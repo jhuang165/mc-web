@@ -6,17 +6,19 @@
 // The conversion follows the pack's own fields (data/guns/<gun>_data.json, display/guns/<gun>_display.json); what this game
 // cannot do yet (projectile flight, heat, crawling, melee, an attachment's scripted functions) is ignored.
 import { parseLenient } from "./json5.js";
-import { TACZ_GUN_IDS, TACZ_AMMO_IDS, TACZ_ATTACHMENT_IDS } from "./ids.js";
+import { TACZ_GUN_IDS, TACZ_AMMO_IDS, TACZ_ATTACHMENT_IDS, LRT_MELEE_IDS } from "./ids.js";
+
+import { resourceKey, packResource } from "./resources.js";
 
 export const PACK_ROOT = "/mods/tacz/";
 const ASSETS = PACK_ROOT + "pack/assets/tacz/", DATA = PACK_ROOT + "pack/data/tacz/";
-const path = (loc) => String(loc ?? "").replace(/^tacz:/, "");
+const path = resourceKey;
 export const packUrl = {
-  geo: (loc) => `${ASSETS}geo_models/${path(loc)}.json`,
-  texture: (loc) => `${ASSETS}textures/${path(loc)}.png`,
-  animation: (loc) => `${ASSETS}animations/${path(loc)}.animation.json`,
+  geo: (loc) => packResource("geo_models", ".json", loc),
+  texture: (loc) => packResource("textures", ".png", loc),
+  animation: (loc) => packResource("animations", ".animation.json", loc),
   defaultAnimation: (kind) => `${PACK_ROOT}base/assets/tacz/animations/${kind}_default.animation.json`,
-  sound: (file) => `${ASSETS}tacz_sounds/${file}.ogg`,
+  sound: (file) => packResource("tacz_sounds", ".ogg", file),
 };
 // "tacz:ak47/ak47_shoot" -> "ak47/ak47_shoot", the file under tacz_sounds/ (and the sound event's name, sounds.js).
 export const soundPath = (loc) => (loc ? path(loc) : null);
@@ -27,32 +29,40 @@ const strip = (s) => String(s ?? "").replace(/§./g, "").trim();
 // The raw pack: { index, lang, guns: { name: { index, data, display } }, ammo: { name: { index, display } },
 // attachments: { name: { index, data, display } }, tags: { "allow_attachments/ak47": [...], ... }, recipes: [...] }, or null
 // when public/mods/tacz/index.json is missing (the pack is not installed).
-export async function loadTaczPack(fetchText = defaultFetch) {
+export async function loadTaczPack(fetchText = defaultFetch, { root = PACK_ROOT, namespace = "tacz" } = {}) {
+  const ASSETS = `${root}pack/assets/${namespace}/`, DATA = `${root}pack/data/${namespace}/`;
+  const filePath = loc => String(loc ?? "").replace(/^[^:]+:/, "");
+  const key = name => resourceKey(`${namespace}:${name}`);
+  const referenced = (kind, folder, loc) => {
+    const value = String(loc ?? ""), ns = value.includes(":") ? value.split(":")[0] : namespace;
+    const base = ns === namespace ? root : ns === "tacz" ? PACK_ROOT : `/mods/${ns}/`;
+    return `${base}pack/${kind}/${ns}/${folder}/${filePath(loc)}.json`;
+  };
   // A file that does not parse counts as missing, so one bad file costs only its own entry.
   const json = async (url) => { const t = await fetchText(url); if (t == null) return null; try { return parseLenient(t); } catch { return null; } };
-  const index = await json(PACK_ROOT + "index.json").catch(() => null);
+  const index = await json(root + "index.json").catch(() => null);
   if (!index?.guns) return null;
   const pack = { index, lang: (await json(ASSETS + "lang/en_us.json")) ?? {}, guns: {}, ammo: {}, attachments: {}, tags: {}, recipes: [] };
   await Promise.all([
     ...index.guns.map(async (name) => {
       const gi = await json(`${DATA}index/guns/${name}.json`);
       if (!gi) return;
-      const [data, display] = await Promise.all([json(`${DATA}data/guns/${path(gi.data)}.json`), json(`${ASSETS}display/guns/${path(gi.display)}.json`)]);
-      if (data && display) pack.guns[name] = { index: gi, data, display };
+      const [data, display] = await Promise.all([json(referenced("data", "data/guns", gi.data)), json(referenced("assets", "display/guns", gi.display))]);
+      if (data && display) pack.guns[key(name)] = { index: gi, data, display };
     }),
     ...index.ammo.map(async (name) => {
       const ai = await json(`${DATA}index/ammo/${name}.json`);
       if (!ai) return;
-      pack.ammo[name] = { index: ai, display: await json(`${ASSETS}display/ammo/${path(ai.display)}.json`) };
+      pack.ammo[key(name)] = { index: ai, display: await json(referenced("assets", "display/ammo", ai.display)) };
     }),
     ...(index.attachments ?? []).map(async (name) => {
       const ai = await json(`${DATA}index/attachments/${name}.json`);
       if (!ai) return;
-      const [data, display] = await Promise.all([json(`${DATA}data/attachments/${path(ai.data)}.json`), json(`${ASSETS}display/attachments/${path(ai.display)}.json`)]);
-      pack.attachments[name] = { index: ai, data: data ?? {}, display: display ?? {} };
+      const [data, display] = await Promise.all([json(referenced("data", "data/attachments", ai.data)), json(referenced("assets", "display/attachments", ai.display))]);
+      pack.attachments[key(name)] = { index: ai, data: data ?? {}, display: display ?? {} };
     }),
-    ...(index.attachmentTags ?? []).map(async (name) => { const t = await json(`${DATA}tacz_tags/attachments/${name}.json`); if (Array.isArray(t)) pack.tags[name] = t; }),
-    ...(index.recipes ?? []).map(async (name) => { const r = await json(`${DATA}recipes/${name}.json`); if (r) pack.recipes.push({ name, ...r }); }),
+    ...(index.attachmentTags ?? []).map(async (name) => { const t = await json(`${DATA}tacz_tags/attachments/${name}.json`); if (Array.isArray(t)) pack.tags[key(name)] = t; }),
+    ...(index.recipes ?? []).map(async (name) => { const r = await json(`${DATA}recipes/${name}.json`); if (r) pack.recipes.push({ name: key(name), ...r }); }),
   ]);
   pack.recipes.sort((a, b) => (a.name < b.name ? -1 : 1));
   return pack;
@@ -155,6 +165,7 @@ export const SMITH_MATERIALS = {
   "forge:leather": { item: 315 }, "minecraft:wool": { item: "wool" }, "minecraft:gunpowder": { item: 330 },
   "minecraft:blaze_powder": { item: 388 }, "minecraft:fire_charge": { item: 1952 }, "minecraft:ender_eye": { item: 1960 },
   "minecraft:end_crystal": { item: 1960 }, "minecraft:crying_obsidian": { item: 22 }, "minecraft:shroomlight": { item: 1131 },
+  "minecraft:quartz": { item: 382 }, "minecraft:oak_log": { item: 4, damage: 0 }, "forge:nuggets/gold": { item: 394 },
   "minecraft:observer": { item: 381 }, "minecraft:copper_block": { item: 1144 },
   "forge:ingots/iron": { item: 302 }, "forge:ingots/gold": { item: 304 }, "forge:gems/diamond": { item: 303 },
   "forge:rods/blaze": { item: 387 }, "forge:gems/quartz": { item: 382 }, "forge:gems/lapis": { item: 351, damage: 4 },
@@ -168,8 +179,9 @@ export function taczRecipes(pack) {
   const out = [];
   for (const r of pack?.recipes ?? []) {
     const res = r.result ?? {}, name = path(res.id);
-    const output = res.type === "gun" ? TACZ_GUN_IDS[name] : res.type === "ammo" ? TACZ_AMMO_IDS[name]
-      : res.type === "attachment" ? TACZ_ATTACHMENT_IDS[name] : undefined;
+    const melee = res.type === "custom" && res.item?.item === "lrtactical:melee" ? LRT_MELEE_IDS[res.item?.nbt?.MeleeWeaponId] : LRT_MELEE_IDS[name];
+    const output = melee ?? (res.type === "gun" ? TACZ_GUN_IDS[name] : res.type === "ammo" ? TACZ_AMMO_IDS[name]
+      : res.type === "attachment" ? TACZ_ATTACHMENT_IDS[name] : undefined);
     if (output == null) continue;
     const materials = [];
     for (const m of r.materials ?? []) {
@@ -180,7 +192,8 @@ export function taczRecipes(pack) {
       if (same) same.count += count; else materials.push({ item: map.item, ...(map.damage != null ? { damage: map.damage } : {}), count });
     }
     if (materials[0] === null || !materials.length) continue;
-    out.push({ key: r.name, output, count: Math.max(1, res.count | 0 || 1), kind: res.type, group: res.group ?? null, materials });
+    const attachments = Object.fromEntries(Object.entries(res.attachments ?? {}).map(([type, key]) => [type, TACZ_ATTACHMENT_IDS[path(key)]]).filter(([, id]) => id != null));
+    out.push({ key: r.name, output, count: Math.max(1, res.count | 0 || 1), kind: melee != null ? "melee" : res.type, group: res.group ?? null, materials, ...(Object.keys(attachments).length ? { modTag: { attachments } } : {}) });
   }
   return out;
 }

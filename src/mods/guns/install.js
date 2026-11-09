@@ -61,7 +61,7 @@ export function setMeleePacks(packs) {
   for (const w of melee.weapons) melee.items.push({ id: w.id, name: w.name, stack: 1, iconUrl: w.pack.slot ? meleeUrl.texture(w.pack.slot, w.namespace) : "/media/mods/guns/gun_smith_table.png",
     melee: w, tooltip: () => [`+${w.damage} Attack Damage`] });
   const have = new Set(melee.items.map((i) => i.id));
-  for (const id of Object.values(LRT_MELEE_IDS)) if (!have.has(id)) melee.items.push({ id, name: "Missing Melee Weapon", stack: 1, iconUrl: "/media/mods/guns/gun_smith_table.png", missingPack: true });
+  for (const id of new Set(Object.values(LRT_MELEE_IDS))) if (!have.has(id)) melee.items.push({ id, name: "Missing Melee Weapon", stack: 1, iconUrl: "/media/mods/guns/gun_smith_table.png", missingPack: true });
   return melee;
 }
 const LEGACY = new Set(Object.keys(GUNS).map(Number).concat(Object.keys(AMMO).map(Number)));
@@ -95,7 +95,7 @@ export function setGunPack(raw) {
     // Each gun's allow list (its tag file, whose `#tags` nest), kept only for the slot types the gun's data allows.
     const tags = raw.tags ?? {}, byKey = new Map(pack.attachments.map((a) => [a.key, a]));
     for (const g of pack.guns) {
-      const types = new Set(g.attachmentTypes), names = resolveAllowed(tags[`allow_attachments/${g.key}`], tags);
+      const types = new Set(g.attachmentTypes), names = resolveAllowed(tags[g.key.includes(":") ? g.key.replace(":", ":allow_attachments/") : `allow_attachments/${g.key}`], tags);
       for (const b of Object.values(g.builtin ?? {})) for (const n of b.attachments) names.add(n);
       g.attachments = new Set([...names].filter((n) => byKey.has(n) && (!types.size || types.has(byKey.get(n).type))));
       // The part an empty slot shows and fires with (fit.js; catalog.js gunOf).
@@ -112,7 +112,7 @@ export function setGunPack(raw) {
       if (LEGACY.has(g.id)) Object.assign(GUNS[g.id], { pack: g.pack, attachments: g.attachments, extendedMag: g.extendedMag, builtinParts: g.builtinParts });
       else GUNS[g.id] = g;
     }
-    pack.recipes = taczRecipes(raw).filter((r) => GUNS[r.output] || AMMO[r.output] || ATTACHMENTS[r.output]);
+    pack.recipes = taczRecipes(raw).filter((r) => GUNS[r.output] || AMMO[r.output] || ATTACHMENTS[r.output] || Object.values(LRT_MELEE_IDS).includes(r.output));
   }
   const ICON = (loc, fallback) => (loc ? packUrl.texture(loc) : fallback);
   for (const g of pack.guns) {

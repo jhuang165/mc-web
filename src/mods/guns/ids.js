@@ -63,3 +63,61 @@ export const LRT_MELEE_NAMES = {
   "cs2_wt:m9": "M9 Bayonet", "cs2_wt:push": "Shadow Daggers", "cs2_wt:skeleton": "Skeleton Knife", "cs2_wt:stiletto": "Stiletto Knife",
   "cs2_wt:tactical": "Huntsman Knife", "cs2_wt:talon": "Talon Knife",
 };
+
+// CS2 Unified uses distinct stable ids; default-pack weapons retain their existing ids.
+export const CS2_GUN_IDS = {
+  "cs2:cs_ak": 4700,
+  "cs2:cs_aug": 4701,
+  "cs2:cs_awp": 4702,
+  "cs2:cs_bizon": 4703,
+  "cs2:cs_cz75": 4704,
+  "cs2:cs_deagle": 4705,
+  "cs2:cs_elite": 4706,
+  "cs2:cs_famas": 4707,
+  "cs2:cs_fiveseven": 4708,
+  "cs2:cs_g3sg1": 4709,
+  "cs2:cs_galil": 4710,
+  "cs2:cs_glock": 4711,
+  "cs2:cs_m249": 4712,
+  "cs2:cs_m320": 4713,
+  "cs2:cs_m4a1s": 4714,
+  "cs2:cs_m4a4": 4715,
+  "cs2:cs_mac10": 4716,
+  "cs2:cs_mag7": 4717,
+  "cs2:cs_mp5sd": 4718,
+  "cs2:cs_mp7": 4719,
+  "cs2:cs_mp9": 4720,
+  "cs2:cs_negev": 4721,
+  "cs2:cs_nova": 4722,
+  "cs2:cs_p2000": 4723,
+  "cs2:cs_p250": 4724,
+  "cs2:cs_p90": 4725,
+  "cs2:cs_r8": 4726,
+  "cs2:cs_rpg7": 4727,
+  "cs2:cs_sawedoff": 4728,
+  "cs2:cs_scar20": 4729,
+  "cs2:cs_sg553": 4730,
+  "cs2:cs_ssg08": 4731,
+  "cs2:cs_tec9": 4732,
+  "cs2:cs_test_ak": 4733,
+  "cs2:cs_ump45": 4734,
+  "cs2:cs_usp": 4735,
+  "cs2:cs_xm1014": 4736,
+  "cs2:cs_zeus": 4737
+};
+export const CS2_ATTACHMENT_IDS = {
+  "cs2:aug_scope": 4800,
+  "cs2:awp_scope": 4801,
+  "cs2:m4a1s_silencer": 4802,
+  "cs2:sg553_scope": 4803,
+  "cs2:ssg08_scope": 4804,
+  "cs2:usp_silencer": 4805
+};
+Object.assign(TACZ_GUN_IDS, CS2_GUN_IDS);
+Object.assign(TACZ_ATTACHMENT_IDS, CS2_ATTACHMENT_IDS);
+// The unified knives replace the old pack by semantic identity; saved numeric stacks keep the same knives.
+for (const [key, id] of Object.entries(LRT_MELEE_IDS)) {
+  const unified = key.replace(/^cs2_wt:/, "cs2:");
+  LRT_MELEE_IDS[unified] = id; LRT_MELEE_NAMES[unified] = LRT_MELEE_NAMES[key];
+}
+Object.assign(LRT_MELEE_IDS, { "cs2:ct_knife": 4610, "cs2:t_knife": 4611 });

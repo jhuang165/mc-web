@@ -31,7 +31,12 @@ export async function loadMeleeAssets(weapon, load = fetchJson) {
   const p = weapon.pack, ns = p.namespace;
   const [geoJson, animJson] = await Promise.all([load(meleeUrl.geo(p.model, ns)), p.animation ? load(meleeUrl.animation(p.animation, ns)) : null]);
   const geo = bedrockGeometry(geoJson);
-  return geo ? { geo, animations: parseAnimations(animJson) } : null;
+  const animations = parseAnimations(animJson);
+  // TaCZ default knives use melee_push for their close-range attack clip.
+  if (!animations.has("melee_1") && animations.has("melee_push")) {
+    animations.set("melee_1", animations.get("melee_push")); animations.set("melee_3", animations.get("melee_push"));
+  }
+  return geo ? { geo, animations } : null;
 }
 
 // The clip an action plays. kind: "draw" | "inspect" | "left" | "right"; `count` the left attacks so far (melee_1 and

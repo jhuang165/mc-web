@@ -35,10 +35,10 @@ export function smithCraft(slots, recipe) {
     }
   }
   const gun = GUNS[recipe.output];
-  return { id: recipe.output, count: recipe.count, damage: gun && gun.feed !== "inventory" ? gun.magazine : 0 };
+  return { id: recipe.output, count: recipe.count, damage: gun && gun.feed !== "inventory" ? gun.magazine : 0, ...(recipe.modTag ? { modTag: structuredClone(recipe.modTag) } : {}) };
 }
 
-const TABS = [["gun", "Guns"], ["ammo", "Ammo"], ["attachment", "Attachments"]];
+const TABS = [["gun", "Guns"], ["ammo", "Ammo"], ["attachment", "Attachments"], ["melee", "Knives"]];
 let styled = false;
 // The item icons in list rows (here and attachment-screen.js).
 export function ensureStyle() {
@@ -60,7 +60,7 @@ export function gunSmithScreen({ recipes, slots, icon, name, craft, close, show,
       const c = Math.trunc(w / 2), list = recipes.filter((r) => r.kind === tab);
       g.text("Gun Smith Table", c, 8, { center: true });
       TABS.forEach(([k, label], i) => {
-        g.button({ x: c - 152 + i * 102, y: 18, w: 100, h: 20 }, label, () => { if (tab !== k) { tab = k; selected = -1; scroll = 0; show(self); } }, { enabled: tab !== k });
+        g.button({ x: c - 152 + i * 77, y: 18, w: 75, h: 20 }, label, () => { if (tab !== k) { tab = k; selected = -1; scroll = 0; show(self); } }, { enabled: tab !== k });
       });
       if (!list.length) {
         g.text(recipes.length ? "Nothing to make here" : "No recipes: install the TaCZ gun pack (npm run mods:fetch-tacz)", c, Math.trunc(h / 2) - 4, { center: true, color: 0xa0a0a0 });

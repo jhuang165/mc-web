@@ -159,6 +159,7 @@ import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, setMeleePacks, gunS
 import { loadMeleePacks } from "./mods/guns/melee.js";
 import { gunSmithScreen, smithCraft } from "./mods/guns/smith-screen.js";
 import { GUN_SMITH, gunOf } from "./mods/guns/catalog.js";
+import { loadCS2Pack, mergeGunPacks } from "./mods/guns/cs2.js";
 import { loadTaczPack } from "./mods/guns/pack.js";
 import { createGunHooks } from "./mods/guns/hooks.js";
 import { GunTracers } from "./mods/guns/tracers.js";
@@ -452,8 +453,8 @@ let gunTracers = null; // the tracer boxes in the world scene, made at the first
 // The locally installed TaCZ gun pack (Git-ignored; pack.js), read once, the first time a guns world loads.
 let gunPackLoad = null;
 // With it, the locally installed LR Tactical melee packs (the CS2 knives; melee.js).
-const gunPackReady = () => (gunPackLoad ??= Promise.all([loadTaczPack().catch(() => null), loadMeleePacks().catch(() => null)])
-  .then(([raw, melee]) => { setGunPack(raw); setMeleePacks(melee); return raw; }));
+const gunPackReady = () => (gunPackLoad ??= Promise.all([loadTaczPack().catch(() => null), loadMeleePacks().catch(() => null), loadCS2Pack().catch(() => null)])
+  .then(([base, melee, cs2]) => { const raw = mergeGunPacks(base, cs2?.raw); setGunPack(raw); setMeleePacks(cs2 ? [...(melee ?? []).filter(p => p.namespace !== "cs2_wt" && p.namespace !== "cs2"), cs2.melee] : melee); return raw; }));
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
@@ -2058,8 +2059,9 @@ function openGunSmith() {
     craft: (recipe) => {
       const out = smithCraft(survival.inventory.main, recipe);
       if (!out) return false;
-      const stored = survival.add(out.id, out.count, out.damage);
-      if (stored < out.count) throwStacks([{ ...out, count: out.count - stored }]);
+      // Preserve the pack recipe's factory attachments along with the crafted stack.
+      survival.inventory.add(out);
+      if (out.count > 0) throwStacks([out]);
       saved = false;
       renderHotbar();
       return true;

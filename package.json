@@ -16,7 +16,8 @@
     "music:fetch": "node tools/fetch-music-streams.mjs",
     "lang:fetch": "node tools/fetch-lang.mjs",
     "mods:fetch-tacz": "node tools/fetch-tacz.mjs",
-    "mods:fetch-knives": "node tools/fetch-knives.mjs"
+    "mods:fetch-knives": "node tools/fetch-knives.mjs",
+    "mods:fetch-cs2": "node tools/fetch-cs2.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

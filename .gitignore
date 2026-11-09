@@ -24,3 +24,7 @@ public/mods/tacz/
 public/audio/mods/tacz/
 # LR Tactical melee packs (the CS2 knives) installed from local zips by npm run mods:fetch-knives; never committed
 public/mods/lrtactical/
+
+# User-installed CS2 Unified payload; encrypted publication only
+public/mods/cs2/
+public/mods/cs2.install/

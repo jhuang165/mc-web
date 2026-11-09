@@ -7,13 +7,14 @@
 // `damage` is the item's generic.attack_damage attribute, `speed` its movement-speed modifier; each attack has LR Tactical's
 // CombatData.MeleeAttackInfo fields (factor, knockback, cooldown and delay in ticks, hitbox). The models, animations and
 // sounds load later (melee-view.js).
+import { packResource } from "./resources.js";
 import { parseLenient } from "./json5.js";
 import { LRT_MELEE_IDS, LRT_MELEE_NAMES } from "./ids.js";
 
 export const MELEE_ROOT = "/mods/lrtactical/";
 // "cs2_wt:melee/karambit_geo" -> namespace and path (a bare path is the pack's own namespace).
 const split = (loc, ns) => { const s = String(loc ?? ""), i = s.indexOf(":"); return i < 0 ? [ns, s] : [s.slice(0, i), s.slice(i + 1)]; };
-const asset = (folder, ext) => (loc, ns) => { const [n, p] = split(loc, ns); return `${MELEE_ROOT}${n}/assets/${n}/${folder}/${p}${ext}`; };
+const asset = (folder, ext) => (loc, ns) => { const [n, p] = split(loc, ns); return n === "cs2" ? packResource(folder, ext, `${n}:${p}`) : `${MELEE_ROOT}${n}/assets/${n}/${folder}/${p}${ext}`; };
 export const meleeUrl = {
   geo: asset("geo_models", ".json"),
   texture: asset("textures", ".png"),

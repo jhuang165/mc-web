@@ -88,7 +88,7 @@ test("installGunSounds adds the TaCZ files to the base and live tables once", as
   const load = async (url) => { loads++; return url === "/mods/tacz/index.json" ? { guns: [], sounds: ["ak47/ak47_shoot", "dry_fire"] } : { packs: [{ namespace: "test", sounds: ["melee/draw"] }] }; };
   assert.equal(await installGunSounds(bank, load), true);
   assert.equal(await installGunSounds(bank, load), true);
-  assert.equal(loads, 2);
+  assert.equal(loads, 4);
   for (const t of [bank.base, bank.manifest]) {
     assert.deepEqual(t.files["mods/tacz/ak47/ak47_shoot"], { url: "/mods/tacz/pack/assets/tacz/tacz_sounds/ak47/ak47_shoot.ogg" });
     assert.deepEqual(t.events[gunSoundEvent("dry_fire")], { category: "player", sounds: ["mods/tacz/dry_fire"] });

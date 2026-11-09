@@ -386,7 +386,9 @@ export class FirstPerson {
     } else
     this.pivot.matrix.copy(mapMode ? this.mapPose(pose, pitchDeg, map.data) : firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
     if (this.mapRoot) this.mapRoot.visible = mapMode;
-    if (this.item) this.item.visible = !mapMode;
+    // The native equip pose may still hold the outgoing model after weapon state has switched.
+    // Pack geometry is in pixels and must never use the vanilla sprite matrix during that gap.
+    if (this.item) this.item.visible = !mapMode && !(this.item.userData?.pack && !gunMesh);
     // Keep the native pose visible when the browser panel is narrower than a game window.
     if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1)*(gunMesh ? 1 - gun.aim : 1),0,0));
     if (view) this.lights.forEach((l, i) => l.copy(ITEM_LIGHTS[i]).transformDirection(view.matrixWorldInverse));
