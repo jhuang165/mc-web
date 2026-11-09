@@ -238,3 +238,13 @@ test('foreign ticks: a backlog above 1000 due entries is taken 1000 per tick',()
  const env={version:1,time:0,entries:Array.from({length:2500},(_,k)=>({i:54,x:k,y:5,z:0,t:1,p:0}))};const ft=new ForeignTicks(env,()=>-1,{});
  ft.tick(1);assert.equal(env.entries.length,1500);ft.tick(2);assert.equal(env.entries.length,500);ft.tick(3);assert.equal(env.entries.length,0);
 });
+
+test('ForeignTicks handles a list longer than the spread-argument limit', async () => {
+  const { ForeignTicks } = await import('./tile-ticks.js');
+  const entries = Array.from({ length: 300000 }, (_, i) => ({ i: 1, x: i, y: 300, z: 0, t: 5 + (i % 3), p: 0 }));
+  const ft = new ForeignTicks({ version: 1, time: 0, entries }, () => -1, {});
+  assert.doesNotThrow(() => ft.tick(1));
+  assert.equal(ft.size, 300000);
+  ft.tick(5);
+  assert.equal(ft.size, 300000 - 1000);
+});

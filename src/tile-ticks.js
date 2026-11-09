@@ -172,7 +172,7 @@ export class ForeignTicks {
     const elapsed = now - (Number.isInteger(env.time) ? env.time : 0);
     if (elapsed < 1) return 0;
     const dueAt = (e) => (e.air ? 1 : e.t);
-    if (this.minDue === null) this.minDue = Math.min(...env.entries.map(dueAt));
+    if (this.minDue === null) { let m = Infinity; for (const e of env.entries) { const d = dueAt(e); if (d < m) m = d; } this.minDue = m; } // a loop: a whole-save list can exceed the argument limit of Math.min(...)
     if (elapsed < this.minDue) return 0;
     const due = env.entries.filter((e) => dueAt(e) <= elapsed);
     const { taken } = tickUpdatesTake(due.map((e) => ({ e, t: e.air ? -1e15 : e.t - elapsed, p: e.p })), false);
