@@ -229,6 +229,18 @@ export function generateJavaWorld(world) {
   world.biomeIds = new Uint8Array(128 * 128);
   world.biomeAt = (x, z) =>
     manager.biomeAt(x + world.originX, z + world.originZ);
+  // Computes the cached biome array of ring chunks ahead of the random-tick rolls that read them (a pure function of the seed, so the
+  // values are the same whenever it runs). `chunks` are [cx, cz] in world chunk coordinates; stops once `budgetMs` has passed.
+  world.warmBiomes = (chunks, budgetMs = 3) => {
+    const end = performance.now() + budgetMs, ox = world.originX >> 4, oz = world.originZ >> 4;
+    let done = 0;
+    for (const [cx, cz] of chunks) {
+      if (manager.cache.has((cx + ox) + "," + (cz + oz))) continue;
+      manager.cachedChunk(cx + ox, cz + oz); done++;
+      if (performance.now() >= end) break;
+    }
+    return done;
+  };
   world.temperatureAt = (x, y, z) =>
     javaTemperature(
       world.biomeAt(x, z),
