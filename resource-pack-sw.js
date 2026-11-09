@@ -1,6 +1,6 @@
 // Replaces the normal resource-pack worker for this frozen encrypted publication only. Plaintext is never put in a
 // Cache API store. A nonextractable CryptoKey stays in this browser's IndexedDB until expiry or an explicit lock.
-const CONFIG = {"base":"/mc-web/","version":"cs2-unified-8329a8d8-2026-11-08","salt":"95y/mQLa95qnjZjM0et0Eg==","iterations":600000,"sessionMs":43200000};
+const CONFIG = {"base":"/mc-web/","version":"cs2-unified-353b79ac-2026-11-08","salt":"DJR80OA2ozYSO4maH533ew==","iterations":600000,"sessionMs":43200000};
 const enc = new TextEncoder(), dbName = "mc-web-protected:" + CONFIG.base;
 let session = null, overrides = null;
 function db() {
@@ -89,7 +89,8 @@ async function serve(request, url) {
   }
   const entry = Object.hasOwn(s.manifest.files, rel) && s.manifest.files[rel];
   if (!entry) return new Response(null, { status: 404 });
-  const response = await fetch(CONFIG.base + "sealed/" + entry.file);
+  const response = await fetch(CONFIG.base + "sealed/" + entry.file + url.search,
+    url.search ? { cache: "no-store" } : undefined);
   if (!response.ok) return new Response("Preview file unavailable", { status: 502 });
   let bytes = await open(await response.arrayBuffer(), s.key, rel);
   if (entry.gzip) bytes = await inflate(bytes);
