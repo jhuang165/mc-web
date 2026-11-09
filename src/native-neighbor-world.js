@@ -21,24 +21,36 @@ export function nativeNeighborWorldClass(area, Base = mineshaftGenWorldClass()) 
         if (id !== 30) return super.dropBlockAsItem(id, x, y, z, meta, fortune);
         if (this.rand.nextFloat() <= 1) this.spawnItem(x, y, z, 287, 1, 0);
       }
-      // BlockButton.onNeighborBlockChange (ajs.a, bytecode-read and call-traced natively): canPlaceBlockAt (x-1, x+1, z-1, z+1, first normal cube wins), then the
-      // metadata read and all four side reads before the single drop test. A button that would fall is not part of any generated structure.
-      buttonNeighbor(x, y, z) {
+      // BlockButton.onNeighborBlockChange (ajs.a, bytecode-read; the native chain is the 256 button cases of neighbor-chains-reference.json from the unchanged
+      // classes): canPlaceBlockAt (x-1, x+1, z-1, z+1, first normal cube wins), then the metadata read and all four side reads before the single drop
+      // test. A button that falls drops its item (dropBlockAsItem, chance 1, the three spawn floats) and is then cleared by setBlockToAir (flags 3), so the
+      // neighbour notifications and, for a pressed button, BlockButton.breakBlock follow the drop.
+      buttonNeighbor(id, x, y, z) {
         const cube = (dx, dz) => this.isNormalCube(this.getBlock(x + dx, y, z + dz));
-        if (!(cube(-1, 0) || cube(1, 0) || cube(0, -1) || cube(0, 1))) throw new Error(`structure button fell at ${x},${y},${z}: its drop is unported`);
+        const fall = () => { this.dropBlockAsItem(id, x, y, z, this.getBlockMetadata(x, y, z), 0); this.setBlockToAir(x, y, z); };
+        if (!(cube(-1, 0) || cube(1, 0) || cube(0, -1) || cube(0, 1))) return fall();
         const facing = this.getBlockMetadata(x, y, z) & 7;
         let loose = false;
         if (!cube(-1, 0) && facing === 1) loose = true;
         if (!cube(1, 0) && facing === 2) loose = true;
         if (!cube(0, -1) && facing === 3) loose = true;
         if (!cube(0, 1) && facing === 4) loose = true;
-        if (loose) throw new Error(`structure button fell at ${x},${y},${z}: its drop is unported`);
+        if (loose) fall();
+        return undefined;
+      }
+      // BlockTNT.onBlockAdded / onNeighborBlockChange (aob.b / aob.a): when indirectly powered, func_150114_a(meta 1) spawns an EntityTNTPrimed at the
+      // block centre (fuse 80, igniter none; the native motion comes from Math.random and is not carried) with the primed sound, then the block is cleared.
+      tntPowered(x, y, z) {
+        if (!this.indirectlyPowered(x, y, z)) return;
+        this.spawnEntity({ type: "PrimedTnt", x: x + 0.5, y: y + 0.5, z: z + 0.5, fuse: 80 });
+        this.setBlockToAir(x, y, z);
       }
       // BlockDoor (64 wooden, 71 iron) onNeighborBlockChange as ItemDoor.func_150924_a triggers it: the
       // neighbour is the door itself, so only the support checks and the power reads run.
       neighborChanged(id, x, y, z, source) {
         if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.onNeighborBlockChange?.(area.redstone, x, y, z, source);
-        if (id === 77) return this.buttonNeighbor(x, y, z);
+        if (id === 77 || id === 143) return this.buttonNeighbor(id, x, y, z);
+        if (id === 46) return this.tntPowered(x, y, z);
         if (id !== 64 && id !== 71) return super.neighborChanged(id, x, y, z, source);
         const meta = this.getBlockMetadata(x, y, z);
         if ((meta & 8) === 0) {
@@ -91,7 +103,7 @@ export function nativeNeighborWorldClass(area, Base = mineshaftGenWorldClass()) 
       providedPower(id, x, y, z, side, strong) {
         if (id === 70) return (!strong || side === 1) && this.getBlockMetadata(x, y, z) > 0 ? 15 : 0;
         // BlockButton.isProvidingWeakPower / StrongPower: a button not yet pressed (metadata bit 8 clear) gives nothing; the stronghold's is never pressed in generation.
-        if (id === 77 && (this.getBlockMetadata(x, y, z) & 8) === 0) return 0;
+        if ((id === 77 || id === 143) && (this.getBlockMetadata(x, y, z) & 8) === 0) return 0;
         // The other providers (lever, wire, torch, repeater, hook, ...) use the native-replayed behaviours of redstone.js on the area's own block store.
         if (POWER_SOURCES.includes(id)) {
           const behaviour = area.redstone?.behaviours[id], read = strong ? behaviour?.strong : behaviour?.weak;
@@ -115,19 +127,29 @@ export function nativeNeighborWorldClass(area, Base = mineshaftGenWorldClass()) 
         // BlockContainer.onBlockAdded is only its super call; BlockFlowerPot adds nothing.
         if (id === 140) return undefined;
         if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.onBlockAdded?.(area.redstone, x, y, z);
-        // BlockTNT.onBlockAdded: a powered TNT block would prime itself; none is reachable in these structures.
-        if (id === 46) { if (this.indirectlyPowered(x, y, z)) throw new Error("structure TNT power is unported"); return undefined; }
+        if (id === 46) return this.tntPowered(x, y, z);
         if (id === 23 || id === 61 || id === 62) return this.containerFacing(x, y, z);
         return super.blockAdded(id, x, y, z);
       }
       // BlockButton.breakBlock only acts on a powered (metadata bit 8) button.
       breakBlock(id, x, y, z, meta) {
-        if (id === 77 && (meta & 8) === 0) return undefined;
+        // BlockButton.breakBlock (a pressed button only): notify the cell, then the cell it was attached to (func_150042_a).
+        if (id === 77 || id === 143) {
+          if ((meta & 8) === 0) return undefined;
+          this.notifyNeighbors(x, y, z, id);
+          const f = meta & 7;
+          if (f === 1) this.notifyNeighbors(x - 1, y, z, id);
+          else if (f === 2) this.notifyNeighbors(x + 1, y, z, id);
+          else if (f === 3) this.notifyNeighbors(x, y, z - 1, id);
+          else if (f === 4) this.notifyNeighbors(x, y, z + 1, id);
+          else this.notifyNeighbors(x, y - 1, z, id);
+          return undefined;
+        }
         if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.breakBlock?.(area.redstone, x, y, z, id, meta);
         return super.breakBlock(id, x, y, z, meta);
       }
       spawnEntity(e) {
-        if (e.type === "MinecartChest") this.carts.push(e); else this.animals.push(e);
+        if (e.type === "MinecartChest") this.carts.push(e); else if (e.type === "PrimedTnt") (this.primedTnt ??= []).push(e); else this.animals.push(e);
         this.onEntity?.(e); return true;
       }
   };

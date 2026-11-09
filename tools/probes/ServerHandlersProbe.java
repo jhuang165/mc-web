@@ -76,9 +76,9 @@ public class ServerHandlersProbe {
   }
   public static class PMP extends mw {
     PMP() { super(null, null, null, null); }
-    boolean visible = true; zb visibility = zb.a;
+    boolean visible = true, real = false; zb visibility = zb.a;
     public zb u() { return visibility; }
-    public boolean p(sa e) { return visible; }
+    public boolean p(sa e) { return real ? super.p(e) : visible; }
     public boolean q(sa e) { ev.add("{\"entity\":\"interact\"}"); return true; }
     public void r(sa e) { ev.add("{\"entity\":\"attack\"}"); }
     public xk a(add s, boolean b) { ev.add("{\"drop\":" + (s == null ? "null" : BookProbe.stack(s)) + ",\"random\":" + b + "}"); return null; }
@@ -93,12 +93,12 @@ public class ServerHandlersProbe {
   }
   public static class TW extends mt {
     TW() { super(null, null, null, 0, null, null); }
-    boolean loaded = true; aor tile; Map<Integer, sa> entities = new HashMap<>();
+    boolean loaded = true; aor tile; java.util.Set<String> solid; Map<Integer, sa> entities = new HashMap<>();
     static final Info INFO = new Info();
     public boolean d(int x, int y, int z) { return loaded; }
     public aor o(int x, int y, int z) { return tile; }
     public void g(int x, int y, int z) { ev.add("{\"markBlock\":[" + x + "," + y + "," + z + "]}"); }
-    public aji a(int x, int y, int z) { return aji.e(0); }
+    public aji a(int x, int y, int z) { return solid != null && solid.contains(x + "," + y + "," + z) ? aji.e(1) : aji.e(0); }
     public int e(int x, int y, int z) { return 0; }
     public sa a(int id) { return entities.get(id); }
     public ays N() { return INFO; }
@@ -396,17 +396,42 @@ public class ServerHandlersProbe {
     digCase(dg, "release use item (status 5)", 0.5, 64, 0.5, 5, 90, 64, 0);
     out("{\"case\":\"digging\",\"cases\":" + arr(dg) + "}");
   }
+  static sa entityOf(String type, Rig r) throws Exception {
+    switch (type) {
+      case "item": return alloc(xk.class);
+      case "self": return r.p;
+      case "arrow": return alloc(zc.class);
+      case "xporb": return alloc(sq.class);
+      case "painting": return alloc(tb.class);
+      case "frame": return alloc(st.class);
+      case "minecart": return alloc(xs.class);
+      case "boat": return alloc(xi.class);
+      default: return alloc(TGT.class);
+    }
+  }
   static void entityCase(List<String> cs, String name, double ex, double ey, double ez, boolean visible, jb action, String type) throws Exception {
+    entityCase(cs, name, ex, ey, ez, visible, action, type, null);
+  }
+  // `solid` non-null: the player's real canEntityBeSeen (a block ray from posY + 0.12 to the entity's posY + getEyeHeight) runs over those stone cells.
+  static void entityCase(List<String> cs, String name, double ex, double ey, double ez, boolean visible, jb action, String type, int[][] solid) throws Exception {
     Rig r = build("Steve");
     r.p.s = 0; r.p.t = 64; r.p.u = 0; r.p.visible = visible;
-    sa e = type.equals("item") ? alloc(xk.class) : type.equals("self") ? r.p : alloc(TGT.class);
-    if (e != r.p) { e.s = ex; e.t = ey; e.u = ez; }
+    if (solid != null) {
+      r.p.real = true;
+      MobMoveProbe.field(sa.class, "o").set(r.p, r.world);
+      r.world.solid = new java.util.HashSet<>();
+      for (int[] c : solid) r.world.solid.add(c[0] + "," + c[1] + "," + c[2]);
+    }
+    sa e = entityOf(type, r);
+    if (e != r.p) { e.s = ex; e.t = ey; e.u = ez; if (solid != null) MobMoveProbe.field(sa.class, "o").set(e, r.world); }
     int id = 77;
     if (e != r.p) MobMoveProbe.field(sa.class, "c").set(e, id); else id = e.y();
     r.world.entities.put(id, e);
     ja pk = new ja(); set(pk, "a", id); set(pk, "b", action);
     r.h.a(pk);
-    cs.add("{\"name\":" + jq(name) + ",\"type\":" + jq(type) + ",\"entity\":[" + ex + "," + ey + "," + ez + "],\"visible\":" + visible + ",\"action\":" + jq(action.name()) + ",\"events\":" + events() + "}");
+    StringBuilder sj = new StringBuilder();
+    if (solid != null) { sj.append(",\"solid\":["); for (int i = 0; i < solid.length; i++) sj.append(i > 0 ? "," : "").append("[" + solid[i][0] + "," + solid[i][1] + "," + solid[i][2] + "]"); sj.append("]"); }
+    cs.add("{\"name\":" + jq(name) + ",\"type\":" + jq(type) + ",\"entity\":[" + ex + "," + ey + "," + ez + "],\"visible\":" + (solid != null ? "\"real\"" : String.valueOf(visible)) + ",\"action\":" + jq(action.name()) + sj + ",\"events\":" + events() + "}");
   }
   static void entities() throws Exception {
     List<String> cs = new ArrayList<>();
@@ -417,10 +442,37 @@ public class ServerHandlersProbe {
       entityCase(cs, "visible diagonal 4.2/4.2 (35.28)", 4.2, 64, 4.2, true, a, "mob");
       entityCase(cs, "visible vertical 5.9 up", 0, 69.9, 0, true, a, "mob");
       entityCase(cs, "missing entity id", 0, 64, 0, true, a, "none");
+      // Hanging entities and vehicles take the same C02 path (the handler only looks the id up in the world).
+      for (String t : new String[]{"painting", "frame", "minecart", "boat"}) {
+        for (double d : new double[]{2.9, 3, 5.9, 6.01}) {
+          entityCase(cs, t + " visible, " + d + " east", d, 64.5, 0, true, a, t);
+          entityCase(cs, t + " not visible, " + d + " east", d, 64.5, 0, false, a, t);
+        }
+      }
+      // Real block-ray sight: a one-block wall at x 1 between the eye (posY + 0.12) and the target (posY + 0 for these entities).
+      int[][] wall = {{1, 64, 0}};
+      for (String t : new String[]{"mob", "minecart", "boat", "painting", "frame"}) {
+        for (double d : new double[]{2.9, 3, 3.5, 5, 6}) {
+          entityCase(cs, t + " behind wall, " + d + " east", d, 64.5, 0, false, a, t, wall);
+          entityCase(cs, t + " open ground, " + d + " east", d, 64.5, 0, false, a, t, new int[][]{});
+        }
+      }
+      // A wall under the sight line (the line runs 0.12 above the feet, so a block at y 63 never blocks) and one above it (y 65 starts at 65.0, the line stays below).
+      entityCase(cs, "minecart behind a floor block, 5 east", 5, 64.5, 0, false, a, "minecart", new int[][]{{1, 63, 0}});
+      entityCase(cs, "minecart under a high block, 5 east", 5, 64.5, 0, false, a, "minecart", new int[][]{{1, 65, 0}});
+      entityCase(cs, "minecart behind a corner, 5 east 1 north", 5, 64.5, 1, false, a, "minecart", new int[][]{{2, 64, 0}});
+      entityCase(cs, "minecart past a corner, 5 east 2 north", 5, 64.5, 2, false, a, "minecart", new int[][]{{2, 64, 0}});
     }
     entityCase(cs, "item entity attacked", 1, 64, 0, true, jb.b, "item");
     entityCase(cs, "item entity interacted", 1, 64, 0, true, jb.a, "item");
+    entityCase(cs, "arrow attacked", 1, 64, 0, true, jb.b, "arrow");
+    entityCase(cs, "arrow interacted", 1, 64, 0, true, jb.a, "arrow");
+    entityCase(cs, "experience orb attacked", 1, 64, 0, true, jb.b, "xporb");
+    entityCase(cs, "experience orb interacted", 1, 64, 0, true, jb.a, "xporb");
+    entityCase(cs, "item entity attacked beyond range", 7, 64, 0, true, jb.b, "item");
+    entityCase(cs, "arrow attacked beyond range", 7, 64, 0, true, jb.b, "arrow");
     entityCase(cs, "self attacked", 0, 64, 0, true, jb.b, "self");
+    entityCase(cs, "self interacted", 0, 64, 0, true, jb.a, "self");
     out("{\"case\":\"useEntity\",\"cases\":" + arr(cs) + "}");
   }
 

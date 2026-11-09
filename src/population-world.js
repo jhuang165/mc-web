@@ -64,6 +64,7 @@ export class PopulationArea {
       }
       spawnEntity(e) {
         if(e.type === 'MinecartChest') this.carts.push(e);
+        else if(e.type === 'PrimedTnt') (this.primedTnt ??= []).push(e);
         else this.animals.push(e);
         this.onEntity?.(e); return true;
       }

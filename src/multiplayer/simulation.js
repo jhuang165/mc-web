@@ -19,6 +19,7 @@ import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
+import { serverClick } from '../server-handlers.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn } from './protocol.js';
 
 const noop = () => {};
@@ -114,7 +115,7 @@ export class DedicatedSimulation {
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch), slots = cleanHotbar(message.hotbar);
     if (!p || !input || !look || !slots || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
-    Object.assign(p, look, { input, lastInput: this.ticks });
+    Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
     for (let i = 0; i < 9; i++) p.survival.inventory.main[i] = slots[i];
     p.survival.inventory.current = message.current;
     return true;
@@ -130,6 +131,12 @@ export class DedicatedSimulation {
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
     if (!target) return false;
+    // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
+    // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
+    // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
+    const feet = [p.position.x, p.position.y, p.position.z];
+    const gate = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
     if (!place) return breakPlayerBlock(state, target.block, { creative: true });
