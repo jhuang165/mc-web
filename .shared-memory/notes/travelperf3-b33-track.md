@@ -1,0 +1,34 @@
+# travelperf3 (batch 33)
+
+## Summary
+Goal: hide the world-generation wait of a portal trip behind the portal countdown. No game rule or generator changed; no Java probes (nothing native was re-derived, cells and columns come from the same worker generators as before).
+
+- Exit prewarm (`src/exit-prewarm.js`, new): once the player has stood in a portal for 5 ticks (survival, not riding; `DimensionLive.tick` calls `warmExit`; creative travels at once and is not covered), the terrain round the exit is built in stream workers while the 80-tick countdown runs.
+  - Overworld target (Nether to Overworld trip, generation 13 and up): the target's window cells first (`need`), then up to 5 more cells round the spots an exit may be built at (`specMax`, nearest first; the old rule only used lanes the needed cells left spare, so it caught 1 of the 2 neighbouring cells on seed `a2`). They are built into a bare shell that is never edited, ticked or shared with the live world. The Overworld origin comes from `spawnOrigins` (new, `java-world.js`: recorded when the Overworld was generated) or a parked spawn solve; if neither exists nothing is built.
+  - Nether target: a throw-away `DimensionWorld` shell collects `pregenerated` columns and chunk records (fortress, chests) from the worker.
+  - `DimensionLive.arrive` calls `exitWarm.adopt`: Overworld cells at the start (before the Teleporter reads terrain), Nether columns at the end (the Teleporter's own page reads would otherwise consume them out of `pregenerated`). It waits only for the `need` request, then ends the workers; speculative cells still in flight are dropped.
+  - `arrivalWarmer` (`src/travel-loading.js`) skips units already held (and opens no worker when nothing is left), takes `pageFallback: false` (a background request never builds on the page thread) and `specMax`.
+  - A request nobody uses is dropped after 30 s. A target that moves under 6 blocks asks for nothing new.
+- Same result as before: cells and columns are a pure function of seed, generation, origin and coordinates; the shell is never edited. Checked in a unit test (adopted cells equal the cells a fresh `World` builds, block by block, plus mineshafts and populate counts) and in the browser (hash of every resident chunk after each trip identical with and without prewarm; see below).
+- Nether arrival windows (goal 2): already on a worker since batch 28 (`noPrefetch` only keeps the page-slice path for a missing or failed worker, `travel-loading.js` `chunks`). The batch 32 follow-up line was out of date: the 0.55-1.1 s Nether "second fetch" measured here (`fetch2` in `trip.mjs`) is a wait for worker columns, not page-thread building, and no long task (50 ms) was seen on any trip, before or after. The prewarm removes most of that wait (below). Nothing to move to a worker.
+- Not done: ring-light per-frame cost (goal 3). The batch 32 note could not reproduce a spike and the search already has the shortcuts; at load 5-20 on this shared machine no honest before/after of 0.3 ms per frame was possible, so `headless-columns.js` and `lighting.js` are unchanged.
+
+## Verification
+`npm test`: 4904 tests, 4904 pass, 0 fail (load average 8.6 at start, 19.7 at end). `npm run build`: built OK (chunk-size warning only). `git diff --check` clean. Focused tests: `exit-prewarm.test.js` (4: Overworld cells equal a fresh world's and adopt without a worker, wrong origin / unknown world / End / below generation 13 build nothing, Nether columns held until the end stage with records, near target asks nothing and dispose ends workers), `travel-loading.test.js` (13 pass with the held-unit and specMax changes), `dimension-live.test.js` (+1: the portal hook asks for the right target, not for a brush, creative or when switched off).
+
+Browser (muted headless Chrome, `?silent`, vite port 5354, `artifacts/b33-travelperf3/trip.mjs`): a new survival world per seed, player teleported to (100.5, 130, 100.5) and settled 8 s, then Overworld to Nether to Overworld to Nether to Overworld. Before every trip it waits 4 s like the portal countdown; "after" calls `dims.warmExit` first (what the portal hook does), "before" does not. Seeds `walkperf31` and `a2`. `PORTAL_OFFSET=60` places a saved portal 60 blocks east before the first trip (the Teleporter then finds it on the way back). Wall time is from the `travel()` call to the idle screen. 1-minute load average from `uptime` at the start of each batch; during runs it was 6 to 25 (the other four tracks were running), the "after" rep 1 and 2 batches ran at 5-9.
+| case | before (wall per trip) | after (wall per trip) |
+|---|---|---|
+| no saved portal, Nether trips | walkperf31 1.12-1.26 s, a2 0.94-1.17 s | walkperf31 0.53-0.54 s, a2 0.43-0.86 s |
+| no saved portal, Overworld returns | walkperf31 1.64-1.87 s, a2 1.67-1.96 s | walkperf31 0.55-0.66 s, a2 0.55-0.67 s |
+| saved portal, Overworld returns | walkperf31 1.75-2.46 s, a2 1.95-2.92 s | walkperf31 0.53-0.54 s, a2 0.56-0.65 s |
+Before numbers: batches at load 7-25 (reps 1-2, `r*_m0.json`); after numbers: the final code at load 5-9 (`v2_r*.json`). An earlier after build that only used spare lanes for speculative cells left seed `a2`'s first return at 1.9 s, so the Overworld shell now takes up to 5 speculative cells. The `a2` Nether trips still show a second fetch of 230-270 ms: its portal is built about 8 blocks from the target and the window shifts by one chunk row, beyond the 64 prewarmed columns. The Nether trip with a saved portal on seed walkperf31 (trip 3) also shows 240 ms for the same reason.
+Result identity: for each seed and portal case the hash of every resident chunk's blocks (every 7th byte) plus the player position after each trip was identical between the before and after runs (hashes in the json files; the 3 trips where a hash differed were in both modes and came from the player drifting after landing, not from terrain).
+Long tasks: a PerformanceObserver for `longtask` recorded 0 on every trip in both modes.
+
+## Follow-ups (proposed gap lines)
+- Exit prewarm covers the Nether and the no-saved-portal / near-target Overworld exit only. With a saved portal far from the target (up to 128 blocks) the exit window is built after the countdown as before; the prewarm does not read saved portals.
+- Nether prewarm asks only for the target's 8 x 8 columns; a portal built a chunk or more away still waits for a second worker fetch (about 250 ms, `a2`).
+- Creative mode (instant travel) has no countdown to hide generation in.
+- Ring-light bulk column light and mob-brightness `search` reads (about 0.3 ms per frame while walking) are untouched in batch 33.
+- Held-cell memory: up to 9 population cells (about 70 MB of block and metadata arrays) are kept in the shell during a countdown; they are freed when the trip adopts them or after 30 s.
