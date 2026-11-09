@@ -329,6 +329,10 @@ export class DimensionLive {
         root.entities = r.entities.mobs; root.arrows = r.entities.arrows; root.projectiles = r.entities.projectiles; root.thrownPotions = r.entities.potions;
         root.rockets = r.entities.rockets; root.fireballs = r.entities.fireballs; root.hanging = r.entities.hanging;
       }
+      // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
+      if (r.commandBlocks) root.commandBlocks = r.commandBlocks;
+      if (r.world) Object.assign(root, r.world);
+      this.host.awayResult?.(r);
       if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
       if (r.columns.length) await this.writeColumns(root.id, r.columns);
       root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);

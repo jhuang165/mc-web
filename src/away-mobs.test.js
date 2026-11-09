@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { populationBlockMapperReady } from "./population-world.js";
 import { runAway, stateColumns, awayPlan, AWAY_ENTITY_TICKS } from "./away-world.js";
 import { EntityWorld } from "./entities.js";
-import { World } from "./world.js";
+import { World, FENCE } from "./world.js";
 import { Hanging } from "./hanging.js";
 
 await populationBlockMapperReady;
@@ -107,4 +107,28 @@ test("dispensers on a clock create arrows, snowballs, eggs, potions, fire charge
     assert.equal(r.tiles.dispensers["5,11,5"].items[0].count, 2, `item ${id}: one used`);
     assert.equal(pick(r.entities).length, 1, `item ${id}: one live entity ${JSON.stringify(r.stats)} ${JSON.stringify(r.tiles.dispensers)}`);
   }
+});
+
+test("a cow leashed to a knot on a fence ticks (its lead holds past the 100-tick fence check); a lead held by the player stays frozen", async () => {
+  const fence = (chunks) => { setBlock(chunks, 7, 11, 5, FENCE); };
+  const root = { ...base, entities: [
+    mob("cow", 5.5, 11, 5.5, { id: "mob-1", leash: { knot: { x: 7, y: 11, z: 5 } } }),
+    mob("cow", 8.5, 11, 8.5, { id: "mob-2", leash: { holder: "player" } }),
+  ] };
+  const r = await run(root, 400, fence);
+  const [tied] = r.entities.mobs.filter((m) => m.id === "mob-1"), [held] = r.entities.mobs.filter((m) => m.id === "mob-2");
+  assert.ok(tied.age >= 100, `the tied cow aged (${tied.age})`);
+  assert.deepEqual(tied.leash, { knot: { x: 7, y: 11, z: 5 } });
+  assert.equal(held.age ?? 0, 0, "the player-held lead is not ticked");
+  assert.deepEqual(held.leash, { holder: "player" });
+  assert.equal(r.stats.entities.mobs, 1);
+});
+
+test("a zombie standing in torch light reads block light: the lead path of lightAt is exercised through the run's light volume", async () => {
+  const TORCH = 20;
+  const lit = await run({ ...base, entities: [mob("zombie", 5.5, 11, 5.5, { id: "mob-1" })] }, 40, (chunks) => setBlock(chunks, 6, 11, 5, TORCH, 5));
+  assert.equal(lit.stats.light.emitters, 1);
+  assert.ok(lit.stats.light.floods >= 1);
+  const dark = await run({ ...base, entities: [mob("zombie", 5.5, 11, 5.5, { id: "mob-1" })] }, 40);
+  assert.equal(dark.stats.light.emitters, 0);
 });

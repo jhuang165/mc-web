@@ -25,6 +25,8 @@ import { awayEntities } from "./away-entities.js";
 import { dispenseFirework } from "./fireworks-live.js";
 import { WATER, LAVA } from "./world.js";
 import { JavaRandom } from "./java-random.js";
+import { awayCommands } from "./away-commands.js";
+import { AwayBlockLight } from "./away-light.js";
 import { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan } from "./away-plan.js";
 
 export { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan };
@@ -54,7 +56,13 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const spawn = plan.spawn, ticking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; return wanted.has(key(cx, cz)) && inSpawnArea(spawn, cx, cz); }; // entities pass fractional coordinates
   world.isTicking = ticking;
   const put = world.put.bind(world);
-  world.put = (x, y, z, b, meta = 0) => ticking(x, z) && put(x, y, z, b, meta, true);
+  const light = new AwayBlockLight(world, plan.chunks.map((c) => ({ x: c.x, z: c.z })));
+  world.put = (x, y, z, b, meta = 0) => {
+    if (!ticking(x, z)) return false;
+    const old = world.get(x, y, z), ok = put(x, y, z, b, meta, true);
+    if (ok) light.touch(old, b);
+    return ok;
+  };
 
   const drops = [], tiles = plan.tiles, spill = (stack, x, y, z) => {
     const made = makeStack(stack.id, stack.count, stack.damage || 0);
@@ -79,7 +87,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const dispRand = new JavaRandom(BigInt(rand) * 40503n + 7n);
   const rt = createRedstoneRuntime({ world, scene: null, game: {
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
-    drop: (x, y, z, d) => spill(d, x + 0.5, y + 0.5, z + 0.5), sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => null,
+    drop: (x, y, z, d) => spill(d, x + 0.5, y + 0.5, z + 0.5), sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
     items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,
     primeTnt: (x, y, z) => ents?.prime(x + 0.5, y + 0.5, z + 0.5),
@@ -104,10 +112,11 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       firework: (stack, x, y, z, fx, fz) => { if (ents) dispenseFirework(ents.rockets, x, y, z, fx, fz, stack); else unsupported.hit = true; },
     },
   } });
-  rt.restore({ redstone: plan.redstone, pistons: plan.pistons });
+  rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks });
+  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); } });
   const live = rt.redstone;
   // Dispensers and droppers fire through the entity systems above (items, TNT, carts, buckets, flint and steel). A dispense that
-  // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks need the command interpreter and are skipped (dimensions.md "Batch 31").
+  // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks run through away-commands.js.
   for (const id of [23, 158]) {
     const b = live.behaviours[id];
     if (!b) continue;
@@ -118,7 +127,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       if (unsupported.hit) { if (before) tiles.dispensers[k] = before; else delete tiles.dispensers[k]; }
     } };
   }
-  if (live.behaviours[137]) live.behaviours[137] = { ...live.behaviours[137], updateTick() {} };
+  cmds.installBlock(live); // BlockCommandBlock.updateTick: a scheduled tick, no player test
   const hoppers = new Hoppers({
     world, chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing,
     maxStack: (s) => maxStackOf(s.id ?? s), burnTime, items: () => ents?.items.items ?? [], active: ticking, changed: (keys) => rt.containerClosed(keys),
@@ -137,7 +146,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     }
   };
 
-  ents = awayEntities(plan, { world, ticking, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), maxStack: (st) => sv.inventory.maxStack(st) });
+  ents = awayEntities(plan, { world, ticking, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
   if (ents) ents.falling = falling;
   const idle = () => !fluids.pending.size && !fire.queue.heap.length && !falling.pending.size && !live.tree.length && !live.thisTick.length
     && !live.deferred.length && !(live.torchToggles?.length) && !live.blockEvents.some((l) => l.length) && !live.pistonTiles().length;
@@ -152,6 +161,8 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     fire.tick();
     if (entities) falling.tick();
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
+    cmds.state.ran = ran;
+    if (ran % 10 === 0) light.refresh(ran);
     live.clock++; live.time++;
     live.tickUpdates(); live.sendQueuedBlockEvents();
     if (entities && ents) ents.tick();
@@ -163,6 +174,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     entities: entityLists,
     columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: falling.serialize(),
     editSequence: world.nextEditOrder, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
-    stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}) },
+    ...cmds.result(),
+    stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}), commands: cmds.stats, light: { emitters: light.emitters, floods: light.floods, floodMs: Math.round(light.floodMs) } },
   };
 }

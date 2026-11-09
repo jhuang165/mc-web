@@ -34,13 +34,13 @@ import { copyStack } from "./inventory.js";
 // Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
 // A spawner cart only moves: MobSpawnerBaseLogic needs a player within 16 blocks, so nothing spawns with nobody there. The hopper cart
 // transfers through the run's Hoppers host. The command cart (6) needs the command interpreter and stays frozen as saved.
-const CART_TYPES = new Set([0, 1, 2, 3, 4, 5]);
+const CART_TYPES = new Set([0, 1, 2, 3, 4, 5]); // 6 (command cart) joins when the run has a command host (away-commands.js)
 // Mobs the run leaves as saved: the dimension bosses, and anything riding, ridden, leashed or carrying the player.
 const FROZEN_MOBS = new Set(["ender_dragon", "ender_crystal", "wither"]);
 const PLAYER_FAR = 1e9; // the stand-in position of the absent player (never read as a target: `absent` and not alive)
 const num = (v) => Number.isFinite(v);
 
-export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack, maxStack, transfer = null, sound = () => {} }) {
+export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack, maxStack, transfer = null, sound = () => {}, light = null, runCommand = null }) {
   const e = plan.entities;
   if (!e) return null;
   const at = (r) => num(r?.x) && num(r?.z) && ticking(r.x, r.z);
@@ -52,17 +52,20 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
 
   const drops = split(e.drops), orbs = split(e.xpOrbs), tnt = split(e.tnt);
   const mobList = Array.isArray(e.mobs) ? e.mobs : [], mounts = new Set(mobList.map((m) => m?.riding).filter((r) => typeof r === "string"));
-  const simMob = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && !m.riding && !mounts.has(m.id) && !m.leash && !m.playerRides;
+  // A lead whose other end is a knot in a ticked column runs (horse-gear-live.js recreates the knot from the record and the fence check keeps it);
+  // a lead held by the player or another mob, or a lost lead, stays as saved.
+  const leashOk = (m) => !m.leash || (!m.leash.holder && !m.leash.lost && [m.leash.knot?.x, m.leash.knot?.y, m.leash.knot?.z].every(Number.isInteger) && ticking(m.leash.knot.x, m.leash.knot.z));
+  const simMob = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && !m.riding && !mounts.has(m.id) && leashOk(m) && !m.playerRides;
   const mobSplit = { inside: mobList.filter(simMob), rest: mobList.filter((m) => !simMob(m)) };
   const arrowSplit = split(e.arrows);
-  const ballSplit = (() => { const inside = [], rest = []; for (const r of Array.isArray(e.projectiles) ? e.projectiles : []) (at(r) && r.kind !== "enderPearl" ? inside : rest).push(r); return { inside, rest }; })(); // a pearl needs its thrower
+  const ballSplit = (() => { const inside = [], rest = []; for (const r of Array.isArray(e.projectiles) ? e.projectiles : []) (at(r) ? inside : rest).push(r); return { inside, rest }; })();
   const potionSplit = split(e.potions);
   const rocketList = Array.isArray(e.rockets?.rockets) ? e.rockets.rockets : [], rocketSplit = { inside: rocketList.filter(at), rest: rocketList.filter((r) => !at(r)) };
   const fireList = Array.isArray(e.fireballs) ? e.fireballs : [], fireIn = (r) => (r?.dimension ?? 0) === 0 && at(r);
   const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => num(r?.tx) && num(r?.tz) && ticking(r.tx, r.tz);
   const hangSplit = { inside: hangList.filter(hangAt), rest: hangList.filter((r) => !hangAt(r)) };
   const cartList = Array.isArray(e.minecarts?.carts) ? e.minecarts.carts : [], boatList = Array.isArray(e.boats) ? e.boats : [];
-  const simCart = (c) => at(c) && CART_TYPES.has(c.type) && !c.rider && !ridden.has(`cart-${c.id}`);
+  const simCart = (c) => at(c) && (CART_TYPES.has(c.type) || (c.type === 6 && runCommand)) && !c.rider && !ridden.has(`cart-${c.id}`);
   const simBoat = (b) => at(b) && !b.rider && !ridden.has(`boat-${b.id}`);
   const carts = { inside: cartList.filter(simCart), rest: cartList.filter((c) => !simCart(c)) };
   const boatsSplit = { inside: boatList.filter(simBoat), rest: boatList.filter((b) => !simBoat(b)) };
@@ -101,15 +104,20 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
   mobs.isRaining = () => weather.isRaining();
   mobs.isThundering = () => weather.isThundering();
-  // No lighting volume runs here: the brightness a mob reads is open sky less the skylight subtracted (no block light), which is what its
-  // sunburn and path weights need; spawning is off.
-  mobs.lightAt = (x, y, z) => (canSeeSky(world, x, y, z) ? Math.max(0, 15 - subtracted()) : 0);
+  // The sky half is open sky less the skylight subtracted (no lateral sky light); spawning is off.
+  // Block light (away-light.js) joins it: World.getBlockLightValue is the larger of the two (LightVolume.level).
+  mobs.lightAt = (x, y, z) => Math.max(canSeeSky(world, x, y, z) ? Math.max(0, 15 - subtracted()) : 0, light ? light.blockAt(x, y, z) : 0);
+  if (light) mobs.dimensionBlockLight = (x, y, z) => light.blockAt(x, y, z);
   mobs.shoot = (m, target, scale) => arrows.skeletonShoot(m, target, scale, mobs.difficulty);
   mobs.ignite = (x, y, z) => fire.ignite(x, y, z);
   mobs.potions = new WitchPotions(mobs, random);
   mobs.potions.load(potionSplit.inside);
   if (fireList.some(fireIn)) { const mine = fireList.filter(fireIn); mobs.fireballs.load(mine, 0); mobs.skulls.load(mine, 0); }
   if (e.villages) mobs.villages.loadJSON(e.villages);
+  // EntityEnderPearl.onImpact (zm.a, bytecode-read): an entity hit takes thrown damage 0 from the thrower, 32 portal particles, and the teleport needs a
+  // thrower that is an EntityPlayerMP in the pearl's own world (mw.o == this.o). The thrower is null (an unloaded save looks it up in a world with no
+  // player) or the player in the Nether/End, so nothing teleports: the pearl just dies. The hit mob gets the same 0-damage hurt a snowball does.
+  const pearlLands = ({ pearl, hit }) => { if (hit && hit !== "player") thrownHit(mobs, hit, pearl); pearl.dead = true; };
   const late = []; // spills after the gate: an item entity that would never tick, kept as a saved record
   let open = true;
 
@@ -148,7 +156,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
       items.tick(world, maxStack);
       tickPrimedTnt(world, primed, { explode: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }) });
       if (projectiles.balls.length) {
-        projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), null);
+        projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), pearlLands);
         for (const h of projectiles.drain()) if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
       }
       drainMob();
@@ -173,6 +181,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
       clock++;
     },
     close() { open = false; },
+    shiftTime(d) { clock += d; }, // /time set or add by a command block
     // Every list in its saved form: the records outside the run unchanged, the run's entities serialized.
     finish() {
       return {
@@ -192,6 +201,6 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
     },
   };
   // EntityMinecartTNT and the furnace cart: the explosion; smoke and sounds are not drawn.
-  const cartHost = { explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
+  const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
   return self;
 }
