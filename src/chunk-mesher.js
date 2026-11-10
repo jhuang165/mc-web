@@ -9,8 +9,8 @@ import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, st
 import { PORTAL, portalSideRendered } from "./nether-portal.js";
 import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
-import { woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
-import { LILY_PAD, FERN, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET } from "./world.js";
+import { WOOD_SLAB, woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
+import { LILY_PAD, FERN, DEAD_SHRUB, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET, HAY_BALE } from "./world.js";
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
@@ -44,6 +44,21 @@ export const FACES = [
 ];
 // Fancy graphics: leaves are not opaque at render time, so faces next to them draw; Fast makes both leaf
 // blocks opaque (BlockLeaves.setGraphicsLevel), so faces between and against leaves are culled.
+// BlockSlab.shouldSideBeRendered (single slab; bytecode-read and replayed in render-types.test.js): the side faces follow aji.a (hidden by an
+// opaque cube) and are also dropped against a single slab of the same half; the top and bottom faces are never dropped.
+const slabCulled = (w, b, meta, x, y, z, fi, f, boundary) => {
+  const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2], nb = w.get(nx, ny, nz), single = nb === STONE_SLAB || nb === WOOD_SLAB, nbTop = single && (w.getMeta(nx, ny, nz) & 8) !== 0, top = (meta & 8) !== 0;
+  if (fi === 2 || fi === 3) return false; // the top and bottom: a single slab is not an opaque cube, so either the aji.a test or the same-half test passes
+  return (boundary && hides(nb)) || (single && nbTop === top);
+};
+// RenderBlocks' uvRotate* quarter turn of a face's texture, per face in the face's own (s, t) texture space (t grows downward). Read off the
+// native vertices of logs and quartz pillars (render-types.test.js): the faces are mirrored differently, so the turn is a plain rotation
+// on the top, bottom, west and south faces and a reflection across the anti-diagonal on the east and north faces.
+const TURN = [(u, v) => [1 - v, 1 - u], (u, v) => [v, 1 - u], (u, v) => [v, 1 - u], (u, v) => [1 - v, u], (u, v) => [v, 1 - u], (u, v) => [1 - v, 1 - u]];
+const turnUvs = (uvs, fi, r) => uvs.forEach((uv, i) => {
+  const [s, t] = TURN[fi]((uv[0] - r.u0) / (r.u1 - r.u0), (r.v1 - uv[1]) / (r.v1 - r.v0));
+  uvs[i] = [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
+});
 export const hides = (b) => opaqueCube(b) && ((b !== 5 && b !== 71) || leavesOpaque());
 // Smooth Lighting: Off lights each face flat from one cell (renderStandardBlockWithColorMultiplier), Minimum
 // uses the full-cube ambient occlusion path for every block, Maximum switches to the interpolating partial
@@ -61,25 +76,32 @@ export class Mesher {
     this.light = [];
     this.idx = [];
   }
-  // Four vertices with per-vertex (or shared) shade and packed brightness.
+  // Four vertices with per-vertex (or shared) shade and packed brightness. twoSided true draws the same vertices from behind (reversed
+  // triangles); "mirror" adds a second quad of its own vertices for the back with the u of every vertex mirrored across the quad's u span, as
+  // RenderBlocks.renderCrossedSquares and renderBlockCropsImpl draw their back faces (the picture is not flipped when seen from behind).
   quad(verts, uvs, shade, packed, twoSided = false) {
-    const v = this.p.length / 3;
-    for (let i = 0; i < 4; i++) {
-      this.p.push(...verts[i]);
-      this.uv.push(...uvs[i]);
-      const s = Array.isArray(shade) ? shade[i] : shade, l = Array.isArray(packed) ? packed[i] : packed;
-      const sf = Math.fround(s); this.shade.push(sf, sf, sf); // RenderBlocks colours are Java floats
-      this.light.push(l & 0xffff, (l >> 16) & 0xffff);
+    const v = this.p.length / 3, mirror = twoSided === "mirror";
+    for (let pass = 0; pass < (mirror ? 2 : 1); pass++) {
+      const lo = Math.min(...uvs.map((t) => t[0])), hi = Math.max(...uvs.map((t) => t[0]));
+      for (let i = 0; i < 4; i++) {
+        this.p.push(...verts[i]);
+        this.uv.push(pass ? lo + hi - uvs[i][0] : uvs[i][0], uvs[i][1]);
+        const s = Array.isArray(shade) ? shade[i] : shade, l = Array.isArray(packed) ? packed[i] : packed;
+        const sf = Math.fround(s); this.shade.push(sf, sf, sf); // RenderBlocks colours are Java floats
+        this.light.push(l & 0xffff, (l >> 16) & 0xffff);
+      }
     }
+    this.last = mirror ? 8 : 4;
     this.idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
-    if (twoSided) this.idx.push(v, v + 2, v + 1, v, v + 3, v + 2);
+    if (mirror) this.idx.push(v + 4, v + 6, v + 5, v + 4, v + 7, v + 6);
+    else if (twoSided) this.idx.push(v, v + 2, v + 1, v, v + 3, v + 2);
   }
-  // Block.colorMultiplier: multiplies the last quad's four vertex colours by 0xRRGGBB (the shade attribute is an rgb triple).
+  // Block.colorMultiplier: multiplies the last quad's four (eight for a mirrored back face) vertex colours by 0xRRGGBB (the shade attribute is an rgb triple).
   // `native` false marks the paths that never read EntityRenderer.anaglyphEnable (vine, water, redstone wire): their tint stays raw.
   tint(color, native = true) {
-    const [r, g, b] = anaglyphMultiplier(color, native && meshAnaglyph.on), k = this.shade.length - 12;
+    const [r, g, b] = anaglyphMultiplier(color, native && meshAnaglyph.on), n = this.last ?? 4, k = this.shade.length - 3 * n;
     const f = Math.fround;
-    for (let i = 0; i < 4; i++) { this.shade[k + i * 3] = f(this.shade[k + i * 3] * r); this.shade[k + i * 3 + 1] = f(this.shade[k + i * 3 + 1] * g); this.shade[k + i * 3 + 2] = f(this.shade[k + i * 3 + 2] * b); }
+    for (let i = 0; i < n; i++) { this.shade[k + i * 3] = f(this.shade[k + i * 3] * r); this.shade[k + i * 3 + 1] = f(this.shade[k + i * 3 + 1] * g); this.shade[k + i * 3 + 2] = f(this.shade[k + i * 3 + 2] * b); }
   }
   // Tessellator.setColorOpaque_F (bmh.b(float,float,float), bytecode-read): each float channel becomes (int) (c * 255.0f) (clamped to a byte by
   // setColorOpaque) in the vertex colour int, and GL reads it back as byte / 255. The vertex colours that reach the GPU are these bytes.
@@ -101,6 +123,8 @@ export class Mesher {
   }
 }
 export const rectUvs = (r) => [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]];
+// renderFaceYNeg gives the corner at the cell's low z the icon's minV (its top row), the opposite of the FACES order's plain rectUvs.
+export const bottomUvs = (r) => [[r.u0, r.v1], [r.u1, r.v1], [r.u1, r.v0], [r.u0, r.v0]];
 // BlockLiquid.getMixedBrightnessForBlock: the brighter of the cell and the one above.
 export const maxPacked = (a, b) => Math.max(a & 0xffff, b & 0xffff) | (Math.max(a >>> 16, b >>> 16) << 16);
 
@@ -135,15 +159,22 @@ export class MeshMethods {
       const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
       if (b === LILY_PAD && fi !== 2 && fi !== 3) return; // RenderBlocks.renderBlockLilyPad (blm.o) adds two flat quads, top and underside, and no sides.
       // BlockSnow.shouldSideBeRendered always draws the top.
-      if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
-      if ((b === 9 || b === ICE) && nb === b) return;
-      if (b === STAINED_GLASS && nb === b && w.getMeta(x + f.n[0], y + f.n[1], z + f.n[2]) === w.getMeta(x, y, z)) return;
+      // BlockBreakable.shouldSideBeRendered: stained glass beside any block whose metadata differs from its own is always drawn (even beside an
+      // opaque cube); beside the same metadata, glass of the same block is dropped.
+      const glassDiffers = b === STAINED_GLASS && w.getMeta(x + f.n[0], y + f.n[1], z + f.n[2]) !== w.getMeta(x, y, z);
+      if (glassDiffers) { /* drawn */ } else {
+        if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
+        if ((b === 9 || b === ICE) && nb === b) return;
+        if (b === STAINED_GLASS && nb === b) return;
+      }
       const snowed = b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23);
-      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), snowed)), uvs = rectUvs(r);
+      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), snowed)), uvs = fi === 3 ? bottomUvs(r) : rectUvs(r);
       // RenderBlocks.renderBlockLilyPad: the top and underside quads take a hashed one-of-four rotation of the texture (lily-pad.js; native minV is this atlas's v1).
       if (b === LILY_PAD) f.v.forEach((v, i) => { const [u, t] = lilyPadCornerUv(x, y, z, v[0], v[2]); uvs[i] = [u ? r.u1 : r.u0, t ? r.v0 : r.v1]; });
       // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
-      if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) uvs.push(uvs.shift()); }
+      if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) turnUvs(uvs, fi, r); }
+      // RenderBlocks.renderBlockLog (render type 31): a log lying on x (meta 4) turns the top, bottom, east and west faces a quarter, one lying on z (meta 8) the north and south faces.
+      if (b === 4 || b === 70 || b === HAY_BALE) { const axis = w.getMeta(x, y, z) & 12; if ((axis === 4 && fi >= 2) || (axis === 8 && fi < 2)) turnUvs(uvs, fi, r); }
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
@@ -200,7 +231,7 @@ export class MeshMethods {
     const w = this.world, L = this.light, lo = [x0, y0, z0], hi = [x1, y1, z1];
     FACES.forEach((f, fi) => {
       const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
-      if (!renderAllFaces && boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2]))) return;
+      if (!renderAllFaces && (b === STONE_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
       const r = tileRect(blockTile(b, fi, false, meta)),
         corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
         st = (p) => [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi],
@@ -212,25 +243,26 @@ export class MeshMethods {
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
   }
-  // RenderBlocks.renderBlockStairs (render type 10): the half block with the usual face culling, then
-  // the second box and the optional inner-corner box with renderAllFaces set (stairBoxes).
+  // RenderBlocks.renderBlockStairs (render type 10): the half block (renderAllFaces false), then
+  // the second box and the optional inner-corner box with the same culling (native bounds-based; renderAllFaces stays off, verified in render-types.test.js) (stairBoxes).
   stairs(m,b,x,y,z) {
-    stairBoxes(this.world,x,y,z).forEach((box,i)=>this.box(m,b,x,y,z,box,0,i>0));
+    stairBoxes(this.world,x,y,z).forEach((box,i)=>this.box(m,b,x,y,z,box,0,false));
   }
-  // RenderBlocks.renderBlockDoor (render type 7): the half's bounds as a box with the usual face culling, each side
+  // RenderBlocks.renderBlockDoor (render type 7): the half's bounds as a box with every face always drawn (flat light), each side
   // face using BlockDoor.getIcon's flipped or plain texture (doorFaceFlip); the top and bottom use the lower texture.
   door(m,b,x,y,z) {
     const w=this.world,L=this.light,flags=doorFlags(w,x,y,z),[x0,y0,z0,x1,y1,z1]=doorBoundsFor(flags),lo=[x0,y0,z0],hi=[x1,y1,z1],
       SIDE=[5,4,1,0,3,2],half=(flags&8)?8:0;
     FACES.forEach((f,fi)=>{
       const axis=fi>>1,positive=(fi&1)===0,boundary=positive?hi[axis]>=1:lo[axis]<=0;
-      if(boundary&&hides(w.get(x+f.n[0],y+f.n[1],z+f.n[2])))return;
       const flip=fi<2||fi>3?doorFaceFlip(flags,SIDE[fi]):false,
         r=tileRect(blockTile(b,fi,false,fi===2||fi===3?0:half)),
         corners=f.v.map(v=>[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0]),
-        st=(p)=>[[1-p[2],1-p[1]],[p[2],1-p[1]],[p[0],p[2]],[p[0],p[2]],[p[0],1-p[1]],[1-p[0],1-p[1]]][fi],
+        // renderFaceXPos/ZNeg crop the icon to the face's extent: the mirrored axes run (min + max) - p, so a thin end cap shows a strip of the door
+        // (the native end caps differ from a full-width face here; render-types.test.js).
+        st=(p)=>[[z0+z1-p[2],1-p[1]],[p[2],1-p[1]],[p[0],p[2]],[p[0],p[2]],[p[0],1-p[1]],[x0+x1-p[0],1-p[1]]][fi],
         uvs=corners.map(p=>{const [s0,t]=st(p),s=flip?1-s0:s0;return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
-        sm=shadeFace(L,x,y,z,fi,corners,boundary,partialBox(lo,hi));
+        sm=flatFace(L,x,y,z,fi,corners,boundary); // renderBlockDoor never takes the ambient occlusion path (native, all three settings)
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });
   }
@@ -247,7 +279,7 @@ export class MeshMethods {
         across=(p)=>dz===1?p[0]:dz===-1?1-p[0]:dx===1?1-p[2]:p[2],
         st=(p)=>kind==='end'?[across(p),1-p[1]]:kind==='side'?[along(p),1-p[1]]:[along(p),across(p)],
         uvs=corners.map(p=>{const [s,t]=st(p);return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
-        sm=shadeFace(L,x,y,z,fi,corners,boundary,true);
+        sm=flatFace(L,x,y,z,fi,corners,boundary);
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });
   }
@@ -537,27 +569,45 @@ export class MeshMethods {
   }
   crossed(m, b, x, y, z) {
     const w = this.world;
-    let px = x, py = y, pz = z;
-    if (b === 39 || isFlower(b)) {
-      let i = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ BigInt(y));
+    let px = x, py = y, pz = z, hash = 0n;
+    const tallgrass = b === 39 || b === FERN || b === DEAD_SHRUB;
+    if (tallgrass || isFlower(b) || b === DOUBLE_PLANT) {
+      // blm.l hashes x * 3129871 ^ z * 116129781 ^ y; blm.a(ako, ...) (the double plant) leaves y out of the same hash (bytecode-read, and the
+      // native probe's positions agree).
+      let i = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ (b === DOUBLE_PLANT ? 0n : BigInt(y)));
       i = BigInt.asIntN(64, i * i * 42317861n + i * 11n);
+      hash = i;
       const bits = (s) => Number((i >> BigInt(s)) & 15n) / 15;
-      // blm.l: tall grass moves 0.5 sideways and sinks; flowers (yellow and
-      // red) use the same hash for a 0.3 sideways jitter and do not sink.
-      const spread = b === 39 ? 0.5 : 0.3;
+      // blm.l: tall grass (every BlockTallGrass metadata: dead shrub, grass, fern) moves 0.5 sideways and sinks; flowers (yellow and
+      // red) use the same hash for a 0.3 sideways jitter and do not sink. The double plant jitters 0.3 sideways, no sink.
+      const spread = tallgrass ? 0.5 : 0.3;
       px += (bits(16) - 0.5) * spread;
-      if (b === 39) py += (bits(20) - 1) * 0.2;
+      if (tallgrass) py += (bits(20) - 1) * 0.2;
       pz += (bits(24) - 0.5) * spread;
     }
-    const raw=w.getMeta(x,y,z), plantMeta=b===DOUBLE_PLANT&&(raw&8)?(w.getMeta(x,y-1,z)&7)|8:raw;
+    const raw=w.getMeta(x,y,z), top=b===DOUBLE_PLANT&&(raw&8)!==0, plantMeta=top?(w.getMeta(x,y-1,z)&7)|8:raw;
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
     // BlockTallGrass (not the dead shrub), BlockReed and BlockDoublePlant grass/fern: the biome grass colour of this one position.
     const grassy = b === 39 || b === FERN || b === REEDS || (b === DOUBLE_PLANT && ((plantMeta & 7) === 2 || (plantMeta & 7) === 3)),
       tint = grassy ? this.biomeColors.grassAt(x + this.colorX, y, z + this.colorZ) : null;
-    m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
+    m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, "mirror");
     if (tint !== null) m.tint(tint);
-    m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
+    m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, "mirror");
     if (tint !== null) m.tint(tint);
+    if (top && (plantMeta & 7) === 0) this.sunflowerHead(m, px, py, pz, light, hash);
+  }
+  // The sunflower's head (blm.a(ako, ...), bytecode-read): on the upper half, a front and a back quad (double_plant_sunflower_front and _back)
+  // turned about the vertical by cos(l * 0.8) * pi * 0.1 (l the position hash) and leaning 0.3 / 0.05 off the stem; y is not jittered.
+  sunflowerHead(m, px, py, pz, light, hash) {
+    const ang = Math.cos(Number(hash) * 0.8) * Math.PI * 0.1, cs = Math.cos(ang), sn = Math.sin(ang),
+      d41 = 0.5 + 0.3 * cs - 0.5 * sn, d43 = 0.5 + 0.5 * cs + 0.3 * sn, d45 = 0.5 + 0.3 * cs + 0.5 * sn, d47 = 0.5 + -0.5 * cs + 0.3 * sn,
+      d49 = 0.5 + -0.05 * cs + 0.5 * sn, d51 = 0.5 + -0.5 * cs + -0.05 * sn, d53 = 0.5 + -0.05 * cs - 0.5 * sn, d55 = 0.5 + 0.5 * cs + -0.05 * sn;
+    const front = tileRect(tileByName("double_plant_sunflower_front")), back = tileRect(tileByName("double_plant_sunflower_back"));
+    // Original (minU, maxV) .. with minV the tile's top: the atlas v1 is the top row.
+    m.quad([[px + d49, py + 1, pz + d51], [px + d53, py + 1, pz + d55], [px + d41, py, pz + d43], [px + d45, py, pz + d47]],
+      [[front.u0, front.v0], [front.u1, front.v0], [front.u1, front.v1], [front.u0, front.v1]], 1, light);
+    m.quad([[px + d53, py + 1, pz + d55], [px + d49, py + 1, pz + d51], [px + d45, py, pz + d47], [px + d41, py, pz + d43]],
+      [[back.u0, back.v0], [back.u1, back.v0], [back.u1, back.v1], [back.u0, back.v1]], 1, light);
   }
   // RenderBlocks.renderBlockCactusImpl (render type 13): no ambient occlusion. The bottom and top
   // follow shouldSideBeRendered (not under an opaque cube) in the brightness of the cell beyond;
@@ -569,7 +619,7 @@ export class MeshMethods {
       const vertical = fi === 2 || fi === 3;
       if (vertical && hides(w.get(x, y + f.n[1], z))) return;
       const verts = f.v.map((v) => [x + v[0] - f.n[0] * t, y + v[1], z + v[2] - f.n[2] * t]);
-      m.quad(verts, rectUvs(tileRect(blockTile(CACTUS, fi))), f.shade, vertical ? L.packed(x, y + f.n[1], z) : own);
+      m.quad(verts, (fi === 3 ? bottomUvs : rectUvs)(tileRect(blockTile(CACTUS, fi))), f.shade, vertical ? L.packed(x, y + f.n[1], z) : own);
     });
   }
   // RenderBlocks.renderBlockLadder (render type 8): one quad 0.05 off the wall the metadata
@@ -600,8 +650,8 @@ export class MeshMethods {
   crops(m, b, x, y, z) {
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, this.world.getMeta(x, y, z)))), light = this.light.packed(x, y, z), y0 = y - 1 / 16, y1 = y0 + 1;
     for (const o of [0.25, 0.75]) {
-      m.quad([[x + o, y0, z], [x + o, y0, z + 1], [x + o, y1, z + 1], [x + o, y1, z]], uvs, 1, light, true);
-      m.quad([[x, y0, z + o], [x + 1, y0, z + o], [x + 1, y1, z + o], [x, y1, z + o]], uvs, 1, light, true);
+      m.quad([[x + o, y0, z], [x + o, y0, z + 1], [x + o, y1, z + 1], [x + o, y1, z]], uvs, 1, light, "mirror");
+      m.quad([[x, y0, z + o], [x + 1, y0, z + o], [x + 1, y1, z + o], [x, y1, z + o]], uvs, 1, light, "mirror");
     }
   }
   // renderBlockLiquid (blm.d(Lawt;III)): the top uses the still frames, or the
@@ -611,7 +661,7 @@ export class MeshMethods {
   // flowing texture's top-left quarter, a 0.001 inset and liquid brightness.
   liquid(kind, still, flow, x, y, z) {
     const w = this.world, L = this.light, e = 0.001, inset = 0.0010000000474974513,
-      bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz), L.packed(bx, by + 1, bz)),
+      bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz, false), L.packed(bx, by + 1, bz, false)), // BlockLiquid.getMixedBrightnessForBlock reads both cells with lightValue 0
       top = w.get(x, y + 1, z) !== kind,
       h = [[liquidHeight(w, x, y, z, kind), liquidHeight(w, x, y, z + 1, kind)], [liquidHeight(w, x + 1, y, z, kind), liquidHeight(w, x + 1, y, z + 1, kind)]];
     // BlockLiquid.colorMultiplier: water averages the biome water colour over x-1..x+1, z-1..z+1; lava is white.
@@ -633,8 +683,8 @@ export class MeshMethods {
       const f = FACES[fi], nx = x + f.n[0], nz = z + f.n[2], nb = w.get(nx, y, nz);
       if (nb === kind || hides(nb)) continue;
       const verts = f.v.map((v) => [x + v[0] - f.n[0] * e, y + (v[1] ? h[v[0]][v[2]] : 0), z + v[2] - f.n[2] * e]),
-        uvs = f.v.map((v, i) => [i === 1 || i === 2 ? 0.5 : 0, v[1] ? 1 - (1 - h[v[0]][v[2]]) * 0.5 : 0.5]);
-      flow.quad(verts, uvs, f.shade, bright(nx, y, nz));
+        uvs = f.v.map((v, i) => [i === 1 || i === 2 ? 0 : 0.5, v[1] ? 1 - (1 - h[v[0]][v[2]]) * 0.5 : 0.5]);
+      flow.quad(verts, uvs, f.shade, bright(nx, y, nz), true); // drawn from both sides, as renderBlockLiquid emits each side twice
       paint(flow);
     }
   }
@@ -647,7 +697,7 @@ export class MeshMethods {
     else if (isCrop(b)) this.crops(solid, b, x, y, z);
     else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
     else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
-    else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), true);
+    else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z));
     else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
     else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
     else if (b===END_PORTAL_FRAME) this.endFrameBlock(solid,x,y,z);

@@ -42,13 +42,13 @@ export function fenceCollisionUnion(mask) {
 }
 
 // RenderBlocks.renderBlockFence (blm.a(akz, III)): the post, then the upper (0.75-0.9375) and lower
-// (0.375-0.5625) bars along x when west or east connects and along z when north or south does.
+// (0.375-0.5625) bars along x when west or east connects (or when nothing does: blm.a sets the x flag then, bytecode-read and native-checked) and along z when north or south does.
 // Each bar starts at the post's middle (7/16 - 9/16) and reaches the connected side.
 export function fenceRenderBoxes(mask) {
   const n = mask & 1, s = mask & 2, w = mask & 4, e = mask & 8;
   const out = [[LO, 0, LO, HI, 1, HI]], a = 0.4375, b = 0.5625;
   for (const [y0, y1] of [[0.75, 0.9375], [0.375, 0.5625]]) {
-    if (w || e) out.push([w ? 0 : a, y0, a, e ? 1 : b, y1, b]);
+    if (w || e || !(n || s)) out.push([w ? 0 : a, y0, a, e ? 1 : b, y1, b]);
     if (n || s) out.push([a, y0, n ? 0 : a, b, y1, s ? 1 : b]);
   }
   return out;

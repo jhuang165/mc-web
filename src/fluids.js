@@ -20,6 +20,7 @@
 
 import { WATER, LAVA, REEDS, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";
+import { toOriginal } from "./block-registry.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { pauseUnloadedTicks, ringBlockTickActive } from './streaming-ticks.js';
 
@@ -61,6 +62,11 @@ export const liquidHeightPercent = (meta) => f(f((meta >= 8 ? 0 : meta) + 1) / 9
 // corner from the four cells around it, all in floats. Source and falling water
 // weigh 11, flowing water 1, open non-liquid cells count as full height; water
 // above any of the four makes the corner full.
+// Material.isSolid (awt.a()) of the original block ids, from the unchanged client (render-types-reference.json materialSolid): these are the ones
+// whose material is not solid. renderBlockLiquid counts such a cell as open for a corner height, which differs from the collision test (a snow layer
+// of any depth, a ladder, a pressure plate).
+const OPEN_MATERIAL = new Set([0, 6, 8, 9, 10, 11, 27, 28, 31, 32, 37, 38, 39, 40, 50, 51, 55, 59, 65, 66, 69, 75, 76, 77, 78, 83, 90, 93, 94, 104, 105, 106, 111, 115, 119, 127, 131, 132, 140, 141, 142, 143, 144, 149, 150, 157, 171, 175]);
+export const materialSolid = (b, meta = 0) => { if (b === 0) return false; const o = toOriginal(b, meta); return !o || !OPEN_MATERIAL.has(o[0]); };
 export function liquidHeight(w, x, y, z, kind = WATER) {
   let n = 0, sum = 0;
   for (let i = 0; i < 4; i++) {
@@ -74,7 +80,7 @@ export function liquidHeight(w, x, y, z, kind = WATER) {
       }
       sum = f(sum + liquidHeightPercent(meta));
       n++;
-    } else if (!w.solid(bx, y, bz)) {
+    } else if (!materialSolid(w.get(bx, y, bz), w.getMeta(bx, y, bz))) {
       sum = f(sum + 1);
       n++;
     }

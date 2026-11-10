@@ -56,10 +56,9 @@ function nativeQuads(flat) {
 const key = (quad) => quad.map((v) => v.slice(0, 3).join(",")).sort().join("|");
 const byKey = (quads) => quads.map((q) => [key(q), q]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
-// Face culling (shouldSideBeRendered) is not part of the colour arithmetic. These six neighbourhoods differ in which faces exist
-// (stained glass beside stained glass of another colour, a slab or cake beside a block that hides only part of its face); the
-// faces both sides emit are still compared exactly, and the set of differing neighbourhoods is pinned so it cannot grow unnoticed.
-const CULLING_KNOWN = ["95:14 f15", "44:0 f72", "44:3 f74", "95:3 f125", "95:14 f127", "92:0 f152"];
+// Face culling (shouldSideBeRendered): batch 37 fixed the six neighbourhoods batch 36 pinned here (stained glass beside another colour, a slab
+// or cake beside a block that hides only part of its face), so every neighbourhood now emits exactly the faces the native class does.
+const CULLING_KNOWN = [];
 
 test("mesher vertex colour bytes and light coords equal RenderBlocks' Tessellator input (168 neighbourhoods, three AO settings)", () => {
   const saved = { ...render }, anaglyph = meshAnaglyph.on;

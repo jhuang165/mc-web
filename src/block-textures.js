@@ -74,6 +74,7 @@ for(const t of STEM_CAKE_TILES)if(!TILES.includes(t))TILES.push(t); // stem and 
 for(const t of ['portal',...WART_TILES])if(!TILES.includes(t))TILES.push(t); // BlockPortal (animated in scene.js) and BlockNetherWart stages (nether-wart.js)
 // BlockGrass overlay (RenderBlocks, Fancy graphics): grey, tinted per vertex by the chunk mesher over the untinted grass_side.
 if(!TILES.includes('grass_side_overlay'))TILES.push('grass_side_overlay');
+for(const t of ['double_plant_sunflower_front','double_plant_sunflower_back'])if(!TILES.includes(t))TILES.push(t); // the sunflower's head quads (RenderBlocks.renderBlockDoublePlant)
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
@@ -88,7 +89,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===161)return tile(face===2?'cake_top':face===3?'cake_bottom':face===1&&meta>0?'cake_inner':'cake_side'); // BlockCake.getIcon: inner on the west side of a cut cake
 
  if(id>=1140&&id<=1148)id-=1000;
- if(id>=140&&id<=148){const c=WOOL_COLORS[meta&15].texture;if(id===140)return tile('glass_'+c);if(id===141)return tile(face===2||face===3?'glass_pane_top_'+c:'glass_'+c);if(id===142)return tile('wool_colored_'+c);if(id===143){const a=meta&12;return tile(face===2&&a===0||face===3&&a===0||face<2&&a===4||face>3&&a===8?'hay_block_top':'hay_block_side');}if(id===144)return tile('coal_block');if(id===145)return tile('lapis_block');if(id===146)return tile('emerald_block');if(id===147)return tile('sponge');return tile(face===2||face===3?'pumpkin_top':face===[4,0,5,1][meta&3]?'pumpkin_face_on':'pumpkin_side');}
+ if(id>=140&&id<=148){const c=WOOL_COLORS[meta&15].texture;if(id===140)return tile('glass_'+c);if(id===141)return tile(face===2||face===3?'glass_pane_top_'+c:'glass_'+c);if(id===142)return tile('wool_colored_'+c);if(id===143){const a=meta&12;return tile(face===2&&a===0||face===3&&a===0||face<2&&a===4||face>3&&a===8?'hay_block_top':'hay_block_side');}if(id===144)return tile('coal_block');if(id===145)return tile('lapis_block');if(id===146)return tile('emerald_block');if(id===147)return tile('sponge');return tile(face===2||face===3?'pumpkin_top':face===[4,1,5,0][meta&3]?'pumpkin_face_on':'pumpkin_side');}
  if(id===1177||id===1178)id-=1000; // note block and jukebox items
  if(id===177)return tile('noteblock');
  if(id===178)return tile(face===2?'jukebox_top':'jukebox_side');
@@ -133,7 +134,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===63)return tile('lapis_ore');
  if(id===64||id===65)return tile('redstone_ore');
  if(id===66)return tile('emerald_ore');
- if(id===67)return tile(face===2||face===3?'pumpkin_top':face===[4,0,5,1][meta&3]?'pumpkin_face_off':'pumpkin_side');
+ if(id===67)return tile(face===2||face===3?'pumpkin_top':face===[4,1,5,0][meta&3]?'pumpkin_face_off':'pumpkin_side');
  if(id===68)return tile(['stone','cobblestone','stonebrick','stonebrick_mossy','stonebrick_cracked','stonebrick_carved'][meta]??'stone'); // BlockSilverfish.getIcon: metadata 0-5, anything else is stone
  if(id===69)return tile('double_plant_'+['sunflower','syringa','grass','fern','rose','paeonia'][meta&7]+'_'+(meta&8?'top':'bottom'));
  if(id===4||id===70){const type=TREE_TEXTURES[(id===70?4:0)+(meta&3)]??'oak',axis=meta&12;return tile('log_'+type+((axis===0&&(face===2||face===3)||axis===4&&(face===0||face===1)||axis===8&&(face===4||face===5))?'_top':''));}
@@ -183,7 +184,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===46)return tile('snow');
  if(id===47)return tile('ice');
  if(id===4)return tile(face===2||face===3?'log_oak_top':'log_oak');
- if(id===13)return tile(face===2?'crafting_table_top':face===3?'planks_oak':face===4||face===5?'crafting_table_front':'crafting_table_side');
+ if(id===13)return tile(face===2?'crafting_table_top':face===3?'planks_oak':face===1||face===5?'crafting_table_front':'crafting_table_side');
  if(id===14){const front=({2:5,3:4,4:1,5:0})[meta]??4;return tile(face===2||face===3?'furnace_top':face===front?(lit?'furnace_front_on':'furnace_front_off'):'furnace_side');}
  if(id===41||id===162)return tile(face===2||face===3?'chest_top':face===4?'chest_front':'chest_side');
  if(id===21)return tile(face===2||face===3?'planks_oak':'bookshelf');
