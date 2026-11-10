@@ -151,7 +151,7 @@ import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
-import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
+import { HopperContainer, Hoppers, HOPPER, hopperActive } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
@@ -454,7 +454,7 @@ const hopperTiles = new Hoppers({
   maxStack: (s) => survival.inventory.maxStack(s),
   burnTime,
   items: () => items.items,
-  active: (x, z) => !world.streaming || world.isTicking(x, z),
+  active: (x, z) => hopperActive(world, x, z), // the window, and ring columns that take writes (hopper.js)
   changed: (keys) => { saved = false; redstoneRuntime?.containerClosed(keys); },
 });
 let rider = createPlayerRider();

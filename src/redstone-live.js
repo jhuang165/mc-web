@@ -21,6 +21,7 @@ import { doorSound } from "./doors-panes.js";
 import { hashSeed, WATER, LAVA } from "./world.js";
 
 const REPEATER = 112, FURNACE = 14;
+const PISTON_REACH = 14; // 12 blocks pushed plus the head cell and the one beyond
 const PLATES = [70, 72, 147, 148], SENSOR = 151, TRIPWIRE = 132; // plates and tripwire strings are re-sensed every tick while idle
 const COMPARATORS = [149, 150];
 const SIZES = { 54: 27, 146: 27, 61: 3, 62: 3, 23: 9, 158: 9, 154: 5, 117: 4 };
@@ -74,6 +75,45 @@ export class LiveRedstone extends RedstoneWorld {
   tickable(x, y, z) {
     const w = this.world;
     return w.inside(x, y, z) && (w.isLoaded(x, z) || (w.ringReads && !!w.ringSink?.blockTicks(x, z)));
+  }
+  // Block events (BlockPistonBase) and the tile-entity loop (TileEntityPiston) have no neighbour chunk test of their own: the tile loop
+  // needs only its own chunk (World.updateEntities: blockExists, bytecode-read in ring-pistons-reference.json) and the piston classes
+  // make no chunk test (WorldServer's own event delivery was not read), because natively every chunk a piston line reads (13 blocks, BlockPistonBase.canPushBlock loop plus the head) is loaded. Here
+  // a missing ring column reads as air and drops writes, so with a ring the event waits until its column takes writes and the chunks
+  // within 14 blocks are resident or held (HeadlessColumns.reaches); a moving block needs its own column writable and the chunks within 2 blocks (its finish updates the neighbours).
+  eventActive(x, y, z) {
+    const ring = this.world.ringSink;
+    if (!ring || !this.world.ringReads) return true;
+    return this.world.inside(x, y, z) && ring.writable(x, z) && ring.reaches(x, z, PISTON_REACH);
+  }
+  tileActive(te) {
+    const w = this.world, ring = w.ringSink;
+    return !ring || !w.ringReads || w.isLoaded(te.x, te.z) || (ring.writable(te.x, te.z) && ring.reaches(te.x, te.z, 2));
+  }
+  // WorldServer.sendQueuedBlockEvents with the ring wait above: an event that cannot run stays in the list that is not being filled,
+  // and joins the filling list (equal events merge, as addBlockEvent) on the next call.
+  sendQueuedBlockEvents() {
+    const idle = this.blockEvents[this.blockEventIndex ^ 1];
+    if (idle.length) {
+      const fill = this.blockEvents[this.blockEventIndex];
+      for (const d of idle) if (!fill.some((f) => f.x === d.x && f.y === d.y && f.z === d.z && f.id === d.id && f.event === d.event && f.param === d.param)) fill.push(d);
+      this.blockEvents[this.blockEventIndex ^ 1] = [];
+    }
+    const wait = [];
+    while (this.blockEvents[this.blockEventIndex].length) {
+      const i = this.blockEventIndex;
+      this.blockEventIndex ^= 1;
+      for (const d of this.blockEvents[i]) {
+        const id = this.getBlock(d.x, d.y, d.z);
+        if (id !== d.id) continue;
+        if (!this.eventActive(d.x, d.y, d.z)) { if (!wait.some((f) => f.x === d.x && f.y === d.y && f.z === d.z && f.id === d.id && f.event === d.event && f.param === d.param)) wait.push(d); continue; }
+        this.record(`v,${d.x},${d.y},${d.z},${id},${d.event},${d.param}`);
+        const r = this.behaviours[id]?.onBlockEventReceived?.(this, d.x, d.y, d.z, d.event, d.param) ?? false;
+        this.record(`r,${r ? 1 : 0}`);
+      }
+      this.blockEvents[i].length = 0;
+    }
+    this.blockEvents[this.blockEventIndex ^ 1] = wait;
   }
   getBlock(x, y, z) {
     const id = this.world.get(x, y, z);
