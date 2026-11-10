@@ -14,9 +14,12 @@ import { plain, LogRandom } from "./legacy-ai-replay.js";
 // (EntityFireball.onUpdate) on the unchanged 1.7.10 classes, against `Fireballs.tick` in the port's EntityWorld. The shooters and targets stand still (the
 // replay ticks the fireballs, not the mobs). Row per tick: [entities [x, y, z, vx, vy, vz, health, fire ticks, isDead], fireballs [large, shooter
 // index (-1 none, the player is the last index), x, y, z, vx, vy, vz, ax, ay, az, isDead, ticksInAir, ticksAlive, power], explosions [x, y, z, power,
-// flaming, smoking, hasExploder], setBlock calls [x, y, z, id], punches [ball, accepted, lookX, lookY, lookZ]].
+// flaming, smoking, hasExploder], setBlock calls [x, y, z, id], punches [ball, accepted, lookX, lookY, lookZ], hurts [victim, accepted, health]]. An entity's tenth
+// value is its entityToAttack index (-1 none) for the mobs in TARGETING.
 export const fireballReference = JSON.parse(readFileSync(new URL("../public/research/fireballs-reference.json", import.meta.url))).records;
-const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube" };
+const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant" };
+// The mobs whose entityToAttack (td.bT) the record keeps: the legacy-action-state mobs (EntityZombie and the other AI-task mobs keep it unused in 1.7.10).
+const TARGETING = new Set(["blaze", "silverfish", "giant", "spider", "pigman"]);
 const NUM = Number;
 
 export function replayFireballs(r) {
@@ -47,9 +50,9 @@ export function replayFireballs(r) {
   ew.ignite = (x, y, z) => { sets.push([x, y, z, 51]); ew.world.put(x, y, z, FIRE, 0); }; // World.setBlock: the cell is fire for the next ball
   let look = [0, 0, 1], madeAt = 0;
   ew.playerLook = () => look;
-  const pv = { x: 0, y: 0, z: 0 }, states = []; // the player double's motion: only knockback moves it
+  const pv = { x: 0, y: 0, z: 0 }, targetOf = (e) => { const t = TARGETING.has(e.type) ? ew.silverfishState(e).target : null; return !t ? -1 : t === ew.ai.player ? n : ents.indexOf(t.e ?? t); }, states = []; // the player double's motion: only knockback moves it
   for (let t = 0; t < r.ticks; t++) {
-    const punches = [];
+    const punches = [], hurts = [];
     for (const s of r.script) {
       const p = s.split(" ");
       if (NUM(p[0]) !== t) continue;
@@ -66,6 +69,14 @@ export function replayFireballs(r) {
       else if (p[1] === "move") { const i = NUM(p[2]), e = i === n ? player : ents[i]; e.x = NUM(p[3]); e.z = NUM(p[4]); if (p.length > 5) e.y = NUM(p[5]); }
       else if (p[1] === "kill") { const e = ents[NUM(p[2])]; killed.add(e); ew.entities.splice(ew.entities.indexOf(e), 1); }
       else if (p[1] === "rule") rules[p[2]] = p[3] === "true";
+      else if (p[1] === "hurt") {
+        const v = ents[NUM(p[2])], k = p[3], amount = NUM(p[4]);
+        const source = k === "p" ? { from: { x: player.x, z: player.z }, player: true, name: "player" }
+          : k === "n" ? { name: "fireball", fireball: true, from: { x: 0, z: 0 }, entity: { x: 0, y: 0, z: 0 } } // the probe's shooterless ball at the origin
+          : k === "s" ? { from: { x: v.x, z: v.z }, attacker: v, name: "mob" }
+          : { from: { x: ents[NUM(k.slice(1))].x, z: ents[NUM(k.slice(1))].z }, attacker: ents[NUM(k.slice(1))], name: "mob" };
+        hurts.push([NUM(p[2]), ew.attackEntityFrom(v, amount, source), v.health]);
+      }
       else if (p[1] === "fire") { const i = NUM(p[2]); if (i === n) survival.setFire?.(NUM(p[3])); else ents[i].fire = NUM(p[3]) * 20; }
     }
     ew.ai.beginTick(player, survival, 0);
@@ -77,9 +88,9 @@ export function replayFireballs(r) {
     for (const ev of ew.events) if (ev.explode) { const x = ev.explode; booms.push([x.x, x.y, x.z, x.size, x.flaming ? 1 : 0, x.smoking ? 1 : 0, x.source ? 1 : 0]); }
     states.push({
       playerHealth: survival.health,
-      ents: [...ents.map((e) => [e.x, e.y, e.z, e.vx ?? 0, e.vy ?? 0, e.vz ?? 0, e.health, e.fire ?? 0, killed.has(e) ? 1 : 0]), [player.x, player.y, player.z, pv.x, pv.y, pv.z, survival.health, survival.fire ?? 0, 0]],
+      ents: [...ents.map((e) => [e.x, e.y, e.z, e.vx ?? 0, e.vy ?? 0, e.vz ?? 0, e.health, e.fire ?? 0, killed.has(e) ? 1 : 0, targetOf(e)]), [player.x, player.y, player.z, pv.x, pv.y, pv.z, survival.health, survival.fire ?? 0, 0, -1]],
       balls: balls.map((b) => [b.large ? 1 : 0, b.owner === "player" ? n : b.owner ? ents.indexOf(b.owner) : -1, b.x, b.y, b.z, b.vx, b.vy, b.vz, b.ax, b.ay, b.az, b.dead ? 1 : 0, b.ticks, 0, b.large ? b.power : 0]),
-      booms, sets: sets.splice(0), punches,
+      booms, sets: sets.splice(0), punches, hurts,
     });
   }
   return { ew, ents, states, balls, survival };
@@ -100,6 +111,7 @@ export function fireballDivergence(r, got) {
     if (JSON.stringify(want[2]) !== JSON.stringify(g.booms)) return [t, "booms", want[2], g.booms];
     if (JSON.stringify(want[3]) !== JSON.stringify(g.sets)) return [t, "sets", want[3], g.sets];
     if (JSON.stringify(want[4]) !== JSON.stringify(g.punches)) return [t, "punches", want[4], g.punches];
+    if (JSON.stringify(want[5]) !== JSON.stringify(g.hurts)) return [t, "hurts", want[5], g.hurts];
   }
   return null;
 }

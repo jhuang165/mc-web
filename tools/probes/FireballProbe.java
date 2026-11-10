@@ -70,6 +70,9 @@ public class FireballProbe {
         case 'p': e = new yh(w); break;
         case 'b': e = new xx(w); break;
         case 'g': e = new yd(w); break;
+        case 's': e = new yn(w); break;
+        case 'k': e = new yk(w); break;
+        case 'e': e = new ye(w); break;
         case 'm': { yf s = new yf(w); MobMoveProbe.method(ym.class, "a", int.class).invoke(s, sizes[i]); e = s; break; }
         default: throw new RuntimeException(types);
       }
@@ -95,7 +98,7 @@ public class FireballProbe {
     List<String> made = new ArrayList<>(), rows = new ArrayList<>();
     VillagerProbe.World.spawned.clear();
     for (int t = 0; t < ticks; t++) {
-      List<String> punches = new ArrayList<>();
+      List<String> punches = new ArrayList<>(), hurts = new ArrayList<>();
       for (String op : script) {
         String[] p = op.split(" ");
         if (Integer.parseInt(p[0]) != t) continue;
@@ -139,6 +142,13 @@ public class FireballProbe {
           case "kill": all.get(Integer.parseInt(p[2])).B(); break;
           case "rule": ((agy) w.O()).a(p[2], p[3]); break;
           case "fire": all.get(Integer.parseInt(p[2])).e(Integer.parseInt(p[3])); break;
+          case "hurt": { // hurt victim kind amount: kind m<i> a mob attacker (DamageSource.causeMobDamage), p the player, n a fireball without a shooter, s the victim itself
+            sv victim = (sv) all.get(Integer.parseInt(p[2]));
+            ro src = p[3].equals("p") ? ro.a((yz) player) : p[3].equals("n") ? ro.a(new zg(w, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1), (sa) null) : p[3].equals("s") ? ro.a(victim) : ro.a((sv) all.get(Integer.parseInt(p[3].substring(1))));
+            boolean hit = victim.a(src, Float.parseFloat(p[4]));
+            hurts.add("[" + p[2] + "," + hit + "," + num(victim.aS()) + "]");
+            break;
+          }
           default: throw new RuntimeException(op);
         }
       }
@@ -155,7 +165,7 @@ public class FireballProbe {
         sa e = all.get(i);
         if (i > 0) row.append(",");
         row.append("[").append(num(e.s)).append(",").append(num(e.t)).append(",").append(num(e.u)).append(",").append(num(e.v)).append(",").append(num(e.w)).append(",").append(num(e.x)).append(",")
-          .append(num(((sv) e).aS())).append(",").append(fld(sa.class, "e").getInt(e)).append(",").append(e.K ? 1 : 0).append("]");
+          .append(num(((sv) e).aS())).append(",").append(fld(sa.class, "e").getInt(e)).append(",").append(e.K ? 1 : 0).append(",").append(e instanceof xx || e instanceof yk || e instanceof ye || e instanceof yn || e instanceof yh ? index(all, ((td) e).bT()) : -1).append("]");
       }
       row.append("],[");
       for (int k = 0; k < balls.size(); k++) {
@@ -165,7 +175,7 @@ public class FireballProbe {
           .append(num(f.v)).append(",").append(num(f.w)).append(",").append(num(f.x)).append(",").append(num(fld(ze.class, "b").getDouble(f))).append(",").append(num(fld(ze.class, "c").getDouble(f))).append(",").append(num(fld(ze.class, "d").getDouble(f))).append(",")
           .append(f.K ? 1 : 0).append(",").append(fld(ze.class, "au").getInt(f)).append(",").append(fld(ze.class, "at").getInt(f)).append(",").append(f instanceof zg ? fld(zg.class, "e").getInt(f) : 0).append("]");
       }
-      row.append("],[").append(String.join(",", FW.booms)).append("],[").append(String.join(",", FW.sets)).append("],[").append(String.join(",", punches)).append("]]");
+      row.append("],[").append(String.join(",", FW.booms)).append("],[").append(String.join(",", FW.sets)).append("],[").append(String.join(",", punches)).append("],[").append(String.join(",", hurts)).append("]]");
       rows.add(row.toString());
     }
     StringBuilder sc = new StringBuilder();
@@ -271,6 +281,27 @@ public class FireballProbe {
     scenario("fb-nogrief-entity-" + s, s, 40, "bz", sz(2), new double[][] {{10.5, 10.5}, {30.5, 70.5}, {60.5, 70.5}},
       new String[] {"0 rule mobGriefing false", ball(1, 1, 0, "0 0 40", 30.5, 1.0, 62.5, 2), ball(1, 1, 0, "0 0 40", 60.5, 1.0, 62.5, 1)});
     s++;
+    // EntityMob.attackEntityFrom (yg.a) on the blaze, the silverfish, the giant, the spider and the pigman: the attacker of a hit that counts becomes entityToAttack
+    // (a mob, the player), a refused hit (not above the hurt window's last damage) leaves it, an entity-less source and the victim itself change nothing.
+    scenario("fb-hurt-mobs-" + s, s, 8, "bkespzz", sz(7), new double[][] {{20.5, 20.5}, {26.5, 20.5}, {32.5, 20.5}, {38.5, 20.5}, {44.5, 20.5}, {50.5, 20.5}, {56.5, 20.5}, {150.5, 150.5}},
+      concat(hurts(0, "m5 4"), hurts(1, "p 4"), hurts(2, "p 6"), hurts(3, "m6 5"), hurts(4, "n 7"), hurts(5, "s 8"), hurts(6, "m5 9"), hurts(7, "n 12")));
+    s++;
+    // A fireball without a shooter (a dispenser's): DamageSource.causeFireballDamage uses the ball itself as the source entity, so a fresh hit knocks back from the ball
+    // and makes the ball the victim's entityToAttack (a dead entity: the next action state clears it).
+    scenario("fb-hurt-ball-" + s, s, 3, "bkespz", sz(6), new double[][] {{20.5, 20.5}, {26.5, 20.5}, {32.5, 20.5}, {38.5, 20.5}, {44.5, 20.5}, {50.5, 20.5}, {150.5, 150.5}},
+      hurts(0, "n 5"));
+    s++;
+  }
+  // One hurt op per victim 0 to 4 at tick `t` (kind and amount as the op names them).
+  static String[] hurts(int t, String what) {
+    String[] o = new String[5];
+    for (int v = 0; v < 5; v++) o[v] = t + " hurt " + v + " " + what;
+    return o;
+  }
+  static String[] concat(String[]... parts) {
+    List<String> o = new ArrayList<>();
+    for (String[] a : parts) o.addAll(Arrays.asList(a));
+    return o.toArray(new String[0]);
   }
 
   public static void main(String[] args) throws Exception {

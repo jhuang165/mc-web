@@ -27,3 +27,11 @@ Original classes: Blaze `xx`, Ghast `yd` (extends `sr`/EntityFlying), EntityFire
 - Audio files are not imported (the lead imports them); the media importer regex only gained `blaze|ghast`. Missing sounds fail silently.
 - Hover offsets after the first gaussian pair are not replayed in the probe (shared Entity.rand).
 - Not checked in a browser. Full parity is not claimed.
+
+## Batch 40: fireball flight and impact, the EntityMob target rule
+
+- `public/research/fireballs-reference.json` (tools/probes/FireballProbe.java via tools/verify-fireballs.mjs, replayed by `src/fireballs-native.test.js` / `src/fireballs-replay.js`): 27 records of the unchanged `zg`, `zi` and `ze.h` on the LegacyAi double. They cover acceleration and the 0.95 / 0.8 drag, `ticksInAir` (the 25 tick shooter grace, a punch does not reset it), block and entity intercepts (0.3 grow, nearest hit, the `d < best || best == 0` quirk), a ball hitting another large ball, the player's deflecting punch (small balls refuse), explosion power and `flaming`/`smoking` with mobGriefing on and off, the small ball's fire cell (no rule check) and `setFire(5)` unless immune, and knockback of the player double.
+- Port fixes found by the replay: the dispenser form `(x, y, z, ax, ay, az)` normalises its aim like the shooter form; the first update keeps the constructor's box; water is tested before the sweep; an impact does not stop the update; large balls are collision targets; a cake's ray box is its shaped box.
+- `EntityMob.attackEntityFrom` (`yg.a`): the attacker of a counted hit becomes `entityToAttack` for the blaze, silverfish, giant, spider and pigman (a mob or the player); refused hits and the victim itself change nothing; a shooterless ball is its own source entity (knocks back, becomes a dead target that the next `td.bq` clears). Blazes now shoot and melee a mob target.
+- Bytecode-read only: `World.blockExists` (y outside 0 to 255 or an unloaded chunk removes the ball), the `inGround` path, `ye`/`yk` writing no `bc` (isJumping persists in the giant and silverfish).
+- The blaze crackle (`fire.fire`) is the client half: a `clientOnly` client sound at the blaze; the server draws are unchanged.

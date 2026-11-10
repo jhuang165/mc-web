@@ -120,8 +120,9 @@ export class Fireballs {
         return !!s && s.damage(n, "fireball", true, "fireball", owner && owner !== "player" ? owner : undefined); // the source entity is the shooter
       }
       if (t?.ball) return this.hitBall(t.ball, owner); // EntityFireball.attackEntityFrom from the other ball's DamageSource
-      // No shooter: DamageSource.getEntity is null, so no knockback (one Math.random instead).
-      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : undefined, player: byPlayer, attacker: null, name: "fireball", fireball: true });
+      // DamageSource.causeFireballDamage(ball, shooter): the shooter is the source entity; without one (a dispenser's ball) it is the ball itself, which knocks back from its own
+      // position and, for an EntityMob on the legacy action state, becomes the dead entityToAttack that the next update clears.
+      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }) });
     };
     if (b.large) {
       if (hit.entity) damage(FIREBALL.largeDamage);

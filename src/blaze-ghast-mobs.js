@@ -28,7 +28,7 @@ export function fireballMobTalk(m, e) {
   m.events.push({ sound: sounds.sounds.living, volume: e.type === "blaze" ? BLAZE.volume : GHAST.volume, pitch, position: { x: e.x, y: e.y, z: e.z } });
 }
 
-// The target as the rules read it: the player (the only creature a blaze or ghast targets), its feet and height.
+// The target as the rules read it: the player or a mob that hurt the blaze (a ghast targets only the player), its feet and height.
 const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 
 // EntityBlaze.onLivingUpdate (xx.e), before the walk: the wet damage, the hover countdown and push (toward entityToAttack, the target of
@@ -36,11 +36,12 @@ const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 // The action state itself (target, path, the volley) is blazeThink.
 export function blazeUpdate(m, e, t) {
   const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
-  if (st.target && !(st.target === p && p?.alive && !m.ai.survival.creative)) st.target = null;
+  if (st.target && (st.target === p ? !(p?.alive && !m.ai.survival.creative) : st.target.alive === false)) st.target = null; // the player, or a mob that hurt it (EntityMob.attackEntityFrom)
   const target = st.target;
   if (wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });
-  if (rand.nextInt(24) === 0) m.events.push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
+  // The crackle is EntityBlaze.onLivingUpdate's client half (isRemote: worldObj.playSound(posX + 0.5, posY + 0.5, posZ + 0.5, "fire.fire", ...)): a client-only sound at the blaze (entity-tracker.js), the draws stay.
+  if (rand.nextInt(24) === 0) (m.clientSounds ??= []).push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: e, clientOnly: true });
   for (let i = 0; i < 2; i++) { // the six nextDouble draws happen with or without a particle system
     const x = e.x + (rand.nextDouble() - 0.5) * t.width, y = e.y + rand.nextDouble() * t.height, z = e.z + (rand.nextDouble() - 0.5) * t.width;
     m.fx?.spawn("largesmoke", x, y, z, 0, 0, 0);
@@ -70,9 +71,9 @@ export function blazeThink(m, e, t, aiMoveSpeed) {
     rand, remote: false,
     closestPlayer: (me, range) => (p?.alive && (range < 0 || brain.distSq(p) < range * range) ? p : null),
     findPlayerToAttack: (me) => { const c = m.ai.closestVulnerablePlayer(me, BLAZE.followRange); return c && brain.canSee(c) ? c : null; },
-    isAlive: (x) => (x === p ? !!p.alive : true),
-    isCreative: () => !!survival.creative,
-    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+    isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
+    isCreative: (x) => x === p && !!survival.creative,
+    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
     boxMidY: (x) => x.y,
     canSee: (me, target) => brain.canSee(target),
     attackEntity: (me, target, d) => {
@@ -80,7 +81,7 @@ export function blazeThink(m, e, t, aiMoveSpeed) {
       me.hasAttacked = s.hasAttacked;
       e.blazeBurning = s.burning;
       if (out.yaw !== null) st.rotationYaw = out.yaw;
-      if (out.melee) m.hitPlayer(e, survival);
+      if (out.melee) { if (target === p) m.hitPlayer(e, survival); else if (target.e) m.hitMob(e, target.e); }
       if (out.shot) {
         m.fireballs.launch({ large: false, owner: e, x: out.shot.x, y: out.shot.y, z: out.shot.z, dx: out.shot.dx, dy: out.shot.dy, dz: out.shot.dz });
         levelEvent(m, e, BLAZE.shootSound, BLAZE.shootVolume);

@@ -55,3 +55,15 @@ test("a launched small fireball flies, and fire immunity holds for a blaze", () 
   assert.ok(b.x > 60.5);
   assert.equal(w.attackEntityFrom(w.entities[0], 4, { name: "onFire" }), false);
 });
+
+test("the blaze crackle is a client-only sound at the blaze, never a server event", () => {
+  const w = make("blaze"), s = new Survival({ slots: [], time: 6000 }, "survival"), p = player();
+  let heard = 0;
+  for (let i = 0; i < 400; i++) {
+    w.tick(p, s);
+    assert.ok(!w.events.some((x) => x.sound === "fire.fire"));
+    for (const c of w.clientSounds ?? []) if (c.sound === "fire.fire") { heard++; assert.equal(c.clientOnly, true); assert.equal(c.position, w.entities[0]); }
+    if (w.clientSounds) w.clientSounds.length = 0;
+  }
+  assert.ok(heard > 0);
+});

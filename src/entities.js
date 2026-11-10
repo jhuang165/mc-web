@@ -265,6 +265,8 @@ const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? P
 const deathOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.death : deathSound(e.type));
 const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.type));
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
+// EntityMob subclasses on EntityCreature.updateEntityActionState (td.bq), whose entityToAttack the port keeps in silverfishState(e).target.
+const TARGETS_ATTACKER = new Set(["spider", "cave_spider", "pigman", "silverfish", "blaze", "giant"]);
 const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
 // Classes whose onSpawnWithEgg rolls draw the follow-range spawn bonus themselves (difficulty.js, horse.js) or, for the cave spider, never.
@@ -1006,10 +1008,12 @@ export class EntityWorld {
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
     if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
-    // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
-    if ((e.type === "silverfish" || e.type === "blaze") && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player; // the blaze is an EntityMob too (blazeThink)
-    // EntityMob.attackEntityFrom (yg.a), spider and pigman: any living attacker that is not this mob, its rider or its mount becomes entityToAttack.
-    if (isLegacyCreature(e) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = by === "player" ? this.ai.player : this.ai.brain(by);
+    // EntityMob.attackEntityFrom (yg.a), every legacy-action-state EntityMob (spider, pigman, silverfish, blaze, giant; fireballs-replay.js, fireballs-reference.json
+    // "fb-hurt-mobs"): any living attacker that is not this mob, its rider or its mount becomes entityToAttack. A source without an entity (a rider/mount null
+    // equals the null entity) changes nothing. The AI-task mobs (zombie, skeleton ...) keep entityToAttack unused in 1.7.10 (bytecode-read).
+    if (TARGETS_ATTACKER.has(e.type) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = by === "player" ? this.ai.player : this.ai.brain(by);
+    // A source whose entity is no creature (the shooterless fireball): the dead entity becomes entityToAttack and the next td.bq clears it (isEntityAlive false).
+    else if (TARGETS_ATTACKER.has(e.type) && !by && source.entity) this.silverfishState(e).target = { alive: false, x: source.entity.x, y: source.entity.y, z: source.entity.z, height: 0, eyeHeight: 0 };
     return true;
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
@@ -2410,7 +2414,7 @@ export class EntityWorld {
     const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.silverfish;
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
-    st.summonCooldown = e.summonCooldown ?? 0; st.jumping = false; st.speed = aiMoveSpeed(e, 1);
+    st.summonCooldown = e.summonCooldown ?? 0; st.jumping = !!e.jumping; st.speed = aiMoveSpeed(e, 1); // isJumping (bc) is not reset here: td.bq clears it only on its path-following branch (legacyThink)
     if (st.attackTime > 0) st.attackTime--;
     m.senseCache.clear();
     const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
@@ -2419,15 +2423,16 @@ export class EntityWorld {
       rand, remote: false, get mobGriefing() { return gameRule("mobGriefing"); },
       closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
       findPlayerToAttack: (me) => this.ai.closestVulnerablePlayer(me, 8),
-      isAlive: (x) => (x === p ? !!p.alive : true),
-      isCreative: () => !!s.creative,
-      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+      isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
+      isCreative: (x) => x === p && !!s.creative,
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
       boxMidY: (x) => x.y,
       canSee: (me, target) => m.canSee(target),
       attackEntity: (me, target, d) => {
-        if (attackReady({ y: me.y, attackTime: me.attackTime }, target.y, target.y + 1.8, d)) {
+        if (attackReady({ y: me.y, attackTime: me.attackTime }, target.y, target.y + (target.height ?? 1.8), d)) {
           me.attackTime = 20;
-          this.hitPlayer(e, s);
+          if (target === p) this.hitPlayer(e, s);
+          else if (target.e) this.hitMob(e, target.e); // a mob that hurt it (EntityMob.attackEntityFrom)
         }
       },
       pathToEntity: (me, target, range) => path((fn) => fn.createEntityPathToEntity(m, target, range)),
@@ -2461,7 +2466,7 @@ export class EntityWorld {
     const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.giant;
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
-    st.speed = aiMoveSpeed(e, 1); st.jumping = false; // td.be: the movementSpeed attribute, saved modifiers included
+    st.speed = aiMoveSpeed(e, 1); st.jumping = !!e.jumping; // td.be: the movementSpeed attribute, saved modifiers included. isJumping (bc) persists like the spider's (td.bq clears it only on its path-following branch)
     // EntityLivingBase.moveForward is one field: the previous tick's x 0.98 decay (walk) carries over when the
     // legacy action state leaves it unset (no waypoint beyond width x 2).
     st.moveForward = f(f(st.moveForward || 0) * f(0.98));
@@ -2473,15 +2478,16 @@ export class EntityWorld {
       rand, remote: false,
       closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
       findPlayerToAttack: (me) => { const c = this.ai.closestVulnerablePlayer(me, GIANT.range); return c && m.canSee(c) ? c : null; },
-      isAlive: (x) => (x === p ? !!p.alive : true),
-      isCreative: () => !!s.creative,
-      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+      isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
+      isCreative: (x) => x === p && !!s.creative,
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
       boxMidY: (x) => x.y,
       canSee: (me, target) => m.canSee(target),
       attackEntity: (me, target, d) => {
-        if (giantAttackReady({ y: e.y, attackTime: me.attackTime }, target.y, target.y + 1.8, d)) {
+        if (giantAttackReady({ y: e.y, attackTime: me.attackTime }, target.y, target.y + (target.height ?? 1.8), d)) {
           me.attackTime = 20;
-          this.hitPlayer(e, s);
+          if (target === p) this.hitPlayer(e, s);
+          else if (target.e) this.hitMob(e, target.e); // a mob that hurt it (EntityMob.attackEntityFrom)
         }
       },
       pathToEntity: (me, target, range) => path((fn) => fn.createEntityPathToEntity(m, target, range)),

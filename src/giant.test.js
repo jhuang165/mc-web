@@ -101,3 +101,15 @@ test("a giant hunts the player down: it walks from 8 blocks to the collision gap
   assert.equal(giantAttackReady({ y: 0, attackTime: 0 }, 0, 1.8, 1.9), true);
   assert.equal(ENTITY_TYPES.giant.damage, 50);
 });
+
+test("isJumping persists through a giant's and a silverfish's action state (td.bq clears it only on its path-following branch; bytecode-read: ye and yk write no bc)", () => {
+  for (const type of ["giant", "silverfish"]) {
+    const w = new EntityWorld(flatWorld(), [], () => 0.5), s = new Survival({ slots: [], time: 6000 }, "survival"), p = { x: 20.5, y: 0, z: 20.5, alive: true };
+    const e = w.create(type, 80.5, 0, 80.5);
+    setEntityRandom(e, new JavaRandom(3));
+    w.entities.push(e);
+    e.jumping = true; // asked for, not yet acted on (no path, no target, no liquid: nothing in the action state writes it)
+    w.tick(p, s);
+    assert.equal(e.jumping, true, type);
+  }
+});
