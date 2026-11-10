@@ -6,7 +6,7 @@
 import { ChunkMesher } from "./chunk-mesher.js";
 import { BiomeColorField } from "./biome-colors.js";
 import { World, HEIGHT, SIZE } from "./world.js";
-import { useNeighborBrightness, lightEmission, pack } from "./lighting.js";
+import { lightEmission, cellPacked, isSlabBlock } from "./lighting.js";
 import { render } from "./render-settings.js";
 import { meshAnaglyph } from "./anaglyph.js";
 
@@ -95,16 +95,8 @@ class RegionLight {
     return lightEmission(b, b === 14 && this.furnaces.has(`${x},${y},${z}`));
   }
   packed(x, y, z) {
-    const b = this.world.get(x, y, z);
-    let sky, block;
-    if (useNeighborBrightness(b)) {
-      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1));
-      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1));
-    } else {
-      sky = this.skyAt(x, y, z);
-      block = this.blockAt(x, y, z);
-    }
-    return pack(sky, Math.max(block, b ? this.emission(x, y, z, b) : 0));
+    const p = cellPacked(this, x, y, z);
+    return p === 0 && isSlabBlock(this.world.get(x, y, z)) ? cellPacked(this, x, y - 1, z) : p; // aji.c: a slab at brightness 0 reads the cell below
   }
 }
 
