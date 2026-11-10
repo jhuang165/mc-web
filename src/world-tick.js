@@ -16,5 +16,8 @@ export function tickWorldSystems(systems, clock, observers) {
   tickBlockSystems(systems, clock, observers);
   systems.hoppers?.tick();
   systems.brewing?.();
-  if (!systems.tickTree) systems.redstone?.tick();
+  // With the shared tree the scheduled redstone entries already ran inside it; block events, the tile-entity loop and the piston pushes
+  // (redstone-runtime.js tickEnd) still run here, where redstone.tick() ran them before the tree (batch 33 dropped this call by mistake).
+  if (systems.tickTree) systems.redstone?.tickEnd?.();
+  else systems.redstone?.tick();
 }

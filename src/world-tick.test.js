@@ -6,7 +6,7 @@ import { Weather } from './weather.js';
 import { Farming } from './farming.js';
 import { Fluids } from './fluids.js';
 import { Fire } from './fire.js';
-import { tickBlockSystems } from './world-tick.js';
+import { tickBlockSystems, tickWorldSystems } from './world-tick.js';
 import { tickWeatherSimulation } from './weather-simulation.js';
 
 function fixture() {
@@ -121,4 +121,16 @@ test('headless weather and block steps resume their saved state through repeated
   }
   assert.ok(changed > 0, 'scheduled fluid changes occurred');
   assert.deepEqual(resumed.world.snapshot(), uninterrupted.world.snapshot());
+});
+
+test('with the shared tick tree the live tick still runs redstone tickEnd (block events, tile entities, pistons) and not the old full tick', () => {
+  const calls = [];
+  const redstone = { tick: () => calls.push('tick'), tickEnd: () => calls.push('tickEnd') };
+  const base = { farming: { tick: () => [] }, hoppers: { tick: () => calls.push('hoppers') }, brewing: () => calls.push('brewing'), redstone };
+  tickWorldSystems({ ...base, tickTree: { tick: () => calls.push('tree') } }, {}, { farming() {} });
+  assert.deepEqual(calls.filter(c => c === 'tick' || c === 'tickEnd'), ['tickEnd']);
+  assert.ok(calls.indexOf('tickEnd') > calls.indexOf('brewing'), 'after hoppers and brewing, as redstone.tick() ran');
+  calls.length = 0;
+  tickWorldSystems(base, {}, { farming() {} });
+  assert.deepEqual(calls.filter(c => c === 'tick' || c === 'tickEnd'), ['tick']);
 });
