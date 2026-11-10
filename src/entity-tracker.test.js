@@ -318,3 +318,20 @@ test("Entity.velocityChanged sends the motion at once and clears the flag", () =
   assert.deepEqual(packets.map((p) => p.type), ["velocity"]);
   assert.equal(e.velocityChanged, false);
 });
+
+test("the crosshair picks a tracked mob where its client entity stands (EntityRenderer.getMouseOver on the client world)", () => {
+  const { mobs } = setup();
+  const player = { x: 100, y: 80, z: 40 };
+  const e = mobs.create("zombie", 110.3, 70, 40.5);
+  mobs.entities.push(e);
+  mobs.watching = player;
+  const size = () => [0.6, 1.8];
+  mobs.tracker = new MobTracker(10);
+  mobs.tracker.update(mobs.entities, player, size);
+  for (let t = 1; t <= 6; t++) { e.x = 110.3 + 0.13 * t; mobs.tracker.update(mobs.entities, player, size); }
+  const c = mobs.clientPosition(e);
+  assert.ok(c && e.x - c.x > 0.2, `the client trails the live mob (${(e.x - (c?.x ?? 0)).toFixed(3)})`);
+  const down = { x: 0, y: -1, z: 0 };
+  assert.equal(mobs.pick({ x: c.x, y: 72.5, z: 40.5 }, down, 6)?.entity, e, "the client position is hit");
+  assert.equal(mobs.pick({ x: e.x + 0.29, y: 72.5, z: 40.5 }, down, 6), null, "the live front edge is past the client box");
+});

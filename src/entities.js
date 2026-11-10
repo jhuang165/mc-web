@@ -939,7 +939,11 @@ export class EntityWorld {
     let result = null;
     for (const e of this.entities) {
       if (e.health <= 0) continue;
-      const distance = entityHit(origin, dir, e, Math.min(reach, wallDistance));
+      // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
+      // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
+      const c = e.type === "ender_dragon" ? null : this.clientPosition(e);
+      const box = c ? Object.assign(Object.create(e), { x: c.x, y: c.y, z: c.z }) : e;
+      const distance = entityHit(origin, dir, box, Math.min(reach, wallDistance));
       if (distance !== null && (!result || distance < result.distance))
         result = { entity: e, distance };
     }
