@@ -411,7 +411,7 @@ export class Projectiles {
       const e = t.box;
       if (!(e[3] > area[0] && e[0] < area[3] && e[4] > area[1] && e[1] < area[4] && e[5] > area[2] && e[2] < area[5])) continue;
       if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
-      if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5) continue;
+      if ((t.thrower || (t.playerThrower && b.owner === "player" && (t.by === undefined || t.by === b.by))) && b.ticks < 5) continue; // `by`: which server player threw it
       const r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
       const d1 = Math.sqrt(dist2(start, r.vec));
@@ -431,7 +431,7 @@ export class Projectiles {
       // eight snowballpoof at the ball's current position, then setDead.
       // EntityPotion.onImpact (witch-potions.js applies it): the position, the entity struck and the owner go out as an event.
       if (b.kind === "potion") {
-        this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null } });
+        this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null, ...(b.by !== undefined ? { by: b.by } : {}) } });
         b.dead = true;
         return;
       }

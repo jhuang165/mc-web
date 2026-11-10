@@ -895,6 +895,8 @@ function applyMultiplayerTick(message) {
     } else if (event?.type === 'fx' && event.kind === 'particles' && Array.isArray(event.list)) {
       // A server boat's splashes and bubbles (EntityBoat.onUpdate, Entity.handleWaterMovement).
       for (const q of event.list.slice(0, 128)) if (Array.isArray(q) && typeof q[0] === 'string' && q.slice(1, 7).every(Number.isFinite)) scene.fx.spawn(q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
+    } else if (event?.type === 'fx' && event.kind === 'splash' && [event.x, event.y, event.z, event.damage].every(Number.isInteger)) {
+      splashBreak(scene.fx, scene.fx.worldRandom, event.damage & 32767, event.x, event.y, event.z); // a server splash potion's world event 2002
     } else if (event?.type === 'fx' && event.kind === 'particle' && typeof event.name === 'string') {
       scene.fx.spawn(event.name, event.x, event.y, event.z, event.vx, event.vy, event.vz); // an eye set in a portal frame
     } else if (event?.type === 'firework' && [event.x, event.y, event.z].every(Number.isFinite)) {
@@ -912,7 +914,9 @@ function applyMultiplayerTick(message) {
       // EntityLivingBase.renderBrokenItemStack: 5 pieces of the worn-out item from the player's eye (the sound came as a sound event).
       const q = event.by === multiplayer.id ? null : message.players.find(p => p.id === event.by);
       const eye = q ? { x: q.x, y: q.y + Math.fround(PHYSICS.eye) + Math.fround(0.12), z: q.z, yaw: Math.fround(180 - (num0(q.yaw) * 180) / Math.PI), pitch: Math.fround((-num0(q.pitch) * 180) / Math.PI) } : playerEye();
-      if (q || event.by === multiplayer.id) itemCrumbs(scene.fx, 5, "iconcrack_" + event.id, eye, playerRandom);
+      // `n`: an eater's crumbs (EntityLivingBase.updateItemUse: 5 while chewing, 16 at the last bite).
+      const n = Number.isInteger(event.n) && event.n > 0 && event.n <= 16 ? event.n : 5;
+      if (q || event.by === multiplayer.id) itemCrumbs(scene.fx, n, "iconcrack_" + event.id, eye, playerRandom);
     } else if (event?.type === 'book') {
       // ItemWritableBook / ItemEditableBook.onItemRightClick on the server: the book screen here; its MC|BEdit and MC|BSign go back.
       openHeldBook(survival.held, (channel, packet) => multiplayer?.send({ type: 'book', channel, packet }), message.players.find(p => p.id === multiplayer.id)?.name ?? PLAYER_NAME);

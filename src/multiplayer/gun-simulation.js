@@ -322,6 +322,11 @@ export class GunSimulation extends DedicatedSimulation {
   // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT: the one achievement a tab reports (it opened its inventory).
   clientStatus(id, status) { const p = this.players.get(id); if (p && status === 'openInventory') trigger(p, 'openInventory'); }
   send(p, event) { if (!this.outbox.has(p.id)) this.outbox.set(p.id, []); this.outbox.get(p.id).push(event); }
+  // A sound at player p for the other players near it (p's tab plays its own prediction).
+  heardFrom(p, sound, volume = 1, pitch = 1) {
+    const r = v => Math.round(v * 100) / 100;
+    this.near(p, { type: 'sound', sound, x: r(p.position.x), y: r(p.position.y), z: r(p.position.z), volume: r(volume), pitch: r(pitch) });
+  }
   near(p, event, includeSelf = false) { for (const o of this.players.values()) if ((includeSelf || o !== p) && withinEvents(o, p)) this.send(o, event); }
   damage(target, amount, { attacker, kind, weapon, knockback }) {
     const from = { type: 'player', isPlayer: true, name: attacker.name, ...(knockback ? { x: attacker.position.x, z: attacker.position.z } : {}) };
@@ -363,7 +368,13 @@ export class GunSimulation extends DedicatedSimulation {
       p.survival.time = this.time;
       // EntityPlayer.updateItemUse: 32 ticks of eating, then ItemFood.onEaten. The client only shows its own prediction.
       // ItemPotion.onEaten / ItemBucketMilk.onEaten when a drink ends: the potion's effects and its glass bottle, or milk's cure.
-      if (p.eating) p.eating = tickPlayerItemUse(p.eating, p.survival.inventory.held?.id ?? 0, p.survival, { random: this.random, finishDrinking }).use;
+      // Its random.eat / random.drink / random.burp and the food crumbs are heard and seen by the others; its own tab predicted them.
+      if (p.eating) p.eating = tickPlayerItemUse(p.eating, p.survival.inventory.held?.id ?? 0, p.survival, { random: this.random, finishDrinking,
+        sound: (sound, { volume = 1, pitch = 1 } = {}) => this.heardFrom(p, sound, volume, pitch),
+        foodEffects: (id, n) => { // EntityLivingBase.updateItemUse(stack, n) for EnumAction.eat
+          this.heardFrom(p, 'random.eat', 0.5 + 0.5 * Math.floor(this.random() * 2), (this.random() - this.random()) * 0.2 + 1);
+          this.near(p, { type: 'crumbs', id, by: p.id, n });
+        } }).use;
       p.survival.tick({ inWater: moved.inWater, inLava: moved.inLavaNow });
       p.inWater = moved.inWater;
       tickPlayerStats(this, p, from);

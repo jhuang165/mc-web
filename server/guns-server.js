@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { GunSimulation } from '../src/multiplayer/gun-simulation.js';
 import { ITEMS } from '../src/survival.js';
+import { stackName } from '../src/item-names.js';
 import { PROTOCOL } from '../src/multiplayer/protocol.js';
 import { loadServerFiles, formatReport } from './properties.js';
 import { ProfileVerifier, ProfileUnavailable } from './profile-verifier.js';
@@ -280,7 +281,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       if (!stack) return `There is no such item with name ${item}`;
       const given = simulation.give(simulation.players.get(entry[0]), stack, count);
       if (!given) return `${entry[1].name}'s inventory is full`;
-      return `Given ${ITEMS[stack.id].name} * ${given} to ${entry[1].name}`;
+      return `Given ${stackName(stack, ITEMS) || ITEMS[stack.id].name} * ${given} to ${entry[1].name}`; // a potion by its damage value (ItemPotion's name)
     }],
     kit: [2, (id, [target]) => {
       const entry = target ? byName(target) : [id, sessions.get(id)];

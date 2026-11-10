@@ -428,6 +428,8 @@ test('two sockets fight through the server; commands follow op levels', async t 
   await bob.next(m => m.type === 'chat' && m.text === 'You do not have permission to use this command');
   alice.ws.send(JSON.stringify({ type: 'chat', text: '/give Bob creative_ammo_box' }));
   assert.equal((await alice.next(m => m.type === 'chat' && /^Given|no such/.test(m.text))).text, 'Given Creative Ammo Box * 1 to Bob');
+  alice.ws.send(JSON.stringify({ type: 'chat', text: '/give Bob potion 1 16386' })); // named by its damage value, not "Water Bottle"
+  assert.equal((await alice.next(m => m.type === 'chat' && /^Given|no such/.test(m.text))).text, 'Given Splash Potion of Swiftness * 1 to Bob');
   bob.ws.send(JSON.stringify({ type: 'chat', text: '/give Bob diamond 64' }));
   await bob.next(m => m.type === 'chat' && m.text === 'You do not have permission to use this command');
   alice.ws.send(JSON.stringify({ type: 'chat', text: '/gamemode creative Bob' }));

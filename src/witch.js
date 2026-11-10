@@ -3,6 +3,7 @@
 // native-verified and what is approximated. entities.js, ai.js, combat.js and witch-potions.js call into this module; the splash potion
 // flight itself is projectiles.js (witch-potions.js).
 import { mhSin, mhCos } from "./lighting.js";
+import { getPotionEffects } from "./potions.js";
 const f = Math.fround;
 export const WITCH = Object.freeze({
   // EntityWitch.applyEntityAttributes: maxHealth 26 (EntityMob's 20 is replaced), movementSpeed 0.25; EntityMob adds attackDamage 2 (never used:
@@ -25,7 +26,7 @@ export const DRINK_PENALTY = Object.freeze([-0.25, 0]);
 export const DRINK_TICKS = 32; // ItemPotion.getMaxItemUseDuration
 
 // The eight potions the witch uses, as ItemPotion.getEffects reports them (splash durations are PotionHelper's 0.75 scaling, rounded).
-// Entries are [effect id, amplifier, duration in ticks]. Other potion values are not implemented (witch.md).
+// Entries are [effect id, amplifier, duration in ticks]. Other values come from potions.js (potionEffects below).
 export const POTIONS = Object.freeze({
   8237: [[13, 0, 3600]], // water breathing (drunk)
   16307: [[12, 0, 3600]], // fire resistance (drunk)
@@ -37,7 +38,8 @@ export const POTIONS = Object.freeze({
   32696: [[18, 0, 1351]], // splash weakness
 });
 export const POTION_THROWN_DEFAULT = 32732;
-export const potionEffects = (damage) => POTIONS[damage] ?? [];
+// Any other potion value (a player's thrown splash potion) reads PotionHelper through potions.js, which gives the same rows for the eight.
+export const potionEffects = (damage) => POTIONS[damage] ?? (getPotionEffects(damage) ?? []).map((e) => [e.id, e.amplifier, e.duration]);
 export const isSplashPotion = (damage) => (damage & 16384) !== 0;
 export const SPLASH_EFFECT = { SLOWNESS: 2, WEAKNESS: 18, POISON: 19, HARM: 7, HEAL: 6 };
 

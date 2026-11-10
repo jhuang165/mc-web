@@ -13,6 +13,11 @@ export class WitchPotions {
   constructor(mobs, random = Math.random) {
     this.mobs = mobs;
     this.projectiles = new Projectiles(random);
+    // The gun server's players (server-mobs.js): () => [{ ref, by, position, survival, pvp }]. Without it the one local player.
+    this.players = null;
+  }
+  playersAt(player, survival) {
+    return (this.players?.() ?? (player && survival ? [{ ref: "player", position: player, survival }] : [])).filter((q) => q.survival.health > 0);
   }
   get balls() {
     return this.projectiles.balls;
@@ -65,10 +70,9 @@ export class WitchPotions {
     if (!p.balls.length) return;
     const targets = mobTargets(mobs.entities.filter((e) => e.health > 0), null);
     for (const t of targets) if (t.ref.type === "witch") t.thrower = true; // the thrower is skipped for the first 5 ticks (every witch here)
-    if (player && survival && survival.health > 0) {
-      const hw = f(f(0.6) / 2);
-      targets.push({ ref: "player", playerThrower: true, box: [player.x - hw, player.y, player.z - hw, player.x + hw, player.y + f(1.8), player.z + hw] });
-    }
+    const hw = f(f(0.6) / 2);
+    for (const { ref, by, position: q } of this.playersAt(player, survival))
+      targets.push({ ref, playerThrower: true, ...(by !== undefined ? { by } : {}), box: [q.x - hw, q.y, q.z - hw, q.x + hw, q.y + f(1.8), q.z + hw] });
     p.tick(mobs.world, targets);
     for (const ev of p.drain()) { if (ev.potion) this.impact(ev.potion, player, survival); else if (ev.expBottle) this.expImpact(ev.expBottle); }
   }
@@ -81,20 +85,24 @@ export class WitchPotions {
     events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }
   // EntityPotion.onImpact: effects on everything around, the glass sound (world event 2002).
-  impact({ x, y, z, damage, owner, hit }, player, survival) {
+  impact({ x, y, z, damage, owner, hit, by }, player, survival) {
     const mobs = this.mobs, victims = [];
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
       const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
       victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: UNDEAD.has(e.type), ref: e, direct: hit === e });
     }
-    if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: 0.6, height: 1.8, undead: false, ref: "player", direct: hit === "player" });
+    const players = this.playersAt(player, survival);
+    for (const q of players) victims.push({ x: q.position.x, y: q.position.y, z: q.position.z, width: 0.6, height: 1.8, undead: false, ref: q.ref, direct: hit === q.ref });
     for (const r of splashImpact(damage, { x, y, z }, victims, owner)) {
-      if (r.ref === "player") {
+      const q = players.find((o) => o.ref === r.ref);
+      if (q) {
         // EntityPlayer: magic damage ignores armour; slowness/weakness/speed/strength live in status-effects.js and feed movement, FOV and melee damage (player-knockback.md).
-        if (r.hurt > 0) survival.damage(r.hurt, "magic", false, undefined, owner?.x !== undefined ? owner : undefined); // the thrower is the source entity
-        if (r.heal > 0) survival.heal?.(r.heal);
-        for (const e of r.effects) survival.effects?.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
+        // On the server another player's splash hurts only with PvP on (EntityPlayer.attackEntityFrom -> canAttackPlayer); its effects always land.
+        const s = q.survival, pvpBlocked = by !== undefined && q.by !== by && q.pvp === false;
+        if (r.hurt > 0 && !pvpBlocked) s.damage(r.hurt, "magic", false, undefined, owner?.x !== undefined ? owner : undefined); // the thrower is the source entity
+        if (r.heal > 0) s.heal?.(r.heal);
+        for (const e of r.effects) s.effects?.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
         continue;
       }
       const e = r.ref;

@@ -1,9 +1,10 @@
 // The gun server's mobs (not 1.7.10 networking): one EntityWorld (entities.js) over the server's streamed world, run as
 // WorldServer runs it for several players. SpawnerAnimals spawns around every player's chunks (the cap scaled by their union, as
-// eligibleChunksForSpawning is), each mob's AI sees its nearest player (World.getClosestPlayerToEntity), mob spawners and
+// eligibleChunksForSpawning is), each mob's AI sees the player its detection reaches first (watcher, World.getClosestVulnerablePlayer), mob spawners and
 // skeleton arrows tick against every player, and a creeper's blast hurts every player in reach. Mobs whose column leaves the
 // resident set are kept by column, as a saved chunk keeps its entities, and come back with it. Each tab gets the mobs near it
 // (rows, below) and draws them with its usual mob renderer (remote-mobs.js).
+import { detectionRangeScale, INVISIBILITY } from '../potion-fx.js';
 import { EntityWorld, ENTITY_TYPES } from '../entities.js';
 import { MobSpawners } from '../mob-spawner.js';
 import { Arrows, arrowTargets } from '../bow.js';
@@ -60,6 +61,8 @@ export class ServerMobs {
     this.projectiles = new Projectiles(random);
     this.projectiles.poof = noop; // the snowballpoof particles are the tabs' (thrown events)
     ew.potions = new WitchPotions(ew, random); // witches' splash potions and thrown exp bottles; EntityWorld.tick flies them
+    // EntityPotion.onImpact over every player in reach (not only the one the AI sees), the thrower skipped for its first 5 ticks.
+    ew.potions.players = () => this.living().map(p => ({ ref: p, by: p.id, position: p.position, survival: p.survival, pvp: this.sim.config?.pvp !== false }));
     this.orbs = new ExperienceOrbs(Array.isArray(saved.xpOrbs) ? saved.xpOrbs : [], random);
     this.orbs.wet = o => isWet(sim.weather, sim.world, o, 0.25);
     const java = () => new JavaRandom(Math.floor(random() * 2 ** 48));
@@ -135,6 +138,22 @@ export class ServerMobs {
     }
     return best;
   }
+  // The player a mob's AI sees this tick. World.getClosestVulnerablePlayer takes the nearest player its range reaches, the range shrunk for
+  // a sneaking or invisible one (potion-fx.js detectionRangeScale) and creative players skipped; the AI here sees one player, so among
+  // those within 32 blocks (EntityLiving.despawnEntity reads the plain nearest, which stays inside that) the one nearest by distance over
+  // that scale is shown. An invisible player beside a zombie no longer hides a visible one a few blocks off.
+  watcher(players, at) {
+    let best = null, d = Infinity;
+    for (const p of players) {
+      const q = (p.position.x - at.x) ** 2 + (p.position.y - at.y) ** 2 + (p.position.z - at.z) ** 2;
+      if (q >= 32 * 32) continue;
+      const scale = p.survival.creative ? 1e-6 : detectionRangeScale({ sneaking: !!p.input?.sneak, invisible: p.survival.effects.has(INVISIBILITY),
+        armorPieces: (p.survival.inventory?.armor ?? []).filter(Boolean).length });
+      const w = Math.sqrt(q) / scale;
+      if (w < d) { d = w; best = p; }
+    }
+    return best ?? this.nearest(players, at);
+  }
   // The AI's one PlayerView (ai.js) becomes player `p`: its position, Survival, held item and sneaking.
   see(p) {
     const ai = this.ew.ai;
@@ -167,7 +186,7 @@ export class ServerMobs {
     this.current = null;
     const first = players[0];
     // A ridden pig or horse follows its rider (EntityAIControlledByPlayer reads the rider's held item), others their nearest player.
-    ew.beforeMob = e => { const o = e.rider?.owner; this.see(o && players.includes(o) ? o : this.nearest(players, e)); };
+    ew.beforeMob = e => { const o = e.rider?.owner; this.see(o && players.includes(o) ? o : this.watcher(players, e)); };
     try { ew.tick(first.position, first.survival, first.survival.inventory.held?.id ?? 0); } finally { ew.beforeMob = null; }
     this.current = null; // beginTick showed the first player whatever was seen last
     this.tickArrows(players);
@@ -388,7 +407,13 @@ export class ServerMobs {
   drain(players) {
     const sim = this.sim;
     drainMobEvents({ mobs: this.ew, xpOrbs: this.orbs, items: sim.play.items }, {
-      sound: s => this.sound(s),
+      sound: (s, raw) => {
+        this.sound(s);
+        // World event 2002 (EntityPotion.onImpact, auxSFX within 64 blocks): each tab draws the glass and spell particles itself.
+        const b = raw?.splashBreak;
+        if (b && [b.x, b.y, b.z].every(Number.isFinite)) for (const p of this.sim.players.values())
+          if (Math.hypot(p.position.x - b.x, p.position.y - b.y, p.position.z - b.z) <= 64) this.sim.send(p, { type: 'fx', kind: 'splash', x: b.x, y: b.y, z: b.z, damage: b.damage | 0 });
+      },
       explode: (x, y, z, size, options) => this.explode(players, x, y, z, size, options),
     });
   }
