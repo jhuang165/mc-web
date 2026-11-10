@@ -41,7 +41,7 @@ await writeFile(path.join(out, "raw.jsonl"), stdout);
 if (/Exception|Caused by:/.test(stderr)) throw new Error(stderr);
 const records = stdout.trim().split("\n").filter((l) => l.startsWith("{")).map(JSON.parse);
 const count = (k) => records.filter((r) => r.kind === k).length;
-assert.ok(count("trace") === 10 && count("collide") === 8 && count("transfer") === 30 && count("travel") === 30 && count("nbt") === 5 && count("vehicle") === 8 && count("cache") === 8, JSON.stringify(Object.fromEntries(["trace", "collide", "transfer", "travel", "nbt", "vehicle", "cache"].map((k) => [k, count(k)]))));
+assert.ok(count("trace") === 10 && count("collide") === 8 && count("transfer") === 30 && count("travel") === 30 && count("nbt") === 5 && count("vehicle") === 10 && count("cache") === 8, JSON.stringify(Object.fromEntries(["trace", "collide", "transfer", "travel", "nbt", "vehicle", "cache"].map((k) => [k, count(k)]))));
 const { stderr: version } = await exec("java", ["-XshowSettings:properties", "-version"]);
 const srgText = await readFile(path.join(research, "joined-1.7.10.srg"), "utf8"), mcp = {};
 for (const m of srgText.matchAll(/^CL: (\S+) \S+\/(\S+)$/gm)) mcp[m[1]] = m[2];
