@@ -136,10 +136,11 @@ export class DimensionLive {
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
     // destinationCoordinateCache lives as long as the destination world does (natively the whole session): a repeat trip to the same column within about
     // 600 ticks reuses the portal picked before, even one that has been broken since. The Teleporter here is made per trip, so it is kept per root and dimension.
-    const ckey = `${record.rootId ?? record.id}:${to}`, now = this.host.ticks?.() ?? 0;
+    // The mobs, items and orbs that travel (peekFor, deliver) use the same cache, as natively (one Teleporter per WorldServer, driven by the world's total time).
+    const ckey = `${record.rootId ?? record.id}:${to}`, now = this.clock(record);
     world.time = now;
-    const kept = this.exitCacheFor(ckey, now);
-    if (kept) { teleporter.cache = kept.cache; teleporter.keys = kept.keys; } else this.exitCache.set(ckey, { cache: teleporter.cache, keys: teleporter.keys });
+    const kept = this.sharedCache(ckey, now);
+    teleporter.cache = kept.cache; teleporter.keys = kept.keys;
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
       const reuse = teleporter.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`); // a cache hit searches nothing: the window round the cached portal is the exit's
       const found = reuse ? null : world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
@@ -170,9 +171,24 @@ export class DimensionLive {
     Teleporter.prototype.removeStale.call(kept, sweep);
     return kept;
   }
+  // The Teleporter cache of a root and dimension, created when missing: one per destination world, shared by the player's arrivals and every travelling entity.
+  sharedCache(key, now) {
+    let kept = this.exitCacheFor(key, now);
+    if (!kept) this.exitCache.set(key, kept = { cache: new Map(), keys: [] });
+    return kept;
+  }
+  // The destination world's getTotalWorldTime for the cache sweep and entry times (bytecode-read: Teleporter.removeStalePortalLocations(WorldServer.getTotalWorldTime()) runs in
+  // WorldServer.tick, and a Nether or End WorldServer's DerivedWorldInfo returns the Overworld's total time). The port keeps that one clock in the loaded world's mobs
+  // (host.totalTime), saved as the record's totalTime; the page tick counter is the fallback. It does not advance while a dimension is unloaded or a loading screen shows.
+  clock(record) {
+    const live = this.host.totalTime?.();
+    if (Number.isSafeInteger(live) && live >= 0) return live;
+    if (Number.isSafeInteger(record?.totalTime) && record.totalTime >= 0) return record.totalTime;
+    return this.host.ticks?.() ?? 0;
+  }
   // The portal a repeat trip to the target's column reuses (Teleporter cache hit), or null.
   cachedExit(root, to, tt) {
-    const kept = this.exitCacheFor(`${root.id}:${to}`, this.host.ticks?.() ?? 0), hit = kept?.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`);
+    const kept = this.exitCacheFor(`${root.id}:${to}`, this.clock(root)), hit = kept?.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`);
     return hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
   }
   restorePlayer(record) {
@@ -198,6 +214,9 @@ export class DimensionLive {
     if (!record.rootId && record.portalArrivals) { const rest = { ...record.portalArrivals }; delete rest[0]; if (Object.keys(rest).length) record.portalArrivals = rest; else delete record.portalArrivals; }
     if (!inbox) return;
     for (const k of ["entities", "drops", "xpOrbs"]) if (inbox[k]?.length) record[k] = [...(record[k] ?? []), ...inbox[k]];
+    // Minecarts (saved as { version, carts }) and boats (a list) that travelled here (batch 37).
+    if (inbox.carts?.length) record.minecarts = { version: 1, ...record.minecarts, carts: [...(record.minecarts?.carts ?? []), ...inbox.carts] };
+    if (inbox.boats?.length) record.boats = [...(Array.isArray(record.boats) ? record.boats : []), ...inbox.boats];
     for (const [x, y, z, id, meta] of inbox.writes ?? []) prepared.set(x, y, z, id, true, meta);
   }
   // Entity portals --------------------------------------------------------------------
@@ -206,12 +225,13 @@ export class DimensionLive {
   settle() { return this.queue; }
   // Per physics tick, after the mobs/items/orbs moved (Entity.onEntityUpdate + doBlockCollisions of each). Travellers leave the
   // live lists at once; their arrival (Teleporter in the target dimension) resolves asynchronously into the target's inbox.
-  tickEntities(world, { mobs, items, xpOrbs } = {}) {
+  // `carts` (Minecarts) and `boats` (Boats) travel as well: their lists are `.carts`, their box `bb`, riders block the portal collision.
+  tickEntities(world, { mobs, items, xpOrbs, carts, boats } = {}) {
     if (this.busy || !world || this.host.active()?.transit) return;
     const dim = world.dimension ?? OVERWORLD, getId = (x, y, z) => world.get(x, y, z), at = { dim, getId };
     const root = this.rootRecord();
     if (!root) return;
-    const lists = [["mob", mobs?.entities], ["item", items?.items], ["orb", xpOrbs?.orbs]];
+    const lists = [["mob", mobs?.entities], ["item", items?.items], ["orb", xpOrbs?.orbs], ["cart", carts?.carts], ["boat", boats?.carts]];
     for (const [kind, list] of lists) {
       if (!list?.length) continue;
       let gone = null;
@@ -219,19 +239,29 @@ export class DimensionLive {
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys too).
         if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         if (!ringEntityActive(world, e)) continue; // Entity.onEntityUpdate's portal step runs for every updated entity, ring ones too
-        const r = this.portals.step(e, kind, at);
+        if ((kind === "cart" || kind === "boat") && e.dead) continue;
+        // A vehicle with a rider: the collision ignores it; a player rider keeps the vehicle out of every portal here (a port simplification: natively the player stays behind).
+        const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : at);
         if (!r) continue;
+        if ((kind === "cart" || kind === "boat") && e.rider) continue;
         (gone ??= new Set()).add(e);
-        this.depart(root, dim, kind, e, r, kind === "mob" ? mobs : kind === "item" ? items : xpOrbs);
+        this.depart(root, dim, kind, e, r, { mob: mobs, item: items, orb: xpOrbs, cart: carts, boat: boats }[kind]);
       }
       if (gone) { const keep = list.filter((e) => !gone.has(e)); list.length = 0; list.push(...keep); }
     }
   }
   depart(root, from, kind, e, r, owner) {
     const cooldown = this.portals.cooldownAfter(e, r);
+    const vehicle = kind === "cart" || kind === "boat";
     const rec = structuredClone(owner.serializeOne(e));
     rec.portalCooldown = cooldown || undefined;
-    const mc = kind === "mob"
+    if (vehicle && e.passenger) { // the copy is made from the vehicle's own NBT: a mob that mounted it after the collision stays behind, unmounted (Entity.updateRidden)
+      if (e.passenger.ridingEntity === e) e.passenger.ridingEntity = null;
+      e.passenger = null;
+    }
+    const mc = vehicle
+      ? { x: e.x, y: e.posY, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: e.yaw ?? 0, pitch: 0 }
+      : kind === "mob"
       ? { x: e.x, y: e.y, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
       : { x: e.x, y: e.y + POS_Y[kind], z: e.z, vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0, yaw: 0, pitch: 0 };
     mc.teleportDirection = r.direction;
@@ -290,13 +320,19 @@ export class DimensionLive {
     this.peeks.set(key, peek);
     return peek;
   }
+  // The peek's Teleporter on the destination's shared cache at the world's current total time (the player's arrival may have replaced or swept the cache since the last call).
+  shareTeleporter(root, to, peek) {
+    const now = this.clock(root), kept = this.sharedCache(`${root.id}:${to}`, now);
+    peek.time = now; peek.teleporter.cache = kept.cache; peek.teleporter.keys = kept.keys;
+    return peek.teleporter;
+  }
   async deliver(rootId, from, kind, rec, mc, arg, leashed) {
     const root = this.rootRecord();
     if (!root || root.id !== rootId) return;
     const to = from === END && arg === END ? OVERWORLD : arg, peek = await this.peekFor(root, to), before = peek.writes.length;
     const spawn = root.worldSpawn ? { x: root.worldSpawn[0], z: root.worldSpawn[2] } : { x: 0, z: 0 };
     const heightAt = (x, z) => { for (let y = peek.actualHeight - 1; y > 0; y--) if (solidId(peek.get(x, y, z))) return y + 1; return 0; };
-    const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: peek.teleporter, spawn, heightAt });
+    const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: this.shareTeleporter(root, to, peek), spawn, heightAt });
     const inbox = ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
     for (const w of peek.writes.slice(before)) inbox.writes.push(w);
     const y = e.y - POS_Y[kind];
@@ -305,6 +341,12 @@ export class DimensionLive {
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
       if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world; EntityItem's constructor motion
       inbox.entities.push(rec);
+    } else if (kind === "cart" || kind === "boat") {
+      // Entity.copyDataFrom keeps the contents and UUID (NBT); Pos, Motion and Rotation come from transferEntityToWorld. A rider does not travel with it.
+      delete rec.rider;
+      Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch], onGround: false });
+      delete rec.id; // a new id in the destination (passengers name their vehicle by id; Minecarts/Boats.fromJSON keep an id only when unused there)
+      (kind === "cart" ? (inbox.carts ??= []) : (inbox.boats ??= [])).push(rec);
     } else if (kind === "item") {
       Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });
       inbox.drops.push(rec);
