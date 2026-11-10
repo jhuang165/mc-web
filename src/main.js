@@ -141,6 +141,7 @@ import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
+import { replayPlayerCommands } from "./away-commands.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
 import { SHADOWS } from "./shadows.js";
@@ -187,7 +188,7 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
-import { DimensionLive, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw } from './dimension-live.js'; // Nether/End travel (dimensions track)
+import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -2578,7 +2579,11 @@ const dims = new DimensionLive({
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
   advanceTicks: (n) => { if (n > 0) { weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
   // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.
-  awayResult: (r) => { if (r.timeShift && !survival.timeFrozen) survival.time += r.timeShift; if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l); },
+  awayResult: (r, root) => { if (r.timeShift && !survival.timeFrozen) survival.time += r.timeShift; if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l);
+    // Batch 34: the commands that act on the player, queued by the run in firing order, through the live command host (/give goes straight into the inventory).
+    if (r.playerCommands?.length) r.stats.commands.replayed = replayPlayerCommands(r.playerCommands, { host: commandHost, records: root?.commandBlocks, carts: root?.minecarts?.carts, giveStack: (s) => { survival.inventory.add(s); if (s.count > 0) items.dropPlayer(s, position, yaw, pitch); renderHotbar(); renderVitals(); saved = false; } });
+    // The return builds the Overworld record from `root`, whose player state is the departure's: carry what the replay changed (the tile maps in root.player are the Overworld's own).
+    if (r.stats.commands.replayed?.applied) { const sp = survival.serialize(); root.player = { ...(root.player ?? {}) }; for (const k of Object.keys(sp)) if (!TILE_KEYS.includes(k)) root.player[k] = sp[k]; root.experience = experience.serialize(); root.mode = survival.mode; root.achievements = achievements.save(); root.stats = stats.save(); } },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {

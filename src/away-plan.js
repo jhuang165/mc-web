@@ -45,7 +45,7 @@ export function stateColumns(root) {
 }
 
 // Everything the main thread sends the worker: the world recipe, the column list is read separately (stored edits per column).
-export function awayPlan(root, columns, ticks, difficulty) {
+export function awayPlan(root, columns, ticks, difficulty, wallNow = Date.now()) {
   const tiles = {};
   for (const name of [...TILE_SIM, ...TILE_DATA]) tiles[name] = structuredClone(root.player?.[name] ?? {});
   return {
@@ -63,6 +63,8 @@ export function awayPlan(root, columns, ticks, difficulty) {
     // Command blocks (away-commands.js): the saved tiles, the rules the commands read, and what a selector filter reads of the player in the other dimension.
     commandBlocks: structuredClone(root.commandBlocks ?? []), gameRules: root.gameRules ? { ...root.gameRules } : undefined, defaultGameMode: root.defaultGameMode,
     player: { mode: root.mode === "creative" ? 1 : root.mode === "adventure" ? 2 : 0, level: Number.isInteger(root.experience?.level) ? root.experience.level : 0 },
+    // Wall-clock ms at tick 0 of the run (the plan is made at the return; the trip lasted `ticks` ticks): LastOutput of a command block carries the clock time of its firing.
+    wall: wallNow - Math.min(ticks | 0, MAX_AWAY_TICKS) * 50,
     time: Number.isFinite(root.player?.time) ? root.player.time : 0, difficulty: Number.isInteger(difficulty) ? difficulty : undefined,
   };
 }

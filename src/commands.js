@@ -1,4 +1,4 @@
-import { selectLocalPlayer } from "./command-selector.js";
+import { selectLocalPlayer, selectsNobody } from "./command-selector.js";
 // The singleplayer command layer of Minecraft Java 1.7.10: CommandHandler.executeCommand, the permission rule of
 // EntityPlayerMP.canCommandSenderUseCommand, CommandBase's argument parsers and the vanilla commands the port can honour.
 // Names, aliases, permission levels, usage keys, the registries and the en_US strings are generated into command-data.js by
@@ -509,6 +509,7 @@ export function createCommandRunner(host) {
       if (!command) throw new CommandException("commands.generic.notFound");
       if (!allowed(command)) throw new CommandException("commands.generic.permission");
       if (UNSUPPORTED.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available in this build`], "unsupported");
+      if (selectsNobody(command.name, parts, host)) return false; // CommandHandler.a: no matching player, no run, no message
       handlers[command.name](parts);
       return true;
     } catch (e) {

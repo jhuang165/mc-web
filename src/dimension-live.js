@@ -337,7 +337,7 @@ export class DimensionLive {
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;
       if (r.world) Object.assign(root, r.world);
-      this.host.awayResult?.(r);
+      this.host.awayResult?.(r, root);
       if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
       if (r.columns.length) await this.writeColumns(root.id, r.columns);
       root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);
