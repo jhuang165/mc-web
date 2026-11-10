@@ -337,8 +337,9 @@ export function createCommandRunner(host) {
     // x and z within +-30000000, y 0..256, so "~" and decimals are errors); any other count is the usage line.
     spawnpoint(a) {
       if (a.length > 1 && a.length !== 4) usage("commands.spawnpoint.usage");
-      const target = targetArg(a, 0), here = pos();
-      let x = Math.floor(here.x), y = Math.floor(here.y), z = Math.floor(here.z);
+      // The target's own block position (EntityPlayerMP.f_, bytecode-read: floor x, floor(y + 0.5), floor z), not the sender's: a command block's `/spawnpoint @p` reads the player.
+      const target = targetArg(a, 0), here = (host.playerPosition ?? pos)();
+      let x = Math.floor(here.x), y = Math.floor(here.y + 0.5), z = Math.floor(here.z);
       if (a.length === 4) { x = parseIntBounded(a[1], -30000000, 30000000); y = parseIntBounded(a[2], 0, 256); z = parseIntBounded(a[3], -30000000, 30000000); }
       host.setSpawnpoint(x, y, z);
       feedback("commands.spawnpoint.success", target, x, y, z);

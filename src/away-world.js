@@ -54,7 +54,21 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   world.nextEditOrder = Math.max(world.nextEditOrder, plan.editSequence | 0);
   world.dirtyColumns.clear();
   // Only the spawn area is loaded: a write outside it, or into a column the run did not load, is refused. Every write is an edit.
-  const spawn = plan.spawn, ticking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; return wanted.has(key(cx, cz)) && inSpawnArea(spawn, cx, cz); }; // entities pass fractional coordinates
+  // Batch 36 (public/research/dimensions.md "Batch 36"): the loaded set is the spawn area, and it only SHRINKS while the run lasts. ms.b (unloadChunksIfNotNearSpawn)
+  // reads the world spawn when it is called: when the last watcher leaves a chunk and in WorldServer.saveAllChunks (mt.a), which MinecraftServer.tick runs every 900 ticks
+  // (`tickCounter % 900 == 0`, bytecode-read). Nothing loads the chunks a moved spawn would newly cover, so after a /setworldspawn the next autosave unloads the chunks
+  // outside the new area (the unload itself runs on the next tick) and the loaded set is the intersection of every spawn area it has been checked against.
+  const areas = [plan.spawn], loadedChunk = (cx, cz) => areas.every((s) => inSpawnArea(s, cx, cz));
+  const ticking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; return wanted.has(key(cx, cz)) && loadedChunk(cx, cz); }; // entities pass fractional coordinates
+  // World.updateEntityWithOptionalForce (ahb.a(sa, true) with checkChunksExist(x-32, 0, z-32, x+32, 0, z+32), bytecode-read): an entity only updates when every
+  // chunk within 32 blocks of it exists, so entities near the edge of the loaded area do not tick (tile entities only need their own chunk: `ticking`).
+  const entityTicks = (x, z) => {
+    const bx = Math.floor(x), bz = Math.floor(z);
+    if (!wanted.has(key(bx >> 4, bz >> 4))) return false;
+    for (let cx = (bx - 32) >> 4; cx <= (bx + 32) >> 4; cx++) for (let cz = (bz - 32) >> 4; cz <= (bz + 32) >> 4; cz++) if (!loadedChunk(cx, cz)) return false;
+    return true;
+  };
+  const spawn = plan.spawn;
   world.isTicking = ticking;
   const put = world.put.bind(world);
   const litFurnaces = () => Object.entries(plan.tiles.furnaces).filter(([, f]) => f.burn > 0).map(([k]) => k);
@@ -115,7 +129,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     },
   } });
   rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks });
-  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); } });
+  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); } });
   const live = rt.redstone;
   // Dispensers and droppers fire through the entity systems above (items, TNT, carts, buckets, flint and steel). A dispense that
   // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks run through away-commands.js.
@@ -148,13 +162,15 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     }
   };
 
-  ents = awayEntities(plan, { world, ticking, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
+  ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
   if (ents) ents.falling = falling;
   const idle = () => !fluids.pending.size && !fire.queue.heap.length && !falling.pending.size && !live.tree.length && !live.thisTick.length
     && !live.deferred.length && !(live.torchToggles?.length) && !live.blockEvents.some((l) => l.length) && !live.pistonTiles().length;
   // The same tick tree the live game runs (tile-ticks.js attachTickTree, public/research/region-import.md Batch 33): fluids, fire, falling blocks and redstone
   // take their due entries together in (time, priority, creation) order under one 1000 cap. `trace(kind, entry)` sees each entry as it runs (tests).
   const tree = attachTickTree({ fluids, fire, falling, redstone: rt });
+  // Batch 36: redstone hears each fluid write at once (World.setBlock notifies neighbours), as main.js does through fluids.writers; the renderer-side flush follows the run.
+  fluids.writers.push((x, y, z, old, now) => rt.fluidChanges([[x, y, z, old, now]], true));
   if (trace) for (const src of tree.sources) { const run = src.run; src.run = (e) => { trace(src.name, e); return run(e); }; }
   let ran = 0, stopped = "done";
   for (; ran < plan.ticks; ran++) {
@@ -166,12 +182,14 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     // random ticks), then the block events and updateEntities (tile entities) while the gate is open.
     cmds.state.ran = ran;
     if (ran % 10 === 0) light.refresh(ran);
-    tree.tick({ x: 0, z: 0 }, { fluids: (changes) => rt.fluidChanges(changes) });
+    tree.tick({ x: 0, z: 0 }, { fluids: () => rt.flush() });
     live.sendQueuedBlockEvents();
     if (entities) falling.tick();
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
     if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); sv.tickFurnaces(); }
+    // MinecraftServer.tick: after the worlds tick, `tickCounter % 900 == 0` saves them, and the save queues every unwatched chunk outside the CURRENT spawn area (see above).
+    if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
   rt.flush();
   const entityLists = ents?.finish() ?? null;

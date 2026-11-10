@@ -90,6 +90,7 @@ export const gameYaw = (mcDegrees) => Math.PI - (mcDegrees * Math.PI) / 180;
 export const mcYaw = (yaw) => ((Math.PI - yaw) * 180) / Math.PI;
 
 const PREWARM_TICKS = 5; // a brush against a portal does not start workers; the standing countdown is 80 ticks (4 s)
+const TRACE_EVERY = 20, TRACE_SAMPLES = 4000, TRACE_STATES = 300; // the away trace (traceAway): about a second between samples, bounded
 
 export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
@@ -303,8 +304,24 @@ export class DimensionLive {
       if (!chunks.length) return;
       const records = await this.readColumns(root.id, list);
       const worker = this.makeAwayWorker(), ready = new Promise((resolve) => { worker.onmessage = ({ data }) => { if (data.type === "ready") resolve(true); }; worker.onerror = () => resolve(false); });
-      this.away = { rootId: root.id, ticks0: h.ticks(), tripMs: 0, chunks, records, columns: list, worker, ready };
+      this.away = { rootId: root.id, ticks0: h.ticks(), tripMs: 0, chunks, records, columns: list, worker, ready, trace: { samples: [], states: [] }, lastTrace: -TRACE_EVERY, traceKey: null };
+      this.traceAway(OVERWORLD, h.player?.() ?? {}, true); // the state he leaves with (away-commands.js shadow player)
     } catch (error) { console.warn("away run not prepared:", error); this.away = null; }
+  }
+  // Batch 36: the player's trace while away, for the run's shadow player (away-commands.js): a [t, dimension, x, y, z] sample about every second (capped) and, whenever his state
+  // (inventory, experience, game mode) differs from the last snapshot, a [t, state] snapshot (capped; the last one is replaced when full). t counts as the run's ticks do.
+  traceAway(dimension, pos, force = false) {
+    const a = this.away, h = this.host;
+    if (!a?.trace || !h.awayPlayer) return;
+    const now = h.ticks();
+    if (!force && now - a.lastTrace < TRACE_EVERY) return;
+    a.lastTrace = now;
+    const t = Math.max(0, now - a.ticks0 + Math.round(a.tripMs / 50)), { samples, states } = a.trace;
+    if (samples.length < TRACE_SAMPLES) samples.push([t, dimension, pos.x, pos.y, pos.z]);
+    const snap = h.awayPlayer(), key = JSON.stringify(snap);
+    if (key === a.traceKey) return;
+    a.traceKey = key;
+    if (states.length < TRACE_STATES) states.push([t, snap]); else states[states.length - 1] = [t, snap];
   }
   endAway() { try { this.away?.worker?.terminate(); } catch { /* already gone */ } this.away = null; }
   // The run for `ticks`; patches the root record (runtime and tile maps in place, drops appended) and stores the edited columns.
@@ -315,7 +332,7 @@ export class DimensionLive {
     const ticks = Math.min(MAX_AWAY_TICKS, (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50));
     try {
       if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
-      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.()), chunks: a.chunks, records: a.records };
+      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.()), chunks: a.chunks, records: a.records, tickBase: a.ticks0, trace: a.trace };
       Object.assign(plan.player, this.host.awayPlayer?.() ?? {}); // the player's live state: the run's shadow player (away-commands.js)
       const msg = await new Promise((resolve) => {
         const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
@@ -378,7 +395,9 @@ export class DimensionLive {
   // positions of the previous and current tick. Returns whether the player is standing in a nether portal (overlay input).
   tick(world, prev, pos, { creative = false, riding = false, alive = true } = {}) {
     if (this.busy || !alive || !world) return false;
-    const d = world.dimension ?? OVERWORLD, hw = 0.3 - 0.001;
+    const d = world.dimension ?? OVERWORLD;
+    if (this.away) this.traceAway(d, pos);
+    const hw = 0.3 - 0.001;
     let inPortal = false, endPortal = false;
     for (let x = Math.floor(pos.x - hw); x <= Math.floor(pos.x + hw); x++) for (let z = Math.floor(pos.z - hw); z <= Math.floor(pos.z + hw); z++) for (let y = Math.floor(pos.y + 0.001); y <= Math.floor(pos.y + 1.8 - 0.001); y++) {
       const b = world.get(x, y, z);
