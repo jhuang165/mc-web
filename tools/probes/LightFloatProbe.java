@@ -40,8 +40,9 @@ public class LightFloatProbe {
     public boolean c(int cx, int cz) { return true; } // chunkExists
     // Raw saved light (World.getSavedLightValue through Chunk.getSavedLightValue): the cell map.
     public int b(ahn type, int x, int y, int z) { int s = at(x, y, z); return s < 0 ? 0 : (type == ahn.a ? sky[s] : blk[s]); }
-    public apx e(int cx, int cz) { return chunk; }
+    public apx e(int cx, int cz) { return chunkAt != null ? chunkAt.apply(cx, cz) : chunk; }
     apx chunk;
+    java.util.function.BiFunction<Integer, Integer, apx> chunkAt; // optional: one chunk object per chunk coordinate (blocks away from chunk 0)
     public ahu a(int x, int z) {
       ahu[] all = ahu.n();
       long h = (long) x * 341873128712L + (long) z * 132897987541L + (long) x * z * 31L + biomeSeed;

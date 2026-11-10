@@ -6,6 +6,7 @@
 import { coloredItemId, STAINED_GLASS, STAINED_GLASS_PANE } from "./colored-blocks.js";
 import { WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, STONE_SLAB, SNOW_LAYER, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, opaqueCube, normalCube } from "./world.js";
 import { replaceable } from "./plants.js";
+import { leavesOpaque } from "./render-settings.js";
 import { chestItemOfBlock } from "./chest-blocks.js";
 import { isStair, stairSolidTop } from "./stairs.js";
 
@@ -201,6 +202,8 @@ export class Doors {
 // ---- panes and bars ----
 // BlockPane.canPaneConnectTo (aoa.a): an opaque cube, glass, or another pane or bar. Stained glass is not in this
 // build, and panes do not connect to fences.
+// The pane's face test asks Block.isOpaqueCube (connections use renderAsNormalBlock, true for leaves in both modes): leaves (internal 5 and 71) are opaque only with Fast graphics (BlockLeaves.isOpaqueCube = !fancy).
+const paneOpaque = (b) => opaqueCube(b) && ((b !== 5 && b !== 71) || leavesOpaque());
 export const paneConnectsTo = (b) => opaqueCube(b) || b === 9 || b === STAINED_GLASS || isPane(b);
 // Bit 0 z-1 (north), bit 1 z+1 (south), bit 2 x-1 (west), bit 3 x+1 (east).
 export function paneMask(world, x, y, z) {
@@ -236,7 +239,7 @@ export function paneCollisionUnion(mask) {
 }
 // BlockPane.shouldSideBeRendered (func_149646_a): never against the same block, else Block's rule (a neighbouring
 // opaque cube hides the face). `neighbour` is the block in the direction of the face.
-export const paneSideRendered = (self, neighbour) => neighbour !== self && !opaqueCube(neighbour);
+export const paneSideRendered = (self, neighbour) => neighbour !== self && !paneOpaque(neighbour);
 // RenderBlocks.renderBlockPane: which faces (and arms) to draw. The vertical faces of each arm are the post's
 // two sides; arms are drawn to the cell edge when connected one-sidedly. Returns the arm rectangles as
 // {axis, from, to}: axis "x" spans along x at the two z faces (0.4375, 0.5625), axis "z" along z at the two x faces.

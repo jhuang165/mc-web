@@ -338,7 +338,7 @@ export class MeshMethods {
       // Two quads: the listed one and its back (the vertices' coordinate on `axis` swapped between lo and hi), vertices [a, y, o, u, v].
       pair=(axis,lo,hi,pts)=>{
         for(const back of [false,true])
-          m.quad(pts.map(([a,yy,o])=>{const c=back?(a===lo?hi:a===hi?lo:a):a;return axis==='x'?[c,yy,o]:[o,yy,c];}),pts.map((q)=>[q[3],q[4]]),1,light);
+          m.quad(pts.map((p)=>{const q=[p[0],p[1],p[2]],k=axis==='x'?0:2;if(back)q[k]=q[k]===lo?hi:q[k]===hi?lo:q[k];return q;}),pts.map((q)=>[q[3],q[4]]),1,light);
       },
       up=y+1,
       stripX=(yy,kind)=>kind==='full'?pair('x',xL,xH,[[xL,yy,zp,tu9,tmaxV],[xH,yy,zp,tu9,tminV],[xH,yy,zm,tu7,tminV],[xL,yy,zm,tu7,tmaxV]])

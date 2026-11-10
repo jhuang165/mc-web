@@ -76,7 +76,8 @@ export const gateCanPlace = (solidBelow) => !!solidBelow;
 // test without the fence itself: world.js wallSolid, the fence rule of fences.js minus the fence post).
 export const isGourd = (b) => b === 67 || b === 81;
 export const wallConnectsTo = (b, solid) => b === COBBLE_WALL || b === FENCE_GATE || (!isGourd(b) && !!solid(b));
-// RenderBlocks.renderBlockFenceGate: posts and rails across the gate; an open gate swings its two leaves towards the facing.
+// Superseded by gateRenderPlan (render-shapes.js), which equals the executed RenderBlocks.renderBlockFenceGate record; this older sketch mirrors facing 1
+// wrongly and is no longer used by the renderer (only shaped-blocks.test.js still calls it).
 export function gateRenderBoxes(meta) {
   const open = gateOpen(meta), dir = meta & 3, boxes = [];
   // Built for facing 0/2 (spanning x, thin in z); `rot` swaps the axes for 1/3.
