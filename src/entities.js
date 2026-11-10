@@ -1822,7 +1822,7 @@ export class EntityWorld {
       rangedAttack:(e,target,scale)=>e.type==="wither"?witherRanged(this,e,target):e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
-      despawn:(e)=>{e.health=0;e.death=20;},
+      despawn:(e)=>{e.despawnedHealth=e.health;e.health=0;e.death=20;}, // setDead leaves the native health; the rest of that update (its path search's fall tries) still reads it (ai.js maxSafePointTries)
     });
   }
   // The mob tick reads blocks through the headless ring's view (resident column first, then the ring's), so mobs outside the resident

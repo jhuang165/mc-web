@@ -127,8 +127,24 @@ public class VillagerProbe {
         try { return new ahr(this, cx - r, cy - r, cz - r, cx + r, cy + r, cz + r, 0); } finally { serving = false; }
       } catch (Exception ex) { throw new RuntimeException(ex); }
     }
-    public ayf a(sa e, int x, int y, int z, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(chunkCache ? cacheAround(e, e.t, 8, range) : this, open, doors, water, swim).a(e, x, y, z, range); }
-    public ayf a(sa e, sa target, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(chunkCache ? cacheAround(e, e.t + 1.0, 16, range) : this, open, doors, water, swim).a(e, target, range); }
+    // Batch 35: every native search is counted: `searches` lists [points the PathFinder created (its IntHashMap `c` size), 1 when it returned a path]; `tick` is set by the fight probe. Wall-clock nanoseconds go to `searchNanos`
+    // (not recorded: timing is not deterministic).
+    static java.util.List<long[]> searches = new ArrayList<>(); static java.util.List<Long> searchNanos = new ArrayList<>(); static int tick = 0;
+    static ayf counted(ayg finder, java.util.concurrent.Callable<ayf> run) {
+      try {
+        long t0 = System.nanoTime(); ayf path = run.call(); long dt = System.nanoTime() - t0;
+        pz map = (pz) MobMoveProbe.field(ayg.class, "c").get(finder);
+        searches.add(new long[] {tick, MobMoveProbe.field(pz.class, "b").getInt(map), path == null ? 0 : 1}); searchNanos.add(dt);
+        if (System.getenv("VF_DUMPSEARCH") != null && searches.size() == Integer.parseInt(System.getenv("VF_DUMPSEARCH"))) { // development aid: every point (x y z visited) of the nth search of this run
+          StringBuilder b = new StringBuilder(); qa[] table = (qa[]) MobMoveProbe.field(pz.class, "a").get(map);
+          for (qa head : table) for (qa en = head; en != null; en = en.c) { aye p = (aye) en.b; b.append(p.a).append(' ').append(p.b).append(' ').append(p.c).append(' ').append(p.i ? 1 : 0).append('\n'); }
+          java.nio.file.Files.writeString(java.nio.file.Path.of(System.getenv("VF_DUMPFILE")), b.toString());
+        }
+        return path;
+      } catch (Exception ex) { throw new RuntimeException(ex); }
+    }
+    public ayf a(sa e, int x, int y, int z, float range, boolean open, boolean doors, boolean water, boolean swim) { ayg f = new ayg(chunkCache ? cacheAround(e, e.t, 8, range) : this, open, doors, water, swim); return counted(f, () -> f.a(e, x, y, z, range)); }
+    public ayf a(sa e, sa target, float range, boolean open, boolean doors, boolean water, boolean swim) { ayg f = new ayg(chunkCache ? cacheAround(e, e.t + 1.0, 16, range) : this, open, doors, water, swim); return counted(f, () -> f.a(e, target, range)); }
   }
 
   static String num(double v) { return Double.toString(v); }
