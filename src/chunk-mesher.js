@@ -9,9 +9,9 @@ import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, st
 import { PORTAL, portalSideRendered } from "./nether-portal.js";
 import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
-import { WOOD_SLAB, woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
+import { WOOD_SLAB, woodSlabBounds, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
 import { LILY_PAD, FERN, DEAD_SHRUB, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, normalCube, STAINED_GLASS, CARPET, HAY_BALE, IRON_BARS } from "./world.js";
-import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
+import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, endFrameBounds, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
@@ -28,6 +28,7 @@ import { liquidHeight, flowAngle } from "./fluids.js";
 import { fireVertices } from "./fire.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
 import { NETHER_FENCE, QUARTZ_BLOCK } from "./nether-blocks.js";
+import { gateRenderPlan, NATIVE_ROT_TO_TURN, anvilUv } from "./render-shapes.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
 import { BED_DIR, bedTexture } from './bed.js';
@@ -219,30 +220,36 @@ export class MeshMethods {
   shaped(m, b, x, y, z, all = false) {
     const w = this.world, meta = w.getMeta(x, y, z);
     if (b === 165) this.box(m, b, x, y, z, woodSlabBounds(b, meta), meta, all);
-    else if (b === 167) for (const box of gateRenderBoxes(meta)) this.box(m, b, x, y, z, box, meta, true);
+    else if (b === 167) { // RenderBlocks.renderBlockFenceGate (render-shapes.js): wall-adjacent gates sit 3/16 lower
+      const dx = (meta & 1) === 0 ? 1 : 0, dz = 1 - dx, lowered = w.get(x - dx, y, z - dz) === 169 && w.get(x + dx, y, z + dz) === 169;
+      for (const [box, rot] of gateRenderPlan(meta, lowered)) this.box(m, b, x, y, z, box, meta, true, null, true, NATIVE_ROT_TO_TURN[rot]);
+    }
     else if (b === 168) this.box(m, b, x, y, z, trapBounds(meta), meta, true);
-    else if (b === 169) for (const box of wallRenderBoxes(wallMask(w, x, y, z, wallSolid), w.get(x, y + 1, z) === 0)) this.box(m, b, x, y, z, box, meta, true);
+    else if (b === 169) { // RenderBlocks.renderBlockWall: the boxes are drawn without renderAllFaces, BlockWall.shouldSideBeRendered is true for every side but the bottom, which asks the block below
+      const mask = wallMask(w, x, y, z, wallSolid);
+      for (const box of wallRenderBoxes(mask, w.get(x, y + 1, z) === 0)) this.box(m, b, x, y, z, box, meta, (f) => f.n[1] < 0 && hides(w.get(x, y - 1, z)), null, true);
+    }
   }
   // RenderBlocks.renderStandardBlock over setRenderBounds (used by renderBlockFence): each face of
   // the box with the ambient-occlusion path. Texture coordinates follow renderFace*: u = x on the
   // top, bottom and south faces, z on the west face, 1 - x north and 1 - z east (the mirrored
   // field_152631_f mapping, which for the centred fence post equals the plain one); v = z on the
   // top and bottom, 1 - y on the sides. A face on the cell boundary is skipped next to an opaque cube.
-  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0, renderAllFaces = false, named = null, ownUv = false, rotTop = 0) {
+  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0, renderAllFaces = false, named = null, ownUv = false, rotTop = 0, uvFn = null) {
     const w = this.world, L = this.light, lo = [x0, y0, z0], hi = [x1, y1, z1];
     FACES.forEach((f, fi) => {
       const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
       if (typeof named === "function" && named(fi) === null) return; // a face the model never draws
-      if (!renderAllFaces && (b === STONE_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
+      if (typeof renderAllFaces === "function" ? renderAllFaces(f) : !renderAllFaces && (b === STONE_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
       const r = tileRect(named ? tileByName(typeof named === "function" ? named(fi) : named) : blockTile(b, fi, false, meta)),
         corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
-        st = (p) => fi === 2 && rotTop ? [null, [p[2], 1 - p[0]], [1 - p[0], 1 - p[2]], [1 - p[2], p[0]]][rotTop] : ownUv ? [[z0 + z1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [x0 + x1 - p[0], 1 - p[1]]][fi] : [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi], // ownUv: renderFaceXPos / ZNeg run (min + max) - p, like the door's end caps (the stairs' locked bounds keep 1 - p)
+        st = (p) => uvFn ? uvFn(fi, p) : fi === 2 && rotTop ? [null, [p[2], 1 - p[0]], [1 - p[0], 1 - p[2]], [1 - p[2], p[0]]][rotTop] : ownUv ? [[z0 + z1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [x0 + x1 - p[0], 1 - p[1]]][fi] : [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi], // ownUv: renderFaceXPos / ZNeg run (min + max) - p, like the door's end caps (the stairs' locked bounds keep 1 - p)
         uvs = corners.map((p) => {
           let [s, t] = st(p);
           if (fi === 2 && named && named.topShift) { s += named.topShift[0]; t += named.topShift[1]; }
           return [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
         }),
-        s = named && named.flatTop && (fi === 2 || named.flatAll) ? flatFace(L, x, y, z, fi, corners, boundary) : shadeFace(L, x, y, z, fi, corners, boundary, partialBox(lo, hi)); // the diode's top is always flat; a lit repeater (light 9) takes the flat path on every face, like any emitting block
+        s = (named && named.flatTop && (fi === 2 || named.flatAll)) || lightEmission(b) > 0 ? flatFace(L, x, y, z, fi, corners, boundary) : shadeFace(L, x, y, z, fi, corners, boundary, partialBox(lo, hi)); // the diode's top is always flat; a lit repeater (light 9) takes the flat path on every face; renderStandardBlock does so for every block with a light value (dragon egg, end portal frame, brewing stand)
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
   }
@@ -470,8 +477,13 @@ export class MeshMethods {
   // RenderBlocks.renderBlockEndPortalFrame (render type 26): the 13/16 base, then the eye's smaller box with every face
   // drawn in the endframe_eye texture (blockTile reads meta bit 16 as that override).
   endFrameBlock(m,x,y,z) { // (named endFrame until batch 30, when VoxelScene's own endFrame() shadowed it and portal frames were never meshed)
-    const meta=this.world.getMeta(x,y,z);
-    endFrameBoxes(meta).forEach((box,i)=>this.box(m,END_PORTAL_FRAME,x,y,z,box,i?16:meta,i>0));
+    const meta=this.world.getMeta(x,y,z),w=this.world,eye=(meta&4)!==0,
+      // Without an eye the base goes through shouldSideBeRendered, which reads the BLOCK's bounds (the probe's block has the full cell, so an opaque neighbour hides all six faces); with an eye the method sets renderAllFaces and draws both boxes whole.
+      culled=(f)=>!eye&&hides(w.get(x+f.n[0],y+f.n[1],z+f.n[2])),
+      // uvRotateTop as the native record shows it (top turned 180, 270, none, 90 degrees for facing 0..3); it stays set for the eye box, which is the one drawn after the base.
+      rot=[2,3,0,1][meta&3];
+    this.box(m,END_PORTAL_FRAME,x,y,z,endFrameBounds(),meta,culled,null,false,rot);
+    if(eye)this.box(m,END_PORTAL_FRAME,x,y,z,[.25,.8125,.25,.75,1,.75],16,culled,null,false,rot); // the eye's render box is wider than its collision box
   }
   // RenderBlocks.renderBlockCauldron (render type 24): the outer boxes (floor and four walls) in the cauldron textures, the
   // inner faces of floor and walls in cauldron_inner, and the water surface (water_still, not biome tinted) at 6/16 + 3/16 per level.
@@ -531,8 +543,8 @@ export class MeshMethods {
   }
   anvil(m,x,y,z) {
     const meta=this.world.getMeta(x,y,z);
-    for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta))
-      this.box(m,ANVIL,x,y,z,[x0,y0,z0,x1,y1,z1],meta,true);
+    // BlockAnvil.getIcon: only the fourth box's top is the (damaged) anvil top, every other face is anvil_base; uvs per facing (render-shapes.js).
+    anvilModelBoxes(meta).forEach((box,i)=>this.box(m,ANVIL,x,y,z,box,meta,true,i<3?"anvil_base":null,false,0,(fi,p)=>anvilUv(meta&3,fi,p,box)));
   }
   // RenderBlocks.renderBlockMinecartTrack (blm.a(aje, III), render type 9): one quad 1/16 above
   // the cell floor, drawn from both sides, its corners rotated per metadata and the raised edge
