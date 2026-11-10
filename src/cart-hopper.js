@@ -15,6 +15,10 @@ const firstItem = (host, box) => (host.items?.() ?? []).find((e) => !e.dead && e
 export function hopperSuck(cart, host) {
   const transfer = host?.transfer;
   if (!transfer) return false;
+  // A cart in a headless ring column (carts tick there, ringEntityActive) reaches containers and items there like in the window; a
+  // held column whose stored edits are not applied yet would read stale blocks, so the cart waits (natively the chunk is loaded).
+  const ring = transfer.world?.ringSink;
+  if (ring && transfer.world.ringReads && !ring.writable(cart.x, cart.z)) return false;
   const maxStack = transfer.maxStack, inv = arrayAdapter("", cart.slots, { keys: [], cart });
   const x = Math.floor(cart.x), y = Math.floor(cart.posY) + 1, z = Math.floor(cart.z);
   const above = containerAt(transfer, x, y, z);

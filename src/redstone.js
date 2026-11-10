@@ -649,7 +649,7 @@ export class RedstoneWorld {
     this.scanning = true;
     for (let i = 0; i < this.loadedTiles.length; ) {
       const te = this.loadedTiles[i];
-      if (!te.invalid && te.world && te.y >= 0 && te.y < 256) tileUpdate(this, te);
+      if (!te.invalid && te.world && te.y >= 0 && te.y < 256 && (this.tileActive?.(te) ?? true)) tileUpdate(this, te);
       if (te.invalid) {
         this.loadedTiles.splice(i, 1);
         this.chunkRemoveTile(te.x, te.y, te.z);

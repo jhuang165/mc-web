@@ -4,6 +4,7 @@
 //
 // Block metadata: bits 0-2 facing (0 down, 2-5 horizontal; never 1), bit 3 (8) set when disabled by redstone power.
 import { HOPPER_BOUNDS, HOPPER_BOXES, HOPPER_UNION } from "./hopper-shape.js";
+import { ringBlockTickActive } from "./streaming-ticks.js";
 import { Container, Slot, StackArray, copyStack } from "./inventory.js";
 import {
   containerAt, isInventoryFull, arrayAdapter, pushOne, suckFromInventory, pickUpEntity, insertStack, touch, newHopperTile,
@@ -133,3 +134,8 @@ export class Hoppers {
   }
 }
 export { insertStack };
+
+// TileEntityHopper.updateEntity runs in every loaded chunk (World.updateEntities: blockExists on its own chunk, bytecode-read in
+// ring-ticks-reference.json), so a hopper in a headless ring column ticks too (natural-spawning.md "Batch 37"). Its reads reach one block
+// (the inventory above or below, the item box above): the column must take writes and the chunks within 1 block be resident or held.
+export const hopperActive = (world, x, z) => ringBlockTickActive(world, x, z, 1);
