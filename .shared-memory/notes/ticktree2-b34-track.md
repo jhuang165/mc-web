@@ -9,7 +9,7 @@
 
 ## Verification
 - Focused: tick-tree.test.js (12 tests), tile-ticks, world-tick, redstone-live, region-export, world-import, boats tests pass.
-- `npm test` and `npm run build`: see the lead message (results at the end of this batch).
+- `npm test`: 4971 tests, 4971 pass, 0 fail (run once at the end). `npm run build`: succeeds (only the existing chunk size warning).
 - Probe: `MC_RESEARCH=/Users/programming-xcode/Desktop/mc-web/tools/research node tools/verify-tile-ticks.mjs` prints 32 scenarios; the first 30 cases compare equal to the previous reference.
 - Browser (muted headless Chrome, `?silent`, port 5362, machine load average 30 to 68 so timings are noisy): sand slab 40 x 35 whose support is removed in one tick: 1000 falling runs in game tick 1 and 400 in tick 2, ids strictly ascending across all runs, no long task, frame max 37 to 40 ms and p95 22 to 26 ms. The 0.62.0 build (`087c0b4ea` run from an archive on the same port) gave frame max 40 ms and p95 27 ms, no long task. 1200 water blocks placed at once (fluid tick backlog, not directly observable from the page): this build frame max 29 to 44 ms, p95 25 to 30 ms; 0.62.0 max 26 ms, p95 22 ms; two other runs of this build had one long task (58 and 95 ms) while the machine was heavily loaded, and a repeat A/B (with and without the per-run step) was inconclusive under load 60+. A node benchmark (`artifacts/b34-ticktree2/step-bench.mjs`, CPU time) shows the per-run step equal to the batched flush within noise (same 25495 runs; total about 150 to 220 ms for 80 ticks either way). Only a `404` console resource message, no page errors.
 
