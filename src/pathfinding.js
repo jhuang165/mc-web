@@ -244,6 +244,10 @@ export function getVerticalOffset(entity, x, y, z, size, avoidWater, breakDoors,
 // The original floors the entity's stored bounding box minimum; the port rebuilds it as position - width / 2, which for an entity pressed against a block
 // face (the box edge is exactly an integer) can land an ulp below it and floor into the block next door. An edge within 1e-9 of an integer is that integer.
 const floorEdge = (v) => { const r = Math.round(v); return Math.abs(v - r) < 1e-9 ? r : floor(v); };
+// ChunkCache (ahr), bytecode-read and then pinned by the b34 records: World.getEntityPathToXYZ / getPathEntityToEntity give the PathFinder a ChunkCache of radius
+// (int)(range + 8) / (int)(range + 16) around the entity, but the only reads the PathFinder makes through it are the swimming start loop (water above the start). Every
+// open/blocked test (ayg.a static, func_82565_a) reads entity.worldObj directly (invokevirtual ahb.a), so the search is NOT bounded by the cache region: walls beyond it still
+// count. The only bound is the follow-range sphere around the target. The probe still builds the real cache (b34 records, field `chunkCache`) and the port needs nothing.
 export class PathFinder {
   constructor(world, openDoors, breakDoors, avoidsWater, canSwim, options = {}) {
     this.world = world;
@@ -375,12 +379,14 @@ export class PathFinder {
   }
 }
 
-// The live port caps a search at 6000 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
-// Batch 33 benchmark (tools in artifacts, Node on the dev laptop): an open flat arena with the target sealed away expands 3196 points at range 32 (1.3 ms), 5004 at the zombie's
-// range 40 (1.9 ms), 12042 at range 64 (5 ms); terraced hills reach 12462 / 11 ms at 64 and 29894 / 21 ms at 100. About 0.4-0.7 ms per 1000 points, so 6000 keeps the worst
-// sealed-target search for a 40-block range complete (a capped search returns the closest partial path, which differs from the original) at about 3-4 ms. The search cannot be
-// split over ticks with identical results: the original runs it to completion inside one call, and a mob's next goal check depends on the path it returns.
-let nodeCap = 6000;
+// The live port caps a search at 30000 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
+// Benchmarks (Node on the dev laptop, node scripts in the batch 33/34 notes). The only native bound is the follow-range sphere around the target (the ChunkCache does not bound it, see the
+// ChunkCache comment above), so a sealed target expands the walkable area inside that sphere: an open flat arena 769 points at range 16 (1.2 ms), 1220 at 20, 4988 at the zombie's 40
+// (1.6 ms); terraced hills 731 / 1170 / 4969 (4.3 ms at range 40). Range 40 is the vanilla maximum (a zombie's random spawn bonus reaches about 45: 6400 points), so the old 6000 cap cut
+// those searches short (a capped search returns the closest partial path, which differs from the original). 30000 is about 3 ms per 1000 points worst case on stepped terrain (ca. 15-20 ms),
+// far beyond any single-floor search and only reachable in multi-storey caves. The search cannot be split over ticks with identical results: the original runs it to completion inside one
+// call, and a mob's next goal check depends on the path it returns.
+let nodeCap = 30000;
 export const setPathNodeCap = (n) => { const was = nodeCap; nodeCap = n; return was; };
 // --- PathNavigate (vv) ---
 // The navigator reads its entity through a small interface (all in Java units):
