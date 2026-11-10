@@ -1025,7 +1025,8 @@ export class EntityWorld {
       solidTop: (x, y, z) => y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
       light: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : 0),
       fits: (x, y, z) => {
-        if ((this.world.streaming ? !this.world.isTicking(x,z) : x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1) || y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
+        // Batch 34: no chunk test here. The native site test (yq.a) only reads blocks and boxes; the chunk check is World.spawnEntityInWorld's (chunkExists), after the site is chosen (below).
+        if (y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
         const box = [x - w, y, z - w, x + w, y + t.height, z + w];
         const meets = (o, ow, oh) => o.x + ow > box[0] && o.x - ow < box[3] && o.y + oh > box[1] && o.y < box[4] && o.z + ow > box[2] && o.z - ow < box[5];
         // World.checkNoEntityCollision: living mobs and the player.
@@ -1043,6 +1044,15 @@ export class EntityWorld {
       },
     });
     if (!spot) return null;
+    // World.spawnEntityInWorld (ahb.d) returns false for a non-player entity whose chunk is not loaded; yq.a ignores that: the target is set on the unspawned zombie, both charges apply
+    // and the search stops at this site (bytecode-read; the b34 unloaded-chunk records). A site in a chunk that is not loaded is therefore a lost reinforcement, not a retry.
+    const loaded = this.chunkLoaded ? this.chunkLoaded(spot.x, spot.z) : this.world.streaming ? this.world.isTicking(spot.x, spot.z) : !(spot.x < 1 || spot.z < 1 || spot.x >= SIZE - 1 || spot.z >= SIZE - 1);
+    if (!loaded) {
+      // yq.a still runs onSpawnWithEgg on the refused zombie: its rolls draw the world's Random (child, villager, jockey), which later spawns share (b34 reinforce-unloaded records).
+      this.onSpawnWithEgg(this.create("zombie", spot.x, spot.y, spot.z), { ghost: true });
+      e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
+      return null;
+    }
     const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z, "reinforce");
     this.tickOrder?.push(z); // World.spawnEntityInWorld: appended to the list being walked, so it updates in this pass
     this.ai.brain(z).attackTarget = target;
@@ -1056,6 +1066,9 @@ export class EntityWorld {
   // door breaking, the leader's health) are drawn and dropped.
   spawnNatural(type, x, y, z, kind = "spawn") {
     const e = this.create(type, x, y, z);
+    // EntityLivingBase's constructor rolls rotationYaw = (float)(Math.random() * 3.1415927 * 2.0) (degrees, so 0 to 6.28) and sets rotationYawHead to it (bytecode-read); a reinforcement
+    // zombie gets no setLocationAndAngles, so that is its heading (the mob's other yaw fields stay 0). Unseedable natively; a replay overrides it from the record in entitySeed.
+    if (kind === "reinforce") { const yaw = Math.fround(Math.random() * 3.1415927410125732 * 2.0); e.rotationYaw = e.rotationYawHead = yaw; e.yaw = (-yaw * Math.PI) / 180; }
     this.entitySeed?.(e, kind); // replay hook (village-fight-replay.js): the new mob's Entity.rand
     this.onSpawnWithEgg(e);
     this.entities.push(e);
@@ -1121,7 +1134,7 @@ export class EntityWorld {
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
-      if (r.child) this.chickenJockeyRolls(e, r);
+      if (r.child && !opts.ghost) this.chickenJockeyRolls(e, r);
       // The rolls as saved AttributeModifiers (mob-attributes.js, probed in interchange-reference.json); the leader's max-health bonus is one of them.
       e.modifiers = cleanModifiers(r.modifiers);
       if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
