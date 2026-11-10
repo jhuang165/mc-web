@@ -249,3 +249,15 @@ test("summon failures and tag errors are plain feedback; testfor finds the local
   assert.ok(!g.run("/give @p diamond 1 0 {bad")[0].startsWith("§c"));
   assert.deepEqual(g.run("/testfor @p"), [tr("commands.testfor.success", "Player")]);
 });
+
+test("spawnpoint: 0 or 1 arguments use the target's position, exactly 4 take absolute integers (CommandSetSpawnpoint bp.b)", () => {
+  const g = game({ mode: "creative", allowCommands: true });
+  g.run("/spawnpoint Player 5 64 -3");
+  assert.deepEqual(g.active.playerSpawn, [5, 64, -3]);
+  assert.match(g.run("/spawnpoint Player ~ 64 3")[0], /^§c'~' is not a valid number$/);
+  assert.match(g.run("/spawnpoint Player 1.5 64 3")[0], /^§c'1\.5' is not a valid number$/);
+  assert.match(g.run("/spawnpoint Player 1 300 3")[0], /^§c/);
+  assert.match(g.run("/spawnpoint Player 1 2")[0], /^§cUsage: \/spawnpoint/);
+  assert.match(g.run("/spawnpoint Player 1 2 3 4")[0], /^§cUsage: \/spawnpoint/);
+  assert.deepEqual(g.active.playerSpawn, [5, 64, -3], "failed forms change nothing");
+});

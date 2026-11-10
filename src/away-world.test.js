@@ -100,3 +100,16 @@ test("DimensionLive carries the departure state through a worker run and patches
   assert.ok(dirty > 0);
   assert.equal(await dims.finishAway(root), null, "one run per trip");
 });
+
+// Batch 35: the 1200-tick idle gate against the executed WorldServer.updateEntities (public/research/idle-counter-reference.json, tools/probes/IdleCounterProbe.java).
+import { readFileSync } from "node:fs";
+import { AWAY_ENTITY_TICKS as GATE } from "./away-plan.js";
+test("the entity gate matches the native idle counter: P = 0..1199 runs, 1200 onward stops, a player present resets it", () => {
+  const rec = JSON.parse(readFileSync(new URL("../public/research/idle-counter-reference.json", import.meta.url), "utf8"));
+  assert.ok(rec.cases.length >= 10);
+  for (const c of rec.cases) {
+    if (c.players) { assert.equal(c.result, "past"); assert.equal(c.pAfter, 0, "mt.i() resets the counter"); continue; }
+    assert.equal(c.result === "past", c.p < GATE, `P=${c.p}`);
+    assert.equal(c.pAfter, c.p + 1);
+  }
+});

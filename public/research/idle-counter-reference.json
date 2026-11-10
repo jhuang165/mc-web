@@ -1,0 +1,77 @@
+{
+ "probe": "tools/probes/IdleCounterProbe.java",
+ "evidence": "executed: unchanged 1.7.10 WorldServer (mt) class from minecraft-1.7.10.jar (sha1 e80d9b3bf5085002218d4be59e668bac718abbc6)",
+ "classes": {
+  "mt": "b45a7fb9ca9aaf7b30f90f14141758cc61f985c5de1071f55f32ead83a3a3ebf",
+  "ahb": "e682175e53be8972a6d04dff07da5780467754a7ffce2e396643c102893fd58a"
+ },
+ "method": "mt.h() = WorldServer.updateEntities on an Unsafe-allocated instance; 'past' = the call went on into World.updateEntities (NullPointerException from the missing profiler), 'gate' = it returned at the idle gate",
+ "cases": [
+  {
+   "players": false,
+   "p": 0,
+   "result": "past",
+   "pAfter": 1
+  },
+  {
+   "players": false,
+   "p": 1,
+   "result": "past",
+   "pAfter": 2
+  },
+  {
+   "players": false,
+   "p": 1198,
+   "result": "past",
+   "pAfter": 1199
+  },
+  {
+   "players": false,
+   "p": 1199,
+   "result": "past",
+   "pAfter": 1200
+  },
+  {
+   "players": false,
+   "p": 1200,
+   "result": "gate",
+   "pAfter": 1201
+  },
+  {
+   "players": false,
+   "p": 1201,
+   "result": "gate",
+   "pAfter": 1202
+  },
+  {
+   "players": false,
+   "p": 5000,
+   "result": "gate",
+   "pAfter": 5001
+  },
+  {
+   "players": true,
+   "p": 0,
+   "result": "past",
+   "pAfter": 0
+  },
+  {
+   "players": true,
+   "p": 700,
+   "result": "past",
+   "pAfter": 0
+  },
+  {
+   "players": true,
+   "p": 1200,
+   "result": "past",
+   "pAfter": 0
+  },
+  {
+   "players": true,
+   "p": 5000,
+   "result": "past",
+   "pAfter": 0
+  }
+ ]
+}

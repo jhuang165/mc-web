@@ -60,12 +60,12 @@ test("a world-restricted selector finds nobody: silent zero, LastOutput untouche
     assert.equal(r.commandStats.silent, 1, sel);
   }
   const plain = await run(rootWith("give @p minecraft:stone"));
-  assert.equal(block(plain).successCount, 7, "queued: unchanged until the replay");
-  assert.equal(block(plain).lastOutput, "old");
+  assert.equal(block(plain).successCount, 1, "batch 35: the shadow player runs it at fire time, the replay repeats it at return");
+  assert.match(JSON.parse(block(plain).lastOutput).text, /Given/);
   assert.equal(plain.commandStats.skipped, 0);
   assert.equal(plain.commandStats.queued, 1);
   assert.equal(plain.playerCommands[0].command, "give @p minecraft:stone");
-  assert.equal((await run(rootWith("difficulty hard"))).commandStats.skipped, 1, "still skipped and counted");
+  assert.equal((await run(rootWith("difficulty hard"))).difficulty, 3, "batch 35: applied and returned, not skipped");
   const test = await run(rootWith("testfor @p"));
   assert.equal(block(test).successCount, 1, "testfor finds the player in the other dimension");
   const mode = await run(rootWith("testfor @p[m=1]"));
@@ -175,4 +175,66 @@ test("a burning furnace emits block light 13 in the away run; a cold one does no
   assert.equal(light.blockAt(5, 11, 5), 13);
   burning = []; light.refresh(200);
   assert.equal(light.blockAt(6, 11, 5), 0, "out again");
+});
+
+// ---- Batch 35: shadow player (fire-time effect), /spawnpoint, /difficulty, sky light under cover ----
+// Three command blocks due in the same tick fire in tree order (x = 3, 4, 5).
+const runBlocks = async (commands, ticks = 20, player = {}) => {
+  const root = { ...base, redstone: { version: 1, clock: 0, time: 0, pending: commands.map((_, i) => [3 + i, 11, 3, 137, 1, 0, 1 + i]), events: [] },
+    commandBlocks: commands.map((c, i) => ({ ...tile(c), x: 3 + i })) };
+  const cols = stateColumns(root), plan = { ...awayPlan(root, cols, ticks, 2), chunks: floorChunks(cols), records: [] };
+  plan.player = { ...plan.player, ...player };
+  for (let i = 0; i < commands.length; i++) setBlock(plan.chunks, 3 + i, 11, 3, COMMAND_BLOCK);
+  return runAway(plan);
+};
+const at = (r, x) => r.commandBlocks.find((t) => t.x === x);
+test("a later command in the run sees an earlier one: give then clear, xp then a level filter, gamemode then a mode filter (fire-time shadow player)", async () => {
+  const r = await runBlocks(["give @p minecraft:diamond 3", "clear @p minecraft:diamond", "clear @p minecraft:diamond"]);
+  assert.equal(at(r, 3).successCount, 1, "the give succeeded at fire time");
+  assert.match(JSON.parse(at(r, 3).lastOutput).text, /Given \[.*\] \* 3 to Player/);
+  assert.equal(at(r, 4).successCount, 1, "the clear found the diamonds the give put in");
+  assert.match(JSON.parse(at(r, 4).lastOutput).text, /Cleared the inventory of Player, removing 3 items/);
+  assert.equal(at(r, 5).successCount, 0, "and the second clear finds nothing");
+  assert.equal(r.commandStats.shadow, 3);
+  assert.deepEqual(r.playerCommands.map((e) => e.command.split(" ")[0]), ["give", "clear", "clear"], "all three still replay at return");
+  const lv = await runBlocks(["testfor @p[lm=5]", "xp 5L @p", "testfor @p[lm=5]"]);
+  assert.equal(at(lv, 3).successCount, 0); assert.equal(at(lv, 4).successCount, 1); assert.equal(at(lv, 5).successCount, 1, "level 5 is visible to the next block");
+  const mode = await runBlocks(["testfor @p[m=1]", "gamemode 1 @p", "testfor @p[m=1]"]);
+  assert.deepEqual([3, 4, 5].map((x) => at(mode, x).successCount), [0, 1, 1]);
+});
+
+test("the shadow player starts from the state the player returns with, and the replayed result matches", async () => {
+  const state = new Survival({}, "survival"); state.inventory.add({ id: DIAMOND, count: 2, damage: 0 });
+  const r = await runBlocks(["clear @p minecraft:diamond", "give @p minecraft:diamond 1"], 20, { state: JSON.parse(JSON.stringify(state.serialize())) });
+  assert.equal(at(r, 3).successCount, 1, "the returning player's own 2 diamonds are cleared");
+  assert.match(JSON.parse(at(r, 3).lastOutput).text, /removing 2 items/);
+});
+
+test("/spawnpoint with four absolute integers sets the respawn point; without coordinates it is skipped; /difficulty is applied and returned", async () => {
+  const sp = await runBlocks(["spawnpoint @p 7 70 -9", "spawnpoint @p ~ 70 4", "spawnpoint @p", "difficulty hard"]);
+  assert.deepEqual(sp.world.playerSpawn, [7, 70, -9]);
+  assert.equal(at(sp, 3).successCount, 1); assert.match(JSON.parse(at(sp, 3).lastOutput).text, /Set Player's spawn point to \(7, 70, -9\)/);
+  assert.equal(at(sp, 4).successCount, 0, "~ is not an integer natively (CommandBase.a(sender, s, min, max))");
+  assert.equal(at(sp, 5).successCount, 7, "no coordinates: the player's position in the other dimension is unknown, skipped");
+  assert.equal(sp.commandStats.skipped, 1);
+  assert.equal(sp.difficulty, 3); assert.equal(at(sp, 6).successCount, 1);
+  const none = await runBlocks(["spawnpoint @p[r=5] 1 2 3"]);
+  assert.equal(none.world, undefined, "a world-restricted selector finds nobody");
+});
+
+test("sky light under cover: a roof shades the cells beneath it by distance from open sky, open sky stays 15, an unheld column answers null", () => {
+  const world = new World("sky", "javaStreamed", 15, "flat", "");
+  world.chunks = new Map();
+  for (const [x, z] of [[0, 0], [1, 0]]) world.chunks.set(`${x},${z}`, new WorldChunk(x, z, world.height));
+  for (let x = 3; x <= 13; x++) for (let z = 3; z <= 13; z++) world.set(x, 20, z, STONE, false);
+  const light = new AwayBlockLight(world, [{ x: 0, z: 0 }, { x: 1, z: 0 }]);
+  assert.equal(light.skyAt(8, 19, 8), 9, "six cells in from the roof edge: 15 - 6");
+  assert.equal(light.skyAt(3, 19, 8), 14);
+  assert.equal(light.skyAt(16, 19, 8), 15, "open sky");
+  assert.equal(light.skyAt(8, 30, 8), 15, "above the roof");
+  assert.equal(light.skyAt(100, 19, 8), null);
+  // an edit under the roof's opacity re-floods after the throttle: remove the roof, the cell is open sky
+  for (let x = 3; x <= 13; x++) for (let z = 3; z <= 13; z++) { world.set(x, 20, z, 0, false); light.touch(STONE, 0); }
+  light.refresh(1000);
+  assert.equal(light.skyAt(8, 19, 8), 15);
 });

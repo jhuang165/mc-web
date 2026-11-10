@@ -6,6 +6,9 @@
 // flooded once from every emitter. It costs nothing in a world with no emitter: the first scan finds none and `blockAt` answers 0 without a volume.
 // Blocks change during a run (water, fire, explosions, commands): `touch` marks the volume stale when an emitter or an opacity changes and the next
 // read re-floods at most once per REFLOOD_TICKS ticks, so a burning field or a flowing stream cannot make it run every tick.
+// Batch 35: sky light under cover. The same volume carries the sky half: each column starts at 15 above its first opaque block and loses the block's opacity going
+// down (Chunk.generateSkylightMap), then spreads sideways by the same fixed point, so a cell under a tree or an overhang is not open sky. `skyAt` answers the raw
+// 0..15 value (the caller subtracts the time-of-day/rain darkening, as World.getBlockLightValue does); a column the run did not load has none (null).
 import { OPACITY, EMISSION, COST } from "./ring-light.js";
 import { useNeighborBrightness, lightEmission } from "./lighting.js";
 
@@ -26,7 +29,7 @@ export class AwayBlockLight {
     this.cx0 = Math.min(...xs); this.cz0 = Math.min(...zs);
     this.w = Math.max(...xs) - this.cx0 + 1; this.d = Math.max(...zs) - this.cz0 + 1;
     this.held = new Set(columns.map((c) => `${c.x},${c.z}`));
-    this.block = null;
+    this.block = null; this.sky = null;
     this.stale = true;
     this.tick = 0; this.floodedAt = -Infinity;
     this.emitters = 0; this.floods = 0; this.floodMs = 0; this.lastMs = 0;
@@ -35,7 +38,7 @@ export class AwayBlockLight {
   // A block write at (x, y, z): the old and new block decide whether the light can have changed.
   touch(old, now) {
     if (old === now) return;
-    if (EMISSION[old & 255] || EMISSION[now & 255] || (this.emitters && OPACITY[old & 255] !== OPACITY[now & 255])) this.stale = true; // with no emitter an opacity change cannot matter
+    if (EMISSION[old & 255] || EMISSION[now & 255] || OPACITY[old & 255] !== OPACITY[now & 255]) this.stale = true; // the sky half reads every opacity change
   }
   index(x, y, z) { return (((x - this.cx0 * 16) * this.d * 16) + (z - this.cz0 * 16)) * this.h + y; }
   // Floods from every emitter in the held columns. Returns the number of emitters.
@@ -61,7 +64,41 @@ export class AwayBlockLight {
         }
       }
     }
-    // Spread by value: the highest level first, so every cell is final when it is taken.
+    this.spread(light, buckets, blocks, W, D, H);
+    // The sky half: the sky volume is kept always (a world with no emitter still has covered cells).
+    const sky = this.sky && this.sky.length === W * D * H ? this.sky.fill(0) : new Uint8Array(W * D * H);
+    const skyBuckets = Array.from({ length: 16 }, () => []);
+    // Each column's first opaque block from the top; a sky cell can only spread sideways at or below the highest neighbouring top, so higher cells are not queued.
+    const top = new Int16Array(this.w * 16 * D).fill(-1);
+    for (let xi = 0; xi < W; xi++) for (let zi = 0; zi < D; zi++) {
+      if (!this.held.has(`${this.cx0 + (xi >> 4)},${this.cz0 + (zi >> 4)}`)) continue;
+      const base = (xi * D + zi) * H;
+      let y = H - 1;
+      for (; y >= 0; y--) if (OPACITY[blocks[base + y]] > 0) break;
+      top[xi * D + zi] = y;
+    }
+    const reach = (xi, zi) => (xi < 0 || zi < 0 || xi >= W || zi >= D ? -1 : top[xi * D + zi]);
+    for (let xi = 0; xi < W; xi++) for (let zi = 0; zi < D; zi++) {
+      if (top[xi * D + zi] < -1 || !this.held.has(`${this.cx0 + (xi >> 4)},${this.cz0 + (zi >> 4)}`)) continue;
+      const base = (xi * D + zi) * H, limit = Math.max(top[xi * D + zi], reach(xi + 1, zi), reach(xi - 1, zi), reach(xi, zi + 1), reach(xi, zi - 1)) + 1;
+      let lv = 15;
+      for (let y = H - 1; y >= 0 && lv > 0; y--) {
+        const o = OPACITY[blocks[base + y]];
+        if (o >= 15) break;
+        lv = Math.max(0, lv - o);
+        sky[base + y] = lv;
+        if (lv > 1 && (lv < 15 || y <= limit)) skyBuckets[lv].push(base + y);
+      }
+    }
+    this.spread(sky, skyBuckets, blocks, W, D, H);
+    this.sky = sky;
+    this.block = emitters ? light : null;
+    this.emitters = emitters; this.stale = false; this.floodedAt = now; this.floods++;
+    if (t0) { this.lastMs = performance.now() - t0; this.floodMs += this.lastMs; }
+    return emitters;
+  }
+  // Spread by value: the highest level first, so every cell is final when it is taken.
+  spread(light, buckets, blocks, W, D, H) {
     const sx = D * H, sz = H;
     for (let level = 15; level > 1; level--) {
       const list = buckets[level];
@@ -84,16 +121,29 @@ export class AwayBlockLight {
         }
       }
     }
-    this.block = emitters ? light : null;
-    this.emitters = emitters; this.stale = false; this.floodedAt = now; this.floods++;
-    if (t0) { this.lastMs = performance.now() - t0; this.floodMs += this.lastMs; }
-    return emitters;
   }
   // Marks the run's clock; a stale volume is re-flooded here, at most once per REFLOOD_TICKS.
   refresh(now) {
     this.tick = now;
     if (this.litFurnaces && !this.stale && [...this.litFurnaces()].sort().join("|") !== this.litSig) this.stale = true; // a furnace lit or went out
     if (this.stale && (this.floods === 0 || now - this.floodedAt >= Math.max(REFLOOD_TICKS, this.lastMs * 2))) this.flood(now); // a slow flood waits longer: at most about a third of the run's time goes here
+  }
+  rawSky(x, y, z) {
+    if (!this.sky || y < 0 || y >= this.h) return 0;
+    const xi = x - this.cx0 * 16, zi = z - this.cz0 * 16;
+    if (xi < 0 || zi < 0 || xi >= this.w * 16 || zi >= this.d * 16) return 0;
+    return this.sky[(xi * this.d * 16 + zi) * this.h + y];
+  }
+  // The raw sky light at a cell (0..15 before the darkening), or null when the column is not held. Above the world it is 15.
+  skyAt(x, y, z) {
+    x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
+    if (!this.has(x, z)) return null;
+    if (y >= this.h) return 15;
+    if (y < 0) return 0;
+    if (this.stale && this.floods === 0) this.flood(this.tick);
+    const b = this.world.get(x, y, z) & 255;
+    if (useNeighborBrightness(b)) return Math.max(this.rawSky(x, y, z), this.rawSky(x, y + 1, z), this.rawSky(x + 1, y, z), this.rawSky(x - 1, y, z), this.rawSky(x, y, z + 1), this.rawSky(x, y, z - 1), this.rawSky(x, y - 1, z));
+    return this.rawSky(x, y, z);
   }
   raw(x, y, z) {
     if (!this.block || y < 0 || y >= this.h) return 0;

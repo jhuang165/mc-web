@@ -104,9 +104,11 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
   mobs.isRaining = () => weather.isRaining();
   mobs.isThundering = () => weather.isThundering();
-  // The sky half is open sky less the skylight subtracted (no lateral sky light); spawning is off.
+  // Spawning is off.
   // Block light (away-light.js) joins it: World.getBlockLightValue is the larger of the two (LightVolume.level).
-  mobs.lightAt = (x, y, z) => Math.max(canSeeSky(world, x, y, z) ? Math.max(0, 15 - subtracted()) : 0, light ? light.blockAt(x, y, z) : 0);
+  // Batch 35: the sky half is the run's sky volume (light under cover, away-light.js skyAt) less the darkening; a column the run did not hold falls back to open sky.
+  const skyHalf = (x, y, z) => { const raw = light?.skyAt(x, y, z); return Math.max(0, (raw ?? (canSeeSky(world, x, y, z) ? 15 : 0)) - subtracted()); };
+  mobs.lightAt = (x, y, z) => Math.max(skyHalf(x, y, z), light ? light.blockAt(x, y, z) : 0);
   if (light) mobs.dimensionBlockLight = (x, y, z) => light.blockAt(x, y, z);
   mobs.shoot = (m, target, scale) => arrows.skeletonShoot(m, target, scale, mobs.difficulty);
   mobs.ignite = (x, y, z) => fire.ignite(x, y, z);
