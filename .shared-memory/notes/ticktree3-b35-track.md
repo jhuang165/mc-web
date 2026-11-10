@@ -10,7 +10,7 @@
 ## Verification
 - Probe: `MC_RESEARCH=/Users/programming-xcode/Desktop/mc-web/tools/research node tools/verify-tick-sequence.mjs` prints "3 executed sequences, 0 diverge from the port". Before the two fixes it showed: slab-collapse diverged at tick 4 (in-flight rescheduling), lake-collapse at tick 14 (missing falling entries) then tick 17 (in-flight again).
 - Focused tests (fluids, lava, falling, tick-tree, tile-ticks, world-tick, tick-tree-runtime, away-tick-tree, redstone-live, piston-live, pistons, falling-damage, tick-sequence): all pass.
-- Full `npm test` / `npm run build`: see the lead message (numbers filled in there).
+- Full `npm test` was NOT completed in-track: I started it once, the lead killed it at load 150 (the partial log reached test 1043 with 2 failures, a block-light test that passes alone in `away-commands.test.js` and a portal-wait test that waits on workers; both look load-related and unrelated to this change, the portal one was not re-run). `npm run build` was not run. The lead runs the full suite after merging.
 - Browser (muted headless Chrome, `?silent`, port 5362, `artifacts/b35-ticktree3/piston.mjs`): new world, stone pad, piston facing +x and a floor lever beside it, right click on the lever (`redstone.use`): piston head appears 3 game ticks later and stays while on; second click: head gone the next tick, base remains, no moving tile left. Only a 404 resource console message, no page errors.
 
 ## Follow-ups (proposed gap lines)
