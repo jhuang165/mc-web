@@ -191,3 +191,10 @@ test('savedPortalFor weighs height like Teleporter.placeInExistingPortal: stacks
     assert.deepEqual(mine, [hit.x + 0.5, hit.z + 0.5], `trial ${trial}`);
   }
 });
+
+test("a Teleporter cache entry is the pick whatever the saved portals say (batch 36)", () => {
+  const tt = { x: 100.5, y: 70, z: 100.5 };
+  assert.deepEqual(savedPortalFor([[90, 100, [70]]], tt, { x: 300, y: 60, z: 40 }), [300.5, 40.5]);
+  assert.deepEqual(savedPortalFor([], tt, { x: 300, y: 60, z: 40 }), [300.5, 40.5], "a broken portal is still the cached exit");
+  assert.deepEqual(savedPortalFor([[90, 100, [70]]], tt, null), [90.5, 100.5]);
+});

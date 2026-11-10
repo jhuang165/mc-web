@@ -22,8 +22,11 @@ const SEARCH = 128; // Teleporter.placeInExistingPortal: the saved portals searc
 // lists them, `ys` the ascending y of its portal blocks): the search (dimensions.js, ahp.b) visits the columns in that order and, in each, scans y from the top
 // down, drops to the bottom block of every portal stack it meets, and keeps the first stack with the strictly smallest 3D distance (to the block centre) from
 // the target (x, y, z). So a tie goes to the earlier column, and inside a column to the higher stack. A column without `ys` counts at the target's height.
+// `cached` ({ x, y, z } of the Teleporter's destinationCoordinateCache entry for the target's column, a repeat trip): placeInExistingPortal uses it without any search
+// (and without checking that the portal still stands), so it is the pick.
 // Returns [x + 0.5, z + 0.5] or null.
-export function savedPortalFor(columns, tt) {
+export function savedPortalFor(columns, tt, cached = null) {
+  if (cached) return [cached.x + 0.5, cached.z + 0.5];
   if (!columns?.length) return null;
   const lx = Math.floor(tt.x), lz = Math.floor(tt.z), ty = Number.isFinite(tt.y) ? tt.y : 0;
   let best = Infinity, at = null;
@@ -68,9 +71,9 @@ export class ExitPrewarm {
   // tt: transferTarget(...) of the trip; asks for the window round it and (spare lanes) the windows round the spots an exit may be built at.
   // `portals`: the saved portal columns of the destination (batch 34): when one is within the Teleporter's search range the exit is that portal, so the
   // windows are asked for round it instead of round the target.
-  start(root, to, tt, portals = null) {
+  start(root, to, tt, portals = null, cached = null) {
     if (!root || !tt || !Number.isFinite(tt.x) || !Number.isFinite(tt.z)) return false;
-    const saved = savedPortalFor(portals, tt), focus = saved ?? [tt.x, tt.z];
+    const saved = savedPortalFor(portals, tt, cached), focus = saved ?? [tt.x, tt.z];
     const id = `${root.id}:${to}`;
     if (this.id === id && this.at && Math.hypot(focus[0] - this.at[0], focus[1] - this.at[1]) < MOVED) return true;
     if (this.id !== id) { this.dispose(); try { this.shell = this.makeShell(root, to); } catch (e) { console.warn(`exit prewarm: no shell: ${e.message}`); this.shell = null; } if (!this.shell) return false; this.id = id; this.warmer = arrivalWarmer(this.shell, { pause: null, pageFallback: false, specMax: to === OVERWORLD ? SPECULATIVE_CELLS : NETHER_SPECULATIVE, createWorker: this.createWorker, ...(this.maxWorkers ? { maxWorkers: this.maxWorkers } : {}) }); }

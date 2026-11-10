@@ -95,7 +95,7 @@ export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
-    this.portals = new EntityPortals(); this.peeks = new Map(); this.queue = Promise.resolve(); this.flights = 0;
+    this.portals = new EntityPortals(); this.peeks = new Map(); this.exitCache = new Map(); this.queue = Promise.resolve(); this.flights = 0;
     this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.exitWarm = new ExitPrewarm(); this.prewarmEnabled = true; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
@@ -133,9 +133,17 @@ export class DimensionLive {
     if (warm) await this.exitWarm.adopt(prepared, "start"); // cells the portal wait built for this world (exit-prewarm.js)
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
+    // destinationCoordinateCache lives as long as the destination world does (natively the whole session): a repeat trip to the same column within about
+    // 600 ticks reuses the portal picked before, even one that has been broken since. The Teleporter here is made per trip, so it is kept per root and dimension.
+    const ckey = `${record.rootId ?? record.id}:${to}`, now = this.host.ticks?.() ?? 0;
+    world.time = now;
+    const kept = this.exitCacheFor(ckey, now);
+    if (kept) { teleporter.cache = kept.cache; teleporter.keys = kept.keys; } else this.exitCache.set(ckey, { cache: teleporter.cache, keys: teleporter.keys });
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
-      const found = world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
-      if (found?.length) {
+      const reuse = teleporter.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`); // a cache hit searches nothing: the window round the cached portal is the exit's
+      const found = reuse ? null : world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
+      if (reuse) await warm.window(reuse.x + 0.5, reuse.z + 0.5);
+      else if (found?.length) {
         // The search ends at the saved portal nearest the target (Teleporter.placeInExistingPortal) and the arrival window (main.js openWorld:
         // World.streamAround at the exit) is built round it, up to 100 blocks from the target: fetch that window, not the target's, so the exit
         // needs no second fetch (a whole window's cells, about 1.4-1.9 s, when the portal was in another population cell).
@@ -150,6 +158,21 @@ export class DimensionLive {
     this.writes = world.writes;
     record.position = { x: e.x, y: e.y, z: e.z, yaw: gameYaw(e.yaw), pitch: 0 };
     if (warm) await this.exitWarm.adopt(prepared, "end"); // Nether columns the portal wait built (the arrival window takes them)
+  }
+  // The kept portal cache of a root and dimension after the sweeps up to `now` (Teleporter.removeStalePortalLocations runs when the world time is a multiple of 100 and
+  // drops entries unused for 600 ticks; the latest sweep has the strictest limit). A clock that went back (the world was reopened) drops the cache.
+  exitCacheFor(key, now) {
+    const kept = this.exitCache.get(key);
+    if (!kept) return null;
+    for (const p of kept.cache.values()) if (p.time > now) { this.exitCache.delete(key); return null; }
+    const sweep = Math.floor(now / 100) * 100;
+    Teleporter.prototype.removeStale.call(kept, sweep);
+    return kept;
+  }
+  // The portal a repeat trip to the target's column reuses (Teleporter cache hit), or null.
+  cachedExit(root, to, tt) {
+    const kept = this.exitCacheFor(`${root.id}:${to}`, this.host.ticks?.() ?? 0), hit = kept?.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`);
+    return hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
   }
   restorePlayer(record) {
     this.state.restore(readPlayerPortalState(record.portalState));
@@ -403,10 +426,10 @@ export class DimensionLive {
       if (known?.key !== key) {
         const mine = known = this.exitPortals = { key, list: null };
         const box = (v) => [Math.floor(v) - 160, Math.floor(v) + 160];
-        const ready = () => { if (this.exitPortals === mine && !this.busy) try { this.exitWarm.start(root, to, tt, mine.list); } catch (e) { console.warn(`exit prewarm: ${e.message}`); } }; // the tick that asked has gone by: start with its target
+        const ready = () => { if (this.exitPortals === mine && !this.busy) try { this.exitWarm.start(root, to, tt, mine.list, this.cachedExit(root, to, tt)); } catch (e) { console.warn(`exit prewarm: ${e.message}`); } }; // the tick that asked has gone by: start with its target
         this.savedPortals(root, to, box(tt.x), box(tt.z)).then((list) => { mine.list = list; }, () => { mine.list = []; }).then(ready);
       }
-      if (known.list) this.exitWarm.start(root, to, tt, known.list);
+      if (known.list) this.exitWarm.start(root, to, tt, known.list, this.cachedExit(root, to, tt));
     } catch (e) { console.warn(`exit prewarm: ${e.message}`); }
   }
   // The portal columns the Teleporter's search would list in the destination (the same edits, arrivals and imported columns peekFor reads) as [x, z], sorted by x then z.

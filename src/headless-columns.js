@@ -512,6 +512,26 @@ export class RingLight {
     }
     return false;
   }
+  // Can any cell of the resident chunk (cx, cz) give the query (qx, qy, qz) more sky light than `sky`? A cell sees the sky at or above its column's height map, and
+  // a path costs at least one per step, so the best cell of a column is the one nearest the query height (y = max(qy, height)) and gives 15 minus its Manhattan
+  // distance (batch 36). Exact for the current blocks (heights are the cached resident ones); false only when no cell of the box can beat `sky`.
+  residentSees(cx, cz, qx, qy, qz, sky) {
+    const H = this.ring.height, limit = 15 - sky; // a cell helps when its distance is below limit
+    const x0 = Math.max(cx * 16, qx - R), x1 = Math.min(cx * 16 + 15, qx + R), z0 = Math.max(cz * 16, qz - R), z1 = Math.min(cz * 16 + 15, qz + R);
+    for (let x = x0; x <= x1; x++) {
+      const ax = Math.abs(x - qx);
+      if (ax >= limit) continue;
+      for (let z = z0; z <= z1; z++) {
+        const az = ax + Math.abs(z - qz);
+        if (az >= limit) continue;
+        const hm = this.heightAt(x, z);
+        if (hm >= H) continue; // nothing at or above the height map inside the world
+        const d = az + (hm > qy ? hm - qy : 0);
+        if (d > 0 && d < limit) return true;
+      }
+    }
+    return false;
+  }
   // [sky << 4 | block] of a cell.
   at(x, y, z) {
     const ring = this.ring, col = ring.resident(x, z) ? null : ring.column(x >> 4, z >> 4);
@@ -562,17 +582,19 @@ export class RingLight {
     // Shortcuts (same answer): no cell within reach sees the sky when every height map in the 3 x 3 chunks is above qy + R, and no block light
     // arrives when none of the chunks that emit holds an emitter; the search then stops as soon as neither channel can still improve.
     const fast = this.fast;
-    let minHm = 65535, needBlock = !fast;
+    let minHm = 65535, needBlock = !fast, residentSky = false;
     for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
       const here = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16);
       present[a * 3 + b] = here ? 1 : 0;
       emits[a * 3 + b] = here && (ring.resident((pcx + a - 1) * 16, (pcz + b - 1) * 16) || !isRim(ring, pcx + a - 1, pcz + b - 1)) ? 1 : 0;
       if (fast && here) {
-        const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm;
+        const inf = this.info(pcx + a - 1, pcz + b - 1);
+        if (inf !== ANY) { if (inf.minHm < minHm) minHm = inf.minHm; }
+        else if (!residentSky && !noSky && sky < 15) residentSky = this.ring.world.chunkAt?.(pcx + a - 1, pcz + b - 1)?.blocks ? this.residentSees(pcx + a - 1, pcz + b - 1, qx, qy, qz, sky) : true;
         if (!needBlock && emits[a * 3 + b] && inf.emitter && inf.eMax >= qy - R && inf.eMin <= qy + R) needBlock = inf === ANY ? this.residentReaches(pcx + a - 1, pcz + b - 1, qx, qy, qz, block) : true;
       }
     }
-    const needSky = !fast || (!noSky && sky < 15 && qy + R >= minHm);
+    const needSky = !fast || (!noSky && sky < 15 && (residentSky || qy + R >= minHm));
     if (!needSky && !needBlock) return sky << 4 | block;
     const mid = (R * W + R) * W + R;
     grid[mid] = 0; seen[mid] = gen;
