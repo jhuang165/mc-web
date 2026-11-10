@@ -19,7 +19,7 @@ import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
 import { ExitPrewarm } from "./exit-prewarm.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
-import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
+import { EntityPortals, entityDeparture, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
@@ -92,6 +92,13 @@ export const mcYaw = (yaw) => ((Math.PI - yaw) * 180) / Math.PI;
 const PREWARM_TICKS = 5; // a brush against a portal does not start workers; the standing countdown is 80 ticks (4 s)
 const TRACE_EVERY = 20, TRACE_SAMPLES = 4000, TRACE_STATES = 300; // the away trace (traceAway): about a second between samples, bounded
 
+// The loading screens' ticks (the server keeps ticking): WorldInfo total time (mobs.worldTicks), weather timers and the day clock. See `clock` below.
+export function advanceWorldClock({ mobs, weather, survival, scene }, n) {
+  if (!(n > 0)) return;
+  if (mobs?.worldTicks !== undefined) mobs.worldTicks += n;
+  weather.advance(n);
+  if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); }
+}
 export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
@@ -255,21 +262,12 @@ export class DimensionLive {
     }
   }
   depart(root, from, kind, e, r, owner) {
-    const cooldown = this.portals.cooldownAfter(e, r);
     const vehicle = kind === "cart" || kind === "boat";
-    const rec = structuredClone(owner.serializeOne(e));
-    delete rec.rider; // the player never travels with the vehicle
-    rec.portalCooldown = cooldown || undefined;
+    const { rec, mc } = entityDeparture(this.portals, kind, e, r, owner);
     if (vehicle && e.passenger) { // the copy is made from the vehicle's own NBT: a mob that mounted it after the collision stays behind, unmounted (Entity.updateRidden)
       if (e.passenger.ridingEntity === e) e.passenger.ridingEntity = null;
       e.passenger = null;
     }
-    const mc = vehicle
-      ? { x: e.x, y: e.posY, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: e.yaw ?? 0, pitch: 0 }
-      : kind === "mob"
-      ? { x: e.x, y: e.y, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
-      : { x: e.x, y: e.y + POS_Y[kind], z: e.z, vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0, yaw: 0, pitch: 0 };
-    mc.teleportDirection = r.direction;
     const leashed = kind === "mob" && e.leash?.holder === "player";
     const rootId = root.id;
     this.flights++;
@@ -326,18 +324,19 @@ export class DimensionLive {
     return peek;
   }
   // The peek's Teleporter on the destination's shared cache at the world's current total time (the player's arrival may have replaced or swept the cache since the last call).
-  shareTeleporter(root, to, peek) {
-    const now = this.clock(root), kept = this.sharedCache(`${root.id}:${to}`, now, peek.seed);
+  // `time`: the total time of a delivery that happened earlier than now (an away run's traveller leaves at the tick it reached the portal, finishAway).
+  shareTeleporter(root, to, peek, time) {
+    const now = time ?? this.clock(root), kept = this.sharedCache(`${root.id}:${to}`, now, peek.seed);
     peek.time = now; peek.teleporter.cache = kept.cache; peek.teleporter.keys = kept.keys; peek.teleporter.random = kept.random;
     return peek.teleporter;
   }
-  async deliver(rootId, from, kind, rec, mc, arg, leashed) {
+  async deliver(rootId, from, kind, rec, mc, arg, leashed, time) {
     const root = this.rootRecord();
     if (!root || root.id !== rootId) return;
     const to = from === END && arg === END ? OVERWORLD : arg, peek = await this.peekFor(root, to), before = peek.writes.length;
     const spawn = root.worldSpawn ? { x: root.worldSpawn[0], z: root.worldSpawn[2] } : { x: 0, z: 0 };
     const heightAt = (x, z) => { for (let y = peek.actualHeight - 1; y > 0; y--) if (solidId(peek.get(x, y, z))) return y + 1; return 0; };
-    const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: this.shareTeleporter(root, to, peek), spawn, heightAt });
+    const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: this.shareTeleporter(root, to, peek, time), spawn, heightAt });
     const inbox = ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
     for (const w of peek.writes.slice(before)) inbox.writes.push(w);
     const y = e.y - POS_Y[kind];
@@ -426,7 +425,10 @@ export class DimensionLive {
         root.entities = r.entities.mobs; root.arrows = r.entities.arrows; root.projectiles = r.entities.projectiles; root.thrownPotions = r.entities.potions;
         root.rockets = r.entities.rockets; root.fireballs = r.entities.fireballs; root.hanging = r.entities.hanging;
         // Batch 38: the carts and boats that went through the Overworld's portals during the run are delivered to their destination's inbox now.
-        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, OVERWORLD, t.kind, t.rec, t.mc, t.arg, false); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
+        // Batch 39: mobs, items and orbs too, and each arrives at the total time of the tick it left the run at (the Teleporter's cache entries and 100-tick sweeps are keyed by it).
+        const now = this.clock(root), t0 = now - (this.host.ticks() - a.ticks0) - Math.round(a.tripMs / 50);
+        let last = -Infinity;
+        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, OVERWORLD, t.kind, t.rec, t.mc, t.arg, !!t.leashed, last = Math.max(last, Math.min(now, Math.max(0, t0 + (t.tick | 0))))); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
       }
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;

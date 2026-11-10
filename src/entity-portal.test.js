@@ -19,7 +19,7 @@ const of = (kind) => reference.records.filter((r) => r.kind === kind);
 const ORIGINAL = { air: 0, obsidian: 49, portal: 90, endPortal: 119, bedrock: 7 };
 
 test("reference file has every record kind", () => {
-  assert.deepEqual(["trace", "collide", "transfer", "travel", "nbt", "vehicle", "cache"].map((k) => of(k).length), [10, 8, 30, 30, 5, 8, 8]);
+  assert.deepEqual(["trace", "collide", "transfer", "travel", "nbt", "vehicle", "cache"].map((k) => of(k).length), [10, 8, 30, 30, 5, 10, 8]);
 });
 
 test("PortalState replays the per-tick counters of a mob and of a Survival/Creative player", () => {
@@ -274,12 +274,14 @@ test("native vehicle traces: a minecart and a boat follow the entity portal sche
     if (r.mode === "ridden") e.passenger = {};
     const travelled = [];
     for (const [tick, inBlock, , until, , op] of r.ticks) {
-      const go = portals.step(e, kind, { dim: 0, getId: (x, y, z) => (inBlock && x === 0 && z === 0 && y >= 10 && y <= 12 ? GAME_IDS.portal : 0), riding: r.mode === "riding", ridden: r.mode === "ridden" });
+      const go = portals.step(e, kind, { dim: 0, getId: (x, y, z) => (inBlock && x === 0 && z === 0 && y >= 10 && y <= 12 ? GAME_IDS.portal : 0), riding: r.mode === "riding", ridden: r.mode === "ridden" || (r.mode === "mount" && tick >= 1) });
       assert.equal(!!go, !!op, `${kind}/${r.mode} tick ${tick} travel`);
       if (go) { assert.equal(go.arg, -1); assert.equal(portals.cooldownAfter(e, go), 300); e.portalCooldown = 300; travelled.push(tick); }
-      assert.equal(e.portalCooldown | 0, until, `${kind}/${r.mode} tick ${tick} cooldown`);
+      // mount: the original has left at tick 1 (the copy is written with 300 by travelToDimension); its own counter is no longer observable.
+      if (r.mode !== "mount" || tick < 1) assert.equal(e.portalCooldown | 0, until, `${kind}/${r.mode} tick ${tick} cooldown`);
     }
-    assert.deepEqual(travelled, r.mode === "enter" ? [1] : []);
+    // mount (executed): a rider that boards between the collision and the next onUpdate does not stop the trip; the countdown in onUpdate has no rider test.
+    assert.deepEqual(travelled, r.mode === "enter" || r.mode === "mount" ? [1] : []);
   }
 });
 
@@ -448,4 +450,25 @@ test("an End portal sends a cart to the End platform with no cooldown", async ()
   await live.settle();
   const rec = root.portalArrivals[1].carts[0];
   assert.deepEqual([rec.x, rec.z], [100, 0]); assert.equal(rec.portalCooldown, undefined);
+});
+
+test("batch 39: finishAway delivers away mobs, items and orbs with their ids dropped once, and the Teleporter sees the tick each left at", async () => {
+  const root = makeRoot(), { live } = makeLive(root);
+  live.host.ticks = () => 300;
+  const mc = (x) => ({ x, y: 5, z: 64.5, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, teleportDirection: 0 });
+  const pig = { id: "mob-7", type: "pig", x: 64.5, y: 5, z: 64.5, health: 10, portalCooldown: 300 };
+  const result = { fluidTicks: [], fireTicks: [], fallingTicks: [], falling: [], redstone: null, pistons: null, tiles: {}, drops: [], columns: [], editSequence: 0, stats: {},
+    entities: { drops: [], xpOrbs: [], tnt: [], minecarts: { version: 1, carts: [] }, boats: [], mobs: [{ id: "mob-8", type: "pig", x: 1, y: 5, z: 1 }], arrows: [], projectiles: [], potions: [], rockets: null, fireballs: [], hanging: [],
+      portalTravel: [{ kind: "mob", tick: 10, rec: pig, mc: mc(64.5), arg: -1 },
+        { kind: "item", tick: 40, rec: { stack: { id: 4, count: 1, damage: 0 }, x: 64.5, y: 5, z: 64.5, mx: 0, my: 0, mz: 0, age: 0, delay: 0, portalCooldown: 300 }, mc: mc(64.5), arg: -1 },
+        { kind: "orb", tick: 30, rec: { x: 64.5, y: 5.2, z: 64.5, value: 3, portalCooldown: 300 }, mc: mc(64.5), arg: -1 }] } };
+  live.away = { rootId: root.id, ticks0: 0, tripMs: 0, columns: [], chunks: [], records: [], trace: { samples: [], states: [] }, ready: Promise.resolve(true),
+    worker: { postMessage() { setTimeout(() => this.onmessage({ data: { type: "result", result } }), 0); }, terminate() {} } };
+  assert.ok(await live.finishAway(root));
+  const inbox = root.portalArrivals[-1];
+  assert.equal(inbox.entities.length, 1); assert.equal(inbox.entities[0].id, undefined, "the arrival gets a new id in the Nether (no duplicate of mob-7)");
+  assert.equal(inbox.drops.length, 1); assert.equal(inbox.xpOrbs.length, 1);
+  assert.equal(root.entities.filter((m) => m.id === "mob-7").length, 0);
+  const times = [...live.exitCache.get(`${root.id}:-1`).cache.values()].map((p) => p.time);
+  assert.ok(times.length > 0 && times.every((t) => t >= 10 && t <= 40), `cache entry times ${times}: from the departure ticks, not the return's 300`);
 });
