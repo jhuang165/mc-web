@@ -35,6 +35,9 @@ export const fightReference37 = JSON.parse(readFileSync(new URL("../public/resea
 // hits by the player and the golem, cave spider poison, a pigman's group anger): records carry `bright` (the light level the probe world answers), `patches` and `poison` (the player's Poison
 // duration per tick); for S, T and P mobs the row's 5th element is entityToAttack (td.bm), not the AI-task target.
 export const fightReference38 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b38-reference.json", import.meta.url)));
+// Batch 39: village-fight-b39-reference.json (wall climbing against rings, roofs, pillars and a plateau, spiders killed by the player and the golem, night jockeys whose arrow hits its own mount):
+// the script op `creative 7 on|off` (kept for probes with an EntityPlayerMP player; no b39 record uses it) and the record's `mathRandom` ([tick, value, caller]: every java.lang.Math.random() call outside a constructor, which the replay hands to Entity.knockBack's coincident-attacker nudge).
+export const fightReference39 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b39-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -119,6 +122,8 @@ function replayFightUncapped(r, hooks) {
   // state (position, motion, yaw, pitch, damage, punch, flame) must equal the native one: `headingDiff` lists any differing field.
   const arrows = new Arrows(() => 0.5), shotLog = [], shotsLeft = (r.shots ?? []).slice(), mine = [];
   let tick = 0, nextShot = 0;
+  const mathLeft = (r.mathRandom ?? []).slice(), mathCalls = [];
+  if (r.mathRandom) ew.mathRandom = () => { const m = mathLeft.shift(); mathCalls.push([tick, m ? m[1] : null]); return m ? m[1] : Math.random(); };
   ew.shoot = (e, target, scale) => {
     arrows.mobRands.set(e, ents.includes(e) ? logs[ents.indexOf(e)] : extraMobs.includes(e) ? mobLogs[extraMobs.indexOf(e)] : arrows.rng());
     const want = shotsLeft[0];
@@ -219,6 +224,7 @@ function replayFightUncapped(r, hooks) {
       else if (p[1] === "move" && Number(p[2]) !== n) { const e = ents[Number(p[2])]; e.x = Number(p[3]); e.z = Number(p[4]); if (p.length > 5) e.y = Number(p[5]); }
       else if (p[1] === "move") { player.x = Number(p[3]); player.z = Number(p[4]); }
       else if (p[1] === "rename") name = p[2];
+      else if (p[1] === "creative") survival.mode = p[3] === "on" ? "creative" : "survival"; // PlayerCapabilities.disableDamage / isCreativeMode of the probe player
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
       else if (p[1] === "spawn") spawnZombie(Number(p[2]), Number(p[3]), Number(p[4]), Number(p[5]));
       else if (p[1] === "spawnspider") ew.spawnNatural("spider", Number(p[2]), Number(p[4]), Number(p[3]), "spawn"); // SpawnerAnimals' order: spawnEntityInWorld, then onSpawnWithEgg (the jockey roll and the Hard potion on World.rand)
@@ -253,7 +259,7 @@ function replayFightUncapped(r, hooks) {
     hooks.onTick?.(t, ew, ents);
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player")]);
   }
-  return { ew, extraMobs, spawnLog, extraChickens, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
+  return { ew, mathCalls, extraMobs, spawnLog, extraChickens, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
 }
 
 // The first tick, mob and field where a replay differs from a record (null when none): fields 0-5 are x, y, z, health, attack target, revenge target, then the draws.
@@ -276,11 +282,12 @@ export function firstDivergence(r, got) {
     if (r.rows[t][7] !== undefined) {
       // A spider's own update draws on Entity.rand through EntityCreature.updateEntityActionState (i180, i120, f, f while idle), which the port's adapted spider AI does not (public/research/spiders.md): its draws
       // are compared only up to the first ambient-sound draw (i1000) of its first update, i.e. its spawn rolls; its place, health and target are compared at every tick. The skeleton jockey is compared whole.
-      const view = (list, kinds) => list.map((m, i) => (kinds[i] === 0 && r.bright === undefined ? [...m.slice(0, 6), m[6].slice(0, Math.max(0, m[6].indexOf("i1000")))] : m));
+      const view = (list, kinds) => list.map((m, i) => (kinds[i] === 0 && /jockey/.test(r.name ?? "") && r.bright === undefined ? [...m.slice(0, 6), m[6].slice(0, Math.max(0, m[6].indexOf("i1000")))] : m));
       const kinds = (r.mobs ?? []).map((m) => m[1]);
       if (JSON.stringify(view(r.rows[t][7], kinds)) !== JSON.stringify(view(got.states[t].mobs, kinds))) return [t, "extra mobs", r.rows[t][7], got.states[t].mobs];
     }
     if (r.poison && r.poison[t] !== got.states[t].poison) return [t, "poison", r.poison[t], got.states[t].poison];
+    if (r.mathRandom && JSON.stringify(r.mathRandom.filter((m) => m[0] === t).map((m) => m[1])) !== JSON.stringify(got.mathCalls.filter((m) => m[0] === t).map((m) => m[1]))) return [t, "Math.random calls", r.mathRandom.filter((m) => m[0] === t).length, got.mathCalls.filter((m) => m[0] === t).length];
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
     if (!near(before - want[n][3], got.playerDamage[t])) return [t, "player damage", before - want[n][3], got.playerDamage[t]];
   }

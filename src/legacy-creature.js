@@ -40,7 +40,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom) {
   st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
   st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
   if (pigman) e.pigTarget = !!st.target; // yh.h: the speed boost modifier follows the target at the start of the update
-  st.speed = aiMoveSpeed(e, 1); st.jumping = false;
+  st.speed = aiMoveSpeed(e, 1); // isJumping (bc) is not reset here: td.bq clears it only on its path-following branch, so a jump asked for while airborne is taken on landing (b39 pillar records)
   st.entityAge = e.idle || 0; // the port's idle counter is EntityLiving.entityAge (a hit resets it)
   st.moveForward = f(f(st.moveForward || 0) * f(0.98)); // the previous tick's x 0.98 decay carries over when the action state leaves it unset
   if (st.attackTime > 0) st.attackTime--;

@@ -987,7 +987,9 @@ export class EntityWorld {
     if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
-      if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), Math.random);
+      // `mathRandom`: a replay's recorded java.lang.Math.random values (village-fight-b39-reference.json)
+      if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), this.mathRandom ?? Math.random);
+      else (this.mathRandom ?? Math.random)(); // no attacker entity: attackedAtYaw = (int)(Math.random() * 2) * 180 (sv.a(ro, F), bytecode-read; the value is not used by the port)
     }
     const child = e.growingAge < 0, sound = { volume: soundVolume(e.type), position: e };
     // The server's own sound (hurt, or die when the hit kills) at getSoundPitch(): `events`, replayed against the original
@@ -1462,6 +1464,7 @@ export class EntityWorld {
   deathUpdate(e, t) {
     e.death = (e.death || 0) + 1;
     if (e.death !== 20) return;
+    freeRider(e); // onDeathUpdate's setDead at deathTime 20: the rider updating right after finds its mount dead and is let go within the same tick (b39 jockey kills)
     const rand = entityRandom(e);
     if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
