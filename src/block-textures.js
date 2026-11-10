@@ -20,7 +20,7 @@ import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOW
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 import {CHEST_ICON_TEXTURES,chestIconTexture,drawChestIcon} from './chest-icon.js';
 import {anaglyphRgba,anaglyphMultiplier,meshAnaglyph} from './anaglyph.js';
-import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile} from './atlas-texels.js';
+import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile,rasterIcon,encodePngStored,pngDataUrl,hasTranslucent} from './atlas-texels.js';
 import {decodePng} from './png-codec.js';
 import {setIconResolver} from './gui-anaglyph.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
@@ -279,7 +279,11 @@ export function createBlockAtlas(){
  // drawn from the already converted atlas, which the DOM conversion must not convert again. Chest icons draw the raw entity texture.
  const chestUrls=new Set();
  function icon(id,damage=0){const url=iconRaw(id,damage);return url+'#mcicon='+id+':'+damage+(canvas.__agDone===true&&!chestUrls.has(url)?':ag':'');}
- function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||id===1941)id-=1778;if(id>=1140&&id<=1148)id-=1000;if(id===1177||id===1178)id-=1000;if(id===1100)id=GLASS_PANE;if(id>=1135&&id<=1137)id-=1000;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER||id===DROPPER?3:1;}const chest=chestIconTexture(id),key=id+':'+damage+(chest?':'+chest:'');if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+ // A translucent texel (ice, stained glass) drawn on the 2D canvas and read back by toDataURL drifts through premultiplied rounding. An icon
+// with any translucent face texel is composed from the exact tile bytes instead (atlas-texels.js rasterIcon) and written as a PNG that reads
+// back exactly; opaque icons keep the canvas path, which is lossless for them. layers: [tile index, canvas matrix, shade, drop].
+function softIcon(layers){const tiles=[];for(const[i]of layers){const l=exactLevels(false,TILES[i],0);if(!l)return null;tiles.push(l[0]);}if(!tiles.some(hasTranslucent))return null;return pngDataUrl(encodePngStored(64,70,rasterIcon(64,70,layers.map(([,matrix,shade,drop],k)=>({tile:tiles[k],matrix,shade,drop})))));}
+function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||id===1941)id-=1778;if(id>=1140&&id<=1148)id-=1000;if(id===1177||id===1178)id-=1000;if(id===1100)id=GLASS_PANE;if(id>=1135&&id<=1137)id-=1000;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER||id===DROPPER?3:1;}const chest=chestIconTexture(id),key=id+':'+damage+(chest?':'+chest:'');if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   if(chest){drawChestIcon(x,images.get(chest));const url=c.toDataURL();icons.set(key,url);chestUrls.add(url);return url;}
   if(id===173){beaconIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
   if(id===ANVIL){anvilIcon(x,damage);const url=c.toDataURL();icons.set(key,url);return url;}
@@ -288,7 +292,7 @@ export function createBlockAtlas(){
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE||isNetherFence(id)){fenceIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
- if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+ if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);{const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]]);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */{const url=softIcon([[blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop],[blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop],[blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0,drop]]);if(url){icons.set(key,url);return url;}}face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  // RenderBlocks.renderBlockAsItem (type 34): the inner boxes first, then the glass shell over them.
