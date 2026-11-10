@@ -16,6 +16,8 @@ import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { LiveRedstone } from '../redstone-live.js';
+import { installDispensers } from '../dispense.js';
+import { dispenseFirework } from '../fireworks-live.js';
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
 import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
@@ -82,6 +84,7 @@ export class DedicatedSimulation {
         hoppers: () => this.tiles.hoppers, brewing: () => this.tiles.brewing, maxStack: s => this.tiles.inventory.maxStack(s) }),
     });
     this.redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
+    this.installDispensers();
     this.redstone.restore(saved.redstone);
     // TileEntityHopper.updateEntity for every hopper in a ticking column (hopper.js), over the shared tile maps; a move tells the
     // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems); its
@@ -247,6 +250,39 @@ export class DedicatedSimulation {
     }
   }
   hopperItems() { return []; } // dropped items a hopper can pick up (the gun server's ItemEntities)
+  // BlockDispenser (23) and BlockDropper (158) on the server's redstone (dispense.js), over the shared dispenser tiles. The entities
+  // they shoot are the server's own (server-mobs.js: arrows, thrown things, fireballs, minecarts, rockets; server-play.js dropped
+  // items); a dropper pushes into the container in front through the hoppers' transfer host. The aux sounds 1000 / 1001 (click)
+  // and 1002 (bow) go to the players in earshot; the smoke particles (2000) are not sent. The server has no primed TNT entity, so a
+  // dispensed TNT is used up without one (LiveRedstone.primeTnt has no hook here).
+  installDispensers() {
+    const AUX_SOUNDS = { 1000: ['random.click', 1], 1001: ['random.click', 1.2], 1002: ['random.bow', 1.2] };
+    const tiles = this.tiles, mobs = () => this.mobs;
+    this.dispensing = installDispensers(this.redstone, {
+      tile: (x, y, z) => ((tiles.dispensers ??= {})[`${x},${y},${z}`] ??= { items: Array(9).fill(null) }),
+      aux: (id, x, y, z) => { const s = AUX_SOUNDS[id]; if (s) mobs()?.sound({ sound: s[0], position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: 1, pitch: s[1] }); },
+      rng: () => mobs()?.arrows.rng(),
+      spawnItem: (stack, x, y, z, mx, my, mz) => { this.play?.items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
+      arrow: e => { const a = mobs()?.arrows; a?.list.push(a.make(e, e.rand, { shooter: null, pickup: 1 })); },
+      thrown: (kind, e) => {
+        const m = mobs();
+        if (!m) return;
+        const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
+        if (kind === 'potion') m.ew.potions.balls.push({ ...ball, damage: e.damage, owner: null });
+        else m.projectiles.balls.push(ball);
+      },
+      fireball: ({ x, y, z, ax, ay, az }) => { mobs()?.ew.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // FIRE_CHARGE
+      cart: (type, x, y, z) => { const c = mobs()?.minecarts; if (type === 0) c?.spawnEmpty({ x, y, z }); else c?.spawnCart(type, { x, y, z, items: [] }); },
+      firework: (stack, x, y, z, fx, fz) => { const r = mobs()?.rockets; if (r) dispenseFirework(r, x, y, z, fx, fz, stack); },
+      // World.setBlock with notify (World.set), so the fluids schedule the poured liquid (Fluids world.onChange) and the redstone sees it.
+      setLiquid: (x, y, z, id) => { this.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
+      setAir: (x, y, z) => { this.world.set(x, y, z, 0, true, 0); },
+      setFire: (x, y, z) => { this.fire.ignite(x, y, z); },
+      boneMeal: (x, y, z, original) => original === 6 && this.trees.boneMeal(x, y, z) !== null,
+      transfer: () => this.hoppers?.host ?? null,
+      maxStack: s => tiles.inventory.maxStack(s),
+    });
+  }
   // A streamed world's player whose column is not ticking (its window is still being generated) waits, like an unloaded chunk.
   frozen(p) { return !!this.columns && !this.world.isTicking(p.position.x, p.position.z); }
   tickWorld(beforeLit) {

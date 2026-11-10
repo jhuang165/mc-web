@@ -282,6 +282,8 @@ export class ServerPlay {
     }
     const state = this.state(p, target), made = sim.mobs?.mark(), heldTool = p.survival.held?.id ?? 0;
     let result = null;
+    const redstone = sim.redstone;
+    if (redstone) redstone.touched = new Set();
     try {
       result = applyPlayerEdit(state, { place, target, aimedEntity, bucket: null }, {
         random: sim.random,
@@ -307,11 +309,13 @@ export class ServerPlay {
         placeBoat: () => this.placeBoat(p),
         useFishingRod: () => useRod(sim, p),
       });
+      if (redstone) placedRedstone(redstone, result?.placement, p);
     } catch (error) {
       console.error('[gun-server] edit failed', error?.message ?? error);
       return false;
     } finally {
       if (made) sim.mobs.claim(made, p);
+      if (redstone) redstone.touched = null;
     }
     p.eating = state.eating; p.mining = state.mining; p.mineCooldown = state.mineCooldown; p.motion.sprinting = state.motion.sprinting;
     p.statsLive?.placed(result, heldTool); // ItemStack.tryPlaceItemIntoWorld: the placed or applied item's use stat
@@ -399,3 +403,19 @@ export class ServerPlay {
   }
 }
 export { StackArray, ChestContainer };
+
+// The redstone side of a player's placement (as redstone-runtime.js applyEdit does in the browser): the placement's collision test
+// writes the block untracked first, so the tracked write that follows is no change to the LiveRedstone funnel. Each placed cell the
+// funnel did not see gets onBlockAdded and the neighbour notification (a dispenser beside a placed redstone block fires), then
+// ItemBlock.placeBlockAt's onPostBlockPlaced (tripwire hook) or onBlockPlacedBy with the placer's yaw (repeater, comparator facing).
+export function placedRedstone(redstone, placement, p) {
+  if (!placement?.placed || !placement.position) return;
+  const [x, y, z] = placement.position, cells = placement.reason === 'door' ? [[x, y, z], [x, y + 1, z]] : [[x, y, z]];
+  for (const c of cells) if (!redstone.touched?.has(c.join(','))) redstone.placed(...c);
+  if (placement.reason !== 'block') return;
+  const id = redstone.getBlock(x, y, z), behaviour = redstone.behaviours[id];
+  if (id === 131) { behaviour?.onPostBlockPlaced?.(redstone, x, y, z, redstone.getBlockMetadata(x, y, z)); return; }
+  if (!behaviour?.onBlockPlacedBy || id === 137) return; // command blocks are not on the gun server
+  const mcYaw = Math.fround(180 - (p.yaw * 180) / Math.PI);
+  behaviour.onBlockPlacedBy(redstone, x, y, z, id === 33 || id === 29 ? { x: p.position.x, y: p.position.y, z: p.position.z, yaw: mcYaw } : mcYaw);
+}
