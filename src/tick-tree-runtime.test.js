@@ -12,7 +12,7 @@ import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { attachTickTree } from "./tile-ticks.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { PISTON, PISTON_HEAD } from "./dispenser-piston.js";
-import { LEVER } from "./redstone-blocks.js";
+import { LEVER, REPEATER } from "./redstone-blocks.js";
 
 const STONE = 3, NOTE = 177, O = [20, 20, 20];
 
@@ -103,7 +103,7 @@ function fluidScene(perWrite) {
   // water source on a stone shelf one block up with dust on three sides and one repeater beside the dust
   for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) s.world.put(x + dx, y - 1, z + dz, STONE, 0, false);
   s.world.put(x - 1, y, z, WIRE, 0, false); s.world.put(x + 1, y, z, WIRE, 0, false); s.world.put(x, y, z + 1, WIRE, 0, false);
-  s.world.put(x + 2, y, z, 94, 0, false); // powered-less repeater next to the east dust
+  s.world.put(x + 2, y, z, REPEATER, 0, false); // powered-less repeater next to the east dust
   s.world.put(x, y, z, WATER, 0, false);
   const fluids = s.tickTree.sources.find((q) => q.name === "fluids").sys;
   const put = s.world.put.bind(s.world), external = s.rt.redstone.external.bind(s.rt.redstone);
