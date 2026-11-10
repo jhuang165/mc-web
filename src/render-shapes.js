@@ -37,6 +37,11 @@ export function gateRenderPlan(meta, lowered) {
   return out;
 }
 
+// RenderBlocks.renderBlockAsItem for render type 21 (the fence gate in a hand or inventory slot, blm.a(aji, int, float), bytecode-read, not executed or wired into
+// the icon code yet): NOT the world path above. Three boxes, each drawn with its six faces (icon faces 0..5 of the gate block, planks) around a -0.5 translate, with
+// f = 1/16: [0.5 - f, 0.3, 0, 0.5 + f, 1, 2f], [0.5 - f, 0.3, 1 - 2f, 0.5 + f, 1, 1] (two posts) and [0.5 - f, 0.5, 0, 0.5 + f, 1 - f, 1] (one bar across).
+export const GATE_ITEM_BOXES = Object.freeze([[0.4375, 0.3, 0, 0.5625, 1, 0.125], [0.4375, 0.3, 0.875, 0.5625, 1, 1], [0.4375, 0.5, 0, 0.5625, 0.9375, 1]]);
+
 // renderBlockWall's boxes are wallRenderBoxes (shaped-blocks.js, already exact); what the record added is the face rule: BlockWall.shouldSideBeRendered (aoi.a(ahl, x, y, z, side))
 // returns true for every side but 0, and side 0 asks Block's rule, so only the bottom face is hidden by an opaque block below (bytecode-read, then confirmed by the record).
 
