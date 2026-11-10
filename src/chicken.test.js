@@ -66,12 +66,9 @@ test("a chicken takes no fall damage", () => {
 test("an adult lays an egg with mob.chicken.plop when the timer runs out, as EntityChicken does for seeded rand", () => {
   assert.equal(reference.eggtimer.length, 6);
   for (const want of reference.eggtimer) {
-    // The sound's two nextFloat draws, then nextInt(6000) as an exact fraction.
-    const jr = new JavaRandom(want.seed);
-    let calls = -1;
-    const random = () => (calls < 0 ? 0.5 : calls++ < 2 ? jr.nextFloat() : (jr.next(31) % 6000 + 0.5) / 6000);
-    const ew = chickenWorld({}, random), e = ew.entities[0];
-    calls = 0;
+    // EntityChicken draws on its own Entity.rand (batch 36: it was the world's): the sound's two nextFloat draws, then nextInt(6000).
+    const ew = chickenWorld(), e = ew.entities[0];
+    setEntityRandom(e, new JavaRandom(want.seed));
     Object.assign(e, { eggTimer: 1, onGround: true });
     ew.chickenUpdate(e);
     const [sound, volume, pitch] = want.sounds[0].split("|");

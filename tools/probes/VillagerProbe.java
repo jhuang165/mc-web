@@ -52,8 +52,9 @@ public class VillagerProbe {
     public azu a(azw a, azw b) { return realRays ? super.a(a, b) : null; }
     public azu a(azw a, azw b, boolean c) { return realRays ? super.a(a, b, c) : null; }
     public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return realRays ? super.a(a, b, c, d, e) : null; }
-    public boolean d(sa entity) { if (!unloaded.isEmpty() && !(entity instanceof yz) && unloaded.contains(chunkKey(qh.c(entity.s / 16.0), qh.c(entity.u / 16.0)))) return false; spawned.add(entity); if (pickEntities && immediateZombies && entity instanceof yq) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
+    public boolean d(sa entity) { if (!unloaded.isEmpty() && !(entity instanceof yz) && unloaded.contains(chunkKey(qh.c(entity.s / 16.0), qh.c(entity.u / 16.0)))) return false; spawned.add(entity); if (pickEntities && ((immediateZombies && entity instanceof yq) || (immediateChickens && entity instanceof wg))) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
     static boolean immediateZombies = false;
+    static boolean immediateChickens = false; // batch 36: a chicken a baby zombie spawns joins the entity list at once (as immediateZombies)
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
     // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.
     static List<yz> closePlayers = null;

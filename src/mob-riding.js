@@ -76,7 +76,7 @@ export function releaseDead(entities) {
     }
     // World.updateEntityWithOptionalForce (ahb.a, after the mount's update): a rider that is dead, or no longer carried, is let go on both sides.
     const r = e.riddenBy;
-    if (r && (r.ridingEntity !== e || !entities.includes(r) || (r.health <= 0 && r.death >= 20))) {
+    if (r && (r.ridingEntity !== e || (!entities.includes(r) && !r.unspawned) || (r.health <= 0 && r.death >= 20))) {
       if (r.ridingEntity === e) hide(r, "ridingEntity", null);
       hide(e, "riddenBy", null);
     }
