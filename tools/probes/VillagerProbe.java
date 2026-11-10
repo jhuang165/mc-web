@@ -71,11 +71,13 @@ public class VillagerProbe {
     }
     // Batch 38: World.getClosestVulnerablePlayerToEntity (ahb.b(sa, D) -> b(DDDD)): the nearest living player within d of the entity's feet (no sneaking or invisibility scaling: the probe player has neither); null in every older record (closePlayers unset).
     public yz b(sa e, double d) {
+      if (realPlayers) return super.b(e, d); // batch 39: the real World.getClosestVulnerablePlayerToEntity over World.playerEntities (disableDamage and isEntityAlive tests, sneaking and invisibility scaling), b39-* records only
       if (closePlayers == null || !vulnerable) return null;
       yz best = null; double bd = -1;
       for (yz p : closePlayers) { if (p.aS() <= 0) continue; double dx = p.s - e.s, dy = p.t - e.t, dz = p.u - e.u, q = dx * dx + dy * dy + dz * dz; if ((d < 0 || q < d * d) && (bd == -1 || q < bd)) { bd = q; best = p; } }
       return best;
     }
+    static boolean realPlayers = false;
     static boolean vulnerable = false; // batch 38: VillageFightProbe turns it on for b38-* records
     // Batch 29: VillageFightProbe turns this on so entities push each other and collideWithEntity runs (getEntitiesWithinAABBExcludingEntity); every
     // other probe leaves it off and keeps the empty answer its reference was recorded with.

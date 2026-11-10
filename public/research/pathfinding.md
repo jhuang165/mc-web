@@ -59,3 +59,7 @@ Tasks only decide every third tick and a freshly created mob is not `onGround` u
 - The legacy `EntityCreature` flow (spider, cave spider, pigman) uses the same `PathFinder` calls as the giant: `getPathEntityToEntity` with range 16 for a target and `getEntityPathToXYZ` with range 10 for the wander target (`updateWanderPath`: ten tries of `nextInt(13) - 6`, `nextInt(7) - 3`, `nextInt(13) - 6`, strictly greater weight wins, weight `0.5 - brightness`, so dark columns beat lit ones). The 27 records of `village-fight-b38-reference.json` compare the point count of every search (a night hunt makes 350+ of them) and all match.
 - Re-path rolls are native: with a target and a path, `nextInt(20) == 0` re-paths (and then no wander roll); otherwise `(no path and nextInt(180) == 0) or nextInt(120) == 0` with `entityAge < 100` picks a wander target; `nextInt(100) == 0` or no path drops to `EntityLiving.updateEntityActionState` and clears the path.
 - Bytecode-read only: `td.bq` order for creative players (cleared in the port as for the giant; the probe's player is not an `EntityPlayerMP`, so there is no native record of it).
+
+## Batch 39 (spiderwall)
+
+Native search sizes for wall-climbing spiders match for all 22 b39 records (`src/village-fight-b39.test.js` checks the path search observer). Spiders get a path to the top of a 3-high ring but none for a 5-high one; pillar and plateau paths end short of the player, so the climb is mostly the `collidedHorizontally` climbing flag plus the persisting jump flag.

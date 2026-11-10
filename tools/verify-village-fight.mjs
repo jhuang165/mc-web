@@ -37,16 +37,34 @@ await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
  const out2=Buffer.concat([buf.subarray(0,at),add,buf.subarray(at)]);
  out2.writeUInt16BE(count+2,8);out2.writeUInt16BE(count+1,entry+1);out2.writeUInt16BE(count+1,hit+add.length+1); // the cp entries precede `at`, so the Methodref offset is unchanged
  await writeFile(file,out2);}
+// Batch 39: the same kind of edit for EntityLivingBase (sv.class): its Methodref `java/lang/Math.random()D` gets the class SeedMath (probes/SeedMath.java), which records every call
+// outside a constructor (an arrow hitting its own mount's rider makes attackEntityFrom draw the knockback direction from Math.random).
+{const file=path.join(classes,'sv.class'),buf=await readFile(file);
+ const count=buf.readUInt16BE(8),utf=new Map(),cls=new Map(),nat=new Map(),refs=[];let at=10,i=1;
+ while(i<count){const tag=buf[at];
+  if(tag===1){const len=buf.readUInt16BE(at+1);utf.set(i,buf.toString('latin1',at+3,at+3+len));at+=3+len;}
+  else if(tag===3||tag===4){at+=5;}else if(tag===5||tag===6){at+=9;i++;}
+  else if(tag===7){cls.set(i,buf.readUInt16BE(at+1));at+=3;}else if(tag===8||tag===16||tag===19||tag===20){at+=3;}
+  else if(tag===12){nat.set(i,[buf.readUInt16BE(at+1),buf.readUInt16BE(at+3)]);at+=5;}
+  else if(tag===10){refs.push([i,at,buf.readUInt16BE(at+1),buf.readUInt16BE(at+3)]);at+=5;}else if([9,11,17,18].includes(tag)){at+=5;}else if(tag===15){at+=4;}else throw new Error('cp tag '+tag);
+  i++;}
+ const mathClass=[...cls].find(([,n])=>utf.get(n)==='java/lang/Math')[0];
+ const hits=refs.filter(([,,c,n])=>c===mathClass&&utf.get(nat.get(n)[0])==='random'&&utf.get(nat.get(n)[1])==='()D');
+ assert.equal(hits.length,1,'sv.class has one Math.random Methodref');
+ const name=Buffer.from('SeedMath'),add=Buffer.concat([Buffer.from([1,0,name.length]),name,Buffer.from([7,count>>8,count&255])]);
+ const out2=Buffer.concat([buf.subarray(0,at),add,buf.subarray(at)]);
+ out2.writeUInt16BE(count+2,8);out2.writeUInt16BE(count+1,hits[0][1]+1);
+ await writeFile(file,out2);}
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','SeedMath','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout,stderr}=await exec('java',['-cp',cp,'VillageFightProbe'],{maxBuffer:1<<29});
 if(process.env.VF_ERR)await writeFile(process.env.VF_ERR,stderr); // development aid: the probe's stderr (VF_YAW, VF_EXTRA ... lines)
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.VF_DUMP){await writeFile(process.env.VF_DUMP,JSON.stringify(records)+'\n');process.exit(0);} // development aid (with VF_ONLY): every record of this run, nothing else written
-const b31=records.filter(r=>r.name.startsWith('b31-')),b32=records.filter(r=>r.name.startsWith('b32-')),b33=records.filter(r=>r.name.startsWith('b33-')),b34=records.filter(r=>r.name.startsWith('b34-')),b35=records.filter(r=>r.name.startsWith('b35-')),b36=records.filter(r=>r.name.startsWith('b36-')),b37=records.filter(r=>r.name.startsWith('b37-')),b38=records.filter(r=>r.name.startsWith('b38-')),base=records.filter(r=>!/^b3[12345678]-/.test(r.name));
-const only38=process.env.VF_PREFIX==='b38-'; // batch 38: the b38 records alone (the older files are never rewritten without VF_REWRITE_OLD=1)
-if(only38){assert.ok(b38.length>=20,'b38 records');assert.equal(b38.length,records.length);}else{assert.equal(base.length,7);assert.equal(b31.length,19);assert.equal(b32.length,Number(process.env.VF_EXPECT_B32??b32.length));assert.ok(b32.length>=20,'b32 records');assert.equal(b33.length,Number(process.env.VF_EXPECT_B33??b33.length));assert.equal(b34.length,Number(process.env.VF_EXPECT_B34??b34.length));assert.equal(b35.length,Number(process.env.VF_EXPECT_B35??b35.length));assert.equal(b36.length,Number(process.env.VF_EXPECT_B36??b36.length));assert.ok(b36.length>=20,'b36 records');assert.equal(b37.length,Number(process.env.VF_EXPECT_B37??b37.length));assert.ok(b37.length>=15,'b37 records');assert.equal(b38.length,Number(process.env.VF_EXPECT_B38??b38.length));}
+const b31=records.filter(r=>r.name.startsWith('b31-')),b32=records.filter(r=>r.name.startsWith('b32-')),b33=records.filter(r=>r.name.startsWith('b33-')),b34=records.filter(r=>r.name.startsWith('b34-')),b35=records.filter(r=>r.name.startsWith('b35-')),b36=records.filter(r=>r.name.startsWith('b36-')),b37=records.filter(r=>r.name.startsWith('b37-')),b38=records.filter(r=>r.name.startsWith('b38-')),b39=records.filter(r=>r.name.startsWith('b39-')),base=records.filter(r=>!/^b3[123456789]-/.test(r.name));
+const only39=process.env.VF_PREFIX==='b39-',only38=process.env.VF_PREFIX==='b38-'; // batch 38: the b38 records alone (the older files are never rewritten without VF_REWRITE_OLD=1)
+if(only39){assert.ok(b39.length>=15,'b39 records');assert.equal(b39.length,records.length);}else if(only38){assert.ok(b38.length>=20,'b38 records');assert.equal(b38.length,records.length);}else{assert.equal(base.length,7);assert.equal(b31.length,19);assert.equal(b32.length,Number(process.env.VF_EXPECT_B32??b32.length));assert.ok(b32.length>=20,'b32 records');assert.equal(b33.length,Number(process.env.VF_EXPECT_B33??b33.length));assert.equal(b34.length,Number(process.env.VF_EXPECT_B34??b34.length));assert.equal(b35.length,Number(process.env.VF_EXPECT_B35??b35.length));assert.equal(b36.length,Number(process.env.VF_EXPECT_B36??b36.length));assert.ok(b36.length>=20,'b36 records');assert.equal(b37.length,Number(process.env.VF_EXPECT_B37??b37.length));assert.ok(b37.length>=15,'b37 records');assert.equal(b38.length,Number(process.env.VF_EXPECT_B38??b38.length));}
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={vz:'Village',wa:'VillageAggressor',vm:'EntityAIDefendVillage',yv:'EntityVillager',wt:'EntityIronGolem',yq:'EntityZombie',yl:'EntitySkeleton',tw:'EntityAIAvoidEntity',sv:'EntityLivingBase'};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
@@ -92,5 +110,11 @@ if(rewriteOld)await writeFile(path.join(root,'../public/research/village-fight-b
 const reference38={target:'Minecraft Java 1.7.10',clientSha1:reference31.clientSha1,classes:{...reference37.classes,xy:{name:'EntityCaveSpider',sha256:await digest('xy')},yh:{name:'EntityPigZombie',sha256:await digest('yh')}},
  method:'Batch 38. Same double, row layout, script ops and record fields as village-fight-b37-reference.json, plus: the mob types S (EntitySpider), T (EntityCaveSpider) and P (EntityPigZombie), built bare with `new` and ticked from the first tick (EntityCreature.updateEntityActionState, isAIEnabled false); for them row element 4 is EntityCreature.entityToAttack instead of the AI-task attack target; World.getClosestVulnerablePlayerToEntity answers the probe player (record field `vulnerable` of the double); World.getLightBrightness is the real light table at the record field `bright` (a light level) with `patches` ([x0, z0, x1, z1, level] columns, first match wins) so a spider sees the dark and EntityCreature.updateWanderPath weighs tries by 0.5 - brightness; `poison` is the player Poison duration left after each tick (EntityCaveSpider.attackEntityAsMob).',
  records:b38};
-await writeFile(path.join(root,'../public/research/village-fight-b38-reference.json'),JSON.stringify(reference38)+'\n');
+if(only38||rewriteOld)await writeFile(path.join(root,'../public/research/village-fight-b38-reference.json'),JSON.stringify(reference38)+'\n');
+// Batch 39: wall climbing (spiders and cave spiders against pillars and walled rings), spider deaths mid-fight, a creative probe player (PlayerCapabilities.disableDamage, the real World.getClosestVulnerablePlayerToEntity over World.playerEntities), and night jockeys with the Math.random draws recorded (`mathRandom`: [tick, value, caller]).
+const reference39={target:'Minecraft Java 1.7.10',clientSha1:reference31.clientSha1,classes:{...reference38.classes},
+ method:'Batch 39. Same double, row layout, script ops and record fields as village-fight-b38-reference.json, plus: the player is in World.playerEntities and World.getClosestVulnerablePlayerToEntity is the real one (it skips a player whose capabilities.disableDamage is set); the script op `t creative 7 on|off` sets the probe player PlayerCapabilities.disableDamage and isCreativeMode; a `pos` row may carry the start height of the player (a pillar top); EntityLivingBase (sv) calls java.lang.Math.random() through the class SeedMath, so every non-constructor call is listed in `mathRandom` as [tick, value, caller] (the knockback direction of a hit whose attacker stands on the victim).',
+ records:b39};
+if(only39||process.env.VF_REWRITE_B39)await writeFile(path.join(root,'../public/research/village-fight-b39-reference.json'),JSON.stringify(reference39)+'\n');
+
 console.log('Fight records:',base.length,'+',b31.length,'bytes:',JSON.stringify(reference).length,JSON.stringify(reference31).length);
