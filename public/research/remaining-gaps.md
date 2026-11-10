@@ -2,6 +2,21 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 41
+
+Batch 41 covered these areas:
+- **Duplicate mob ids after a portal trip.** A mob that came through a portal had no id and took the next number counted from 1, which could be an id a saved mob already had. Ids now start above every saved id. A unit check follows a pig, an item and an orb through a portal while their world is away and finds each once in the Nether, near the portal ([natural-spawning.md](natural-spawning.md)).
+- **Fence gate item and render positions.** The fence gate is drawn with its item boxes in the inventory, the hand, the third-person hand and on the ground (bytecode-read boxes); every block in the third-person hand used to be a cube. An executed probe at 24 positions, with plant, lily pad and vine sweeps (704 fixtures), found and fixed float offsets of grass and flowers, bitten cake sides, and the vine top under glowstone, leaves, ice and TNT ([post-shaders.md](post-shaders.md)).
+- **Mobs drawn where the client sees them.** The client entity now follows the tracker's position and velocity packets with the native three-step interpolation and its own drag and movement; mobs, their shadows, leads and name tags are drawn there with the partial tick, and the crosshair aims at it, as `EntityRenderer.getMouseOver` reads the client world ([natural-spawning.md](natural-spawning.md)).
+- **Mob targets against a real server player.** An executed `EntityPlayerMP` probe records zombies, skeletons and spiders against survival, creative, adventure, invisible and sneaking players, at range, and spiders reaching players on pillars; the port matched every record. Stuck fireballs, blaze volleys at a mob attacker and the blaze's float distance now match executed records ([blaze-ghast.md](blaze-ghast.md)).
+- **Ring chests and pistons.** A hopper or dropper reaching a chest in a never-visited chunk finds its generated loot instead of making an empty chest. An executed probe shows a piston at the edge of the loaded area makes the server load the next chunk; the port's waiting event reaches the same end state.
+
+Still open from batch 41:
+- Rendering: the gate item boxes and the anvil uv table are not executed; the render-types-2 blocks are exact only at their earlier positions; items, orbs, arrows, particles, mounts, riders and leash holders are drawn at live positions; flying, swimming and boss mobs are interpolated without client physics. Cube icon edges use 4x4 coverage; the atlas keeps a 16-column layout.
+- Mobs: enderman and wolf targets are not recorded; an idle wandering zombie in one record (seed 4109) turns differently from tick 19; fireballs tick after all mobs rather than in entity-list order; ghast fireballs at mobs are not recorded; the blaze crackle +0.5 offset is not applied. Path searches beyond 250000 points are truncated.
+- Travel and away: mob ids are one counter per world, not one global counter; the away delivery check is a unit chain, not a browser trip; one smoke away run covered 127 instead of about 620 ticks and was not reproduced; entities outside the 32-block rule and ridden mobs do not travel while away; the run tick to total time offset can be off by one; a loss that would kill the shadow kills the live player on return; `/xp` replays on the live player.
+- Ring: a chest in a visited and evicted column can still be made empty by a ring hopper; the first loot lookup in an uncached population cell can take about a second on the main thread; a rim piston queues a no-op event where native refuses. Saves imported at 16/17 keep the quiet neighbour callbacks; the chunk resend carries no tile entity data. Tracker mounted and non-mob entities are not modelled.
+
 ## Done in batch 40
 
 Batch 40 covered these areas:
@@ -11,11 +26,7 @@ Batch 40 covered these areas:
 - **Entity tracking.** The client's view of a mob follows the native `EntityTrackerEntry`: positions in 1/32 blocks, the per-type update delay, the 4-block and 400-tick resends, and ranges clamped to the view distance. Hurt, death and other client sounds of a mob play at that client position and only while the client knows the mob; dragon wing sounds follow it too (executed tracker probe, [natural-spawning.md](natural-spawning.md)).
 - **Fireballs.** 27 executed records of ghast and blaze fireballs replay exactly: flight and drag, block, entity and fireball hits, the player's punch, explosion power and fire with mobGriefing on and off, small-fireball fire and fire-immune targets, water. Blazes, silverfish and giants now turn on any living attacker; the blaze crackle is a client sound ([blaze-ghast.md](blaze-ghast.md)).
 
-Still open from batch 40:
-- Rendering: the held and inventory fence gate do not use the native item boxes yet; the first probe and the float-light probe sample only (8, 8, 8); the anvil uv table is fitted to the record. Mobs, items and particles are drawn at their live server position, about two ticks of motion ahead of the native client. Cube icon edges use 4x4 coverage; the atlas keeps a 16-column layout.
-- Mobs: creative-player target clearing is bytecode-read (the probe has no `EntityPlayerMP`); no record has a spider reaching a player on a pillar; blaze volleys at a mob target are not recorded; the fireball `inGround` path is bytecode-read. Path searches beyond 250000 points are truncated.
-- Travel and away: after a return trip one Nether mob id was duplicated in the netherload checks (not investigated); a full trip that follows away-portal mobs, items and orbs to their destination is still unchecked; entities outside the 32-block rule and ridden mobs do not travel while away; the run tick to total time offset can be off by one; a loss that would kill the shadow kills the live player on return; `/xp` replays on the live player.
-- Ring: a rim piston powered while its line reaches an unheld chunk decides against air; loot in never-resident ring chests reached by ring hoppers is unchecked. Saves imported at 16/17 keep the quiet neighbour callbacks; the chunk resend carries no tile entity data. Tracker velocity packets, mounted entities and non-mob entities are not modelled.
+Still open from batch 40: carried into the batch 41 list above, except the items batch 41 closed.
 
 ## Done in batch 39
 
