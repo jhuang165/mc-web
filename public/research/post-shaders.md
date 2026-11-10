@@ -76,3 +76,24 @@ Float arithmetic. `RenderBlocks` stores every intermediate as a Java float: the 
 Known culling differences (not colour arithmetic): six neighbourhoods differ in which faces exist: stained glass next to stained glass of another colour (`hides` treats glass as opaque), a slab or cake beside a block that hides only part of its face. They are pinned in `CULLING_KNOWN` in the test; faces both sides emit are still compared exactly.
 
 DOM icons from exact bytes. `block-textures.js` `icon()` drew the atlas canvas (premultiplied: 246 of the ice tile's translucent texels and 256 of the blue stained glass pane's read back 1 off) onto a 64 x 70 canvas and `toDataURL`. An icon whose face tiles contain a translucent texel is now composed in software from the exact tile bytes (`atlas-texels.js` `rasterIcon`: the canvas matrix, nearest sampling at the pixel centre, black source-atop shade, 4 x 4 coverage on the slanted cube edges) and written by `encodePngStored` (stored deflate, reads back exactly). Opaque icons keep the canvas path, which is lossless for them. The tile bytes come from `exactLevels`, so 3D Anaglyph conversion and the ":ag" tag work as before. Headless Chrome check (`artifacts/b36-lightfloat/icons-check.mjs`, `icons-anaglyph-check.mjs`): the stained glass pane icon is 3364 of 3364 pixels equal to the PNG texels (3364 of 3364 equal to the anaglyph-converted texels with the option on); the top faces of the ice and stained glass cube icons equal the PNG texels, the side faces are the texel colour times 0.8 and 0.92.
+
+## Batch 37 (rendertypes)
+
+Native evidence beyond render type 0. `tools/probes/RenderTypesProbe.java` runs the unchanged 1.7.10 `blm` (RenderBlocks) with the real Tessellator `bmh` (executed, not bytecode-read; worlds built through `Unsafe.allocateInstance`) for render types 1, 2, 4, 6, 7, 8, 9, 10, 11, 13, 14, 18/41, 20, 23, 31, 39 and the cubes of type 0 with irregular culling, at AO off, on and smooth. `tools/verify-render-types.mjs` writes `public/research/render-types-reference.json` (354 fixtures, 28656 vertices, client SHA1 and seed recorded). `src/render-types.test.js` replays every record through `ChunkMesher.meshBlock` and compares quads by corner position, then vertices by position, uv, tile, colour and light. Vertex order inside a quad is not compared (the port may start at another corner), so "exact" means the set of vertices per face is equal.
+
+Exact (100% of the recorded vertices, position, uv, tile, colour and light): crossed squares 1, 6, 31, 32, 37, 38, 39, 40, 83; double plant 175; torches 50, 75, 76; crops 59, 141, 115; ladder 65; rails 66, 27, 157; stairs (all 10); doors 64, 71; cactus 81; fluids 8, 9, 10, 11; logs 17, 170; quartz 155; cubes 1, 2, 3, 5, 24, 47, 58, 61, 86, 91, 23, 98, 35.
+
+Not exact (pinned in `KNOWN` in the test, they may only improve):
+
+| id:type | exact / native vertices | what differs |
+|---|---|---|
+| 85:11 fence | 612 / 648 | native draws the top and bar-end faces against opaque neighbours (invisible) |
+| 113:11 nether fence | 612 / 648 | same, plus 24 light values |
+| 106:20 vine | 0 / 144 | quad structure differs |
+| 26:14 bed | 288 / 480 | 96 uv, 96 light; 108 extra port vertices |
+| 102:41, 160:41 panes | 0 / 612 | native draws segmented arms; a faithful `renderBlockPane` port is needed |
+| 111:23 lily pad | 12 / 72 | quad and light differences |
+
+Findings fixed from the records: doors always draw all six faces with flat light and the end-cap uv `(min + max) - p`; fences with no connection still draw the x bars; log, hay and quartz side uvs turn per face in uv space; fluid layers sample their own texture (raw uv), draw the sides twice, read brightness without emission and treat only `Material.isSolid` neighbours as solid for corner heights (`fluids.js` `materialSolid`, list from the native `materialSolid` output); pumpkin and workbench faces were mirrored; stained glass next to a different colour always draws the face; single slab sides cull only by an opaque cube or a same-half single slab, top and bottom never; cake bottom culls by its bounds; stairs use `renderAllFaces` false. All six culling neighbourhoods of batch 36 now match, so `CULLING_KNOWN` in `light-float.test.js` is empty.
+
+Not done: the slab "light 0 re-queries the cell below" rule in `aji.c(ahl,x,y,z)`.
