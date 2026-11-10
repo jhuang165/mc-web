@@ -1,6 +1,8 @@
 // Column mesh building (RenderBlocks): the geometry arrays of one 16 x 16 chunk column, with no renderer state. The page thread
 // (VoxelScene, scene.js) and the mesh worker (mesh-worker.js) run this same code: VoxelScene takes the MeshMethods as its own, and a
 // ChunkMesher reads the world, light volume and biome colours of whatever it was created over (a region snapshot in the worker).
+import { toOriginal } from './block-registry.js';
+import { rendersAsNormalOriginal } from './render-normal.js';
 import { BEACON } from "./pyramid.js";
 import { END_PORTAL } from "./eye-of-ender.js";
 import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
@@ -705,7 +707,7 @@ export class MeshMethods {
   }
   // RenderBlocks.renderBlockVine (blm.j(aji, x, y, z), executed in the render-types probe): for each metadata bit a wall quad 0.05f off the cell face (bit 2 at
   // x, bit 8 at x + 1, bit 4 at z, bit 1 at z + 1) drawn twice (the second quad lists the same four vertices in reverse order), and one single quad
-  // 0.05f under the top when the block above is a normal cube (Block.isNormalCube, not only a vine with bits set). The same flat brightness and the
+  // 0.05f under the top when the block above renders as a normal block (Block.renderAsNormalBlock, not isNormalCube: glowstone, leaves, ice and TNT count, glass does not; render-normal.js). The same flat brightness and the
   // foliage colour at the cell (no anaglyph conversion) for every quad.
   vine(m,x,y,z) {
     const w=this.world,meta=w.getMeta(x,y,z),r=tileRect(blockTile(VINE,0)),light=this.light.packed(x,y,z),d=0.05000000074505806,
@@ -720,7 +722,7 @@ export class MeshMethods {
     if(meta&8)put([[1-d,0,1,maxU,maxV],[1-d,1,1,maxU,minV],[1-d,1,0,minU,minV],[1-d,0,0,minU,maxV]],true);
     if(meta&4)put([[1,0,d,maxU,maxV],[1,1,d,maxU,minV],[0,1,d,minU,minV],[0,0,d,minU,maxV]],true);
     if(meta&1)put([[1,1,1-d,minU,minV],[1,0,1-d,minU,maxV],[0,0,1-d,maxU,maxV],[0,1,1-d,maxU,minV]],true);
-    if(normalCube(w.get(x,y+1,z)))put([[1,1-d,0,minU,minV],[1,1-d,1,minU,maxV],[0,1-d,1,maxU,maxV],[0,1-d,0,maxU,minV]],false);
+    if(rendersAsNormalOriginal(toOriginal(w.get(x,y+1,z),w.getMeta(x,y+1,z))?.[0]))put([[1,1-d,0,minU,minV],[1,1-d,1,minU,maxV],[0,1-d,1,maxU,maxV],[0,1-d,0,maxU,minV]],false);
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
@@ -746,7 +748,7 @@ export class MeshMethods {
       let i = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ (b === DOUBLE_PLANT ? 0n : BigInt(y)));
       i = BigInt.asIntN(64, i * i * 42317861n + i * 11n);
       hash = i;
-      const bits = (s) => Number((i >> BigInt(s)) & 15n) / 15;
+      const bits = (s) => Math.fround(Number((i >> BigInt(s)) & 15n) / 15); // (float) n / 15.0F, widened to double
       // blm.l: tall grass (every BlockTallGrass metadata: dead shrub, grass, fern) moves 0.5 sideways and sinks; flowers (yellow and
       // red) use the same hash for a 0.3 sideways jitter and do not sink. The double plant jitters 0.3 sideways, no sink.
       const spread = tallgrass ? 0.5 : 0.3;
@@ -755,13 +757,15 @@ export class MeshMethods {
       pz += (bits(24) - 0.5) * spread;
     }
     const raw=w.getMeta(x,y,z), top=b===DOUBLE_PLANT&&(raw&8)!==0, plantMeta=top?(w.getMeta(x,y-1,z)&7)|8:raw;
-    const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
+    const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z);
+    // blm.l: d3 = d0 + 0.5 - 0.45, d4 = d0 + 0.5 + 0.45 (and d5/d6 for z) in double arithmetic: not px + 0.05 / px + 0.95, which differ in the last double bit and so, now and then, in the float the Tessellator stores.
+    const x0 = px + 0.5 - 0.45, x1 = px + 0.5 + 0.45, z0 = pz + 0.5 - 0.45, z1 = pz + 0.5 + 0.45;
     // BlockTallGrass (not the dead shrub), BlockReed and BlockDoublePlant grass/fern: the biome grass colour of this one position.
     const grassy = b === 39 || b === FERN || b === REEDS || (b === DOUBLE_PLANT && ((plantMeta & 7) === 2 || (plantMeta & 7) === 3)),
       tint = grassy ? this.biomeColors.grassAt(x + this.colorX, y, z + this.colorZ) : null;
-    m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, "mirror");
+    m.quad([[x0, py, z0], [x1, py, z1], [x1, py + 1, z1], [x0, py + 1, z0]], uvs, 1, light, "mirror");
     if (tint !== null) m.tint(tint);
-    m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, "mirror");
+    m.quad([[x0, py, z1], [x1, py, z0], [x1, py + 1, z0], [x0, py + 1, z1]], uvs, 1, light, "mirror");
     if (tint !== null) m.tint(tint);
     if (top && (plantMeta & 7) === 0) this.sunflowerHead(m, px, py, pz, light, hash);
   }
@@ -866,7 +870,7 @@ export class MeshMethods {
     else if (isCrop(b)) this.crops(solid, b, x, y, z);
     else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
     else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
-    else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z));
+    else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), false, null, true); // ownUv: the mirrored side axes run (min + max) - p, so a bitten cake's sides show their own strip (render-types-pos.test.js)
     else if (b===COCOA) this.cocoa(solid,x,y,z);
     else if (b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
     else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
