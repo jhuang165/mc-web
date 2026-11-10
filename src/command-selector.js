@@ -6,6 +6,15 @@ const INT_LIST = /([-!]?[\w-]*)(?:$|,)/y;       // \G([-!]?[\w-]*)(?:$|,)
 const KEY_VALUE = /(\w+)=([-!]?[\w-]*)(?:$|,)/y; // \G(\w+)=([-!]?[\w-]*)(?:$|,)
 const POSITIONAL = ['x', 'y', 'z', 'r'];
 
+// ICommand.isUsernameIndex per command (bytecode-read): the argument CommandHandler.a (z.a) feeds to PlayerSelector.c when it is a selector token.
+export const USERNAME_INDEX = { give: 0, clear: 0, effect: 0, enchant: 0, spawnpoint: 0, testfor: 0, tell: 0, tp: 0, tellraw: 0, gamemode: 1, xp: 1, playsound: 1, achievement: 2 };
+// CommandHandler.a with zero matches runs the command zero times and prints nothing; the count is 0. True when this command line is that case.
+// Only the @p, @a and @r tokens: ad.c answers null for the dead @f token, which the original does not handle.
+export function selectsNobody(name, args, host) {
+  const at = USERNAME_INDEX[name], text = at === undefined ? undefined : args[at];
+  return text !== undefined && /^@[par](?:\[[\w=,!-]*\])?$/.test(text) && !selectLocalPlayer(text, host);
+}
+
 // MathHelper.parseIntWithDefault (qh.a): Integer.parseInt, any NumberFormatException gives the default.
 export function parseIntWithDefault(text, fallback) {
   if (typeof text !== 'string' || !/^[+-]?[0-9]+$/.test(text)) return fallback;

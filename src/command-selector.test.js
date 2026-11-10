@@ -72,3 +72,13 @@ test('@r with count 0 selects nobody, a negative count throws like subList; @p a
   for(const s of ['@p[c=0]','@p[c=-1]','@p[c=3]','@a[c=0]','@a[c=-1]','@a[c=2]'])assert.equal(selectLocalPlayer(s,host),'Player',s);
   assert.equal(selectLocalPlayer('@r[c=x]',host),'Player');
 });
+
+import {createCommandRunner} from './commands.js';
+test('a selector at the username index that matches nobody runs nothing and prints nothing (CommandHandler.a); a literal wrong name still fails',()=>{
+  const said=[],h={...host,print:t=>said.push(t),cheats:true,give:()=>{said.push('GIVEN');return {name:'x'};}};
+  const run=createCommandRunner(h);
+  for(const line of ['give @p[r=1] diamond','give @p[m=0] diamond','/xp 5 @a[name=!Player]','tell @p[l=1] hi','gamemode 1 @p[m=0]','achievement give * @p[m=0]'])assert.equal(run.run(line),false,line);
+  assert.deepEqual(said,[],'silent');
+  assert.equal(run.run('give Nobody diamond'),false);assert.match(said[0],/Player not found|player/i);
+  said.length=0;assert.equal(run.run('give @p diamond'),true);assert.ok(said.includes('GIVEN'));
+});
