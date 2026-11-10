@@ -15,7 +15,7 @@ import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
 import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
-import { glintMesh } from "./first-person.js";
+import { glintMesh, gateItemGeometry, isGateItem } from "./first-person.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
@@ -515,6 +515,10 @@ export class PlayerRenderer {
         mesh.add(overlay);
         if (glint) overlay.add(glintMesh(this.heldGeometry, overlayMap));
       }
+    } else if (isGateItem(id)) {
+      this.heldMaterial = this.material({ map: this.atlas });
+      mesh = new THREE.Mesh((this.heldGeometry = gateItemGeometry(id)), this.heldMaterial);
+      mesh.rotation.y = Math.PI / 2;
     } else {
       const g = (this.heldGeometry = new THREE.BoxGeometry(1, 1, 1)), uv = g.attributes.uv;
       for (let face = 0; face < 6; face++) {

@@ -5,6 +5,7 @@ import { ITEMS } from "./survival.js";
 import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, ANVIL } from "./world.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
+import { GATE_ITEM_BOXES } from './render-shapes.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
@@ -30,7 +31,10 @@ const BLOCK_FACES=[
 function anvilItemGeometry(meta){return boxItemGeometry(anvilModelBoxes(meta),(fi)=>blockTile(ANVIL,fi,false,meta));}
 // RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
 export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
-function boxItemGeometry(boxes,tileOf,scale=1){
+// RenderBlocks.renderBlockAsItem for render type 21 (GATE_ITEM_BOXES), at `scale` of a block. `id` is the fence gate item (1167) or block (167).
+export function gateItemGeometry(id=1167,scale=1){return boxItemGeometry(GATE_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
+export const isGateItem=(id)=>id===1167||id===167;
+export function boxItemGeometry(boxes,tileOf,scale=1){
  const positions=[],uvs=[],indices=[];
  for(const [x0,y0,z0,x1,y1,z1] of boxes)for(let fi=0;fi<BLOCK_FACES.length;fi++){
   const face=BLOCK_FACES[fi],tile=tileOf(fi),r=tileRect(tile),base=positions.length/3;
@@ -254,8 +258,8 @@ export class FirstPerson {
     if (chestUrl) {
       mesh = chestItemModel(this.material({ map: pixelTexture(chestUrl) }));
       mesh.rotation.y = Math.PI / 2;
-    } else if(id===ANVIL||STAIRS[id]){
-      mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
+    } else if(id===ANVIL||STAIRS[id]||isGateItem(id)){
+      mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):isGateItem(id)?gateItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
       mesh.rotation.y=Math.PI/2;
     } else if (url) {
       mesh = new THREE.Mesh(
