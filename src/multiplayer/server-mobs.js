@@ -19,7 +19,8 @@ import { isWet } from '../weather.js';
 import { localDifficulty } from '../difficulty.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { applyExplosion } from '../explosion-simulation.js';
-import { explosionImpact } from '../explosion.js';
+import { explosionImpact, primeTnt, TNT_Y_OFFSET } from '../explosion.js';
+import { tickPrimedTnt } from '../entity-simulation.js';
 import { blastKnockback } from '../armor-enchantments.js';
 import { entityBox } from '../weather.js'; // the player's box
 import { PHYSICS, LILY_PAD } from '../world.js';
@@ -35,6 +36,7 @@ export const MOB_RANGE = 48; // blocks: the mobs a tab is told about (EntityTrac
 export const MOB_ROWS = 80; // the nearest ones, at most
 export const STORED_PER_COLUMN = 64;
 const SPAWN_RADIUS = 8; // SpawnerAnimals: the 17 x 17 chunks around each player
+const MAX_PRIMED = 256; // a server bound on live primed TNT (none in 1.7.10): a bigger chain lights no more
 const noop = () => {};
 const columnOf = (x, z) => `${Math.floor(x / 16)},${Math.floor(z / 16)}`;
 const r3 = v => Math.round(v * 1000) / 1000, r2 = v => Math.round(v * 100) / 100;
@@ -73,6 +75,12 @@ export class ServerMobs {
     this.minecarts = Minecarts.fromJSON(saved.minecarts ?? null);
     // Boats (EntityBoat) the players placed. A saved rider is not seated again: a player comes back on foot.
     this.boats = Boats.fromJSON(saved.boats ?? null);
+    // EntityTNTPrimed (explosion.js primeTnt / tickTnt): lit by redstone, fire, flint and steel, a flame arrow, a dispenser or another
+    // explosion. `by` is the id of the player who lit it (their kill when it hurts another player).
+    this.random = random;
+    const ok = t => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite);
+    this.primed = (Array.isArray(saved.tnt) ? saved.tnt : []).filter(ok).slice(0, MAX_PRIMED)
+      .map(t => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, by: typeof t.by === 'string' ? t.by : null }));
     for (const c of [...this.minecarts.carts, ...this.boats.carts]) c.restorePlayer = false;
     this.stored = new Map(Array.isArray(saved.stored) ? saved.stored.filter(([k, list]) => typeof k === 'string' && Array.isArray(list)) : []);
     const light = () => sim.light;
@@ -189,6 +197,7 @@ export class ServerMobs {
     ew.beforeMob = e => { const o = e.rider?.owner; this.see(o && players.includes(o) ? o : this.watcher(players, e)); };
     try { ew.tick(first.position, first.survival, first.survival.inventory.held?.id ?? 0); } finally { ew.beforeMob = null; }
     this.current = null; // beginTick showed the first player whatever was seen last
+    this.tickTnt(players);
     this.tickArrows(players);
     this.tickThrown(players);
     this.tickOrbs(players);
@@ -208,6 +217,24 @@ export class ServerMobs {
   owner(x) { const p = x.by == null ? null : this.sim.players.get(x.by); return p && !p.dead ? p : null; }
   // Another player as a target of player p's arrow or ball: PvP on, alive, not p.
   others(players, p) { return this.sim.config?.pvp === false ? [] : players.filter(q => q !== p); }
+  // BlockTNT.func_150114_a: an EntityTNTPrimed at the cell centre (fuse 80) and game.tnt.primed; `by` is the player who lit it.
+  // A dispenser's TNT is silent (BehaviorDispenseTNT). The block itself is the caller's to remove.
+  prime(x, y, z, by = null, { sound = true } = {}) {
+    if (this.primed.length >= MAX_PRIMED) return null;
+    const e = primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: by ? 'player' : null, random: this.random });
+    e.by = by?.id ?? null;
+    this.primed.push(e);
+    if (sound) this.sound({ sound: 'game.tnt.primed', position: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z } });
+    return e;
+  }
+  // EntityTNTPrimed.onUpdate in the ticking columns (entity-simulation.js tickPrimedTnt): fall, bounce, and at the end of the fuse
+  // a strength-4 explosion; the TNT it reaches is knocked about (Explosion.doExplosionA) and the TNT blocks it breaks light.
+  tickTnt(players) {
+    if (!this.primed.length) return;
+    tickPrimedTnt(this.sim.world, this.primed, {
+      explode: (x, y, z, power, { exploder }) => this.explode(players, x, y, z, power, { exploder, by: exploder?.by != null ? this.sim.players.get(exploder.by) ?? null : null }),
+    });
+  }
   // EntityArrow.onUpdate for each arrow. A skeleton's goes for the mobs and its nearest player; a player's for the mobs and the
   // nearest other player (PvP on), and its hits are that player's (the mob's revenge, looting, the death message).
   tickArrows(players) {
@@ -215,18 +242,20 @@ export class ServerMobs {
     if (!this.arrows.list.length) return;
     // EntityHanging.canBeCollidedWith: an arrow breaks a painting or frame (or knocks out a frame's item), as bow.js does.
     const hanging = this.sim.hanging?.hanging ?? null, hangs = this.sim.hanging?.arrowTargets() ?? [];
+    // EntityArrow on fire in a TNT block (BlockTNT.onEntityCollidedWithBlock): it lights, the shooter's if a player shot it.
+    const igniteTnt = (x, y, z, by = null) => { if (this.prime(x, y, z, by)) world.set(x, y, z, 0, true, 0); };
     for (const a of this.arrows.list) {
       if (a.dead || !world.isTicking(a.x, a.z)) continue;
       if (a.by == null) {
         const p = this.nearest(players, a);
-        this.arrows.step(world, a, { targets: [...arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), ...hangs], hanging, mobs: ew, survival: p.survival, player: p.position });
+        this.arrows.step(world, a, { targets: [...arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), ...hangs], hanging, mobs: ew, survival: p.survival, player: p.position, igniteTnt: (x, y, z) => igniteTnt(x, y, z) });
         continue;
       }
       const shooter = this.owner(a), q = shooter ? this.nearest(this.others(players, shooter), a) : null;
       if (shooter) this.see(shooter);
       const survival = q ? this.shotBy(q, shooter) : null;
       this.arrows.step(world, a, { targets: [...arrowTargets(mobTargets(ew.entities, q?.position ?? null, PHYSICS.width, PHYSICS.height), !!q?.survival.creative), ...hangs],
-        hanging, mobs: ew, survival, player: shooter?.position ?? null });
+        hanging, mobs: ew, survival, player: shooter?.position ?? null, igniteTnt: (x, y, z) => igniteTnt(x, y, z, shooter) });
     }
     this.arrows.list = this.arrows.list.filter(a => !a.dead);
     this.sim.hanging?.drops();
@@ -314,7 +343,7 @@ export class ServerMobs {
     for (const s of o.sounds.splice(0)) this.sound({ sound: s.name, volume: s.volume, pitch: s.pitch, position: { x: s.x, y: s.y, z: s.z } });
   }
   // The arrows, thrown things and orbs near player p, for the tab's renderers: arrows [id, x, y, z, yaw, pitch, shake, crit], balls
-  // [id, kind, x, y, z], orbs [id, x, y, z, value].
+  // [id, kind, x, y, z], orbs [id, x, y, z, value], primed TNT [id, x, y, z, fuse] (y the box bottom, as EntityTNTPrimed's posY - yOffset).
   thrownRows(p) {
     const at = p.position, near = e => Math.abs(e.x - at.x) <= THROWN_RANGE && Math.abs(e.z - at.z) <= THROWN_RANGE && Math.abs(e.y - at.y) <= THROWN_RANGE;
     const id = x => this.thrownIds.get(x) ?? (this.thrownIds.set(x, this.nextThrown++), this.thrownIds.get(x));
@@ -327,7 +356,8 @@ export class ServerMobs {
         return [id(b), b.kind, r3(b.x), r3(b.y), r3(b.z), b.kind === 'potion' ? b.damage | 0 : 0, look];
       });
     const orbs = this.orbs.orbs.filter(o => !o.dead && near(o)).slice(0, 64).map(o => [o.id, r3(o.x), r3(o.y), r3(o.z), o.value]);
-    return { arrows, balls, orbs };
+    const tnt = this.primed.filter(near).slice(0, 64).map(e => [id(e), r3(e.x), r3(e.y), r3(e.z), e.fuse | 0]);
+    return { arrows, balls, orbs, tnt };
   }
   // EntityMinecartChest.onUpdate and the pushes between carts, players and mobs (structure-simulation.js tickMinecartSimulation
   // for every player); a broken cart's contents and items drop as item entities.
@@ -430,7 +460,7 @@ export class ServerMobs {
   explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true, by = null } = {}) {
     const sim = this.sim, tiles = Object.create(sim.tiles, { health: { value: 0 } });
     applyExplosion({ world: sim.world, weather: sim.weather, mobs: this.ew, items: sim.play.items, xpOrbs: this.orbs, arrows: this.arrows, projectiles: this.projectiles,
-      falling: null, primed: [], hanging: sim.hanging?.hanging ?? null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
+      falling: null, primed: this.primed, hanging: sim.hanging?.hanging ?? null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
     { x, y, z, size, exploder, attacker, smoking });
     sim.hanging?.drops(); // the paintings and frames it broke (hanging.js explode)
     for (const p of players) {
@@ -500,7 +530,8 @@ export class ServerMobs {
       stored.set(key, list);
     }
     return { stored: [...stored].map(([k, list]) => [k, list.map(r => JSON.parse(JSON.stringify(r, (key, v) => (typeof v === 'function' ? undefined : v))))]),
-      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId, xpOrbs: this.orbs.serialize(), minecarts: this.minecarts.toJSON(), boats: this.boats.toJSON() };
+      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId, xpOrbs: this.orbs.serialize(), minecarts: this.minecarts.toJSON(), boats: this.boats.toJSON(),
+      tnt: this.primed.map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, by: e.by ?? null })) };
   }
 }
 export { ENTITY_TYPES };

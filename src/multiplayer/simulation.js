@@ -65,7 +65,8 @@ export class DedicatedSimulation {
     this.fluids = new Fluids(this.world, { random: this.weather.random });
     this.fluids.load(saved.fluidTicks);
     this.fire = new Fire(this.world, { weather: () => this.weather,
-      stillLava: (x, y, z) => !this.fluids.pending.has(this.fluids.key(x, y, z, LAVA)) });
+      stillLava: (x, y, z) => !this.fluids.pending.has(this.fluids.key(x, y, z, LAVA)),
+      primeTnt: (x, y, z) => { this.mobs?.prime(x, y, z); } }); // a TNT block the fire burnt lights (BlockFire.tryCatchFire)
     this.fire.watch();
     this.fire.sharedRandomTicks = true;
     this.fire.load(saved.fireTicks);
@@ -76,6 +77,7 @@ export class DedicatedSimulation {
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: noop, apply: noop }).watch();
     this.redstone = new LiveRedstone(this.world, {
+      primeTnt: (x, y, z) => { this.mobs?.prime(x, y, z); }, // BlockTNT.onNeighborBlockChange when powered (the engine removes the block)
       entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
@@ -253,8 +255,8 @@ export class DedicatedSimulation {
   // BlockDispenser (23) and BlockDropper (158) on the server's redstone (dispense.js), over the shared dispenser tiles. The entities
   // they shoot are the server's own (server-mobs.js: arrows, thrown things, fireballs, minecarts, rockets; server-play.js dropped
   // items); a dropper pushes into the container in front through the hoppers' transfer host. The aux sounds 1000 / 1001 (click)
-  // and 1002 (bow) go to the players in earshot; the smoke particles (2000) are not sent. The server has no primed TNT entity, so a
-  // dispensed TNT is used up without one (LiveRedstone.primeTnt has no hook here).
+  // and 1002 (bow) go to the players in earshot; the smoke particles (2000) are not sent. TNT comes out primed and silent
+  // (BehaviorDispenseTNT, server-mobs.js prime).
   installDispensers() {
     const AUX_SOUNDS = { 1000: ['random.click', 1], 1001: ['random.click', 1.2], 1002: ['random.bow', 1.2] };
     const tiles = this.tiles, mobs = () => this.mobs;
@@ -278,6 +280,7 @@ export class DedicatedSimulation {
       setLiquid: (x, y, z, id) => { this.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
       setAir: (x, y, z) => { this.world.set(x, y, z, 0, true, 0); },
       setFire: (x, y, z) => { this.fire.ignite(x, y, z); },
+      spawnTnt: (x, y, z) => { mobs()?.prime(x, y, z, null, { sound: false }); },
       boneMeal: (x, y, z, original) => original === 6 && this.trees.boneMeal(x, y, z) !== null,
       transfer: () => this.hoppers?.host ?? null,
       maxStack: s => tiles.inventory.maxStack(s),

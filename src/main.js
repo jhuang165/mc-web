@@ -929,6 +929,8 @@ function applyMultiplayerTick(message) {
     remoteThrown.apply(message.you.thrown);
     scene.setArrows(remoteThrown.arrows);
     scene.setProjectiles(remoteThrown.balls, []);
+    // EntityTNTPrimed.onUpdate's smoke puff, on this tab for each server TNT a snapshot moved (explosion.js tickTnt).
+    for (const e of remoteThrown.tnt) scene.explosionParticles?.spawn("smoke", e.x, e.y + TNT_Y_OFFSET + 0.5, e.z);
   }
   if (message.you?.carts && minecarts) { remoteThrown.applyCarts(message.you.carts); minecarts.carts = remoteThrown.carts; } // drawn by minecartRenderer
   if (message.you?.boats) { remoteThrown.applyBoats(message.you.boats); boats.carts = remoteThrown.boats; } // drawn by boatRenderer
@@ -4529,7 +4531,7 @@ function animate(now) {
   enchantBookRenderer?.update(screen === "home" ? [] : [...enchantBooks.tiles.values()], world, position, partial);
   enchantExtras?.frame(partial);
   beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
-  tntRenderer?.update(screen === "home" ? [] : primed, partial);
+  tntRenderer?.update(screen === "home" ? [] : multiplayer ? remoteThrown.tnt : primed, partial); // the gun server's TNT in a joined world
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
@@ -4615,7 +4617,7 @@ function shadowCasters(partial) {
   for (const e of items.items)
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   // RenderTNTPrimed: shadowSize 0.5 under the box (posY is its centre).
-  for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
+  for (const e of multiplayer ? remoteThrown.tnt : primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   // A sleeper is rendered in first person too (RenderGlobal), so its shadow draws at the bed position in every view.

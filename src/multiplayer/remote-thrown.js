@@ -29,10 +29,12 @@ export class RemoteThrown {
   constructor() {
     this.arrowMap = new Map(); this.ballMap = new Map(); this.orbMap = new Map();
     this.arrows = []; this.balls = []; this.orbs = [];
+    this.tntMap = new Map(); this.tnt = [];
     this.cartMap = new Map(); this.carts = [];
     this.boatMap = new Map(); this.boats = [];
   }
-  // rows: { arrows: [[id, x, y, z, yaw, pitch, shake, crit]], balls: [[id, kind, x, y, z, potion, look]], orbs: [[id, x, y, z, value]] }.
+  // rows: { arrows: [[id, x, y, z, yaw, pitch, shake, crit]], balls: [[id, kind, x, y, z, potion, look]], orbs: [[id, x, y, z, value]],
+  // tnt: [[id, x, y, z, fuse]] } (TntRenderer reads x/y/z, px/py/pz and fuse).
   apply(rows) {
     if (!rows || typeof rows !== 'object') return;
     this.arrows = follow(this.arrowMap, rows.arrows, () => ({}), (r, [, x, y, z, yaw, pitch, shake, crit], fresh) => {
@@ -53,6 +55,10 @@ export class RemoteThrown {
       move(r, num(x), num(y), num(z), fresh);
       r.value = num(value); r.posY = r.y + 0.25;
       if (!fresh) r.color++; // EntityXPOrb.xpColor: ticks since it appeared here
+    });
+    this.tnt = follow(this.tntMap, rows.tnt, () => ({}), (r, [, x, y, z, fuse], fresh) => {
+      move(r, num(x), num(y), num(z), fresh);
+      r.fuse = num(fuse);
     });
   }
   // The chest minecarts (server-mobs.js cartRows: [id, type, x, posY, z, yaw, pitch, rolling, rollingDir, damage]) as the records
@@ -85,7 +91,7 @@ export class RemoteThrown {
       });
   }
   clear() {
-    this.arrowMap.clear(); this.ballMap.clear(); this.orbMap.clear(); this.cartMap.clear(); this.boatMap.clear();
-    this.arrows = []; this.balls = []; this.orbs = []; this.carts = []; this.boats = [];
+    this.arrowMap.clear(); this.ballMap.clear(); this.orbMap.clear(); this.cartMap.clear(); this.boatMap.clear(); this.tntMap.clear();
+    this.arrows = []; this.balls = []; this.orbs = []; this.carts = []; this.boats = []; this.tnt = [];
   }
 }
