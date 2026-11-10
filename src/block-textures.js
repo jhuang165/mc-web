@@ -20,6 +20,8 @@ import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOW
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 import {CHEST_ICON_TEXTURES,chestIconTexture,drawChestIcon} from './chest-icon.js';
 import {anaglyphRgba,anaglyphMultiplier,meshAnaglyph} from './anaglyph.js';
+import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile} from './atlas-pixels.js';
+import {decodePng} from './png-codec.js';
 import {setIconResolver} from './gui-anaglyph.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
@@ -195,12 +197,15 @@ function frameSize(source){return Math.max(1,Math.min(source.width||16,source.he
 function image(name){const url=versioned('/media/1.7.10/'+name+'.png');return retryAsset(attempt=>requestAsset(()=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=retryUrl(url,attempt);})));}
 export function createBlockAtlas(){
  const canvas=document.createElement('canvas');canvas.width=ATLAS_COLUMNS*TILE_SIZE;canvas.height=ATLAS_ROWS*TILE_SIZE;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;
- const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0,uploader=null;
+ // The GL textures are DataTextures filled from exactly decoded PNG pixels (atlas-pixels.js); the 2D canvas below only feeds icons and the fallback.
+ const AW=ATLAS_COLUMNS*TILE_SIZE,AH=ATLAS_ROWS*TILE_SIZE,exact=new Map();
+ const atlasTexture=()=>{const t=new THREE.DataTexture(new Uint8Array(AW*AH*4),AW,AH,THREE.RGBAFormat,THREE.UnsignedByteType);t.flipY=true;t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;return t;};
+ const texture=atlasTexture();const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0,uploader=null;
  // Two atlases: `canvas`/`texture` carry the item colours (ColorizerGrass.getColor(0.5, 1.0) etc.: GUI icons, held and dropped blocks, particles);
  // `tcanvas`/`terrain` keep the grass, foliage, vine, reed and lily tiles grey and the grass side without its overlay, because the chunk
  // mesher multiplies the per-position biome colour (biome-colors.js) into the vertex colours as Block.colorMultiplier does.
- const tcanvas=document.createElement('canvas');tcanvas.width=canvas.width;tcanvas.height=canvas.height;const tctx=tcanvas.getContext('2d',{willReadFrequently:true});tctx.imageSmoothingEnabled=false;
- const terrain=new THREE.CanvasTexture(tcanvas);terrain.magFilter=terrain.minFilter=THREE.NearestFilter;terrain.generateMipmaps=false;
+ // `terrain` keeps grey tinted tiles and the grass side without its overlay (below); its level data is built per tile like `texture`.
+ const terrain=atlasTexture();
  const css=c=>`rgb(${c>>16&255},${c>>8&255},${c&255})`;
  // 3D Anaglyph, item atlas: natively the texture is converted at upload (TextureUtil.anaglyphColor) and RenderBlocks then multiplies the
  // converted colour multiplier (blm reads EntityRenderer.anaglyphEnable), so a tinted tile is convert(texture) x convert(multiplier), not
@@ -211,6 +216,7 @@ export function createBlockAtlas(){
  function agFrame(source,frame){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingEnabled=false;const f=frameSize(source);x.drawImage(source,0,(source instanceof HTMLCanvasElement?0:frame)*f,f,f,0,0,16,16);return agConvert(c);}
  function tinted(source,color,frame=0,ag=false){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d',{willReadFrequently:ag});const f=frameSize(source);x.drawImage(source,0,frame*f,f,f,0,0,16,16);if(ag)agConvert(c);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,frame*f,f,f,0,0,16,16);return c;}
  function pixels(name){const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+name),0,0);return x.getImageData(0,0,256,256).data;}
+ async function exactPng(name){if(name.startsWith('colormap/'))return null;try{const url=versioned('/media/1.7.10/'+name+'.png');return await requestAsset(async()=>{const r=await fetch(url);if(!r||!r.ok||!r.arrayBuffer)return null;return decodePng(new Uint8Array(await r.arrayBuffer()));});}catch{return null;}}
  const GRASS_TILES=['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'];
  // terrainMode: grey tinted tiles and no overlay in the grass side (the mesher adds both per position). Otherwise the item colours.
  // Block tile animation (batch 17): a tile whose png is a strip with a ".png.mcmeta" animation section animates as
@@ -238,22 +244,37 @@ export function createBlockAtlas(){
   // before the first draw and when no renderer uploader is attached. On the sub-rect path the 2D canvases (read only by icons,
   // redraws and fallback uploads) are brought up to date lazily by syncCanvases.
   const sub=!!(uploader&&uploader.ready(texture)&&uploader.ready(terrain));
-  if(!sub)syncCanvases();
-  for(const n of changed){const i=TILES.indexOf(n),x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;renderTile(texture,ctx,false,n,x,y,sub);renderTile(terrain,tctx,true,n,x,y,sub);if(sub)stale.add(n);}
+  for(const n of changed){const i=TILES.indexOf(n),x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;renderTile(texture,false,n,x,y,sub);renderTile(terrain,true,n,x,y,sub);stale.add(n);}
   if(sub)uploader.flush();else{texture.needsUpdate=true;terrain.needsUpdate=true;}
   return true;
  }
  const stale=new Set();
- function syncCanvases(){if(!stale.size)return;for(const n of stale){const i=TILES.indexOf(n),x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;renderTile(texture,ctx,false,n,x,y,false);renderTile(terrain,tctx,true,n,x,y,false);}stale.clear();}
- // One tile's level 0 and mip levels. It is drawn into a 16 px scratch canvas and read from there (getImageData on the atlas canvas, already
- // a GL source, costs ~0.4 ms per call, on the scratch ~1 us). With `sub` the levels are queued as GPU sub-rects; otherwise the tile is also
- // drawn into the atlas canvas and the level canvases (the same per-tile chain as atlasMips) for a whole-texture upload.
+ function syncCanvases(){if(!stale.size)return;for(const n of stale)drawAtlas(ctx,false,new Set([n]));stale.clear();}
+ // One tile's level 0 and mip levels as exact RGBA bytes. The source is the decoded PNG (exact: straight alpha, no canvas rounding); only a
+ // texture the PNG codec cannot read (16-bit, interlaced, colour-keyed) or a failed byte fetch falls back to the 2D canvas, drawn into a 16 px
+ // scratch canvas and read from there. Item atlas (not terrainMode) order, as natively: mip chain of the raw sprite, then the Anaglyph
+ // conversion per level when on (TextureUtil upload), then the tint multiplier (converted when Anaglyph is on), then the grass overlay.
  const scratch=document.createElement('canvas');scratch.width=scratch.height=TILE_SIZE;const sctx=scratch.getContext('2d',{willReadFrequently:true});sctx.imageSmoothingEnabled=false;
- function renderTile(tex,g,terrainMode,name,x,y,sub){const only=new Set([name]);if(!sub&&tex.mipmaps.length<2){drawAtlas(g,terrainMode,only);return;}sctx.setTransform(1,0,0,1,-x,-y);drawAtlas(sctx,terrainMode,only);sctx.setTransform(1,0,0,1,0,0);const mips=tex.mipmaps.length>=2,max=mips?tex.mipmaps.length-1:0,data=sctx.getImageData(0,0,TILE_SIZE,TILE_SIZE).data,chain=mips?mipChain(data,TILE_SIZE,TILE_SIZE,max):[{data,width:TILE_SIZE,height:TILE_SIZE}];if(!sub)drawAtlas(g,terrainMode,only);for(let l=0;l<chain.length&&l<=max;l++){const c=chain[l];if(sub)uploader.queue(tex,l,x>>l,y>>l,c.width,c.height,c.data,tex===texture&&canvas.__agDone===true);else if(l>0)tex.mipmaps[l].getContext('2d').putImageData(new ImageData(c.data,c.width,c.height),x>>l,y>>l);}}
+ function exactLevels(terrainMode,name,n){
+  const ag=!terrainMode&&canvas.__agDone===true,cv=ag?convertTile:d=>d;
+  if(CHEST_FACES[name]){const img=exact.get('entity/chest/normal');if(!img)return null;const s=img.width/64,t=new Uint8Array(TILE_SIZE*TILE_SIZE*4);for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])blit(t,TILE_SIZE,img,u*s,v*s,w*s,h*s,dx,dy,w,h);return spriteLevels(t,n).map(cv);}
+  const src=exact.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!src)return null;
+  const chain=spriteLevels(frameTile(src,shown.get(name)??0),n);let mult=null;
+  if(!terrainMode){const col=GRASS_TILES.includes(name)?itemGrassColor():name.startsWith('leaves_')?(name==='leaves_spruce'?PINE:name==='leaves_birch'?BIRCH:itemFoliageColor()):name==='waterlily'?LILY_PAD_COLOR:null;if(col!=null)mult=anaglyphMultiplier(col,ag);}
+  let levels=chain.map(d=>{d=cv(d);return mult?multiplyTile(d,mult):d;});
+  if(name==='grass_side'&&!terrainMode){const ov=exact.get('blocks/grass_side_overlay');if(!ov)return null;const om=anaglyphMultiplier(itemGrassColor(),ag),oc=spriteLevels(frameTile(ov,0),n);levels=levels.map((d,l)=>overTile(d,multiplyTile(cv(oc[l]),om)));}
+  return levels;
+ }
+ function canvasLevels(terrainMode,name,x,y,n){sctx.setTransform(1,0,0,1,-x,-y);drawAtlas(sctx,terrainMode,new Set([name]));sctx.setTransform(1,0,0,1,0,0);return spriteLevels(Uint8Array.from(sctx.getImageData(0,0,TILE_SIZE,TILE_SIZE).data),n);}
+ const tileLevels=(terrainMode,name,x,y,n)=>exactLevels(terrainMode,name,n)??canvasLevels(terrainMode,name,x,y,n);
+ const levelArrays=tex=>tex.mipmaps.length?tex.mipmaps.map(m=>m.data):[tex.image.data];
+ // Writes the tile into the CPU level arrays (the source of any whole-texture upload) and, with `sub`, queues it as GPU sub-rects (atlas-upload.js).
+ function renderTile(tex,terrainMode,name,x,y,sub){const lv=tileLevels(terrainMode,name,x,y,Math.max(0,tex.mipmaps.length-1));putTile(levelArrays(tex),AW,lv,x,y);if(sub){const conv=!terrainMode&&canvas.__agDone===true;for(let l=0;l<lv.length;l++){const w=Math.max(1,TILE_SIZE>>l);uploader.queue(tex,l,x>>l,y>>l,w,w,lv[l],conv);}}}
  function drawAtlas(g,terrainMode,only=null){const ag=!terrainMode&&canvas.__agDone===true,col=c=>css(ag?agColor(c):c),grass=col(itemGrassColor()),foliage=col(itemFoliageColor()),chestImg=images.get('entity/chest/normal'),chestScale=chestImg.width/64;TILES.forEach((name,i)=>{if(only&&!only.has(name))return;const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(only)g.clearRect(x,y,16,16);const fr=shown.get(name)??0;if(CHEST_FACES[name]){const t=ag?document.createElement('canvas'):null;if(t)t.width=t.height=16;const tg=t?t.getContext('2d',{willReadFrequently:true}):g;if(t)tg.imageSmoothingEnabled=false;for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])tg.drawImage(chestImg,u*chestScale,v*chestScale,w*chestScale,h*chestScale,(t?0:x)+dx,(t?0:y)+dy,w,h);if(t){agConvert(t);g.drawImage(t,x,y);}return;}let source=images.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!terrainMode){if(GRASS_TILES.includes(name))source=tinted(source,grass,fr,ag);else if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?col(PINE):name==='leaves_birch'?col(BIRCH):foliage,fr,ag);else if(name==='waterlily')source=tinted(source,col(LILY_PAD_COLOR),fr,ag);else if(ag)source=agFrame(source,fr);}{const f=frameSize(source),k=source instanceof HTMLCanvasElement?0:fr;g.drawImage(source,0,k*f,f,f,x,y,16,16);}if(name==='grass_side'&&!terrainMode)g.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass,0,ag),x,y);});}
- function redraw(){if(!images.size)return;stale.clear();icons.clear();canvas.__agDone=!!meshAnaglyph.on;setColormaps(pixels('grass'),pixels('foliage'));ctx.clearRect(0,0,canvas.width,canvas.height);tctx.clearRect(0,0,tcanvas.width,tcanvas.height);drawAtlas(ctx,false);drawAtlas(tctx,true);updateMips(texture,ctx,canvas);updateMips(terrain,tctx,tcanvas);texture.needsUpdate=true;terrain.needsUpdate=true;}
+ function redraw(){if(!images.size)return;stale.clear();icons.clear();canvas.__agDone=!!meshAnaglyph.on;setColormaps(pixels('grass'),pixels('foliage'));ctx.clearRect(0,0,canvas.width,canvas.height);drawAtlas(ctx,false);buildLevels(texture,true);buildLevels(terrain,false);texture.needsUpdate=true;terrain.needsUpdate=true;}
  // TextureMap mipmaps (render-settings.js atlasMips): per-tile chains, NEAREST_MIPMAP_LINEAR when above level 0.
- function updateMips(tex,g,cv){const n=Math.min(mipLevels,4);if(n===0){if(tex.mipmaps.length){tex.mipmaps=[];tex.minFilter=THREE.NearestFilter;tex.dispose();}return;}const d=g.getImageData(0,0,cv.width,cv.height).data,chain=atlasMips(d,cv.width,cv.height,TILE_SIZE,n);tex.mipmaps=chain.map((l,i)=>{if(i===0)return cv;const c=document.createElement('canvas');c.width=l.width;c.height=l.height;c.getContext('2d').putImageData(new ImageData(l.data,l.width,l.height),0,0);if(cv===canvas&&canvas.__agDone)c.__agDone=true;return c;});tex.minFilter=THREE.NearestMipmapLinearFilter;const key=chain.length+':'+tex.mipmaps.length;if(tex.userData.mipKey!==key)tex.dispose();tex.userData.mipKey=key;}
+ // Rebuilds every tile's levels. TextureMap mipmaps (render-settings.js): per-sprite chains, NEAREST_MIPMAP_LINEAR when above level 0. The arrays of the item atlas carry `__agDone` while Anaglyph is on: they are already converted, so the upload hook skips them.
+ function buildLevels(tex,item){const n=Math.min(mipLevels,4),conv=item&&canvas.__agDone===true,lv=[tex.image.data];tex.image.data.fill(0);for(let l=1;l<=n;l++)lv.push(new Uint8Array((AW>>l)*(AH>>l)*4));TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;putTile(lv,AW,tileLevels(!item,name,x,y,n),x,y);});for(const d of lv)d.__agDone=conv;if(n===0){if(tex.mipmaps.length){tex.mipmaps=[];tex.minFilter=THREE.NearestFilter;tex.dispose();}return;}tex.mipmaps=lv.map((d,l)=>({data:d,width:AW>>l,height:AH>>l}));tex.minFilter=THREE.NearestMipmapLinearFilter;const key=lv.length+':'+tex.mipmaps.length;if(tex.userData.mipKey!==key)tex.dispose();tex.userData.mipKey=key;}
  // Icons are tagged with their item so a refresh can rebuild them from the current atlas (gui-anaglyph.js refreshIcons); ':ag' marks an icon
  // drawn from the already converted atlas, which the DOM conversion must not convert again. Chest icons draw the raw entity texture.
  const chestUrls=new Set();
@@ -321,9 +342,9 @@ export function createBlockAtlas(){
   }
  }
  setIconResolver(icon);
- const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),...CHEST_ICON_TEXTURES,'blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')].map(async n=>images.set(n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)))).then(()=>{redraw();return loadAnimations();});
+ const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),...CHEST_ICON_TEXTURES,'blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')].map(async n=>{images.set(n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n));const e=await exactPng(n);if(e)exact.set(n,e);else exact.delete(n);})).then(()=>{redraw();return loadAnimations();});
  // Resource pack refresh: re-read every image (versioned url, so the service worker's new overrides are fetched) and redraw in place.
  const names=()=>[...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),...CHEST_ICON_TEXTURES,'blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')];
- async function reload(){const next=new Map(await Promise.all(names().map(async n=>[n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)])));images.clear();for(const[k,v]of next)images.set(k,v);anims=new Map();shown.clear();redraw();await loadAnimations();}
+ async function reload(){const nextExact=new Map(),next=new Map(await Promise.all(names().map(async n=>{const img=n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n),e=await exactPng(n);if(e)nextExact.set(n,e);return[n,img];})));images.clear();for(const[k,v]of next)images.set(k,v);exact.clear();for(const[k,v]of nextExact)exact.set(k,v);anims=new Map();shown.clear();redraw();await loadAnimations();}
  return{texture,terrain,canvas,ready,reload,animate,setUploader(u){const old=uploader;uploader=u;return old;},icon,setBiome(value){biome=value;},get biome(){return biome;},get leavesOpaque(){return opaque;},setOpaqueLeaves(v){opaque=!!v;redraw();},setFiltering(levels,aniso,max=1){const a=Math.max(1,Math.min(aniso,max)),changed=levels!==mipLevels;mipLevels=levels;for(const t of[texture,terrain])if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true;}if(changed)redraw();}};
 }

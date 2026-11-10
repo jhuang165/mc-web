@@ -1,7 +1,8 @@
 // 3D Anaglyph at the native conversion points (TextureUtil.anaglyphColor, bqi.a(int[]), applied to every texture upload;
 // RenderGlobal/EntityRenderer sky, cloud and fog colours). The eye merge is then a pure channel mask (eye 0 -> G,B; eye 1 -> R).
 // RenderBlocks vertex colours (the 13 blt.a sites) convert the block colour multiplier while the chunk mesher runs (meshAnaglyph);
-// the sunrise fan centre converts in sky.js. Not ported: the FontRenderer colour table (bbu constructor) and the DOM GUI.
+// the sunrise fan centre converts in sky.js; the FontRenderer colour table is font-renderer.js colorCodeTable; the DOM GUI is gui-anaglyph.js.
+// Pixel arrays flagged `__agDone` (the item atlas levels, block-textures.js) already hold converted bytes and upload as they are.
 import { anaglyphColor, anaglyphFog } from "./post-shaders.js";
 import { getExactPixels } from "./png-codec.js";
 
@@ -55,7 +56,7 @@ export function installAnaglyphUpload(gl, state = { on: false }) {
       const r = read(a[5]);
       if (r) return texImage2D(a[0], a[1], a[2], r.w, r.h, 0, a[3], a[4], (r.done ? r.px : convertedBytes(r.px)));
     } else if (a.length >= 9 && a[6] === gl.RGBA && a[7] === gl.UNSIGNED_BYTE && a[8] instanceof Uint8Array) {
-      return texImage2D(...a.slice(0, 8), convertedBytes(new Uint8Array(a[8])));
+      return texImage2D(...a.slice(0, 8), a[8].__agDone ? a[8] : convertedBytes(new Uint8Array(a[8])));
     }
     return texImage2D(...a);
   };
@@ -65,7 +66,7 @@ export function installAnaglyphUpload(gl, state = { on: false }) {
       const r = read(a[6]);
       if (r) return texSubImage2D(a[0], a[1], a[2], a[3], r.w, r.h, a[4], a[5], (r.done ? r.px : convertedBytes(r.px)));
     } else if (a.length >= 9 && a[6] === gl.RGBA && a[7] === gl.UNSIGNED_BYTE && a[8] instanceof Uint8Array) {
-      return texSubImage2D(...a.slice(0, 8), convertedBytes(new Uint8Array(a[8])));
+      return texSubImage2D(...a.slice(0, 8), a[8].__agDone ? a[8] : convertedBytes(new Uint8Array(a[8])));
     }
     return texSubImage2D(...a);
   };
