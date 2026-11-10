@@ -97,3 +97,21 @@ Not exact (pinned in `KNOWN` in the test, they may only improve):
 Findings fixed from the records: doors always draw all six faces with flat light and the end-cap uv `(min + max) - p`; fences with no connection still draw the x bars; log, hay and quartz side uvs turn per face in uv space; fluid layers sample their own texture (raw uv), draw the sides twice, read brightness without emission and treat only `Material.isSolid` neighbours as solid for corner heights (`fluids.js` `materialSolid`, list from the native `materialSolid` output); pumpkin and workbench faces were mirrored; stained glass next to a different colour always draws the face; single slab sides cull only by an opaque cube or a same-half single slab, top and bottom never; cake bottom culls by its bounds; stairs use `renderAllFaces` false. All six culling neighbourhoods of batch 36 now match, so `CULLING_KNOWN` in `light-float.test.js` is empty.
 
 Not done: the slab "light 0 re-queries the cell below" rule in `aji.c(ahl,x,y,z)`.
+
+## Batch 38 panes
+
+The last recorded gaps of `render-types.test.js` are closed: `KNOWN` is empty, so every id:type in `render-types-reference.json` (354 fixtures, unchanged and not regenerated this batch) matches the native `blm`/`bmh` vertex for vertex (position, uv, tile, colour, light).
+
+| path | native method | result |
+|---|---|---|
+| glass and stained panes 102, 160 (type 41) | `blm.k`, executed in the probe | 612 / 612 each, same vertex order. Single-sided walls at 1/16 either side of each arm, cut at the post, end caps for a lone arm, top and bottom strips per arm (no above/below tests) |
+| iron bars (type 18) | `blm.a(aoa, ...)`, bytecode-read only | ported, but the probe has no iron bars fixture, so this one is not pinned by native vertices |
+| vine 106:20 | `blm.j`, executed | 144 / 144. A quad plus its reversed copy per set side bit, a top quad when the block above is a normal cube, foliage tint, flat own-cell light |
+| bed 26:14 | `blm.v`, executed | 480 / 480. Bottom at y+3/16 (colour 0.5), top at y+9/16 taking the light of the cell above and a texture turned by the direction, sides cropped to v 7/16..1 with the neighbour cell's light |
+| lily pad 111:23 | `blm.o`, executed | 72 / 72. Two flat-light quads at y+1/64, the underside in half the colour ((c & 0xFEFEFE) >> 1), hashed rotation, Java float maths |
+| fences 85:11, 113:11 | `blm` type 11 | 648 / 648 each: every face of every box is drawn, against opaque neighbours too (so the top and bar ends that were culled are now emitted; they cannot be seen) |
+
+One lighting fix came out of the nether fence light mismatches (`lighting.js`, `smoothFace`): for a face that does not reach the cell boundary the cell in front is only treated as opaque if `isOpaqueCube` is true, and leaves are opaque only with graphics Fast (`leavesOpaque()`). The port used `opaqueCube(18)` which is always true, so a partial face in front of fancy leaves took the block's own light instead of the leaves' light (24 vertices, one fixture). All stair, fence and other partial types stay exact.
+
+Not done: iron bars have no native fixture; the probe still places every fixture at (8,8,8), so the lily pad and vine hashes are only checked at that position (`lily-pad.test.js` covers the hash itself).
+
