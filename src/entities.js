@@ -626,7 +626,9 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.moveMotion = [e.vx, e.vy, e.vz];
     if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
-    e.vy -= 0.08;
+    // A client entity whose chunk is not loaded hovers instead (World.isRemote and the chunk's isChunkLoaded, entity-tracker.js ClientEntity).
+    if (e.clientUnloaded) e.vy = e.y > 0 ? -0.1 : 0;
+    else e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
     e.vx *= friction;
     e.vz *= friction;
@@ -650,6 +652,7 @@ export function knockBack(e, fromX, fromZ, random = Math.random, nudge = random)
   e.vy = e.vy / 2 + k;
   e.vz = e.vz / 2 - (dz / len) * k;
   if (e.vy > 0.4000000059604645) e.vy = 0.4000000059604645;
+  e.velocityChanged = true; // EntityLivingBase.attackEntityFrom sets it; EntityTrackerEntry sends the motion (entity-tracker.js)
   return true;
 }
 // Entity.addVelocity (sa.g(DDD)V).
@@ -1872,6 +1875,36 @@ export class EntityWorld {
     for (let i = from; i < this.events.length; i++) { const ev = this.events[i]; if (!ev.sound || ev.position) this.events[n++] = ev; }
     this.events.length = n;
   }
+  // The client entity's EntityLivingBase.moveEntityWithHeading(0, 0) (entity-tracker.js): the same movement code on the same world. Water and
+  // lava come from the live mob (the client recomputes them from the same blocks); a chunk the streaming world has not loaded hovers.
+  moveClient(c, m) {
+    const [w, h] = this.size(m);
+    c.inWater = m.inWater; c.inLava = m.inLava; c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
+    c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
+    moveEntityWithHeading(this.world, c, w, h, 0);
+  }
+  /** The client entity's position for drawing: previous and current client positions (RenderManager's partial tick), or null when the
+   *  client has no entity for it or it is mounted (the rider moves with its mount's live position). */
+  clientPosition(e) {
+    if (e.ridingEntity || e.riddenBy || e.riddenByEntity || e.rider) return null;
+    return this.tracker?.clientIfTracked(e) ?? null;
+  }
+  /** The mob list the leash and nameplate renderer reads (horse-gear-renderer.js uses e.x, e.y, e.z): a mob with a leash or a name is
+   *  replaced by a view that delegates every field to the live mob and overrides the position with its client entity's. The views persist,
+   *  so renderers may key maps on them. */
+  gearViews() {
+    this.views ??= new WeakMap();
+    return this.entities.map((e) => {
+      if (!e.leash && !e.customName) return e;
+      const c = this.clientPosition(e);
+      if (!c) return e;
+      let v = this.views.get(e);
+      if (!v) { v = Object.create(e); this.views.set(e, v); }
+      v.x = c.x; v.y = c.y; v.z = c.z;
+      return v;
+    });
+  }
+  gearViewOf(e) { return (e && this.views?.get(e)) ?? e; } // the view gearViews() made of `e` (the aimed mob is compared by identity)
   tickMobs(player, survival, heldItem=0) {
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
@@ -1882,7 +1915,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
-    this.tracker.update(this.entities, player, (m) => this.size(m));
+    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= (c, m) => this.moveClient(c, m));
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)

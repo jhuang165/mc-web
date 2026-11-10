@@ -441,7 +441,8 @@ export class MobRenderer {
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
   // `fireViewYaw` is RenderManager.playerViewY in degrees, which turns every mob's fire layers.
-  update(entities,dt=0,partial=1,fireViewYaw=180) {
+  // `clientOf(e)` (optional) gives the client entity ({ px, py, pz, x, y, z }) a mob is drawn at (entity-tracker.js); without one the live position.
+  update(entities,dt=0,partial=1,fireViewYaw=180,clientOf=null) {
     const active = new Set(entities.map((e) => e.id));
     for (const [id, rig] of this.rigs)
       if (!active.has(id)) {
@@ -463,6 +464,12 @@ export class MobRenderer {
         this.rigs.set(e.id, r);
       }
       const pose = mobPose(e, partial);
+      // RenderManager.renderEntityStatic: lastTickPos + (pos - lastTickPos) * partialTicks, of the client's entity.
+      const client = clientOf?.(e);
+      if (client) {
+        const p = Math.fround(partial);
+        pose.x = client.px + (client.x - client.px) * p; pose.y = client.py + (client.y - client.py) * p; pose.z = client.pz + (client.z - client.pz) * p;
+      }
       const baby = e.growingAge < 0;
       // RendererLivingEntity.renderModel draws no model for an invisible mob (an Invisibility
       // effect); RenderSpider's eye pass still runs, with the depth mask off.
@@ -550,7 +557,7 @@ export class MobRenderer {
       // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or dying.
       const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * mobScale(e),
         // A display mob takes the spawner block's lightmap (TileEntityRendererDispatcher).
-        packed = e.type === "magma_cube" ? 15728880 : e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z), // yf.c: always fully lit
+        packed = e.type === "magma_cube" ? 15728880 : e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(client?.x ?? e.x, (client?.y ?? e.y) + h * 0.66, client?.z ?? e.z), // yf.c: always fully lit
         level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
         b = BRIGHTNESS[Math.max(0, level)];
       // RenderCreeper: the swell scale (preRenderCallback), the powered shell, and the white
