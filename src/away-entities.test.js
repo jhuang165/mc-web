@@ -102,3 +102,14 @@ test("Weather.advance runs the loading-screen ticks on the Overworld's timers, a
   assert.equal(nether.overworld.raining, true);
   assert.equal(nether.raining, false, "the Nether's own state is untouched");
 });
+
+// Batch 36: World.updateEntityWithOptionalForce (ahb.a(sa, true), bytecode-read) updates an entity only when every chunk within 32 blocks of it exists.
+test("an entity within 32 blocks of the edge of the loaded spawn area does not tick; one further in does", async () => {
+  const root = { ...base, drops: [item(94.5, 11.5, 5.5), item(96.5, 11.5, 5.5), item(-95.5, 11.5, 5.5), item(-97.5, 11.5, 5.5)] };
+  const r = await run(root, 100);
+  const age = (x) => r.entities.drops.find((d) => d.x === x).age;
+  assert.equal(age(94.5), 100, "x + 32 = 126.5 is chunk 7, the last loaded one (centre 120 <= 128)");
+  assert.equal(age(96.5), 0, "x + 32 = 128.5 is chunk 8 (centre 136): not loaded, so the item never updates");
+  assert.equal(age(-95.5), 100, "x - 32 = -127.5 is chunk -8 (centre -120)");
+  assert.equal(age(-97.5), 0, "x - 32 = -129.5 is chunk -9");
+});

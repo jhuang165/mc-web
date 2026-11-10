@@ -113,3 +113,69 @@ test("the entity gate matches the native idle counter: P = 0..1199 runs, 1200 on
     assert.equal(c.pAfter, c.p + 1);
   }
 });
+
+// ---- Batch 36: /setworldspawn mid-run and per-write fluid notification ----
+const COMMAND_BLOCK = 139;
+const moveSpawn = async (delay, tickBase, command = "setworldspawn 3000 64 3000", ticks = 2000) => {
+  const root = { ...base, fluidTicks: { version: 1, time: 0, entries: [{ x: 5, y: 11, z: 5, block: WATER, delay }] },
+    redstone: { version: 1, clock: 0, time: 0, pending: [[3, 11, 3, 137, 5, 0, 1]], events: [] },
+    commandBlocks: [{ x: 3, y: 11, z: 3, command, successCount: 0, customName: "@", trackOutput: true, lastOutput: null }] };
+  const cols = stateColumns(root), plan = { ...awayPlan(root, cols, ticks, 2), chunks: floorChunks(cols), records: [], tickBase };
+  setBlock(plan.chunks, 3, 11, 3, COMMAND_BLOCK); setBlock(plan.chunks, 5, 11, 5, WATER, 0);
+  return runAway(plan);
+};
+test("/setworldspawn mid-run: nothing reloads, and the next autosave (tickCounter % 900 == 0) unloads the columns outside the new area", async () => {
+  const before = await moveSpawn(700, 0);
+  assert.deepEqual(before.world.worldSpawn, [3000, 64, 3000]);
+  assert.equal(cellOf(before, 6, 11, 5), WATER, "due at tick 700, before the autosave at tick 900: the old area is still loaded");
+  const after = await moveSpawn(1500, 0);
+  assert.equal(cellOf(after, 6, 11, 5), null, "due at tick 1500: the column was unloaded at tick 900, the spread is refused");
+  assert.equal(after.stats.commands.areaMoves, 1);
+  const phase = await moveSpawn(700, 400);
+  assert.equal(cellOf(phase, 6, 11, 5), null, "the autosave follows the server's tick counter: with 400 ticks already counted it comes at run tick 499");
+  const stays = await moveSpawn(1500, 0, "setworldspawn 10 64 10");
+  assert.equal(cellOf(stays, 6, 11, 5), WATER, "a new spawn that still covers the column keeps it loaded");
+  assert.equal(stays.stats.commands.areaMoves, 1);
+  const none = await moveSpawn(1500, 0, "say hi");
+  assert.equal(none.stats.commands.areaMoves, undefined);
+  assert.equal(cellOf(none, 6, 11, 5), WATER);
+});
+
+test("every fluid write of the away run goes through Fluids.written, whose writers list notifies redstone per write (as main.js does)", async () => {
+  const { Fluids } = await import("./fluids.js");
+  let seen = null;
+  const proto = Fluids.prototype.written;
+  const log = [];
+  Fluids.prototype.written = function (...a) { log.push(a.slice(0, 3).join(",")); return proto.apply(this, a); };
+  try {
+    const r = await run({ ...base, fluidTicks: { version: 1, time: 0, entries: [{ x: 5, y: 11, z: 5, block: WATER, delay: 1 }] } }, 40, (chunks) => setBlock(chunks, 5, 11, 5, WATER, 0));
+    seen = cellOf(r, 6, 11, 5);
+  } finally { Fluids.prototype.written = proto; }
+  assert.equal(seen, WATER);
+  assert.ok(log.length >= 4, "every placement of the spread went through Fluids.written, which calls the writers list");
+});
+
+test("DimensionLive records the player's trace while away (position about each second, a snapshot only when his state changed) and hands it to the run", async () => {
+  const { DimensionLive } = await import("./dimension-live.js");
+  const root = { ...base, id: "w2", player: { furnaces: { "3,11,3": furnace(20) } } };
+  let tick = 100, inv = 0, pos = { x: 1, y: 64, z: 2 }, plan = null;
+  const host = { ticks: () => tick, chunks: (cols) => floorChunks(cols), dirty() {}, player: () => pos, awayPlayer: () => ({ state: { slots: inv ? [{ id: 303, count: inv, damage: 0 }] : [] }, experience: {}, mode: 0, level: 0 }) };
+  const dims = new DimensionLive(host);
+  dims.readColumns = async () => [];
+  dims.writeColumns = async () => {};
+  dims.makeAwayWorker = () => {
+    const w = { terminate() {} };
+    queueMicrotask(() => w.onmessage?.({ data: { type: "ready" } }));
+    w.postMessage = (p) => { plan = p; setTimeout(() => w.onmessage({ data: { type: "result", result: null } }), 0); };
+    return w;
+  };
+  await dims.beginAway(root);
+  for (let i = 0; i < 100; i++) { tick++; pos = { x: 10 + i, y: 70, z: 5 }; if (i === 50) inv = 3; dims.traceAway(-1, pos); }
+  await dims.finishAway(root);
+  assert.equal(plan.tickBase, 100);
+  assert.equal(plan.trace.samples[0][1], 0, "the first sample is the departure, in the Overworld");
+  assert.ok(plan.trace.samples.length >= 5 && plan.trace.samples.length <= 7, `${plan.trace.samples.length} samples for 100 ticks`);
+  assert.deepEqual(plan.trace.samples.at(-1).slice(1, 3), [-1, plan.trace.samples.at(-1)[2]]);
+  assert.equal(plan.trace.states.length, 2, "the departure state and the one after he picked something up; unchanged states add nothing");
+  assert.ok(plan.trace.states[1][0] >= 50 && plan.trace.states[1][0] <= 70);
+});

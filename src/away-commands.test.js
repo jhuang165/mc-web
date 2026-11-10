@@ -238,3 +238,61 @@ test("sky light under cover: a roof shades the cells beneath it by distance from
   light.refresh(1000);
   assert.equal(light.skyAt(8, 19, 8), 15);
 });
+
+// ---- Batch 36: the shadow player follows the trip's trace ----
+// Blocks due at the given ticks (redstone `time` is absolute with clock 0), the player's trace as the main thread records it.
+const runTimed = async (blocks, trace, ticks = 200) => {
+  const root = { ...base, redstone: { version: 1, clock: 0, time: 0, pending: blocks.map(([, t], i) => [3 + i, 11, 3, 137, t, 0, 1 + i]), events: [] },
+    commandBlocks: blocks.map(([c], i) => ({ ...tile(c), x: 3 + i })) };
+  const cols = stateColumns(root), plan = { ...awayPlan(root, cols, ticks, 2), chunks: floorChunks(cols), records: [], trace };
+  for (let i = 0; i < blocks.length; i++) setBlock(plan.chunks, 3 + i, 11, 3, COMMAND_BLOCK);
+  return runAway(plan);
+};
+const snapshot = (n) => { const s = new Survival({}, "survival"); if (n) s.inventory.add({ id: DIAMOND, count: n, damage: 0 }); return { state: JSON.parse(JSON.stringify(s.serialize())), experience: new Experience({}).serialize(), mode: 0, level: 0 }; };
+
+test("/spawnpoint @p takes the player's own block position at the firing (floor x, floor(y + 0.5), floor z) from the trace", async () => {
+  const trace = { samples: [[0, -1, 0.5, 64, 0.5], [40, -1, 10.7, 70.6, -5.2], [100, -1, 50, 65, 50]], states: [[0, snapshot(0)]] };
+  const early = await runTimed([["spawnpoint @p", 10]], trace);
+  assert.deepEqual(early.world.playerSpawn, [0, 64, 0]);
+  const later = await runTimed([["spawnpoint @p", 10], ["spawnpoint @p", 50], ["spawnpoint Player", 120]], trace);
+  assert.match(JSON.parse(at(later, 4).lastOutput).text, /Set Player's spawn point to \(10, 71, -6\)/, "y 70.6 + 0.5 floors to 71, z -5.2 floors to -6");
+  assert.match(JSON.parse(at(later, 5).lastOutput).text, /\(50, 65, 50\)/, "the sample in force at tick 120 is the one from tick 100");
+  assert.deepEqual(later.world.playerSpawn, [50, 65, 50], "the last firing wins; not queued for the replay");
+  assert.equal(later.commandStats.shadowSpawn, 3);
+  assert.equal(later.playerCommands.length, 0);
+  const bare = await runTimed([["spawnpoint", 10]], trace);
+  assert.equal(at(bare, 3).successCount, 0, "no argument: a command block is not a player (CommandBase.b(sender) throws)");
+  assert.equal(bare.world, undefined);
+  const untraced = await runTimed([["spawnpoint @p", 10]], undefined);
+  assert.equal(untraced.commandStats.skipped, 1, "without a trace the position is unknown: skipped, as in batch 35");
+});
+
+test("each firing starts from the player's state at its own tick: what he picked up in the Nether is added to the shadow, which keeps the effects of earlier commands", async () => {
+  const trace = { samples: [[0, -1, 0, 64, 0]], states: [[0, snapshot(0)], [60, snapshot(3)]] };
+  const r = await runTimed([["clear @p minecraft:diamond", 30], ["give @p minecraft:diamond 2", 40], ["clear @p minecraft:diamond", 100]], trace);
+  assert.equal(at(r, 3).successCount, 0, "tick 30: the player has no diamonds yet (he finds three at tick 60)");
+  assert.equal(at(r, 4).successCount, 1);
+  assert.equal(at(r, 5).successCount, 1);
+  assert.match(JSON.parse(at(r, 5).lastOutput).text, /removing 5 items/, "the 3 he picked up plus the 2 the earlier command gave");
+  assert.equal(r.commandStats.traceChanges, 1);
+  const level = { samples: [[0, -1, 0, 64, 0]], states: [[0, snapshot(0)], [50, { ...snapshot(0), experience: (() => { const x = new Experience({}); x.add(200); return x.serialize(); })(), level: 11 }]] };
+  const lv = await runTimed([["testfor @p[lm=5]", 20], ["testfor @p[lm=5]", 80]], level);
+  assert.deepEqual([3, 4].map((x) => at(lv, x).successCount), [0, 1], "@p[lm=5] sees the level at firing");
+});
+
+test("the return applies give and clear as one net inventory change from the trace, not as re-runs on the return state", async () => {
+  // He finds 2 diamonds at tick 60. A clear at tick 30 finds none (fails, takes nothing); a give of 4 at tick 40 and a clear of everything at tick 100 net to taking the 2 he found.
+  const trace = { samples: [[0, -1, 0, 64, 0]], states: [[0, snapshot(0)], [60, snapshot(2)]] };
+  const r = await runTimed([["clear @p minecraft:diamond", 30], ["give @p minecraft:diamond 4", 40], ["clear @p minecraft:diamond", 100]], trace);
+  assert.deepEqual([3, 4, 5].map((x) => at(r, x).successCount), [0, 1, 1]);
+  assert.deepEqual(r.inventoryDelta.map((d) => [d.stack.id, d.count]), [[DIAMOND, -2]], "net: the 2 he picked up are cleared; the 4 given were cleared too");
+  const live = liveHost(); live.survival.inventory.add({ id: DIAMOND, count: 2, damage: 0 }); // the live player at return has what he found
+  const out = replayPlayerCommands(r.playerCommands, { host: live.host, records: r.commandBlocks, delta: r.inventoryDelta, inventory: live.survival.inventory, giveStack: (s) => live.survival.inventory.add(s) });
+  assert.equal(live.survival.count(DIAMOND), 0);
+  assert.deepEqual([out.applied, out.succeeded, out.failed, out.byDelta], [3, 2, 1, 3]);
+  assert.equal(at(r, 3).successCount, 0, "the fire-time SuccessCount stays (the replay does not rewrite it)");
+  const keep = await runTimed([["give @p minecraft:diamond 4", 40]], trace);
+  const live2 = liveHost(); live2.survival.inventory.add({ id: DIAMOND, count: 2, damage: 0 });
+  replayPlayerCommands(keep.playerCommands, { host: live2.host, records: keep.commandBlocks, delta: keep.inventoryDelta, inventory: live2.survival.inventory, giveStack: (s) => live2.survival.inventory.add(s) });
+  assert.equal(live2.survival.count(DIAMOND), 6, "a give adds to what he found");
+});

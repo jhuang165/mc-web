@@ -40,10 +40,11 @@ const FROZEN_MOBS = new Set(["ender_dragon", "ender_crystal", "wither"]);
 const PLAYER_FAR = 1e9; // the stand-in position of the absent player (never read as a target: `absent` and not alive)
 const num = (v) => Number.isFinite(v);
 
-export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack, maxStack, transfer = null, sound = () => {}, light = null, runCommand = null }) {
+export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, fire, weather, tiles, readStack, maxStack, transfer = null, sound = () => {}, light = null, runCommand = null }) {
   const e = plan.entities;
   if (!e) return null;
-  const at = (r) => num(r?.x) && num(r?.z) && ticking(r.x, r.z);
+  // Entities update only where every chunk within 32 blocks is loaded (entityTicks, away-world.js); tile entities and block writes use `ticking`.
+  const at = (r) => num(r?.x) && num(r?.z) && entityTicks(r.x, r.z);
   const split = (list) => { const inside = [], rest = []; for (const r of Array.isArray(list) ? list : []) (at(r) ? inside : rest).push(r); return { inside, rest }; };
   const ridden = new Set(plan.ridden ?? []);
   const seed = Number(BigInt.asUintN(32, BigInt(plan.editSequence | 0) * 40503n + BigInt(plan.ticks | 0)));
@@ -54,7 +55,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   const mobList = Array.isArray(e.mobs) ? e.mobs : [], mounts = new Set(mobList.map((m) => m?.riding).filter((r) => typeof r === "string"));
   // A lead whose other end is a knot in a ticked column runs (horse-gear-live.js recreates the knot from the record and the fence check keeps it);
   // a lead held by the player or another mob, or a lost lead, stays as saved.
-  const leashOk = (m) => !m.leash || (!m.leash.holder && !m.leash.lost && [m.leash.knot?.x, m.leash.knot?.y, m.leash.knot?.z].every(Number.isInteger) && ticking(m.leash.knot.x, m.leash.knot.z));
+  const leashOk = (m) => !m.leash || (!m.leash.holder && !m.leash.lost && [m.leash.knot?.x, m.leash.knot?.y, m.leash.knot?.z].every(Number.isInteger) && entityTicks(m.leash.knot.x, m.leash.knot.z));
   const simMob = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && !m.riding && !mounts.has(m.id) && leashOk(m) && !m.playerRides;
   const mobSplit = { inside: mobList.filter(simMob), rest: mobList.filter((m) => !simMob(m)) };
   const arrowSplit = split(e.arrows);
@@ -62,7 +63,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   const potionSplit = split(e.potions);
   const rocketList = Array.isArray(e.rockets?.rockets) ? e.rockets.rockets : [], rocketSplit = { inside: rocketList.filter(at), rest: rocketList.filter((r) => !at(r)) };
   const fireList = Array.isArray(e.fireballs) ? e.fireballs : [], fireIn = (r) => (r?.dimension ?? 0) === 0 && at(r);
-  const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => num(r?.tx) && num(r?.tz) && ticking(r.tx, r.tz);
+  const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => num(r?.tx) && num(r?.tz) && entityTicks(r.tx, r.tz);
   const hangSplit = { inside: hangList.filter(hangAt), rest: hangList.filter((r) => !hangAt(r)) };
   const cartList = Array.isArray(e.minecarts?.carts) ? e.minecarts.carts : [], boatList = Array.isArray(e.boats) ? e.boats : [];
   const simCart = (c) => at(c) && (CART_TYPES.has(c.type) || (c.type === 6 && runCommand)) && !c.rider && !ridden.has(`cart-${c.id}`);
@@ -97,7 +98,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
   let clock = Number.isFinite(plan.time) ? plan.time : 0;
   const subtracted = () => skylightSubtracted(celestialAngle(clock), weather.rainStrength(1), weather.weightedThunder(1));
-  mobs.isActive = (m) => ticking(m.x, m.z);
+  mobs.isActive = (m) => entityTicks(m.x, m.z); // World.updateEntityWithOptionalForce, re-read every tick: a mob that walks to the edge stops
   mobs.worldRandom = weather.random;
   mobs.wet = (m, height) => isWet(weather, world, m, height);
   mobs.isDaytime = () => subtracted() < 4;
@@ -176,7 +177,7 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
         for (const d of boats.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
       }
       if (hanging.entities.length) {
-        hanging.tick(world, { active: (h) => ticking(h.x, h.z) });
+        hanging.tick(world, { active: (h) => entityTicks(h.x, h.z) });
         for (const d of hanging.drain()) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay });
       }
       drainMob();
