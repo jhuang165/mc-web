@@ -95,3 +95,24 @@ test('redstone pending ticks save the shared creation id n while a tree runs: re
  const c=build(false);assert.equal(c.rt.redstone.restore(legacy),true);assert.equal(c.rt.redstone.pending.size,legacy.pending.length);
  const d=build(false);d.rt.redstone.restore(JSON.parse(JSON.stringify(saved)));assert.equal([...d.rt.redstone.pending.values()].find(e=>e.x===30)?.n,mine[0][7]);
 });
+test('fire edits reach the redstone engine inside the run (world.set is the funnel), fluid edits (world.put) reach it per run through observers.step and batched without it',()=>{
+ // Fire: the first run burns a wool support, the second run in the same tick already finds the dust above it gone, with no observer at all.
+ const a=build(true),rt=a.rt,w=rt.redstone.world,fl=a.tree.sources.find(s=>s.name==='fluids').sys;
+ const fi=new Fire(w,{weather:()=>({})}),tree=attachTickTree({fluids:fl,fire:fi,redstone:rt});
+ rt.redstone.setBlock(24,20,23,35,0,3);rt.redstone.setBlock(24,21,23,55,0,3);rt.flush();assert.notEqual(w.get(24,21,23),0);
+ for(const x of [22,23])w.put(x,22,22,51,0,false);
+ const seen=[];let n=0;fi.run=()=>{n++;if(n===1)fi.L.setAir(24,20,23);else seen.push(w.get(24,21,23));};
+ for(const x of [22,23])fi.schedule(x,22,22,1,0);
+ tree.tick({x:0,z:0});assert.deepEqual([n,seen],[2,[0]]);
+ // Fluids: two water ticks in a row; the engine hears about each change before the next run with `step`, only after both runs without it.
+ const order=(withStep)=>{
+  const b=build(true),r=b.rt,wb=r.redstone.world,f=b.tree.sources.find(s=>s.name==='fluids').sys,log=[];
+  const ext=r.redstone.external.bind(r.redstone);r.redstone.external=(x,y,z,o)=>{log.push('external');ext(x,y,z,o);};
+  const run=f.run.bind(f);f.run=(e)=>{log.push('run');return run(e)};
+  for(const x of [22,25]){wb.put(x,22,22,WATER,0,false);f.enqueue(x,22,22,WATER,1,0);}
+  b.tree.tick({x:0,z:0},withStep?{step:(name,c)=>r.fluidChanges(c),fluids:(c)=>r.fluidChanges(c)}:{fluids:(c)=>r.fluidChanges(c)});
+  return log.join();
+ };
+ const per=order(true),batch=order(false);
+ assert.match(per,/^run,external(,external)*,run,external/);assert.match(batch,/^run,run,external/);
+});
