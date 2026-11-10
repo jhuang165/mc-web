@@ -213,7 +213,12 @@ export class Fluids {
     this.ids = null; // the shared TickTree (tile-ticks.js) once the live game attaches one: creation ids then come from it
     this.heap = [];
     this.pending = new Map();
+    this.inFlight = new Set(); // keys of entries taken from the tree but not yet run (WorldServer.tickUpdates takes the whole batch first): their blocks are still flowing
     this.changes = [];
+    // Listeners (x, y, z, old, now) called right after each native-style setBlock inside a run (place, setLevel, remove), where the native
+    // World.setBlock notifies its neighbours at once: main.js adds the redstone engine, attachTickTree adds the falling-block list (fluids write
+    // with world.put, which bypasses world.onChange). Without listeners observers see only the drained list.
+    this.writers = [];
     this.sources = 0;
     // World.setBlock(..., flag 1) from edits made outside the fluid code.
     world.onChange = (x, y, z, old, now) => {
@@ -306,9 +311,9 @@ export class Fluids {
     const w = this.world;
     for (const [dx, dy, dz] of NOTIFY) {
       const nx = x + dx, ny = y + dy, nz = z + dz, b = w.get(nx, ny, nz);
-      if (b === WATER) this.schedule(nx, ny, nz);
+      if (b === WATER) { if (!this.inFlight.has(this.key(nx, ny, nz, WATER))) this.schedule(nx, ny, nz); } // a flowing block (taken, not yet run) has no neighbour hook that schedules
       else if (b === LAVA) {
-        const still = w.inside(nx, ny, nz) && !this.pending.has(this.key(nx, ny, nz, LAVA));
+        const still = w.inside(nx, ny, nz) && !this.pending.has(this.key(nx, ny, nz, LAVA)) && !this.inFlight.has(this.key(nx, ny, nz, LAVA));
         this.harden(nx, ny, nz);
         if (still && w.get(nx, ny, nz) === LAVA) this.added(nx, ny, nz);
       }
@@ -353,9 +358,11 @@ export class Fluids {
   take() {
     const e = this.pop();
     this.pending.delete(e.key);
+    this.inFlight.add(e.key);
     return e;
   }
-  run({ x, y, z, block }) {
+  run({ x, y, z, block, key }) {
+    this.inFlight.delete(key);
     if (this.world.get(x, y, z) === block) this.updateTick(x, y, z);
   }
   drain() {
@@ -363,6 +370,7 @@ export class Fluids {
     this.changes = [];
     return changes;
   }
+  written(x, y, z, old, now) { for (const w of this.writers) w(x, y, z, old, now); }
   // World.setBlock(x, y, z, block, level, 3): onBlockAdded schedules the tick,
   // then the neighbours are notified.
   place(x, y, z, block, meta) {
@@ -371,16 +379,18 @@ export class Fluids {
     this.changes.push([x, y, z, old, block]);
     if (isLiquid(block)) this.added(x, y, z);
     this.notify(x, y, z);
+    this.written(x, y, z, old, block);
   }
   // World.setBlockMetadataWithNotify(..., flag 2): no neighbour notification.
   setLevel(x, y, z, kind, meta) {
-    if (this.world.put(x, y, z, kind, meta)) this.changes.push([x, y, z, kind, kind]);
+    if (this.world.put(x, y, z, kind, meta)) { this.changes.push([x, y, z, kind, kind]); this.written(x, y, z, kind, kind); }
   }
   // World.setBlockToAir (flag 3).
   remove(x, y, z, kind) {
     if (this.world.put(x, y, z, 0, 0)) {
       this.changes.push([x, y, z, kind, 0]);
       this.notify(x, y, z);
+      this.written(x, y, z, kind, 0);
     }
   }
   // BlockDynamicLiquid.func_149807_p (akr.p): doors, signs, ladders, reeds and

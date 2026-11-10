@@ -47,6 +47,7 @@ export class FallingBlocks {
     this.ids = null; // the shared TickTree (tile-ticks.js) once the live game attaches one: creation ids come from it, and it takes the due entries
     this.serial = 0;
     this.entities = [];
+    this.fallInstantly = false; // BlockFalling.fallInstantly (akx.M): the block moves at once, no entity (set by the executed-sequence probe replay; the game leaves it false)
     if (Array.isArray(saved)) for (const e of saved.slice(0, 1024)) this.restoreEntity(e);
   }
   // BlockFalling.onBlockAdded and onNeighborBlockChange both schedule an update in tickRate (2).
@@ -74,15 +75,19 @@ export class FallingBlocks {
     // Stable sort also handles imported entries that are not already time-ordered.
     this.pending = new Map([...this.pending].sort((a, b) => a[1].time - b[1].time || a[1].p - b[1].p));
   }
+  // World.setBlock's tail for falling blocks: onBlockAdded of a new falling block and onNeighborBlockChange of the falling neighbours, each scheduling.
+  changed(x, y, z, old, now) {
+    if (isFallingBlock(now) && old !== now) this.schedule(x, y, z, now);
+    for (const [dx, dy, dz] of NEIGHBOURS) {
+      const b = this.world.get(x + dx, y + dy, z + dz);
+      if (isFallingBlock(b)) this.schedule(x + dx, y + dy, z + dz, b);
+    }
+  }
   watch() {
     const next = this.world.onChange;
     this.world.onChange = (x, y, z, old, now) => {
       next?.(x, y, z, old, now);
-      if (isFallingBlock(now) && old !== now) this.schedule(x, y, z, now);
-      for (const [dx, dy, dz] of NEIGHBOURS) {
-        const b = this.world.get(x + dx, y + dy, z + dz);
-        if (isFallingBlock(b)) this.schedule(x + dx, y + dy, z + dz, b);
-      }
+      this.changed(x, y, z, old, now);
     };
     return this;
   }
@@ -104,7 +109,7 @@ export class FallingBlocks {
   fall(x, y, z) {
     const w = this.world, b = w.get(x, y, z);
     if (!canFallBelow(w.get(x, y - 1, z)) || y < 0) return null;
-    if (w.ringSink && !ringEntityActive(w, { x, z })) {
+    if (this.fallInstantly || (w.ringSink && !ringEntityActive(w, { x, z }))) {
       if (!w.set(x, y, z, 0)) return null;
       this.apply([[x, y, z, b, 0]]);
       let at = y;

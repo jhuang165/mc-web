@@ -1398,6 +1398,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     world.redstoneApply = redstoneRuntime.applyEdit;
     redstoneRuntime.restore(record);
     tickTree = attachTickTree({ fluids, fire, falling, redstone: redstoneRuntime, foreign: foreignTicks, now: () => mobs?.saveTotalTime() ?? 0 }); // one WorldServer tick tree over the lists
+    fluids.writers.push((x, y, z, old, now) => redstoneRuntime?.fluidChanges([[x, y, z, old, now]], true)); // World.setBlock notifies neighbours at once: redstone hears each write of a fluid run in order (batch 35)
     scene.repeaterLit = (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true;
     for (const k of redstoneRuntime.redstone.lit) { const [x, y, z] = k.split(",").map(Number); scene.updateBlock(x, z, y); } // restored powered repeaters emit light 9
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
@@ -3179,9 +3180,8 @@ function movementTick(controls) {
   tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates,
-      // The tree tells redstone after every fluid run (`step`: fluids write with world.put, which natively is a setBlock that notifies its neighbours at once);
-      // fire edits already pass the redstone funnel of world.set. The scene batch follows per kind.
-      step: (name, changes) => { if (name === "fluids") redstoneRuntime?.fluidChanges(changes, true); },
+      // Fluid writes notify redstone one by one through fluids.writers (added where the tree attaches), as each native setBlock does; fire edits pass the
+      // redstone funnel of world.set. The scene batch follows per kind.
       fluids: changes => { scene.updateBlocks(changes); if (tickTree) redstoneRuntime?.flush(); else redstoneRuntime?.fluidChanges(changes); },
       fire: changes => scene.updateBlocks(changes) });
   recordHud.tick();
