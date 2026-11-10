@@ -52,7 +52,7 @@ test("say, time and an unknown command: native SuccessCount and LastOutput", asy
   assert.match(block(bad).lastOutput, /Unknown command|commands\.generic\.notFound/);
 });
 
-test("a world-restricted selector finds nobody: silent zero, LastOutput untouched; a plain @p finds the player and the command is skipped", async () => {
+test("a world-restricted selector finds nobody: silent zero, LastOutput untouched; a plain @p finds the player and the command is queued for the return", async () => {
   for (const sel of ["@p[r=10]", "@p[x=0,y=70,z=0]", "@a[rm=1]"]) {
     const r = await run(rootWith(`give ${sel} minecraft:stone`));
     assert.equal(block(r).successCount, 0, sel);
@@ -60,9 +60,12 @@ test("a world-restricted selector finds nobody: silent zero, LastOutput untouche
     assert.equal(r.commandStats.silent, 1, sel);
   }
   const plain = await run(rootWith("give @p minecraft:stone"));
-  assert.equal(block(plain).successCount, 7, "skipped: unchanged");
+  assert.equal(block(plain).successCount, 7, "queued: unchanged until the replay");
   assert.equal(block(plain).lastOutput, "old");
-  assert.equal(plain.commandStats.skipped, 1);
+  assert.equal(plain.commandStats.skipped, 0);
+  assert.equal(plain.commandStats.queued, 1);
+  assert.equal(plain.playerCommands[0].command, "give @p minecraft:stone");
+  assert.equal((await run(rootWith("difficulty hard"))).commandStats.skipped, 1, "still skipped and counted");
   const test = await run(rootWith("testfor @p"));
   assert.equal(block(test).successCount, 1, "testfor finds the player in the other dimension");
   const mode = await run(rootWith("testfor @p[m=1]"));
@@ -97,4 +100,79 @@ test("block light: torches light the volume at the fixed point, walls stop it, a
   assert.equal(light.floods, 2);
   light.touch(0, STONE); light.refresh(101);
   assert.equal(light.floods, 2, "throttled");
+});
+
+// ---- Batch 34: player commands are queued by the run and replayed through the live command host ----
+import { replayPlayerCommands } from "./away-commands.js";
+import { createCommandHost } from "./command-host.js";
+import { Survival } from "./survival.js";
+import { Experience } from "./experience.js";
+import { chat } from "./chat-ui.js";
+const liveHost = () => {
+  const survival = new Survival({}, "survival"), experience = new Experience(), active = { mode: "survival", allowCommands: true, seed: "x" }, drops = [];
+  const env = { active: () => active, world: () => new World("x", "meadow", 1), weather: () => null, mobs: () => null, survival: () => survival, experience: () => experience, position: () => ({ x: 10.5, y: 40, z: 10.5 }), seed: () => "x",
+    stackName: (s) => "Item" + s.id, giveDrop: (s) => drops.push(s), refreshInventory() {}, changed() {}, setTime() {}, teleport() { throw new Error("tp must not reach the live host"); }, setMode: (m) => { survival.mode = m; survival.inventory.creative = survival.creative; }, updateBlock() {}, destroyBlock() {} };
+  return { survival, experience, drops, host: createCommandHost(env) };
+};
+const DIAMOND = 303;
+test("give, xp, clear, tp and kill from a command block: queued or run, replayed in order with the native SuccessCount and LastOutput", async () => {
+  chat.clear();
+  const live = liveHost(), give = { ...tile("give @p minecraft:diamond 3"), x: 3, y: 11, z: 3 };
+  const first = await run(rootWith("give @p minecraft:diamond 3"), 20);
+  assert.deepEqual(first.playerCommands.map((e) => e.command), ["give @p minecraft:diamond 3"]);
+  assert.equal(first.commandStats.skipped, 0);
+  const out = replayPlayerCommands(first.playerCommands, { host: live.host, records: first.commandBlocks, giveStack: (s) => live.survival.inventory.add(s) });
+  assert.deepEqual([out.applied, out.succeeded], [1, 1]);
+  assert.equal(live.survival.count(DIAMOND), 3, "the diamond is in the inventory");
+  assert.equal(block(first).successCount, 1);
+  assert.match(JSON.parse(block(first).lastOutput).text, /^\[\d\d:\d\d:\d\d\] Given \[Item303\] \* 3 to Player$/);
+  void give;
+  // xp, clear (nothing to clear: failure 0 with the native text), a literal name, an @a, and tell
+  const xp = await run(rootWith("xp 7 @p"));
+  replayPlayerCommands(xp.playerCommands, { host: live.host, records: xp.commandBlocks });
+  assert.equal(live.experience.total, 7); assert.equal(block(xp).successCount, 1);
+  const clear = await run(rootWith("clear @p minecraft:emerald"));
+  replayPlayerCommands(clear.playerCommands, { host: live.host, records: clear.commandBlocks });
+  assert.equal(block(clear).successCount, 0); assert.match(block(clear).lastOutput, /Could not clear the inventory of Player/);
+  const named = await run(rootWith("give Player minecraft:diamond"));
+  assert.equal(named.commandStats.queued, 1, "a literal name finds the player in any dimension");
+  const other = await run(rootWith("give Nobody minecraft:diamond"));
+  assert.equal(other.commandStats.queued, 0); assert.match(block(other).lastOutput, /That player cannot be found/); assert.equal(block(other).successCount, 0);
+  // tp: native success text, the move discarded, nothing queued
+  const tp = await run(rootWith("tp @p 1 2 3"));
+  assert.equal(tp.playerCommands.length, 0); assert.equal(tp.commandStats.tpDiscarded, 1);
+  assert.equal(block(tp).successCount, 1); assert.match(block(tp).lastOutput, /Teleported Player to 1\.5,2\.5,3\.5/);
+  // kill from a command block is PlayerNotFound natively
+  const kill = await run(rootWith("kill"));
+  assert.equal(block(kill).successCount, 0); assert.match(block(kill).lastOutput, /That player cannot be found/); assert.equal(kill.playerCommands.length, 0);
+});
+
+test("a clock firing a give keeps firing order and a bounded chat; the queue is capped and counted", async () => {
+  // Three due command ticks of the same block are not needed: three blocks fire in the same tick in tree order.
+  const root = { ...base, redstone: { version: 1, clock: 0, time: 0, pending: [[3, 11, 3, 137, 1, 0, 1], [4, 11, 3, 137, 1, 0, 2], [5, 11, 3, 137, 1, 0, 3]], events: [] },
+    commandBlocks: ["give @p minecraft:diamond 1", "give @p minecraft:diamond 2", "give @p minecraft:diamond 4"].map((c, i) => ({ ...tile(c), x: 3 + i })) };
+  const cols = stateColumns(root), plan = { ...awayPlan(root, cols, 20, 2), chunks: floorChunks(cols), records: [] };
+  for (const x of [3, 4, 5]) setBlock(plan.chunks, x, 11, 3, COMMAND_BLOCK);
+  const r = await runAway(plan);
+  assert.deepEqual(r.playerCommands.map((e) => e.command.slice(-1)), ["1", "2", "4"]);
+  const live = liveHost(), lines = [];
+  live.host.print = (t) => lines.push(t);
+  const out = replayPlayerCommands(r.playerCommands, { host: live.host, records: r.commandBlocks, chatCap: 2, giveStack: (s) => live.survival.inventory.add(s) });
+  assert.equal(live.survival.count(DIAMOND), 7);
+  assert.equal(out.muted > 0, true, "feedback lines beyond the cap are dropped");
+});
+
+test("a burning furnace emits block light 13 in the away run; a cold one does not, and lighting it re-floods", () => {
+  const FURNACE = 14;
+  const world = new World("light2", "javaStreamed", 15, "flat", "");
+  world.chunks = new Map(); world.chunks.set("0,0", new WorldChunk(0, 0, world.height));
+  world.set(5, 11, 5, FURNACE, false, 2);
+  let burning = [];
+  const light = new AwayBlockLight(world, [{ x: 0, z: 0 }], () => burning);
+  assert.equal(light.blockAt(6, 11, 5), 0, "cold");
+  burning = ["5,11,5"]; light.refresh(100);
+  assert.equal(light.blockAt(6, 11, 5), 12, "lit: 13 at the furnace, one less beside it");
+  assert.equal(light.blockAt(5, 11, 5), 13);
+  burning = []; light.refresh(200);
+  assert.equal(light.blockAt(6, 11, 5), 0, "out again");
 });

@@ -7,14 +7,20 @@
 // Blocks change during a run (water, fire, explosions, commands): `touch` marks the volume stale when an emitter or an opacity changes and the next
 // read re-floods at most once per REFLOOD_TICKS ticks, so a burning field or a flowing stream cannot make it run every tick.
 import { OPACITY, EMISSION, COST } from "./ring-light.js";
-import { useNeighborBrightness } from "./lighting.js";
+import { useNeighborBrightness, lightEmission } from "./lighting.js";
+
+// Blocks that emit only in a state the block id does not carry: a lit furnace (lightEmission(b, true), the position-dependent form LightVolume asks).
+const STATE_EMITTER = new Uint8Array(256);
+for (let b = 0; b < 256; b++) STATE_EMITTER[b] = lightEmission(b, true) > EMISSION[b] ? lightEmission(b, true) : 0;
 
 export const REFLOOD_TICKS = 10;
 
 export class AwayBlockLight {
   // `columns`: [{ x, z }] chunk coordinates the run holds. `world.get` is read for blocks.
-  constructor(world, columns) {
+  // `litFurnaces()`: the "x,y,z" keys of the furnaces burning now (batch 34); they emit 13 like a lit furnace block, and a change of that set re-floods.
+  constructor(world, columns, litFurnaces = null) {
     this.world = world;
+    this.litFurnaces = litFurnaces; this.litSig = "";
     this.h = world.height ?? 256;
     const xs = columns.map((c) => c.x), zs = columns.map((c) => c.z);
     this.cx0 = Math.min(...xs); this.cz0 = Math.min(...zs);
@@ -40,6 +46,8 @@ export class AwayBlockLight {
     const light = this.block && this.block.length === W * D * H ? this.block.fill(0) : new Uint8Array(W * D * H);
     const buckets = Array.from({ length: 16 }, () => []);
     let emitters = 0;
+    const lit = new Set(this.litFurnaces ? this.litFurnaces() : []);
+    this.litSig = [...lit].sort().join("|");
     for (const key of this.held) {
       const [cx, cz] = key.split(",").map(Number);
       for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
@@ -48,7 +56,7 @@ export class AwayBlockLight {
           const b = world.get(x, y, z) & 255;
           if (!b) continue;
           blocks[base + y] = b;
-          const e = EMISSION[b];
+          const e = EMISSION[b] || (STATE_EMITTER[b] && lit.has(`${x},${y},${z}`) ? STATE_EMITTER[b] : 0);
           if (e) { light[base + y] = e; buckets[e].push(base + y); emitters++; }
         }
       }
@@ -84,6 +92,7 @@ export class AwayBlockLight {
   // Marks the run's clock; a stale volume is re-flooded here, at most once per REFLOOD_TICKS.
   refresh(now) {
     this.tick = now;
+    if (this.litFurnaces && !this.stale && [...this.litFurnaces()].sort().join("|") !== this.litSig) this.stale = true; // a furnace lit or went out
     if (this.stale && (this.floods === 0 || now - this.floodedAt >= Math.max(REFLOOD_TICKS, this.lastMs * 2))) this.flood(now); // a slow flood waits longer: at most about a third of the run's time goes here
   }
   raw(x, y, z) {

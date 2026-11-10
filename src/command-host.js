@@ -62,7 +62,7 @@ export function createCommandHost(env) {
       const name = env.stackName(stack);
       // CommandGive (bytecode-read, neg-stacks3-reference.json give): EntityPlayer.func_146097_a(stack, false, false) drops the whole
       // stack along the view, then sets the pickup delay to 0 and the owner (func_145797_a) to the player. It never touches the inventory.
-      env.giveDrop(stack, this.name);
+      (this.giveDrop ?? env.giveDrop)(stack, this.name); // a replay (away-commands.js replayPlayerCommands) puts the stack straight in the inventory
       env.refreshInventory();
       return { name: "[" + name + "]", ignored };
     },

@@ -27,6 +27,7 @@ import { WATER, LAVA } from "./world.js";
 import { JavaRandom } from "./java-random.js";
 import { awayCommands } from "./away-commands.js";
 import { AwayBlockLight } from "./away-light.js";
+import { attachTickTree } from "./tile-ticks.js";
 import { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan } from "./away-plan.js";
 
 export { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan };
@@ -34,7 +35,7 @@ const key = (cx, cz) => `${cx},${cz}`;
 
 // Runs `plan.ticks` away ticks over `plan.chunks` (live column copies) and `plan.records` (the columns' stored edits, as readChunkColumns returns them).
 // Resolves { columns, fluidTicks, fireTicks, fallingTicks, falling, redstone, pistons, tiles, drops, stats } or null when nothing ran.
-export async function runAway(plan, { now = () => performance.now(), budgetMs = WALL_BUDGET_MS, world: given = null } = {}) {
+export async function runAway(plan, { now = () => performance.now(), budgetMs = WALL_BUDGET_MS, world: given = null, trace = null } = {}) {
   const started = now();
   if (!plan.ticks || plan.biome !== "javaStreamed") return null;
   // The away World is a Superflat shell (no terrain generation): its columns are the live blocks the main thread copied at departure
@@ -56,7 +57,8 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const spawn = plan.spawn, ticking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; return wanted.has(key(cx, cz)) && inSpawnArea(spawn, cx, cz); }; // entities pass fractional coordinates
   world.isTicking = ticking;
   const put = world.put.bind(world);
-  const light = new AwayBlockLight(world, plan.chunks.map((c) => ({ x: c.x, z: c.z })));
+  const litFurnaces = () => Object.entries(plan.tiles.furnaces).filter(([, f]) => f.burn > 0).map(([k]) => k);
+  const light = new AwayBlockLight(world, plan.chunks.map((c) => ({ x: c.x, z: c.z })), litFurnaces);
   world.put = (x, y, z, b, meta = 0) => {
     if (!ticking(x, z)) return false;
     const old = world.get(x, y, z), ok = put(x, y, z, b, meta, true);
@@ -150,21 +152,24 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   if (ents) ents.falling = falling;
   const idle = () => !fluids.pending.size && !fire.queue.heap.length && !falling.pending.size && !live.tree.length && !live.thisTick.length
     && !live.deferred.length && !(live.torchToggles?.length) && !live.blockEvents.some((l) => l.length) && !live.pistonTiles().length;
+  // The same tick tree the live game runs (tile-ticks.js attachTickTree, public/research/region-import.md Batch 33): fluids, fire, falling blocks and redstone
+  // take their due entries together in (time, priority, creation) order under one 1000 cap. `trace(kind, entry)` sees each entry as it runs (tests).
+  const tree = attachTickTree({ fluids, fire, falling, redstone: rt });
+  if (trace) for (const src of tree.sources) { const run = src.run; src.run = (e) => { trace(src.name, e); return run(e); }; }
   let ran = 0, stopped = "done";
   for (; ran < plan.ticks; ran++) {
     const entities = ran < AWAY_ENTITY_TICKS;
     if (!entities) ents?.close(); // spills after the gate are saved records, not entities that would tick
     if (!entities && idle()) { stopped = "idle"; ran = plan.ticks; break; }
     if ((ran & 31) === 31 && now() - loopStart > budgetMs) { stopped = "budget"; break; }
-    // World.tick order: scheduled updates, then updateEntities (tile entities) while the gate is open.
-    rt.fluidChanges(fluids.tick());
-    fire.tick();
-    if (entities) falling.tick();
-    else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
+    // World.tick order: WorldServer.tickUpdates (fluid, fire, falling and redstone entries from the one shared tree under one 1000 cap, then fire's
+    // random ticks), then the block events and updateEntities (tile entities) while the gate is open.
     cmds.state.ran = ran;
     if (ran % 10 === 0) light.refresh(ran);
-    live.clock++; live.time++;
-    live.tickUpdates(); live.sendQueuedBlockEvents();
+    tree.tick({ x: 0, z: 0 }, { fluids: (changes) => rt.fluidChanges(changes) });
+    live.sendQueuedBlockEvents();
+    if (entities) falling.tick();
+    else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
     if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); sv.tickFurnaces(); }
   }
