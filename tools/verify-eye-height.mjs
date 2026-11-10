@@ -11,15 +11,17 @@ const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'eye
 assert.equal(createHash('sha1').update(await readFile(jar)).digest('hex'),'e80d9b3bf5085002218d4be59e668bac718abbc6');
 async function library(prefix){
  for(const p of (process.env.MC_PROBE_LIBS||'').split(path.delimiter).filter(Boolean))if(path.basename(p).startsWith(prefix))return p;
- for(const dir of [path.join(os.homedir(),'Library/Application Support/minecraft/libraries'),path.join(os.homedir(),'.minecraft/libraries'),path.join(os.homedir(),'.gradle/caches')]){
+ for(const dir of [path.join(research,'libs-1.7.10'),path.join(os.homedir(),'Library/Application Support/minecraft/libraries'),path.join(os.homedir(),'.minecraft/libraries'),path.join(os.homedir(),'.gradle/caches')]){
   if(!await exists(dir))continue;const {stdout}=await exec('find',[dir,'-name',prefix+'*.jar','-not','-name','*sources*'],{maxBuffer:1<<24});const hit=stdout.split('\n').filter(Boolean).sort()[0];if(hit)return hit;
  }
  throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
-const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-','commons-io-','gson-','icu4j-core-mojang-','netty-all-'].map(library));
+const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-','commons-io-','gson-','icu4j-core-mojang-','netty-all-','lwjgl-2'].map(library));
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
+// EntityHorse's constructor reads StatCollector (/assets/minecraft/lang/en_US.lang); an empty file stands in so the real constructor runs (translations are not asked).
+await mkdir(path.join(probe,'assets/minecraft/lang'),{recursive:true});await writeFile(path.join(probe,'assets/minecraft/lang/en_US.lang'),'');
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','EyeHeightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout,stderr}=await exec('java',['-Dclasses='+classes,'-Dtrace='+(process.env.EYE_TRACE||'-'),'-cp',cp,'EyeHeightProbe'],{maxBuffer:1<<26});
@@ -32,7 +34,7 @@ for(const r of rows){r.name=names[r.class]||r.class;r.declaredInName=names[r.dec
 const hashes={};for(const c of new Set(rows.flatMap(r=>[r.class,r.declaredIn]).filter(Boolean)))hashes[c]=await digest(c);
 rows.sort((a,b)=>a.name<b.name?-1:1);
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
- method:'Every concrete subclass of Entity (sa) in the unchanged JAR is constructed through its (World) constructor on MobMoveProbe.ProbeWorld and Entity.getEyeHeight (sa.g) is called; classes whose constructor needs a real world are allocated without a constructor and asked with marker heights 1, 2, 3 (formula only).',
+ method:'Every concrete subclass of Entity (sa) in the unchanged JAR is constructed through its (World) constructor on MobMoveProbe.ProbeWorld and Entity.getEyeHeight (sa.g) is called; classes without a (World) constructor are built through their real constructors with default arguments (horse with an empty en_US.lang, EntityPlayerMP on server/world doubles, client players on a no-op skin manager, dragon parts from the dragon); a class that still cannot be built would be allocated and asked with marker heights 1, 2, 3 (formula only).',
  classes:rows,classSha256:hashes};
 await writeFile(path.join(root,'../public/research/eye-height-reference.json'),JSON.stringify(reference)+'\n');
-console.log('eye heights:',rows.length,'classes;',rows.filter(r=>r.how==='allocated').length,'allocated');
+console.log('eye heights:',rows.length,'classes;',rows.filter(r=>r.how==='allocated').length,'allocated (formula only)');
