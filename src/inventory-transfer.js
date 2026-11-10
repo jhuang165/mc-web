@@ -49,6 +49,7 @@ export function furnaceAdapter(key, tile, burnTime) {
 export function containerAt(host, x, y, z) {
   const id = host.world.get(x, y, z), key = `${x},${y},${z}`;
   if (id === BLOCK_CHEST || id === 162) { // chest or trapped chest (chests pair only with their own kind)
+    host.seedChest?.(x, y, z); // a chest of a never-resident chunk gets its generated loot first (ring-chests.js)
     const chests = host.chests(), open = openChest(host.world, chests, x, y, z);
     if (!open) return null;
     const inv = open.inventory, parts = inv instanceof LargeChestInventory;

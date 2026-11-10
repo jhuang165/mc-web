@@ -11,7 +11,7 @@ import {newDispenser} from './dispenser-container.js';
 import {FLOWER_POT,setPotContents,potPlantOf} from './stone-utility.js';
 const ANIMALS={Pig:'pig',Cow:'cow',MushroomCow:'mooshroom',Sheep:'sheep',Chicken:'chicken',Wolf:'wolf',EntityHorse:'horse'};
 // Dungeon chests whose block is still a chest; an existing tile (even an emptied one) is never overwritten.
-function restoreChests(list,world,survival){
+export function restoreChests(list,world,survival){
   let chests=0;
   for(const c of list??[]){
     if(world.get(c.x,c.y,c.z)!==CHEST)continue;

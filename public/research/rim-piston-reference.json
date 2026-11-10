@@ -1,0 +1,103 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "ahb": {
+   "name": "World",
+   "sha256": "e682175e53be8972a6d04dff07da5780467754a7ffce2e396643c102893fd58a"
+  },
+  "ms": {
+   "name": "ChunkProviderServer",
+   "sha256": "12246247369f3427c584ea5d5859bfce25c23a5cd988513b8250cb5d468575f7"
+  },
+  "app": {
+   "name": "BlockPistonBase",
+   "sha256": "b7a1b365b0323b429566885adee4609a7884505d67f26af8b8b8f81ea931031c"
+  },
+  "apx": {
+   "name": "Chunk",
+   "sha256": "3c72c3c1eb377f7d073d01f50bc979b632206085d2a68c19c9c98d3596872efe"
+  },
+  "apw": {
+   "name": "EmptyChunk",
+   "sha256": "8f0114c73ee48ee0ddc99353db47a37d166b6dfb25a7ec7f0736e92a8449a7b6"
+  }
+ },
+ "method": "Executed (not just read): unchanged World.getBlock (ahb.a), ChunkProviderServer.provideChunk (ms.d) / loadChunk (ms.c) and BlockPistonBase.canExtend (app.h) over a constructor-less WorldServer, a stub IChunkLoader and a stub generator (logs L load, G generate, P populate). Piston at (14, 63, 5) facing +x; the line runs along the top of a stone block in chunks (0,0) and (1,0), so a loaded stone chunk (1,0) makes the 13-cell line too long (canExtend false) and air makes it true. ChunkProviderServer.loadChunkOnProvideRequest (field a) defaults to true; scene providerEmpty sets it false.",
+ "scenes": [
+  {
+   "name": "generated",
+   "saved": false,
+   "loadChunkOnProvideRequest": true,
+   "loadedBefore": [
+    [
+     0,
+     0
+    ]
+   ],
+   "blockAt16_63_5": "stone",
+   "canExtend": false,
+   "loadedAfter": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "events": [
+    "L 1 0 0",
+    "G 1 0"
+   ]
+  },
+  {
+   "name": "saved",
+   "saved": true,
+   "loadChunkOnProvideRequest": true,
+   "loadedBefore": [
+    [
+     0,
+     0
+    ]
+   ],
+   "blockAt16_63_5": "null",
+   "canExtend": false,
+   "loadedAfter": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     0
+    ]
+   ],
+   "events": [
+    "L 1 0 1",
+    "R 1 0"
+   ]
+  },
+  {
+   "name": "providerEmpty",
+   "saved": true,
+   "loadChunkOnProvideRequest": false,
+   "loadedBefore": [
+    [
+     0,
+     0
+    ]
+   ],
+   "blockAt16_63_5": "air",
+   "canExtend": true,
+   "loadedAfter": [
+    [
+     0,
+     0
+    ]
+   ],
+   "events": []
+  }
+ ]
+}

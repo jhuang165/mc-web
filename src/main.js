@@ -274,6 +274,7 @@ import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing } from "./headless-columns.js";
+import { seedRingChest } from "./ring-chests.js";
 import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.js";
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
@@ -449,6 +450,7 @@ let redstoneRuntime = null, tickTree = null;
 const hopperTiles = new Hoppers({
   get world() { return world; },
   chests: () => survival.chests,
+  seedChest: (x, y, z) => seedRingChest(world, survival.chests, x, y, z),
   furnaces: () => survival.furnaces,
   dispensers: () => (survival.dispensers ??= {}),
   hoppers: () => (survival.hoppers ??= {}),
