@@ -17,7 +17,8 @@ import { plain, LogRandom } from "./legacy-ai-replay.js";
 // flaming, smoking, hasExploder], setBlock calls [x, y, z, id], punches [ball, accepted, lookX, lookY, lookZ], hurts [victim, accepted, health]]. An entity's tenth
 // value is its entityToAttack index (-1 none) for the mobs in TARGETING.
 export const fireballReference = JSON.parse(readFileSync(new URL("../public/research/fireballs-reference.json", import.meta.url))).records;
-const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant" };
+export const fireballReference41 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b41-reference.json", import.meta.url))).records; // batch 41: inGround and blaze volleys at a mob
+const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant", x: "skeleton", w: "snow_golem" };
 // The mobs whose entityToAttack (td.bT) the record keeps: the legacy-action-state mobs (EntityZombie and the other AI-task mobs keep it unused in 1.7.10).
 const TARGETING = new Set(["blaze", "silverfish", "giant", "spider", "pigman"]);
 const NUM = Number;
@@ -46,7 +47,8 @@ export function replayFireballs(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, width: 0.6, height: 1.8, isPlayer: true };
   ew.ai.player.unticked = true;
   const pending = { seed: 0n }, balls = [], killed = new Set(), sets = [];
-  ew.fireballSeed = () => pending.seed;
+  let shotAt = 0;
+  ew.fireballSeed = () => (r.tickMobs ? BigInt(r.shots[shotAt++]?.[3] ?? 0) : pending.seed); // tickMobs: the mobs launch their own balls, with the seeds the probe recorded
   ew.ignite = (x, y, z) => { sets.push([x, y, z, 51]); ew.world.put(x, y, z, FIRE, 0); }; // World.setBlock: the cell is fire for the next ball
   let look = [0, 0, 1], madeAt = 0;
   ew.playerLook = () => look;
@@ -67,6 +69,8 @@ export function replayFireballs(r) {
         punches.push([NUM(p[2]), ok, ...look]);
       } else if (p[1] === "look") look = lookVector(NUM(p[2]), NUM(p[3]), mhSin, mhCos);
       else if (p[1] === "move") { const i = NUM(p[2]), e = i === n ? player : ents[i]; e.x = NUM(p[3]); e.z = NUM(p[4]); if (p.length > 5) e.y = NUM(p[5]); }
+      else if (p[1] === "ground") { const b = balls[NUM(p[2])]; ew.fireballs.stickIn(b, NUM(p[3]), NUM(p[4]), NUM(p[5])); }
+      else if (p[1] === "air") ew.world.put(NUM(p[2]), NUM(p[3]), NUM(p[4]), p[5] ? NUM(p[5]) : 0, 0);
       else if (p[1] === "kill") { const e = ents[NUM(p[2])]; killed.add(e); ew.entities.splice(ew.entities.indexOf(e), 1); }
       else if (p[1] === "rule") rules[p[2]] = p[3] === "true";
       else if (p[1] === "hurt") {
@@ -82,14 +86,15 @@ export function replayFireballs(r) {
     ew.ai.beginTick(player, survival, 0);
     ew.events.length = 0;
     survival.health = 1000 - (states.length ? 1000 - states[states.length - 1].playerHealth : 0);
-    ew.fireballs.tick();
+    if (r.tickMobs) { ew.tick(player, survival, 0); for (const b of ew.fireballs.list) if (!balls.includes(b)) balls.push(b); } // the mobs shoot: a new ball is the next row entry
+    else ew.fireballs.tick();
     drainKnockback(survival, pv, player);
     const booms = [];
     for (const ev of ew.events) if (ev.explode) { const x = ev.explode; booms.push([x.x, x.y, x.z, x.size, x.flaming ? 1 : 0, x.smoking ? 1 : 0, x.source ? 1 : 0]); }
     states.push({
       playerHealth: survival.health,
       ents: [...ents.map((e) => [e.x, e.y, e.z, e.vx ?? 0, e.vy ?? 0, e.vz ?? 0, e.health, e.fire ?? 0, killed.has(e) ? 1 : 0, targetOf(e)]), [player.x, player.y, player.z, pv.x, pv.y, pv.z, survival.health, survival.fire ?? 0, 0, -1]],
-      balls: balls.map((b) => [b.large ? 1 : 0, b.owner === "player" ? n : b.owner ? ents.indexOf(b.owner) : -1, b.x, b.y, b.z, b.vx, b.vy, b.vz, b.ax, b.ay, b.az, b.dead ? 1 : 0, b.ticks, 0, b.large ? b.power : 0]),
+      balls: balls.map((b) => [b.large ? 1 : 0, b.owner === "player" ? n : b.owner ? ents.indexOf(b.owner) : -1, b.x, b.y, b.z, b.vx, b.vy, b.vz, b.ax, b.ay, b.az, b.dead ? 1 : 0, b.ticks, b.ticksAlive ?? 0, b.large ? b.power : 0]),
       booms, sets: sets.splice(0), punches, hurts,
     });
   }
@@ -104,7 +109,6 @@ export function fireballDivergence(r, got) {
     for (const [sec, w, x] of [["ents", want[0], g.ents], ["balls", want[1], g.balls]]) {
       if (w.length !== x.length) return [t, sec, "count", w.length, x.length];
       for (let i = 0; i < w.length; i++) for (let k = 0; k < w[i].length; k++) {
-        if (sec === "balls" && k === 13) continue; // ticksAlive only counts while inGround, which no 1.7.10 path sets
         if (!near(w[i][k], x[i][k])) return [t, sec, i, k, w[i][k], x[i][k]];
       }
     }

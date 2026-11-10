@@ -1,0 +1,18 @@
+# Batch 41 playermp track
+
+## Summary
+- New probe player: `tools/probes/ServerPlayerProbe.java` builds a real `EntityPlayerMP` (`mw`) with stubbed network, stats, server and world-server, and runs the unchanged 1.7.10 classes (executed, not bytecode-read). `VillageFightProbe` gained the `b41-` scenarios and the script ops `creative`, `invisible`, `sneak`, `adventure`.
+- `public/research/village-fight-b41-reference.json` (22 records): zombie, skeleton, spider and cave spider vs a survival, creative, adventure, invisible or sneaking player, at range, plus six spider/cave spider pillar records (pillar 1, 2, 3 high, 3x3 top, 4-wide). `src/village-fight-b41.test.js` replays all of them exactly. No behaviour change was needed in the port beyond the replay ops (`src/village-fight-replay.js`: invisible, sneak, adventure).
+- `public/research/fireballs-b41-reference.json` (10 records, `FireballProbe` with `FB_PREFIX=fb41-`, `tools/verify-fireballs.mjs`): the fireball `inGround` path executed (stays 600 ticks then setDead; block removed or swapped: let go, motion times three float `nextFloat() * 0.2F`, both counters reset, flight continues that update), and blaze volleys at a zombie, a skeleton arrow's target and a snowball thrower (blaze hurt, takes the mob as target, shoots two volleys of three small balls). `src/fireballs-b41.test.js` replays them exactly.
+- Port fixes from the records: `Fireballs.stick/stickIn` (inGround rule, ball keeps its own Random), `ticksAlive` compared in the replay; the blaze's shot distance is now `Entity.getDistanceToEntity` (float axes, float sum, `sqrt_float`) which changed the spread by one float ulp; balls now tick after the mobs in `EntityWorld.tickMobs` (a ball is appended to the list the pass is walking, so a launched ball updates in its launch pass; before, it waited a tick and also ticked before the mobs).
+- No 1.7.10 code path sets `inGround`; the probe sets the fields by reflection, so the rule is only exercised by tests.
+
+## Verification
+Focused tests, one at a time (full `npm test` and build left to the lead; no browser run in this track): fireballs-b41 11/11; fireballs-native + blaze-ghast-world + blaze-ghast 41/41; village-fight-b41 + legacy-ai + village-fight-b39 80/80; away-mobs + dimension-live + entity-portal + mob-griefing 65/65; projectile-nbt + ring-events + ring-ticks + summon-coverage 63/63; entities + module-names 22/22. Load average was 4.5 to 6.5 at the start of the runs. Records need `MC_RESEARCH=/Users/programming-xcode/Desktop/mc-web/tools/research`, `VF_PREFIX=b41-` / `FB_PREFIX=fb41-`.
+
+## Follow-ups (proposed gap lines)
+- Enderman and wolf target rules vs survival/creative/invisible players are not recorded (their probes differ and the enderman needs the player's gaze); zombies, skeletons, spiders and cave spiders are.
+- A wandering idle zombie (FireballProbe seed 4109, wander starts on tick 15) turns differently from tick 19 than the port's zombie path-following; the volley records use seeds where the zombie stays idle. Likely a legacy wander/path-node difference, not investigated.
+- Blaze crackle client position is still the entity, not posX+0.5/posY+0.5/posZ+0.5 (bytecode-read); `drainClientSounds` and `entity-tracker.js` belong to the tracker track.
+- Ball vs mob update order is now "all mobs, then all balls"; the original interleaves by entity list order, so a mob created after the ball still updates after it in 1.7.10.
+- Only blaze volleys at mobs are recorded; ghast fireballs at mobs, skeleton arrows hurting a blaze in-flight, and a snow golem's own snowballs hitting a blaze are not.

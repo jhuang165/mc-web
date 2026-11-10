@@ -1925,7 +1925,6 @@ export class EntityWorld {
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
-    this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js)
     this._skulls?.tick(); // wither skulls (wither-boss-mobs.js)
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick: SpawnerAnimals.findChunksForSpawning (spawner-animals.js) while gamerule doMobSpawning is true, before the
@@ -2064,6 +2063,7 @@ export class EntityWorld {
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
+    this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js): after the mobs (a ball is created after its shooter, and World.spawnEntityInWorld appends to the list the pass is still walking, so a ball launched this tick updates this tick; executed in fireballs-b41-reference.json)
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).

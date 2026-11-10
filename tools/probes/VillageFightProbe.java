@@ -60,7 +60,8 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-"); } // batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-"); } // batch 39: b39-* records use the b38 legacy-row layout
+  static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
@@ -127,7 +128,7 @@ public class VillageFightProbe {
     for (int[] u : unloadedChunks) VillagerProbe.World.unloaded.add(VillagerProbe.World.chunkKey(u[0], u[1]));
     for (int t = 0; t < 5; t++) { if (t % 60 == 0) c.a(52, 0, 52); c.a(); }
     ahb w = VillageLiveProbe.world;
-    P player = new P(w, "probe");
+    yz player = name.startsWith("b41-") ? ServerPlayerProbe.make(w, "probe") : new P(w, "probe"); // batch 41: a real EntityPlayerMP (ServerPlayerProbe)
     Object[] ents = new Object[n + 1];
     for (int i = 0; i < n; i++) {
       switch (types.charAt(i)) {
@@ -175,8 +176,8 @@ public class VillageFightProbe {
     at(player, pos[n][0], pos[n].length > 2 ? pos[n][2] : 0, pos[n][1]); // yOffset 0 as EntityPlayerMP: rebuild the box that the loop above made with EntityPlayer's 1.62 (batch 29: the stale box made a zombie's AttackOnCollide see a target that had moved)
     VillageLiveProbe.W.players.put("probe", player);
     VillagerProbe.World.closePlayers = new ArrayList<yz>(java.util.Arrays.asList(player));
-    { Field hf = ahb.class.getDeclaredField("h"); hf.setAccessible(true); List pl = (List) hf.get(w); pl.clear(); if (name.startsWith("b39-")) pl.add(player); } // batch 39: World.playerEntities for the real getClosestVulnerablePlayer
-    VillagerProbe.World.realPlayers = name.startsWith("b39-");
+    { Field hf = ahb.class.getDeclaredField("h"); hf.setAccessible(true); List pl = (List) hf.get(w); pl.clear(); if (name.startsWith("b39-") || name.startsWith("b41-")) pl.add(player); } // batch 39: World.playerEntities for the real getClosestVulnerablePlayer
+    VillagerProbe.World.realPlayers = name.startsWith("b39-") || name.startsWith("b41-");
     player.bE.a = false; player.bE.d = false; // capabilities.disableDamage / isCreativeMode (the `creative` script op sets them)
     SeedMath.reset(seed * 7 + 5);
     double[][] vel = new double[ents.length][2];
@@ -226,10 +227,13 @@ public class VillageFightProbe {
             sp.a((sy) null);
             break;
           }
-          case "creative": { boolean on = p[3].equals("on"); player.bE.a = on; player.bE.d = on; break; } // batch 39: "t creative 7 on|off" the probe player's PlayerCapabilities.disableDamage and isCreativeMode (the player has the index types.length)
+          case "creative": { boolean on = p[3].equals("on"); if (player instanceof ServerPlayerProbe.PM) ServerPlayerProbe.gameType((ServerPlayerProbe.PM) player, on ? ahk.c : ahk.b); else { player.bE.a = on; player.bE.d = on; } break; }
+          case "invisible": player.d(p[3].equals("on")); break; // batch 41: Entity.setInvisible (flag 5 of the data watcher)
+          case "sneak": player.b(p[3].equals("on")); break; // Entity.setSneaking (flag 1)
+          case "adventure": ServerPlayerProbe.gameType((ServerPlayerProbe.PM) player, p[3].equals("on") ? ahk.d : ahk.b); break; // batch 39: "t creative 7 on|off" the probe player's PlayerCapabilities.disableDamage and isCreativeMode (the player has the index types.length)
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
           case "move": at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break; // batch 33: optional height
-          case "rename": VillageLiveProbe.W.players.remove(player.n); player.n = p[2]; VillageLiveProbe.W.players.put(p[2], player); break;
+          case "rename": VillageLiveProbe.W.players.remove(pname(player)); if (player instanceof P) ((P) player).n = p[2]; else ((ServerPlayerProbe.PM) player).n = p[2]; VillageLiveProbe.W.players.put(p[2], player); break;
         }
       }
       for (int i = 0; i < ents.length; i++) if (vel[i][0] != 0 || vel[i][1] != 0) { sa e = (sa) ents[i]; at(e, e.s + vel[i][0], e.t, e.u + vel[i][1]); }
@@ -351,7 +355,7 @@ public class VillageFightProbe {
         row.append(first ? "" : ",").append("[").append(idx).append(",").append(MobMoveProbe.field(o.getClass(), "b").getInt(o)).append("]");
         first = false;
       }
-      row.append("],").append(village.a(player.n));
+      row.append("],").append(village.a(pname(player)));
       if (extras) {
         row.append(",[").append(String.join(",", tickArrows)).append("],[");
         for (int k = 0; k < extraZombies.size(); k++) {
@@ -390,7 +394,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + (name.startsWith("b39-") ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -873,6 +877,40 @@ public class VillageFightProbe {
     scenario("b39-spider-jockey-night-47", 47, 450, "VVZGKKK", spiderFarGolem, new String[] {"3 spawnspider 64.5 70.5 0 90", "200 walk 7 -0.05 -0.05", "300 walk 7 0 0"});
     scenario("b39-spider-jockey-night-2231", 2231, 450, "VVZGKKK", spiderFarGolem, new String[] {"3 spawnspider 64.5 70.5 0 90", "200 walk 7 -0.05 -0.05", "300 walk 7 0 0"});
     bright = 15; difficulty = 2; local = 0;
+    // Batch 41 (names b41-*): the player is a real EntityPlayerMP (ServerPlayerProbe) with ItemInWorldManager, so td.bq's creative test and EntityAITarget run as natively.
+    difficulty = 2; local = 0; eggTimer = 6000; bright = 3; patches = new int[][] {}; blocks = new int[][] {};
+    // creative (ItemInWorldManager.isCreative: PlayerCapabilities.disableDamage): mid-hunt, from the first tick, and back to survival
+    scenario("b41-zombie-creative-3000", 3000, 220, "Z", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"60 creative 1 on", "140 creative 1 off"});
+    scenario("b41-zombie-creative-start-3001", 3001, 120, "Z", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"0 creative 1 on"});
+    scenario("b41-zombie-adventure-3002", 3002, 160, "Z", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"10 adventure 1 on"});
+    scenario("b41-skeleton-creative-3003", 3003, 200, "K", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"60 creative 1 on", "140 creative 1 off"});
+    scenario("b41-skeleton-bow-creative-3004", 3004, 260, "B", new double[][] {{50.5, 60.5}, {66.5, 64.5}}, new String[] {"90 creative 1 on", "170 creative 1 off"});
+    scenario("b41-spider-creative-3005", 3005, 240, "S", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"60 creative 1 on", "140 creative 1 off"});
+    scenario("b41-cave-spider-creative-3006", 3006, 240, "T", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"60 creative 1 on", "140 creative 1 off"});
+    scenario("b41-spider-creative-start-3007", 3007, 120, "S", new double[][] {{60.5, 60.5}, {66.5, 64.5}}, new String[] {"0 creative 1 on"});
+    // invisible (data watcher flag 5): the legacy mobs' World.getClosestVulnerablePlayerToEntity scales the range by 0.7 * max(0.1, armour visibility): a spider sees an invisible player only about a block away; the task-based zombie does not scale
+    scenario("b41-spider-invisible-3010", 3010, 200, "S", new double[][] {{60.5, 60.5}, {68.5, 64.5}}, new String[] {"0 invisible 1 on", "100 move 0 67.5 64.5", "130 invisible 1 off"});
+    scenario("b41-zombie-invisible-3011", 3011, 200, "Z", new double[][] {{50.5, 60.5}, {70.5, 64.5}}, new String[] {"0 invisible 1 on", "110 invisible 1 off"});
+    scenario("b41-zombie-sneak-3012", 3012, 200, "Z", new double[][] {{30.5, 60.5}, {70.5, 64.5}}, new String[] {"0 sneak 1 on", "100 sneak 1 off"});
+    scenario("b41-skeleton-invisible-3013", 3013, 200, "K", new double[][] {{54.5, 60.5}, {70.5, 64.5}}, new String[] {"0 invisible 1 on", "110 invisible 1 off"});
+    scenario("b41-spider-sneak-3014", 3014, 200, "S", new double[][] {{54.5, 60.5}, {70.5, 64.5}}, new String[] {"0 sneak 1 on", "100 sneak 1 off"});
+    // range: a zombie follows to 40 blocks, the legacy mobs look 16 blocks, a silverfish-like 8 (not here)
+    scenario("b41-zombie-range-far-3020", 3020, 200, "Z", new double[][] {{20.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
+    scenario("b41-spider-range-far-3021", 3021, 200, "S", new double[][] {{40.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
+    scenario("b41-skeleton-range-far-3022", 3022, 200, "K", new double[][] {{20.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
+    // spider and a player on a pillar (batch 41): one, two and three blocks high, a wider top, and a pillar the player stands next to the edge of; does the spider reach him?
+    blocks = new int[][] {{66, 0, 64, 66, 0, 64, 1, 0}};
+    scenario("b41-spider-pillar-1-night-3101", 3101, 300, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 1}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 1, 64, 1, 0}};
+    scenario("b41-spider-pillar-2-night-3102", 3102, 300, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 2}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 2, 64, 1, 0}};
+    scenario("b41-spider-pillar-3-night-3103", 3103, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    scenario("b41-cave-spider-pillar-3-night-3104", 3104, 400, "T", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    blocks = new int[][] {{65, 0, 63, 67, 2, 65, 1, 0}};
+    scenario("b41-spider-pillar-3x3-night-3105", 3105, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 3, 64, 1, 0}, {66, 0, 65, 66, 3, 65, 1, 0}};
+    scenario("b41-spider-pillar-4-wide-night-3106", 3106, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 4}}, new String[] {});
+    blocks = new int[][] {};
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
     scenario("player-turns-aggressive", 0, 700, open, new String[] {"10 hit 0 7 0.1 player", "31 hit 0 7 0.1 player", "52 hit 0 7 0.1 player", "73 hit 0 7 0.1 player", "94 hit 0 7 0.1 player", "115 hit 0 7 0.1 player", "136 hit 0 7 0.1 player", "157 hit 0 7 0.1 player",
       "178 hit 0 7 0.1 player", "199 hit 0 7 0.1 player", "220 hit 0 7 0.1 player", "241 hit 0 7 0.1 player", "262 hit 0 7 0.1 player", "283 hit 0 7 0.1 player", "304 hit 0 7 0.1 player", "330 move 7 50.5 56.5", "500 hit 4 7 300.0 player", "600 rename alt", "610 hit 1 7 0.1 player"});
