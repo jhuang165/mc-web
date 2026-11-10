@@ -22,7 +22,7 @@ import { blockOfItem as stoneUtilityItemBlock, heldSlabType, planSlabUse, endFra
 import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, DROPPER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
 import { newDispenser } from './dispenser-container.js';
 import { brewingItemBlock } from './brewing.js';
-import { HOPPER, hopperPlacedMeta, newHopperTile } from './hopper.js';
+import { HOPPER, hopperPlacedMeta, newHopperTile, hopperItemBlock } from './hopper.js';
 import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta, ITEM_REDSTONE } from './redstone-blocks.js';
 
 import { logPlacedMeta } from './wood-types.js';
@@ -50,7 +50,7 @@ const shapedNonSolid = (b) => b === 0 || isLiquid(b) || b === SNOW_LAYER || b ==
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || shapedItemBlock(itemId) || chestBlockOfItem(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || hopperItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || shapedItemBlock(itemId) || chestBlockOfItem(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},
@@ -162,7 +162,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     markUnsaved();
     return result(true, plan.merge ? "slab-merge" : "slab", plan.id, cell);
   }
-  if ((!item?.block && !dispenserPistonItemBlock(itemId) && !redstoneItemBlock(itemId) && !brewingItemBlock(itemId) && !stoneUtilityItemBlock(itemId)) || isLiquid(id)) {
+  if ((!item?.block && !dispenserPistonItemBlock(itemId) && !redstoneItemBlock(itemId) && !brewingItemBlock(itemId) && !hopperItemBlock(itemId) && !stoneUtilityItemBlock(itemId)) || isLiquid(id)) {
     return result(false, "not-a-building-block", id, p);
   }
   if (!survival.creative && !survival.count(itemId)) {

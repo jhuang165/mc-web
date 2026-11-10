@@ -46,6 +46,8 @@ export { HOPPER_BOUNDS, HOPPER_BOXES, HOPPER_UNION };
 export const HOPPER_HARDNESS = 3, HOPPER_BLAST = 4.8, HOPPER_SOUND = "wood"; // soundTypeWood; checked against block-sounds.js by block-sounds.test.js
 // Hopper -> item 1133; a broken hopper drops its own item (Items.hopper, original 410).
 export const hopperDrops = () => [{ id: ITEM_HOPPER, count: 1, damage: 0 }];
+// Items.hopper is an ItemReed of Blocks.hopper: the item places the block (block-placement-simulation.js).
+export const hopperItemBlock = (itemId) => (itemId === ITEM_HOPPER ? HOPPER : 0);
 
 // ---- model (RenderBlocks.renderBlockHopper): boxes in 1/16 units, texture roles ----
 // Faces: 0 +x, 1 -x, 2 top, 3 bottom, 4 +z, 5 -z (block-textures.js order). Textures: hopper_outside (sides, bottom),

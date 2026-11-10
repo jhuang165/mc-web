@@ -45,6 +45,29 @@ const inside = (b, [x0, y0, z0, x1, y1, z1]) => b[3] > x0 && b[0] < x1 && b[4] >
 const FALLING_HALF = 0.49, FALLING_SIZE = 0.98;
 const ITEM_SIZE = 0.25, ITEM_HALF = 0.125, ARROW_HALF = 0.25, ARROW_SIZE = 0.5, TNT_HALF = 0.49, TNT_SIZE = 0.98;
 
+// The comparators' view of the TileEntity inventories (LiveRedstone hooks.containerSlots): { count, max } slots by original id, a double
+// chest reading both halves (west or north first). `game` gives chests(), furnaces(), dispensers(), hoppers(), brewing(), maxStack(s);
+// the gun server uses it too (multiplayer/simulation.js).
+export function containerSlotsOf(world, game) {
+  const slotsOf = (items) => (items ?? []).map((s) => (s && s.count > 0 ? { count: s.count, max: game.maxStack?.(s) ?? 64 } : null));
+  return (x, y, z, id) => {
+    const key = `${x},${y},${z}`;
+    if (id === 54 || id === 146) { // a trapped chest (146, internal 162) pairs only with its own kind
+      const kind = id === 146 ? TRAPPED_CHEST : CHEST, chests = game.chests?.() ?? {}, self = chests[key]?.items ?? Array(27).fill(null);
+      for (const [dx, dz, first] of [[-1, 0, true], [1, 0, false], [0, -1, true], [0, 1, false]]) {
+        if (world.get(x + dx, y, z + dz) !== kind) continue;
+        const other = chests[`${x + dx},${y},${z + dz}`]?.items ?? Array(27).fill(null);
+        return slotsOf(first ? [...other, ...self] : [...self, ...other]);
+      }
+      return slotsOf(self);
+    }
+    if (id === 61 || id === 62) return slotsOf(game.furnaces?.()[key]?.items ?? [null, null, null]);
+    if (id === 23 || id === 158) return slotsOf(game.dispensers?.()[key]?.items ?? Array(9).fill(null));
+    if (id === 154) return slotsOf(game.hoppers?.()[key]?.items ?? Array(5).fill(null));
+    if (id === 117) return slotsOf(game.brewing?.()[key]?.items ?? Array(4).fill(null)); // TileEntityBrewingStand: Container.calcRedstoneFromInventory over 4 slots
+    return null;
+  };
+}
 export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   const changes = [];
   const flush = () => {
@@ -93,25 +116,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const e of game.falling?.() ?? []) if (!e.dead && inside([e.x - FALLING_HALF, e.y, e.z - FALLING_HALF, e.x + FALLING_HALF, e.y + FALLING_SIZE, e.z + FALLING_HALF], box)) out.push(e);
     return out;
   };
-  // TileEntity inventories as { count, max } slots; a double chest reads both halves (west or north first).
-  const slotsOf = (items) => (items ?? []).map((s) => (s && s.count > 0 ? { count: s.count, max: game.maxStack?.(s) ?? 64 } : null));
-  const containerSlots = (x, y, z, id) => {
-    const key = `${x},${y},${z}`;
-    if (id === 54 || id === 146) { // a trapped chest (146, internal 162) pairs only with its own kind
-      const kind = id === 146 ? TRAPPED_CHEST : CHEST, chests = game.chests?.() ?? {}, self = chests[key]?.items ?? Array(27).fill(null);
-      for (const [dx, dz, first] of [[-1, 0, true], [1, 0, false], [0, -1, true], [0, 1, false]]) {
-        if (world.get(x + dx, y, z + dz) !== kind) continue;
-        const other = chests[`${x + dx},${y},${z + dz}`]?.items ?? Array(27).fill(null);
-        return slotsOf(first ? [...other, ...self] : [...self, ...other]);
-      }
-      return slotsOf(self);
-    }
-    if (id === 61 || id === 62) return slotsOf(game.furnaces?.()[key]?.items ?? [null, null, null]);
-    if (id === 23 || id === 158) return slotsOf(game.dispensers?.()[key]?.items ?? Array(9).fill(null));
-    if (id === 154) return slotsOf(game.hoppers?.()[key]?.items ?? Array(5).fill(null));
-    if (id === 117) return slotsOf(game.brewing?.()[key]?.items ?? Array(4).fill(null)); // TileEntityBrewingStand: Container.calcRedstoneFromInventory over 4 slots
-    return null;
-  };
+  const containerSlots = containerSlotsOf(world, game);
   const redstone = new LiveRedstone(world, {
     changed: (x, y, z, old, now) => {
       if (changes.length < 20000) changes.push([x, y, z, old ?? world.get(x, y, z), now ?? world.get(x, y, z)]);

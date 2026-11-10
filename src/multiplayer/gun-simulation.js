@@ -420,6 +420,7 @@ export class GunSimulation extends DedicatedSimulation {
     this.play.tickItems();
     return super.tickWorld(beforeLit);
   }
+  hopperItems() { return this.play.items.items; }
   // A thunderstorm's bolts (EntityLightningBolt): thunder is heard by everyone (volume 10000), the strike's crack within its 16 x 2
   // blocks; the mobs and players in a flashing bolt's box are struck.
   weatherEvents(events, struck) {

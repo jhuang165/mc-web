@@ -111,6 +111,9 @@ export class ServerPlay {
     w.container.close();
     w.container.chest?.closed?.();
     this.throwDrops(p, w.container);
+    // The comparators read the new contents (main.js closeContainer -> containerClosed); a cart's chest is no block.
+    const keys = w.kind === 'chest' ? w.container.keys : ['furnace', 'dispenser', 'hopper', 'brewing'].includes(w.kind) ? [w.key] : null;
+    for (const key of keys ?? []) if (/^-?\d+,-?\d+,-?\d+$/.test(key)) this.sim.redstone.containerChanged(...key.split(',').map(Number));
   }
   open(p, kind, container, extra = {}) {
     this.closeWindow(p);
@@ -373,6 +376,7 @@ export class ServerPlay {
   itemsNear(p) {
     const out = [], r = 64;
     for (const e of this.items.items) {
+      if (e.dead) continue; // a hopper took it this tick (hopper.js pickUpFromWorld)
       if (Math.abs(e.x - p.position.x) > r || Math.abs(e.z - p.position.z) > r) continue;
       out.push([this.entityId(e), +e.x.toFixed(3), +e.y.toFixed(3), +e.z.toFixed(3), e.stack.id, e.stack.damage ?? 0, e.stack.count]);
     }

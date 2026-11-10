@@ -1,5 +1,7 @@
 import { World, PHYSICS, WATER, LAVA, raycast, collides } from '../world.js';
-import { Survival, ITEMS } from '../survival.js';
+import { Survival, ITEMS, burnTime } from '../survival.js';
+import { Hoppers, hopperBehaviour } from '../hopper.js';
+import { containerSlotsOf } from '../redstone-runtime.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
 import { Farming } from '../farming.js';
@@ -75,8 +77,21 @@ export class DedicatedSimulation {
       entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
+      // Comparators read the shared tile inventories (redstone-runtime.js containerSlotsOf), as in the browser.
+      containerSlots: containerSlotsOf(this.world, { chests: () => this.tiles.chests, furnaces: () => this.tiles.furnaces, dispensers: () => this.tiles.dispensers,
+        hoppers: () => this.tiles.hoppers, brewing: () => this.tiles.brewing, maxStack: s => this.tiles.inventory.maxStack(s) }),
     });
+    this.redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
     this.redstone.restore(saved.redstone);
+    // TileEntityHopper.updateEntity for every hopper in a ticking column (hopper.js), over the shared tile maps; a move tells the
+    // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems).
+    const tiles = this.tiles;
+    this.hoppers = new Hoppers({
+      world: this.world, chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers,
+      hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: s => tiles.inventory.maxStack(s), burnTime,
+      items: () => this.hopperItems(), active: (x, z) => !this.columns || this.world.isTicking(x, z),
+      changed: keys => { for (const key of keys ?? []) this.redstone.containerChanged(...String(key).split(',').map(Number)); },
+    });
     const emission = (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`));
     this.light = this.columns ? new ServerLight(this.world, emission) : new LightVolume(this.world, emission);
     if (this.columns) this.light.columns({ added: [...this.world.chunks.values()] });
@@ -229,13 +244,14 @@ export class DedicatedSimulation {
       if (p.swing) p.swing--;
     }
   }
+  hopperItems() { return []; } // dropped items a hopper can pick up (the gun server's ItemEntities)
   // A streamed world's player whose column is not ticking (its window is still being generated) waits, like an unloaded chunk.
   frozen(p) { return !!this.columns && !this.world.isTicking(p.position.x, p.position.z); }
   tickWorld(beforeLit) {
     this.weather.tick(this.world);
     this.weatherEvents(this.weather.drain(), this.weather.struck);
     this.falling.tick();
-    tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
+    tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, hoppers: this.hoppers, redstone: this.redstone },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     for (const key of new Set([...beforeLit, ...this.redstone.lit])) if (beforeLit.has(key) !== this.redstone.lit.has(key)) {
       const [x, y, z] = key.split(',').map(Number);
