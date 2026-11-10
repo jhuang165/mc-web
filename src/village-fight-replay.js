@@ -25,6 +25,8 @@ export const fightReference33 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 34: village-fight-b34-reference.json (the native ChunkCache does not bound the search, sealed and far targets, chunk borders, reinforcement sites in chunks that are not loaded,
 // cobblestone walls, nether fences, cobweb with arrows and falls); a record may carry `unloaded` chunks (the double's ChunkProviderServer has not loaded them).
 export const fightReference34 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b34-reference.json", import.meta.url)));
+// Batch 35: village-fight-b35-reference.json (stacked storeys, a tower, zombie follow range 80-130): records carry `searches`, the native PathFinder's point count of every search.
+export const fightReference35 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b35-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -84,6 +86,7 @@ function replayFightUncapped(r, hooks) {
     // the probe's `new EntitySkeleton` was never onSpawnWithEgg'd: an empty hand, so setCombatTask picks AttackOnCollide (a bow skeleton got its bow through setCurrentItemOrArmor)
     if (type === "skeleton") e.equipment = [ch === "B" ? BOW_STACK() : null, null, null, null, null];
     if (ch === "z") e.canBreakDoors = true;
+    if (type === "zombie" && r.follow) e.followRange = r.follow; // the probe sets generic.followRange (the live value the onSpawnWithEgg bonuses give); the navigator reads it when the mob's brain is built
     if (type === "zombie" && r.bases) e.reinforcement = r.bases[i]; // the spawnReinforcements base the zombie's constructor drew from its (then seeded) Entity.rand
     if (type === "villager") e.profession = i % 5;
     const lr = new LogRandom(BigInt(r.seed * 10 + i)); lr.logBooleans = extras; logs.push(lr); setEntityRandom(e, lr);

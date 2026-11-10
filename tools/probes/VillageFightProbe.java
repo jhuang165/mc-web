@@ -38,6 +38,14 @@ public class VillageFightProbe {
   }
   static void held(yl e, add stack) throws Exception { e.c(0, stack); ((add[]) MobMoveProbe.field(sv.class, "g").get(e))[0] = e.ak()[0]; }
   static double[] bx(azt b) throws Exception { return new double[] {b.a, b.b, b.c, b.d, b.e, b.f}; }
+  static String searchJson() {
+    StringBuilder b = new StringBuilder("[");
+    for (long[] r : VillagerProbe.World.searches) b.append(b.length() > 1 ? "," : "").append("[").append(r[0]).append(",").append(r[1]).append(",").append(r[2]).append("]");
+    long total = 0, worst = 0; for (long ns : VillagerProbe.World.searchNanos) { total += ns; worst = Math.max(worst, ns); }
+    long points = 0, most = 0; for (long[] r : VillagerProbe.World.searches) { points += r[1]; most = Math.max(most, r[1]); }
+    System.err.println("searches " + VillagerProbe.World.searches.size() + " points " + points + " max " + most + " native ms total " + total / 1e6 + " worst " + worst / 1e6);
+    return b.append("]").toString();
+  }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
@@ -69,7 +77,9 @@ public class VillageFightProbe {
     return s.toString();
   }
 
-  static void base(yq z) throws Exception { if (reinforce > 0) ((ti) z.a((th) MobMoveProbe.field(yq.class, "bp").get(null))).a(reinforce); }
+  // batch 35: `follow` > 0 sets every zombie's generic.followRange base value (yj.b): the live value after EntityZombie.onSpawnWithEgg's "Random zombie-spawn bonus" (operation 2, d0 = nextDouble * 1.5 * local difficulty, kept when above 1) reaches (40 + bonus) * (1 + d0), up to about 130 on Hard
+  static void base(yq z) throws Exception { if (reinforce > 0) ((ti) z.a((th) MobMoveProbe.field(yq.class, "bp").get(null))).a(reinforce); if (follow > 0) ((ti) z.a(yj.b)).a(follow); }
+  static double follow = 0;
   static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
   static int[][] unloadedChunks = {}; // batch 34: [chunkX, chunkZ] pairs the ChunkProviderServer model has not loaded
   static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
@@ -90,7 +100,7 @@ public class VillageFightProbe {
     for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
     VillagerProbe.World.light = light; MobMoveProbe.ProbeWorld.water = water;
     // batch 34: b34-* records read blocks through the real ChunkCache (VF_CACHE_ALL=1 runs the older ones that way too, to see which of them depend on it) and may leave chunks unloaded
-    boolean cache = name.startsWith("b34-") || System.getenv("VF_CACHE_ALL") != null;
+    boolean cache = name.startsWith("b34-") || name.startsWith("b35-") || System.getenv("VF_CACHE_ALL") != null;
     VillagerProbe.World.chunkCache = cache; VillagerProbe.World.unloaded.clear();
     for (int[] u : unloadedChunks) VillagerProbe.World.unloaded.add(VillagerProbe.World.chunkKey(u[0], u[1]));
     for (int t = 0; t < 5; t++) { if (t % 60 == 0) c.a(52, 0, 52); c.a(); }
@@ -113,8 +123,8 @@ public class VillageFightProbe {
     StringBuilder bases = new StringBuilder("[");
     for (int i = 0; i < n; i++) bases.append(i > 0 ? "," : "").append(ents[i] instanceof yq ? num(((ti) ((yq) ents[i]).a((th) MobMoveProbe.field(yq.class, "bp").get(null))).e()) : "null");
     bases.append("]");
-    VillagerProbe.World.immediateZombies = (name.startsWith("b33-") || name.startsWith("b34-"));
-    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-") || name.startsWith("b34-"); // rows then end with the arrows, and the record lists the shots and conversions
+    VillagerProbe.World.immediateZombies = (name.startsWith("b33-") || name.startsWith("b34-") || name.startsWith("b35-"));
+    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-") || name.startsWith("b34-") || name.startsWith("b35-"); // rows then end with the arrows, and the record lists the shots and conversions
     VillagerProbe.World.spawned.clear();
     SeedRandom.next = 1000000L + seed * 1000; // the first Entity built from here on (an arrow, a converted or reinforcement zombie) gets this seed
     List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
@@ -137,7 +147,9 @@ public class VillageFightProbe {
     double[][] vel = new double[ents.length][2];
     List<String> rows = new ArrayList<>(), hits = new ArrayList<>(), shots = new ArrayList<>(), conversions = new ArrayList<>();
     java.util.Map<sa, Integer> arrowId = new java.util.HashMap<>(); java.util.Map<sa, String> lastArrow = new java.util.HashMap<>(); List<sa> arrowList = new ArrayList<>(); List<sa> removed = new ArrayList<>();
+    VillagerProbe.World.searches.clear(); VillagerProbe.World.searchNanos.clear();
     for (int t = 0; t < ticks; t++) {
+      VillagerProbe.World.tick = t;
       for (String op : script) {
         String[] p = op.split(" ");
         if (Integer.parseInt(p[0]) != t) continue;
@@ -273,7 +285,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (cache ? ",\"chunkCache\":true" : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (cache ? ",\"chunkCache\":true" : "") + (name.startsWith("b35-") ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -511,6 +523,46 @@ public class VillageFightProbe {
     scenario("b34-web-fall-d3", 351, 460, "VVzZZGK", arena, new String[] {"20 move 2 60.5 52.5 12", "30 move 3 59.5 50.5 9", "40 move 0 61.5 54.5 7", "60 move 4 58.5 54.5 20", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player"});
     blocks = new int[][] {{58, 0, 48, 62, 0, 56, 30, 0}};
     scenario("b34-web-fall-shallow-d3", 352, 460, "VVzZZGK", arena, new String[] {"20 move 2 60.5 52.5 9", "30 move 3 59.5 50.5 6", "40 move 0 61.5 54.5 5", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player"});
+    // Batch 35 (names b35-*): the same real-ChunkCache arenas, plus the path point count of every native search (record field `searches`: [tick, points the PathFinder created, 1 if it returned a path]).
+    // Stacked storeys: four stone slabs (y 3, 7, 11 on x 20..80, z 20..86; the probe floor y -1 is storey 0) joined by one-block step ramps through holes in the slabs, so every storey is a large walkable
+    // plane inside a zombie's range-40 sphere around a target on the top storey. Step ramps (4 steps of 1 block) go 0 to 1 at x 34, 1 to 2 at x 60 and 2 to 3 at x 34 (z 40/60/60).
+    difficulty = 3; light = 15; reinforce = 0; unloadedChunks = new int[][] {};
+    java.util.function.IntFunction<int[][]> storeysOf = n -> {
+      java.util.List<int[]> st = new ArrayList<>();
+      for (int k = 1; k < n; k++) st.add(new int[] {20, 4 * k - 1, 20, 80, 4 * k - 1, 86, 1, 0});
+      int[][] rampAt = {{34, 40}, {60, 60}, {34, 60}};
+      for (int k = 0; k + 1 < n; k++) { int[] rp = rampAt[k % 3]; int y0 = 4 * k; st.add(new int[] {rp[0], y0 + 3, rp[1], rp[0] + 2, y0 + 3, rp[1] + 1, 0, 0}); for (int i = 0; i < 4; i++) st.add(new int[] {rp[0] + i, y0, rp[1], rp[0] + i, y0 + i, rp[1] + 1, 1, 0}); }
+      return st.toArray(new int[0][]);
+    };
+    int[][] storeys = storeysOf.apply(4), tower = storeysOf.apply(7);
+    // a sealed 3x3 stone cell on storey 1 (interior x 48..50, z 52..54, y 4..6; the slab above is its roof)
+    java.util.function.IntFunction<int[][]> cellAt = y -> new int[][] {{47, y, 51, 51, y + 2, 55, 1, 0}, {48, y, 52, 50, y + 2, 54, 0, 0}};
+    java.util.function.Function<int[][][], int[][]> cat = parts -> { java.util.List<int[]> all = new ArrayList<>(); for (int[][] p : parts) for (int[] b : p) all.add(b); return all.toArray(new int[0][]); };
+    double[][] cellPos = {{49.5, 53.5, 4}, {49.5, 53.5, 4}, {27.5, 53.5}, {24.5, 56.5, 8}, {30.5, 50.5}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 150.5}};
+    // (A zombie only picks a target within 4 blocks above or below it, so the villagers sit one storey up and the zombies on the storeys beside them.)
+    blocks = cat.apply(new int[][][] {storeys, cellAt.apply(4)});
+    scenario("b35-storeys-sealed-d3", 400, 500, "VVzZZGK", cellPos, new String[] {"250 hit 1 3 30.0 mob"});
+    // the same cell with a doorway (x 47, z 53, y 4..5 open): the zombies find the way up the ramps
+    blocks = cat.apply(new int[][][] {storeys, cellAt.apply(4), new int[][] {{47, 4, 53, 47, 5, 53, 0, 0}}});
+    scenario("b35-storeys-open-d3", 401, 600, "VVzZZGK", cellPos, new String[] {"250 hit 1 3 30.0 mob"});
+    // zombies on the first storey hunting a player on the ground (a long way down the ramp) while the villagers stand beside them
+    double[][] down = {{45.5, 53.5, 4}, {45.5, 56.5, 4}, {50.5, 70.5, 4}, {40.5, 70.5, 4}, {70.5, 70.5, 4}, {10.5, 10.5}, {60.5, 120.5}, {30.5, 53.5}};
+    blocks = storeys;
+    scenario("b35-storeys-down-d3", 402, 600, "VVzZZGK", down, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0", "250 hit 1 3 30.0 mob"});
+    scenario("b35-storeys-down-d2", 403, 600, "VVzZZGK", down, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0", "250 hit 1 3 30.0 mob"});
+    // a seven-storey tower (the sphere of range 40 around a sealed villager on storey 3 holds seven walkable planes): the largest realistic flood
+    double[][] towerPos = {{49.5, 53.5, 12}, {49.5, 53.5, 12}, {27.5, 53.5, 8}, {24.5, 56.5, 16}, {30.5, 50.5, 12}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 150.5}};
+    blocks = cat.apply(new int[][][] {tower, cellAt.apply(12)});
+    scenario("b35-tower-sealed-d3", 404, 500, "VVzZZGK", towerPos, new String[] {"250 hit 1 3 30.0 mob"});
+    // Zombie follow range. EntityZombie.onSpawnWithEgg adds a "Random zombie-spawn bonus" (operation 2, d0 = nextDouble * 1.5 * local difficulty, kept above 1) on top of the spawn bonus, so a Hard zombie in a well-played chunk has
+    // followRange (40 + bonus) * (1 + d0): about 80 to 130, not 40 to 45. A zombie then searches a sphere of that radius around a sealed target: the record sets generic.followRange (field `follow`) on every zombie.
+    blocks = new int[][] {{47, 0, 51, 51, 2, 55, 1, 0}, {48, 0, 52, 50, 2, 54, 0, 0}, {47, 3, 51, 51, 3, 55, 1, 0}};
+    double[][] farSealed = {{49.5, 53.5}, {49.5, 53.5}, {49.5, 120.5}, {-30.5, 53.5}, {49.5, 190.5}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 150.5}};
+    for (double fr : new double[] {80, 100, 130}) {
+      follow = fr;
+      scenario("b35-follow" + (int) fr + "-sealed-d3", 410 + (int) fr, 300, "VVzZZGK", farSealed, new String[] {"150 hit 1 3 30.0 mob"});
+    }
+    follow = 0;
     blocks = new int[][] {};
     difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key

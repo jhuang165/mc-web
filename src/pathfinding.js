@@ -283,8 +283,10 @@ export class PathFinder {
     const start = this.openPoint(floorEdge(entity.x - half), y, floorEdge(entity.z - half));
     const end = this.openPoint(floor(tx - half), floor(ty), floor(tz - half));
     const size = new PathPoint(floorFloat(f(entity.width + 1)), floorFloat(f(entity.height + 1)), floorFloat(f(entity.width + 1)));
+    const t0 = searchObserver ? performance.now() : 0;
     const result = this.addToPath(entity, start, end, size, range);
     this.avoidsWater = avoids;
+    if (searchObserver) searchObserver({ finder: this, entity, range, end: [end.x, end.y, end.z], points: this.pointMap.size, expanded: this.expanded, found: result !== null, ms: performance.now() - t0 });
     return result;
   }
   addToPath(entity, start, end, size, range) {
@@ -386,6 +388,13 @@ export class PathFinder {
 // those searches short (a capped search returns the closest partial path, which differs from the original). 30000 is about 0.7-0.9 ms per 1000 points on stepped terrain (batch 33: 29894 points took 21 ms on terraced hills),
 // far beyond any single-floor search and only reachable in multi-storey caves. The search cannot be split over ticks with identical results: the original runs it to completion inside one
 // call, and a mob's next goal check depends on the path it returns.
+// Batch 35 correction (native point counts, village-fight-b35-reference.json): a Hard zombie's range is NOT capped near 45. EntityZombie.onSpawnWithEgg adds a "Random zombie-spawn bonus" (operation 2, kept when
+// d0 = nextDouble * 1.5 * local difficulty > 1) so followRange is (40 + bonus) * (1 + d0), about 80 to 130. A sealed target then floods a sphere of that radius: native 31191 points at range 100 on flat ground, 24461 in a
+// four-storey structure at range 40, 33088 in a seven-storey tower. The 30000 cap counts EXPANDED points (a tower search created 33088 points but expanded 28096), and is passed by range-100+ flat searches.
+// Timing: about 1 ms per 1000 expanded points on typed-array terrain (a memoised verticalOffset was tried and was slower).
+// Tests and benchmarks read every search's size (points created, as the native IntHashMap count), outcome and time through this hook.
+let searchObserver = null;
+export const setPathSearchObserver = (fn) => { const was = searchObserver; searchObserver = fn; return was; };
 let nodeCap = 30000;
 export const setPathNodeCap = (n) => { const was = nodeCap; nodeCap = n; return was; };
 // --- PathNavigate (vv) ---

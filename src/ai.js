@@ -1046,8 +1046,9 @@ export class Brain {
   }
   // sw.ax(): the safe-point tries of the PathFinder, by difficulty (difficulty.js).
   maxSafePointTries() {
-    if (this.e.type === "creeper") return creeperSafeTries(!!this.attackTarget, this.e.health);
-    return maxSafePointTries(!!this.attackTarget, this.e.health, this.ai.types[this.e.type].health, this.ai.deps.difficulty ? this.ai.deps.difficulty() : 2);
+    const health = this.e.despawnedHealth ?? this.e.health; // a mob that despawned earlier in this update still searches with the health it had (setDead leaves it)
+    if (this.e.type === "creeper") return creeperSafeTries(!!this.attackTarget, health);
+    return maxSafePointTries(!!this.attackTarget, health, this.ai.types[this.e.type].health, this.ai.deps.difficulty ? this.ai.deps.difficulty() : 2);
   }
   // vv.l: a zombie riding a chicken may navigate off the ground.
   get isRidingChicken() {
