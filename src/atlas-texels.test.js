@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { decodePng } from "./png-codec.js";
 import { mipChain } from "./render-settings.js";
 import { anaglyphRgba, installAnaglyphUpload } from "./anaglyph.js";
-import { frameTile, blit, multiplyTile, overTile, convertTile, spriteLevels, putTile } from "./atlas-pixels.js";
+import { frameTile, blit, multiplyTile, overTile, convertTile, spriteLevels, putTile } from "./atlas-texels.js";
 import { TILES } from "./block-textures.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/atlas-reference.json", import.meta.url)));

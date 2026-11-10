@@ -20,7 +20,7 @@ import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOW
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 import {CHEST_ICON_TEXTURES,chestIconTexture,drawChestIcon} from './chest-icon.js';
 import {anaglyphRgba,anaglyphMultiplier,meshAnaglyph} from './anaglyph.js';
-import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile} from './atlas-pixels.js';
+import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile} from './atlas-texels.js';
 import {decodePng} from './png-codec.js';
 import {setIconResolver} from './gui-anaglyph.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
@@ -197,7 +197,7 @@ function frameSize(source){return Math.max(1,Math.min(source.width||16,source.he
 function image(name){const url=versioned('/media/1.7.10/'+name+'.png');return retryAsset(attempt=>requestAsset(()=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=retryUrl(url,attempt);})));}
 export function createBlockAtlas(){
  const canvas=document.createElement('canvas');canvas.width=ATLAS_COLUMNS*TILE_SIZE;canvas.height=ATLAS_ROWS*TILE_SIZE;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;
- // The GL textures are DataTextures filled from exactly decoded PNG pixels (atlas-pixels.js); the 2D canvas below only feeds icons and the fallback.
+ // The GL textures are DataTextures filled from exactly decoded PNG pixels (atlas-texels.js); the 2D canvas below only feeds icons and the fallback.
  const AW=ATLAS_COLUMNS*TILE_SIZE,AH=ATLAS_ROWS*TILE_SIZE,exact=new Map();
  const atlasTexture=()=>{const t=new THREE.DataTexture(new Uint8Array(AW*AH*4),AW,AH,THREE.RGBAFormat,THREE.UnsignedByteType);t.flipY=true;t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;return t;};
  const texture=atlasTexture();const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0,uploader=null;

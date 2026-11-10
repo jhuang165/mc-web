@@ -1,7 +1,7 @@
 // Runs the unchanged TextureUtil.generateMipmapData (bqi.a(int,int,int[][])) and TextureUtil.anaglyphColor (bqi.a(int[])) of the 1.7.10
 // client over every block texture of the original jar (first frame, read like TextureMap: ImageIO.read + getRGB) at mipmap settings
 // 0, 1 and 4 and writes public/research/atlas-reference.json: per texture the SHA-1 of every level's ARGB ints and of every level after
-// anaglyphColor. src/atlas-pixels.test.js rebuilds the same levels from the shipped PNGs with the port's exact decoder and compares hashes.
+// anaglyphColor. src/atlas-texels.test.js rebuilds the same levels from the shipped PNGs with the port's exact decoder and compares hashes.
 // Needs a JDK, the pinned client JAR (tools/research or MC_RESEARCH) and libs-1.7.10 (or MC_PROBE_LIBS).
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
