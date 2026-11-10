@@ -433,7 +433,7 @@ export class HeadlessColumns {
 // missing read as air, so a cell within 15 blocks of the headless area's rim can read brighter than natively.
 import { OPACITY, EMISSION, COST, computeColumnLight, isRim } from "./ring-light.js";
 const R = 14, W = 2 * R + 1, HOT = 6; // a column asked about `hot` times by the search is lit whole (ring-light.js)
-const SEARCH_N = W * W * W, ANY = { minHm: 0, emitter: true };
+const SEARCH_N = W * W * W, ANY = { minHm: 0, emitter: true, eMin: 0, eMax: 65535 };
 export class RingLight {
   constructor(ring) {
     this.ring = ring;
@@ -487,11 +487,13 @@ export class RingLight {
     const st = ring.state(cx, cz), stamp = col.stamp | 0;
     if (st.info && st.infoStamp === stamp) return st.info;
     const hm = this.heldHm(st, col), blocks = col.blocks;
-    let minHm = 65535, emitter = false;
+    let minHm = 65535, eMin = 65535, eMax = -1;
     for (let c = 0; c < 256; c++) if (hm[c] < minHm) minHm = hm[c];
-    for (let i = 0, n = blocks.length; i < n; i++) if (EMISSION[blocks[i]]) { emitter = true; break; }
+    // The lowest and highest emitting cell (batch 34): an emitter more than R cells above or below the query is out of reach, so lava lakes and
+    // caves far under a surface cell no longer make every surface search run the whole block-light spread.
+    for (let i = 0, n = blocks.length, h = col.h; i < n; i++) if (EMISSION[blocks[i]]) { const y = i % h; if (y < eMin) eMin = y; if (y > eMax) eMax = y; }
     st.infoStamp = stamp;
-    return (st.info = { minHm, emitter });
+    return (st.info = { minHm, emitter: eMax >= 0, eMin, eMax });
   }
   // [sky << 4 | block] of a cell.
   at(x, y, z) {
@@ -548,7 +550,7 @@ export class RingLight {
       const here = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16);
       present[a * 3 + b] = here ? 1 : 0;
       emits[a * 3 + b] = here && (ring.resident((pcx + a - 1) * 16, (pcz + b - 1) * 16) || !isRim(ring, pcx + a - 1, pcz + b - 1)) ? 1 : 0;
-      if (fast && here) { const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm; if (emits[a * 3 + b] && inf.emitter) needBlock = true; }
+      if (fast && here) { const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm; if (emits[a * 3 + b] && inf.emitter && inf.eMax >= qy - R && inf.eMin <= qy + R) needBlock = true; }
     }
     const needSky = !fast || (!noSky && sky < 15 && qy + R >= minHm);
     if (!needSky && !needBlock) return sky << 4 | block;

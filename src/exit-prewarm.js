@@ -13,7 +13,25 @@ import { javaSeed, spawnKey, spawnOrigins, presolvedSpawns } from "./java-world.
 import { spawnRequest } from "./spawn-presolve.js";
 import { OVERWORLD, NETHER } from "./dimensions.js";
 
-const IDLE_MS = 30000, RESIDENT_CELLS = 9, SPECULATIVE_CELLS = 5, MOVED = 6; // MOVED: blocks the target must shift before the wanted units are asked again
+// NETHER_SPECULATIVE: extra Nether columns asked for behind the target's 8 x 8 window (batch 34): the windows round every spot within 18 blocks of the target
+// (where makePortal may build the exit) union to at most 10 x 10 columns, so up to 36 more; a column is about 33 KB (blocks and metadata), so at most about 1.2 MB held.
+const IDLE_MS = 30000, RESIDENT_CELLS = 9, SPECULATIVE_CELLS = 5, NETHER_SPECULATIVE = 40, MOVED = 6;
+const SEARCH = 128; // Teleporter.placeInExistingPortal: the saved portals searched are the columns within 128 blocks of the target on both axes
+
+// The portal Teleporter.placeInExistingPortal would pick from `columns` ([x, z] of every saved portal column, sorted by x then z as TerrainPeek.portalColumns
+// lists them): the nearest to the target in the horizontal plane (the search also weighs height, which a column list does not carry; a wrong pick only
+// wastes the prewarm, the trip is unchanged), the first in that order on a tie. Returns [x + 0.5, z + 0.5] or null.
+export function savedPortalFor(columns, tt) {
+  if (!columns?.length) return null;
+  const lx = Math.floor(tt.x), lz = Math.floor(tt.z);
+  let best = Infinity, at = null;
+  for (const [x, z] of columns) {
+    if (x < lx - SEARCH || x > lx + SEARCH || z < lz - SEARCH || z > lz + SEARCH) continue;
+    const d = (x + 0.5 - tt.x) ** 2 + (z + 0.5 - tt.z) ** 2;
+    if (d < best) { best = d; at = [x + 0.5, z + 0.5]; }
+  }
+  return at;
+} // MOVED: blocks the target must shift before the wanted units are asked again
 
 class ShellPopulation { // what StreamPrefetch needs of a StreamingPopulation: a cell cache with adopt / hasCell
   constructor() { this.cells = { max: RESIDENT_CELLS, map: new Map() }; }
@@ -41,17 +59,20 @@ export class ExitPrewarm {
     return shell;
   }
   // tt: transferTarget(...) of the trip; asks for the window round it and (spare lanes) the windows round the spots an exit may be built at.
-  start(root, to, tt) {
+  // `portals`: the saved portal columns of the destination (batch 34): when one is within the Teleporter's search range the exit is that portal, so the
+  // windows are asked for round it instead of round the target.
+  start(root, to, tt, portals = null) {
     if (!root || !tt || !Number.isFinite(tt.x) || !Number.isFinite(tt.z)) return false;
+    const saved = savedPortalFor(portals, tt), focus = saved ?? [tt.x, tt.z];
     const id = `${root.id}:${to}`;
-    if (this.id === id && this.at && Math.hypot(tt.x - this.at[0], tt.z - this.at[1]) < MOVED) return true;
-    if (this.id !== id) { this.dispose(); try { this.shell = this.makeShell(root, to); } catch (e) { console.warn(`exit prewarm: no shell: ${e.message}`); this.shell = null; } if (!this.shell) return false; this.id = id; this.warmer = arrivalWarmer(this.shell, { pause: null, pageFallback: false, specMax: to === OVERWORLD ? SPECULATIVE_CELLS : null, createWorker: this.createWorker, ...(this.maxWorkers ? { maxWorkers: this.maxWorkers } : {}) }); }
-    this.at = [tt.x, tt.z]; this.requests++;
+    if (this.id === id && this.at && Math.hypot(focus[0] - this.at[0], focus[1] - this.at[1]) < MOVED) return true;
+    if (this.id !== id) { this.dispose(); try { this.shell = this.makeShell(root, to); } catch (e) { console.warn(`exit prewarm: no shell: ${e.message}`); this.shell = null; } if (!this.shell) return false; this.id = id; this.warmer = arrivalWarmer(this.shell, { pause: null, pageFallback: false, specMax: to === OVERWORLD ? SPECULATIVE_CELLS : NETHER_SPECULATIVE, createWorker: this.createWorker, ...(this.maxWorkers ? { maxWorkers: this.maxWorkers } : {}) }); }
+    this.at = focus; this.requests++; this.saved = !!saved;
     // The target's own window first (`need`, all a trip waits for), then the windows round the spots an exit may be built at (`job`, speculative; the
     // lanes are separate prefetchers, so the second request must not repeat a unit the first has in flight).
     const prior = this.job, warmer = this.warmer;
-    this.need = Promise.resolve(prior).then(() => warmer.window(tt.x, tt.z, 0)).catch(() => {});
-    this.job = this.need.then(() => warmer.window(tt.x, tt.z, 18)).catch(() => {});
+    this.need = Promise.resolve(prior).then(() => warmer.window(focus[0], focus[1], 0)).catch(() => {});
+    this.job = this.need.then(() => warmer.window(focus[0], focus[1], 18)).catch(() => {});
     clearTimeout(this.timer); this.timer = this.setTimer(() => this.dispose(), IDLE_MS); this.timer?.unref?.();
     return true;
   }

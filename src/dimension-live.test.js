@@ -183,20 +183,27 @@ test("arrival fetches the window round the nearest saved portal (the exit), or t
   const portal = (x, z) => [[`${x},70,${z}`, GAME_IDS.portal], [`${x},71,${z}`, GAME_IDS.portal]];
   assert.deepEqual(await run([...portal(330, 120), ...portal(470, 190)]), [["window", 471, 191], ["columns", 2]]); // (470, 190) is nearer to (400, 160)
 });
-test("standing in a portal for a few ticks asks the exit prewarm for the target of the trip, not in creative", () => {
+test("standing in a portal for a few ticks asks the exit prewarm for the target of the trip, not in creative", async () => {
   const live = new DimensionLive({ active: () => ({ id: "w1" }), worlds: () => [root()] });
   const asked = [];
   live.travel = () => {};
-  live.exitWarm = { start: (r, to, tt) => asked.push([r?.id, to, tt.x, tt.z]) };
+  live.exitWarm = { start: (r, to, tt, portals) => asked.push([r?.id, to, tt.x, tt.z, portals.length]) };
+  const lists = { "-1": [], 0: [[700, 1300], [650, 1290]] }; // saved portal columns the destination peek lists
+  live.savedPortals = async (r, to) => lists[to];
+  const flush = () => new Promise((r) => setTimeout(r, 0));
   const pos = { x: 80.5, y: 70, z: 160.5 }, nether = { dimension: -1, get: () => GAME_IDS.portal }, over = { dimension: 0, get: () => GAME_IDS.portal };
   for (let i = 0; i < 4; i++) live.tick(over, pos, pos);
   assert.equal(asked.length, 0, "a brush against the portal asks nothing");
   for (let i = 0; i < 3; i++) live.tick(over, pos, pos);
-  assert.ok(asked.length >= 1);
-  assert.deepEqual(asked[0], ["w1", -1, 10, 20], "Overworld to Nether divides by 8 (whole blocks)");
+  assert.equal(asked.length, 0, "nothing is asked until the destination's saved portals are known");
+  await flush();
+  for (let i = 0; i < 2; i++) live.tick(over, pos, pos);
+  assert.ok(asked.length >= 2, "asked when the portals arrive and again on the next ticks");
+  assert.deepEqual(asked[0], ["w1", -1, 10, 20, 0], "Overworld to Nether divides by 8 (whole blocks)");
   const n = asked.length; live.state.restore({}); asked.length = 0;
   for (let i = 0; i < 8; i++) live.tick(nether, pos, pos);
-  assert.deepEqual(asked[0], ["w1", 0, 644, 1284], "Nether to Overworld multiplies by 8");
+  await flush();
+  assert.deepEqual(asked[0], ["w1", 0, 644, 1284, 2], "Nether to Overworld multiplies by 8; the saved portals ride along");
   asked.length = 0; live.state.restore({});
   for (let i = 0; i < 8; i++) live.tick(over, pos, pos, { creative: true });
   assert.equal(asked.length, 0, "creative travels at once");
@@ -204,4 +211,14 @@ test("standing in a portal for a few ticks asks the exit prewarm for the target 
   for (let i = 0; i < 8; i++) live.tick(over, pos, pos);
   assert.equal(asked.length, 0, "switched off");
   assert.ok(n >= 1);
+});
+
+test("savedPortals lists the destination's saved portal columns from its edits and arrivals without building a World", async () => {
+  const live = new DimensionLive({ sound() {} }), asked = [];
+  live.readEdits = async (id) => { asked.push(id); return [["10,70,20", GAME_IDS.portal], ["10,71,20", GAME_IDS.portal], ["400,70,0", GAME_IDS.portal], ["12,70,22", 1]]; };
+  const r = { ...root(), generationVersion: 13, portalArrivals: { 0: { writes: [[11, 70, 5, GAME_IDS.portal, 0]] }, [-1]: { writes: [[-3, 60, -4, GAME_IDS.portal, 0]] } } };
+  assert.deepEqual(await live.savedPortals(r, 0, [-160, 160], [-160, 160]), [[10, 20], [11, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]), "edits and arrivals in the box, one per column");
+  assert.deepEqual(await live.savedPortals(r, -1, [-160, 160], [-160, 160]), [[-3, -4], [10, 20]], "the Nether reads its own view's edits");
+  assert.deepEqual(asked, ["w1", "w1~-1"]);
+  assert.deepEqual(await live.savedPortals({ ...r, generationVersion: 12 }, 0, [-160, 160], [-160, 160]), [], "no cells to prewarm below generation 13");
 });

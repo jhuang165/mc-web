@@ -46,3 +46,24 @@ test("fast search equals the plain search over random cells, rim and interior co
   light.fast = true;
   assert.ok(lit > 0 && sky > 100 && rim > 20, `coverage: ${lit} block-lit, ${sky} sky-lit, ${rim} rim cells of ${cells}`);
 });
+
+test("an emitter more than 14 cells above or below the query is skipped without changing the answer (batch 34 y-range)", () => {
+  const { ring } = make();
+  const keys = [...ring.cols.keys()].map((k) => { const cz = ((k % 8388608) + 8388608 + 4194304) % 8388608 - 4194304; return [(k - cz) / 8388608, cz]; });
+  const next = rng(11), light = ring.light;
+  const held = keys.filter(([cx, cz]) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (ring.resident((cx + a) * 16, (cz + b) * 16) || !ring.cols.has(ring.key(cx + a, cz + b))) return false; return true; });
+  assert.ok(held.length > 3, "ring columns with a fully held neighbourhood");
+  let placed = 0, lit = 0;
+  for (const [cx, cz] of held.slice(0, 4)) {
+    const x = cx * 16 + 8, z = cz * 16 + 8;
+    for (const y of [30, 100]) if (ring.putOutside(x + y % 5, y, z, TORCH, 0, false)) placed++;
+    for (let n = 0; n < 120; n++) {
+      const qx = x + (next() % 25) - 12, qz = z + (next() % 25) - 12, qy = [20, 31, 45, 60, 70, 85, 100, 101, 120][n % 9];
+      light.fast = false; const plain = light.search(qx, qy, qz);
+      light.fast = true; assert.equal(light.search(qx, qy, qz), plain, `cell ${qx},${qy},${qz}`);
+      if (plain & 15) lit++;
+    }
+  }
+  light.fast = true;
+  assert.ok(placed >= 2 && lit > 0, `torches ${placed}, block-lit cells ${lit}`);
+});
