@@ -1,0 +1,153 @@
+{
+ "method": "bytecode-read (javap -p -c on the unchanged 1.7.10 classes; nothing executed)",
+ "classes": {
+  "mn": "f7b563b173fe93d322a09524716517480a1f63cb",
+  "mt": "a1ec6f2a3cd4911025a52c8e839d9e80653693c0",
+  "xe": "e67564098fc495dc5e8c89f563bff90115cecde2",
+  "zf": "713f4f8660aa65523ecb64dd72ea2c23ff174576"
+ },
+ "names": {
+  "mn": "EntityTracker",
+  "mt": "WorldServer",
+  "xe": "EntityFishHook",
+  "zf": "EntityFireworkRocket"
+ },
+ "trackEntity": {
+  "EntityPlayerMP": [
+   512,
+   2
+  ],
+  "EntityFishHook": [
+   64,
+   5,
+   true
+  ],
+  "EntityArrow": [
+   64,
+   20,
+   false
+  ],
+  "EntitySmallFireball": [
+   64,
+   10,
+   false
+  ],
+  "EntityFireball": [
+   64,
+   10,
+   false
+  ],
+  "EntitySnowball": [
+   64,
+   10,
+   true
+  ],
+  "EntityEnderPearl": [
+   64,
+   10,
+   true
+  ],
+  "EntityEnderEye": [
+   64,
+   4,
+   true
+  ],
+  "EntityEgg": [
+   64,
+   10,
+   true
+  ],
+  "EntityPotion": [
+   64,
+   10,
+   true
+  ],
+  "EntityExpBottle": [
+   64,
+   10,
+   true
+  ],
+  "EntityFireworkRocket": [
+   64,
+   10,
+   true
+  ],
+  "EntityItem": [
+   64,
+   20,
+   true
+  ],
+  "EntityMinecart": [
+   80,
+   3,
+   true
+  ],
+  "EntityBoat": [
+   80,
+   3,
+   true
+  ],
+  "EntitySquid": [
+   64,
+   3,
+   true
+  ],
+  "EntityWither": [
+   80,
+   3,
+   false
+  ],
+  "EntityBat": [
+   80,
+   3,
+   false
+  ],
+  "IAnimals": [
+   80,
+   3,
+   true
+  ],
+  "EntityDragon": [
+   160,
+   3,
+   true
+  ],
+  "EntityTNTPrimed": [
+   160,
+   10,
+   true
+  ],
+  "EntityFallingBlock": [
+   160,
+   20,
+   true
+  ],
+  "EntityXPOrb": [
+   160,
+   20,
+   true
+  ],
+  "EntityHanging": [
+   160,
+   2147483647,
+   false
+  ],
+  "EntityEnderCrystal": [
+   256,
+   2147483647,
+   false
+  ],
+  "fields": "[range, updateFrequency, sendVelocityUpdates]"
+ },
+ "spawnParticleS2A": {
+  "rangeSquared": 256,
+  "measuredFrom": "player.getPlayerCoordinates (floor x, floor y+0.5, floor z)",
+  "callers": [
+   "EntityFishHook"
+  ]
+ },
+ "explosionS27": {
+  "rangeSquared": 4096,
+  "measuredFrom": "EntityPlayerMP.getDistanceSq(x, y, z)"
+ }
+}
