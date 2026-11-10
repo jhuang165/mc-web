@@ -9,6 +9,7 @@ export { JavaRandom } from "./java-random.js";
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
 import { isStair } from "./stairs.js";
+import { leavesOpaque } from "./render-settings.js";
 import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, GLASS_PANE, DOUBLE_STONE_SLAB, END_PORTAL_FRAME, FLOWER_POT, REPEATER, isPlant, normalCube, opaqueCube } from "./world.js";
 import { lightOpacity3 } from "./blocks-0-40.js";
 import { biomeFacts } from "./biomes.js";
@@ -489,7 +490,8 @@ export function smoothFace(light, x, y, z, face, corners, boundary = true, parti
   n[axis] = sign;
   const front = [x + n[0], y + n[1], z + n[2]], base = boundary ? front : [x, y, z],
     nb = w.get(...front),
-    centre = boundary || !opaqueCube(nb) ? light.packed(...front) : light.packed(x, y, z),
+    // BlockLeaves.isOpaqueCube is !fancyGraphics, so the cell in front of a partial face only counts as opaque for leaves with graphics Fast.
+    centre = boundary || !(opaqueCube(nb) && ((nb !== 5 && nb !== 71) || leavesOpaque())) ? light.packed(...front) : light.packed(x, y, z),
     centreAo = aoValue(nb),
     at = (du, dv, out = 0) => {
       const p = base.slice();

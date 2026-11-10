@@ -10,12 +10,12 @@ import { PORTAL, portalSideRendered } from "./nether-portal.js";
 import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
 import { WOOD_SLAB, woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
-import { LILY_PAD, FERN, DEAD_SHRUB, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET, HAY_BALE } from "./world.js";
+import { LILY_PAD, FERN, DEAD_SHRUB, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, normalCube, STAINED_GLASS, CARPET, HAY_BALE, IRON_BARS } from "./world.js";
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
-import { lilyPadCornerUv } from "./lily-pad.js";
+import { lilyPadRotation } from "./lily-pad.js";
 import { PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
@@ -136,7 +136,6 @@ export class MeshMethods {
     if (b === 1) return fi === 2 ? this.grassTint(x, y, z) : null;
     if (b === 5) { const m = meta & 3; return m === 1 ? PINE : m === 2 ? BIRCH : this.foliageTint(x, y, z); }
     if (b === 71) return this.foliageTint(x, y, z);
-    if (b === LILY_PAD) return LILY_PAD_COLOR;
     return null;
   }
   // renderBlockFire (blm.a(alb, ...)): the vertex stream of fire.js, one layer per quad, at
@@ -157,7 +156,6 @@ export class MeshMethods {
       flat = lit || lightEmission(b) > 0;
     FACES.forEach((f, fi) => {
       const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
-      if (b === LILY_PAD && fi !== 2 && fi !== 3) return; // RenderBlocks.renderBlockLilyPad (blm.o) adds two flat quads, top and underside, and no sides.
       // BlockSnow.shouldSideBeRendered always draws the top.
       // BlockBreakable.shouldSideBeRendered: stained glass beside any block whose metadata differs from its own is always drawn (even beside an
       // opaque cube); beside the same metadata, glass of the same block is dropped.
@@ -169,8 +167,6 @@ export class MeshMethods {
       }
       const snowed = b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23);
       const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), snowed)), uvs = fi === 3 ? bottomUvs(r) : rectUvs(r);
-      // RenderBlocks.renderBlockLilyPad: the top and underside quads take a hashed one-of-four rotation of the texture (lily-pad.js; native minV is this atlas's v1).
-      if (b === LILY_PAD) f.v.forEach((v, i) => { const [u, t] = lilyPadCornerUv(x, y, z, v[0], v[2]); uvs[i] = [u ? r.u1 : r.u0, t ? r.v0 : r.v1]; });
       // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
       if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) turnUvs(uvs, fi, r); }
       // RenderBlocks.renderBlockLog (render type 31): a log lying on x (meta 4) turns the top, bottom, east and west faces a quarter, one lying on z (meta 8) the north and south faces.
@@ -266,49 +262,178 @@ export class MeshMethods {
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });
   }
-  // RenderBlocks.renderBlockBed (render type 14): the 9/16-high box whose bottom face (planks) sits 3/16 up; the side and
-  // end textures only use their lower 9 rows (the legs). u runs along the bed from the foot end to the head end.
-  bed(m,b,x,y,z) {
-    const w=this.world,L=this.light,meta=w.getMeta(x,y,z),[dx,dz]=BED_DIR[meta&3],SIDE=[5,4,1,0,3,2],top=.5625;
-    FACES.forEach((f,fi)=>{
-      const boundary=(fi>>1)!==1; // the side faces lie on the cell border, the 9/16 top and the raised bottom do not
-      if(boundary&&hides(w.get(x+f.n[0],y+f.n[1],z+f.n[2])))return;
-      const kind=bedTexture(SIDE[fi],meta).split('_').pop(),r=tileRect(blockTile(b,fi,false,meta)),
-        corners=f.v.map(v=>[v[0],v[1]?top:(fi===3?.1875:0),v[2]]),
-        along=(p)=>dz===1?p[2]:dz===-1?1-p[2]:dx===1?p[0]:1-p[0],
-        across=(p)=>dz===1?p[0]:dz===-1?1-p[0]:dx===1?1-p[2]:p[2],
-        st=(p)=>kind==='end'?[across(p),1-p[1]]:kind==='side'?[along(p),1-p[1]]:[along(p),across(p)],
-        uvs=corners.map(p=>{const [s,t]=st(p);return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
-        sm=flatFace(L,x,y,z,fi,corners,boundary);
-      m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
-    });
+  // RenderBlocks.renderBlockBed (blm.v(aji, x, y, z), render type 14; executed in the render-types probe): bounds 0, 0, 0, 1, 9/16, 1. The bottom (planks, colour 0.5, the
+  // cell's brightness) sits 3/16 up; the top (colour 1.0) takes the brightness of the cell ABOVE and turns its texture by the bed's direction;
+  // then the four sides in the order z-, z+, x-, x+ (colours 0.8, 0.8, 0.6, 0.6), each skipped on the side the other half lies (Direction.d, the
+  // head looks back at the foot) and against an opaque neighbour, with the neighbour's brightness, the texture cropped to its lower 9 rows
+  // (renderFaceZNeg/ZPos/XNeg/XPos with flipTexture set on the long side the direction table names; XNeg/XPos use the bytecode's own minZ/maxZ test for light).
+  // RenderBlocks.renderBlockLilyPad (blm.o, executed in the render-types probe): two flat-light quads 1/64 above the floor, the top in the
+  // block colour and the underside (same corners, reversed) in half of it ((c & 0xFEFEFE) >> 1); hashed rotation from lily-pad.js. Float maths as the bytecode.
+  lilyPad(m,x,y,z) {
+    const r=tileRect(blockTile(LILY_PAD,1)),light=this.light.packed(x,y,z),f=Math.fround(0.015625),i1=lilyPadRotation(x,y,z),F=Math.fround,
+      f19=F(x+0.5),f20=F(z+0.5),f21=F(F(F(i1&1)*0.5)*F(1-(Math.trunc(i1/2)%2)*2)),f22=F(F(F((i1+1)&1)*0.5)*F(1-(Math.trunc((i1+1)/2)%2)*2)),
+      A=F(F(f19+f21)-f22),B=F(F(f20+f21)+f22),C=F(F(f19+f21)+f22),D=F(F(f20-f21)+f22),E=F(F(f19-f21)+f22),G=F(F(f20-f21)-f22),H=F(F(f19-f21)-f22),I=F(F(f20+f21)-f22),
+      top=[[A,B,r.u0,r.v1],[C,D,r.u1,r.v1],[E,G,r.u1,r.v0],[H,I,r.u0,r.v0]],
+      put=(list,color)=>{m.quad(list.map((p)=>[p[0],y+f,p[1]]),list.map((p)=>[p[2],p[3]]),1,light);m.tint(color);};
+    put(top,LILY_PAD_COLOR);
+    put(top.slice().reverse(),(LILY_PAD_COLOR&0xFEFEFE)>>1);
   }
-  // RenderBlocks.renderBlockPane (render types 18 and 41): thin planes through the cell's centre line for each
-  // arm (a half plane per one-sided connection, a full one through or with none), the side texture's matching
-  // half, 2-pixel caps (u 7-9 of the top texture) where a lone arm ends, and top and bottom strips.
+  bed(m,b,x,y,z) {
+    const w=this.world,L=this.light,meta=w.getMeta(x,y,z),dir=meta&3,head=(meta&8)!==0,top=.5625,
+      DIRECTION_FACE=[3,4,2,5],OPPOSITE=[2,3,0,1],
+      skip=DIRECTION_FACE[head?OPPOSITE[dir]:dir],flipSide=[5,3,4,2][dir],
+      FI=[3,2,5,4,1,0], // native side (0 bottom, 1 top, 2 z-, 3 z+, 4 x-, 5 x+) -> this mesher's face index for the texture
+      rect=(side)=>tileRect(blockTile(b,FI[side],false,meta)),
+      put=(r,pts,shade,packed)=>m.quad(pts.map((p)=>[p[0],p[1],p[2]]),pts.map((p)=>[r.u0+(r.u1-r.u0)*p[3],r.v1-(r.v1-r.v0)*p[4]]),shade,packed),
+      own=L.packed(x,y,z);
+    // Bottom.
+    put(rect(0),[[x,y+.1875,z+1,0,1],[x,y+.1875,z,0,0],[x+1,y+.1875,z,1,0],[x+1,y+.1875,z+1,1,1]],.5,own);
+    // Top: u and v per vertex start as the corners of the icon and are swapped by the direction.
+    let u35=0,u37=1,v39=0,v41=0,u43=0,u45=1,v47=1,v49=1;
+    if(dir===0){u37=0;v39=1;u43=1;v49=0;}
+    else if(dir===2){u35=1;v41=1;u45=0;v47=0;}
+    else if(dir===3){u35=1;v41=1;u45=0;v47=0;u37=0;v39=1;u43=1;v49=0;}
+    put(rect(1),[[x+1,y+top,z+1,u43,v47],[x+1,y+top,z,u35,v39],[x,y+top,z,u37,v41],[x,y+top,z+1,u45,v49]],1,L.packed(x,y+1,z));
+    const side=(face,nx,nz,shade,pts)=>{
+      if(skip===face||hides(w.get(x+nx,y,z+nz)))return;
+      put(rect(face),pts(face===flipSide),shade,L.packed(x+nx,y,z+nz));
+    };
+    const yb=y,yt=y+top,tt=7/16;
+    // renderFaceZNeg / ZPos / XNeg / XPos with the icon's lower 9 rows (v 7/16 .. 1); a flipped face swaps its two u values.
+    side(2,0,-1,.8,(f)=>{const a=f?0:1,c=f?1:0;return[[x,yt,z,a,tt],[x+1,yt,z,c,tt],[x+1,yb,z,c,1],[x,yb,z,a,1]];});
+    side(3,0,1,.8,(f)=>{const a=f?1:0,c=f?0:1;return[[x,yt,z+1,a,tt],[x,yb,z+1,a,1],[x+1,yb,z+1,c,1],[x+1,yt,z+1,c,tt]];});
+    side(4,-1,0,.6,(f)=>{const a=f?1:0,c=f?0:1;return[[x,yt,z+1,c,tt],[x,yt,z,a,tt],[x,yb,z,a,1],[x,yb,z+1,c,1]];});
+    side(5,1,0,.6,(f)=>{const a=f?1:0,c=f?0:1;return[[x+1,yb,z+1,a,1],[x+1,yb,z,c,1],[x+1,yt,z,c,tt],[x+1,yt,z+1,a,tt]];});
+  }
+  // RenderBlocks.renderBlockPane (blm.a(aoa, x, y, z), render types 18 and 41), segment by segment as the bytecode does (bytecode-read, and the
+  // native render-types probe agrees): one flat brightness and colour; an x section (a full plane through z + 0.5 with both x neighbours or with
+  // no neighbour at all, else a half plane towards the one x neighbour), then the same along z. Every plane is two quads (the back quad has the
+  // two end coordinates swapped and the same uvs). A lone half plane gets a 2-pixel end cap (top texture u 7..9) when the other axis has no
+  // neighbour. The top and bottom 2-pixel strips (top texture) are drawn when the pane has no pane or opaque cube above (below), or, for the half
+  // strip beside a connected arm, when the cell diagonally above (below) on that side is air. The x strips sit 0.01 off the cell face, the z strips 0.005.
   pane(m,b,x,y,z) {
-    const w=this.world,mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0,false,w.getMeta(x,y,z))),top=tileRect(blockTile(b,2,false,w.getMeta(x,y,z))),light=this.light.packed(x,y,z),
-      lerp=(a,c,t)=>a+(c-a)*t,c0=0.4375,c1=0.5625,
-      plane=(axis,from,to)=>{
-        const sa=from,sb=to,v=axis==='x'?[[x+from,y+1,z+.5],[x+from,y,z+.5],[x+to,y,z+.5],[x+to,y+1,z+.5]]:[[x+.5,y+1,z+from],[x+.5,y,z+from],[x+.5,y,z+to],[x+.5,y+1,z+to]];
-        m.quad(v,[[lerp(side.u0,side.u1,sa),side.v1],[lerp(side.u0,side.u1,sa),side.v0],[lerp(side.u0,side.u1,sb),side.v0],[lerp(side.u0,side.u1,sb),side.v1]],1,light,true);
+    const w=this.world,meta=w.getMeta(x,y,z),mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0,false,meta)),top=tileRect(blockTile(b,2,false,meta)),light=this.light.packed(x,y,z),
+      lerp=(p,q,t)=>p+(q-p)*t,minU=side.u0,midU=lerp(side.u0,side.u1,.5),maxU=side.u1,minV=side.v1,maxV=side.v0,
+      tu7=lerp(top.u0,top.u1,7/16),tu9=lerp(top.u0,top.u1,9/16),tminV=top.v1,tmidV=lerp(top.v1,top.v0,.5),tmaxV=top.v0,
+      N=(mask&1)!==0,S=(mask&2)!==0,W=(mask&4)!==0,E=(mask&8)!==0,
+      xL=x,xM=x+.5,xH=x+1,zL=z,zM=z+.5,zH=z+1,xm=x+.5-.0625,xp=x+.5+.0625,zm=z+.5-.0625,zp=z+.5+.0625,
+      H=w.height||256,air=(a,c,d)=>w.get(a,c,d)===0,
+      upOK=paneSideRendered(b,w.get(x,y+1,z)),dnOK=paneSideRendered(b,w.get(x,y-1,z)),
+      // Two quads: the listed one and its back (the vertices' coordinate on `axis` swapped between lo and hi), vertices [a, y, o, u, v].
+      pair=(axis,lo,hi,pts)=>{
+        for(const back of [false,true])
+          m.quad(pts.map(([a,yy,o])=>{const c=back?(a===lo?hi:a===hi?lo:a):a;return axis==='x'?[c,yy,o]:[o,yy,c];}),pts.map((q)=>[q[3],q[4]]),1,light);
       },
-      cap=(axis)=>{ // the plane through x = 0.5 (or z = 0.5) spanning the 2-pixel post on the other axis
-        const v=axis==='x'?[[x+.5,y+1,z+c0],[x+.5,y,z+c0],[x+.5,y,z+c1],[x+.5,y+1,z+c1]]:[[x+c0,y+1,z+.5],[x+c0,y,z+.5],[x+c1,y,z+.5],[x+c1,y+1,z+.5]];
-        m.quad(v,[[lerp(top.u0,top.u1,7/16),top.v1],[lerp(top.u0,top.u1,7/16),top.v0],[lerp(top.u0,top.u1,9/16),top.v0],[lerp(top.u0,top.u1,9/16),top.v1]],1,light,true);
+      up=y+1,
+      stripX=(yy,kind)=>kind==='full'?pair('x',xL,xH,[[xL,yy,zp,tu9,tmaxV],[xH,yy,zp,tu9,tminV],[xH,yy,zm,tu7,tminV],[xL,yy,zm,tu7,tmaxV]])
+        :kind==='w'?pair('x',xL,xM,[[xL,yy,zp,tu9,tmidV],[xM,yy,zp,tu9,tmaxV],[xM,yy,zm,tu7,tmaxV],[xL,yy,zm,tu7,tmidV]])
+        :pair('x',xM,xH,[[xM,yy,zp,tu9,tminV],[xH,yy,zp,tu9,tmidV],[xH,yy,zm,tu7,tmidV],[xM,yy,zm,tu7,tminV]]),
+      stripZ=(yy,kind)=>kind==='full'?pair('z',zL,zH,[[xp,yy,zH,tu9,tmaxV],[xp,yy,zL,tu9,tminV],[xm,yy,zL,tu7,tminV],[xm,yy,zH,tu7,tmaxV]])
+        :kind==='n'?pair('z',zL,zM,[[xm,yy,zL,tu9,tminV],[xm,yy,zM,tu9,tmidV],[xp,yy,zM,tu7,tmidV],[xp,yy,zL,tu7,tminV]])
+        :pair('z',zM,zH,[[xm,yy,zM,tu7,tmidV],[xm,yy,zH,tu7,tmaxV],[xp,yy,zH,tu9,tmaxV],[xp,yy,zM,tu9,tmidV]]),
+      // Full strip when the face is open, else the half strip beside each connected arm that has air diagonally beyond it (the full-plane sections test both sides).
+      strips=(strip,yy,open,sides)=>{
+        if(open)strip(yy,'full');else for(const [kind,ok] of sides)if(ok)strip(yy,kind);
       },
-      strip=(axis,from,to,yy)=>{
-        const v=axis==='x'?[[x+from,y+yy,z+c0],[x+to,y+yy,z+c0],[x+to,y+yy,z+c1],[x+from,y+yy,z+c1]]:[[x+c0,y+yy,z+from],[x+c1,y+yy,z+from],[x+c1,y+yy,z+to],[x+c0,y+yy,z+to]],
-          ua=lerp(top.u0,top.u1,7/16),ub=lerp(top.u0,top.u1,9/16),va=lerp(top.v0,top.v1,from),vb=lerp(top.v0,top.v1,to);
-        m.quad(v,[[ua,va],[ua,vb],[ub,vb],[ub,va]],1,light,true);
-      };
-    const arms=paneArms(mask),above=paneSideRendered(b,w.get(x,y+1,z)),below=paneSideRendered(b,w.get(x,y-1,z));
-    for(const a of arms){
-      plane(a.axis,a.from,a.to);
-      // A one-sided arm ends at the centre; it gets a cap unless an arm on the other axis closes it.
-      if((a.to-a.from)<1&&arms.length===1)cap(a.axis);
-      if(above)strip(a.axis,a.from,a.to,1);
-      if(below)strip(a.axis,a.from,a.to,0);
+      upAir=(dx,dz)=>y<H-1&&air(x+dx,y+1,z+dz),dnAir=(dx,dz)=>y>1&&air(x+dx,y-1,z+dz),
+      e01=.01,e005=.005;
+    // The x section.
+    if((W&&E)||(!W&&!E&&!N&&!S)){
+      pair('x',xL,xH,[[xL,up,zM,minU,minV],[xL,y,zM,minU,maxV],[xH,y,zM,maxU,maxV],[xH,up,zM,maxU,minV]]);
+      strips(stripX,up+e01,upOK,[['w',upAir(-1,0)],['e',upAir(1,0)]]);
+      strips(stripX,y-e01,dnOK,[['w',dnAir(-1,0)],['e',dnAir(1,0)]]);
+    }else if(W&&!E){
+      pair('x',xL,xM,[[xL,up,zM,minU,minV],[xL,y,zM,minU,maxV],[xM,y,zM,midU,maxV],[xM,up,zM,midU,minV]]);
+      if(!N&&!S)pair('z',zm,zp,[[xM,up,zp,tu7,tminV],[xM,y,zp,tu7,tmaxV],[xM,y,zm,tu9,tmaxV],[xM,up,zm,tu9,tminV]]);
+      if(upOK||upAir(-1,0))stripX(up+e01,'w');
+      if(dnOK||dnAir(-1,0))stripX(y-e01,'w');
+    }else if(!W&&E){
+      pair('x',xM,xH,[[xM,up,zM,midU,minV],[xM,y,zM,midU,maxV],[xH,y,zM,maxU,maxV],[xH,up,zM,maxU,minV]]);
+      if(!N&&!S)pair('z',zm,zp,[[xM,up,zm,tu7,tminV],[xM,y,zm,tu7,tmaxV],[xM,y,zp,tu9,tmaxV],[xM,up,zp,tu9,tminV]]);
+      if(upOK||upAir(1,0))stripX(up+e01,'e');
+      if(dnOK||dnAir(1,0))stripX(y-e01,'e');
+    }
+    // The z section.
+    if((N&&S)||(!W&&!E&&!N&&!S)){
+      pair('z',zL,zH,[[xM,up,zH,minU,minV],[xM,y,zH,minU,maxV],[xM,y,zL,maxU,maxV],[xM,up,zL,maxU,minV]]);
+      strips(stripZ,up+e005,upOK,[['n',upAir(0,-1)],['s',upAir(0,1)]]);
+      strips(stripZ,y-e005,dnOK,[['n',dnAir(0,-1)],['s',dnAir(0,1)]]);
+    }else if(N&&!S){
+      pair('z',zL,zM,[[xM,up,zL,minU,minV],[xM,y,zL,minU,maxV],[xM,y,zM,midU,maxV],[xM,up,zM,midU,minV]]);
+      if(!E&&!W)pair('x',xm,xp,[[xm,up,zM,tu7,tminV],[xm,y,zM,tu7,tmaxV],[xp,y,zM,tu9,tmaxV],[xp,up,zM,tu9,tminV]]);
+      if(upOK||upAir(0,-1))stripZ(up+e005,'n');
+      if(dnOK||dnAir(0,-1))stripZ(y-e005,'n');
+    }else if(!N&&S){
+      pair('z',zM,zH,[[xM,up,zM,midU,minV],[xM,y,zM,midU,maxV],[xM,y,zH,maxU,maxV],[xM,up,zH,maxU,minV]]);
+      if(!E&&!W)pair('x',xm,xp,[[xp,up,zM,tu7,tminV],[xp,y,zM,tu7,tmaxV],[xm,y,zM,tu9,tmaxV],[xm,up,zM,tu9,tminV]]);
+      if(upOK||upAir(0,1))stripZ(up+e005,'s');
+      if(dnOK||dnAir(0,1))stripZ(y-e005,'s');
+    }
+  }
+  // RenderBlocks.renderBlockPane's render type 41 (blm.k(aji, x, y, z); BlockPane.getRenderType is 41 when the material is glass: glass and stained
+  // glass panes, 102 and 160; iron bars keep type 18, pane() above). Executed natively in the render-types probe and replayed segment by segment:
+  // the pane is drawn as thin walls on both sides of its arms (z - 1/16 and z + 1/16 for the x arms, x +- 1/16 for the z arms), 0.001 inside the
+  // cell top and bottom. Where a crossing arm joins, the wall is cut at the post (x - 1/16 or + 1/16), a lone arm gets an end cap at the post, a
+  // pane with no neighbour gets all four caps. Every arm has a top and a bottom strip (top texture) and the post a top and bottom square; there
+  // is no test against the blocks above and below. One quad per piece (no back faces); flat brightness and colour.
+  glassPane(m,b,x,y,z) {
+    const w=this.world,meta=w.getMeta(x,y,z),mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0,false,meta)),top=tileRect(blockTile(b,2,false,meta)),light=this.light.packed(x,y,z),
+      lerp=(p,q,t)=>p+(q-p)*t,minU=side.u0,iu7=lerp(side.u0,side.u1,7/16),iu9=lerp(side.u0,side.u1,9/16),maxU=side.u1,minV=side.v1,maxV=side.v0,
+      tu7=lerp(top.u0,top.u1,7/16),tu9=lerp(top.u0,top.u1,9/16),tminV=top.v1,tv7=lerp(top.v1,top.v0,7/16),tv9=lerp(top.v1,top.v0,9/16),tmaxV=top.v0,
+      N=(mask&1)!==0,S=(mask&2)!==0,W=(mask&4)!==0,E=(mask&8)!==0,none=!N&&!S&&!W&&!E,
+      xL=x,xH=x+1,zL=z,zH=z+1,xm=x+.5-.0625,xp=x+.5+.0625,zm=z+.5-.0625,zp=z+.5+.0625,Yh=y+.999,Yl=y+.001,
+      Q=(...v)=>m.quad(v.map((p)=>[p[0],p[1],p[2]]),v.map((p)=>[p[3],p[4]]),1,light),
+      // A wall piece: the two ends on the arm's axis (a0 first, uv u0 at a0, u1 at a1), at the fixed other coordinate o.
+      wallX=(o,a0,u0,a1,u1)=>Q([a0,Yh,o,u0,minV],[a0,Yl,o,u0,maxV],[a1,Yl,o,u1,maxV],[a1,Yh,o,u1,minV]),
+      wallZ=(o,a0,u0,a1,u1)=>Q([o,Yh,a0,u0,minV],[o,Yl,a0,u0,maxV],[o,Yl,a1,u1,maxV],[o,Yh,a1,u1,minV]);
+    // x arms: west (or no arm at all) and east.
+    if(W||none){
+      if(W&&E){
+        if(!N)wallX(zm,xH,maxU,xL,minU);else{wallX(zm,xm,iu7,xL,minU);wallX(zm,xH,maxU,xp,iu9);}
+        if(!S)wallX(zp,xL,minU,xH,maxU);else{wallX(zp,xL,minU,xm,iu7);wallX(zp,xp,iu9,xH,maxU);}
+        Q([xL,Yh,zp,tu9,tminV],[xH,Yh,zp,tu9,tmaxV],[xH,Yh,zm,tu7,tmaxV],[xL,Yh,zm,tu7,tminV]);
+        Q([xH,Yl,zp,tu7,tmaxV],[xL,Yl,zp,tu7,tminV],[xL,Yl,zm,tu9,tminV],[xH,Yl,zm,tu9,tmaxV]);
+      }else{
+        if(N||none)wallX(zm,xm,iu7,xL,minU);else wallX(zm,xp,iu9,xL,minU);
+        if(S||none)wallX(zp,xL,minU,xm,iu7);else wallX(zp,xL,minU,xp,iu9);
+        Q([xL,Yh,zp,tu9,tminV],[xm,Yh,zp,tu9,tv7],[xm,Yh,zm,tu7,tv7],[xL,Yh,zm,tu7,tminV]);
+        Q([xm,Yl,zp,tu7,tv7],[xL,Yl,zp,tu7,tminV],[xL,Yl,zm,tu9,tminV],[xm,Yl,zm,tu9,tv7]);
+      }
+    }else if(!N&&!S)Q([xm,Yh,zm,iu7,minV],[xm,Yl,zm,iu7,maxV],[xm,Yl,zp,iu9,maxV],[xm,Yh,zp,iu9,minV]);
+    if((E||none)&&!W){
+      if(S||none)wallX(zp,xp,iu9,xH,maxU);else wallX(zp,xm,iu7,xH,maxU);
+      if(N||none)wallX(zm,xH,maxU,xp,iu9);else wallX(zm,xH,maxU,xm,iu7);
+      Q([xp,Yh,zp,tu9,tv9],[xH,Yh,zp,tu9,tminV],[xH,Yh,zm,tu7,tminV],[xp,Yh,zm,tu7,tv9]);
+      Q([xH,Yl,zp,tu7,tmaxV],[xp,Yl,zp,tu7,tv9],[xp,Yl,zm,tu9,tv9],[xH,Yl,zm,tu9,tmaxV]);
+    }else if(!E&&!N&&!S)Q([xp,Yh,zp,iu7,minV],[xp,Yl,zp,iu7,maxV],[xp,Yl,zm,iu9,maxV],[xp,Yh,zm,iu9,minV]);
+    // z arms: north (or no arm at all) and south.
+    if(N||none){
+      if(N&&S){
+        if(!W)wallZ(xm,zL,minU,zH,maxU);else{wallZ(xm,zL,minU,zm,iu7);wallZ(xm,zp,iu9,zH,maxU);}
+        if(!E)wallZ(xp,zH,maxU,zL,minU);else{wallZ(xp,zm,iu7,zL,minU);wallZ(xp,zH,maxU,zp,iu9);}
+        Q([xp,Yh,zL,tu9,tminV],[xm,Yh,zL,tu7,tminV],[xm,Yh,zH,tu7,tmaxV],[xp,Yh,zH,tu9,tmaxV]);
+        Q([xm,Yl,zL,tu7,tminV],[xp,Yl,zL,tu9,tminV],[xp,Yl,zH,tu9,tmaxV],[xm,Yl,zH,tu7,tmaxV]);
+      }else{
+        if(W||none)wallZ(xm,zL,minU,zm,iu7);else wallZ(xm,zL,minU,zp,iu9);
+        if(E||none)wallZ(xp,zm,iu7,zL,minU);else wallZ(xp,zp,iu9,zL,minU);
+        Q([xp,Yh,zL,tu9,tminV],[xm,Yh,zL,tu7,tminV],[xm,Yh,zm,tu7,tv7],[xp,Yh,zm,tu9,tv7]);
+        Q([xm,Yl,zL,tu7,tminV],[xp,Yl,zL,tu9,tminV],[xp,Yl,zm,tu9,tv7],[xm,Yl,zm,tu7,tv7]);
+      }
+    }else if(!E&&!W)Q([xp,Yh,zm,iu9,minV],[xp,Yl,zm,iu9,maxV],[xm,Yl,zm,iu7,maxV],[xm,Yh,zm,iu7,minV]);
+    if((S||none)&&!N){
+      if(W||none)wallZ(xm,zp,iu9,zH,maxU);else wallZ(xm,zm,iu7,zH,maxU);
+      if(E||none)wallZ(xp,zH,maxU,zp,iu9);else wallZ(xp,zH,maxU,zm,iu7);
+      Q([xp,Yh,zp,tu9,tv9],[xm,Yh,zp,tu7,tv9],[xm,Yh,zH,tu7,tmaxV],[xp,Yh,zH,tu9,tmaxV]);
+      Q([xm,Yl,zp,tu7,tv9],[xp,Yl,zp,tu9,tv9],[xp,Yl,zH,tu9,tmaxV],[xm,Yl,zH,tu7,tmaxV]);
+    }else if(!S&&!E&&!W)Q([xm,Yh,zp,iu7,minV],[xm,Yl,zp,iu7,maxV],[xp,Yl,zp,iu9,maxV],[xp,Yh,zp,iu9,minV]);
+    // The post's top and bottom squares, then (no neighbour at all) the four end caps.
+    Q([xp,Yh,zm,tu9,tv7],[xm,Yh,zm,tu7,tv7],[xm,Yh,zp,tu7,tv9],[xp,Yh,zp,tu9,tv9]);
+    Q([xm,Yl,zm,tu7,tv7],[xp,Yl,zm,tu9,tv7],[xp,Yl,zp,tu9,tv9],[xm,Yl,zp,tu7,tv9]);
+    if(none){
+      Q([xL,Yh,zm,iu7,minV],[xL,Yl,zm,iu7,maxV],[xL,Yl,zp,iu9,maxV],[xL,Yh,zp,iu9,minV]);
+      Q([xH,Yh,zp,iu7,minV],[xH,Yl,zp,iu7,maxV],[xH,Yl,zm,iu9,maxV],[xH,Yh,zm,iu9,minV]);
+      Q([xp,Yh,zL,iu9,minV],[xp,Yl,zL,iu9,maxV],[xm,Yl,zL,iu7,maxV],[xm,Yh,zL,iu7,minV]);
+      Q([xm,Yh,zH,iu7,minV],[xm,Yl,zH,iu7,maxV],[xp,Yl,zH,iu9,maxV],[xp,Yh,zH,iu9,minV]);
     }
   }
   // RenderBlocks render type 16/17 (piston base/extension): rotated native quads from dispenser-piston.js,
@@ -550,10 +675,24 @@ export class MeshMethods {
     const verts = alongX ? [[x, h, z + a], [x + 1, h, z + a], [x + 1, h, z + b], [x, h, z + b]] : [[x + a, h, z], [x + b, h, z], [x + b, h, z + 1], [x + a, h, z + 1]];
     m.quad(verts, [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]], 1, light, true);
   }
+  // RenderBlocks.renderBlockVine (blm.j(aji, x, y, z), executed in the render-types probe): for each metadata bit a wall quad 0.05f off the cell face (bit 2 at
+  // x, bit 8 at x + 1, bit 4 at z, bit 1 at z + 1) drawn twice (the second quad lists the same four vertices in reverse order), and one single quad
+  // 0.05f under the top when the block above is a normal cube (Block.isNormalCube, not only a vine with bits set). The same flat brightness and the
+  // foliage colour at the cell (no anaglyph conversion) for every quad.
   vine(m,x,y,z) {
-    const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;
-    for(const [bit,v] of [[1,[[0,0,1-e],[1,0,1-e],[1,1,1-e],[0,1,1-e]]],[2,[[e,0,0],[e,0,1],[e,1,1],[e,1,0]]],[4,[[1,0,e],[0,0,e],[0,1,e],[1,1,e]]],[8,[[1-e,0,1],[1-e,0,0],[1-e,1,0],[1-e,1,1]]]])
-      if(meta&bit){m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);m.tint(this.biomeColors.foliageAt(x+this.colorX,y,z+this.colorZ),false);}
+    const w=this.world,meta=w.getMeta(x,y,z),r=tileRect(blockTile(VINE,0)),light=this.light.packed(x,y,z),d=0.05000000074505806,
+      minU=r.u0,maxU=r.u1,minV=r.v1,maxV=r.v0,
+      put=(pts,twice)=>{
+        for(const list of twice?[pts,pts.slice().reverse()]:[pts]){
+          m.quad(list.map((p)=>[x+p[0],y+p[1],z+p[2]]),list.map((p)=>[p[3],p[4]]),1,light);
+          m.tint(this.biomeColors.foliageAt(x+this.colorX,y,z+this.colorZ),false);
+        }
+      };
+    if(meta&2)put([[d,1,1,minU,minV],[d,0,1,minU,maxV],[d,0,0,maxU,maxV],[d,1,0,maxU,minV]],true);
+    if(meta&8)put([[1-d,0,1,maxU,maxV],[1-d,1,1,maxU,minV],[1-d,1,0,minU,minV],[1-d,0,0,minU,maxV]],true);
+    if(meta&4)put([[1,0,d,maxU,maxV],[1,1,d,maxU,minV],[0,1,d,minU,minV],[0,0,d,minU,maxV]],true);
+    if(meta&1)put([[1,1,1-d,minU,minV],[1,0,1-d,minU,maxV],[0,0,1-d,maxU,maxV],[0,1,1-d,maxU,minV]],true);
+    if(normalCube(w.get(x,y+1,z)))put([[1,1-d,0,minU,minV],[1,1-d,1,minU,maxV],[0,1-d,1,maxU,maxV],[0,1-d,0,maxU,minV]],false);
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
@@ -710,12 +849,13 @@ export class MeshMethods {
     else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
     else if (isStair(b)) this.stairs(solid,b,x,y,z);
     else if (isDoor(b)) this.door(solid,b,x,y,z);
+    else if (b===LILY_PAD) this.lilyPad(solid,x,y,z);
     else if (b===BED) this.bed(solid,b,x,y,z);
-    else if (isPane(b)) this.pane(solid,b,x,y,z);
+    else if (isPane(b)) (b===IRON_BARS ? this.pane(solid,b,x,y,z) : this.glassPane(solid,b,x,y,z));
     else if (b===VINE) this.vine(solid,x,y,z);
     else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
     else if (b === LADDER) this.ladder(solid, x, y, z);
-    else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+    else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box, 0, true); // renderBlockFence (blm type 11) draws every face of its boxes, against opaque neighbours too (render-types-reference.json)
     else if (b >= 165 && b !== 166 && b <= 169) this.shaped(solid, b, x, y, z);
     else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
     else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);

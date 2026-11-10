@@ -140,10 +140,8 @@ test("render types other than 0: mesher vertices equal RenderBlocks' Tessellator
     console.log(details.filter((d) => !process.env.RT_FILTER || new RegExp(process.env.RT_FILTER).test(d)).slice(0, +process.env.RT_REPORT > 1 ? +process.env.RT_REPORT : 60).join("\n"));
   }
   // Known gaps: id:type -> [exact, nativeOnly, jsOnly] vertex counts, pinned so they cannot silently get worse.
-  const KNOWN = {
-    "85:11": [612, 36, 0], "113:11": [612, 12, 0], "106:20": [0, 144, 144], "26:14": [288, 0, 108],
-    "102:41": [0, 612, 384], "160:41": [0, 612, 384], "111:23": [12, 36, 36],
-  };
+  const KNOWN = {}; // batch 38: every recorded type matches exactly (panes, vines, lily pad, beds and fences were the last gaps)
+
   assert.ok(Object.keys(stats).length > 50);
   for (const [key, s] of Object.entries(stats)) {
     const known = KNOWN[key];
