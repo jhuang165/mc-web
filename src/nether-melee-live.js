@@ -17,7 +17,7 @@ export function pigmanHurt(ew, e, source, randOf) {
   if (!source.player || e.health <= 0) return false;
   const r = PIGMAN.angerRange, t = { w: PIGMAN.width / 2, h: PIGMAN.height };
   const near = (o) => o.health > 0 && o.x - t.w < e.x + t.w + r && o.x + t.w > e.x - t.w - r && o.z - t.w < e.z + t.w + r && o.z + t.w > e.z - t.w - r && o.y < e.y + t.h + r && o.y + t.h > e.y - r;
-  pigmanProvoke(e, ew.entities.filter((o) => o.type === "pigman"), randOf, near);
+  pigmanProvoke(e, ew.entities.filter((o) => o.type === "pigman"), randOf, near, (o) => { ew.silverfishState(o).target = ew.ai.player; }); // c(sa): entityToAttack
   return true;
 }
 
@@ -25,41 +25,6 @@ export function pigmanHurt(ew, e, source, randOf) {
 export function pigmanTick(ew, e, rand) {
   const s = pigmanAngrySound(e, rand, 1);
   if (s) ew.events.push({ ...s, position: { x: e.x, y: e.y, z: e.z } });
-}
-
-// yh.bk is false: the pigman keeps EntityCreature's legacy flow like the spider (spiderThink). The path refresh and the idle wander
-// are adapted (every 10 ticks, a random 6 block target every 80), and the attack is EntityMob.attackEntity: attackTime 20 within 2.0
-// blocks when the boxes overlap vertically.
-export function pigmanThink(ew, e) {
-  const m = ew.ai.brain(e), p = ew.ai.player, s = ew.ai.survival;
-  m.despawnEntity();
-  m.senseCache.clear();
-  if (e.attackTime > 0) e.attackTime--;
-  const angry = (e.angerLevel | 0) > 0, distance = p ? Math.sqrt(m.distSq(p)) : Infinity;
-  if (!p?.alive || s.creative || !angry) {
-    if (e.pigTarget) m.navigator.clearPathEntity();
-    e.pigTarget = false;
-  } else if (!e.pigTarget && ew.ai.closestVulnerablePlayer(e, 16) && m.canSee(p)) e.pigTarget = true; // yh.bR: super.bR once angry
-  if (e.pigTarget) {
-    m.attackTarget = p;
-    if (e.attackTime <= 0 && distance < 2 && p.y + (p.height ?? 1.8) > e.y && p.y < e.y + PIGMAN.height && m.canSee(p)) {
-      e.attackTime = 20;
-      ew.hitPlayer(e, s);
-    }
-    if (e.age % 10 === 0 || m.navigator.noPath()) m.navigator.tryMoveToEntityLiving(p, 1);
-    m.lookHelper.setLookPositionWithEntity(p, 30, 30);
-  } else {
-    m.attackTarget = null;
-    if (e.age % 80 === 0) {
-      const a = ew.random() * Math.PI * 2;
-      m.navigator.tryMoveToXYZ(e.x + Math.sin(a) * 6, e.y, e.z + Math.cos(a) * 6, 1);
-    }
-  }
-  m.navigator.onUpdateNavigation();
-  m.moveHelper.onUpdateMoveHelper();
-  m.lookHelper.onUpdateLook();
-  m.jumpHelper.doJump();
-  e.yaw = -e.rotationYaw * Math.PI / 180;
 }
 
 // EntityPig.onStruckByLightning (wo.a(xh)): the pig becomes a pigman with a golden sword at its position and rotation; no damage or fire.

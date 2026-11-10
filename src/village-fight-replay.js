@@ -31,6 +31,10 @@ export const fightReference35 = JSON.parse(readFileSync(new URL("../public/resea
 // a `spawn` script op, chickens (`C`) among the mobs, `spawns`/`chickens` lists and two more row elements (the chickens built during the fight, the jockey flags of the starting chickens).
 export const fightReference36 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b36-reference.json", import.meta.url)));
 export const fightReference37 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b37-reference.json", import.meta.url)));
+// Batch 38: village-fight-b38-reference.json (native spider yn, cave spider xy and zombie pigman yh on EntityCreature's legacy action state: idle wander by day and night, a hunt, the leap,
+// hits by the player and the golem, cave spider poison, a pigman's group anger): records carry `bright` (the light level the probe world answers), `patches` and `poison` (the player's Poison
+// duration per tick); for S, T and P mobs the row's 5th element is entityToAttack (td.bm), not the AI-task target.
+export const fightReference38 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b38-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -40,7 +44,8 @@ class LogRandom extends JavaRandom {
   nextGaussian() { this.log.push("g"); return super.nextGaussian(); }
 }
 const key = (x, y, z) => `${x},${y},${z}`;
-const TYPE_OF = { V: "villager", Z: "zombie", z: "zombie", G: "iron_golem", K: "skeleton", B: "skeleton", C: "chicken" };
+const TYPE_OF = { V: "villager", Z: "zombie", z: "zombie", G: "iron_golem", K: "skeleton", B: "skeleton", C: "chicken", S: "spider", T: "cave_spider", P: "pigman" };
+const LEGACY = new Set(["spider", "cave_spider", "pigman"]);
 const BOW_STACK = () => ({ id: 261, count: 1, damage: 0, enchantments: [] });
 
 // The record's fills use the original block ids; the port's internal ids differ (world.js).
@@ -66,13 +71,16 @@ export function replayFight(r, hooks = {}) {
   try { return replayFightUncapped(r, hooks); } finally { setPathNodeCap(was); }
 }
 function replayFightUncapped(r, hooks) {
+  const legacyRows = r.bright !== undefined; // batch 38 records: a spider's and a pigman's row has entityToAttack (td.bm); older ones the AI-task target (always none for them)
   const types = r.types ?? "VVZZGKK", n = types.length, extras = !!r.types, difficulty = r.difficulty ?? 2;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = difficulty;
   if (r.local) ew.localDifficulty = () => r.local; // the probe's World.func_147462_b answers a constant (record field `local`, 0 when absent)
   ew.worldRandom = new JavaRandom(r.seed);
   ew.isDaytime = () => false;
-  ew.brightnessLevel = () => 15; // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
+  // batch 38: the probe's getLightBrightness answers the record's `bright` level (13 + dark patches, 3 at night, 15 by day); older records are 15 everywhere
+  ew.brightnessLevel = r.bright === undefined ? () => 15 : (x, y, z) => { for (const [x0, z0, x1, z1, level] of r.patches ?? []) if (x >= x0 && z >= z0 && x <= x1 && z <= z1) return level; return r.bright; };
+  // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
   ew.lightAt = () => r.light ?? 15; // the probe world's getLightBrightness is 1.0 everywhere; World.getBlockLightValue is the record's `light` (15 unless a dark arena)
   if (r.unloaded) { const gone = new Set(r.unloaded.map(([x, z]) => x + "," + z)); ew.chunkLoaded = (x, z) => !gone.has((x >> 4) + "," + (z >> 4)); } // World.spawnEntityInWorld's chunkExists
   ew.ai.deps.canSeeSky = (x, y, z) => !(x >= 40 && x <= 49 && z >= 0 && z <= 100);
@@ -94,6 +102,8 @@ function replayFightUncapped(r, hooks) {
     if (type === "zombie" && r.follow) e.followRange = r.follow; // the probe sets generic.followRange (the live value the onSpawnWithEgg bonuses give); the navigator reads it when the mob's brain is built
     if (type === "zombie" && r.bases) e.reinforcement = r.bases[i]; // the spawnReinforcements base the zombie's constructor drew from its (then seeded) Entity.rand
     if (type === "villager") e.profession = i % 5;
+    if (LEGACY.has(type)) { for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = 0; e.yaw = 0; } // the probe zeroes y, aO, aM, aN, aP (its constructors drew a Math.random yaw)
+    if (type === "pigman") { e.held = null; e.equipment = [null, null, null, null, null]; e.angerLevel = 0; } // the probe's `new EntityPigZombie` is bare: no golden sword, calm
     if (type === "chicken" && r.egg) e.eggTimer = r.egg; // the probe sets timeUntilNextEgg (the constructor's 6000 + nextInt(6000) is out of reach)
     const lr = new LogRandom(BigInt(r.seed * 10 + i)); lr.logBooleans = extras; logs.push(lr); setEntityRandom(e, lr);
     ents.push(e);
@@ -110,7 +120,7 @@ function replayFightUncapped(r, hooks) {
   const arrows = new Arrows(() => 0.5), shotLog = [], shotsLeft = (r.shots ?? []).slice(), mine = [];
   let tick = 0, nextShot = 0;
   ew.shoot = (e, target, scale) => {
-    arrows.mobRands.set(e, ents.includes(e) ? logs[ents.indexOf(e)] : arrows.rng());
+    arrows.mobRands.set(e, ents.includes(e) ? logs[ents.indexOf(e)] : extraMobs.includes(e) ? mobLogs[extraMobs.indexOf(e)] : arrows.rng());
     const want = shotsLeft[0];
     arrows.rng = () => new JavaRandom(BigInt(want?.[13] ?? 1)); // the seed of the arrow's Entity.rand
     const a = arrows.skeletonShoot(e, target?.height ? target : { x: target.x, y: target.y, z: target.z, height: 1.8 }, scale, ew.difficulty);
@@ -233,10 +243,11 @@ function replayFightUncapped(r, hooks) {
     const index = (e) => (ents.includes(e) ? ents.indexOf(e) : extra.includes(e) ? n + 1 + extra.indexOf(e) : extraMobs.includes(e) ? n + 1 + extra.length + extraMobs.indexOf(e) : -1);
     const agg = village.aggressors.map((a) => [a.entity.isPlayer ? n : index(a.entity.e), a.tick]);
     const idx = (b) => (!b ? -1 : b.isPlayer ? n : index(b.e));
-    states.push(ents.map((e, i) => [e.x, e.y, e.z, gone.has(e) ? gone.get(e) : e.removedHealth ?? e.health, idx(ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? n : index(revengeOf(e))) : -1), logs[i].log.slice()]));
+    states.push(ents.map((e, i) => [e.x, e.y, e.z, gone.has(e) ? gone.get(e) : e.removedHealth ?? e.health, idx(legacyRows && LEGACY.has(e.type) ? ew.silverfishState(e).target : ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? n : index(revengeOf(e))) : -1), logs[i].log.slice()]));
+    states[states.length - 1].poison = survival.effects.get(19)?.duration ?? 0;
     states[states.length - 1].arrows = changed;
     states[states.length - 1].chickens = extraChickens.map((c, k) => [c.x, c.y, c.z, c.removedHealth ?? c.health, c.chickenJockey ? 1 : 0, chickenLogs[k].log.slice()]);
-    states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
+    states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(legacyRows && LEGACY.has(m.type) ? ew.silverfishState(m).target : ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
     states[states.length - 1].jockeys = ents.flatMap((e) => (e.type === "chicken" ? [e.chickenJockey ? 1 : 0] : []));
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
     hooks.onTick?.(t, ew, ents);
@@ -265,10 +276,11 @@ export function firstDivergence(r, got) {
     if (r.rows[t][7] !== undefined) {
       // A spider's own update draws on Entity.rand through EntityCreature.updateEntityActionState (i180, i120, f, f while idle), which the port's adapted spider AI does not (public/research/spiders.md): its draws
       // are compared only up to the first ambient-sound draw (i1000) of its first update, i.e. its spawn rolls; its place, health and target are compared at every tick. The skeleton jockey is compared whole.
-      const view = (list, kinds) => list.map((m, i) => (kinds[i] === 0 ? [...m.slice(0, 6), m[6].slice(0, Math.max(0, m[6].indexOf("i1000")))] : m));
+      const view = (list, kinds) => list.map((m, i) => (kinds[i] === 0 && r.bright === undefined ? [...m.slice(0, 6), m[6].slice(0, Math.max(0, m[6].indexOf("i1000")))] : m));
       const kinds = (r.mobs ?? []).map((m) => m[1]);
       if (JSON.stringify(view(r.rows[t][7], kinds)) !== JSON.stringify(view(got.states[t].mobs, kinds))) return [t, "extra mobs", r.rows[t][7], got.states[t].mobs];
     }
+    if (r.poison && r.poison[t] !== got.states[t].poison) return [t, "poison", r.poison[t], got.states[t].poison];
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
     if (!near(before - want[n][3], got.playerDamage[t])) return [t, "player damage", before - want[n][3], got.playerDamage[t]];
   }

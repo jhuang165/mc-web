@@ -137,7 +137,7 @@ function livingActionState(e, env) {
   }
   if (e.lookTarget) {
     faceEntity(e, e.lookTarget, 10, 40, env);
-    if (--e.chaseTicks <= 0 || !env.isAlive(e.lookTarget) || distSq(e.lookTarget, e) > f(range * range)) e.lookTarget = null;
+    if (e.chaseTicks-- <= 0 || /* post-decrement (sw.bq: g-- <= 0) */ !env.isAlive(e.lookTarget) || distSq(e.lookTarget, e) > f(range * range)) e.lookTarget = null;
   } else {
     if (r.nextFloat() < f(0.05)) e.randomYaw = f(f(r.nextFloat() - f(0.5)) * 20);
     e.rotationYaw = f(e.rotationYaw + e.randomYaw);

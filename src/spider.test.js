@@ -47,19 +47,20 @@ test('120 original ladder/climbing physics steps, floor and six-block wall', () 
 test('spider aggression uses light, provocation and creative immunity; does not burn in sunlight', () => {
   const ew=new EntityWorld(flat,[],()=>.5),e=ew.create('spider',64,0,65),p={x:64,y:0,z:64};ew.entities.push(e);
   const s=new Survival({slots:[],time:6000});ew.lightAt=()=>15;
+  const target=()=>!!ew.silverfishState(e).target; // EntityCreature.entityToAttack (legacy-creature.js)
   for(let i=0;i<25;i++)ew.tick(p,s);
-  assert.equal(s.health,20);assert.equal(e.spiderTarget,false);assert.equal(e.health,16);
-  ew.damage(e,1,64,64);ew.tick(p,s);assert.equal(e.spiderTarget,true);
-  e.spiderTarget=false;e.revenge=0;ew.lightAt=()=>0;ew.tick(p,s);assert.equal(e.spiderTarget,true);
+  assert.equal(s.health,20);assert.equal(target(),false);assert.equal(e.health,16);
+  ew.damage(e,1,64,64);ew.tick(p,s);assert.equal(target(),true); // EntityMob.attackEntityFrom: the attacker becomes the target, whatever the light
+  ew.silverfishState(e).target=null;e.revenge=0;ew.lightAt=()=>0;ew.tick(p,s);assert.equal(target(),true); // EntitySpider.findPlayerToAttack in the dark
   s.mode='creative'; // Survival uses creative getter over mode.
-  ew.tick(p,s);assert.equal(e.spiderTarget,false);
+  ew.tick(p,s);assert.equal(target(),false);
 });
 test('night spawns and save reload preserve spider health and clear transient aggression', () => {
   const ew=new EntityWorld(flat,[]),s=new Survival({slots:[],time:14000}),p={x:64,y:0,z:64};
   ew.naturalSpawning=true;ew.worldRandom=random(3);
   // Other mobs are cleared so the monster cap never fills before a spider group is drawn.
   for(let i=0;i<200&&!ew.entities.some(e=>e.type==='spider');i++){ew.tick(p,s);ew.entities=ew.entities.filter(e=>e.type==='spider');}
-  const e=ew.entities.find(e=>e.type==='spider');assert.ok(e);e.health=9;e.spiderTarget=true;e.climbing=true;
+  const e=ew.entities.find(e=>e.type==='spider');assert.ok(e);e.health=9;e.spiderTarget=true;e.climbing=true; // spiderTarget is an old save field, cleared on load
   const loaded=new EntityWorld(flat,ew.serialize()).entities.find(e=>e.type==='spider');
   assert.equal(loaded.health,9);assert.equal(loaded.spiderTarget,false);assert.equal(loaded.climbing,false);
 });
@@ -81,10 +82,11 @@ test('four string craft white wool in both grids; eyes consume and always poison
 test('darkness allows contact damage with a 20-tick cooldown and original step events', () => {
   const ew=new EntityWorld(flat,[],()=>.5),e=ew.create('spider',64,0,56),s=new Survival({slots:[],food:0,time:14000}),p={x:64,y:0,z:64};
   ew.entities.push(e);ew.lightAt=()=>0;
-  for(let i=0;i<60;i++)ew.tick(p,s);
-  assert.ok(ew.drain().some(event=>event.sound==='mob.spider.step'&&event.volume===Math.fround(.15)));
-  assert.ok(s.health<20);assert.ok(e.attack>0&&e.attack<=20);
-  s.hurtTicks=0;const health=s.health;e.attack=20;
+  const st=ew.silverfishState(e);let steps=false;
+  for(let i=0;i<150&&s.health>=20;i++){ew.tick(p,s);steps=ew.drain().some(event=>event.sound==='mob.spider.step'&&event.volume===Math.fround(.15))||steps;}
+  assert.ok(steps);
+  assert.ok(s.health<20);assert.ok(st.attackTime>0&&st.attackTime<=20); // EntityMob.attackTime, set to 20 by the hit
+  s.hurtTicks=0;const health=s.health;st.attackTime=20;
   e.x=p.x;e.y=p.y;e.z=p.z+1;e.vx=e.vy=e.vz=0;
   ew.tick(p,s);assert.equal(s.health,health);
 });
