@@ -48,7 +48,7 @@ import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
 import { HORSE_ENTITY, horseRideThink, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
-import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
+import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
 import { squidBatUpdate, squidBatTalk, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
@@ -112,7 +112,7 @@ export const entityRandom = (e) => {
 };
 // Seeds Entity.rand (the combat replay in combat.test.js).
 export const setEntityRandom = (e, rand) => RANDOMS.set(e, rand);
-const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "anchorBox", "fire", "idle", "revenge", "recentlyHit"];
+const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "moveMotion", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "anchorBox", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -592,6 +592,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(LEGACY_MOVE.has(e.type) ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
+    e.moveMotion = [e.vx, e.vy, e.vz]; // Entity.moveEntity reads the motion before the water drag below for its swim sound volume
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
@@ -601,6 +602,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(0.02));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
+    e.moveMotion = [e.vx, e.vy, e.vz];
     e.vx *= 0.5;
     e.vy *= 0.5;
     e.vz *= 0.5;
@@ -620,6 +622,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
       e.fallDistance = 0;
     }
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
+    e.moveMotion = [e.vx, e.vy, e.vz];
     if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
@@ -1004,7 +1007,7 @@ export class EntityWorld {
     } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
     if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
     // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
-    if (e.type === "silverfish" && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player;
+    if ((e.type === "silverfish" || e.type === "blaze") && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player; // the blaze is an EntityMob too (blazeThink)
     // EntityMob.attackEntityFrom (yg.a), spider and pigman: any living attacker that is not this mob, its rider or its mount becomes entityToAttack.
     if (isLegacyCreature(e) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = by === "player" ? this.ai.player : this.ai.brain(by);
     return true;
@@ -1990,7 +1993,7 @@ export class EntityWorld {
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
@@ -2024,10 +2027,15 @@ export class EntityWorld {
   // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement
   // blocked (sv.bh): it slides on its knockback, falls and is pushed, with no AI input.
   dying(e, t) {
+    // EntitySlime.onUpdate (ym.h) wraps a corpse's update too: the squish before and after, and its blocked movement zeroes moveForward and moveStrafing.
+    const slime = isSlimeLike(e);
+    if (slime) slimeSquishStart(e);
     this.deathUpdate(e, t);
     if (e.recentlyHit > 0) e.recentlyHit--;
     e.jumping = false;
+    if (slime) e.moveForward = e.moveStrafing = 0;
     this.walk(e, t, 0);
+    if (slime) this.slimeSquishFinish(e, entityRandom(e));
     this.push(e, t);
     if (e.type === "chicken") this.chickenUpdate(e);
     this.swingLimbs(e);
@@ -2096,8 +2104,8 @@ export class EntityWorld {
     };
   }
   // Entity.handleWaterMovement's splash on entering water: the sound, then the bubble and splash particles (draws on Entity.rand).
-  splash(e, t) {
-    const s = enterWater(this.fx, { x: e.x, z: e.z, minY: e.y, width: t.width, mx: e.vx, my: e.vy, mz: e.vz }, entityRandom(e));
+  splash(e, t, motion = [e.vx, e.vy, e.vz]) {
+    const s = enterWater(this.fx, { x: e.x, z: e.z, minY: e.y, width: t.width, mx: motion[0], my: motion[1], mz: motion[2] }, entityRandom(e));
     this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // EntityLivingBase.updateFallState (inside moveEntity, after the move): a mob not yet in water asks handleWaterMovement again with the box it
@@ -2106,7 +2114,7 @@ export class EntityWorld {
     if (e.inWater !== false || !inWater(this.world, e, t.width, t.height)) return;
     e.inWater = true;
     e.fallDistance = 0;
-    this.splash(e, t);
+    this.splash(e, t, e.moveMotion ?? undefined); // sv.a(DZ) runs inside moveEntity: the motion is the move's, before the drag after it
   }
   // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
   moveSteps(e, from) {
@@ -2116,6 +2124,11 @@ export class EntityWorld {
   // The landing of a move (EntityLivingBase.fall).
   moveLanding(e, landed) {
     if (landed > 0) this.onLand?.(e, landed);
+    // EntityLivingBase.updateFallState (sv.a(DZ)): over 3 blocks of fall onto a solid block, level event 2006 (the landing dust) with ceil(fall - 3), for every living mob (legacy-ai records)
+    if (landed > 3) {
+      const x = Math.floor(e.x), y = Math.floor(e.y - 0.20000000298023224), z = Math.floor(e.z);
+      if (this.world.get(x, y, z)) this.landingDust?.(e, x, y, z, Math.ceil(f(landed - 3)));
+    }
     // EntityChicken.fall, EntityBat.fall, EntityOcelot.fall and EntityGolem.fall do nothing.
     if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot" && e.type !== "snow_golem" && e.type !== "iron_golem" && e.type !== "magma_cube") this.fall(e, landed); // EntityMagmaCube.fall does nothing
   }
@@ -2137,6 +2150,7 @@ export class EntityWorld {
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
     this.waterAfterMove(e, t);
     this.moveSteps(e, from);
+    e.moveMotion = null;
     // The finite world's edge stops a mob like a wall.
     // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
     const w = this.world, lim = (axis, hi) => w.streaming ? (hi ? 30000000 : -30000000) - (axis === "x" ? w.originX || 0 : w.originZ || 0) : w[(hi ? "max" : "min") + axis.toUpperCase()];
@@ -2156,12 +2170,18 @@ export class EntityWorld {
     this.walk(e, t, 0, () => this.slimeThink(e));
     e.slimeForward = e.moveForward;
     e.slimeStrafe = e.moveStrafing || 0;
-    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn(isMagma(e) ? MAGMA.particle : "slime", e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
+    this.slimeSquishFinish(e, rand);
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
     // EntityPlayer.collideWithPlayer reaches mobs within the player's box grown 1 block sideways; b_ then needs size > 1,
     // line of sight and distance^2 < (0.6 * size)^2 (centre to centre), and hits for `size`.
     const p = this.ai.player, s = this.ai.survival;
-    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2, this.ai.brain(e).canSee(p), isMagma(e) || undefined)) this.hitPlayer(e, s);
+    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2, this.ai.brain(e).canSee(p), isMagma(e) || undefined)) {
+      // EntitySlime.func_175451_e (ym.b_): a landed hit plays mob.attack at volume 1, pitch (rand - rand) * 0.2 + 1, both draws on the slime's Entity.rand
+      if (this.hitPlayer(e, s)) { const rand = entityRandom(e); this.events.push({ sound: "mob.attack", volume: 1, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } }); }
+    }
+  }
+  slimeSquishFinish(e, rand) {
+    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn(isMagma(e) ? MAGMA.particle : "slime", e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
   }
   // updateEntityActionState (ym.bq): despawnEntity, the closest vulnerable player within 16 as the facing target, the jump timer.
   slimeThink(e) {
@@ -2180,9 +2200,11 @@ export class EntityWorld {
       if (this.entities.length >= 40) break;
       const child = this.create(e.type, k.x, k.y, k.z);
       Object.assign(child, slimeFields(k.size, this.random));
+      this.entitySeed?.(child, "slime-split"); // the replays seed the child's Entity.rand (its constructor's draws and first jump delay)
       for (const key of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) child[key] = k.yaw;
       child.yaw = (-k.yaw * Math.PI) / 180;
       this.entities.push(child);
+      this.tickOrder?.push(child); // World.spawnEntityInWorld appends to the list being walked: the child updates in this pass (legacy-ai records)
     }
   }
   // EntityPig.onStruckByLightning (wo.a(xh)): the pig is replaced by a zombie pigman (nether-melee-live.js).

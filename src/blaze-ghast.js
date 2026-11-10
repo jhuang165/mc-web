@@ -81,7 +81,7 @@ export function blazeHover(s, rand, e, target, { onGround }) {
     s.hoverDelay = 100;
     s.hoverOffset = f(f(0.5) + f(f(rand.nextGaussian()) * f(3)));
   }
-  if (target && target.y + target.eye > e.y + e.eye + s.hoverOffset) vy += (0.3 - vy) * 0.3;
+  if (target && target.y + target.eye > e.y + e.eye + s.hoverOffset) vy += (0.30000001192092896 - vy) * 0.30000001192092896; // both constants are the float 0.3F widened
   if (!onGround && vy < 0) vy *= 0.6;
   return vy;
 }

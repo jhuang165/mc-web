@@ -6,6 +6,8 @@ import { ENTITY_TYPES, HOSTILE, moveEntity, entityRandom, livingSoundRoll, actor
 import { JavaRandom } from "./java-random.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { Fireballs } from "./fireballs.js";
+import { creatureActionState } from "./silverfish.js";
+import { PathFinder } from "./pathfinding.js";
 import {
   BLAZE, GHAST, blazeState, blazeAttack, blazeHover, ghastState, ghastStep, ghastPitch, lookVector, HURT_SOUNDS,
 } from "./blaze-ghast.js";
@@ -14,7 +16,7 @@ export const isFireballMob = (e) => e.type === "blaze" || e.type === "ghast";
 // Level events of RenderGlobal.playAuxSFX (bma) at the block of the entity, centred: the sound, its volume, pitch (rand - rand) * 0.2 + 1.
 function levelEvent(m, e, sound, volume) {
   m.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
-  m.events.push({ sound, volume, pitch: ghastPitch(m.worldRandom), position: { x: Math.floor(e.x) + 0.5, y: Math.floor(e.y) + 0.5, z: Math.floor(e.z) + 0.5 } });
+  m.events.push({ sound, volume, pitch: ghastPitch(m.worldRandom), position: { x: Math.trunc(e.x) + 0.5, y: Math.trunc(e.y) + 0.5, z: Math.trunc(e.z) + 0.5 } }); // playAuxSFXAtEntity(null, id, (int) x, (int) y, (int) z): casts truncate
 }
 const wet = (m, e, t) => e.inWater || !!m.wet?.(e, t.height);
 
@@ -29,29 +31,72 @@ export function fireballMobTalk(m, e) {
 // The target as the rules read it: the player (the only creature a blaze or ghast targets), its feet and height.
 const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 
-// EntityBlaze.onLivingUpdate (xx.e) and updateEntityActionState's attack (xx.a(sa, F)), before the walk: the hover push, the wet damage, the
-// client's crackle and smoke, the volley. The walk then moves it with its AI (buildBlazeGhastTasks).
+// EntityBlaze.onLivingUpdate (xx.e), before the walk: the wet damage, the hover countdown and push (toward entityToAttack, the target of
+// the previous action state), the client's crackle (one in 24) and the 0.6 fall damping, then the two largesmoke puffs. In that draw order.
+// The action state itself (target, path, the volley) is blazeThink.
 export function blazeUpdate(m, e, t) {
-  const rand = entityRandom(e), s = (e.blaze ??= blazeState()), brain = m.ai.brain(e), p = m.ai.player, survival = m.ai.survival;
-  const view = brain.attackTarget, target = view?.isPlayer && p?.alive && !survival.creative ? p : null;
-  if (!target && view) brain.attackTarget = null;
-  // Client half: fire.fire one time in 24 at 1 + rand volume, two largesmoke puffs a tick.
-  if (rand.nextInt(24) === 0) m.events.push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
-  for (let i = 0; i < 2; i++) m.fx?.spawn("largesmoke", e.x + (rand.nextDouble() - 0.5) * t.width, e.y + rand.nextDouble() * t.height, e.z + (rand.nextDouble() - 0.5) * t.width, 0, 0, 0);
+  const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
+  if (st.target && !(st.target === p && p?.alive && !m.ai.survival.creative)) st.target = null;
+  const target = st.target;
   if (wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });
-  if (s.attackTime > 0) s.attackTime--;
-  s.hasAttacked = false;
-  if (!target) { e.blazeBurning = false; return; }
-  if (!brain.canSee(view)) return;
-  const distance = f(Math.sqrt((target.x - e.x) ** 2 + (target.y - e.y) ** 2 + (target.z - e.z) ** 2)), out = blazeAttack(s, rand, e, playerView(target), distance);
-  e.blazeBurning = s.burning;
-  if (out.yaw !== null) e.rotationYaw = out.yaw;
-  if (out.melee) m.hitPlayer(e, survival);
-  if (out.shot) {
-    m.fireballs.launch({ large: false, owner: e, x: out.shot.x, y: out.shot.y, z: out.shot.z, dx: out.shot.dx, dy: out.shot.dy, dz: out.shot.dz });
-    levelEvent(m, e, BLAZE.shootSound, BLAZE.shootVolume);
+  if (rand.nextInt(24) === 0) m.events.push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
+  for (let i = 0; i < 2; i++) { // the six nextDouble draws happen with or without a particle system
+    const x = e.x + (rand.nextDouble() - 0.5) * t.width, y = e.y + rand.nextDouble() * t.height, z = e.z + (rand.nextDouble() - 0.5) * t.width;
+    m.fx?.spawn("largesmoke", x, y, z, 0, 0, 0);
   }
+}
+
+// EntityBlaze.updateEntityActionState: EntityCreature.updateEntityActionState (td.bq, silverfish.js creatureActionState) with xx.a(sa, F) as
+// its attackEntity, EntityMob.findPlayerToAttack (closest vulnerable player within 16, seen), getBlockPathWeight 0.5 - brightness and
+// EntityMob.onLivingUpdate's entityAge += 2 (the blaze's getBrightness is 1.0). hasAttacked (set by the attack in range) skips the
+// re-path and wander and strafes around the target. blaze-ghast.md: bytecode-read td.bq / xx.e, replayed against legacy-ai-reference.json.
+export function blazeThink(m, e, t, aiMoveSpeed) {
+  const brain = m.ai.brain(e), p = m.ai.player, survival = m.ai.survival, st = m.silverfishState(e), s = (e.blaze ??= blazeState());
+  const rand = entityRandom(e), path = (make) => {
+    if (!brain.navigator.spend()) return null;
+    const n = brain.navigator; // td.bq asks World.getPathEntityToEntity / getEntityPathToXYZ with (openDoors true, breakDoors false, avoidWater false, canSwim true)
+    return make(new PathFinder(n.world, true, false, false, true, { classify: n.classify, maxNodes: n.maxNodes }));
+  };
+  st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
+  st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
+  st.speed = aiMoveSpeed(e, 1); st.jumping = !!e.jumping; /* EntityLivingBase.isJumping persists between ticks (the early action state leaves it unless in liquid) */ st.moveStrafing = e.moveStrafing || 0;
+  st.moveForward = f(f(st.moveForward || 0) * f(0.98));
+  if (s.attackTime > 0) s.attackTime--;
+  st.entityAge += 2;
+  brain.senseCache.clear();
+  s.hasAttacked = false;
+  const env = {
+    rand, remote: false,
+    closestPlayer: (me, range) => (p?.alive && (range < 0 || brain.distSq(p) < range * range) ? p : null),
+    findPlayerToAttack: (me) => { const c = m.ai.closestVulnerablePlayer(me, BLAZE.followRange); return c && brain.canSee(c) ? c : null; },
+    isAlive: (x) => (x === p ? !!p.alive : true),
+    isCreative: () => !!survival.creative,
+    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+    boxMidY: (x) => x.y,
+    canSee: (me, target) => brain.canSee(target),
+    attackEntity: (me, target, d) => {
+      const out = blazeAttack(s, rand, e, playerView(target), f(Math.sqrt((target.x - e.x) ** 2 + (target.y - e.y) ** 2 + (target.z - e.z) ** 2)));
+      me.hasAttacked = s.hasAttacked;
+      e.blazeBurning = s.burning;
+      if (out.yaw !== null) st.rotationYaw = out.yaw;
+      if (out.melee) m.hitPlayer(e, survival);
+      if (out.shot) {
+        m.fireballs.launch({ large: false, owner: e, x: out.shot.x, y: out.shot.y, z: out.shot.z, dx: out.shot.dx, dy: out.shot.dy, dz: out.shot.dz });
+        levelEvent(m, e, BLAZE.shootSound, BLAZE.shootVolume);
+      }
+    },
+    pathToEntity: (me, target, range) => path((fn) => fn.createEntityPathToEntity(brain, target, range)),
+    pathToBlock: (me, x, y, z, range) => path((fn) => fn.createEntityPathToBlock(brain, x, y, z, range)),
+    pathWeight: (me, x, y, z) => f(f(0.5) - m.ai.brightness(x, y, z)),
+    setDead: () => m.ai.despawn(e),
+  };
+  creatureActionState(st, env);
+  if (!st.target) e.blazeBurning = false;
+  st.randomYaw = f(f(st.randomYaw || 0) * f(0.9));
+  e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+  e.moveForward = st.moveForward; e.moveStrafing = st.moveStrafing; e.jumping = st.jumping;
+  e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }
 
 // EntityGhast.updateEntityActionState (yd.bq) and EntityFlying.moveEntityWithHeading (sr.e): the wander waypoint, the charge-up, the
@@ -93,32 +138,9 @@ export function ghastUpdate(m, e, t) {
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }
 
-// Tasks for the blaze (legacy EntityCreature AI in 1.7.10; approximated with the task list, see public/research/blaze-ghast.md): walk
-// towards the target until it is in range and seen (hasAttacked stops the walk), else wander; the nearest visible player (16) and the
-// attacker are the targets. The ghast has no tasks. `K` is ai.js's task classes.
-export function buildBlazeGhastTasks(m, K) {
-  const { AttackOnCollide, Wander, WatchClosest, LookIdle, NearestAttackable, HurtByTarget } = K;
-  if (m.e.type !== "blaze") return;
-  class Approach extends AttackOnCollide {
-    // AttackOnCollide's movement half only: the blaze's melee is blazeAttack's (once a tick, 6 damage after a 20 tick delay).
-    updateTask() {
-      if (m.e.blaze?.hasAttacked) { m.navigator.clearPathEntity(); return; }
-      const t = m.attackTarget, r = m.rand, d = m.distSq(t);
-      m.lookHelper.setLookPositionWithEntity(t, 30, 30);
-      this.delay--;
-      if (m.canSee(t) && this.delay <= 0) {
-        this.delay = 4 + r.nextInt(7) + (d > 1024 ? 10 : d > 256 ? 5 : 0);
-        if (!m.navigator.tryMoveToEntityLiving(t, this.speed)) this.delay += 15;
-      }
-    }
-  }
-  m.tasks.add(1, new Approach(m, 1.0, "player"));
-  m.tasks.add(2, new Wander(m, 1.0));
-  m.tasks.add(3, new WatchClosest(m, 8));
-  m.tasks.add(3, new LookIdle(m));
-  m.targets.add(1, new HurtByTarget(m, false));
-  m.targets.add(2, new NearestAttackable(m));
-}
+// The blaze and the ghast have no task list: the blaze runs EntityCreature's legacy flow (blazeThink) and the ghast its own (ghastUpdate).
+// ai.js still calls this hook for every mob; it adds nothing.
+export function buildBlazeGhastTasks() {}
 
 // Installs the two types and the EntityWorld hooks: fire immunity (Entity.isImmuneToFire), no fall damage (EntityBlaze.fall, EntityGhast is
 // an EntityFlying whose fall is empty), the ghast's death to a player's own fireball (yd.a(ro, F)), the hurt sound names, and the
@@ -134,6 +156,7 @@ export function installFireballMobs(EntityWorld) {
   around("attackEntityFrom", function (base, e, amount, source = {}) {
     if (!e || !isFireballMob(e)) return base.call(this, e, amount, source);
     const name = source.name ?? "generic";
+    if (e.type === "blaze" && e.health > 0) this.silverfishState(e).entityAge = 0; // EntityLivingBase.attackEntityFrom (sv.a): entityAge = 0 before anything else counts
     // Entity.isImmuneToFire: onFire, inFire and lava never hurt.
     if (name === "onFire" || name === "inFire" || name === "lava") return false;
     // EntityGhast.attackEntityFrom: a fireball of a player (a deflected one) deals 1000.

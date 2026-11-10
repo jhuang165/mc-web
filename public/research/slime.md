@@ -18,13 +18,15 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 
 - `tools/probes/SlimeProbe.java` runs the original classes; `tools/verify-slime.mjs` writes `public/research/slime-reference.json` (47 records: facts 1, jumpDelay 1, split 4, splitAlive 1, drops 4, xp 1, chunkRandom 1, spawn 1, spawnFacts 1, spawnChunk 8, attack 1, think 22, model 1).
 - `src/slime.test.js` replays every record (11 tests); `src/slime-world.test.js` covers live integration (8 tests).
+- Batch 39 (legacyai): `tools/probes/LegacyAiProbe.java` ticks the unchanged `ym` (slime), `yf` (magma cube), `yd` (ghast) and `xx` (blaze) whole (`Entity.onUpdate`) next to a real player and logs every Random draw; `tools/verify-legacy-ai.mjs` writes `public/research/legacy-ai-reference.json` (33 records: idle, chase, split, hurt, water, ghast, blaze, mixed). `src/legacy-ai-replay.js` and `src/legacy-ai.test.js` replay every record exactly: position, motion, yaw, squish and jump fields, the nearest player within 16, size-scaled jump and attack, the magma cube's jump delay and boost, split children (seed, draws, first jump delay), sounds, level events (landing dust 2006) and the player's hits.
+- Bytecode-read, not probed: `sw.a(sa, F, F)` (faceEntity) divides by the float constant 3.1415927410125732; `sv.a(DZ)` (updateFallState) sends level event 2006 with ceil(fall - 3) for every living mob.
 - Bytecode-derived, not probed: the renderer layout.
 
 ## Gaps
 
-- Magma cubes are not implemented.
+- Magma cubes follow the same flow (jump delay, boost, split, no fall damage); the probe covers them, the renderer and spawn rules are not probed.
 - Slimes spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)), with the slime chunk and swamp `getCanSpawnHere` above; no seeded replay reached a slime spawn. The 40-mob cap applies to splitting.
-- `mob.attack` has no sound event in the manifest, so it is silent.
+- `mob.attack` (the slime's melee) is emitted as an event with the native two pitch draws; the manifest has no audio for it, so it stays silent.
 - The original may play the landing sound twice in single-player; the port plays it once.
 - Legacy worlds have no biome or Java seed, so the swamp and slime chunk rules do not apply there.
 - Slime shadow size 0.25 is not applied.
