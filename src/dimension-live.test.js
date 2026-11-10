@@ -222,3 +222,28 @@ test("savedPortals lists the destination's saved portal columns from its edits a
   assert.deepEqual(asked, ["w1", "w1~-1"]);
   assert.deepEqual(await live.savedPortals({ ...r, generationVersion: 12 }, 0, [-160, 160], [-160, 160]), [], "no cells to prewarm below generation 13");
 });
+
+test("a repeat trip to the same column reuses the cached portal for 600 ticks, even after it was broken (Teleporter cache, batch 36)", async () => {
+  const { World } = await import("./world.js");
+  let ticks = 1000, edits = [[`330,70,120`, GAME_IDS.portal], [`330,71,120`, GAME_IDS.portal]];
+  const live = new DimensionLive({ sound() {}, ticks: () => ticks }); live.readEdits = async () => edits;
+  const trip = async () => {
+    const calls = [], warm = { window: async (x, z) => { calls.push([Math.round(x), Math.round(z)]); }, columns: async () => {} };
+    const record = { id: "w", seed: "5", chunked: true, transit: { from: -1, x: 50, y: 60, z: 20, yaw: 0, dir: 2 } };
+    await live.arrive(new World("5", "javaStreamed", 12, "default"), record, { warm });
+    return { calls, at: record.position };
+  };
+  const first = await trip();
+  assert.deepEqual(first.calls, [[331, 121]]);
+  assert.deepEqual(live.cachedExit({ id: "w" }, 0, { x: 400, z: 160 }), { x: 330, y: 70, z: 120 });
+  edits = []; ticks += 300; // the portal is gone and a portal elsewhere would now be nearer: the cache still decides
+  edits = [[`400,70,160`, GAME_IDS.portal], [`400,71,160`, GAME_IDS.portal]];
+  const second = await trip();
+  assert.deepEqual(second.calls, [[331, 121]]);
+  assert.ok(Math.abs(second.at.x - first.at.x) < 3 && Math.abs(second.at.z - first.at.z) < 3);
+  ticks += 800; // not used for more than 600 ticks: swept, the search runs again
+  assert.equal(live.cachedExit({ id: "w" }, 0, { x: 400, z: 160 }), null);
+  assert.deepEqual((await trip()).calls, [[401, 161]]);
+  assert.equal(live.cachedExit({ id: "w" }, 0, { x: 400.9, z: 160.9 })?.x, 400);
+  assert.equal(live.cachedExit({ id: "w" }, 0, { x: 401, z: 160 }), null, "another column has its own entry");
+});

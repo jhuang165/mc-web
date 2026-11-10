@@ -99,3 +99,35 @@ test("cells beside the resident window: the emitter box scan of resident chunks 
   light.fast = true;
   assert.ok(lit > 0 && skipped > 100 && scanned > 0, `block-lit ${lit}, resident chunks skipped ${skipped}, kept ${scanned}`);
 });
+
+test("cells beside the resident window: the resident sky check gives the plain search's answers, roofs included (batch 36)", () => {
+  const { world, ring } = make();
+  const keys = [...ring.cols.keys()].map((k) => { const cz = ((k % 8388608) + 8388608 + 4194304) % 8388608 - 4194304; return [(k - cz) / 8388608, cz]; });
+  const beside = keys.filter(([cx, cz]) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (ring.resident((cx + a) * 16, (cz + b) * 16)) return true; return false; });
+  const next = rng(41), light = ring.light;
+  // Roof slabs of stone over resident edge columns (shade cells beside the window) plus a few deep holes.
+  let roofs = 0;
+  for (let i = 0; roofs < 40 && i < 2000; i++) {
+    const [cx, cz] = beside[next() % beside.length];
+    const x = (cx + (ring.resident((cx + 1) * 16, cz * 16) ? 1 : ring.resident((cx - 1) * 16, cz * 16) ? -1 : 0)) * 16 + (next() & 15), z = cz * 16 + (next() & 15);
+    if (!ring.resident(x, z)) continue;
+    let y = 255; while (y > 0 && !world.get(x, y, z)) y--;
+    if (world.put(x, y + 4 + (next() & 3), z, 1, 0, false)) roofs++;
+  }
+  assert.ok(roofs > 10);
+  let skipped = 0, kept = 0, skyLit = 0;
+  const sees = light.residentSees.bind(light);
+  light.residentSees = (...a) => { const r = sees(...a); if (r) kept++; else skipped++; return r; };
+  for (let n = 0; n < 3000; n++) {
+    const [cx, cz] = beside[next() % beside.length], x = cx * 16 + (next() & 15), z = cz * 16 + (next() & 15);
+    if (ring.resident(x, z)) continue;
+    let y = 255; while (y > 0 && !ring.get(x, y, z)) y--;
+    const qy = n % 3 === 0 ? y + 1 : n % 3 === 1 ? 1 + (next() % 120) : Math.max(1, y + 1 - (next() % 12));
+    light.cache.clear(); light.heights.clear();
+    light.fast = false; const plain = light.search(x, qy, z);
+    light.fast = true; assert.equal(light.search(x, qy, z), plain, `cell ${x},${qy},${z}`);
+    if (plain >> 4) skyLit++;
+  }
+  light.fast = true;
+  assert.ok(skyLit > 100 && skipped > 5 && kept > 5, `sky-lit ${skyLit}, resident chunks skipped ${skipped}, kept ${kept}`);
+});
