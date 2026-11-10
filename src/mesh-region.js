@@ -98,8 +98,8 @@ class RegionLight {
     const b = this.world.get(x, y, z);
     let sky, block;
     if (useNeighborBrightness(b)) {
-      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1), this.skyAt(x, y - 1, z));
-      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1), this.blockAt(x, y - 1, z));
+      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1));
+      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1));
     } else {
       sky = this.skyAt(x, y, z);
       block = this.blockAt(x, y, z);

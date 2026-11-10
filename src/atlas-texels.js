@@ -73,3 +73,74 @@ export function putTile(atlasLevels, atlasWidth, levels, x, y, size = 16) {
     for (let row = 0; row < w; row++) dst.set(src.subarray(row * w * 4, (row + 1) * w * 4), (((y >> l) + row) * aw + (x >> l)) * 4);
   }
 }
+
+// ---- DOM icons from exact bytes ------------------------------------------------------------------------------------------------
+// block-textures.js draws item and block icons on a 2D canvas, which stores premultiplied alpha: a translucent texel (ice, stained glass,
+// slime) drawn there and read back by toDataURL drifts by a few units. rasterIcon composes the same picture in software from the exact
+// straight-alpha tile bytes: each layer is a 16 px tile under the canvas matrix (a, b, c, d, e, f) that block-textures.js passes to
+// setTransform, sampled nearest at the pixel centre (drawImage with smoothing off); a pixel whose centre is not covered but part of it is
+// takes the first covered sample's texel with its alpha scaled by the covered fraction (4 x 4 samples, the canvas's edge anti-aliasing).
+// `shade` is the black source-atop overlay (colour x (1 - shade), alpha unchanged); `drop` the rows cut off the top of the tile.
+// Layers are painted in order with straight-alpha source-over, so a pixel covered by one layer is that texel's bytes exactly.
+export function rasterIcon(width, height, layers, size = 16) {
+  const out = new Uint8Array(width * height * 4), SUB = 4;
+  for (const { tile, matrix: [a, b, c, d, e, f0], shade = 0, drop = 0 } of layers) {
+    const det = a * d - b * c, mul = 1 - shade;
+    const local = (X, Y) => [((X - e) * d - (Y - f0) * c) / det, (a * (Y - f0) - b * (X - e)) / det];
+    const texel = (lx, ly) => (lx >= 0 && lx < size && ly >= drop && ly < size ? Math.min(size - 1, Math.floor(ly - drop)) * size + Math.min(size - 1, Math.floor(lx)) : -1);
+    for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
+      const [cx, cy] = local(px + 0.5, py + 0.5);
+      let first = texel(cx, cy), covered = 0;
+      for (let j = 0; j < SUB; j++) for (let i = 0; i < SUB; i++) {
+        const [lx, ly] = local(px + (i + 0.5) / SUB, py + (j + 0.5) / SUB), t = texel(lx, ly);
+        if (t >= 0) { covered++; if (first < 0) first = t; }
+      }
+      if (first < 0) continue;
+      const o = (py * width + px) * 4, s = first * 4, sa = (tile[s + 3] / 255) * (covered / (SUB * SUB));
+      if (sa <= 0) continue;
+      const da = out[o + 3] / 255, ra = sa + da * (1 - sa);
+      for (let k = 0; k < 3; k++) {
+        const sc = shade ? Math.round(f(tile[s + k] * f(mul))) : tile[s + k];
+        out[o + k] = da === 0 ? sc : Math.round((sc * sa + out[o + k] * da * (1 - sa)) / ra);
+      }
+      out[o + 3] = Math.round(ra * 255);
+    }
+  }
+  return out;
+}
+
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = (bytes) => { let c = 0xffffffff; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+// A synchronous PNG writer for small RGBA images: filter 0 rows in stored (uncompressed) deflate blocks, so the bytes read back exactly.
+export function encodePngStored(width, height, data) {
+  const stride = width * 4, raw = new Uint8Array((stride + 1) * height);
+  for (let y = 0; y < height; y++) raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
+  const blocks = Math.max(1, Math.ceil(raw.length / 65535)), z = new Uint8Array(2 + raw.length + blocks * 5 + 4);
+  z[0] = 0x78; z[1] = 0x01;
+  let at = 2;
+  for (let i = 0; i < blocks; i++) {
+    const n = Math.min(65535, raw.length - i * 65535);
+    z[at++] = i === blocks - 1 ? 1 : 0; z[at++] = n & 255; z[at++] = n >> 8; z[at++] = ~n & 255; z[at++] = (~n >> 8) & 255;
+    z.set(raw.subarray(i * 65535, i * 65535 + n), at); at += n;
+  }
+  let s1 = 1, s2 = 0;
+  for (let i = 0; i < raw.length; i++) { s1 = (s1 + raw[i]) % 65521; s2 = (s2 + s1) % 65521; }
+  new DataView(z.buffer).setUint32(at, ((s2 << 16) | s1) >>> 0);
+  const chunk = (name, body) => {
+    const out = new Uint8Array(12 + body.length), view = new DataView(out.buffer);
+    view.setUint32(0, body.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = name.charCodeAt(i);
+    out.set(body, 8);
+    view.setUint32(8 + body.length, crc32(out.subarray(4, 8 + body.length)));
+    return out;
+  };
+  const ihdr = new Uint8Array(13), hv = new DataView(ihdr.buffer);
+  hv.setUint32(0, width); hv.setUint32(4, height); ihdr[8] = 8; ihdr[9] = 6;
+  const parts = [Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10), chunk("IHDR", ihdr), chunk("IDAT", z), chunk("IEND", new Uint8Array(0))];
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+export const pngDataUrl = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return "data:image/png;base64," + btoa(s); };
+export const hasTranslucent = (data) => { for (let i = 3; i < data.length; i += 4) if (data[i] > 0 && data[i] < 255) return true; return false; };

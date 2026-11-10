@@ -57,12 +57,23 @@ export function lightOpacity(b) {
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
 export const lightEmission = (b, lit = false) => (b === 148 || b === 149 || b === 173 ? 15 : b === 171 ? 1 : b === 164 ? 11 /* BlockPortal setLightLevel(0.75F) */ : b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===163?7:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === REPEATER && lit ? 9 /* powered repeater, lightValue 0.625 (block-light-reference.json); the lit state is LiveRedstone.lit */ : b === END_PORTAL_FRAME ? 1 : 0);
-export const useNeighborBrightness = (b) => (b >= 165 && b <= 169) || isStair(b) || useNeighborBrightness2(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 162 || b === 163 || b === 29 || b === 30 || b === FENCE || b === NETHER_FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
+// Block.getUseNeighborBrightness (aji.n, set for every non-air block by Block.registerBlocks from its render type, slab/farmland status and light
+// opacity) per port block id, through the original ids from the unchanged classes (light-float-reference.json neighborBrightness; checked by
+// src/light-float.test.js). Ids beyond the table keep the earlier hand-written test.
+const NEIGHBOR_BRIGHTNESS_IDS = new Set([9,20,29,30,31,32,33,34,35,36,37,38,39,41,42,43,44,45,46,48,49,50,52,53,54,59,60,61,62,69,72,73,75,76,79,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,102,103,104,105,106,107,108,109,110,111,112,113,114,116,117,118,119,120,124,125,126,127,128,129,130,133,134,135,136,137,138,140,141,142,149,154,155,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,175,176]);
+export const useNeighborBrightness = (b) => (b < 179 ? NEIGHBOR_BRIGHTNESS_IDS.has(b) : (b >= 165 && b <= 169) || isStair(b) || useNeighborBrightness2(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 162 || b === 163 || b === 29 || b === 30 || b === FENCE || b === NETHER_FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b));
 const AO_SOLID = f(0.2);
-// Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a
-// normal render), which TNT passes although it is not isNormalCube.
-export const aoValue = (b) => (normalCube(b) || b === TNT ? AO_SOLID : 1);
-export const aoClear = (b) => b === 0 || b === 20 || b === RAIL || b === FIRE || b === ANVIL || isPlant(b);
+// Block.getAmbientOcclusionLightValue (aji.I: 0.2f or 1.0f) and the flag the corner test reads (aji.l, the block's `s` field) per port block
+// id, taken through the original ids from the unchanged classes (tools/probes/LightFloatProbe.java, light-float-reference.json aoValues and
+// cornerOpen; src/light-float.test.js checks both tables against it). The 0.2 blocks include leaves, ice, glowstone and the redstone block
+// (a normal-cube test missed them). RenderBlocks takes a corner's own light and occlusion when either outward neighbour of the two edges has
+// the flag set (air, plants, rails, torches, fire, wire, doors' open cells, signs, ...), else the first edge's (aoClear). Ids beyond the
+// table keep the earlier hand-written tests.
+const AO_SOLID_IDS = new Set([1,2,3,4,5,6,7,8,11,12,13,14,15,16,17,18,19,21,22,23,24,25,26,27,28,40,47,55,56,57,58,62,63,64,65,66,67,68,70,71,74,77,78,80,81,101,102,104,115,121,122,123,131,132,139,143,144,145,146,147,148,150,151,152,153,156,157,166,174,177,178]);
+const CORNER_OPEN_IDS = new Set([20,31,32,33,34,35,36,37,38,39,43,44,45,46,48,49,50,52,54,59,61,69,72,73,75,76,79,83,84,106,107,108,111,112,113,114,119,120,124,127,128,135,136,137,142,149,159,160,164,170,172]);
+const TABLE_END = 179;
+export const aoValue = (b) => ((b < TABLE_END ? AO_SOLID_IDS.has(b) : normalCube(b) || b === TNT) ? AO_SOLID : 1);
+export const aoClear = (b) => b === 0 || (b < TABLE_END ? CORNER_OPEN_IDS.has(b) : b === 20 || b === RAIL || b === FIRE || b === ANVIL || isPlant(b));
 
 // WorldProvider.calculateCelestialAngle.
 export function celestialAngle(ticks, partial = 0) {
@@ -292,13 +303,14 @@ export class LightVolume {
     if (y >= this.height || x < 0 || z < 0 || x >= SIZE || z >= SIZE) return 0;
     return this.block[(x * SIZE + z) * this.height + Math.max(0, y)];
   }
-  // World.getLightBrightnessForSkyBlocks(x, y, z, lightValue of the block there).
+  // World.getLightBrightnessForSkyBlocks(x, y, z, lightValue of the block there). World.getSkyBlockTypeBrightness (ahb.a(ahn,III), bytecode and
+  // light-float-reference.json) of a use-neighbour-brightness block takes the larger of the cells above, east, west, south and north (not below).
   packed(x, y, z) {
     const b = this.world.get(x, y, z);
     let sky, block;
     if (useNeighborBrightness(b)) {
-      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1), this.skyAt(x, y - 1, z));
-      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1), this.blockAt(x, y - 1, z));
+      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1));
+      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1));
     } else {
       sky = this.skyAt(x, y, z);
       block = this.blockAt(x, y, z);
@@ -469,7 +481,8 @@ export class LightVolume {
 // 1.7.10 code does. Returns per-vertex AO factors and packed brightness.
 const AXIS = [0, 0, 1, 1, 2, 2], SIGN = [1, -1, 1, -1, 1, -1], TANGENTS = [[1, 2], [1, 2], [0, 2], [0, 2], [0, 1], [0, 1]];
 export function smoothFace(light, x, y, z, face, corners, boundary = true, partial = false) {
-  if (partial) return partialFace(light, x, y, z, face, corners, boundary);
+  // bytecode-read: the partial path (blm.b) interpolates only its four side faces; the top and bottom faces use the cell-corner values as they are.
+  if (partial && AXIS[face] !== 1) return partialFace(light, x, y, z, face, corners, boundary);
   const w = light.world, axis = AXIS[face], sign = SIGN[face], [u, v] = TANGENTS[face],
     n = [0, 0, 0];
   n[axis] = sign;
@@ -485,12 +498,15 @@ export function smoothFace(light, x, y, z, face, corners, boundary = true, parti
       return p;
     },
     ao = [], packed = [];
+  // The vertex's side along each tangent is its place among the face's own extremes (a half slab's top vertices at 0.5 are the high side).
+  const mid = (a) => (corners.length > 1 ? (Math.min(...corners.map((c) => c[a])) + Math.max(...corners.map((c) => c[a]))) / 2 : 0.5), midU = mid(u), midV = mid(v);
   for (const corner of corners) {
-    const su = corner[u] > 0.5 ? 1 : -1, sv = corner[v] > 0.5 ? 1 : -1,
+    const su = corner[u] > midU ? 1 : -1, sv = corner[v] > midV ? 1 : -1,
       e1 = at(su, 0), e2 = at(0, sv),
       b1 = w.get(...e1), b2 = w.get(...e2),
       p1 = light.packed(...e1), p2 = light.packed(...e2);
-    let pc = p1, ac = aoValue(b1);
+    const fv = face < 2; // bytecode-read: east and west fall back to the tangent-v edge (z / z), the others to the tangent-u edge
+    let pc = fv ? p2 : p1, ac = aoValue(fv ? b2 : b1);
     if (aoClear(w.get(...at(su, 0, 1))) || aoClear(w.get(...at(0, sv, 1)))) {
       const c = at(su, sv);
       pc = light.packed(...c);

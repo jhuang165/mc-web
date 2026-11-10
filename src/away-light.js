@@ -142,7 +142,7 @@ export class AwayBlockLight {
     if (y < 0) return 0;
     if (this.stale && this.floods === 0) this.flood(this.tick);
     const b = this.world.get(x, y, z) & 255;
-    if (useNeighborBrightness(b)) return Math.max(this.rawSky(x, y, z), this.rawSky(x, y + 1, z), this.rawSky(x + 1, y, z), this.rawSky(x - 1, y, z), this.rawSky(x, y, z + 1), this.rawSky(x, y, z - 1), this.rawSky(x, y - 1, z));
+    if (useNeighborBrightness(b)) return Math.max(this.rawSky(x, y, z), this.rawSky(x, y + 1, z), this.rawSky(x + 1, y, z), this.rawSky(x - 1, y, z), this.rawSky(x, y, z + 1), this.rawSky(x, y, z - 1));
     return this.rawSky(x, y, z);
   }
   raw(x, y, z) {
@@ -151,14 +151,14 @@ export class AwayBlockLight {
     if (xi < 0 || zi < 0 || xi >= this.w * 16 || zi >= this.d * 16) return 0;
     return this.block[(xi * this.d * 16 + zi) * this.h + y];
   }
-  // LightVolume.packed's block half: a stair, slab, farmland or plant reads the brightest of its six neighbours.
+  // LightVolume.packed's block half: a stair, slab, farmland or plant reads the brightest of its own cell and the five neighbours above and around it (not below).
   blockAt(x, y, z) {
     x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
     if (this.stale && this.floods === 0) this.flood(this.tick);
     if (!this.block) return 0;
     const b = this.world.get(x, y, z) & 255;
     if (useNeighborBrightness(b)) {
-      return Math.max(EMISSION[b], this.raw(x, y + 1, z), this.raw(x + 1, y, z), this.raw(x - 1, y, z), this.raw(x, y, z + 1), this.raw(x, y, z - 1), this.raw(x, y - 1, z));
+      return Math.max(EMISSION[b], this.raw(x, y + 1, z), this.raw(x + 1, y, z), this.raw(x - 1, y, z), this.raw(x, y, z + 1), this.raw(x, y, z - 1));
     }
     return Math.max(this.raw(x, y, z), b ? EMISSION[b] : 0);
   }

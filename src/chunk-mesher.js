@@ -19,7 +19,7 @@ import { lilyPadCornerUv } from "./lily-pad.js";
 import { PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
-import { mhSin, mhCos, smoothFace, flatFace } from "./lighting.js";
+import { mhSin, mhCos, smoothFace, flatFace, lightEmission } from "./lighting.js";
 import { anaglyphFog } from "./post-shaders.js";
 import { meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js";
 import { render, usePartialAo, leavesOpaque } from "./render-settings.js";
@@ -128,7 +128,9 @@ export class MeshMethods {
   // renderStandardBlockWithAmbientOcclusion; blocks that emit light (a lit
   // furnace) take the flat colour-multiplier path with neighbour brightness.
   cube(m, b, x, y, z) {
-    const w = this.world, L = this.light, h = b === SNOW_LAYER ? snowSelectionHeight(w.getMeta(x, y, z)) : blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`);
+    const w = this.world, L = this.light, h = b === SNOW_LAYER ? snowSelectionHeight(w.getMeta(x, y, z)) : blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`),
+      // renderStandardBlock: ambient occlusion only for blocks whose light value is 0; emitters (glowstone, a lit furnace, ...) take the colour-multiplier path.
+      flat = lit || lightEmission(b) > 0;
     FACES.forEach((f, fi) => {
       const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
       if (b === LILY_PAD && fi !== 2 && fi !== 3) return; // RenderBlocks.renderBlockLilyPad (blm.o) adds two flat quads, top and underside, and no sides.
@@ -145,8 +147,8 @@ export class MeshMethods {
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
-      const s = lit ? null : shadeFace(L, x, y, z, fi, corners, boundary, h < 1),
-        put = (uv) => (lit ? m.quad(verts, uv, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2])) : m.quad(verts, uv, s.ao.map((a) => a * f.shade), s.packed)),
+      const s = flat ? null : shadeFace(L, x, y, z, fi, corners, boundary, h < 1),
+        put = (uv) => (flat ? m.quad(verts, uv, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2])) : m.quad(verts, uv, s.ao.map((a) => a * f.shade), s.packed)),
         tint = this.cubeTint(b, fi, x, y, z, w.getMeta(x, y, z));
       put(uvs);
       if (tint !== null) m.tint(tint);
@@ -636,50 +638,55 @@ export class MeshMethods {
       paint(flow);
     }
   }
+  // The block's vertices into the layer meshers (the per-block dispatch of meshColumn; light-float.test.js drives it per block).
+  meshBlock(M, b, x, y, z) {
+    const w = this.world, { solid, water, ice, flow, lava, lavaFlow, fire, portal } = M;
+    if (b === PORTAL) this.portalBlock(portal, x, y, z);
+    else if (b === NETHER_WART) this.crops(solid, b, x, y, z);
+    else if (b === 20) this.torch(solid, x, y, z);
+    else if (isCrop(b)) this.crops(solid, b, x, y, z);
+    else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
+    else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
+    else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), true);
+    else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
+    else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
+    else if (b===END_PORTAL_FRAME) this.endFrameBlock(solid,x,y,z);
+    else if (b===BEACON) this.beacon(solid,x,y,z);
+    else if (b===133) this.hopper(solid,x,y,z);
+    else if (b===CAULDRON) this.cauldron(solid,x,y,z);
+    else if (b===FLOWER_POT) this.flowerPot(solid,x,y,z);
+    else if (b===134) this.brewingStand(solid,x,y,z);
+    else if (b===ANVIL) this.anvil(solid,x,y,z);
+    else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
+    else if (isStair(b)) this.stairs(solid,b,x,y,z);
+    else if (isDoor(b)) this.door(solid,b,x,y,z);
+    else if (b===BED) this.bed(solid,b,x,y,z);
+    else if (isPane(b)) this.pane(solid,b,x,y,z);
+    else if (b===VINE) this.vine(solid,x,y,z);
+    else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
+    else if (b === LADDER) this.ladder(solid, x, y, z);
+    else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+    else if (b >= 165 && b !== 166 && b <= 169) this.shaped(solid, b, x, y, z);
+    else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
+    else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);
+    else if (b === CACTUS) this.cactus(solid, x, y, z);
+    else if (b === 10) this.liquid(10, water, flow, x, y, z);
+    else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
+    else if (b === FIRE) this.fireBlock(fire, x, y, z);
+    else if (b === CARPET) this.box(solid, b, x, y, z, blockBounds(w, x, y, z), w.getMeta(x, y, z));
+    else this.cube(b === ICE || b === STAINED_GLASS ? ice : solid, b, x, y, z);
+  }
   // The meshers of the column at (cx, cz), one per draw layer; fire has two (fire.js layers).
   meshColumn(cx, cz) {
-    const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()], portal = new Mesher();
+    const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()], portal = new Mesher(), M = { solid, water, ice, flow, lava, lavaFlow, fire, portal };
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < (w.height ?? HEIGHT); y++) {
           const b = w.get(x, y, z);
           if (!b || b === END_PORTAL || isChestShaped(b) || b === PISTON_MOVING || b === 175 || b === 176 || b === 172) continue; // signs are drawn by sign-renderer.js; the moving block is drawn by updateMoving, never as a cube
-          if (b === PORTAL) this.portalBlock(portal, x, y, z);
-          else if (b === NETHER_WART) this.crops(solid, b, x, y, z);
-          else if (b === 20) this.torch(solid, x, y, z);
-          else if (isCrop(b)) this.crops(solid, b, x, y, z);
-          else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
-          else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
-          else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), true);
-          else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
-          else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
-          else if (b===END_PORTAL_FRAME) this.endFrameBlock(solid,x,y,z);
-          else if (b===BEACON) this.beacon(solid,x,y,z);
-          else if (b===133) this.hopper(solid,x,y,z);
-          else if (b===CAULDRON) this.cauldron(solid,x,y,z);
-          else if (b===FLOWER_POT) this.flowerPot(solid,x,y,z);
-          else if (b===134) this.brewingStand(solid,x,y,z);
-          else if (b===ANVIL) this.anvil(solid,x,y,z);
-          else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
-          else if (isStair(b)) this.stairs(solid,b,x,y,z);
-          else if (isDoor(b)) this.door(solid,b,x,y,z);
-          else if (b===BED) this.bed(solid,b,x,y,z);
-          else if (isPane(b)) this.pane(solid,b,x,y,z);
-          else if (b===VINE) this.vine(solid,x,y,z);
-          else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
-          else if (b === LADDER) this.ladder(solid, x, y, z);
-          else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
-          else if (b >= 165 && b !== 166 && b <= 169) this.shaped(solid, b, x, y, z);
-          else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
-          else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);
-          else if (b === CACTUS) this.cactus(solid, x, y, z);
-          else if (b === 10) this.liquid(10, water, flow, x, y, z);
-          else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
-          else if (b === FIRE) this.fireBlock(fire, x, y, z);
-          else if (b === CARPET) this.box(solid, b, x, y, z, blockBounds(w, x, y, z), w.getMeta(x, y, z));
-          else this.cube(b === ICE || b === STAINED_GLASS ? ice : solid, b, x, y, z);
+          this.meshBlock(M, b, x, y, z);
         }
-    return { solid, water, ice, flow, lava, lavaFlow, fire, portal };
+    return M;
   }
 }
 
