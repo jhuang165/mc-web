@@ -119,7 +119,7 @@ test("a creeper blast without mobGriefing hurts but breaks nothing, after the sa
   applyExplosion({
     world, random: new JavaRandom(9), mobs: { entities: [{ type: "pig", x: 1.5, y: 10, z: 0.5, vx: 0, vy: 0, vz: 0, growingAge: 0 }], damage() {}, hazard: (e, d) => hits.push(d) },
     items: noop, xpOrbs: noop, arrows: noop, projectiles: noop, primed: [], farming: { observe() {} },
-    survival: { health: 0, furnaces: {}, chests: {} }, position: { x: 50, y: 10, z: 50 }, velocity: { x: 0, y: 0, z: 0 },
+    survival: { health: 0, furnaces: {}, chests: {} }, position: { x: 20, y: 10, z: 20 }, velocity: { x: 0, y: 0, z: 0 },
   }, { x: 0.5, y: 10, z: 0.5, size: 3, smoking: false }, { burst: (...args) => bursts.push(args[4]) });
   assert.equal(blocks.size, 2, "no block broke");
   assert.ok(hits.length === 1 && hits[0] > 0, "the pig is still hurt");
