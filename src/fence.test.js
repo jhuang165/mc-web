@@ -91,7 +91,7 @@ test("a fence blocks the player 1.5 blocks up, including from the cell above it"
 });
 
 test("RenderBlocks.renderBlockFence: a post with bars towards each connected side", () => {
-  assert.deepEqual(fenceRenderBoxes(0), [[0.375, 0, 0.375, 0.625, 1, 0.625]]);
+  assert.deepEqual(fenceRenderBoxes(0), [[0.375, 0, 0.375, 0.625, 1, 0.625], [0.4375, 0.75, 0.4375, 0.5625, 0.9375, 0.5625], [0.4375, 0.375, 0.4375, 0.5625, 0.5625, 0.5625]]); // nothing connects: blm.a still draws the two x bars at the post (render-types.test.js)
   const ew = fenceRenderBoxes(4 | 8);
   assert.equal(ew.length, 3);
   assert.deepEqual(ew[1], [0, 0.75, 0.4375, 1, 0.9375, 0.5625]);

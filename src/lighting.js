@@ -305,7 +305,8 @@ export class LightVolume {
   }
   // World.getLightBrightnessForSkyBlocks(x, y, z, lightValue of the block there). World.getSkyBlockTypeBrightness (ahb.a(ahn,III), bytecode and
   // light-float-reference.json) of a use-neighbour-brightness block takes the larger of the cells above, east, west, south and north (not below).
-  packed(x, y, z) {
+  // `emissive` false is the lightValue 0 of BlockLiquid.getMixedBrightnessForBlock (the cell's own emission is left out).
+  packed(x, y, z, emissive = true) {
     const b = this.world.get(x, y, z);
     let sky, block;
     if (useNeighborBrightness(b)) {
@@ -315,7 +316,7 @@ export class LightVolume {
       sky = this.skyAt(x, y, z);
       block = this.blockAt(x, y, z);
     }
-    return pack(sky, Math.max(block, b ? this.emission(x, y, z, b) : 0));
+    return pack(sky, Math.max(block, b && emissive ? this.emission(x, y, z, b) : 0));
   }
   // World.getBlockLightValue: the larger of daylight-reduced sky and block light.
   level(x, y, z, subtracted = 0) {
