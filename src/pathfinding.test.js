@@ -112,3 +112,28 @@ test("the budget denies searches once it is spent", () => {
   assert.equal(nav.getPathToXYZ(4.5, 0, 0.5), null);
   assert.equal(budget.denied, 1);
 });
+test("the live node cap does not cut native sized searches: range 100 sealed target matches the b35 native point counts", async () => {
+  const { replayFight, fightReference35 } = await import("./village-fight-replay.js");
+  const { PathNavigate, getPathNodeCap, LIVE_NODE_CAP, setPathSearchObserver } = await import("./pathfinding.js");
+  const rec = fightReference35.records.find((r) => r.name === "b35-follow100-sealed-d3");
+  const native = rec.searches.map((s) => [s[1], s[2]]);
+  assert.ok(Math.max(...native.map((s) => s[0])) >= 31191, "the record holds the native range 100 flood");
+  assert.equal(getPathNodeCap(), LIVE_NODE_CAP);
+  assert.ok(LIVE_NODE_CAP > 2 * 30686, "the cap is well above the largest native expanded count");
+  // replayFight lifts the cap for its navigators; put the live cap back on every finder it builds.
+  const finder = PathNavigate.prototype.finder, sizes = [];
+  PathNavigate.prototype.finder = function () { this.maxNodes = LIVE_NODE_CAP; return finder.call(this); };
+  const was = setPathSearchObserver((s) => sizes.push([s.points, s.found ? 1 : 0, s.expanded <= LIVE_NODE_CAP]));
+  try { replayFight(rec); } finally { PathNavigate.prototype.finder = finder; setPathSearchObserver(was); }
+  assert.deepEqual(sizes.map((s) => [s[0], s[1]]), native);
+  assert.ok(sizes.every((s) => s[2]));
+});
+test("pooled points: a second search on the same finder and the returned path points are independent of the pool", () => {
+  const world = { get: (x, y, z) => (y < 0 ? 3 : 0) };
+  const e = { x: 0.5, y: 0, z: 0.5, width: Math.fround(0.6), height: Math.fround(1.8), inWater: false, inLava: false, maxSafePointTries: () => 3 };
+  const finder = new PathFinder(world, true, false, false, false);
+  const a = finder.createEntityPathToBlock(e, 6, 0, 0, 16), first = a.points.map((p) => [p.x, p.y, p.z]);
+  finder.createEntityPathToBlock(e, 0, 0, 7, 16);
+  assert.deepEqual(a.points.map((p) => [p.x, p.y, p.z]), first);
+  assert.equal(a.points.at(-1).previous.x, a.points.at(-2).x);
+});

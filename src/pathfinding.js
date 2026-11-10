@@ -31,6 +31,7 @@ export class PathPoint {
     this.total = 0;
     this.previous = null;
     this.visited = false;
+    this.slot = -1;
   }
   // aye.a(aye): the float euclidean distance.
   distanceTo(o) {
@@ -248,6 +249,29 @@ const floorEdge = (v) => { const r = Math.round(v); return Math.abs(v - r) < 1e-
 // (int)(range + 8) / (int)(range + 16) around the entity, but the only reads the PathFinder makes through it are the swimming start loop (water above the start). Every
 // open/blocked test (ayg.a static, func_82565_a) reads entity.worldObj directly (invokevirtual ahb.a), so the search is NOT bounded by the cache region: walls beyond it still
 // count. The only bound is the follow-range sphere around the target. The probe still builds the real cache (b34 records, field `chunkCache`) and the port needs nothing.
+const copyPoint = (p) => {
+  const c = new PathPoint(p.x, p.y, p.z);
+  c.cost = p.cost;
+  c.heuristic = p.heuristic;
+  c.total = p.total;
+  return c;
+};
+const store = { pts: [], n: 0, table: new Array(1 << 12).fill(null), mask: (1 << 12) - 1, shift: 20 };
+function growTable(st) {
+  const size = st.table.length << 1, bits = 31 - Math.clz32(size);
+  st.table = new Array(size).fill(null);
+  st.mask = size - 1;
+  st.shift = 32 - bits;
+  for (let i = 0; i < st.n; i++) {
+    const p = st.pts[i];
+    let slot = Math.imul(p.hash, 0x9e3779b1) >>> st.shift;
+    while (st.table[slot] !== null) slot = (slot + 1) & st.mask;
+    st.table[slot] = p;
+    p.slot = slot;
+  }
+}
+const pagePool = [];
+const takePage = () => pagePool.pop() || new Int8Array(4096).fill(127);
 export class PathFinder {
   constructor(world, openDoors, breakDoors, avoidsWater, canSwim, options = {}) {
     this.world = world;
@@ -258,9 +282,10 @@ export class PathFinder {
     this.classify = options.classify || cachedClassify;
     this.maxNodes = options.maxNodes ?? Infinity;
     this.path = new Path();
-    this.pointMap = new Map();
+    this.pointCount = 0;
     this.pathOptions = new Array(32).fill(null);
     this.expanded = 0;
+    this.memo = null;
   }
   // ahb.getEntityPathToXYZ / getPathEntityToEntity are the world-level entry points.
   createEntityPathToEntity(entity, target, range) {
@@ -271,7 +296,7 @@ export class PathFinder {
   }
   createEntityPathTo(entity, tx, ty, tz, range) {
     this.path.clearPath();
-    this.pointMap.clear();
+    this.resetPoints();
     let avoids = this.avoidsWater, y;
     const feet = entity.y, half = f(entity.width / 2);
     if (this.canSwim && entity.inWater) {
@@ -284,9 +309,11 @@ export class PathFinder {
     const end = this.openPoint(floor(tx - half), floor(ty), floor(tz - half));
     const size = new PathPoint(floorFloat(f(entity.width + 1)), floorFloat(f(entity.height + 1)), floorFloat(f(entity.width + 1)));
     const t0 = searchObserver ? performance.now() : 0;
-    const result = this.addToPath(entity, start, end, size, range);
+    this.beginMemo(end, range);
+    let result;
+    try { result = this.addToPath(entity, start, end, size, range); } finally { this.endMemo(); }
     this.avoidsWater = avoids;
-    if (searchObserver) searchObserver({ finder: this, entity, range, end: [end.x, end.y, end.z], points: this.pointMap.size, expanded: this.expanded, found: result !== null, ms: performance.now() - t0 });
+    if (searchObserver) searchObserver({ finder: this, entity, range, end: [end.x, end.y, end.z], points: this.pointCount, expanded: this.expanded, found: result !== null, ms: performance.now() - t0 });
     return result;
   }
   addToPath(entity, start, end, size, range) {
@@ -329,8 +356,12 @@ export class PathFinder {
       b = this.safePoint(entity, cur.x - 1, cur.y, cur.z, size, jump),
       c = this.safePoint(entity, cur.x + 1, cur.y, cur.z, size, jump),
       d = this.safePoint(entity, cur.x, cur.y, cur.z - 1, size, jump);
+    const opts = this.pathOptions;
     let n = 0;
-    for (const p of [a, b, c, d]) if (p && !p.visited && p.distanceTo(end) < range) this.pathOptions[n++] = p;
+    if (a !== null && !a.visited && a.distanceTo(end) < range) opts[n++] = a;
+    if (b !== null && !b.visited && b.distanceTo(end) < range) opts[n++] = b;
+    if (c !== null && !c.visited && c.distanceTo(end) < range) opts[n++] = c;
+    if (d !== null && !d.visited && d.distanceTo(end) < range) opts[n++] = d;
     return n;
   }
   // ayg.a(sa, III aye, int): getSafePoint.
@@ -358,45 +389,113 @@ export class PathFinder {
     return point;
   }
   verticalOffset(entity, x, y, z, size) {
+    const m = this.memo;
+    if (m !== null) {
+      const px = ((x - m.ox) >> 4) >>> 0, py = ((y - m.oy) >> 4) >>> 0, pz = ((z - m.oz) >> 4) >>> 0;
+      if (px < m.nx && py < m.ny && pz < m.nz) {
+        const slot = (px * m.ny + py) * m.nz + pz;
+        let page = m.pages[slot];
+        if (page === null) {
+          page = m.pages[slot] = takePage();
+          m.used.push(page);
+        }
+        const i = ((x - m.ox) & 15) | (((z - m.oz) & 15) << 4) | (((y - m.oy) & 15) << 8);
+        let v = page[i];
+        if (v === 127) v = page[i] = getVerticalOffset(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify);
+        return v;
+      }
+    }
     return getVerticalOffset(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify);
   }
+  // Per-search cache of the cell test over a page table centred on the target (the search never leaves the follow-range sphere by more than a step or a fall).
+  // Nothing the test reads changes during one search, so a cached answer equals a fresh one.
+  beginMemo(end, range) {
+    const r = Math.min(Math.ceil(range) + 24, 400);
+    const ox = end.x - r, oy = end.y - r, oz = end.z - r;
+    const n = ((2 * r) >> 4) + 2;
+    this.memo = { ox, oy, oz, nx: n, ny: n, nz: n, pages: new Array(n * n * n).fill(null), used: [] };
+  }
+  endMemo() {
+    const m = this.memo;
+    this.memo = null;
+    if (m) for (const page of m.used) { page.fill(127); pagePool.push(page); }
+  }
+  // ayg.a(III): the point of the (x, y, z) hash (the original's IntHashMap, keyed by the hash alone), created on first use. The points live in a module level pool
+  // and an open addressing table (the same lookups as a Map keyed by the hash, with no per-search allocation); a returned PathEntity holds copies.
   openPoint(x, y, z) {
-    const hash = makeHash(x, y, z);
-    let p = this.pointMap.get(hash);
-    if (!p) this.pointMap.set(hash, (p = new PathPoint(x, y, z)));
+    const hash = makeHash(x, y, z), st = store;
+    let slot = Math.imul(hash, 0x9e3779b1) >>> st.shift;
+    for (;;) {
+      const p = st.table[slot];
+      if (p === null) break;
+      if (p.hash === hash) return p;
+      slot = (slot + 1) & st.mask;
+    }
+    let p;
+    if (st.n < st.pts.length) {
+      p = st.pts[st.n];
+      p.x = x;
+      p.y = y;
+      p.z = z;
+      p.hash = hash;
+      p.index = -1;
+      p.cost = 0;
+      p.heuristic = 0;
+      p.total = 0;
+      p.previous = null;
+      p.visited = false;
+    } else st.pts.push((p = new PathPoint(x, y, z)));
+    st.n++;
+    this.pointCount = st.n;
+    st.table[slot] = p;
+    p.slot = slot;
+    if (st.n * 2 > st.table.length) growTable(st);
     return p;
+  }
+  resetPoints() {
+    const st = store;
+    for (let i = 0; i < st.n; i++) st.table[st.pts[i].slot] = null;
+    st.n = 0;
+    this.pointCount = 0;
   }
   // ayg.a(aye, aye): the previous links from `end` back to `start` as a PathEntity.
   createEntityPath(start, end) {
     let n = 1;
     for (let p = end; p.previous; p = p.previous) n++;
     const points = new Array(n);
-    let p = end;
-    points[--n] = p;
+    let p = end, q = copyPoint(p);
+    points[--n] = q;
     while (p.previous) {
       p = p.previous;
-      points[--n] = p;
+      const r = copyPoint(p);
+      q.previous = r;
+      points[--n] = q = r;
     }
     return new PathEntity(points);
   }
 }
 
-// The live port caps a search at 30000 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
+// The live port caps a search at LIVE_NODE_CAP expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
 // Benchmarks (Node on the dev laptop, node scripts in the batch 33/34 notes). The only native bound is the follow-range sphere around the target (the ChunkCache does not bound it, see the
 // ChunkCache comment above), so a sealed target expands the walkable area inside that sphere: an open flat arena 769 points at range 16 (1.2 ms), 1220 at 20, 4988 at the zombie's 40
 // (1.6 ms); terraced hills 731 / 1170 / 4969 (4.3 ms at range 40). Range 40 is the vanilla maximum (a zombie's random spawn bonus reaches about 45: 6400 points), so the old 6000 cap cut
-// those searches short (a capped search returns the closest partial path, which differs from the original). 30000 is about 0.7-0.9 ms per 1000 points on stepped terrain (batch 33: 29894 points took 21 ms on terraced hills),
+// those searches short (a capped search returns the closest partial path, which differs from the original). the old 30000 was about 0.7-0.9 ms per 1000 points on stepped terrain (batch 33: 29894 points took 21 ms on terraced hills),
 // far beyond any single-floor search and only reachable in multi-storey caves. The search cannot be split over ticks with identical results: the original runs it to completion inside one
 // call, and a mob's next goal check depends on the path it returns.
 // Batch 35 correction (native point counts, village-fight-b35-reference.json): a Hard zombie's range is NOT capped near 45. EntityZombie.onSpawnWithEgg adds a "Random zombie-spawn bonus" (operation 2, kept when
 // d0 = nextDouble * 1.5 * local difficulty > 1) so followRange is (40 + bonus) * (1 + d0), about 80 to 130. A sealed target then floods a sphere of that radius: native 31191 points at range 100 on flat ground, 24461 in a
-// four-storey structure at range 40, 33088 in a seven-storey tower. The 30000 cap counts EXPANDED points (a tower search created 33088 points but expanded 28096), and is passed by range-100+ flat searches.
+// four-storey structure at range 40, 33088 in a seven-storey tower. The old 30000 cap (batch 35, raised in batch 36) counted EXPANDED points (a tower search created 33088 points but expanded 28096), and is passed by range-100+ flat searches.
 // Timing: about 1 ms per 1000 expanded points on typed-array terrain (a memoised verticalOffset was tried and was slower).
 // Tests and benchmarks read every search's size (points created, as the native IntHashMap count), outcome and time through this hook.
 let searchObserver = null;
 export const setPathSearchObserver = (fn) => { const was = searchObserver; searchObserver = fn; return was; };
-let nodeCap = 30000;
+// Batch 36: the live cap is a backstop of 250000 expanded points, above every native search the game can roll: the largest follow range is about 156 (40 * 1.2 spawn bonus * 3.25 zombie bonus at local
+// difficulty 1.5), whose flat sealed flood is about 55000 expanded points (60000 on hills); the b35 records reach 30686 (flat range 100) and 28167 (tower). A search that big
+// costs about 15-25 ms in Node (see public/research/pathfinding.md). Only a flood far beyond any measured terrain is cut short, where the answer is the closest point of the truncated flood.
+export const LIVE_NODE_CAP = 250000;
+let nodeCap = LIVE_NODE_CAP;
 export const setPathNodeCap = (n) => { const was = nodeCap; nodeCap = n; return was; };
+export const getPathNodeCap = () => nodeCap;
 // --- PathNavigate (vv) ---
 // The navigator reads its entity through a small interface (all in Java units):
 // x, y (feet, minY), z, width, height, inWater, inLava, onGround, moveHelper,
