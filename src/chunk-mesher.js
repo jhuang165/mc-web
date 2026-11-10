@@ -68,7 +68,7 @@ export class Mesher {
       this.p.push(...verts[i]);
       this.uv.push(...uvs[i]);
       const s = Array.isArray(shade) ? shade[i] : shade, l = Array.isArray(packed) ? packed[i] : packed;
-      this.shade.push(s, s, s);
+      const sf = Math.fround(s); this.shade.push(sf, sf, sf); // RenderBlocks colours are Java floats
       this.light.push(l & 0xffff, (l >> 16) & 0xffff);
     }
     this.idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
@@ -78,14 +78,22 @@ export class Mesher {
   // `native` false marks the paths that never read EntityRenderer.anaglyphEnable (vine, water, redstone wire): their tint stays raw.
   tint(color, native = true) {
     const [r, g, b] = anaglyphMultiplier(color, native && meshAnaglyph.on), k = this.shade.length - 12;
-    for (let i = 0; i < 4; i++) { this.shade[k + i * 3] *= r; this.shade[k + i * 3 + 1] *= g; this.shade[k + i * 3 + 2] *= b; }
+    const f = Math.fround;
+    for (let i = 0; i < 4; i++) { this.shade[k + i * 3] = f(this.shade[k + i * 3] * r); this.shade[k + i * 3 + 1] = f(this.shade[k + i * 3 + 1] * g); this.shade[k + i * 3 + 2] = f(this.shade[k + i * 3 + 2] * b); }
+  }
+  // Tessellator.setColorOpaque_F (bmh.b(float,float,float), bytecode-read): each float channel becomes (int) (c * 255.0f) (clamped to a byte by
+  // setColorOpaque) in the vertex colour int, and GL reads it back as byte / 255. The vertex colours that reach the GPU are these bytes.
+  colors() {
+    const f = Math.fround, out = new Float32Array(this.shade.length);
+    for (let i = 0; i < out.length; i++) out[i] = f(Math.min(255, Math.max(0, Math.trunc(f(f(this.shade[i]) * 255)))) / 255);
+    return out;
   }
   geometry() {
     if (!this.idx.length) return null;
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(this.p, 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute("shade", new THREE.Float32BufferAttribute(this.shade, 3));
+    g.setAttribute("shade", new THREE.Float32BufferAttribute(this.colors(), 3));
     g.setAttribute("lightCoord", new THREE.Float32BufferAttribute(this.light, 2));
     g.setIndex(this.idx);
     g.computeBoundingSphere();

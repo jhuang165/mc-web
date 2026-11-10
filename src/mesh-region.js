@@ -133,7 +133,7 @@ export function meshArrays(mesher) {
   if (!mesher.idx.length) return null;
   let big = false;
   for (let i = mesher.idx.length - 1; i >= 0; i--) if (mesher.idx[i] >= MAX_LAYER) { big = true; break; }
-  return { position: new Float32Array(mesher.p), uv: new Float32Array(mesher.uv), shade: new Float32Array(mesher.shade), lightCoord: new Float32Array(mesher.light), index: big ? new Uint32Array(mesher.idx) : new Uint16Array(mesher.idx) };
+  return { position: new Float32Array(mesher.p), uv: new Float32Array(mesher.uv), shade: mesher.colors(), lightCoord: new Float32Array(mesher.light), index: big ? new Uint32Array(mesher.idx) : new Uint16Array(mesher.idx) };
 }
 
 export function meshLayerArrays(meshers) {

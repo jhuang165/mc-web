@@ -65,7 +65,11 @@ export const usePartialAo = (ao, fullCube) => ao >= 2 && !fullCube;
 // and an alpha below 96 becomes 0.
 export function mipLevel(src, w, h, hasTransparent) {
   const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1), out = new Uint8ClampedArray(nw * nh * 4);
-  const lin = (v) => Math.pow(v / 255, 2.2), enc = (v) => Math.trunc(Math.pow(v, 1 / 2.2) * 255);
+  // Java float arithmetic. Both branches sum (float) Math.pow((double) (v / 255.0f), 2.2) over the four texels in float, in order.
+  // Without a transparent texel (bqi.a(IIIII)I): (float) Math.pow((double) sum * 0.25, 0.45454545454545453), then (int) ((double) that * 255.0).
+  // With one (bqi.a(IIIIZ)I, transparent texels skipped): sum / 4.0f in float, then (int) (Math.pow((double) mean, 0.45454545454545453) * 255.0).
+  const f = Math.fround, lin = (v) => f(Math.pow(f(v / 255), 2.2));
+  const enc = (sum) => (hasTransparent ? Math.trunc(Math.pow(f(sum / 4), 0.45454545454545453) * 255) : Math.trunc(f(Math.pow(sum * 0.25, 0.45454545454545453)) * 255));
   for (let y = 0; y < nh; y++)
     for (let x = 0; x < nw; x++) {
       const t = [(2 * y) * w + 2 * x, (2 * y) * w + 2 * x + 1, (2 * y + 1) * w + 2 * x, (2 * y + 1) * w + 2 * x + 1].map((p) => Math.min(p, w * h - 1) * 4);
@@ -74,9 +78,9 @@ export function mipLevel(src, w, h, hasTransparent) {
         let sum = 0;
         for (const p of t) {
           if (hasTransparent && src[p + 3] === 0) continue;
-          sum += lin(Math.fround(src[p + c]));
+          sum = f(sum + lin(src[p + c]));
         }
-        out[o + c] = enc(Math.fround(sum / 4));
+        out[o + c] = enc(sum);
       }
       if (hasTransparent && out[o + 3] < 96) out[o + 3] = 0;
     }
