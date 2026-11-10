@@ -567,15 +567,20 @@ function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current,
     hotbar: survival.inventory.main.slice(0, 9).map(s => s ? { id: s.id, damage: s.damage ?? 0 } : null) });
 }
-function applyMultiplayerTick(message) {
+// Cells from a tick (S22/S21 equivalents) or a placement resend (the clicker's two S23 packets).
+function applyMultiplayerCells(changes) {
   if (!multiplayer?.ready || !active?.remote) return;
-  if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
   const cells = [];
-  for (const [x, y, z, id, meta] of message.changes) {
+  for (const [x, y, z, id, meta] of changes) {
     const old = world.get(x, y, z);
     world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
   }
   if (cells.length) scene.updateBlocks(cells);
+}
+function applyMultiplayerTick(message) {
+  if (!multiplayer?.ready || !active?.remote) return;
+  if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
+  applyMultiplayerCells(message.changes);
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
@@ -596,7 +601,7 @@ function applyMultiplayerTick(message) {
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
-    onTick: applyMultiplayerTick,
+    onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
@@ -1231,7 +1236,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (world.dimension) weather.awayOverworld(record); // the Overworld keeps its weather timers running while the player is in the Nether/End
     // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
     weather.mood = new MoodSound(weather);
-    weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye
+    weather.mood.player = () => ({ x: position.x, y: position.y, z: position.z }); // EntityPlayerMP sets yOffset 0 (bytecode-read), so the server player's posY is the feet; getClosestPlayer uses Entity.getDistanceSq(posX, posY, posZ)
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world, { defer: slice }); // from the title screen the column meshes are built in frame-sized slices below, behind the loading screen

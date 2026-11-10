@@ -201,7 +201,13 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     try {
       broadcast(simulation.tick());
       // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).
-      for (const [pid, player] of simulation.players) if (player.refusal) { const ws = sockets.get(pid); if (ws) send(ws, { type: 'chat', name: '', text: player.refusal }); player.refusal = null; }
+      // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.
+      for (const [pid, player] of simulation.players) {
+        const ws = sockets.get(pid);
+        if (player.refusal && ws) send(ws, { type: 'chat', name: '', text: player.refusal });
+        if (player.blocks && ws) send(ws, { type: 'blocks', changes: player.blocks });
+        player.refusal = null; player.blocks = null;
+      }
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
   }, tickMs);

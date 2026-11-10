@@ -1,5 +1,5 @@
 import { World, BLOCKS } from '../world.js';
-import { PROTOCOL, serverUrl, decodeColumn } from './protocol.js';
+import { PROTOCOL, serverUrl, decodeColumn, chunkPacketCells } from './protocol.js';
 
 export function restoreReplica(snapshot) {
   const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion);
@@ -13,9 +13,15 @@ export function restoreReplica(snapshot) {
   return world;
 }
 
+// S21 equivalents (`chunks`) become the cells of their changed sections, applied after the ordinary cells of the same tick.
+export function expandChunks(message) {
+  if (!message.chunks?.length) return message;
+  return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined };
+}
+
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onBlocks, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -52,8 +58,9 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
-    if (message.type === 'chat') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type === 'chat' || message.type === 'blocks') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
+    message = expandChunks(message);
     const merged = this.pending ??= { cells: new Map() };
     for (const change of message.changes) merged.cells.set(`${change[0]},${change[1]},${change[2]}`, change);
     merged.last = message;
@@ -65,7 +72,8 @@ export class DedicatedClient {
     for (const message of this.messages.splice(0)) this.apply(message);
   }
   apply(message) {
-    if (message.type === 'tick' && message.tick > this.lastTick) { this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
+    if (message.type === 'blocks') this.onBlocks(message);
+    if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }

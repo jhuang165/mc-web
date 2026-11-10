@@ -13,7 +13,7 @@ const by = Object.fromEntries(ref.classes.map((c) => [c.name, c]));
 const MOBS = { zombie: "EntityZombie", pigman: "EntityPigZombie", skeleton: "EntitySkeleton", creeper: "EntityCreeper", spider: "EntitySpider", cave_spider: "EntityCaveSpider",
   enderman: "EntityEnderman", blaze: "EntityBlaze", ghast: "EntityGhast", slime: "EntitySlime", magma_cube: "EntityMagmaCube", silverfish: "EntitySilverfish", witch: "EntityWitch",
   giant: "EntityGiantZombie", cow: "EntityCow", pig: "EntityPig", sheep: "EntitySheep", chicken: "EntityChicken", mooshroom: "EntityMooshroom", wolf: "EntityWolf", ocelot: "EntityOcelot",
-  villager: "EntityVillager", iron_golem: "EntityIronGolem", snow_golem: "EntitySnowman", squid: "EntitySquid", bat: "EntityBat", wither: "EntityWither", ender_dragon: "EntityDragon" };
+  horse: "EntityHorse", villager: "EntityVillager", iron_golem: "EntityIronGolem", snow_golem: "EntitySnowman", squid: "EntitySquid", bat: "EntityBat", wither: "EntityWither", ender_dragon: "EntityDragon" };
 
 test("the probe saw every Entity class and Entity.getEyeHeight is 0 unless overridden", () => {
   assert.equal(ref.classes.length, 95);
@@ -39,15 +39,43 @@ test("livingEyeHeight replays every constructed living mob's native eye height",
   assert.notEqual(livingEyeHeight("wolf", f(0.8)), livingEyeHeight("ocelot", f(0.8)), "a wolf's eye is 0.8 of its height, an ocelot's 0.85");
 });
 
-test("marker heights fix the formulas of classes that cannot be constructed on the double", () => {
-  for (const [cls, k] of [["EntityHorse", 0.85], ["EntityWolf", 0.8]]) for (const [h, eye] of by[cls].markers ?? []) assert.equal(f(eye), f(h * f(k)), cls);
+// Batch 34: every class is built through a real constructor (the horse reads an empty en_US.lang, EntityPlayerMP runs on server / world doubles,
+// the client players on a no-op skin manager, dragon parts come from the dragon), so no record is formula-only any more.
+test("all 95 classes were built with a real constructor and real sizes", () => {
+  assert.equal(ref.classes.filter((c) => c.how === "constructed").length, 95);
+  assert.equal(ref.classes.filter((c) => c.how !== "constructed").length, 0);
+  assert.equal(by.EntityHorse.ctor, "(World)");
+  assert.equal(by.EntityPlayerMP.ctor, "(MinecraftServer,WorldServer,GameProfile,ItemInWorldManager)");
+  for (const c of ref.classes) assert.ok(c.width > 0 && c.height > 0, c.name);
+});
+
+test("a real horse is 1.4 x 1.6 with eye height * 0.85; the wolf formula is 0.8", () => {
+  const h = by.EntityHorse;
+  assert.deepEqual([f(h.width), f(h.height), f(h.eye)], [f(1.4), f(1.6), f(f(1.6) * f(0.85))]);
+  assert.equal(h.declaredInName, "EntityLivingBase");
+  assert.equal(f(by.EntityWolf.eye), f(f(by.EntityWolf.height) * f(0.8)));
+});
+
+test("real player sizes: 0.6 x 1.8 for every player class, eye 1.62 server / 0.12 client / 1.82 other-player, unchanged by the sneak flag", () => {
+  for (const [name, eye] of [["EntityPlayerMP", 1.62], ["EntityPlayerSP", 0.12], ["EntityClientPlayerMP", 0.12], ["EntityOtherPlayerMP", 1.82]]) {
+    const c = by[name];
+    assert.deepEqual([f(c.width), f(c.height), f(c.eye), f(c.sneakEye), f(c.sneakHeight)], [f(0.6), f(1.8), f(eye), f(eye), f(1.8)], name);
+  }
+});
+
+test("particles: Entity.getEyeHeight is 0 and every EntityFX is a 0.2 / 0.02 / 0.01 sized cube", () => {
+  const fx = ref.classes.filter((c) => /FX$/.test(c.name));
+  assert.ok(fx.length >= 30);
+  for (const c of fx) { assert.equal(c.eye, 0, c.name); assert.equal(c.width, c.height, c.name); assert.ok([f(0.2), f(0.02), f(0.01)].includes(f(c.width)), `${c.name} ${c.width}`); }
+  assert.equal(by.EntityLightningBolt.eye, 0);
+  assert.equal(by.EntityDragonPart.eye, 0);
 });
 
 test("the player's eye: server player 1.62 over the feet at every mob call site, client players 0.12", () => {
-  assert.equal(by.EntityPlayerMP.markers[0][1], 1.62);
-  assert.equal(f(by.EntityPlayerSP.markers[0][1]), f(0.12));
-  assert.equal(f(by.EntityClientPlayerMP.markers[0][1]), f(0.12));
-  assert.equal(PLAYER_EYE_HEIGHT, f(by.EntityPlayerMP.markers[0][1]));
+  assert.equal(by.EntityPlayerMP.eye, 1.62);
+  assert.equal(f(by.EntityPlayerSP.eye), f(0.12));
+  assert.equal(f(by.EntityClientPlayerMP.eye), f(0.12));
+  assert.equal(PLAYER_EYE_HEIGHT, f(by.EntityPlayerMP.eye));
   assert.equal(PLAYER_EYE_OFFSET, PLAYER_EYE_HEIGHT);
 });
 
