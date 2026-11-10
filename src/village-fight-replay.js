@@ -38,6 +38,9 @@ export const fightReference38 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 39: village-fight-b39-reference.json (wall climbing against rings, roofs, pillars and a plateau, spiders killed by the player and the golem, night jockeys whose arrow hits its own mount):
 // the script op `creative 7 on|off` (kept for probes with an EntityPlayerMP player; no b39 record uses it) and the record's `mathRandom` ([tick, value, caller]: every java.lang.Math.random() call outside a constructor, which the replay hands to Entity.knockBack's coincident-attacker nudge).
 export const fightReference39 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b39-reference.json", import.meta.url)));
+// Batch 41: village-fight-b41-reference.json (the probe player is a real EntityPlayerMP built by ServerPlayerProbe: ItemInWorldManager game type, PlayerCapabilities, invisible and sneaking flags; script ops
+// `creative`, `adventure`, `invisible`, `sneak` on the player index).
+export const fightReference41 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b41-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -225,6 +228,9 @@ function replayFightUncapped(r, hooks) {
       else if (p[1] === "move") { player.x = Number(p[3]); player.z = Number(p[4]); }
       else if (p[1] === "rename") name = p[2];
       else if (p[1] === "creative") survival.mode = p[3] === "on" ? "creative" : "survival"; // PlayerCapabilities.disableDamage / isCreativeMode of the probe player
+      else if (p[1] === "invisible") { if (p[3] === "on") survival.effects.add({ id: 14, duration: 1e9, amplifier: 0 }); else survival.effects.remove(14); } // Entity.setInvisible (data watcher flag 5); the probe player wears no armour (visibility 0, floored to 0.1 by the range scaling)
+      else if (p[1] === "sneak") ew.ai.player.sneaking = p[3] === "on"; // the host sets the view's flag (living-simulation.js)
+      else if (p[1] === "adventure") survival.mode = p[3] === "on" ? "adventure" : "survival"; // GameType 2: disableDamage stays false, so mobs target it as in survival
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
       else if (p[1] === "spawn") spawnZombie(Number(p[2]), Number(p[3]), Number(p[4]), Number(p[5]));
       else if (p[1] === "spawnspider") ew.spawnNatural("spider", Number(p[2]), Number(p[4]), Number(p[3]), "spawn"); // SpawnerAnimals' order: spawnEntityInWorld, then onSpawnWithEgg (the jockey roll and the Hard potion on World.rand)
