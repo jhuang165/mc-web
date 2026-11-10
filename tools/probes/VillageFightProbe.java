@@ -57,8 +57,9 @@ public class VillageFightProbe {
     System.err.println("searches " + VillagerProbe.World.searches.size() + " points " + points + " max " + most + " native ms total " + total / 1e6 + " worst " + worst / 1e6);
     return b.append("]").toString();
   }
-  static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name) || name.startsWith("b37-"); }
-  static boolean b36up(String name) { return name.startsWith("b36-") || name.startsWith("b37-"); }
+  static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
+  static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
+  static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b38-"); }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
@@ -97,6 +98,7 @@ public class VillageFightProbe {
   static double follow = 0;
   static double local = 0; // batch 37: World.func_147462_b (regional difficulty) the double answers, record field `local`
   static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
+  static int bright = 15; static int[][] patches = {}; // batch 38: light level of World.getLightBrightness (everywhere, then [x0, z0, x1, z1, level] columns)
   static int[][] unloadedChunks = {}; // batch 34: [chunkX, chunkZ] pairs the ChunkProviderServer model has not loaded
   static int eggTimer = 6000; // batch 36: chickens' timeUntilNextEgg (the constructor's nextInt(6000) + 6000 is out of reach of any record)
   static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
@@ -117,6 +119,7 @@ public class VillageFightProbe {
     VillageLiveProbe.W.roofs.add(new int[] {40, 0, 49, 100});
     for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
     VillagerProbe.World.light = light; MobMoveProbe.ProbeWorld.water = water;
+    VillagerProbe.World.brightLevel = bright; VillagerProbe.World.brightPatches = patches; VillagerProbe.World.vulnerable = name.startsWith("b38-"); // batch 38
     // batch 34: b34-* records read blocks through the real ChunkCache (VF_CACHE_ALL=1 runs the older ones that way too, to see which of them depend on it) and may leave chunks unloaded
     boolean cache = name.startsWith("b34-") || b35or36(name) || System.getenv("VF_CACHE_ALL") != null;
     VillagerProbe.World.chunkCache = cache; VillagerProbe.World.unloaded.clear();
@@ -134,6 +137,9 @@ public class VillageFightProbe {
         case 'K': ents[i] = new yl(w); break;
         case 'C': { wg hen = new wg(w); hen.bu = eggTimer; ents[i] = hen; break; }
         case 'B': { yl k = new yl(w); held(k, ArmorEnchantmentProbe.make(261, 0, ArmorEnchantmentProbe.ench())); ents[i] = k; break; }
+        case 'S': ents[i] = new yn(w); break; // batch 38: EntitySpider, EntityCaveSpider (T), EntityPigZombie (P): the legacy EntityCreature AI, built bare (no onSpawnWithEgg)
+        case 'T': ents[i] = new xy(w); break;
+        case 'P': ents[i] = new yh(w); break;
         default: throw new RuntimeException(types);
       }
     }
@@ -149,7 +155,7 @@ public class VillageFightProbe {
     List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
     List<wg> extraChickens = new ArrayList<>(); List<String> chickenRecs = new ArrayList<>(), spawnRecs = new ArrayList<>(); // batch 36
     VillagerProbe.World.immediateChickens = b36up(name);
-    VillagerProbe.World.immediateMobs = name.startsWith("b37-");
+    VillagerProbe.World.immediateMobs = b37up(name);
     VillagerProbe.World.localDiff = (float) local;
     List<sv> extraMobs = mobsForIndex = new ArrayList<>(); List<String> mobRecs = new ArrayList<>(); // batch 37: spiders and skeletons the spawn ops built (a spider jockey's skeleton)
     Log[] logs = new Log[ents.length];
@@ -169,6 +175,7 @@ public class VillageFightProbe {
     VillageLiveProbe.W.players.put("probe", player);
     VillagerProbe.World.closePlayers = new ArrayList<yz>(java.util.Arrays.asList(player));
     double[][] vel = new double[ents.length][2];
+    List<Integer> poison = new ArrayList<>();
     List<String> rows = new ArrayList<>(), hits = new ArrayList<>(), shots = new ArrayList<>(), conversions = new ArrayList<>();
     java.util.Map<sa, Integer> arrowId = new java.util.HashMap<>(); java.util.Map<sa, String> lastArrow = new java.util.HashMap<>(); List<sa> arrowList = new ArrayList<>(); List<sa> removed = new ArrayList<>();
     VillagerProbe.World.searches.clear(); VillagerProbe.World.searchNanos.clear();
@@ -264,7 +271,7 @@ public class VillageFightProbe {
             chickenRecs.add("[" + t + "," + num(ch.s) + "," + num(ch.t) + "," + num(ch.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).seed + "," + num(ch.y) + "," + num(MobMoveProbe.field(sv.class, "aP").getFloat(ch)) + "," + (ch.bZ() ? 1 : 0) + "," + ch.bu + "]");
             extraChickens.add(ch); arrowList.add(ch); ticking.add(ch);
             if (!VillagerProbe.World.entities.contains(ch)) VillagerProbe.World.entities.add(ch);
-          } else if ((sp instanceof yn || sp instanceof yl) && name.startsWith("b37-")) {
+          } else if ((sp instanceof yn || sp instanceof yl) && b37up(name)) {
             // Batch 37: a spider built by a spawn op and the skeleton its onSpawnWithEgg seats on it (World.spawnEntityInWorld first, mountEntity after): both join the world list and tick in this pass; the skeleton updates with its mount.
             sv m = (sv) sp;
             for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(m, fn, 0f);
@@ -326,7 +333,8 @@ public class VillageFightProbe {
         row.append("[").append(num(e.s)).append(",").append(num(e.t)).append(",").append(num(e.u)).append(",").append(num(((sv) e).aS()));
         if (i < ents.length - 1) {
           sv tg = ((sw) e).o(), rv = (sv) MobMoveProbe.field(sv.class, "i").get(e);
-          row.append(",").append(index(ents, extraZombies, tg)).append(",").append(index(ents, extraZombies, rv)).append(",[").append(draws(logs[i].log)).append("]");
+          Object tgo = name.startsWith("b38-") && (e instanceof yn || e instanceof yh) ? ((td) e).bT() : tg; // batch 38: a legacy mob's target is EntityCreature.entityToAttack (getEntityToAttack), not the AI-task attack target
+          row.append(",").append(index(ents, extraZombies, tgo)).append(",").append(index(ents, extraZombies, rv)).append(",[").append(draws(logs[i].log)).append("]");
         }
         row.append("]");
       }
@@ -346,7 +354,7 @@ public class VillageFightProbe {
             .append(index(ents, extraZombies, z.o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(z))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log)).append("]]");
         }
         row.append("]");
-        if (name.startsWith("b37-")) { // the spiders and skeletons built during the fight (chickens first as in b36 rows)
+        if (b37up(name)) { // the spiders and skeletons built during the fight (chickens first as in b36 rows)
           row.append(",[");
           for (int k = 0; k < extraChickens.size(); k++) { wg ch = extraChickens.get(k); row.append(k > 0 ? "," : "").append("[").append(num(ch.s)).append(",").append(num(ch.t)).append(",").append(num(ch.u)).append(",").append(num(ch.aS())).append(",").append(ch.bZ() ? 1 : 0).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log)).append("]]"); }
           row.append("],[");
@@ -356,7 +364,7 @@ public class VillageFightProbe {
           for (int k = 0; k < extraMobs.size(); k++) {
             sv m = extraMobs.get(k);
             row.append(k > 0 ? "," : "").append("[").append(num(m.s)).append(",").append(num(m.t)).append(",").append(num(m.u)).append(",").append(num(m.aS())).append(",")
-              .append(index(ents, extraZombies, ((sw) m).o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(m))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).log)).append("]]");
+              .append(index(ents, extraZombies, name.startsWith("b38-") && m instanceof yn ? ((td) m).bT() : ((sw) m).o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(m))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).log)).append("]]");
           }
           row.append("]");
         } else if (b36up(name)) { // the chickens built during the fight
@@ -370,12 +378,13 @@ public class VillageFightProbe {
       }
       row.append("]");
       rows.add(row.toString());
+      if (name.startsWith("b38-")) { rw pe = player.b(rv.u); poison.add(pe == null ? 0 : pe.b()); } // batch 38: the player's Poison duration left (a cave spider's hit)
     }
     StringBuilder sc = new StringBuilder(), rs = new StringBuilder(), hs = new StringBuilder();
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (name.startsWith("b37-") ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + (name.startsWith("b38-") ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -746,6 +755,71 @@ public class VillageFightProbe {
     double[][] spiderVillage = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {47.5, 46.5}, {46.5, 51.5}, {52.5, 80.5}, {10.5, 10.5}, {66.5, 70.5}};
     scenario("b37-spider-jockey-golem-1713", 1713, 80, "VVZGKKK", spiderVillage, new String[] {"3 spawnspider 40.5 46.5 0 90", "30 hitmob 1 2.0 player", "50 hitmob 1 1.0 player"});
     local = 0; difficulty = 2;
+    // Batch 38 (names b38-*): the legacy EntityCreature AI of the spider (S), cave spider (T) and zombie pigman (P) built bare and ticked from the start. A legacy mob's row target (element 4) is
+    // EntityCreature.entityToAttack. `bright` is the light level World.getLightBrightness answers (the real table, the spider's night test is brightness < 0.5), `patches` dark or lit columns; the record also
+    // lists the player's Poison duration per tick (`poison`). The player (the last entity) is never ticked; its hits are scripted.
+    difficulty = 2; blocks = new int[][] {}; eggTimer = 6000;
+    double[][] farPlayer = {{60.5, 60.5}, {10.5, 10.5}};
+    bright = 15;
+    for (int sd : new int[] {3801, 3802}) scenario("b38-spider-wander-day-" + sd, sd, 480, "S", farPlayer, new String[] {});
+    bright = 3;
+    for (int sd : new int[] {3803, 3804}) scenario("b38-spider-wander-night-" + sd, sd, 480, "S", farPlayer, new String[] {});
+    // getBlockPathWeight is 0.5 - brightness: in the dark columns a wander try weighs 0.5 - 0.05, in the lit ones 0.5 - 0.62, so the first dark try wins (and by day a dark column beats the lit ground)
+    bright = 13; patches = new int[][] {{54, 54, 62, 62, 3}};
+    scenario("b38-spider-wander-dark-patch-3805", 3805, 480, "S", new double[][] {{58.5, 58.5}, {10.5, 10.5}}, new String[] {});
+    bright = 15; patches = new int[][] {{66, 54, 74, 66, 2}};
+    scenario("b38-spider-wander-day-dark-patch-3806", 3806, 480, "S", new double[][] {{60.5, 60.5}, {10.5, 10.5}}, new String[] {});
+    // a spider that sees the player in the dark hunts it (findPlayerToAttack, path to it, leaps at 2 to 6 blocks one tick in ten, melee within 2): the player stands still, then walks
+    bright = 3; patches = new int[][] {};
+    scenario("b38-spider-hunt-night-3811", 3811, 400, "S", new double[][] {{60.5, 60.5}, {70.5, 64.5}}, new String[] {"150 walk 1 -0.06 -0.04", "260 walk 1 0 0"});
+    scenario("b38-spider-hunt-night-3812", 3812, 400, "S", new double[][] {{60.5, 60.5}, {66.5, 70.5}}, new String[] {"100 walk 1 0.05 -0.05", "220 walk 1 0 0"});
+    // the same player in daylight is ignored; a hit makes it the target and each attack then rolls the one-in-a-hundred forget (brightness > 0.5)
+    bright = 15;
+    scenario("b38-spider-day-ignores-3813", 3813, 200, "S", new double[][] {{60.5, 60.5}, {64.5, 62.5}}, new String[] {});
+    scenario("b38-spider-day-hit-forgets-3814", 3814, 500, "S", new double[][] {{60.5, 60.5}, {65.5, 62.5}}, new String[] {"10 hit 0 1 1.0 player"});
+    // hit at night from far outside the 16 block range: it hunts the player anyway (entityToAttack), searching with range 16
+    bright = 3;
+    scenario("b38-spider-hit-far-night-3815", 3815, 400, "S", new double[][] {{60.5, 60.5}, {84.5, 60.5}}, new String[] {"20 hit 0 1 1.0 player"});
+    scenario("b38-spider-hit-near-night-3816", 3816, 400, "S", new double[][] {{60.5, 60.5}, {72.5, 66.5}}, new String[] {"20 hit 0 1 2.0 player", "120 hit 0 1 2.0 player"});
+    // the player stays out of the dark spider's 16 blocks and a second spider's: two spiders, one sees it, one is hit
+    scenario("b38-spiders-two-night-3817", 3817, 400, "SS", new double[][] {{60.5, 60.5}, {64.5, 74.5}, {78.5, 66.5}}, new String[] {"30 hit 1 2 1.0 player"});
+    // a spider on one side of a long wall: the partial path leads it into the wall and it climbs
+    blocks = new int[][] {{66, 0, 20, 66, 4, 100, 1, 0}};
+    scenario("b38-spider-wall-night-3818", 3818, 300, "S", new double[][] {{72.5, 60.5}, {58.5, 60.5}}, new String[] {});
+    blocks = new int[][] {};
+    // a golem hits the spider (a mob damage source): it turns on the golem; and the golem inside its village walks to the spider itself
+    scenario("b38-spider-golem-hit-night-3821", 3821, 300, "VVSGKK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {58.5, 46.5}, {62.5, 46.5}, {10.5, 130.5}, {52.5, 80.5}, {10.5, 10.5}}, new String[] {"20 hit 2 3 1.0 mob"});
+    scenario("b38-spider-golem-village-3822", 3822, 300, "VVSGKK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {45.5, 44.5}, {47.5, 46.5}, {10.5, 130.5}, {52.5, 80.5}, {10.5, 10.5}}, new String[] {});
+    // cave spider: poison for 7 s (Normal) or 15 s (Hard) on each hit, none on Easy
+    for (int d = 1; d <= 3; d++) {
+      difficulty = d;
+      scenario("b38-cave-spider-night-d" + d, 3830 + d, 300, "T", new double[][] {{60.5, 60.5}, {68.5, 64.5}}, new String[] {"120 walk 1 -0.05 -0.03", "200 walk 1 0 0"});
+    }
+    difficulty = 2;
+    bright = 15;
+    scenario("b38-cave-spider-day-hit-3834", 3834, 300, "T", new double[][] {{60.5, 60.5}, {64.5, 62.5}}, new String[] {"10 hit 0 1 1.0 player"});
+    // zombie pigmen: a player's hit angers the one hit and every pigman within 32 blocks (its target is the player at once, with the boost), the far one stays calm until it is hit itself
+    bright = 15;
+    double[][] herd = {{60.5, 60.5}, {64.5, 58.5}, {98.5, 60.5}, {66.5, 66.5}};
+    scenario("b38-pigman-idle-3841", 3841, 400, "PPP", new double[][] {{60.5, 60.5}, {64.5, 58.5}, {98.5, 60.5}, {10.5, 10.5}}, new String[] {});
+    scenario("b38-pigman-anger-group-3842", 3842, 450, "PPP", herd, new String[] {"10 hit 0 3 1.0 player", "150 walk 3 0.05 0.03", "220 walk 3 0 0", "260 hit 2 3 1.0 player"});
+    difficulty = 3;
+    scenario("b38-pigman-anger-group-d3-3843", 3843, 450, "PPP", herd, new String[] {"10 hit 0 3 1.0 player", "150 walk 3 0.05 0.03", "220 walk 3 0 0", "260 hit 2 3 1.0 player"});
+    difficulty = 1;
+    scenario("b38-pigman-anger-group-d1-3844", 3844, 300, "PPP", herd, new String[] {"10 hit 0 3 1.0 player"});
+    // The spider jockeys of batch 37 past tick 80: the same spawn script and seeds (the jockey and potion rolls), 450 ticks, the spider on its legacy AI. By day it wanders and keeps the skeleton on its back;
+    // at night (bright 3) it spawns 12 blocks from the player and hunts; a player hit by day makes it hunt too (EntityMob.attackEntityFrom).
+    blocks = new int[][] {};
+    difficulty = 2; bright = 15; local = 0;
+    scenario("b38-spider-jockey-day-d2-47", 47, 450, "VVZGKKK", spiderFarGolem, spiderOps);
+    // (night-47 and night-2231 were recorded and dropped: the skeleton's arrow hit its own mount point blank, and Entity.knockBack then draws its direction from Math.random, which no record can replay)
+    bright = 3;
+    difficulty = 3; local = 1.5;
+    scenario("b38-spider-jockey-night-regen-1713", 1713, 450, "VVZGKKK", spiderFarGolem, new String[] {"3 spawnspider 64.5 70.5 0 90", "200 walk 7 -0.05 -0.05", "300 walk 7 0 0"});
+    bright = 15;
+    scenario("b38-spider-jockey-day-hit-strength-1003", 1003, 450, "VVZGKKK", spiderFarGolem, new String[] {"3 spawnspider 64.5 70.5 0 90", "100 hitmob 0 1.0 player"});
+    local = 0; difficulty = 2;
+    difficulty = 2; bright = 15; patches = new int[][] {};
     eggTimer = 6000; difficulty = 2;
     difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key

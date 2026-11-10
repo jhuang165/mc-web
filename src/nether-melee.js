@@ -54,9 +54,10 @@ export function pigmanAnger(rand) {
 }
 // a(ro, F) attackEntityFrom with a player source: every pigman in the 32 block box around the hit one (self excluded) is angered
 // first, then the hit one, each with its own rand. `others` are the live pigmen; `near` tests the grown box.
-export function pigmanProvoke(target, pigmen, randOf, near) {
-  for (const o of pigmen) if (o !== target && near(o)) Object.assign(o, pigmanAnger(randOf(o)), { pigTarget: true });
+export function pigmanProvoke(target, pigmen, randOf, near, onAnger) {
+  for (const o of pigmen) if (o !== target && near(o)) { Object.assign(o, pigmanAnger(randOf(o)), { pigTarget: true }); onAnger?.(o); }
   Object.assign(target, pigmanAnger(randOf(target)), { pigTarget: true });
+  onAnger?.(target);
 }
 // h (onUpdate): when randomSoundDelay is above 0 and the pre-decrement count reaches 0 after `--`, the angry sound plays at volume * 2
 // and pitch ((r - r) * 0.2 + 1) * 1.8; the speed boost modifier follows the target (aiMoveSpeed in entities.js).

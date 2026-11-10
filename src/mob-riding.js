@@ -64,6 +64,14 @@ export function mountEntity(rider, mount, heightOf) {
   return true;
 }
 
+// Entity.setDead on a mount in the middle of its own update (EntityLiving.despawnEntity): isDead is set, and the rider, which updates right after it in the list, finds
+// the mount dead in updateRidden and is let go where it sits within the same tick (b38 jockey records: the skeleton falls on the tick its spider despawns).
+export function freeRider(mount) {
+  const r = mount.riddenBy;
+  if (!r) return;
+  if (r.ridingEntity === mount) hide(r, "ridingEntity", null);
+  hide(mount, "riddenBy", null);
+}
 // World.updateEntities (ahb.h) and Entity.updateRidden's start: a mount that is dead frees the rider where it sits (sa.ab clears ridingEntity and returns).
 // The mount of this world's list is dead once it left the list; riders also forget a mount that no longer carries them.
 export function releaseDead(entities) {

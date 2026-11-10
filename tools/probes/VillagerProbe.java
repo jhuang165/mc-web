@@ -41,7 +41,10 @@ public class VillagerProbe {
     public boolean a(int x, int y, int z, int meta, int flags) { int[] c = cell(x, y, z); if (c == null) return false; c[1] = meta; return true; }
     public void c(int x0, int y0, int z0, int x1, int y1, int z1) {}
     public void a(yz player, int event, int x, int y, int z, int data) { aux.add(event + "|" + x + "," + y + "," + z); }
-    public float n(int x, int y, int z) { return 1.0f; }
+    // Batch 38: World.getLightBrightness is the real WorldProvider table (generateLightBrightnessTable, ambient 0) at a light level: `brightLevel` everywhere except the `brightPatches` ([x0, z0, x1, z1, level] columns, first match wins). Level 15 gives exactly 1.0f, the value every older record ran with.
+    static int brightLevel = 15; static int[][] brightPatches = {};
+    static float table(int level) { float f1 = 1.0F - (float) level / 15.0F; return (1.0F - f1) / (f1 * 3.0F + 1.0F) * (1.0F - 0.0F) + 0.0F; }
+    public float n(int x, int y, int z) { int level = brightLevel; for (int[] b : brightPatches) if (x >= b[0] && z >= b[1] && x <= b[2] && z <= b[3]) { level = b[4]; break; } return table(level); }
     public java.util.Calendar V() { java.util.Calendar c = java.util.Calendar.getInstance(); c.setTimeInMillis(1592200000000L); return c; } // batch 31: World.getCurrentDate (EntityZombie.onSpawnWithEgg's Halloween pumpkin check), a fixed mid-June date
     static float localDiff = 0.0f; // batch 37: record field `local`
     public float B(int x, int y, int z) { return localDiff; } // batch 31: World.func_147462_b (regional difficulty) reads a chunk; EntityZombie.onSpawnWithEgg of a converted villager asks, and its result is not observed
@@ -66,7 +69,14 @@ public class VillagerProbe {
       for (yz p : closePlayers) { double dx = p.s - e.s, dy = p.t - e.t, dz = p.u - e.u, q = dx * dx + dy * dy + dz * dz; if ((d < 0 || q < d * d) && (bd == -1 || q < bd)) { bd = q; best = p; } }
       return best;
     }
-    public yz b(sa e, double d) { return null; }
+    // Batch 38: World.getClosestVulnerablePlayerToEntity (ahb.b(sa, D) -> b(DDDD)): the nearest living player within d of the entity's feet (no sneaking or invisibility scaling: the probe player has neither); null in every older record (closePlayers unset).
+    public yz b(sa e, double d) {
+      if (closePlayers == null || !vulnerable) return null;
+      yz best = null; double bd = -1;
+      for (yz p : closePlayers) { if (p.aS() <= 0) continue; double dx = p.s - e.s, dy = p.t - e.t, dz = p.u - e.u, q = dx * dx + dy * dy + dz * dz; if ((d < 0 || q < d * d) && (bd == -1 || q < bd)) { bd = q; best = p; } }
+      return best;
+    }
+    static boolean vulnerable = false; // batch 38: VillageFightProbe turns it on for b38-* records
     // Batch 29: VillageFightProbe turns this on so entities push each other and collideWithEntity runs (getEntitiesWithinAABBExcludingEntity); every
     // other probe leaves it off and keeps the empty answer its reference was recorded with.
     static boolean pickEntities = false;

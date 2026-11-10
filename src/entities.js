@@ -8,7 +8,7 @@ import { fleeceColor } from "./population-tail.js";
 import { MapGenScatteredFeature } from "./scattered-feature-generator.js";
 import { canDespawn, livingEyeHeight } from "./ai.js";
 import { gameRule } from "./game-rules.js";
-import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
+import { spiderDrops, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, anchoredShrunkBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
 import { endermanTick, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
@@ -39,7 +39,8 @@ import { createVillages, PLAYER_NAME, villageAttacker } from "./village-host.js"
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
 import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
-import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigmanThink, pigStrike } from "./nether-melee-live.js";
+import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigStrike } from "./nether-melee-live.js";
+import { isLegacyCreature, legacyThink } from "./legacy-creature.js";
 import { SQUID, BAT, squidCanSpawn, batCanSpawn } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
@@ -57,7 +58,7 @@ import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
 import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
-import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
+import { mountEntity, releaseDead, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
@@ -998,9 +999,11 @@ export class EntityWorld {
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
-    if (e.type === "zombie") this.callReinforcement(e, sourceEntity(this, e, source));
+    if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
     // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
     if (e.type === "silverfish" && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player;
+    // EntityMob.attackEntityFrom (yg.a), spider and pigman: any living attacker that is not this mob, its rider or its mount becomes entityToAttack.
+    if (isLegacyCreature(e) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = by === "player" ? this.ai.player : this.ai.brain(by);
     return true;
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
@@ -1642,6 +1645,11 @@ export class EntityWorld {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
       if (ticks) target.fire = Math.max(target.fire || 0, ticks);
     }
+    // EntityCaveSpider.attackEntityAsMob: Poison (amplifier 0) on any living target.
+    if (hit && e.type === "cave_spider") {
+      const ticks = caveSpiderPoisonTicks(this.difficulty);
+      if (ticks > 0) addMobEffect(target, 19, ticks, 0);
+    }
     return hit;
   }
   // EntityZombie.onKillEntity (yq.a(sv)): on Normal (half the time) and Hard the villager is replaced by a zombie
@@ -1825,7 +1833,7 @@ export class EntityWorld {
       rangedAttack:(e,target,scale)=>e.type==="wither"?witherRanged(this,e,target):e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
-      despawn:(e)=>{e.despawnedHealth=e.health;e.health=0;e.death=20;}, // setDead leaves the native health; the rest of that update (its path search's fall tries) still reads it (ai.js maxSafePointTries)
+      despawn:(e)=>{e.despawnedHealth=e.health;e.health=0;e.death=20;freeRider(e);}, // setDead leaves the native health; the rest of that update (its path search's fall tries) still reads it (ai.js maxSafePointTries)
     });
   }
   // The mob tick reads blocks through the headless ring's view (resident column first, then the ring's), so mobs outside the resident
@@ -1919,6 +1927,8 @@ export class EntityWorld {
           continue;
         }
       }
+      // EntityPigZombie.onUpdate (yh.h) runs its angry sound before EntityZombie.onUpdate and so before the ambient say roll (b38 records: f f, then i1000).
+      if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
       // EntityZombie.onUpdate (yq.h): a converting zombie counts its timer down before EntityLivingBase.onUpdate.
       if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
       e.age++;
@@ -1971,12 +1981,11 @@ export class EntityWorld {
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
-      if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
       if (e.ridingEntity) this.walk(e, t, 0, () => this.ridden(e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
@@ -2346,49 +2355,7 @@ export class EntityWorld {
       return !(e.idle > 600 && entityRandom(e).nextDouble() < hit);
     });
   }
-  // Spider keeps EntityCreature's legacy aggression/leap rules. Navigation reuses
-  // the existing bounded PathFinder; its refresh/wander timing remains adapted.
-  spiderThink(e) {
-    const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival;
-    const height = ENTITY_TYPES[e.type].height, light = this.ai.brightness(Math.floor(e.x), Math.floor(e.y + height * 0.66), Math.floor(e.z));
-    const distance = Math.sqrt(m.distSq(p));
-    e.idle = (e.idle || 0) + 1 + (light > 0.5 ? 2 : 0);
-    m.despawnEntity();
-    m.senseCache.clear();
-    if (!p.alive || s.creative) {
-      if (e.spiderTarget) m.navigator.clearPathEntity();
-      e.spiderTarget = false;
-    } else if (e.revenge && e.revenge !== e.spiderRevenge && revengeOf(e) === "player") {
-      e.spiderRevenge = e.revenge;
-      e.spiderTarget = true;
-    } else if (!e.spiderTarget && this.ai.closestVulnerablePlayer(e, 16) && spiderFindsPlayer(light)) e.spiderTarget = true;
-    if (e.spiderTarget) {
-      m.attackTarget = p;
-      if (m.canSee(p)) {
-        const result = spiderAttack(e, p, distance, light, this.random, height);
-        if (result === "forget") { e.spiderTarget = false; m.navigator.clearPathEntity(); }
-        else if (result === "hit") this.hitPlayer(e, s);
-      }
-      if (e.spiderTarget) {
-        if (e.age % 10 === 0 || m.navigator.noPath()) m.navigator.tryMoveToEntityLiving(p, 1);
-        m.lookHelper.setLookPositionWithEntity(p, 30, 30);
-        // The legacy path cannot climb vertically; continue pushing toward the
-        // target when a wall stops the path, which sets the spider's ladder flag.
-        if (m.navigator.noPath() || e.climbing) m.moveHelper.setMoveTo(p.x, e.y, p.z, 1);
-      }
-    } else {
-      m.attackTarget = null;
-      if (e.age % 80 === 0) {
-        const a = this.random() * Math.PI * 2;
-        m.navigator.tryMoveToXYZ(e.x + Math.sin(a) * 6, e.y, e.z + Math.cos(a) * 6, 1);
-      }
-    }
-    m.navigator.onUpdateNavigation();
-    m.moveHelper.onUpdateMoveHelper();
-    m.lookHelper.onUpdateLook();
-    m.jumpHelper.doJump();
-    e.yaw = -e.rotationYaw * Math.PI / 180;
-  }
+  // The spider's, cave spider's and pigman's legacy AI (EntityCreature.updateEntityActionState) lives in legacy-creature.js.
   // EntitySilverfish.attackEntityFrom (yk.a): an entity or magic source arms the 20 tick summon cooldown.
   silverfishHurt(e, source) {
     const name = source.name ?? "generic", entity = !!(source.player || source.attacker || name === "mob" || name === "thorns");
@@ -2455,6 +2422,7 @@ export class EntityWorld {
       setDead: () => this.ai.despawn(e),
     };
     silverfishActionState(st, env);
+    st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
     e.moveForward = st.moveForward; e.jumping = st.jumping; e.summonCooldown = st.summonCooldown;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
@@ -2495,6 +2463,7 @@ export class EntityWorld {
       setDead: () => this.ai.despawn(e),
     };
     creatureActionState(st, env);
+    st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
     e.moveForward = st.moveForward; e.jumping = st.jumping;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
