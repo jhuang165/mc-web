@@ -30,6 +30,7 @@ export const fightReference35 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 36: village-fight-b36-reference.json (baby-zombie chicken jockeys from scripted spawns, held-item swaps with attribute modifiers, gates and doors on slopes, villagers fleeing across storeys):
 // a `spawn` script op, chickens (`C`) among the mobs, `spawns`/`chickens` lists and two more row elements (the chickens built during the fight, the jockey flags of the starting chickens).
 export const fightReference36 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b36-reference.json", import.meta.url)));
+export const fightReference37 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b37-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -56,7 +57,7 @@ function plain(blocks = []) {
   // Batch 32: `blocks` are the record's [x0, y0, z0, x1, y1, z1, id, meta] fills (terrain steps, walls, glass, fences, a water pool replacing floor cells at y < 0).
   for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), portCell(id, meta));
   return { numericSeed: 1, height: 256, floorBelow: true, minX: -3e7, maxX: 3e7, minZ: -3e7, maxZ: 3e7, // the native world has no edge a mob stops at (batch 34: the golem of a hunt walks past x 0)
-    get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? 1 : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
+    get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? PORT_ID[1] : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
     set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
@@ -68,6 +69,7 @@ function replayFightUncapped(r, hooks) {
   const types = r.types ?? "VVZZGKK", n = types.length, extras = !!r.types, difficulty = r.difficulty ?? 2;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = difficulty;
+  if (r.local) ew.localDifficulty = () => r.local; // the probe's World.func_147462_b answers a constant (record field `local`, 0 when absent)
   ew.worldRandom = new JavaRandom(r.seed);
   ew.isDaytime = () => false;
   ew.brightnessLevel = () => 15; // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
@@ -126,6 +128,7 @@ function replayFightUncapped(r, hooks) {
   // constructor's `new Random()` is the one thing the record cannot give, so the probe's Entity is seeded), and ticks and is compared like any mob.
   const extra = [], extraLogs = [], zombiesLeft = (r.zombies ?? []).slice(), made = [];
   const extraChickens = [], chickenLogs = [], chickensLeft = (r.chickens ?? []).slice();
+  const extraMobs = [], mobLogs = [], mobsLeft = (r.mobs ?? []).slice(); // batch 37: spiders and skeletons built during the fight
   ew.entitySeed = (z, kind) => {
     if (kind === "jockey-chicken") { // a baby zombie's new chicken (yq.a(sy)): Entity.rand seeded, the constructor's egg timer, the yaw setLocationAndAngles gave it
       const rec = chickensLeft.shift(), lr = new LogRandom(BigInt(rec ? rec[4] : 1));
@@ -135,6 +138,16 @@ function replayFightUncapped(r, hooks) {
       if (rec) { z.eggTimer = rec[8]; for (const k of ["rotationYawHead", "prevRotationYawHead"]) z[k] = Math.fround(rec[6]); }
       made.push([tick, kind, z.x, z.y, z.z]);
       extraChickens.push(z); chickenLogs.push(lr);
+      return;
+    }
+    if (z.type === "spider" || z.type === "skeleton") { // batch 37: a spider built by a spawn op and the skeleton jockey its onSpawnWithEgg seats on it: Entity.rand seeded from the record, the constructor's yaw fields, then ticked like any mob
+      const rec = mobsLeft.shift(), lr = new LogRandom(BigInt(rec ? rec[5] : 1));
+      lr.logBooleans = true; setEntityRandom(z, lr);
+      z.growingAge = 0; z.onGround = false;
+      if (rec) for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) z[k] = Math.fround(rec[6]);
+      if (rec) z.yaw = (-Math.fround(rec[6]) * Math.PI) / 180;
+      made.push([tick, kind, z.x, z.y, z.z]);
+      extraMobs.push(z); mobLogs.push(lr);
       return;
     }
     const rec = zombiesLeft.shift();
@@ -172,9 +185,15 @@ function replayFightUncapped(r, hooks) {
   const equip = (i, id) => { const e = ents[i]; e.equipment = [id ? { id: Number(id), count: 1, damage: 0, enchantments: [] } : null, null, null, null, null]; ew.ai.brain(e).syncCombatTask(true); }; // setCurrentItemOrArmor(0) runs setCombatTask at once
   for (let t = 0; t < r.ticks; t++) {
     tick = t;
-    const knownExtras = extraLogs.length, knownChickens = chickenLogs.length;
+    const knownExtras = extraLogs.length, knownChickens = chickenLogs.length, knownMobs = mobLogs.length;
     for (const p of script) {
       if (Number(p[0]) !== t) continue;
+      if (p[1] === "hitmob") { // batch 37: "t hitmob k dmg player|mob" on the k-th spider or skeleton of the fight
+        const v = extraMobs[Number(p[2])], a = p[4] === "player" ? player : ents[0];
+        const src = p[4] === "player" ? { from: { x: player.x, z: player.z }, player: true, name: "player" } : { from: { x: a.x, z: a.z }, attacker: a, name: "mob", player: false };
+        hits.push([t, ew.attackEntityFrom(v, Number(p[3]), src), v.health]);
+        continue;
+      }
       if (p[1] === "hit") {
         const v = ents[Number(p[2])], a = Number(p[3]) === n ? player : ents[Number(p[3])];
         const src = p[5] === "player" ? { from: { x: player.x, z: player.z }, player: true, name: "player" } : { from: { x: a.x, z: a.z }, attacker: a, shooter: p[5] === "arrow" ? a : undefined, name: p[5] === "arrow" ? "arrow" : "mob", player: false };
@@ -192,11 +211,12 @@ function replayFightUncapped(r, hooks) {
       else if (p[1] === "rename") name = p[2];
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
       else if (p[1] === "spawn") spawnZombie(Number(p[2]), Number(p[3]), Number(p[4]), Number(p[5]));
+      else if (p[1] === "spawnspider") ew.spawnNatural("spider", Number(p[2]), Number(p[4]), Number(p[3]), "spawn"); // SpawnerAnimals' order: spawnEntityInWorld, then onSpawnWithEgg (the jockey roll and the Hard potion on World.rand)
     }
     player.x += vel[0]; player.z += vel[1];
     ew.ai.beginTick(player, survival, 0);
     // a zombie built by a scripted hit (before this point) keeps its constructor-time draws: the probe notices it only in the entity pass that follows its log reset
-    for (const l of [...logs, ...extraLogs.slice(0, knownExtras), ...chickenLogs.slice(0, knownChickens)]) l.log.length = 0;
+    for (const l of [...logs, ...extraLogs.slice(0, knownExtras), ...chickenLogs.slice(0, knownChickens), ...mobLogs.slice(0, knownMobs)]) l.log.length = 0;
     survival.health = 1000;
     // the arrows (zc.h) tick after every mob, in spawn order; one spawned this tick ticks in this pass. A zombie an arrow's hit makes (a reinforcement) is appended after the arrows and ticks in the same pass.
     const changed = [];
@@ -210,18 +230,19 @@ function replayFightUncapped(r, hooks) {
     }
     playerDamage.push(1000 - survival.health);
     survival.health = 1000;
-    const index = (e) => (ents.includes(e) ? ents.indexOf(e) : extra.includes(e) ? n + 1 + extra.indexOf(e) : -1);
+    const index = (e) => (ents.includes(e) ? ents.indexOf(e) : extra.includes(e) ? n + 1 + extra.indexOf(e) : extraMobs.includes(e) ? n + 1 + extra.length + extraMobs.indexOf(e) : -1);
     const agg = village.aggressors.map((a) => [a.entity.isPlayer ? n : index(a.entity.e), a.tick]);
     const idx = (b) => (!b ? -1 : b.isPlayer ? n : index(b.e));
     states.push(ents.map((e, i) => [e.x, e.y, e.z, gone.has(e) ? gone.get(e) : e.removedHealth ?? e.health, idx(ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? n : index(revengeOf(e))) : -1), logs[i].log.slice()]));
     states[states.length - 1].arrows = changed;
     states[states.length - 1].chickens = extraChickens.map((c, k) => [c.x, c.y, c.z, c.removedHealth ?? c.health, c.chickenJockey ? 1 : 0, chickenLogs[k].log.slice()]);
+    states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
     states[states.length - 1].jockeys = ents.flatMap((e) => (e.type === "chicken" ? [e.chickenJockey ? 1 : 0] : []));
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
     hooks.onTick?.(t, ew, ents);
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player")]);
   }
-  return { ew, spawnLog, extraChickens, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
+  return { ew, extraMobs, spawnLog, extraChickens, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
 }
 
 // The first tick, mob and field where a replay differs from a record (null when none): fields 0-5 are x, y, z, health, attack target, revenge target, then the draws.
@@ -240,6 +261,13 @@ export function firstDivergence(r, got) {
     if (r.rows[t][5] !== undefined) { // batch 36 rows: the chickens built during the fight, then the jockey flags of the starting chickens
       if (JSON.stringify(r.rows[t][5]) !== JSON.stringify(got.states[t].chickens)) return [t, "extra chickens", r.rows[t][5], got.states[t].chickens];
       if (JSON.stringify(r.rows[t][6]) !== JSON.stringify(got.states[t].jockeys)) return [t, "jockey flags", r.rows[t][6], got.states[t].jockeys];
+    }
+    if (r.rows[t][7] !== undefined) {
+      // A spider's own update draws on Entity.rand through EntityCreature.updateEntityActionState (i180, i120, f, f while idle), which the port's adapted spider AI does not (public/research/spiders.md): its draws
+      // are compared only up to the first ambient-sound draw (i1000) of its first update, i.e. its spawn rolls; its place, health and target are compared at every tick. The skeleton jockey is compared whole.
+      const view = (list, kinds) => list.map((m, i) => (kinds[i] === 0 ? [...m.slice(0, 6), m[6].slice(0, Math.max(0, m[6].indexOf("i1000")))] : m));
+      const kinds = (r.mobs ?? []).map((m) => m[1]);
+      if (JSON.stringify(view(r.rows[t][7], kinds)) !== JSON.stringify(view(got.states[t].mobs, kinds))) return [t, "extra mobs", r.rows[t][7], got.states[t].mobs];
     }
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
     if (!near(before - want[n][3], got.playerDamage[t])) return [t, "player damage", before - want[n][3], got.playerDamage[t]];
