@@ -1180,23 +1180,19 @@ export class EntityWorld {
     }
     return e;
   }
-  // The AI half of a rider's onLivingUpdate (Entity.updateRidden runs onUpdate, then the mount's updateRiderPosition): the tasks, navigator
-  // and helpers run, the rider's own movement does not (its motion is zeroed each tick and the seat overrides the position). A zombie
-  // on a chicken with a target hands its path to the chicken at speed 1.5 first (EntityZombie.onLivingUpdate, yq.e).
+  // The AI of a rider's onLivingUpdate (Entity.updateRidden zeroes its motion, runs the whole onUpdate, then the mount's updateRiderPosition seats it): the tasks,
+  // navigator and helpers run here and the caller's walk() then moves and pushes it from the place the seat left it at (b37 records: the rider's own move and
+  // push are part of the tick, the seat overrides the result). A zombie on a chicken with a target hands its path to the chicken at speed 1.5 first (EntityZombie.onLivingUpdate, yq.e).
   ridden(e) {
     const m = e.ridingEntity;
-    if (e.jumpTicks > 0) e.jumpTicks--;
-    e.moveForward = 0;
     if (e.type === "zombie" && m?.type === "chicken" && this.ai.brain(e).attackTarget) this.ai.brain(m).navigator.setPath(this.ai.brain(e).navigator.getPath(), 1.5);
     this.ai.think(e);
-    e.jumping = false;
-    e.moveForward = 0;
-    e.vx = e.vy = e.vz = 0;
   }
   // EntitySpider.onSpawnWithEgg's rider: a skeleton at the spider's place and yaw (pitch 0), its own rolls, then mounted.
   spawnSpiderJockey(spider) {
     const sk = this.create("skeleton", spider.x, spider.y, spider.z);
     setLocationAndAngles(sk, spider.x, spider.y, spider.z, spider.rotationYaw ?? 0, 0);
+    this.entitySeed?.(sk, "jockey-skeleton"); // replay hook: the skeleton's Entity.rand
     this.onSpawnWithEgg(sk, { free: true });
     this.entities.push(sk);
     mountEntity(sk, spider, (m) => this.size(m)[1]);
@@ -1976,7 +1972,7 @@ export class EntityWorld {
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
       if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
-      if (e.ridingEntity) this.ridden(e); // mob-riding.js: the AI runs, the mount carries the rider
+      if (e.ridingEntity) this.walk(e, t, 0, () => this.ridden(e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
