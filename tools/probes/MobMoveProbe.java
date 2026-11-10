@@ -23,7 +23,7 @@ public class MobMoveProbe {
     public sa a(int id) { return null; }
     public aji a(int x, int y, int z) { return y < 0 || (step > 0 && z >= 2 && y < step) ? aji.e(1) : aji.e(0); }
     public boolean d(int x, int y, int z) { return true; }
-    public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) { return true; } // checkChunksExist
+    public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) { return true; } // checkChunksExist (VillagerProbe.World models unloaded chunks)
     static boolean exact = false; // batch 32: VillageFightProbe keeps only the floor cells whose box intersects the query, as Block.addCollisionBoxesToList does (the list is also tested for emptiness)
     static boolean water = false; // batch 32: VillageFightProbe's pool scenarios use the real World.handleMaterialAcceleration and isMaterialInBB
     public boolean a(azt box, awt material) { return water ? super.a(box, material) : false; }

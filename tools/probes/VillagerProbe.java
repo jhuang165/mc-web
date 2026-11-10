@@ -52,7 +52,7 @@ public class VillagerProbe {
     public azu a(azw a, azw b) { return realRays ? super.a(a, b) : null; }
     public azu a(azw a, azw b, boolean c) { return realRays ? super.a(a, b, c) : null; }
     public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return realRays ? super.a(a, b, c, d, e) : null; }
-    public boolean d(sa entity) { spawned.add(entity); if (pickEntities && immediateZombies && entity instanceof yq) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
+    public boolean d(sa entity) { if (!unloaded.isEmpty() && !(entity instanceof yz) && unloaded.contains(chunkKey(qh.c(entity.s / 16.0), qh.c(entity.u / 16.0)))) return false; spawned.add(entity); if (pickEntities && immediateZombies && entity instanceof yq) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
     static boolean immediateZombies = false;
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
     // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.
@@ -89,8 +89,46 @@ public class VillagerProbe {
     public List a(sa entity, azt box, sj selector) { return pickEntities ? others(entity, box, selector) : new ArrayList(); }
     public List a(Class c, azt box) { return pick(c, box, null); }
     public List a(Class c, azt box, sj selector) { return pick(c, box, selector); }
-    public ayf a(sa e, int x, int y, int z, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(this, open, doors, water, swim).a(e, x, y, z, range); }
-    public ayf a(sa e, sa target, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(this, open, doors, water, swim).a(e, target, range); }
+    // Batch 34: with `chunkCache` on, World.getEntityPathToXYZ / getPathEntityToEntity are the real ones in everything but where the blocks come from: the real ChunkCache (ahr) over real Chunks
+    // (apx, apz storage filled from `cells`; y < 0, where the probe floor is, and chunks without a cell read as air exactly as ahr.a answers). The PathFinder only reads it for the swimming start loop. `unloaded` chunk keys model a ChunkProviderServer
+    // that has not loaded them: World.checkChunksExist (b) is false over them and World.spawnEntityInWorld (d) refuses a non-player entity in them (chunkExists), as natively.
+    static boolean chunkCache = false;
+    static java.util.Set<Long> unloaded = new java.util.HashSet<>();
+    static long chunkKey(int cx, int cz) { return ((long) cx << 32) ^ (cz & 0xffffffffL); }
+    static java.util.Map<Long, apx> image = new HashMap<>(); static long imageStamp = Long.MIN_VALUE; static boolean serving = false;
+    public apx e(int cx, int cz) { return serving ? image.get(chunkKey(cx, cz)) : null; }
+    public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) {
+      if (unloaded.isEmpty()) return true;
+      if (y1 < 0 || y0 > 255) return false; // World.checkChunksExist: the native y test comes first
+      for (int cx = x0 >> 4; cx <= x1 >> 4; cx++) for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) if (unloaded.contains(chunkKey(cx, cz))) return false;
+      return true;
+    }
+    static void refreshImage() throws Exception {
+      long stamp = cells.size();
+      for (Map.Entry<String, int[]> en : cells.entrySet()) stamp += en.getKey().hashCode() * 1000003L + en.getValue()[0] * 131L + en.getValue()[1] * 7L;
+      if (stamp == imageStamp) return;
+      imageStamp = stamp; image = new HashMap<>();
+      for (Map.Entry<String, int[]> en : cells.entrySet()) {
+        String[] k = en.getKey().split(",");
+        int x = Integer.parseInt(k[0]), y = Integer.parseInt(k[1]), z = Integer.parseInt(k[2]);
+        if (y < 0 || y > 255) continue;
+        apx chunk = image.computeIfAbsent(chunkKey(x >> 4, z >> 4), key -> new apx(null, x >> 4, z >> 4));
+        apz[] storage = (apz[]) MobMoveProbe.field(apx.class, "u").get(chunk);
+        if (storage[y >> 4] == null) storage[y >> 4] = new apz(y >> 4 << 4, true);
+        storage[y >> 4].a(x & 15, y & 15, z & 15, aji.e(en.getValue()[0]));
+        storage[y >> 4].a(x & 15, y & 15, z & 15, en.getValue()[1]);
+      }
+    }
+    ahr cacheAround(sa e, double centreY, int pad, float range) {
+      try {
+        refreshImage();
+        int cx = qh.c(e.s), cy = qh.c(centreY), cz = qh.c(e.u), r = (int) (range + pad);
+        serving = true;
+        try { return new ahr(this, cx - r, cy - r, cz - r, cx + r, cy + r, cz + r, 0); } finally { serving = false; }
+      } catch (Exception ex) { throw new RuntimeException(ex); }
+    }
+    public ayf a(sa e, int x, int y, int z, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(chunkCache ? cacheAround(e, e.t, 8, range) : this, open, doors, water, swim).a(e, x, y, z, range); }
+    public ayf a(sa e, sa target, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(chunkCache ? cacheAround(e, e.t + 1.0, 16, range) : this, open, doors, water, swim).a(e, target, range); }
   }
 
   static String num(double v) { return Double.toString(v); }

@@ -22,6 +22,9 @@ export const fightReference31 = JSON.parse(readFileSync(new URL("../public/resea
 export const fightReference32 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b32-reference.json", import.meta.url)));
 // Batch 33: village-fight-b33-reference.json (stairs, ladders, trapdoors, fence gates, lava, ice, packed ice, soul sand, cobweb); a `pos` row may carry a start height.
 export const fightReference33 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b33-reference.json", import.meta.url)));
+// Batch 34: village-fight-b34-reference.json (the native ChunkCache does not bound the search, sealed and far targets, chunk borders, reinforcement sites in chunks that are not loaded,
+// cobblestone walls, nether fences, cobweb with arrows and falls); a record may carry `unloaded` chunks (the double's ChunkProviderServer has not loaded them).
+export const fightReference34 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b34-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -47,12 +50,13 @@ function plain(blocks = []) {
   const cells = new Map([[key(50, 0, 50), [WOODEN_DOOR, 0]], [key(50, 1, 50), [WOODEN_DOOR, 8]]]);
   // Batch 32: `blocks` are the record's [x0, y0, z0, x1, y1, z1, id, meta] fills (terrain steps, walls, glass, fences, a water pool replacing floor cells at y < 0).
   for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), portCell(id, meta));
-  return { numericSeed: 1, height: 256, floorBelow: true, get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? 1 : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
+  return { numericSeed: 1, height: 256, floorBelow: true, minX: -3e7, maxX: 3e7, minZ: -3e7, maxZ: 3e7, // the native world has no edge a mob stops at (batch 34: the golem of a hunt walks past x 0)
+    get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? 1 : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
     set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
 export function replayFight(r, hooks = {}) {
-  const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 6000 expanded points)
+  const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 30000 expanded points)
   try { return replayFightUncapped(r, hooks); } finally { setPathNodeCap(was); }
 }
 function replayFightUncapped(r, hooks) {
@@ -63,6 +67,7 @@ function replayFightUncapped(r, hooks) {
   ew.isDaytime = () => false;
   ew.brightnessLevel = () => 15; // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
   ew.lightAt = () => r.light ?? 15; // the probe world's getLightBrightness is 1.0 everywhere; World.getBlockLightValue is the record's `light` (15 unless a dark arena)
+  if (r.unloaded) { const gone = new Set(r.unloaded.map(([x, z]) => x + "," + z)); ew.chunkLoaded = (x, z) => !gone.has((x >> 4) + "," + (z >> 4)); } // World.spawnEntityInWorld's chunkExists
   ew.ai.deps.canSeeSky = (x, y, z) => !(x >= 40 && x <= 49 && z >= 0 && z <= 100);
   // EntityLiving.despawnEntity is setDead: the native row keeps the health it had, the port marks a despawn as health 0 / death 20 (a corpse's removal)
   const gone = new Map(), despawn = ew.ai.deps.despawn;
@@ -147,7 +152,7 @@ function replayFightUncapped(r, hooks) {
         hits.push([t, hit, v.health]);
         if (away) { ew.entities.splice(ew.entities.indexOf(v), 1); v.removedHealth = v.health; v.health = 0; v.death = kept.d; gone.delete(v); }
       } else if (p[1] === "walk" && Number(p[2]) === n) { vel[0] = Number(p[3]); vel[1] = Number(p[4]); }
-      else if (p[1] === "move" && Number(p[2]) !== n) { const e = ents[Number(p[2])]; e.x = Number(p[3]); e.z = Number(p[4]); }
+      else if (p[1] === "move" && Number(p[2]) !== n) { const e = ents[Number(p[2])]; e.x = Number(p[3]); e.z = Number(p[4]); if (p.length > 5) e.y = Number(p[5]); }
       else if (p[1] === "move") { player.x = Number(p[3]); player.z = Number(p[4]); }
       else if (p[1] === "rename") name = p[2];
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
