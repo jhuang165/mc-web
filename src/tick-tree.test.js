@@ -116,3 +116,21 @@ test('fire edits reach the redstone engine inside the run (world.set is the funn
  const per=order(true),batch=order(false);
  assert.match(per,/^run,external(,external)*,run,external/);assert.match(batch,/^run,run,external/);
 });
+test('TickTree replays the unchanged tickUpdates on consecutive world times: a backlog above 1000 spills from call to call in native order (2 sequence scenarios, 6 calls each)',()=>{
+ const seqs=reference.cases.filter(k=>k.kind==='sequence');assert.equal(seqs.length,2);
+ for(const c of seqs){
+  const kinds={8:'fluid',12:'falling',51:'fire',93:'redstone'},lists={fluid:[],fire:[],falling:[],redstone:[]};let now=0;
+  c.before.forEach((a,id)=>lists[kinds[a[0]]].push({a,t:a[4],p:a[5],id}));
+  for(const l of Object.values(lists))l.sort((x,y)=>x.t-y.t||x.p-y.p||x.id-y.id);
+  const src=(n,l)=>({name:n,begin(){},head:()=>l[0],delay:(e)=>e.t-now,p:(e)=>e.p,id:(e)=>e.id,take:()=>l.shift(),run(){}});
+  const tree=new TickTree().attach(Object.entries(lists).map(([n,l])=>src(n,l)));
+  let capped=0;
+  c.calls.forEach((call,i)=>{
+   now=call.time-c.time;const taken=tree.tick();
+   const left=Object.values(lists).flat().sort((x,y)=>x.t-y.t||x.p-y.p||x.id-y.id).map(e=>[e.a[0],e.a[1],e.a[2],e.a[3],e.a[4]-now,e.a[5]]); // the probe dumps delays from the call's own time
+   assert.deepEqual(left,call.remaining,`sequence ${c.index} call ${i}`);assert.ok(taken<=TICK_UPDATES_CAP);
+   if(taken===TICK_UPDATES_CAP)capped++;
+  });
+  assert.ok(capped>=2,'the cap spilled at least twice');
+ }
+});

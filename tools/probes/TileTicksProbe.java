@@ -132,6 +132,31 @@ public class TileTicksProbe {
       boolean ret = (Boolean) tickUpdates.invoke(w, all);
       out.add("{\"kind\":\"tick\",\"index\":" + s + ",\"time\":" + time + ",\"all\":" + all + ",\"before\":" + json(before) + ",\"remaining\":" + dump(w, time) + ",\"hashSize\":" + ((Set) field(mt.class, "M").get(w)).size() + ",\"returned\":" + ret + "}");
     }
+    // ---- sequence side (batch 34): the same unchanged tickUpdates called on consecutive world times, so a backlog above 1000 spills from one call to the
+    // next. Mixed kinds (8, 12, 51, 93), priorities and times, all at y 300 (removed without ticking); each call's remaining TreeSet is dumped.
+    for (int s = 0; s < 2; s++) {
+      long time = 100;
+      int n = new int[]{2600, 3300}[s];
+      mt w = world(time, true);
+      field(ahb.class, "C").set(w, unsafe.allocateInstance(qi.class));
+      TreeSet tree = (TreeSet) field(mt.class, "N").get(w); Set hash = (Set) field(mt.class, "M").get(w);
+      List<int[]> before = new ArrayList<>();
+      for (int k = 0; k < n; k++) {
+        int id = new int[]{8, 12, 51, 93}[k % 4], x = r.nextInt(900), z = r.nextInt(900), pr = r.nextInt(5) - 2;
+        int delay = r.nextInt(8) - 5;
+        ahs e = new ahs(x, 300, z, aji.e(id)); e.a(time + delay); e.a(pr);
+        if (hash.contains(e)) continue;
+        hash.add(e); tree.add(e); before.add(tick(id, x, 300, z, delay, pr));
+      }
+      ays info = (ays) field(ahb.class, "x").get(w);
+      StringJoiner calls = new StringJoiner(",", "[", "]");
+      for (int c = 0; c < 6; c++) {
+        field(ays.class, "g").setLong(info, time + c);
+        boolean ret = (Boolean) tickUpdates.invoke(w, false);
+        calls.add("{\"time\":" + (time + c) + ",\"returned\":" + ret + ",\"remaining\":" + dump(w, time + c) + "}");
+      }
+      out.add("{\"kind\":\"sequence\",\"index\":" + s + ",\"time\":" + time + ",\"before\":" + json(before) + ",\"calls\":" + calls + "}");
+    }
     for (String l : out) System.out.println(l);
   }
   static boolean k0(int[] a, int q) { return a[q] == 0; }
