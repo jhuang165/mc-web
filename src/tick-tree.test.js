@@ -81,7 +81,7 @@ test('tileTickRows orders equal time and priority across kinds by the saved crea
  const old=tileTickRows({fluidTicks:[{order:0,value:{...f,n:undefined}}],fallingTicks:[{order:0,value:{...a,n:undefined}}]});assert.deepEqual(old.map(r=>r.x),[1,2]);
 });
 test('redstone pending ticks save the shared creation id n while a tree runs: reload and export keep cross-kind order; an older save without n loads',()=>{
- const a=build(true),live=a.rt.redstone,w=live.world??null;
+ const a=build(true),live=a.rt.redstone;
  const fl=a.tree.sources.find(s=>s.name==='fluids').sys;
  // redstone asks first (id 0), a fluid second (id 1), redstone third (id 2), all due at the same time and priority
  live.scheduleBlockUpdate(30,30,30,55,5,0);fl.world.set(2,60,1,WATER,false);fl.enqueue(2,60,1,WATER,5,0);live.scheduleBlockUpdate(31,30,30,55,5,0);
