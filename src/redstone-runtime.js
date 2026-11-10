@@ -263,9 +263,10 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     behaviour.onBlockPlacedBy(redstone, x, y, z, id === 33 || id === 29 ? { x: state.position.x, y: state.position.y, z: state.position.z, yaw: mcYaw } : mcYaw);
   }
   // [x, y, z, old, new] changes of the fluid and fire ticks: fluids write with world.put, so the redstone side learns here.
-  const fluidChanges = (list) => {
+  // `defer` leaves the renderer update of the engine's own edits to a later flush() (the shared tick tree calls this after every fluid run).
+  const fluidChanges = (list, defer = false) => {
     for (const [x, y, z, old, now] of list) if (old !== now) redstone.external(x, y, z, old);
-    flush();
+    if (!defer) flush();
   };
   // A container screen closed: comparators read the new contents.
   const containerClosed = (keys) => {

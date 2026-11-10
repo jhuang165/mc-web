@@ -280,17 +280,32 @@ export class TickTree {
     for (const s of this.sources) s.begin(clock);
     const taken = this.takeDue();
     for (const s of this.sources) s.afterTake?.();
+    // `observers.step(name, changes)` (optional) gets a run's changed cells right after each entry, which is when the native setBlock notifies its
+    // neighbours; `observers[name](changes)` (the renderer) still gets them batched when the running kind switches and at the end.
     let last = null;
-    const flush = () => { if (last?.flush) { const changes = last.flush(); if (changes.length) observers[last.name]?.(changes); } };
+    const held = new Map();
+    const flush = () => {
+      if (!last) return;
+      const list = [...(held.get(last) ?? []), ...(last.flush ? last.flush() : [])];
+      held.delete(last);
+      if (list.length) observers[last.name]?.(list);
+    };
     for (const { s, e } of taken) {
       if (last && last !== s) flush();
       last = s;
       s.run(e);
+      if (observers.step && s.flush) {
+        const changes = s.flush();
+        if (changes.length) { observers.step(s.name, changes); let list = held.get(s); if (!list) held.set(s, (list = [])); for (const c of changes) list.push(c); }
+      }
     }
     flush();
     for (const s of this.sources) {
       const changes = s.end?.(clock);
-      if (changes) observers[s.name]?.(changes);
+      if (changes?.length) {
+        observers.step?.(s.name, changes);
+        observers[s.name]?.(changes);
+      }
     }
     return taken.length;
   }

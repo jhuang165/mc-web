@@ -390,7 +390,7 @@ export class RedstoneWorld {
   restorePending(e) {
     const key = `${e.x},${e.y},${e.z},${tickGroup(e.id)}`;
     if (this.pending.has(key)) return;
-    const entry = { x: e.x, y: e.y, z: e.z, id: e.id, time: e.time, priority: e.priority, serial: e.serial };
+    const entry = { x: e.x, y: e.y, z: e.z, id: e.id, time: e.time, priority: e.priority, serial: e.serial, ...(Number.isSafeInteger(e.n) ? { n: e.n } : {}) };
     this.serial = Math.max(this.serial, entry.serial + 1);
     this.pending.set(key, entry);
     let lo = 0,

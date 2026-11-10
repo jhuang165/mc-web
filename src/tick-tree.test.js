@@ -80,3 +80,62 @@ test('tileTickRows orders equal time and priority across kinds by the saved crea
  const rows=tileTickRows({fluidTicks:[{order:0,value:f}],fallingTicks:[{order:0,value:a}]});assert.deepEqual(rows.map(r=>r.x),[2,1]);
  const old=tileTickRows({fluidTicks:[{order:0,value:{...f,n:undefined}}],fallingTicks:[{order:0,value:{...a,n:undefined}}]});assert.deepEqual(old.map(r=>r.x),[1,2]);
 });
+test('redstone pending ticks save the shared creation id n while a tree runs: reload and export keep cross-kind order; an older save without n loads',()=>{
+ const a=build(true),live=a.rt.redstone;
+ const fl=a.tree.sources.find(s=>s.name==='fluids').sys;
+ // redstone asks first (id 0), a fluid second (id 1), redstone third (id 2), all due at the same time and priority
+ live.scheduleBlockUpdate(30,30,30,55,5,0);fl.world.set(2,60,1,WATER,false);fl.enqueue(2,60,1,WATER,5,0);live.scheduleBlockUpdate(31,30,30,55,5,0);
+ const saved=JSON.parse(JSON.stringify(live.save())),mine=saved.pending.filter(t=>t[0]>=30&&t[1]===30);
+ assert.deepEqual(mine.map(t=>[t[6],t[7]]),[[mine[0][6],mine[0][6]],[mine[1][6],mine[1][6]]]);
+ const fe=fl.save().entries.find(e=>e.x===2&&e.y===60);assert.ok(mine[0][7]<fe.n&&fe.n<mine[1][7]);
+ const rows=tileTickRows({redstoneTicks:mine.map((t,i)=>({order:i,value:{x:t[0],y:t[1],z:t[2],id:t[3],delay:5,priority:0,n:t[7]}})),fluidTicks:[{order:0,value:{...fe,delay:5}}]});
+ assert.deepEqual(rows.map(r=>r.x),[30,2,31]);
+ const b=build(false);assert.equal(b.rt.redstone.save().pending.every(t=>t.length===7),true);
+ const legacy=JSON.parse(JSON.stringify(saved));legacy.pending=legacy.pending.map(t=>t.slice(0,7));
+ const c=build(false);assert.equal(c.rt.redstone.restore(legacy),true);assert.equal(c.rt.redstone.pending.size,legacy.pending.length);
+ const d=build(false);d.rt.redstone.restore(JSON.parse(JSON.stringify(saved)));assert.equal([...d.rt.redstone.pending.values()].find(e=>e.x===30)?.n,mine[0][7]);
+});
+test('fire edits reach the redstone engine inside the run (world.set is the funnel), fluid edits (world.put) reach it per run through observers.step and batched without it',()=>{
+ // Fire: the first run burns a wool support, the second run in the same tick already finds the dust above it gone, with no observer at all.
+ const a=build(true),rt=a.rt,w=rt.redstone.world,fl=a.tree.sources.find(s=>s.name==='fluids').sys;
+ const fi=new Fire(w,{weather:()=>({})}),tree=attachTickTree({fluids:fl,fire:fi,redstone:rt});
+ rt.redstone.setBlock(24,20,23,35,0,3);rt.redstone.setBlock(24,21,23,55,0,3);rt.flush();assert.notEqual(w.get(24,21,23),0);
+ for(const x of [22,23])w.put(x,22,22,51,0,false);
+ const seen=[];let n=0;fi.run=()=>{n++;if(n===1)fi.L.setAir(24,20,23);else seen.push(w.get(24,21,23));};
+ for(const x of [22,23])fi.schedule(x,22,22,1,0);
+ tree.tick({x:0,z:0});assert.deepEqual([n,seen],[2,[0]]);
+ // Fluids: two water ticks in a row; the engine hears about each change before the next run with `step`, only after both runs without it.
+ const order=(withStep)=>{
+  const b=build(true),r=b.rt,wb=r.redstone.world,f=b.tree.sources.find(s=>s.name==='fluids').sys,log=[];
+  const ext=r.redstone.external.bind(r.redstone);r.redstone.external=(x,y,z,o)=>{log.push('external');ext(x,y,z,o);};
+  const run=f.run.bind(f);f.run=(e)=>{log.push('run');return run(e)};
+  for(const x of [22,25]){wb.put(x,22,22,WATER,0,false);f.enqueue(x,22,22,WATER,1,0);}
+  b.tree.tick({x:0,z:0},withStep?{step:(name,c)=>r.fluidChanges(c),fluids:(c)=>r.fluidChanges(c)}:{fluids:(c)=>r.fluidChanges(c)});
+  return log.join();
+ };
+ const per=order(true),batch=order(false);
+ assert.match(per,/^run,external(,external)*,run,external/);assert.match(batch,/^run,run,external/);
+});
+test('TickTree replays the unchanged tickUpdates on consecutive world times: a backlog above 1000 spills from call to call in native order (2 sequence scenarios, 6 calls each)',()=>{
+ const seqs=reference.cases.filter(k=>k.kind==='sequence');assert.equal(seqs.length,2);
+ for(const c of seqs){
+  const kinds={8:'fluid',12:'falling',51:'fire',93:'redstone'},lists={fluid:[],fire:[],falling:[],redstone:[]};let now=0;
+  c.before.forEach((a,id)=>lists[kinds[a[0]]].push({a,t:a[4],p:a[5],id}));
+  for(const l of Object.values(lists))l.sort((x,y)=>x.t-y.t||x.p-y.p||x.id-y.id);
+  const src=(n,l)=>({name:n,begin(){},head:()=>l[0],delay:(e)=>e.t-now,p:(e)=>e.p,id:(e)=>e.id,take:()=>l.shift(),run(){}});
+  const tree=new TickTree().attach(Object.entries(lists).map(([n,l])=>src(n,l)));
+  let capped=0;
+  c.calls.forEach((call,i)=>{
+   now=call.time-c.time;const taken=tree.tick();
+   const left=Object.values(lists).flat().sort((x,y)=>x.t-y.t||x.p-y.p||x.id-y.id).map(e=>[e.a[0],e.a[1],e.a[2],e.a[3],e.a[4]-now,e.a[5]]); // the probe dumps delays from the call's own time
+   assert.deepEqual(left,call.remaining,`sequence ${c.index} call ${i}`);assert.ok(taken<=TICK_UPDATES_CAP);
+   if(taken===TICK_UPDATES_CAP)capped++;
+  });
+  assert.ok(capped>=2,'the cap spilled at least twice');
+ }
+});
+test('a world file import keeps the shared creation id n of a redstone pending tick and still takes the 7-item form',async()=>{
+ const {importedRuntime}=await import('./world-import.js');
+ const r=importedRuntime({redstone:{version:1,clock:3,time:9,pending:[[1,2,3,93,12,0,5,41],[4,5,6,93,12,0,6]],deferred:[[7,8,9,55,3,0,7,40]]}}).redstone;
+ assert.deepEqual(r.pending,[[1,2,3,93,12,0,5,41],[4,5,6,93,12,0,6]]);assert.deepEqual(r.deferred,[[7,8,9,55,3,0,7,40]]);
+});

@@ -387,7 +387,8 @@ export class LiveRedstone extends RedstoneWorld {
 
   // ---- save / restore (inside the world record) ----
   save() {
-    const tick = (e) => [e.x, e.y, e.z, e.id, e.time, e.priority, e.serial];
+    // The 8th item is the shared creation id `n` (== serial while a TickTree numbers all kinds); absent in older saves, whose serial is the list's own counter.
+    const tick = (e) => [e.x, e.y, e.z, e.id, e.time, e.priority, e.serial, ...(this.ids ? [e.serial] : [])];
     return {
       version: 1,
       clock: this.clock,
@@ -412,8 +413,8 @@ export class LiveRedstone extends RedstoneWorld {
     this.tree.length = 0;
     this.thisTick.length = 0;
     this.deferred = [];
-    for (const [x, y, z, id, time, priority, serial] of data.pending ?? []) this.restorePending({ x, y, z, id, time, priority, serial });
-    for (const [x, y, z, id, time, priority, serial] of data.deferred ?? []) this.deferred.push({ x, y, z, id, time, priority, serial });
+    for (const [x, y, z, id, time, priority, serial, n] of data.pending ?? []) this.restorePending({ x, y, z, id, time, priority, serial, n });
+    for (const [x, y, z, id, time, priority, serial, n] of data.deferred ?? []) this.deferred.push({ x, y, z, id, time, priority, serial, ...(Number.isSafeInteger(n) ? { n } : {}) });
     this.blockEvents = [0, 1].map((i) => (data.events?.[i] ?? []).map(([x, y, z, id, event, param]) => ({ x, y, z, id, event, param })));
     this.blockEventIndex = data.eventIndex ? 1 : 0;
     this.torchToggles = (data.torches ?? []).map(([x, y, z, time]) => ({ x, y, z, time }));
