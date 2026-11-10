@@ -231,7 +231,7 @@ export class Teleporter {
         for (let j2 = H - 1; j2 >= 0; j2--) {
           if (!this.isAir(i2, j2, k2)) continue;
           while (j2 > 0 && this.isAir(i2, j2 - 1, k2)) j2--;
-          for (let i3 = l1; i3 < l1 + 4; i3++) {
+          rot: for (let i3 = l1; i3 < l1 + 4; i3++) {
             let l2 = i3 % 2, k3 = 1 - l2;
             if (i3 % 4 >= 2) { l2 = -l2; k3 = -k3; }
             let ok = true;
@@ -239,7 +239,7 @@ export class Teleporter {
               const k4 = i2 + (i4 - 1) * l2 + j3 * k3, j4 = j2 + l3, l4 = k2 + (i4 - 1) * k3 - j3 * l2;
               if ((l3 < 0 && !solidAt(k4, j4, l4)) || (l3 >= 0 && !this.isAir(k4, j4, l4))) { ok = false; break scan; }
             }
-            if (!ok) continue;
+            if (!ok) break rot; // native `continue label274`: one failed rotation abandons the rest at this height
             const d4 = j2 + 0.5 - e.y, d3 = d1 * d1 + d4 * d4 + d2 * d2;
             if (best < 0 || d3 < best) { best = d3; l = i2; i1 = j2; j1 = k2; k1 = i3 % 4; }
           }
@@ -255,14 +255,14 @@ export class Teleporter {
           for (let j2 = H - 1; j2 >= 0; j2--) {
             if (!this.isAir(i2, j2, k2)) continue;
             while (j2 > 0 && this.isAir(i2, j2 - 1, k2)) j2--;
-            for (let i3 = l1; i3 < l1 + 2; i3++) {
+            rot: for (let i3 = l1; i3 < l1 + 2; i3++) {
               const l2 = i3 % 2, k3 = 1 - l2;
               let ok = true;
               scan: for (let j3 = 0; j3 < 4; j3++) for (let i4 = -1; i4 < 4; i4++) {
                 const l3 = i2 + (j3 - 1) * l2, k4 = j2 + i4, j4 = k2 + (j3 - 1) * k3;
                 if ((i4 < 0 && !solidAt(l3, k4, j4)) || (i4 >= 0 && !this.isAir(l3, k4, j4))) { ok = false; break scan; }
               }
-              if (!ok) continue;
+              if (!ok) break rot;
               const d4 = j2 + 0.5 - e.y, d3 = d1 * d1 + d4 * d4 + d2 * d2;
               if (best < 0 || d3 < best) { best = d3; l = i2; i1 = j2; j1 = k2; k1 = i3 % 2; }
             }

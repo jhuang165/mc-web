@@ -256,9 +256,8 @@ test("native Teleporter cache replay: successive travellers share one cache per 
     };
     const teleporter = teleporterOf(w);
     let clock = 0;
-    // KNOWN GAP: record 0 (seed 3000) builds its second Nether portal at a different spot than the native Teleporter once the
-    // first one was wiped and its obsidian frame is left standing next to the new site; only its first two steps are replayed.
-    for (const [time, wipe, sx, sz, yaw, dir, after] of r.steps.slice(0, r.index === 0 ? 2 : undefined)) {
+    // Record 0 (seed 3000) needs makePortal's native `continue label274` (one failed rotation skips the rest at that height).
+    for (const [time, wipe, sx, sz, yaw, dir, after] of r.steps) {
       for (let t = (Math.floor(clock / 100) + 1) * 100; t <= time; t += 100) { w.time = t; teleporter.removeStale(t); }
       w.time = clock = time;
       if (wipe) for (const [k, v] of cells) if (v === ORIGINAL.portal) cells.set(k, 0);
@@ -331,6 +330,19 @@ test("a player's arrival seeds a later mob at the same column: it takes the play
   assert.ok(Math.abs(rec.x - view.position.x) < 3 && Math.abs(rec.z - view.position.z) < 3, `${rec.x},${rec.z} vs ${JSON.stringify(view.position)}`);
 });
 
+test("one Teleporter Random(worldSeed) per world: the player's arrival and a mob's share it, so the second portal site continues the same sequence", async () => {
+  const root = makeRoot(), { live } = makeLive(root);
+  live.host.ticks = () => 100;
+  await playerArrives(live, root);
+  const kept = live.exitCache.get("w1:-1");
+  assert.ok(kept.random && typeof kept.random.nextInt === "function");
+  const inbox = await mobThrough(live, root); // cache hit: no draw
+  const peek = live.peeks.get("w1:-1");
+  assert.equal(peek.teleporter.random, kept.random, "the peek Teleporter draws from the world's one Random");
+  const next = kept.random.nextInt(1000);
+  assert.ok(Number.isInteger(next) && inbox);
+});
+
 test("the cache clock is the world's total time (host.totalTime), not the page tick counter", async () => {
   const root = makeRoot(), { live } = makeLive(root);
   let total = 5000; live.host.ticks = () => 7; live.host.totalTime = () => total;
@@ -392,6 +404,23 @@ test("a boat travels the same way and a cart or boat with a passenger or a playe
     const stay = await vehicleThrough(({ carts }) => Object.assign(carts.spawnCart(0, { x: 64.5, y: 5.35, z: 64.5 }), rider));
     assert.equal(stay.carts.carts.length, 1);
     assert.equal(stay.root.portalArrivals, undefined);
+  }
+});
+
+test("a player who mounts a cart already counting down in a portal is dismounted and left behind while the cart travels (native World.removeEntity)", async () => {
+  for (const kind of ["cart", "boat"]) {
+    const root = makeRoot(), { live } = makeLive(root), carts = new Minecarts(), boats = new Boats(), world = Object.assign(cartWorld(), { solid: (x, y, z) => y < 0 });
+    const v = kind === "cart" ? carts.spawnCart(0, { x: 64.5, y: 5.35, z: 64.5 }) : boats.spawnBoat({ x: 64.5, y: 5, z: 64.5 });
+    live.tickEntities(world, { carts, boats }); // the collision sets inPortal (empty vehicle)
+    const rider = { player: true, x: 0, y: 0, z: 0, vehicle: null };
+    assert.ok((kind === "cart" ? carts : boats).mount(v, rider));
+    for (let i = 0; i < 3; i++) live.tickEntities(world, { carts, boats });
+    await live.settle();
+    assert.equal((kind === "cart" ? carts : boats).carts.length, 0, `${kind} travelled with its rider aboard`);
+    assert.equal(rider.vehicle, null, "the player stays behind, dismounted");
+    assert.equal(v.rider, null);
+    const rec = (kind === "cart" ? root.portalArrivals[-1].carts : root.portalArrivals[-1].boats)[0];
+    assert.ok(!rec.rider, "the copy carries no rider");
   }
 });
 
