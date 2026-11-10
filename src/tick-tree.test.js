@@ -134,3 +134,8 @@ test('TickTree replays the unchanged tickUpdates on consecutive world times: a b
   assert.ok(capped>=2,'the cap spilled at least twice');
  }
 });
+test('a world file import keeps the shared creation id n of a redstone pending tick and still takes the 7-item form',async()=>{
+ const {importedRuntime}=await import('./world-import.js');
+ const r=importedRuntime({redstone:{version:1,clock:3,time:9,pending:[[1,2,3,93,12,0,5,41],[4,5,6,93,12,0,6]],deferred:[[7,8,9,55,3,0,7,40]]}}).redstone;
+ assert.deepEqual(r.pending,[[1,2,3,93,12,0,5,41],[4,5,6,93,12,0,6]]);assert.deepEqual(r.deferred,[[7,8,9,55,3,0,7,40]]);
+});

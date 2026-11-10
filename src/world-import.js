@@ -33,7 +33,7 @@ const nums = (a, n) => Array.isArray(a) && a.length === n && a.every(finite);
 // redstone-live.js save(): only the shapes restore() reads are kept; the engine's Random and block-event queue are not trusted from a file.
 function sanitizeRedstone(v) {
   if (!v || typeof v !== "object" || v.version !== 1) return undefined;
-  const ticks = (a) => (Array.isArray(a) ? a.filter((e) => ints(e, 7)).slice(0, LIST_CAP).map((e) => e.slice(0, 7)) : []);
+  const ticks = (a) => (Array.isArray(a) ? a.filter((e) => ints(e, 7)).slice(0, LIST_CAP).map((e) => (int(e[7]) ? e.slice(0, 8) : e.slice(0, 7))) /* the 8th item is the shared creation id n (batch 34) */ : []);
   return {
     version: 1, clock: int(v.clock) ? v.clock : 0, time: int(v.time) ? v.time : 0, pending: ticks(v.pending), deferred: ticks(v.deferred),
     torches: (Array.isArray(v.torches) ? v.torches.filter((e) => ints(e, 4)) : []).slice(0, LIST_CAP).map((e) => e.slice(0, 4)),
