@@ -138,3 +138,10 @@ test("batch 39: a pig, an item and an orb standing in a portal of the run leave 
   assert.equal(r.entities.drops.length, 0);
   assert.equal(r.entities.xpOrbs.length, 0);
 });
+
+test("batch 39: an item and an orb pushed sideways through a portal of the run travel", async () => {
+  const portal = (chunks) => { for (let y = 11; y <= 13; y++) { setBlock(chunks, 3, y, 5, 164); setBlock(chunks, 3, y, 6, 164); } };
+  const root = { ...base, drops: [item(2.2, 11.5, 6.2, { mx: 0.35 })], xpOrbs: [{ x: 2.2, y: 11.5, z: 5.9, value: 3, age: 0, vx: 0.35, vy: 0, vz: 0, onGround: false }] };
+  const r = await run(root, 40, portal);
+  assert.deepEqual(r.entities.portalTravel.map((x) => x.kind).sort(), ["item", "orb"]);
+});
