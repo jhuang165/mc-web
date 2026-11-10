@@ -425,6 +425,8 @@ export class DimensionLive {
         // Batch 32: mobs, arrows, thrown projectiles, rockets, potions, fireballs and hanging entities (the run returns whole lists).
         root.entities = r.entities.mobs; root.arrows = r.entities.arrows; root.projectiles = r.entities.projectiles; root.thrownPotions = r.entities.potions;
         root.rockets = r.entities.rockets; root.fireballs = r.entities.fireballs; root.hanging = r.entities.hanging;
+        // Batch 38: the carts and boats that went through the Overworld's portals during the run are delivered to their destination's inbox now.
+        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, OVERWORLD, t.kind, t.rec, t.mc, t.arg, false); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
       }
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;

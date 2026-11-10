@@ -79,4 +79,13 @@ export class EntityPortals {
   cooldownAfter(e, result) { return result.endPortal ? e.portalCooldown | 0 : 300; }
 }
 
+// A departing cart or boat as the destination's inbox takes it: its save record with the 300-tick cooldown (End portal: the one it had) and without
+// a rider (the player stays behind), and the transferEntityToWorld input. Shared by the live tick (dimension-live.js) and the away run (away-entities.js).
+export function vehicleDeparture(portals, e, r, owner) {
+  const rec = structuredClone(owner.serializeOne(e));
+  delete rec.rider;
+  rec.portalCooldown = portals.cooldownAfter(e, r) || undefined;
+  return { rec, mc: { x: e.x, y: e.posY, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: e.yaw ?? 0, pitch: 0, teleportDirection: r.direction }, arg: r.arg };
+}
+
 export { OVERWORLD, NETHER, END };

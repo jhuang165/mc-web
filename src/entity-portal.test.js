@@ -424,6 +424,23 @@ test("a player who mounts a cart already counting down in a portal is dismounted
   }
 });
 
+test("finishAway delivers the carts and boats the away run sent through a portal into the Nether's inbox", async () => {
+  const root = makeRoot(), { live } = makeLive(root);
+  live.host.ticks = () => 100;
+  const cart = { id: 5, type: 0, x: 64.5, y: 5.35, z: 64.5, motion: [0, 0, 0], rotation: [0, 0], portalCooldown: 300, items: [] };
+  const mc = { x: 64.5, y: 5.35, z: 64.5, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, teleportDirection: 0 };
+  const result = { fluidTicks: [], fireTicks: [], fallingTicks: [], falling: [], redstone: null, pistons: null, tiles: {}, drops: [], columns: [], editSequence: 0, stats: {},
+    entities: { drops: [], xpOrbs: [], tnt: [], minecarts: { version: 1, carts: [] }, boats: [], mobs: [], arrows: [], projectiles: [], potions: [], rockets: null, fireballs: [], hanging: [],
+      portalTravel: [{ kind: "cart", rec: cart, mc, arg: -1 }, { kind: "boat", rec: { id: 6, x: 64.5, y: 5, z: 64.5, motion: [0, 0, 0], rotation: [0, 0], portalCooldown: 300 }, mc, arg: -1 }] } };
+  live.away = { rootId: root.id, ticks0: 0, tripMs: 0, columns: [], chunks: [], records: [], trace: { samples: [], states: [] }, ready: Promise.resolve(true),
+    worker: { postMessage() { setTimeout(() => this.onmessage({ data: { type: "result", result } }), 0); }, terminate() {} } };
+  assert.ok(await live.finishAway(root));
+  const inbox = root.portalArrivals[-1];
+  assert.equal(inbox.carts.length, 1); assert.equal(inbox.boats.length, 1);
+  assert.equal(inbox.carts[0].portalCooldown, 300);
+  assert.ok(inbox.writes.some((w) => w[3] === GAME_IDS.portal), "the Teleporter built the Nether portal");
+});
+
 test("an End portal sends a cart to the End platform with no cooldown", async () => {
   const root = makeRoot(), { live } = makeLive(root), carts = new Minecarts();
   carts.spawnCart(0, { x: 64.5, y: 5.35, z: 64.5 });

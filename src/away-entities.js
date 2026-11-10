@@ -18,6 +18,7 @@ import { tickPrimedTnt } from "./entity-simulation.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
+import { EntityPortals, vehicleDeparture } from "./entity-portal.js";
 import { JavaRandom } from "./java-random.js";
 import { EntityWorld, ENTITY_TYPES } from "./entities.js";
 import { Survival } from "./survival.js";
@@ -186,10 +187,12 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       if (minecarts.carts.length) {
         park(minecarts, "carts", () => minecarts.tick(world, { entities: [], host: cartHost }));
         for (const d of minecarts.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
+        portalTravel("cart", minecarts);
       }
       if (boats.carts.length) {
         park(boats, "carts", () => boats.tick(world, { entities: [], hooks: {} }));
         for (const d of boats.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
+        portalTravel("boat", boats);
       }
       if (hanging.entities.length) {
         hanging.tick(world, { active: (h) => entityTicks(h.x, h.z) });
@@ -214,12 +217,31 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         rockets: e.rockets || rockets.rockets.length ? { ...(e.rockets ?? {}), ...rockets.serialize(), rockets: [...rocketSplit.rest, ...rockets.serialize().rockets] } : null,
         fireballs: [...fireList.filter((r) => !fireIn(r)), ...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])],
         hanging: [...hangSplit.rest, ...hanging.toJSON()],
+        portalTravel: travellers,
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
           mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length, held: stats.held },
       };
     },
   };
   // EntityMinecartTNT and the furnace cart: the explosion; smoke and sounds are not drawn.
+  // Batch 38: carts and boats of the run travel through the Overworld's portals as the live tick's do (entity-portal.js: EntityMinecart.onUpdate / EntityBoat.onUpdate run the
+  // same portal block). A traveller leaves the list at once and is returned in finish().portalTravel; the main thread (dimension-live.js endAway) delivers it into the
+  // destination's inbox with the shared Teleporter when the player is back. The delivery happens after the run, so the Teleporter sees the total time of the return, not the
+  // tick the cart left at; mobs, items and orbs of the run do not travel (not ported).
+  function portalTravel(kind, owner) {
+    const getId = (x, y, z) => world.get(x, y, z);
+    let gone = null;
+    for (const c of owner.carts) {
+      if (c.dead) continue;
+      const r = portals.step(c, kind, { dim: 0, getId, ridden: !!(c.rider || c.passenger) });
+      if (!r) continue;
+      const d = vehicleDeparture(portals, c, r, owner);
+      travellers.push({ kind, ...d });
+      (gone ??= new Set()).add(c);
+    }
+    if (gone) { const keep = owner.carts.filter((c) => !gone.has(c)); owner.carts.length = 0; owner.carts.push(...keep); }
+  }
+  const portals = new EntityPortals(), travellers = [];
   const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
   return self;
 }

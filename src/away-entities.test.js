@@ -113,3 +113,15 @@ test("an entity within 32 blocks of the edge of the loaded spawn area does not t
   assert.equal(age(-95.5), 100, "x - 32 = -127.5 is chunk -8 (centre -120)");
   assert.equal(age(-97.5), 0, "x - 32 = -129.5 is chunk -9");
 });
+
+test("batch 38: a cart and a boat resting in a portal of the run leave the run's lists and come back as portal travellers; an empty spot keeps its cart", async () => {
+  const portal = (chunks) => { for (let y = 10; y <= 12; y++) { setBlock(chunks, 3, y, 5, 164); setBlock(chunks, 9, y, 5, 164); } }; // 164: the internal id of original block 90
+  const cart = (id, x) => ({ id, type: 0, x, y: 11.05, z: 5.5, motion: [0, 0, 0], rotation: [0, 0], fallDistance: 0, fire: 0, onGround: true, items: [] });
+  const root = { ...base, minecarts: { version: 1, carts: [cart(1, 3.5), cart(2, 20.5)] }, boats: [{ id: 3, x: 9.5, y: 11, z: 5.5, motion: [0, 0, 0], rotation: [0, 0] }] };
+  const r = await run(root, 10, portal);
+  assert.deepEqual(r.entities.minecarts.carts.map((c) => c.id), [2], "cart 2 is outside the portal and stays");
+  assert.equal(r.entities.boats.length, 0);
+  const t = r.entities.portalTravel;
+  assert.deepEqual(t.map((x) => x.kind).sort(), ["boat", "cart"]);
+  for (const x of t) { assert.equal(x.arg, -1); assert.equal(x.rec.portalCooldown, 300); assert.ok(!x.rec.rider); }
+});
