@@ -15,7 +15,7 @@ import { fireballAcceleration } from "./blaze-ghast.js";
 // player, the last of the starting list, has only the first nine). Split slimes follow the player in the list.
 export const legacyReference = JSON.parse(readFileSync(new URL("../public/research/legacy-ai-reference.json", import.meta.url)));
 
-class LogRandom extends JavaRandom {
+export class LogRandom extends JavaRandom {
   log = [];
   nextBoolean() { const r = super.nextBoolean(); this.log.push("b"); return r; }
   nextInt(b) { const r = super.nextInt(b); if (b !== undefined) this.log.push("i" + b); return r; }
@@ -26,7 +26,7 @@ const key = (x, y, z) => `${x},${y},${z}`;
 const TYPE_OF = { s: "slime", m: "magma_cube", g: "ghast", b: "blaze" };
 const PORT_ID = { 1: 3, 9: WATER };
 const DOOR = [WOODEN_DOOR, 0];
-function plain(blocks = []) {
+export function plain(blocks = []) {
   const cells = new Map([[key(50, 0, 50), DOOR], [key(50, 1, 50), [WOODEN_DOOR, 8]]]);
   for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) {
     const c = id in PORT_ID ? [PORT_ID[id], meta] : (() => { const r = fromOriginal(id, meta); return [r.id, r.meta]; })();
