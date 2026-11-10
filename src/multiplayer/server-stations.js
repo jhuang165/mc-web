@@ -12,7 +12,7 @@ import { ANVIL, PHYSICS } from '../world.js';
 import { ITEMS } from '../survival.js';
 import { stackName } from '../item-names.js';
 import { anvilName } from '../gui.js';
-import { Beacons, BEACON } from '../pyramid.js';
+import { Beacons, BEACON, fullBeaconReach } from '../pyramid.js';
 import { BeaconContainer } from '../pyramid-container.js';
 import { tickBeacons } from '../pyramid-live.js';
 import { trigger } from './server-stats.js';
@@ -108,7 +108,7 @@ export class ServerStations {
     return null;
   }
   // Once per world tick: every loaded brewing stand (its bottles shown as metadata) and every beacon (each 80 ticks the pyramid,
-  // then the effects for the players in range). New beacons are found in the tick's block changes (BlockContainer.onBlockAdded).
+  // then the effects for the players in range, and Beaconator when it has just reached 4 levels). New beacons are found in the tick's block changes (BlockContainer.onBlockAdded).
   tick(changes) {
     const sim = this.sim, world = sim.world;
     for (const [x, y, z] of changes) if (world.get(x, y, z) === BEACON) this.beacons.ensure(x, y, z);
@@ -122,6 +122,8 @@ export class ServerStations {
     }
     const players = [...sim.players.values()].filter(p => !p.dead)
       .map(p => ({ p, x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height }));
-    tickBeacons(this.beacons, { world, time: sim.time, players, apply: (q, e) => q.p.survival.effects.add(e) });
+    // Beaconator: every player in the world, the dead too (they stay in World.playerEntities until they respawn).
+    const full = tile => { for (const p of sim.players.values()) if (fullBeaconReach(tile, p.position, PHYSICS.width, PHYSICS.height)) trigger(p, 'fullBeacon'); };
+    tickBeacons(this.beacons, { world, time: sim.time, players, apply: (q, e) => q.p.survival.effects.add(e), full });
   }
 }

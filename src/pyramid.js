@@ -85,6 +85,12 @@ export function tickBeacon(tile, { time, remote = false, get, canSeeSky, players
   for (const p of players) if (inBox(box, p)) given.push({ player: p, effects });
   return given;
 }
+// aoq.y (TileEntityBeacon.func_146003_y): when a check takes the pyramid from below 4 to 4 levels, the players whose boxes meet
+// AxisAlignedBB(x, y, z, x, y - 4, z).expand(10, 5, 10) get Beaconator. `p` is a player's feet, `width` and `height` its box.
+export function fullBeaconReach(tile, p, width = 0.6, height = 1.8) {
+  const w = width / 2;
+  return p.x + w > tile.x - 10 && p.x - w < tile.x + 10 && p.y + height > tile.y - 5 && p.y < tile.y + 1 && p.z + w > tile.z - 10 && p.z - w < tile.z + 10;
+}
 // aoq.i: the beam's fade-in, called once per rendered frame (single precision like the original).
 export function beamFade(tile, time) {
   if (!tile.active) return 0;

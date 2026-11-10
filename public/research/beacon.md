@@ -23,7 +23,9 @@ Port of BlockBeacon (`ajg`), TileEntityBeacon (`aoq`), ContainerBeacon (`zx`, pa
 ## Gaps
 
 - The `ambient` flag is carried but the existing `Effects` class ignores it (no particle or HUD difference).
-- The "full pyramid" achievement is not modelled.
+- Beaconator (`fullBeacon`) is awarded on the 80-tick check that takes the pyramid from below 4 to 4 levels, to the players whose
+  boxes meet AxisAlignedBB(x, y, z, x, y - 4, z).expand(10, 5, 10) (`fullBeaconReach`, aoq.func_146003_y); dead players are not
+  excluded on the gun server.
 - No beacon sounds exist in 1.7.10; none added. No audio importer change.
 - The beam and the inventory icon are approximations: no screenshot or browser comparison was made; texture scroll direction and the GUI hit areas follow bytecode only.
 - Tiles are created when the block is placed or found in the loaded edits at world load; streamed chunks loaded later do not create tiles for beacons that were never edited in this session (a beacon only exists via an edit, but chunk streaming restore is untested).

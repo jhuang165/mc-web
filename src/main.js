@@ -186,7 +186,7 @@ import { ITEM_FILLED_MAP, MAP_SIZE, mapStore, createMapData } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
-import { BEACON, Beacons, validPrimary, validSecondary } from "./pyramid.js";
+import { BEACON, Beacons, validPrimary, validSecondary, fullBeaconReach } from "./pyramid.js";
 import { tickBeacons } from "./pyramid-live.js";
 import { BeaconRenderer } from "./pyramid-renderer.js";
 import { BeaconContainer } from "./pyramid-container.js";
@@ -3233,16 +3233,11 @@ const dims = new DimensionLive({
 // First entry to the End (dimension-live.js): ChunkProviderEnd's dragon, spawned once the new world's mobs exist (launch).
 let pendingDragon = false;
 dims.onDragonSpawn = () => { pendingDragon = true; };
-// Per-tick achievement observers: the biome set (every 20 ticks), minecart distance and a beacon reaching level 4.
+// Per-tick achievement observers: the biome set (every 20 ticks) and minecart distance. Beaconator is the beacon tick's (tickBeacons).
 function watchAchievements() {
   if (achievementTicks++ % 20 === 0) achievements.visit(world.biomeAt?.(Math.floor(position.x), Math.floor(position.z))?.name, 0);
   const cart = rider.vehicle;
   if (cart && !cart.boat && !cart.horse) achievements.rideMinecart(position.x, position.y, position.z); else achievements.stopRiding();
-  for (const [key, tile] of beacons.tiles) {
-    const [bx, by, bz] = key.split(",").map(Number);
-    const near = position.x >= bx - 10 && position.x <= bx + 11 && position.y >= by - 5 && position.y <= by + 6 && position.z >= bz - 10 && position.z <= bz + 11;
-    achievements.beacon(key, tile.levels | 0, near);
-  }
 }
 // Entity.moveEntity: playSoundAtEntity(random.fizz, 0.7, 1.6 + (r - r) * 0.4) at the player (fire-fx.js entityFizz).
 function playerFizz() { const s = entityFizz(Math.random); sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: position.x, y: position.y, z: position.z } }); }
@@ -3322,7 +3317,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, playerLanding());
   ({ fallDistance, landedFall } = movement);
-  tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
+  tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e), full: tile => { if (fullBeaconReach(tile, position, PHYSICS.width, PHYSICS.height)) achievements.trigger("fullBeacon"); } });
   watchAchievements();
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });

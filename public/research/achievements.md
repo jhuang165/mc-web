@@ -24,7 +24,12 @@ from the `beh` / `bei` / `pq` / `aax` / `aak` bytecode). Regenerate with
 
 ## Gaps (parity is not claimed)
 
-- diamondsToYou needs another player to pick up a diamond you dropped; it cannot happen in singleplayer.
+- diamondsToYou needs another player to pick up a diamond you dropped; it cannot happen in singleplayer. The gun server awards it
+  (EntityItem.onCollideWithPlayer: the Q-dropped item's Thrower, found by name in the picker's world, not the picker); death,
+  window and creative drops carry no thrower, as in 1.7.10.
+- The gun server's Beaconator follows TileEntityBeacon.func_146003_y (a check that takes the pyramid from below 4 to 4 levels,
+  players meeting the beacon cell grown by 10, 5 below to 1 above) and The Beginning? follows BlockSkull.func_149965_a (players
+  meeting the Wither's box grown by 50). Singleplayer uses the same beacon transition.
 - No Statistics screen and no stats file: general statistics are not recorded, and the "Downloading statistics" loading state is
   skipped. The region export (`region-*.js`) does not write `stats/<uuid>.json`; it is owned by other work and was left alone.
 - Event approximations: onARail counts the rider's position each tick instead of `addMovementStat` increments; ghast does not

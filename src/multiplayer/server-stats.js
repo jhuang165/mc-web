@@ -4,12 +4,14 @@
 // sites (achievements-live.js) for crafting, smelting, pickups, mob kills, breeding, biomes and minecart rides. A tab asks for
 // its numbers when it opens the Statistics screen (C16PacketClientStatus REQUEST_STATS -> S37PacketStatistics); an unlock reaches
 // every tab as one event (the chat.type.achievement line) and its own player's tab draws the toast; a potion taken from a brewing
-// stand counts (server-stations.js). Not covered: the beacon, portal and dimension achievements, whose systems the gun server does
-// not run.
+// stand counts (server-stations.js), as do a full beacon (server-stations.js), the portals (server-dimensions.js), the Wither
+// (spawnWither below) and a diamond thrown to another player (pickedUp).
 import { Stats, STAT } from '../stats.js';
 import { StatsLive, addFallStat, damageTenths, toolUses, originalItem } from '../stats-live.js';
 import { Achievements, BY_ID, OVERKILL_DAMAGE, SNIPE_DISTANCE_SQUARED } from '../achievements.js';
-import { IMOB, craftedAchievement, smeltedAchievement, pickedAchievement, overkillDamage, pigFall } from '../achievements-live.js';
+import { IMOB, ITEM, craftedAchievement, smeltedAchievement, pickedAchievement, overkillDamage, pigFall } from '../achievements-live.js';
+import { WITHER } from '../wither-rules.js';
+import { PHYSICS } from '../world.js';
 import { smeltExperience } from '../experience.js';
 import { countsVertical } from '../ladders.js';
 import { eyeInWater } from '../fluids.js';
@@ -147,8 +149,27 @@ export function deathStats(p, killer = null) {
   p.statsLive?.death();
   if (killer?.stats && killer !== p) killer.stats.increment(STAT.playerKills);
 }
-// The pickups' achievements (EntityPlayer.onItemPickup).
-export function pickedUp(p, stack) { const id = pickedAchievement(stack?.id); if (id) trigger(p, id); }
+// The pickups' achievements (EntityItem.onCollideWithPlayer): the picked item's, then Diamonds to you! for the player who threw a
+// diamond (EntityItem.func_145800_j, the Q key's thrower name) when someone else in its world picks it up.
+export function pickedUp(sim, p, item) {
+  const stack = item?.stack, id = pickedAchievement(stack?.id);
+  if (id) trigger(p, id);
+  if (stack?.id !== ITEM.diamond || !item.thrower) return;
+  const thrower = [...sim.players.values()].find(q => q.name === item.thrower); // World.getPlayerEntityByName
+  if (thrower && thrower !== p) trigger(thrower, 'diamondsToYou');
+}
+// BlockSkull.func_149965_a: the Wither spawns, and every player whose box meets the Wither's grown by 50 gets The Beginning? (the
+// dead too: they stay in World.playerEntities until they respawn).
+export function spawnWither(sim, x, y, z, yaw) {
+  const e = sim.mobs?.ew?.spawnWither(x, y, z, yaw);
+  if (!e) return null;
+  const hw = WITHER.width / 2 + 50, pw = PHYSICS.width / 2;
+  for (const p of sim.players.values()) {
+    const { x: px, y: py, z: pz } = p.position;
+    if (px + pw > e.x - hw && px - pw < e.x + hw && py + PHYSICS.height > e.y - 50 && py < e.y + WITHER.height + 50 && pz + pw > e.z - hw && pz - pw < e.z + hw) trigger(p, 'spawnWither');
+  }
+  return e;
+}
 // S37PacketStatistics: every stat of player p (the tab's Statistics screen).
 export const statsMessage = p => ({ type: 'stats', stats: p.stats?.save() ?? {} });
 // What player p's tab mirrors of its achievements: the unlocked ids, sent when they change.

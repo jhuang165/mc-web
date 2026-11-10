@@ -2,7 +2,7 @@
 // mining, block use and placement, and the dropped items players throw, break loose and pick up. The server runs the same
 // single-player code (Container.click, tickPlayerMining, applyPlayerEdit, ItemEntities) on its own state; a client sends
 // only button presses and slot clicks, and shows its own prediction until the server's answer arrives.
-import { watchCrafting, furnaceTaken, pickedUp } from './server-stats.js';
+import { watchCrafting, furnaceTaken, pickedUp, spawnWither } from './server-stats.js';
 import { raycast, PHYSICS, WATER, LAVA, collides } from '../world.js';
 import { ITEMS } from '../survival.js';
 import { OUTSIDE, StackArray, ChestContainer, copyStack } from '../inventory.js';
@@ -155,7 +155,8 @@ export class ServerPlay {
   dropHeld(p, all) {
     const inv = p.survival.inventory, s = inv.held;
     if (!s || p.dead) return false;
-    this.items.dropPlayer(inv.decr(inv.current, all ? s.count : 1), p.position, p.yaw, p.pitch);
+    const thrown = this.items.dropPlayer(inv.decr(inv.current, all ? s.count : 1), p.position, p.yaw, p.pitch);
+    if (thrown) thrown.thrower = p.name; // dropOneItem -> func_146097_a(stack, false, true): EntityItem.func_145799_b(name)
     p.eating = null;
     return true;
   }
@@ -303,6 +304,7 @@ export class ServerPlay {
         ...this.stations.hooks(this, p),
         touchRedstoneOre: noop,
         useBed: (x, y, z) => sim.useBed?.(p, x, y, z), // BlockBed.onBlockActivated (server-beds.js)
+        spawnWither: (x, y, z, yaw) => spawnWither(sim, x, y, z, yaw), // the T of soul sand under three wither skulls (skull.js)
         lightTnt: (x, y, z) => { sim.mobs?.prime(x, y, z, p); }, // ItemFlintAndSteel on TNT (BlockTNT.onBlockActivated); the edit removes the block
         updateBlock: noop, updateBlocks: noop, // the world's own change log reaches the tabs
         particle: (name, x, y, z, vx, vy, vz) => sim.near(p, { type: 'fx', kind: 'particle', name, x, y, z, vx, vy, vz }, true),
@@ -375,7 +377,7 @@ export class ServerPlay {
     for (const p of sim.players.values()) {
       if (p.dead) continue;
       const picked = this.items.collect(p.position, PHYSICS.width, PHYSICS.height, s => p.survival.inventory.add(s));
-      for (const { item, count } of picked) { pickedUp(p, item.stack); sim.near(p, { type: 'pickup', by: p.id, entity: this.entityId(item), count }, true); }
+      for (const { item, count } of picked) { pickedUp(sim, p, item); sim.near(p, { type: 'pickup', by: p.id, entity: this.entityId(item), count }, true); }
     }
     this.items.sounds.length = 0;
   }
