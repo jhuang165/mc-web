@@ -61,7 +61,7 @@ export function brewingBottles(x, y, z, meta) {
     const p = (px, py, pz, u, v) => ({ p: [px, py, pz], uv: [u, v] });
     const quad = (vs) => out.push({ icon, verts: vs.map((v) => v.p), uv: vs.map((v) => v.uv), colour: WHITE });
     quad([p(x0, y + 1, z0, u0, 0), p(x0, y, z0, u0, 1), p(x1, y, z1, u1, 1), p(x1, y + 1, z1, u1, 0)]);
-    quad([p(x1, y + 1, z1, u0, 0), p(x1, y, z1, u0, 1), p(x0, y, z0, u1, 1), p(x0, y + 1, z0, u1, 0)]);
+    quad([p(x1, y + 1, z1, u1, 0), p(x1, y, z1, u1, 1), p(x0, y, z0, u0, 1), p(x0, y + 1, z0, u0, 0)]);
   }
   return out;
 }

@@ -498,8 +498,8 @@ export class MeshMethods {
   // (blockTile reads meta bit 16 as the base) and one vertical sprite plane toward each slab whose bottle bit (1/2/4) is set.
   brewingStand(m,x,y,z) {
     const meta=this.world.getMeta(x,y,z),own=this.light.packed(x,y,z);
-    this.box(m,134,x,y,z,[0.4375,0,0.4375,0.5625,0.875,0.5625],0,false);
-    for(const box of [[0.5625,0,0.3125,0.9375,0.125,0.6875],[0.125,0,0.0625,0.5,0.125,0.4375],[0.125,0,0.5625,0.5,0.125,0.9375]])this.box(m,134,x,y,z,box,16,true);
+    this.box(m,134,x,y,z,[0.4375,0,0.4375,0.5625,0.875,0.5625],0,(f)=>f.n[1]!==1&&hides(this.world.get(x+f.n[0],y+f.n[1],z+f.n[2]))); // shouldSideBeRendered reads the block's own bounds (full in x/z, 14/16 tall): an opaque neighbour hides every face but the top
+    for(const box of [[0.5625,0,0.3125,0.9375,0.125,0.6875],[0.125,0,0.0625,0.5,0.125,0.4375],[0.125,0,0.5625,0.5,0.125,0.9375]])this.box(m,134,x,y,z,box,16,true,null,true);
     for(const q of brewingBottles(x,y,z,meta))this.nativeQuad(m,q,own);
   }
   // RenderBlocks.renderBlockHopper (render type 38, bytecode func_147799_a): the bowl box (0, 5/8, 0)-(1, 1, 1) in the block's own icons

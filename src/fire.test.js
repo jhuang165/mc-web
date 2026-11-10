@@ -97,9 +97,10 @@ test("the encouragement, flammability and material tables are the original's for
   }
   // every other table entry of the original that burns is a block this build lacks
   const have = new Set(Object.keys(TO_BUILD).map(Number));
+  // vessels b39: wood stairs, fences and wood slabs are in FIRE_INFO (the fire render reads their encouragement) but outside TO_BUILD
   const lacking = reference.table.filter((r) => r[1] > 0 && !have.has(r[0])).map((r) => r[0]);
   assert.deepEqual(lacking, [53, 85, 125, 126, 134, 135, 136, 170, 171, 173]);
-  assert.deepEqual(Object.keys(FIRE_INFO).map(Number).sort((a, b) => a - b), [4, 5, 7, 19, 21, 39, 43, 44, TNT,69,70,71,72,83,84,142,143,144]);
+  assert.deepEqual(Object.keys(FIRE_INFO).map(Number).sort((a, b) => a - b), [4, 5, 7, 19, 21, 39, 43, 44, TNT, 60, 69, 70, 71, 72, 83, 84, 87, 91, 92, 93, 142, 143, 144, 165, 166]);
 });
 
 test("canPlaceBlockAt, onNeighborBlockChange and onBlockAdded match alb", () => {
