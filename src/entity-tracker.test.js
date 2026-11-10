@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { MobTracker, TrackerEntry, PlayerWatch, ClientEntity, sizeClass, encodeAxis, TRACKER_LIMIT } from "./entity-tracker.js";
 import { trackingRange } from "./ring-events.js";
+import { moveEntityWithHeading } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/tracker-reference.json", import.meta.url), "utf8"));
 const cx = (v) => Math.floor(v / 16);
@@ -31,7 +32,7 @@ const SCENARIOS = {
   range144: { range: 144, view: 10, n: 1300, at: (t) => row(10.3 + 0.2 * t, 64, 5.7, 0, 0, 0, 0, 0, 0.5, 64, 0.5) },
   chunkGate: { range: 80, view: 2, n: 900, at: (t) => row(60.5, 64, 0.5, 0, 0, 0, 0, 0, 0.5 + 0.2 * t, 64, 0.5) },
 };
-const KINDS = { hg: "move", hh: "moveLook", hi: "look", ik: "teleport", ht: "head", fz: "spawn" };
+const KINDS = { hg: "move", hh: "moveLook", hi: "look", ik: "teleport", ht: "head", fz: "spawn", hy: "velocity" };
 // the probe's packet as [kind, ...fields] without the entity id
 function expected(packets) {
   const out = [];
@@ -43,10 +44,11 @@ function expected(packets) {
     else if (KINDS[p[0]] === "look") out.push(["look", p[5], p[6]]);
     else if (KINDS[p[0]] === "teleport") out.push(["teleport", p[2], p[3], p[4], p[5], p[6]]);
     else if (KINDS[p[0]] === "head") out.push(["head", p[2]]);
+    else if (KINDS[p[0]] === "velocity") out.push(["velocity", p[2], p[3], p[4]]);
   }
   return out;
 }
-const flat = (p) => p.type === "spawn" ? ["spawn", p.x, p.y, p.z] : p.type === "destroy" ? ["destroy"] : p.type === "move" ? ["move", p.dx, p.dy, p.dz] : p.type === "moveLook" ? ["moveLook", p.dx, p.dy, p.dz, p.yaw, p.pitch] : p.type === "look" ? ["look", p.yaw, p.pitch] : p.type === "teleport" ? ["teleport", p.x, p.y, p.z, p.yaw, p.pitch] : ["head", p.head];
+const flat = (p) => p.type === "velocity" ? ["velocity", p.vx, p.vy, p.vz] : p.type === "spawn" ? ["spawn", p.x, p.y, p.z] : p.type === "destroy" ? ["destroy"] : p.type === "move" ? ["move", p.dx, p.dy, p.dz] : p.type === "moveLook" ? ["moveLook", p.dx, p.dy, p.dz, p.yaw, p.pitch] : p.type === "look" ? ["look", p.yaw, p.pitch] : p.type === "teleport" ? ["teleport", p.x, p.y, p.z, p.yaw, p.pitch] : ["head", p.head];
 
 // Replays one scenario through MobTracker.serverTick and compares every row the probe recorded: packets of the tick, the tracking
 // flag, the entry's encoded position and the player's flag. Ticks without a record had no packet and no change.
@@ -246,4 +248,73 @@ test("a mob far from the player produces no client sound, and its tracking survi
   assert.ok(last >= 7, "still tracked after it passed 80 blocks: the list is re-evaluated only after 4 more blocks of walking");
   assert.ok(last < 80, "but gone well before 30 blocks past the edge");
   void Survival;
+});
+
+// Client scenarios: the executed EntityChicken on a remote world double receives the packets the executed EntityTrackerEntry sends
+// (TrackerProbe clientWalk, clientKnock, clientFall, clientTeleport, clientSpawn, clientUnloaded); the browser port replays the recorded
+// server inputs (position and motion per tick) and must reproduce the packets and the client entity's position, motion and previous
+// position every tick.
+const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0 };
+const UNLOADED = { clientUnloaded: [35, 60] };
+function replayClient(name) {
+  const record = ref[name], rows = new Map(record.rows.map((r) => [r[0], r]));
+  const tracker = new MobTracker(10);
+  const mob = { type: "chicken", x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rotationYaw: 0, rotationPitch: 0, rotationYawHead: 0, health: 4, onGround: true };
+  const player = { x: 0.5, y: 0, z: 0.5 };
+  let unloaded = false, log = [], worst = 0, bad = 0;
+  tracker.view.log = (p) => log.push(flat(p));
+  const physics = (c) => { c.clientUnloaded = unloaded; moveEntityWithHeading(grass, c, 0.3, 0.7, 0); };
+  record.inputs.forEach((inp, t) => {
+    [mob.x, mob.y, mob.z, mob.vx, mob.vy, mob.vz] = inp;
+    mob.airBorne = !!inp[6]; mob.velocityChanged = !!inp[7];
+    const [from, to] = UNLOADED[name] ?? [-1, -1];
+    unloaded = t >= from && t < to;
+    log = [];
+    tracker.serverTick([mob], player, () => [0.3, 0.7]);
+    const want = rows.get(t);
+    if (want) assert.deepEqual(log, expected(want[6]), `${name} packets at tick ${t}`);
+    else assert.deepEqual(log, [], `${name} unrecorded packets at tick ${t}`);
+    tracker.clientTick(physics);
+    const c = tracker.clientIfTracked(mob), w = record.client[t];
+    if (!w[0]) { assert.equal(c, null, `${name} tick ${t}: no client entity yet`); return; }
+    assert.ok(c, `${name} tick ${t}: client entity`);
+    const got = [c.x, c.y, c.z, c.vx, c.vy, c.vz, c.px, c.py, c.pz], exp = [w[1], w[2], w[3], w[4], w[5], w[6], w[8], w[9], w[10]];
+    got.forEach((v, i) => { const d = Math.abs(v - exp[i]); worst = Math.max(worst, d); if (d > 1e-9) bad++; });
+    assert.equal(c.onGround, w[7], `${name} tick ${t}: onGround`);
+  });
+  assert.equal(bad, 0, `${name}: ${bad} client values differ (worst ${worst})`);
+  return record.inputs.length;
+}
+for (const name of ["clientWalk", "clientKnock", "clientFall", "clientTeleport", "clientSpawn", "clientUnloaded"]) {
+  test(`client replay ${name} matches the executed client entity`, () => {
+    assert.ok(replayClient(name) >= 80);
+  });
+}
+
+test("a velocity packet comes before the position packet and carries (int)(m * 8000) clamped to 3.9", () => {
+  const packets = [];
+  const view = { player: { x: 0, z: 0 }, watches: () => true, log: (p) => packets.push(p) };
+  const e = { x: 0.5, y: 64, z: 0.5, vx: 0, vy: 0, vz: 0, rotationYaw: 0, rotationPitch: 0, rotationYawHead: 0 };
+  const entry = new TrackerEntry(e, { range: 80 }, view);
+  entry.sendLocation(); // tick 0 starts tracking
+  packets.length = 0;
+  for (let i = 0; i < 3; i++) entry.sendLocation();
+  assert.deepEqual(packets, []);
+  e.x = 1.5; e.vx = 5; e.vy = -0.0001;
+  entry.sendLocation(); entry.sendLocation(); entry.sendLocation();
+  assert.deepEqual(packets.map((p) => p.type), ["velocity", "move"]);
+  assert.deepEqual([packets[0].vx, packets[0].vy], [31200, Math.trunc(-0.0001 * 8000)]);
+});
+
+test("Entity.velocityChanged sends the motion at once and clears the flag", () => {
+  const packets = [];
+  const view = { player: { x: 0, z: 0 }, watches: () => true, log: (p) => packets.push(p) };
+  const e = { x: 0.5, y: 64, z: 0.5, vx: 0.4, vy: 0.4, vz: 0, rotationYaw: 0, rotationPitch: 0, rotationYawHead: 0, velocityChanged: true };
+  const entry = new TrackerEntry(e, { range: 80 }, view);
+  entry.sendLocation();
+  packets.length = 0;
+  e.velocityChanged = true;
+  entry.sendLocation(); // tick 1: not a frequency tick
+  assert.deepEqual(packets.map((p) => p.type), ["velocity"]);
+  assert.equal(e.velocityChanged, false);
 });
