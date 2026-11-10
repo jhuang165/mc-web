@@ -898,6 +898,19 @@ public class VillageFightProbe {
     scenario("b41-zombie-range-far-3020", 3020, 200, "Z", new double[][] {{20.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
     scenario("b41-spider-range-far-3021", 3021, 200, "S", new double[][] {{40.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
     scenario("b41-skeleton-range-far-3022", 3022, 200, "K", new double[][] {{20.5, 60.5}, {64.5, 64.5}}, new String[] {"100 move 1 52.5 64.5"});
+    // spider and a player on a pillar (batch 41): one, two and three blocks high, a wider top, and a pillar the player stands next to the edge of; does the spider reach him?
+    blocks = new int[][] {{66, 0, 64, 66, 0, 64, 1, 0}};
+    scenario("b41-spider-pillar-1-night-3101", 3101, 300, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 1}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 1, 64, 1, 0}};
+    scenario("b41-spider-pillar-2-night-3102", 3102, 300, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 2}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 2, 64, 1, 0}};
+    scenario("b41-spider-pillar-3-night-3103", 3103, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    scenario("b41-cave-spider-pillar-3-night-3104", 3104, 400, "T", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    blocks = new int[][] {{65, 0, 63, 67, 2, 65, 1, 0}};
+    scenario("b41-spider-pillar-3x3-night-3105", 3105, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 3}}, new String[] {});
+    blocks = new int[][] {{66, 0, 64, 66, 3, 64, 1, 0}, {66, 0, 65, 66, 3, 65, 1, 0}};
+    scenario("b41-spider-pillar-4-wide-night-3106", 3106, 400, "S", new double[][] {{58.5, 64.5}, {66.5, 64.5, 4}}, new String[] {});
+    blocks = new int[][] {};
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
     scenario("player-turns-aggressive", 0, 700, open, new String[] {"10 hit 0 7 0.1 player", "31 hit 0 7 0.1 player", "52 hit 0 7 0.1 player", "73 hit 0 7 0.1 player", "94 hit 0 7 0.1 player", "115 hit 0 7 0.1 player", "136 hit 0 7 0.1 player", "157 hit 0 7 0.1 player",
       "178 hit 0 7 0.1 player", "199 hit 0 7 0.1 player", "220 hit 0 7 0.1 player", "241 hit 0 7 0.1 player", "262 hit 0 7 0.1 player", "283 hit 0 7 0.1 player", "304 hit 0 7 0.1 player", "330 move 7 50.5 56.5", "500 hit 4 7 300.0 player", "600 rename alt", "610 hit 1 7 0.1 player"});
