@@ -739,9 +739,15 @@ export class EntityWorld {
     // and tools leave it off unless they exercise spawning.
     this.naturalSpawning = false;
     if (Array.isArray(saved)) {
+      // Entity.nextEntityID is one counter that never repeats: a record without an id (a mob that travelled here through a portal, dimension-live deliver) gets
+      // one above every saved id, not the next free number counted from 1 (that repeated a saved id when the saved list had gaps).
+      this.nextId = Math.max(1, ...saved.slice(0, 256).map((e) => (/^mob-\d+$/.test(e?.id) ? Number(e.id.slice(4)) + 1 : 1)));
+      const used = new Set();
       for (const e of saved.slice(0, 256)) {
         const m = this.restore(e);
         if (!m) continue;
+        if (used.has(m.id)) m.id = "mob-" + this.nextId;
+        used.add(m.id);
         this.entities.push(m);
         this.nextId++;
       }
