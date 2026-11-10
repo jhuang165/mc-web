@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ExitPrewarm, savedPortalFor } from './exit-prewarm.js';
 import { World } from './world.js';
-import { DimensionWorld } from './dimension-world.js';
+import { DimensionWorld, TerrainPeek } from './dimension-world.js';
+import * as D from './dimensions.js';
 import { createStreamWorker } from './streaming-generator.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { arrivalWarmer } from './travel-loading.js';
@@ -162,4 +163,31 @@ test('Nether prewarm also holds the columns of the windows an exit up to 18 bloc
     assert.deepEqual(Buffer.from(got.metadata), Buffer.from(want.metadata), `${k} metadata`);
   }
   assert.ok(nether.pregenerated.size > 0);
+});
+
+test('savedPortalFor weighs height like Teleporter.placeInExistingPortal: stacks, ties, and random worlds against the real search', () => {
+  const tt = { x: 100.5, y: 70, z: 100.5 };
+  // one 30 blocks above the target height, one 5 below: the lower-distance one wins although it is later in x order
+  assert.deepEqual(savedPortalFor([[90, 100, [100]], [105, 100, [65, 66]]], tt), [105.5, 100.5], 'height decides');
+  assert.deepEqual(savedPortalFor([[90, 100, [70]], [110, 100, [70]]], tt), [90.5, 100.5], 'equal 3D distance: the earlier column');
+  assert.deepEqual(savedPortalFor([[90, 100, [70]], [105, 100, [40]]], tt), [90.5, 100.5], 'a farther column at a better height can still lose');
+  assert.deepEqual(savedPortalFor([[95, 100, [30, 31, 32, 80, 81]]], tt), [95.5, 100.5]);
+  // a stack counts at its bottom block: column (100, 100) holds a stack 60-63, which is 9.5 below the target at its bottom (6.5 at its top)
+  assert.deepEqual(savedPortalFor([[100, 100, [60, 61, 62, 63]], [100, 106, [75]]], tt), [100.5, 106.5], 'bottom 90.25 vs top 42.25: (100,106,75) at 66.25 wins only if the bottom counts');
+  const rnd = (() => { let a = 12345; return () => (a = (a * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; })();
+  for (let trial = 0; trial < 60; trial++) {
+    const edits = new Map(), at = { x: Math.floor(rnd() * 80) - 40 + 0.5, y: 20 + Math.floor(rnd() * 100), z: Math.floor(rnd() * 80) - 40 + 0.5 };
+    const n = 1 + Math.floor(rnd() * 8);
+    for (let i = 0; i < n; i++) { // portals spread over about 300 blocks (some beyond the 128 box), stacks of 1-4, sometimes two stacks in a column; shared distances are common on the 4-block grid
+      const x = Math.floor((rnd() * 75) - 37) * 4, z = Math.floor((rnd() * 75) - 37) * 4, y = 4 + Math.floor(rnd() * 120);
+      for (let h = 0; h < 1 + Math.floor(rnd() * 4); h++) edits.set(`${x},${y + h},${z}`, 90);
+    }
+    const peek = new TerrainPeek({ dimension: 0, javaSeed: 5n, generateTerrainChunk: () => ({ blocks: new Uint8Array(65536) }) }, edits);
+    const list = peek.portalColumns(90, Math.floor(at.x) - 160, Math.floor(at.x) + 160, Math.floor(at.z) - 160, Math.floor(at.z) + 160);
+    const t = new D.Teleporter(peek, { ids: { air: 0, obsidian: 49, portal: 90, endPortal: 119, bedrock: 7 }, isSolid: (id) => id === 1 || id === 49 });
+    const e = { x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, teleportDirection: 0 };
+    const found = t.placeInExistingPortal(e, at.x, at.y, at.z, 0), hit = t.cache.get(`${Math.floor(at.x)},${Math.floor(at.z)}`), mine = savedPortalFor(list, at);
+    if (!found) { assert.equal(mine, null, `trial ${trial}: no portal inside the box`); continue; }
+    assert.deepEqual(mine, [hit.x + 0.5, hit.z + 0.5], `trial ${trial}`);
+  }
 });

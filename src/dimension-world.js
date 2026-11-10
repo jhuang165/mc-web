@@ -229,19 +229,27 @@ export class TerrainPeek {
     this.writes.push([x, y, z, id, meta, flags]);
   }
   notify() {}
-  // The columns in the box whose saved or written cells include block `id`, sorted by x then z (the Teleporter's search order).
+  // The columns in the box whose saved or written cells include block `id`, sorted by x then z (the Teleporter's search order), as [x, z, ys] with
+  // `ys` the ascending y of every such block in the column (the search weighs height; the exit prewarm picks the portal as it does).
   // Terrain never contains a portal block (neither the Nether/End generators nor the Overworld population place one), so every
   // portal this peek can see is one of its edits and the 257 x 257 column scan can skip the rest.
   portalColumns(id, x0, x1, z0, z1) {
-    const seen = new Set(), out = [];
+    const seen = new Map(), out = [];
     for (const [key, value] of this.edits) {
       if ((value & 255) !== id) continue;
-      const [x, , z] = key.split(',').map(Number), k = `${x},${z}`;
-      if (x < x0 || x > x1 || z < z0 || z > z1 || seen.has(k)) continue;
-      seen.add(k); out.push([x, z]);
+      const [x, y, z] = key.split(',').map(Number), k = `${x},${z}`;
+      if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+      let c = seen.get(k);
+      if (!c) { c = [x, z, []]; seen.set(k, c); out.push(c); }
+      if (!c[2].includes(y)) c[2].push(y);
     }
     // Imported stored columns (stored-peek.js StoredIndex, attached as `stored`) can hold a portal block too.
-    if (this.stored?.marker === id) for (const [x, z] of this.stored.portalColumns(x0, x1, z0, z1)) { const k = `${x},${z}`; if (!seen.has(k)) { seen.add(k); out.push([x, z]); } }
+    if (this.stored?.marker === id) for (const [x, z, ys] of this.stored.portalColumns(x0, x1, z0, z1)) {
+      let c = seen.get(`${x},${z}`);
+      if (!c) { c = [x, z, []]; seen.set(`${x},${z}`, c); out.push(c); }
+      for (const y of ys) if (!c[2].includes(y)) c[2].push(y);
+    }
+    for (const c of out) c[2].sort((a, b) => a - b);
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   }
 }

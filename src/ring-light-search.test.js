@@ -67,3 +67,35 @@ test("an emitter more than 14 cells above or below the query is skipped without 
   light.fast = true;
   assert.ok(placed >= 2 && lit > 0, `torches ${placed}, block-lit cells ${lit}`);
 });
+
+test("cells beside the resident window: the emitter box scan of resident chunks gives the plain search's answers (batch 35)", () => {
+  const { world, ring } = make();
+  const keys = [...ring.cols.keys()].map((k) => { const cz = ((k % 8388608) + 8388608 + 4194304) % 8388608 - 4194304; return [(k - cz) / 8388608, cz]; });
+  const beside = keys.filter(([cx, cz]) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (ring.resident((cx + a) * 16, (cz + b) * 16)) return true; return false; });
+  assert.ok(beside.length > 10, "held columns whose 3 x 3 touches the resident window");
+  const next = rng(23), light = ring.light;
+  // Torches in a few resident edge cells, at various heights (put, as a player or a mob edit would), the rest of the edge has none.
+  let placed = 0;
+  for (let i = 0; placed < 8 && i < 400; i++) {
+    const [cx, cz] = beside[next() % beside.length];
+    const x = (cx + (ring.resident((cx + 1) * 16, cz * 16) ? 1 : ring.resident((cx - 1) * 16, cz * 16) ? -1 : 0)) * 16 + (next() & 15), z = cz * 16 + (next() & 15);
+    if (!ring.resident(x, z)) continue;
+    for (let y = 120; y > 20; y--) if (world.get(x, y, z) === 0 && world.get(x, y - 1, z)) { if (world.put(x, y, z, TORCH, 0, false)) placed++; break; }
+  }
+  assert.ok(placed > 0);
+  let lit = 0, skipped = 0, scanned = 0;
+  const reaches = light.residentReaches.bind(light);
+  light.residentReaches = (...a) => { const r = reaches(...a); if (r) scanned++; else skipped++; return r; };
+  for (let n = 0; n < 2500; n++) {
+    const [cx, cz] = beside[next() % beside.length], x = cx * 16 + (next() & 15), z = cz * 16 + (next() & 15);
+    let y = 255; while (y > 0 && !ring.get(x, y, z)) y--;
+    const qy = n % 3 === 0 ? y + 1 : n % 3 === 1 ? 20 + (next() % 100) : Math.max(1, y + 1 - (next() % 12));
+    if (ring.resident(x, z)) continue;
+    light.cache.clear();
+    light.fast = false; const plain = light.search(x, qy, z);
+    light.fast = true; assert.equal(light.search(x, qy, z), plain, `cell ${x},${qy},${z}`);
+    if (plain & 15) lit++;
+  }
+  light.fast = true;
+  assert.ok(lit > 0 && skipped > 100 && scanned > 0, `block-lit ${lit}, resident chunks skipped ${skipped}, kept ${scanned}`);
+});

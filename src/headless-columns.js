@@ -495,6 +495,23 @@ export class RingLight {
     st.infoStamp = stamp;
     return (st.info = { minHm, emitter: eMax >= 0, eMin, eMax });
   }
+  // Can any emitter of the resident chunk (cx, cz) light the cell (qx, qy, qz) above `start`? A path costs at least one per step, so an emitter of emission e at
+  // Manhattan distance d gives at most e - d; the chunk's blocks are scanned in the box the search reaches (the resident window is edited and has no per-chunk
+  // summary, so it is read directly; exact for the current blocks, no cache to go stale). Answers true whenever the chunk cannot be read directly.
+  residentReaches(cx, cz, qx, qy, qz, start) {
+    const chunk = this.ring.world.chunkAt?.(cx, cz);
+    if (!chunk?.blocks) return true;
+    const blocks = chunk.blocks, h = this.ring.world.height, x0 = Math.max(cx * 16, qx - R), x1 = Math.min(cx * 16 + 15, qx + R), z0 = Math.max(cz * 16, qz - R), z1 = Math.min(cz * 16 + 15, qz + R);
+    const y0 = Math.max(0, qy - R), y1 = Math.min(h - 1, qy + R);
+    for (let x = x0; x <= x1; x++) {
+      const ax = Math.abs(x - qx);
+      for (let z = z0; z <= z1; z++) {
+        const base = ((x & 15) * 16 + (z & 15)) * h, az = ax + Math.abs(z - qz);
+        for (let y = y0; y <= y1; y++) { const e = EMISSION[blocks[base + y]]; if (e > start && e - az - Math.abs(y - qy) > start) return true; }
+      }
+    }
+    return false;
+  }
   // [sky << 4 | block] of a cell.
   at(x, y, z) {
     const ring = this.ring, col = ring.resident(x, z) ? null : ring.column(x >> 4, z >> 4);
@@ -550,7 +567,10 @@ export class RingLight {
       const here = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16);
       present[a * 3 + b] = here ? 1 : 0;
       emits[a * 3 + b] = here && (ring.resident((pcx + a - 1) * 16, (pcz + b - 1) * 16) || !isRim(ring, pcx + a - 1, pcz + b - 1)) ? 1 : 0;
-      if (fast && here) { const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm; if (emits[a * 3 + b] && inf.emitter && inf.eMax >= qy - R && inf.eMin <= qy + R) needBlock = true; }
+      if (fast && here) {
+        const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm;
+        if (!needBlock && emits[a * 3 + b] && inf.emitter && inf.eMax >= qy - R && inf.eMin <= qy + R) needBlock = inf === ANY ? this.residentReaches(pcx + a - 1, pcz + b - 1, qx, qy, qz, block) : true;
+      }
     }
     const needSky = !fast || (!noSky && sky < 15 && qy + R >= minHm);
     if (!needSky && !needBlock) return sky << 4 | block;

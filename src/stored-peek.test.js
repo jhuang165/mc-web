@@ -32,10 +32,10 @@ test("stored index: tops follow CommandSpreadPlayers (y >= 1, 257 over an empty 
 
 test("stored index: portal columns and kept terrain feed the Teleporter peek", async () => {
   const i = await index();
-  assert.deepEqual(i.portalColumns(-1e3, 1e3, -1e3, 1e3), [[5 * 16 + 4, -2 * 16 + 9]]);
+  assert.deepEqual(i.portalColumns(-1e3, 1e3, -1e3, 1e3), [[5 * 16 + 4, -2 * 16 + 9, [41, 42]]]);
   const peek = new TerrainPeek({ generateTerrainChunk: () => ({ blocks: new Uint8Array(65536), metadata: new Uint8Array(65536) }) });
   peek.stored = i;
-  assert.deepEqual(peek.portalColumns(PORTAL, 0, 200, -100, 100), [[84, -23]]);
+  assert.deepEqual(peek.portalColumns(PORTAL, 0, 200, -100, 100), [[84, -23, [41, 42]]]);
   assert.deepEqual(peek.portalColumns(PORTAL, 0, 50, -100, 100), []);
   assert.equal(peek.get(84, 41, -23), PORTAL);
   assert.equal(peek.get(84, 43, -23), 0);

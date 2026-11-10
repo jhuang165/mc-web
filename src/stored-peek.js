@@ -1,7 +1,7 @@
 // Stored-column index of an imported whole save (whole-save-import.js): what the Teleporter's portal search and /spreadplayers
 // read about columns that are not resident. Built once per world and dimension by scanning the stored sections (no full decode):
 //   tops    "cx,cz" -> Uint16Array(256), per (lx*16+lz) the Java top-block+1 over y >= 1 (CommandSpreadPlayers; 0 = empty column)
-//   portals "cx,cz" -> [[x,z]...] columns holding a marker block (the nether portal id)
+//   portals "cx,cz" -> [[x,z,[y...]]...] columns holding a marker block (the nether portal id)
 //   kept    "cx,cz" -> decoded {blocks, metadata} of the marker columns only (at most KEEP_LIMIT, so the search can read them)
 // Cost: 512 bytes per stored column in memory, one pass over the stored sections in time (about 0.1 ms per column in Node), plus
 // a full decode (128 KiB) for each of up to 256 columns that hold a portal.
@@ -23,7 +23,7 @@ export class StoredIndex {
   column(cx, cz) { return this.kept.get(`${cx},${cz}`) ?? null; }
   portalColumns(x0, x1, z0, z1) {
     const out = [];
-    for (const list of this.portals.values()) for (const [x, z] of list) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) out.push([x, z]);
+    for (const list of this.portals.values()) for (const [x, z, ys] of list) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) out.push([x, z, ys]);
     return out;
   }
   add(record, marker, blockCount) {
@@ -33,13 +33,17 @@ export class StoredIndex {
         const id = blocks[col * 16 + dy], y = s * 16 + dy;
         if (!id) continue;
         if (y >= 1 && y + 1 > top[col]) top[col] = y + 1;
-        if (id === marker) found.push(col);
+        if (id === marker) found.push([col, y]);
       }
     }
     this.tops.set(key, top);
     if (!found.length) return;
-    const seen = new Set(), cols = [];
-    for (const col of found) if (!seen.has(col)) { seen.add(col); cols.push([record.x * 16 + (col >> 4), record.z * 16 + (col & 15)]); }
+    const seen = new Map(), cols = [];
+    for (const [col, y] of found) {
+      let c = seen.get(col);
+      if (!c) { c = [record.x * 16 + (col >> 4), record.z * 16 + (col & 15), []]; seen.set(col, c); cols.push(c); }
+      c[2].push(y);
+    }
     this.portals.set(key, cols);
     if (this.kept.size < KEEP_LIMIT) this.kept.set(key, decodeBaseColumn(record, blockCount)); else this.omitted++;
   }
