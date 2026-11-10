@@ -383,7 +383,7 @@ export class PathFinder {
 // Benchmarks (Node on the dev laptop, node scripts in the batch 33/34 notes). The only native bound is the follow-range sphere around the target (the ChunkCache does not bound it, see the
 // ChunkCache comment above), so a sealed target expands the walkable area inside that sphere: an open flat arena 769 points at range 16 (1.2 ms), 1220 at 20, 4988 at the zombie's 40
 // (1.6 ms); terraced hills 731 / 1170 / 4969 (4.3 ms at range 40). Range 40 is the vanilla maximum (a zombie's random spawn bonus reaches about 45: 6400 points), so the old 6000 cap cut
-// those searches short (a capped search returns the closest partial path, which differs from the original). 30000 is about 3 ms per 1000 points worst case on stepped terrain (ca. 15-20 ms),
+// those searches short (a capped search returns the closest partial path, which differs from the original). 30000 is about 0.7-0.9 ms per 1000 points on stepped terrain (batch 33: 29894 points took 21 ms on terraced hills),
 // far beyond any single-floor search and only reachable in multi-storey caves. The search cannot be split over ticks with identical results: the original runs it to completion inside one
 // call, and a mob's next goal check depends on the path it returns.
 let nodeCap = 30000;
