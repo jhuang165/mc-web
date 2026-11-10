@@ -1436,6 +1436,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       trampleFarmland(entity, distance);
       if (entity.type === "pig" && pigFall(distance, rider.vehicle?.entity === entity)) achievements.trigger("flyPig");
     };
+    mobs.landingDust = (entity, x, y, z, data) => scene.particles.landingDust(world, x, y, z, data, [position.x, position.y + PHYSICS.eye, position.z]); // playAuxSFX(2006) of any mob's landing
     watchMobs(mobs, { achievements, player: () => position });
     watchMobStats(mobs, { live: statsLive });
     mobs.onEntityWalking = (x, y, z) => touchRedstoneOre(x, y, z); // Entity.moveEntity's step tail: Block.onEntityWalking

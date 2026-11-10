@@ -80,7 +80,8 @@ export function mobStepEvents(world, e, from, { hostile = false, random, onWalk 
   const position = { x: e.x, y: e.y, z: e.z }, events = [];
   // Entity.moveEntity plays the swim sound when isInWater() and then func_145780_a regardless (the step is silent over liquids).
   if (e.inWater) {
-    const volume = Math.min(1, f(Math.sqrt(f(f(f(e.vx * e.vx) * 0.2) + f(e.vy * e.vy) + f(f(e.vz * e.vz) * 0.2))) * f(0.35)));
+    const [mx, my, mz] = e.moveMotion ?? [e.vx, e.vy, e.vz];
+    const volume = Math.min(1, f(f(Math.sqrt(mx * mx * 0.20000000298023224 + my * my + mz * mz * 0.20000000298023224)) * f(0.35))); // doubles, sqrt_double returns a float
     const pitch = f(1 + f(f(random() - random()) * 0.4));
     events.push({ sound: hostile ? "game.hostile.swim" : "game.neutral.swim", volume, pitch, position });
   }

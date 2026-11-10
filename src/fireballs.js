@@ -28,7 +28,7 @@ export class Fireballs {
   // EntityFireball(world, shooter, dx, dy, dz) at (x, y, z): the aim gets 0.4 * gaussian per axis (x, y, z) on the ball's own Random, then
   // acceleration = aim / |aim| * 0.1. `exact` is the (world, x, y, z, ax, ay, az) form of the dispenser: the acceleration as given.
   launch({ large, owner = null, x, y, z, dx = 0, dy = 0, dz = 0, power = FIREBALL.defaultPower, exact = null }) {
-    const rand = new JavaRandom(seedOf(this.mobs));
+    const rand = new JavaRandom(this.mobs.fireballSeed?.(owner, large) ?? seedOf(this.mobs)); // fireballSeed: the replays' recorded Entity.rand seed
     const [ax, ay, az] = exact ?? fireballAcceleration(dx, dy, dz, rand);
     const ball = {
       id: "fb-" + this.next++, type: "fireball", kind: large ? "fireball" : "smallFireball", large: !!large, owner, health: 1,

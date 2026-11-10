@@ -1,6 +1,7 @@
 // Minecraft Java 1.7.10 EntitySilverfish (yk), BlockSilverfish (amb, the monster egg) and ModelSilverfish (bia).
 // A leaf module: the legacy (non-AI-task) action state is ported with injected hooks, so entities.js
 // supplies the live world and tests/silverfish.test.js replays public/research/silverfish-reference.json.
+import { mhSin, mhCos } from "./lighting.js";
 const f = Math.fround;
 export const STONE = 3, COBBLESTONE = 12, STONE_BRICKS = 101, MONSTER_EGG = 68;
 export const SILVERFISH = Object.freeze({ health: 8, width: f(0.3), height: f(0.7), speed: 0.6000000238418579, damage: 1, followRange: 16 });
@@ -160,6 +161,7 @@ function wanderPath(e, env) {
 // EntityCreature.updateEntityActionState (td.bq) for a mob that is never "movement ceased" and never flees.
 export function creatureActionState(e, env) {
   const r = env.rand;
+  e.hasAttacked = false; // td.bq: hasAttacked = isMovementCeased() (never); attackEntity may set it (the blaze's volley), which skips the re-path/wander and strafes
   if (!e.target) {
     e.target = env.findPlayerToAttack(e);
     if (e.target) e.path = env.pathToEntity(e, e.target, 16);
@@ -168,8 +170,8 @@ export function creatureActionState(e, env) {
     if (env.canSee(e, e.target)) env.attackEntity(e, e.target, d);
   } else e.target = null;
   if (e.target && env.isCreative(e.target)) e.target = null;
-  if (e.target && (!e.path || r.nextInt(20) === 0)) e.path = env.pathToEntity(e, e.target, 16);
-  else if (((!e.path && r.nextInt(180) === 0) || r.nextInt(120) === 0) && e.entityAge < 100) wanderPath(e, env);
+  if (!e.hasAttacked && e.target && (!e.path || r.nextInt(20) === 0)) e.path = env.pathToEntity(e, e.target, 16);
+  else if (!e.hasAttacked && ((!e.path && r.nextInt(180) === 0) || r.nextInt(120) === 0) && e.entityAge < 100) wanderPath(e, env);
   const i = floor(e.y + 0.5), water = !!e.inWater, lava = !!e.inLava;
   e.rotationPitch = 0;
   if (!e.path || r.nextInt(100) === 0) {
@@ -192,6 +194,13 @@ export function creatureActionState(e, env) {
     if (step > 30) step = 30;
     if (step < -30) step = -30;
     e.rotationYaw = f(e.rotationYaw + step);
+    if (e.hasAttacked && e.target) { // td.bq: strafe around the target while attacking
+      const old = e.rotationYaw;
+      e.rotationYaw = f(f(Math.atan2(e.target.z - e.z, e.target.x - e.x) * 180 / Math.PI) - 90);
+      const a = f(f(f(f(old - e.rotationYaw) + 90) * f(Math.PI)) / 180);
+      e.moveStrafing = f(-mhSin(a) * e.moveForward);
+      e.moveForward = f(mhCos(a) * e.moveForward);
+    }
     if (dy > 0) e.jumping = true;
   }
   if (e.target) faceEntity(e, e.target, 30, 30, env);
