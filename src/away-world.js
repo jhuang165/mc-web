@@ -65,6 +65,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const entityTicks = (x, z) => {
     const bx = Math.floor(x), bz = Math.floor(z);
     if (!wanted.has(key(bx >> 4, bz >> 4))) return false;
+    if (areas.every((s) => Math.abs(bx - s[0]) <= 80 && Math.abs(bz - s[2]) <= 80)) return true; // 32 blocks further still lie inside every loaded area: skip the chunk loop
     for (let cx = (bx - 32) >> 4; cx <= (bx + 32) >> 4; cx++) for (let cz = (bz - 32) >> 4; cz <= (bz + 32) >> 4; cz++) if (!loadedChunk(cx, cz)) return false;
     return true;
   };
@@ -164,7 +165,9 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
 
   ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
   if (ents) ents.falling = falling;
-  const idle = () => !fluids.pending.size && !fire.queue.heap.length && !falling.pending.size && !live.tree.length && !live.thisTick.length
+  // (an entry held back in an unloaded column does nothing for the rest of the run, so it does not keep the run going)
+  const work = (list) => { for (const e of list) if (ticking(e.x, e.z)) return true; return false; };
+  const idle = () => !work(fluids.pending.values()) && !work(fire.queue.heap) && !work(falling.pending.values()) && !work(live.tree) && !live.thisTick.length
     && !live.deferred.length && !(live.torchToggles?.length) && !live.blockEvents.some((l) => l.length) && !live.pistonTiles().length;
   // The same tick tree the live game runs (tile-ticks.js attachTickTree, public/research/region-import.md Batch 33): fluids, fire, falling blocks and redstone
   // take their due entries together in (time, priority, creation) order under one 1000 cap. `trace(kind, entry)` sees each entry as it runs (tests).
@@ -172,6 +175,16 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   // Batch 36: redstone hears each fluid write at once (World.setBlock notifies neighbours), as main.js does through fluids.writers; the renderer-side flush follows the run.
   fluids.writers.push((x, y, z, old, now) => rt.fluidChanges([[x, y, z, old, now]], true));
   if (trace) for (const src of tree.sources) { const run = src.run; src.run = (e) => { trace(src.name, e); return run(e); }; }
+  // Batch 37: a scheduled tick in a column that is not loaded (never was, or the autosave unloaded it) is not run against refused writes. Natively the chunk's save
+  // (AnvilChunkLoader, TileTicks with t = scheduledTime - worldTime) keeps it and a later load re-queues it with the same remaining delay. Fluids, fire and falling blocks
+  // already hold such entries back (their pauseUnloadedTicks / beginTick put the time back each tick); the redstone list does the same here, so the entry is saved with
+  // the delay it had when its column left the loaded set.
+  const compare = (a, b) => a.time - b.time || a.priority - b.priority || a.serial - b.serial;
+  const freezeUnloadedRedstone = () => {
+    let moved = 0;
+    for (const e of live.tree) if (!ticking(e.x, e.z)) { e.time++; moved++; }
+    if (moved) { live.tree.sort(compare); cmds.stats.heldTicks = (cmds.stats.heldTicks ?? 0) + moved; }
+  };
   let ran = 0, stopped = "done";
   for (; ran < plan.ticks; ran++) {
     const entities = ran < AWAY_ENTITY_TICKS;
@@ -182,9 +195,10 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     // random ticks), then the block events and updateEntities (tile entities) while the gate is open.
     cmds.state.ran = ran;
     if (ran % 10 === 0) light.refresh(ran);
+    freezeUnloadedRedstone();
     tree.tick({ x: 0, z: 0 }, { fluids: () => rt.flush() });
     live.sendQueuedBlockEvents();
-    if (entities) falling.tick();
+    if (entities) { if (ents) ents.park(falling, "entities", () => falling.tick()); else falling.tick(); }
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
     if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); sv.tickFurnaces(); }
