@@ -107,7 +107,7 @@ export class DimensionLive {
   // arrivalWarmer) builds the terrain they read ahead of them; without them (every caller but a loading-screen trip) it runs at once.
   async arrive(prepared, record, { pause = null, warm = null } = {}) {
     await restoreImportedFortress(prepared, record); // imported data/Fortress.dat starts (Nether views only)
-    const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear();
+    const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear(); this.exitPortals = null;
     if (!t) return;
     const to = dimensionOf(record), from = t.from;
     if (t.death || from === END) delete record.portalState; // A new player is created on respawn.
@@ -394,7 +394,31 @@ export class DimensionLive {
   // The player has stood in a portal for PREWARM_TICKS of its countdown: build the terrain round the exit now (exit-prewarm.js). The trip ends the request.
   warmExit(from, pos, yaw = 0) {
     const to = from === NETHER ? OVERWORLD : NETHER;
-    try { this.exitWarm.start(this.rootRecord(), to, transferTarget(from, to, pos.x, pos.y, pos.z, yaw)); } catch (e) { console.warn(`exit prewarm: ${e.message}`); }
+    try {
+      const root = this.rootRecord(), tt = transferTarget(from, to, pos.x, pos.y, pos.z, yaw);
+      // The saved portals of the destination, read once per trip (batch 34): the exit is the one the Teleporter picks, not the target. Nothing is asked until they are known.
+      const key = `${root?.id}:${to}`;
+      let known = this.exitPortals;
+      if (known?.key !== key) {
+        const mine = known = this.exitPortals = { key, list: null };
+        const box = (v) => [Math.floor(v) - 160, Math.floor(v) + 160];
+        const ready = () => { if (this.exitPortals === mine && !this.busy) try { this.exitWarm.start(root, to, tt, mine.list); } catch (e) { console.warn(`exit prewarm: ${e.message}`); } }; // the tick that asked has gone by: start with its target
+        this.savedPortals(root, to, box(tt.x), box(tt.z)).then((list) => { mine.list = list; }, () => { mine.list = []; }).then(ready);
+      }
+      if (known.list) this.exitWarm.start(root, to, tt, known.list);
+    } catch (e) { console.warn(`exit prewarm: ${e.message}`); }
+  }
+  // The portal columns the Teleporter's search would list in the destination (the same edits, arrivals and imported columns peekFor reads) as [x, z], sorted by x then z.
+  // peekFor itself is not used: for the Overworld it builds a World, whose constructor would take the parked resident cell the return trip is waiting for (spawn-presolve.js).
+  async savedPortals(root, to, [x0, x1], [z0, z1]) {
+    const peek = this.peeks.get(`${root.id}:${to}`);
+    if (peek) return peek.portalColumns?.(GAME_IDS.portal, x0, x1, z0, z1) ?? [];
+    if (to === OVERWORLD && !(root.chunked && root.generationVersion >= 13)) return []; // finite worlds and below generation 13 build no cells to prewarm
+    const edits = new Map(await this.readEdits(to === OVERWORLD ? root.id : viewId(root.id, to)));
+    for (const [x, y, z, id, meta] of root.portalArrivals?.[to]?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8));
+    const lister = new TerrainPeek({ dimension: to }, edits);
+    lister.stored = await this.warmStored(root, to);
+    return lister.portalColumns(GAME_IDS.portal, x0, x1, z0, z1);
   }
   // EntityPlayerSP.onLivingUpdate: the first tick in a portal plays portal.trigger (volume 0.25, pitch 0.8-1.2); the overlay follows timeInPortal.
   portalFrame(timer, inPortal) {
