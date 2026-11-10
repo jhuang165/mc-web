@@ -1,0 +1,24 @@
+# Batch 41 gateitem track
+
+## Summary
+Branch `batch41-gateitem`. Two parts: the fence gate item model, and probe coverage at other positions.
+
+- Fence gate item model (commit 1b4ee32a7). `GATE_ITEM_BOXES` (render type 21, `RenderBlocks.renderBlockAsItem`, bytecode-read only, not executed) now draws the gate in the inventory icon (`block-textures.js`, `gateIcon`, same projection as the stair and anvil icons), the first-person hand and `gateItemGeometry` (`first-person.js`), the dropped item (`drop-renderer.js`, scale 0.25) and the third-person hand (`player-renderer.js`; before, every block there was a cube). Item id 1167 and block id 167 both count. Tiles are planks. Headless muted screenshots before/after are in `artifacts/b41-gateitem/` (`before-*.png`, `after-*.png`): before, the gate was a full plank cube everywhere; after, two posts and a bar.
+- Position probe (commit 81dfdfa28). New `tools/probes/RenderTypesPosProbe.java` + `tools/verify-render-types-pos.mjs` write `public/research/render-types-pos-reference.json` (3.4 MB, separate from the 8 MB render-types-2 file): 704 fixtures, 39588 native vertices at three AO settings, executed 1.7.10 classes. It reuses the centre lists of `RenderTypesProbe` and `LightFloatProbe` (so render types 0, 1, 2, 4, 6-11, 13, 14, 18, 20, 23, 40 and the type 0 light blocks) at random positions from a list of 24 (negative x/z, chunk edges on both axes, corners, heights 1 and 254, 1000 and 12345 magnitudes), one chunk object per chunk coordinate as RenderTypes2Probe does. Sweeps: lily pad 10x10 grid x two heights (102 fixtures, all four rotations occur: 35/21/21/25), tall grass, dandelion, red flower, double plant (both halves) on a 6x6 grid, vines on a grid, and vines under 40 kinds of block. `src/render-types-pos.test.js` replays them at their position; it is exact for every vertex (no `KNOWN` rows).
+- Port bugs the new record found, all fixed in `src/chunk-mesher.js`:
+  1. Hashed plant offsets (tall grass, flowers, double plant): the native code widens a float, `(float) n / 15.0F`; the port divided in double, so some positions differed by one float bit. Now `Math.fround`. Also the quad edges are `(p + 0.5) - 0.45` and `(p + 0.5) + 0.45`, as native, not `p + 0.05` / `p + 0.95`.
+  2. Cake sides: a bitten cake's side faces now use the mirrored `(min + max) - p` texture axis (`ownUv`), so the strip matches native (it was only right for symmetric boxes).
+  3. Vine top quad: native draws it under any block that renders as a normal block (`renderAsNormalBlock`: glowstone, leaves, ice, TNT, redstone block) and not under glass, stained glass, slabs, stairs, chests, doors, cactus or air. The port asked `normalCube`. New `src/render-normal.js` holds the original-id set (the RedstoneProbe flags already in `redstone.js`, air removed); the mesher maps the port id with `toOriginal`.
+- Test harness fixes in the new test only: burning furnace cells go into the lit set and the furnace facing becomes the metadata of port block 14 (this is how the mesher reads it).
+- Not done: `LightFloatProbe` and `RenderTypesProbe` themselves are unchanged (their 8,8,8 references stay byte identical); the new probe covers their blocks at other positions instead of editing them.
+
+Evidence: executed for all vertices of the position record. Bytecode-read only: the type 21 item boxes.
+
+## Verification
+Focused, one at a time (full suite and build left to the lead): gate-item 3/3, render-types-pos 2/2 (704 fixtures), render-types 1/1, render-types-2 1/1, stems-cake 6/6, lily-pad 4/4, light-float 2/2, mesh-worker 4/4, module-names 1/1. Browser: one muted headless Chrome (Playwright, port 5412) singleplayer world with a gate, anvil and wall in the hotbar: the inventory icon, the first-person hand and the third-person hand of the inventory player model show the gate model; no page errors. Not checked in a browser: the dropped gate item and the new vine/plant paths (covered by the vertex test only). Load average was 6.9-8.6 during the work.
+
+## Follow-ups (proposed gap lines)
+- Fence gate item boxes are still bytecode-read, not executed (the probes run world rendering only; an item render probe needs the item path of `renderBlockAsItem` with a Tessellator).
+- Dropped gate item (0.25 scale) not looked at in a browser; the third-person held gate keeps the cube's size and rotation convention.
+- Fire, flower pot, anvil, walls, gates, end frame and the redstone family are exact at their own positions in the render-types-2 record (batch 38-40), but the world-position sweep covered only the blocks of `RenderTypesProbe`/`LightFloatProbe`; hashed fire flicker is the same at all positions only if the batch 40 six positions are enough.
+- The vine rule list in `render-normal.js` is a copy of the RedstoneProbe flags; `redstone.js` still carries its own packed table.
