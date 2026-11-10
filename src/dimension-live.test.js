@@ -264,3 +264,13 @@ test("batch 39: advanceWorldClock (main.js advanceTicks) adds the loading screen
   advanceWorldClock(parts(), 0); advanceWorldClock(parts(), -3); advanceWorldClock(parts(), NaN);
   assert.equal(advanced.length, before, "no ticks, no change");
 });
+
+test("batch 41: a saved mob without an id (a portal arrival) gets one above every saved id, not a repeat of a gap (Entity.nextEntityID never repeats)", () => {
+  const flat = { numericSeed: 1, getMeta: () => 0, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 8.5, y: 0, z: 8.5 }) };
+  const pig = (id, x) => ({ id, type: "pig", x, y: 0, z: 9.5, health: 10 });
+  const m = new EntityWorld(flat, [pig("mob-3", 8.5), pig("mob-5", 10.5), pig(undefined, 12.5), pig("mob-5", 14.5)]);
+  const ids = m.entities.map((e) => e.id);
+  assert.equal(new Set(ids).size, 4, `ids ${ids}`);
+  assert.ok(ids.slice(2).every((id) => Number(id.slice(4)) > 5));
+  assert.ok(m.nextId > Math.max(...ids.map((id) => Number(id.slice(4)))));
+});
