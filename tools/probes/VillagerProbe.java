@@ -43,7 +43,8 @@ public class VillagerProbe {
     public void a(yz player, int event, int x, int y, int z, int data) { aux.add(event + "|" + x + "," + y + "," + z); }
     public float n(int x, int y, int z) { return 1.0f; }
     public java.util.Calendar V() { java.util.Calendar c = java.util.Calendar.getInstance(); c.setTimeInMillis(1592200000000L); return c; } // batch 31: World.getCurrentDate (EntityZombie.onSpawnWithEgg's Halloween pumpkin check), a fixed mid-June date
-    public float B(int x, int y, int z) { return 0.0f; } // batch 31: World.func_147462_b (regional difficulty) reads a chunk; EntityZombie.onSpawnWithEgg of a converted villager asks, and its result is not observed
+    static float localDiff = 0.0f; // batch 37: record field `local`
+    public float B(int x, int y, int z) { return localDiff; } // batch 31: World.func_147462_b (regional difficulty) reads a chunk; EntityZombie.onSpawnWithEgg of a converted villager asks, and its result is not observed
     static int light = 15; // batch 32: a dark scenario lets a Hard zombie's reinforcement site search find a spot
     public int k(int x, int y, int z) { return light; } // batch 31: World.getBlockLightValue (a Hard zombie's reinforcement site search reads it; fully lit, so none is ever spawned)
     public ahu a(int x, int z) { return ahu.d(1); } // plains: MoveIndoors reads its biome
@@ -52,8 +53,9 @@ public class VillagerProbe {
     public azu a(azw a, azw b) { return realRays ? super.a(a, b) : null; }
     public azu a(azw a, azw b, boolean c) { return realRays ? super.a(a, b, c) : null; }
     public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return realRays ? super.a(a, b, c, d, e) : null; }
-    public boolean d(sa entity) { if (!unloaded.isEmpty() && !(entity instanceof yz) && unloaded.contains(chunkKey(qh.c(entity.s / 16.0), qh.c(entity.u / 16.0)))) return false; spawned.add(entity); if (pickEntities && ((immediateZombies && entity instanceof yq) || (immediateChickens && entity instanceof wg))) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
+    public boolean d(sa entity) { if (!unloaded.isEmpty() && !(entity instanceof yz) && unloaded.contains(chunkKey(qh.c(entity.s / 16.0), qh.c(entity.u / 16.0)))) return false; spawned.add(entity); if (pickEntities && ((immediateZombies && entity instanceof yq) || (immediateChickens && entity instanceof wg) || (immediateMobs && (entity instanceof yn || entity instanceof yl)))) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
     static boolean immediateZombies = false;
+    static boolean immediateMobs = false; // batch 37: a spider and its skeleton jockey join the entity list at once
     static boolean immediateChickens = false; // batch 36: a chicken a baby zombie spawns joins the entity list at once (as immediateZombies)
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
     // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.
@@ -136,6 +138,11 @@ public class VillagerProbe {
         long t0 = System.nanoTime(); ayf path = run.call(); long dt = System.nanoTime() - t0;
         pz map = (pz) MobMoveProbe.field(ayg.class, "c").get(finder);
         searches.add(new long[] {tick, MobMoveProbe.field(pz.class, "b").getInt(map), path == null ? 0 : 1}); searchNanos.add(dt);
+        if (System.getenv("VF_PATHS") != null) { // batch 37 development aid: the path every native search returned, as x,y,z points on stderr
+          StringBuilder pb = new StringBuilder("path " + (searches.size() - 1) + " tick " + tick + " points " + (path == null ? "null" : path.d() + ":"));
+          if (path != null) for (int k = 0; k < path.d(); k++) { aye q = path.a(k); pb.append(" ").append(q.a).append(",").append(q.b).append(",").append(q.c); }
+          java.nio.file.Files.writeString(java.nio.file.Path.of(System.getenv("VF_PATHS")), pb + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        }
         if (System.getenv("VF_DUMPSEARCH") != null && searches.size() == Integer.parseInt(System.getenv("VF_DUMPSEARCH"))) { // development aid: every point (x y z visited) of the nth search of this run
           StringBuilder b = new StringBuilder(); qa[] table = (qa[]) MobMoveProbe.field(pz.class, "a").get(map);
           for (qa head : table) for (qa en = head; en != null; en = en.c) { aye p = (aye) en.b; b.append(p.a).append(' ').append(p.b).append(' ').append(p.c).append(' ').append(p.i ? 1 : 0).append('\n'); }

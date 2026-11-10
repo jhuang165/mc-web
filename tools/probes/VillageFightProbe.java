@@ -57,7 +57,8 @@ public class VillageFightProbe {
     System.err.println("searches " + VillagerProbe.World.searches.size() + " points " + points + " max " + most + " native ms total " + total / 1e6 + " worst " + worst / 1e6);
     return b.append("]").toString();
   }
-  static boolean b35or36(String name) { return name.startsWith("b35-") || name.startsWith("b36-"); }
+  static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name) || name.startsWith("b37-"); }
+  static boolean b36up(String name) { return name.startsWith("b36-") || name.startsWith("b37-"); }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
@@ -78,9 +79,11 @@ public class VillageFightProbe {
     public float g() { return 1.62f; } // EntityPlayerMP.getEyeHeight (mw.g, bytecode-read): the server player's eye over its feet (yOffset 0)
   }
   // Index of an entity in the record: the mobs, the player (types.length), then the zombies spawned during the fight in spawn order.
+  static List<sv> mobsForIndex = new ArrayList<>();
   static int index(Object[] ents, List<yq> extra, Object e) {
     for (int k = 0; k < ents.length; k++) if (ents[k] == e) return k;
     for (int k = 0; k < extra.size(); k++) if (extra.get(k) == e) return ents.length + k;
+    for (int k = 0; k < mobsForIndex.size(); k++) if (mobsForIndex.get(k) == e) return ents.length + extra.size() + k; // batch 37: spiders and skeletons spawned during the fight follow the zombies
     return -1;
   }
   static String draws(List<String> log) {
@@ -92,6 +95,7 @@ public class VillageFightProbe {
   // batch 35: `follow` > 0 sets every zombie's generic.followRange base value (yj.b): the live value after EntityZombie.onSpawnWithEgg's "Random zombie-spawn bonus" (operation 2, d0 = nextDouble * 1.5 * local difficulty, kept when above 1) reaches (40 + bonus) * (1 + d0), up to about 130 on Hard
   static void base(yq z) throws Exception { if (reinforce > 0) ((ti) z.a((th) MobMoveProbe.field(yq.class, "bp").get(null))).a(reinforce); if (follow > 0) ((ti) z.a(yj.b)).a(follow); }
   static double follow = 0;
+  static double local = 0; // batch 37: World.func_147462_b (regional difficulty) the double answers, record field `local`
   static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
   static int[][] unloadedChunks = {}; // batch 34: [chunkX, chunkZ] pairs the ChunkProviderServer model has not loaded
   static int eggTimer = 6000; // batch 36: chickens' timeUntilNextEgg (the constructor's nextInt(6000) + 6000 is out of reach of any record)
@@ -144,7 +148,10 @@ public class VillageFightProbe {
     SeedRandom.next = 1000000L + seed * 1000; // the first Entity built from here on (an arrow, a converted or reinforcement zombie) gets this seed
     List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
     List<wg> extraChickens = new ArrayList<>(); List<String> chickenRecs = new ArrayList<>(), spawnRecs = new ArrayList<>(); // batch 36
-    VillagerProbe.World.immediateChickens = name.startsWith("b36-");
+    VillagerProbe.World.immediateChickens = b36up(name);
+    VillagerProbe.World.immediateMobs = name.startsWith("b37-");
+    VillagerProbe.World.localDiff = (float) local;
+    List<sv> extraMobs = mobsForIndex = new ArrayList<>(); List<String> mobRecs = new ArrayList<>(); // batch 37: spiders and skeletons the spawn ops built (a spider jockey's skeleton)
     Log[] logs = new Log[ents.length];
     for (int i = 0; i < ents.length; i++) {
       sa e = (sa) ents[i];
@@ -179,6 +186,13 @@ public class VillageFightProbe {
             hits.add("[" + t + "," + hit + "," + num(victim.aS()) + "]");
             break;
           }
+          case "hitmob": { // batch 37: "t hitmob k dmg player|mob": a hit on the k-th spider or skeleton built during the fight, by the player (the last entity) or the first mob
+            sv victim = (sv) mobsForIndex.get(Integer.parseInt(p[2]));
+            sa attacker = (sa) ents[p[4].equals("player") ? ents.length - 1 : 0];
+            boolean hit = victim.a(p[4].equals("player") ? ro.a((yz) attacker) : ro.a((sv) attacker), Float.parseFloat(p[3]));
+            hits.add("[" + t + "," + hit + "," + num(victim.aS()) + "]");
+            break;
+          }
           case "equip": held((sv) ents[Integer.parseInt(p[2])], p[3].equals("0") ? null : ArmorEnchantmentProbe.make(Integer.parseInt(p[3]), 0, ArmorEnchantmentProbe.ench())); break; // setCurrentItemOrArmor(0): setCombatTask runs at once
           case "spawn": { // batch 36: "t spawn x z y yaw" SpawnerAnimals' order: a zombie placed, World.spawnEntityInWorld (refused in an unloaded chunk), then onSpawnWithEgg(null) with its chicken-jockey rolls
             yq z = new yq(w);
@@ -193,6 +207,13 @@ public class VillageFightProbe {
             spawnRecs.add("[" + t + "," + (in ? 1 : 0) + "," + (z.f() ? 1 : 0) + "," + kind + "," + near + "," + (chickenIn ? 1 : 0) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).seed + "]");
             break;
           }
+          case "spawnspider": { // batch 37: "t spawnspider x z y yaw" SpawnerAnimals' order for a spider: placed, World.spawnEntityInWorld, EntitySpider.onSpawnWithEgg(null): World.rand rolls the 1-in-100 skeleton jockey, then on Hard the potion effect
+            yn sp = new yn(w);
+            sp.b(Double.parseDouble(p[2]), Double.parseDouble(p[4]), Double.parseDouble(p[3]), Float.parseFloat(p[5]), 0f);
+            w.d(sp);
+            sp.a((sy) null);
+            break;
+          }
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
           case "move": at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break; // batch 33: optional height
           case "rename": VillageLiveProbe.W.players.remove(player.n); player.n = p[2]; VillageLiveProbe.W.players.put(p[2], player); break;
@@ -204,6 +225,7 @@ public class VillageFightProbe {
       for (Log l : logs) l.log.clear();
       for (yq z : extraZombies) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log.clear();
       for (wg ch : extraChickens) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log.clear();
+      for (sv m : extraMobs) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).log.clear();
       // World.updateEntities walks loadedEntityList by index, so an arrow spawned by a skeleton joins the end and ticks in the same pass; a dead entity
       // (setDead) leaves the list right after its own update (extras records only: the batch 28-30 records kept corpses in the list).
       List<String> tickArrows = new ArrayList<>();
@@ -236,12 +258,21 @@ public class VillageFightProbe {
             arrowList.add(arrow);
             ticking.add(arrow);
             VillagerProbe.World.entities.add(arrow);
-          } else if (sp instanceof wg && name.startsWith("b36-")) {
+          } else if (sp instanceof wg && b36up(name)) {
             // Batch 36: a chicken built by a baby zombie's onSpawnWithEgg (a new chicken jockey), spawned and ticked like any mob. Its constructor's Math.random yaw is overwritten by setLocationAndAngles (the zombie's yaw).
             wg ch = (wg) sp;
             chickenRecs.add("[" + t + "," + num(ch.s) + "," + num(ch.t) + "," + num(ch.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).seed + "," + num(ch.y) + "," + num(MobMoveProbe.field(sv.class, "aP").getFloat(ch)) + "," + (ch.bZ() ? 1 : 0) + "," + ch.bu + "]");
             extraChickens.add(ch); arrowList.add(ch); ticking.add(ch);
             if (!VillagerProbe.World.entities.contains(ch)) VillagerProbe.World.entities.add(ch);
+          } else if ((sp instanceof yn || sp instanceof yl) && name.startsWith("b37-")) {
+            // Batch 37: a spider built by a spawn op and the skeleton its onSpawnWithEgg seats on it (World.spawnEntityInWorld first, mountEntity after): both join the world list and tick in this pass; the skeleton updates with its mount.
+            sv m = (sv) sp;
+            for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(m, fn, 0f);
+            for (int slot = 0; slot < 5; slot++) equipSync(m, slot);
+            int mount = -1; if (((sa) m).m != null) for (int k = 0; k < extraMobs.size(); k++) if (extraMobs.get(k) == ((sa) m).m) mount = k;
+            mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : 1) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
+            extraMobs.add(m); arrowList.add(m); ticking.add(m);
+            if (!VillagerProbe.World.entities.contains(m)) VillagerProbe.World.entities.add(m);
           } else if (sp instanceof yq) {
             // Batch 32: a zombie spawned mid-pass (EntityZombie.onKillEntity's converted villager, or a Hard reinforcement) joins the world list and ticks in this
             // pass like any entity. A conversion stands exactly where a dead villager did; a reinforcement is built by attackEntityFrom on an integer corner.
@@ -315,7 +346,20 @@ public class VillageFightProbe {
             .append(index(ents, extraZombies, z.o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(z))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log)).append("]]");
         }
         row.append("]");
-        if (name.startsWith("b36-")) { // the chickens built during the fight
+        if (name.startsWith("b37-")) { // the spiders and skeletons built during the fight (chickens first as in b36 rows)
+          row.append(",[");
+          for (int k = 0; k < extraChickens.size(); k++) { wg ch = extraChickens.get(k); row.append(k > 0 ? "," : "").append("[").append(num(ch.s)).append(",").append(num(ch.t)).append(",").append(num(ch.u)).append(",").append(num(ch.aS())).append(",").append(ch.bZ() ? 1 : 0).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log)).append("]]"); }
+          row.append("],[");
+          boolean firstFlag = true;
+          for (int k = 0; k < n; k++) if (ents[k] instanceof wg) { row.append(firstFlag ? "" : ",").append(((wg) ents[k]).bZ() ? 1 : 0); firstFlag = false; }
+          row.append("],[");
+          for (int k = 0; k < extraMobs.size(); k++) {
+            sv m = extraMobs.get(k);
+            row.append(k > 0 ? "," : "").append("[").append(num(m.s)).append(",").append(num(m.t)).append(",").append(num(m.u)).append(",").append(num(m.aS())).append(",")
+              .append(index(ents, extraZombies, ((sw) m).o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(m))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).log)).append("]]");
+          }
+          row.append("]");
+        } else if (b36up(name)) { // the chickens built during the fight
           row.append(",[");
           for (int k = 0; k < extraChickens.size(); k++) { wg ch = extraChickens.get(k); row.append(k > 0 ? "," : "").append("[").append(num(ch.s)).append(",").append(num(ch.t)).append(",").append(num(ch.u)).append(",").append(num(ch.aS())).append(",").append(ch.bZ() ? 1 : 0).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log)).append("]]"); }
           row.append("],[");
@@ -331,7 +375,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (cache ? ",\"chunkCache\":true" : "") + (name.startsWith("b36-") ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (name.startsWith("b37-") ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -673,6 +717,36 @@ public class VillageFightProbe {
     blocks = storeysOf.apply(3);
     scenario("b36-flee-ramp-d3", 4622, 500, "VVzZZGK", new double[][] {{33.5, 41.5, 4}, {35.5, 44.5, 4}, {36.5, 40.5, 4}, {30.5, 40.5, 0}, {37.5, 47.5, 8}, {10.5, 10.5}, {60.5, 120.5}, {30.5, 53.5}}, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0"});
     blocks = new int[][] {};
+    // Batch 37 (names b37-*): see the scenarios below.
+    difficulty = 3; blocks = new int[][] {}; eggTimer = 90;
+    scenario("b37-chicken-wander-1406", 1406, 300, "VVZGKCC", nearChickens, new String[] {});
+    scenario("b37-jockey-nearby-113-d3", 113, 300, "VVZGKCC", nearChickens, jockeyOps);
+    // Chicken wander targets underground: the probe floor (y < 0) is stone, so every try has the same getBlockPathWeight (brightness - 0.5) and the first one wins, a target below the mob when its dy is negative; the partial path
+    // goes to the reachable cell nearest the target. (The port replays this world with a stone floor: its first replay floor was the port's grass id 1, which made tries with a floor under them weigh 10.)
+    for (int sd : new int[] {1401, 1402, 1408, 1413}) scenario("b37-chicken-wander-" + sd, sd, 300, "VVZGKCC", nearChickens, new String[] {});
+    // the same two seeds over a grass patch (the weight of a try with grass below it is 10, so those tries win over stone ones)
+    blocks = new int[][] {{58, -1, 48, 90, -1, 70, 2, 0}};
+    for (int sd : new int[] {1402, 1413}) scenario("b37-chicken-wander-grass-" + sd, sd, 300, "VVZGKCC", nearChickens, new String[] {});
+    blocks = new int[][] {};
+    // Skeleton spider jockeys: "t spawnspider x z y yaw" (SpawnerAnimals' order). World.rand rolls the 1-in-100 jockey first; on Hard a roll below 0.1 * regional difficulty (record field `local`; 0 in the other records) gives the spider a potion effect.
+    // Seeds were found with the port's draw order and are confirmed by the records (`mobs`: [tick, 0 spider / 1 skeleton, x, y, z, Entity.rand seed, yaw, mount's index among them, movement speed, health]).
+    double[][] spiderArena = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {36.5, 100.5}, {46.5, 51.5}, {52.5, 80.5}, {10.5, 10.5}, {62.5, 58.5}};
+    double[][] spiderFarGolem = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {10.5, 130.5}, {46.5, 51.5}, {52.5, 80.5}, {10.5, 10.5}, {62.5, 58.5}};
+    String[] spiderOps = {"3 spawnspider 30.5 100.5 0 90"};
+    // (the jockey and effect seeds were found with the port's replay of this world, whose World.rand has drawn before the spawn tick; the records confirm them)
+    difficulty = 2;
+    scenario("b37-spider-jockey-d2-47", 47, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    difficulty = 3; local = 1.5;
+    scenario("b37-spider-jockey-speed-2231", 2231, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    scenario("b37-spider-jockey-regen-1713", 1713, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    scenario("b37-spider-jockey-invisible-972", 972, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    scenario("b37-spider-jockey-strength-1003", 1003, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    scenario("b37-spider-effect-nojockey-4", 4, 80, "VVZGKKK", spiderFarGolem, spiderOps);
+    // the golem inside its village walks to a spider at the village edge (its target selector takes any IMob inside its home area) and hits it: the spider's motion, health and the skeleton riding it follow
+    double[][] spiderVillage = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {47.5, 46.5}, {46.5, 51.5}, {52.5, 80.5}, {10.5, 10.5}, {66.5, 70.5}};
+    scenario("b37-spider-jockey-golem-1713", 1713, 80, "VVZGKKK", spiderVillage, new String[] {"3 spawnspider 40.5 46.5 0 90", "30 hitmob 1 2.0 player", "50 hitmob 1 1.0 player"});
+    local = 0; difficulty = 2;
+    eggTimer = 6000; difficulty = 2;
     difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
     scenario("player-turns-aggressive", 0, 700, open, new String[] {"10 hit 0 7 0.1 player", "31 hit 0 7 0.1 player", "52 hit 0 7 0.1 player", "73 hit 0 7 0.1 player", "94 hit 0 7 0.1 player", "115 hit 0 7 0.1 player", "136 hit 0 7 0.1 player", "157 hit 0 7 0.1 player",
