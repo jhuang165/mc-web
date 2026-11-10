@@ -41,11 +41,11 @@ await writeFile(path.join(out, "raw.jsonl"), stdout);
 if (/Exception|Caused by:/.test(stderr)) throw new Error(stderr);
 const records = stdout.trim().split("\n").filter((l) => l.startsWith("{")).map(JSON.parse);
 const count = (k) => records.filter((r) => r.kind === k).length;
-assert.ok(count("trace") === 10 && count("collide") === 8 && count("transfer") === 30 && count("travel") === 30 && count("nbt") === 5, JSON.stringify(Object.fromEntries(["trace", "collide", "transfer", "travel", "nbt"].map((k) => [k, count(k)]))));
+assert.ok(count("trace") === 10 && count("collide") === 8 && count("transfer") === 30 && count("travel") === 30 && count("nbt") === 5 && count("vehicle") === 8 && count("cache") === 8, JSON.stringify(Object.fromEntries(["trace", "collide", "transfer", "travel", "nbt", "vehicle", "cache"].map((k) => [k, count(k)]))));
 const { stderr: version } = await exec("java", ["-XshowSettings:properties", "-version"]);
 const srgText = await readFile(path.join(research, "joined-1.7.10.srg"), "utf8"), mcp = {};
 for (const m of srgText.matchAll(/^CL: (\S+) \S+\/(\S+)$/gm)) mcp[m[1]] = m[2];
-const names = ["ahp", "aqo", "aqp", "aqq", "aqr", "sa", "yz", "amp", "akt", "oi", "sg", "xk", "sq"];
+const names = ["ahp", "aqo", "aqp", "aqq", "aqr", "sa", "yz", "amp", "akt", "oi", "sg", "xk", "sq", "xl", "xs", "xi", "ayp", "mt"];
 const classesUsed = Object.fromEntries(await Promise.all(names.map(async (c) => [c, {
   name: mcp[c], sha256: createHash("sha256").update((await exec("unzip", ["-p", jar, c + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex"),
 }])));
@@ -53,7 +53,7 @@ const reference = {
   target: "Minecraft Java 1.7.10", clientSha1: "e80d9b3bf5085002218d4be59e668bac718abbc6",
   srgSha256: createHash("sha256").update(srgText).digest("hex"), classes: classesUsed,
   jvm: String(version).match(/java\.version = (\S+)/)?.[1] || "unknown",
-  method: "Unchanged sa.C (Entity.onEntityUpdate, called non-virtually so EntityLivingBase extras do not run), amp.a / akt.a (BlockPortal / BlockEndPortal.onEntityCollidedWithBlock), sa.b(I)V (travelToDimension with a MinecraftServer double whose world array holds the three probe worlds), oi.a(sa,int,mt,mt) (transferEntityToWorld) and ahp (Teleporter) on sparse WorldServer doubles (mt subclass, no constructor): cell = explicit override, else stone up to `floor`, else air; spawn/remove/update calls are logged. The probe entity class is registered with EntityList (id 250, \"ProbeEntity\") so createEntityByName builds the copy. Entity fields are [x,y,z,vx,vy,vz,yaw,pitch]. trace: per tick [tick, insidePortalBlock, portalCounter, timeUntilPortal, inPortal, travel ops]; the trace runs Entity.onEntityUpdate and then the BlockPortal collision, as the server does (update first, movement collision after).",
+  method: "Unchanged sa.C (Entity.onEntityUpdate, called non-virtually so EntityLivingBase extras do not run), amp.a / akt.a (BlockPortal / BlockEndPortal.onEntityCollidedWithBlock), sa.b(I)V (travelToDimension with a MinecraftServer double whose world array holds the three probe worlds), oi.a(sa,int,mt,mt) (transferEntityToWorld) and ahp (Teleporter) on sparse WorldServer doubles (mt subclass, no constructor): cell = explicit override, else stone up to `floor`, else air; spawn/remove/update calls are logged. The probe entity class is registered with EntityList (id 250, \"ProbeEntity\") so createEntityByName builds the copy. Entity fields are [x,y,z,vx,vy,vz,yaw,pitch]. trace: per tick [tick, insidePortalBlock, portalCounter, timeUntilPortal, inPortal, travel ops]; the trace runs Entity.onEntityUpdate and then the BlockPortal collision, as the server does (update first, movement collision after). Batch 37: vehicle = the real EntityMinecartEmpty (xs, onUpdate xl.h with its own portal section) and EntityBoat (xi.h -> Entity.onUpdate) with their own moveEntity doing the BlockPortal collision, over portal blocks at (0, 10..12, 0) removed at tick 20 (travelToDimension replaced by a log line; the vehicle sinks into the probe floor, boats included, which does not matter for the counters); cache = a persistent per-world Teleporter (mt.u()) used by successive transferEntityToWorld calls and swept with ahp.a(time) every 100 ticks, steps [time, wipe, source x, source z, yaw, direction, entity after].",
   records,
 };
 const text = JSON.stringify(reference) + "\n";

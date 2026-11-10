@@ -624,7 +624,7 @@ export class Minecarts {
     const out = {
       Pos: [9, 6, [cart.x, cart.posY, cart.z]], Motion: [9, 6, [cart.vx, cart.vy, cart.vz]], Rotation: [9, 5, [cart.yaw, cart.pitch]],
       FallDistance: [5, cart.fallDistance], Fire: [2, cart.fire], Air: [2, 300], OnGround: [1, cart.onGround ? 1 : 0], Dimension: [3, 0],
-      Invulnerable: [1, 0], PortalCooldown: [3, 0], Items: [9, items.length ? 10 : 0, items],
+      Invulnerable: [1, 0], PortalCooldown: [3, cart.portalCooldown | 0], Items: [9, items.length ? 10 : 0, items],
     };
     if (cart.customName) out.CustomName = [8, cart.customName];
     if (!V.isContainerType(cart.type)) delete out.Items;
@@ -633,20 +633,20 @@ export class Minecarts {
   // Browser save: the fields EntityMinecartChest writes (damage, rolling and the reverse flag are
   // DataWatcher/transient state that a native reload also resets), with original ids for
   // unmapped items so they map once the build has them.
-  toJSON() {
+  toJSON() { return { version: 1, carts: this.carts.filter((c) => !c.dead).map((c) => this.serializeOne(c)) }; }
+  // One cart's save record (also what portal travel carries to the other dimension: entity-portal.js).
+  serializeOne(c) {
     return {
-      version: 1,
-      carts: this.carts.filter((c) => !c.dead).map((c) => ({
-        id: c.id, uuid: ensureUuid(c), type: c.type, rider: c.rider?.player === true || undefined,
-        x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
-        customName: c.customName || undefined, ...V.variantJSON(c),
-        items: c.slots.flatMap((s, slot) => {
-          const o = s ? originalOf(s) : null, u = c.unmapped[slot];
-          if (s && o) return [{ slot, ...copyStack(s), id: o.id, damage: o.damage, count: s.count }];
-          if (u) return [{ slot, ...copyStack(u) }];
-          return [];
-        }),
-      })),
+      id: c.id, uuid: ensureUuid(c), type: c.type, rider: c.rider?.player === true || undefined,
+      x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
+      portalCooldown: c.portalCooldown > 0 ? c.portalCooldown : undefined, // Entity.timeUntilPortal (PortalCooldown)
+      customName: c.customName || undefined, ...V.variantJSON(c),
+      items: c.slots.flatMap((s, slot) => {
+        const o = s ? originalOf(s) : null, u = c.unmapped[slot];
+        if (s && o) return [{ slot, ...copyStack(s), id: o.id, damage: o.damage, count: s.count }];
+        if (u) return [{ slot, ...copyStack(u) }];
+        return [];
+      }),
     };
   }
   static fromJSON(json, options) {
@@ -670,6 +670,7 @@ export class Minecarts {
       if (ok(c.fallDistance)) cart.fallDistance = f(c.fallDistance);
       if (Number.isInteger(c.fire)) cart.fire = c.fire;
       cart.onGround = !!c.onGround;
+      if (Number.isInteger(c.portalCooldown) && c.portalCooldown > 0) cart.portalCooldown = Math.min(300, c.portalCooldown);
     }
     return m;
   }

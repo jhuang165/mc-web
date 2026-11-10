@@ -1,6 +1,8 @@
 // Non-player entities in portals (1.7.10 Entity.onEntityUpdate / setInPortal / travelToDimension, tools/probes/EntityPortalProbe.java,
 // public/research/entity-portal-reference.json). Mobs, dropped items and experience orbs travel; the player's tamed wolves and
-// leashed animals do not follow (they stay in the dimension the browser unloads).
+// leashed animals do not follow (they stay in the dimension the browser unloads). Batch 37: minecarts and boats travel too
+// (kinds "cart" and "boat": EntityMinecart.onUpdate xl.h has its own copy of the portal block, bytecode-read identical to Entity.onEntityUpdate's;
+// EntityBoat.onUpdate xi.h runs Entity.onUpdate; neither overrides travelToDimension). Their collision box is the entity's own `bb`.
 import { ENTITY_TYPES } from "./entities.js";
 import { mobScale } from "./slime.js";
 import { OVERWORLD, NETHER, END, PortalState, transferTarget, GAME_IDS } from "./dimensions.js";
@@ -10,11 +12,12 @@ const SKIPPED = new Set(["ender_dragon", "ender_crystal"]);
 export const SIZES = { item: [0.25, 0.25], orb: [0.5, 0.5] };
 // Collision box of a record: half width and height; `e.y` is the bottom for all three kinds (a mob's feet).
 export function boxOf(kind, e) {
+  if (kind === "cart" || kind === "boat") return e.bb ? [(e.bb[3] - e.bb[0]) / 2, e.bb[4] - e.bb[1]] : null;
   if (kind === "mob") { const t = ENTITY_TYPES[e.type], s = mobScale(e); return t ? [(t.width * s) / 2, t.height * s] : null; }
   return [SIZES[kind][0] / 2, SIZES[kind][1]];
 }
 // Entity.posY, the value transferEntityToWorld hands to the Teleporter: a mob's feet, an item's bottom + yOffset, an orb's centre.
-export const POS_Y = { mob: 0, item: 0.125, orb: 0.25 };
+export const POS_Y = { mob: 0, item: 0.125, orb: 0.25, cart: 0, boat: 0 }; // a cart's or boat's `y` is already its posY
 export const mobYawToMc = (yaw) => (-yaw * 180) / Math.PI + 0;
 export const mcToMobYaw = (deg) => (-deg * Math.PI) / 180 + 0;
 
@@ -45,7 +48,8 @@ export class EntityPortals {
   }
   // One tick after the entity moved. Returns null or { arg, endPortal, direction }: the travelToDimension argument.
   // `getId(x,y,z)`: block id of the current dimension; `dim`: the dimension; `riding`: it has a rider or a vehicle.
-  step(e, kind, { dim, getId, riding = false }) {
+  // `ridden`: something rides it (BlockPortal and BlockEndPortal ignore it, but the countdown of Entity.onEntityUpdate still runs).
+  step(e, kind, { dim, getId, riding = false, ridden = false }) {
     const box = boxOf(kind, e);
     if (!box || (kind === "mob" && (e.health <= 0 || SKIPPED.has(e.type)))) return null;
     const s = this.state(e), prev = this.last.get(e) ?? { x: e.x, z: e.z };
@@ -54,10 +58,13 @@ export class EntityPortals {
     // Entity.onEntityUpdate runs first in the next tick: it consumes the inPortal the previous tick's collision set.
     const go = s.tick(dim, { isPlayer: false, riding });
     if (go !== null) result = { arg: go, endPortal: false, direction: s.teleportDirection };
-    else if (!riding) {
-      const [hw, h] = box, x0 = Math.floor(e.x - hw + 0.001), x1 = Math.floor(e.x + hw - 0.001), z0 = Math.floor(e.z - hw + 0.001), z1 = Math.floor(e.z + hw - 0.001);
+    else if (!riding && !ridden) {
+      const [hw, h] = box, vehicle = kind === "cart" || kind === "boat", bb = e.bb;
+      // doBlockCollisions: the box shrunk by 0.001 on every side; a vehicle has its own box, the others hang off their position.
+      const x0 = Math.floor((vehicle ? bb[0] : e.x - hw) + 0.001), x1 = Math.floor((vehicle ? bb[3] : e.x + hw) - 0.001), z0 = Math.floor((vehicle ? bb[2] : e.z - hw) + 0.001), z1 = Math.floor((vehicle ? bb[5] : e.z + hw) - 0.001);
+      const y0 = Math.floor((vehicle ? bb[1] : e.y) + 0.001), y1 = Math.floor((vehicle ? bb[4] : e.y + h) - 0.001);
       let nether = false, end = false;
-      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = Math.floor(e.y + 0.001); y <= Math.floor(e.y + h - 0.001); y++) {
+      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) {
         const b = getId(x, y, z);
         if (b === GAME_IDS.portal) nether = true; else if (b === GAME_IDS.endPortal) end = true;
       }

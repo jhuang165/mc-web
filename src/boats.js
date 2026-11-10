@@ -321,11 +321,13 @@ export class Boats extends Minecarts {
   }
 
   // Browser save: the Entity fields a native reload keeps (position, motion, rotation, fall distance, fire).
-  toJSON() {
-    return this.carts.filter((c) => !c.dead).map((c) => ({
+  toJSON() { return this.carts.filter((c) => !c.dead).map((c) => this.serializeOne(c)); }
+  // One boat's save record (also what portal travel carries to the other dimension: entity-portal.js).
+  serializeOne(c) {
+    return {
       id: c.id, uuid: ensureUuid(c), x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
-      onGround: c.onGround, ...(c.rider?.player === true ? { rider: true } : {}),
-    }));
+      onGround: c.onGround, ...(c.rider?.player === true ? { rider: true } : {}), ...(c.portalCooldown > 0 ? { portalCooldown: c.portalCooldown } : {}),
+    };
   }
   static fromJSON(list, options) {
     const m = new Boats(options), ok = (...v) => v.every(Number.isFinite);
@@ -344,6 +346,7 @@ export class Boats extends Minecarts {
       if (ok(c.fallDistance)) boat.fallDistance = f(c.fallDistance);
       if (Number.isInteger(c.fire)) boat.fire = c.fire;
       boat.onGround = !!c.onGround;
+      if (Number.isInteger(c.portalCooldown) && c.portalCooldown > 0) boat.portalCooldown = Math.min(300, c.portalCooldown);
     }
     return m;
   }

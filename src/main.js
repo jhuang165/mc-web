@@ -2576,6 +2576,7 @@ const dims = new DimensionLive({
   active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
   // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
   ticks: () => tickCounter,
+  totalTime: () => mobs?.saveTotalTime(), // WorldInfo.getWorldTotalTime, the Teleporter cache clock (dimension-live.js clock)
   difficulty: () => worldDifficulty(active, options.difficulty),
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
   advanceTicks: (n) => { if (n > 0) { weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
@@ -3206,7 +3207,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
-  dims.tickEntities(world, { mobs, items, xpOrbs }); // mobs, items and orbs in portals (entity-portal.js)
+  dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
