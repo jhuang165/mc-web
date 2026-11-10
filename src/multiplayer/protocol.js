@@ -1,6 +1,7 @@
-// Browser protocol v2 (v2: account sessions replace the shared join key). These are port-state messages, not Java Edition packets.
+// Browser protocol v3 (v2: account sessions replace the shared join key; v3: ticks may carry whole-chunk resends, see splitChanges).
+// These are port-state messages, not Java Edition packets.
 // See public/research/multiplayer.md for the deliberate wire-format decision.
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 export const DEFAULT_SERVER = 'wss://ledoge0.tail92abaf.ts.net/multiplayer';
 export const IDLE_INPUT = Object.freeze({ forward: 0, strafe: 0, jump: false, sneak: false, sprint: false });
 export const validName = name => typeof name === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(name);
@@ -53,4 +54,45 @@ export function apiBase(value) {
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
   url.pathname = '/api/'; url.search = '';
   return url.href;
+}
+
+// PlayerManager.PlayerInstance (mr, bytecode-read): flagChunkForUpdate(x, y, z) records each distinct changed cell of a chunk in a 64-entry
+// list and ORs 1 << (y >> 4) into the section mask; the count stops at 64. sendChunkUpdate (mr.b) then sends S23 for one change, S22 for 2 to 63
+// and, at 64, an S21 chunk packet (ground-up false, the changed section mask) with the tile entities of those sections. Here S23/S22 are cells in
+// `changes` and S21 is a `chunks` entry `{ x, z, mask, runs }` (chunk coordinates, section mask, the column's run-length cells).
+export const CHUNK_RESEND = 64;
+// `changes` are distinct final cells [x, y, z, id, meta]; `columnOf(cx, cz)` returns the authoritative column for a whole-chunk resend.
+export function splitChanges(changes, columnOf) {
+  const byChunk = new Map();
+  for (const change of changes) {
+    const key = `${change[0] >> 4},${change[2] >> 4}`;
+    let group = byChunk.get(key);
+    if (!group) byChunk.set(key, group = { x: change[0] >> 4, z: change[2] >> 4, cells: new Set(), list: [], mask: 0 });
+    const cell = `${change[0]},${change[1]},${change[2]}`;
+    if (!group.cells.has(cell)) { group.cells.add(cell); group.list.push(change); }
+    group.mask |= 1 << (change[1] >> 4);
+  }
+  const cells = [], chunks = [];
+  for (const group of byChunk.values()) {
+    if (group.list.length < CHUNK_RESEND) { cells.push(...group.list); continue; }
+    chunks.push({ x: group.x, z: group.z, mask: group.mask, runs: encodeColumn(columnOf(group.x, group.z)).runs });
+  }
+  return { changes: cells, chunks };
+}
+// A chunk packet back to cells: every cell of the masked 16-high sections (the client applies them like S22 entries).
+export function chunkPacketCells(packet) {
+  if (!Array.isArray(packet.runs) || packet.runs.length % 2 || !Number.isInteger(packet.mask) || packet.mask < 0) throw new Error('Invalid chunk packet');
+  let total = 0;
+  for (let i = 1; i < packet.runs.length; i += 2) total += packet.runs[i];
+  const height = total / 256;
+  if (!Number.isInteger(height) || height % 16) throw new Error('Invalid chunk packet');
+  const column = { blocks: new Uint8Array(total), meta: new Uint8Array(total) };
+  decodeColumn(packet, column);
+  const cells = [];
+  for (let xi = 0; xi < 16; xi++) for (let zi = 0; zi < 16; zi++) for (let y = 0; y < height; y++) {
+    if (!(packet.mask >> (y >> 4) & 1)) continue;
+    const i = (xi * 16 + zi) * height + y;
+    cells.push([packet.x * 16 + xi, y, packet.z * 16 + zi, column.blocks[i], column.meta[i]]);
+  }
+  return cells;
 }

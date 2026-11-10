@@ -20,7 +20,7 @@ import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
 import { serverClick } from '../server-handlers.js';
-import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn } from './protocol.js';
+import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
 const vector = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
@@ -136,6 +136,9 @@ export class DedicatedSimulation {
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
     const feet = [p.position.x, p.position.y, p.position.z];
     const gate = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    // nh.a(jo) always ends a block placement packet (any face but 255) with an S23 for the clicked cell and for the cell on the clicked face, to
+    // that player only, accepted or not; a refused dig (status 0, 1, 2 over 6 blocks or at the height limit) returns silently and resends nothing.
+    if (place) p.resendCells = [target.block, target.adjacent];
     if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
@@ -164,6 +167,9 @@ export class DedicatedSimulation {
       if (p.swing) p.swing--;
     }
     for (const { id, place } of this.actions.splice(0)) { const p = this.players.get(id); if (p) this.edit(p, place); }
+    for (const p of this.players.values()) if (p.resendCells) {
+      p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
+    }
     this.weather.tick(this.world);
     this.weather.drain();
     this.falling.tick();
@@ -174,9 +180,11 @@ export class DedicatedSimulation {
       this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     }
     for (const [x, y, z] of this.changes.values()) this.light.update(x, y, z);
-    const changes = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
+    const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+    // PlayerInstance.sendChunkUpdate: under 64 changed cells in a chunk go as cells, 64 resend the chunk (protocol.js splitChanges).
+    const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`));
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
