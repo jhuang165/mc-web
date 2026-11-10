@@ -214,6 +214,9 @@ export class Fluids {
     this.heap = [];
     this.pending = new Map();
     this.changes = [];
+    // Optional (x, y, z, old, now) called right after each native-style setBlock inside a run (place, setLevel, remove), where the native
+    // World.setBlock notifies its neighbours at once. main.js points it at the redstone engine; unset, observers see only the drained list.
+    this.onWrite = null;
     this.sources = 0;
     // World.setBlock(..., flag 1) from edits made outside the fluid code.
     world.onChange = (x, y, z, old, now) => {
@@ -371,16 +374,18 @@ export class Fluids {
     this.changes.push([x, y, z, old, block]);
     if (isLiquid(block)) this.added(x, y, z);
     this.notify(x, y, z);
+    this.onWrite?.(x, y, z, old, block);
   }
   // World.setBlockMetadataWithNotify(..., flag 2): no neighbour notification.
   setLevel(x, y, z, kind, meta) {
-    if (this.world.put(x, y, z, kind, meta)) this.changes.push([x, y, z, kind, kind]);
+    if (this.world.put(x, y, z, kind, meta)) { this.changes.push([x, y, z, kind, kind]); this.onWrite?.(x, y, z, kind, kind); }
   }
   // World.setBlockToAir (flag 3).
   remove(x, y, z, kind) {
     if (this.world.put(x, y, z, 0, 0)) {
       this.changes.push([x, y, z, kind, 0]);
       this.notify(x, y, z);
+      this.onWrite?.(x, y, z, kind, 0);
     }
   }
   // BlockDynamicLiquid.func_149807_p (akr.p): doors, signs, ladders, reeds and

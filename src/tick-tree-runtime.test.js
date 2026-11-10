@@ -94,3 +94,44 @@ test("water still ticks next to the runtime under the tree (the tree does not st
   for (let t = 1; t <= 12; t++) s.step(t);
   assert.ok([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => s.world.get(x + dx, y, z + dz) !== 0), "water spread");
 });
+
+// ---- fluid writes notify redstone per setBlock (batch 35) ----
+const WIRE = 107;
+function fluidScene(perWrite) {
+  const s = build(true), log = [];
+  const [x, y, z] = s.at(4, 0, 0);
+  // water source on a stone shelf one block up with dust on three sides and one repeater beside the dust
+  for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) s.world.put(x + dx, y - 1, z + dz, STONE, 0, false);
+  s.world.put(x - 1, y, z, WIRE, 0, false); s.world.put(x + 1, y, z, WIRE, 0, false); s.world.put(x, y, z + 1, WIRE, 0, false);
+  s.world.put(x + 2, y, z, 94, 0, false); // powered-less repeater next to the east dust
+  s.world.put(x, y, z, WATER, 0, false);
+  const fluids = s.tickTree.sources.find((q) => q.name === "fluids").sys;
+  const put = s.world.put.bind(s.world), external = s.rt.redstone.external.bind(s.rt.redstone);
+  s.world.put = (...a) => { const r = put(...a); if (r) log.push(["put", a[0], a[1], a[2], a[3]]); return r; };
+  s.rt.redstone.external = (...a) => { log.push(["external", a[0], a[1], a[2]]); return external(...a); };
+  if (perWrite) fluids.onWrite = (a, b, c, d, e) => s.rt.fluidChanges([[a, b, c, d, e]], true);
+  fluids.schedule(x, y, z, 1);
+  const observers = { farming() {}, fluids() { s.rt.flush(); }, fire() {}, step: perWrite ? undefined : (name, changes) => { if (name === "fluids") s.rt.fluidChanges(changes, true); } };
+  for (let t = 1; t <= 14; t++) tickWorldSystems({ farming: { tick: () => [] }, fluids, fire: null, tickTree: s.tickTree, redstone: s.rt }, { time: t, daylight: 1, x, z }, observers);
+  return { s, log, world: s.world.snapshot(), redstone: s.rt.save(), fluids: fluids.save() };
+}
+
+test("with fluids.onWrite redstone hears every write of a fluid run before the next write", () => {
+  const a = fluidScene(true), writes = a.log.filter((e) => e[0] === "put" && (e[4] === 0 || e[4] === WATER || e[4] === 8 || e[4] === 9) );
+  assert.ok(writes.length >= 3, "the water broke dust and spread");
+  // Every put that replaced a redstone part is immediately followed by the engine's external() for that cell.
+  let checked = 0;
+  a.log.forEach((e, i) => {
+    if (e[0] !== "put" || e[4] === 0) return;
+    const next = a.log.slice(i + 1).find((n) => n[0] === "external" && n[1] === e[1] && n[2] === e[2] && n[3] === e[3]);
+    if (next) { checked++; const between = a.log.slice(i + 1, a.log.indexOf(next)).filter((n) => n[0] === "put"); assert.equal(between.length, 0, `no other fluid write between a write and its notification at ${e.slice(1, 4)}`); }
+  });
+  assert.ok(checked >= 2, `notifications seen (${checked})`);
+});
+
+test("per-write and per-run notification end in the same world and the same scheduled ticks here", () => {
+  const a = fluidScene(true), b = fluidScene(false);
+  assert.deepEqual(a.world, b.world);
+  assert.deepEqual(a.fluids, b.fluids);
+  assert.deepEqual(a.redstone, b.redstone);
+});
