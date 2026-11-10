@@ -3200,6 +3200,7 @@ function movementTick(controls) {
   enchantBooks.tick(world, [{ x: position.x, y: position.y, z: position.z }]); // TileEntityEnchantmentTable.updateEntity
   if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
+  mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
     playerTicks, width: PHYSICS.width, height: PHYSICS.height };
   playerTicks = tickLivingSimulation(living, {
