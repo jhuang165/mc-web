@@ -130,7 +130,7 @@ export function dragonUpdate(mobs, e, player, survival) {
   }
   // The client's wing flap sound is the first thing xa.e does (isRemote), on the animTime pair left by the previous tick.
   const flap = wingFlapPitch(s.prevAnim, s.anim, clientRngOf(e));
-  if (flap !== null) mobs.clientSounds?.push({ sound: DRAGON_SOUNDS.wings, volume: DRAGON_SOUNDS.volume, pitch: flap, position: { x: e.x, y: e.y, z: e.z } });
+  if (flap !== null) mobs.clientSounds?.push({ sound: DRAGON_SOUNDS.wings, volume: DRAGON_SOUNDS.volume, pitch: flap, position: e, clientOnly: true }); // client-only: needs the client's entity (entities.js drainClientSounds)
   dragonTick(e, host);
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
   e.rotationYawHead = e.renderYawOffset = e.rotationYaw;

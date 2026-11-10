@@ -70,7 +70,7 @@ import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
-import { tracksMob } from "./ring-events.js";
+import { MobTracker } from "./entity-tracker.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
@@ -1868,7 +1868,11 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
-    this.watching = player; // drainClientSounds: the one client (ring-events.js)
+    this.watching = player; // drainClientSounds: the one client (entity-tracker.js)
+    // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
+    this.tracker ??= new MobTracker(this.viewChunks);
+    if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
+    this.tracker.update(this.entities, player, (m) => this.size(m));
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
@@ -2637,12 +2641,25 @@ export class EntityWorld {
     else delete saved.playerRides;
     return saved;
   }
-  // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.
-  // Only a client that tracks the mob gets status 2 or 3 (EntityTrackerEntry), so a hurt or death sound of a mob outside its tracking square never plays (ring-events.js).
+  // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's, and the client-only
+  // ones of a client entity (the dragon's wings). Status 2 and 3 are sent to the clients in the entity's tracking list when the mob is
+  // hurt; the sound then plays at the client entity's position, the tracker's encoded and interpolated one (entity-tracker.js,
+  // natural-spawning.md "Batch 40"). A client-only sound needs the client entity to exist (it outlives the tracking list by a tick).
   drainClientSounds() {
     const sounds = this.clientSounds;
     this.clientSounds = [];
-    return this.watching ? sounds.filter((s) => !s.position?.type || tracksMob(s.position, this.watching)) : sounds;
+    if (!this.watching) return sounds;
+    const tracker = (this.tracker ??= new MobTracker(this.viewChunks));
+    tracker.attach(this.watching);
+    const out = [];
+    for (const s of sounds) {
+      const m = s.position;
+      if (!m?.type) { out.push(s); continue; }
+      const en = tracker.entryOf(m, this.size(m)[0]); // a mob that spawned this tick enters the tracker now (addEntityToTracker)
+      if ( !en.client.present || (!s.clientOnly && !en.entry.tracked)) continue;
+      out.push({ ...s, position: { x: en.client.x, y: en.client.y, z: en.client.z } });
+    }
+    return out;
   }
   drain() {
     const events = this.events;

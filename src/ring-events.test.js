@@ -95,7 +95,9 @@ test("hurt and death sounds a client plays for status 2 and 3 need the mob insid
   mobs.watching = { x: 100, y: 80, z: 40 };
   mobs.clientSounds = [near, far, squid].map((e) => ({ sound: "mob.zombie.hurt", volume: 1, pitch: 1, position: e }));
   const kept = mobs.drainClientSounds().map((s) => s.position);
-  assert.deepEqual(kept, [near], "the far zombie is 100 blocks out; the squid is 70 out (past its 64) where a zombie would still be tracked (80)");
+  // the sound plays at the client's entity, the tracker's encoded position (1/32 block), not the live one
+  assert.equal(kept.length, 1, "the far zombie is 100 blocks out; the squid is 70 out (past its 64) where a zombie would still be tracked (80)");
+  assert.ok(Math.abs(kept[0].x - near.x) <= 1 / 32 && Math.abs(kept[0].z - near.z) <= 1 / 32 && Math.abs(kept[0].y - near.y) <= 1 / 32);
   assert.equal(mobs.clientSounds.length, 0);
   mobs.watching = null;
   mobs.clientSounds = [{ sound: "mob.zombie.hurt", volume: 1, pitch: 1, position: far }];
