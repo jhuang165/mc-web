@@ -38,7 +38,7 @@ function source(fx) {
 }
 const layers = (M) => [M.solid, M.water, M.ice, M.flow, M.lava, M.lavaFlow, ...M.fire, M.portal];
 // The fluid layers sample their own textures (the animated still and flow frames, uv across the whole texture), not the block atlas.
-const fluidIcon = (M, layer) => (layer === M.water ? "water_still" : layer === M.flow ? "water_flow" : layer === M.lava ? "lava_still" : layer === M.lavaFlow ? "lava_flow" : null);
+const fluidIcon = (M, layer) => (layer === M.water ? "water_still" : layer === M.flow ? "water_flow" : layer === M.lava ? "lava_still" : layer === M.lavaFlow ? "lava_flow" : layer === M.fire[0] ? "fire_layer_0" : layer === M.fire[1] ? "fire_layer_1" : null);
 // A vertex: position floats, tile (-1 unknown), in-tile fraction, colour bytes, light int.
 function jsQuads(M) {
   const out = [];

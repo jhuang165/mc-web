@@ -5,7 +5,7 @@ import { BEACON } from "./pyramid.js";
 import { END_PORTAL } from "./eye-of-ender.js";
 import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
 import { isChestShaped } from "./chest-blocks.js";
-import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemQuads } from './stems-cake.js';
+import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemBounds } from './stems-cake.js';
 import { PORTAL, portalSideRendered } from "./nether-portal.js";
 import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
@@ -26,6 +26,7 @@ import { meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js";
 import { render, usePartialAo, leavesOpaque } from "./render-settings.js";
 import { liquidHeight, flowAngle } from "./fluids.js";
 import { fireVertices } from "./fire.js";
+import { HOPPER_BOWL, HOPPER_FUNNEL, hopperInner, hopperSpout, cauldronInner, brewingBottles, crossedSquares, stemSmall, stemBig, cocoaQuads, potInner, POT_CACTUS, colourOf } from "./render-vessels.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
 import { NETHER_FENCE, QUARTZ_BLOCK } from "./nether-blocks.js";
 import { anvilModelBoxes } from './anvil-block.js';
@@ -476,58 +477,47 @@ export class MeshMethods {
   // RenderBlocks.renderBlockCauldron (render type 24): the outer boxes (floor and four walls) in the cauldron textures, the
   // inner faces of floor and walls in cauldron_inner, and the water surface (water_still, not biome tinted) at 6/16 + 3/16 per level.
   cauldron(m,x,y,z) {
-    cauldronBoxes().forEach(box=>this.box(m,CAULDRON,x,y,z,box,0,true));
+    // render-vessels.js (bytecode-read func_147785_a): a full standard block, then the inner walls, floor and water as flat-lit faces.
+    this.box(m,CAULDRON,x,y,z,[0,0,0,1,1,1],0,false);
     const own=this.light.packed(x,y,z);
-    // blockTile reads meta bit 16 as cauldron_inner and bit 32 as water_still.
-    const innerUv=rectUvs(tileRect(blockTile(CAULDRON,0,false,16))),F=CAULDRON_FLOOR,W=CAULDRON_WALL,e=0.002;
-    m.quad([[x+W,y+F+e,z+W],[x+1-W,y+F+e,z+W],[x+1-W,y+F+e,z+1-W],[x+W,y+F+e,z+1-W]],innerUv,0.9,own,true);
-    // inner wall faces, bottom edge first
-    for(const q of [
-      [[W,F,W],[1-W,F,W],[1-W,1,W],[W,1,W]], [[W,F,1-W],[1-W,F,1-W],[1-W,1,1-W],[W,1,1-W]],
-      [[W,F,W],[W,F,1-W],[W,1,1-W],[W,1,W]], [[1-W,F,W],[1-W,F,1-W],[1-W,1,1-W],[1-W,1,W]],
-    ])m.quad(q.map(p=>[x+p[0],y+p[1],z+p[2]]),innerUv,0.8,own,true);
-    const level=this.world.getMeta(x,y,z)&3;
-    if(level>0){const h=cauldronWaterHeight(level),wuv=rectUvs(tileRect(blockTile(CAULDRON,0,false,32)));
-      m.quad([[x+W,y+h,z+W],[x+1-W,y+h,z+W],[x+1-W,y+h,z+1-W],[x+W,y+h,z+1-W]],wuv,1,own,true);}
+    for(const q of cauldronInner(x,y,z,this.world.getMeta(x,y,z)))this.nativeQuad(m,q,own);
   }
   // RenderBlocks.renderBlockBrewingStand (render type 25): the centre post in brewing_stand, the three base slabs in brewing_stand_base
   // (blockTile reads meta bit 16 as the base) and one vertical sprite plane toward each slab whose bottle bit (1/2/4) is set.
   brewingStand(m,x,y,z) {
     const meta=this.world.getMeta(x,y,z),own=this.light.packed(x,y,z);
-    this.box(m,134,x,y,z,[0.4375,0,0.4375,0.5625,0.875,0.5625],0,true);
+    this.box(m,134,x,y,z,[0.4375,0,0.4375,0.5625,0.875,0.5625],0,false);
     for(const box of [[0.5625,0,0.3125,0.9375,0.125,0.6875],[0.125,0,0.0625,0.5,0.125,0.4375],[0.125,0,0.5625,0.5,0.125,0.9375]])this.box(m,134,x,y,z,box,16,true);
-    const uvs=rectUvs(tileRect(blockTile(134,0,false,0)));
-    [[0.75,0.5],[0.3125,0.25],[0.3125,0.75]].forEach(([cx,cz],i)=>{
-      if(!(meta&(1<<i)))return;
-      const dx=cx-0.5,dz=cz-0.5,len=Math.hypot(dx,dz),px=-dz/len*0.28,pz=dx/len*0.28;
-      m.quad([[x+0.5-px,y+0.01,z+0.5-pz],[x+0.5+px,y+0.01,z+0.5+pz],[x+0.5+px,y+0.875,z+0.5+pz],[x+0.5-px,y+0.875,z+0.5-pz]],uvs,1,own,true);
-    });
+    for(const q of brewingBottles(x,y,z,meta))this.nativeQuad(m,q,own);
   }
   // RenderBlocks.renderBlockHopper (render type 38, bytecode func_147799_a): the bowl box (0, 5/8, 0)-(1, 1, 1) in the block's own icons
   // (hopper_top on top, hopper_outside elsewhere), its four inner wall faces 1/8 in from the edge in hopper_outside and the floor at
   // 5/8 in hopper_inside, the funnel (1/4, 1/4, 1/4)-(3/4, 5/8 - 0.002, 3/4) and the spout box for the facing, both in hopper_outside.
   // blockTile reads meta bit 16 as hopper_outside on every face and bit 32 as hopper_inside.
   hopper(m,x,y,z) {
-    const B=133,facing=this.world.getMeta(x,y,z)&7,own=this.light.packed(x,y,z),F=0.625,W=0.125;
-    this.box(m,B,x,y,z,[0,F,0,1,1,1],0,true);
-    const wall=rectUvs(tileRect(blockTile(B,0,false,16))),floor=rectUvs(tileRect(blockTile(B,0,false,32)));
-    for(const q of [
-      [[W,F,0],[W,F,1],[W,1,1],[W,1,0]], [[1-W,F,0],[1-W,F,1],[1-W,1,1],[1-W,1,0]],
-      [[0,F,W],[1,F,W],[1,1,W],[0,1,W]], [[0,F,1-W],[1,F,1-W],[1,1,1-W],[0,1,1-W]],
-    ])m.quad(q.map(p=>[x+p[0],y+p[1],z+p[2]]),wall,0.8,own,true);
-    m.quad([[x,y+F,z],[x+1,y+F,z],[x+1,y+F,z+1],[x,y+F,z+1]],floor,1,own,true);
-    this.box(m,B,x,y,z,[0.25,0.25,0.25,0.75,F-0.002,0.75],16,true);
-    const spout={0:[0.375,0,0.375,0.625,0.25,0.625],2:[0.375,0.25,0,0.625,0.5,0.25],3:[0.375,0.25,0.75,0.625,0.5,1],4:[0,0.25,0.375,0.25,0.5,0.625],5:[0.75,0.25,0.375,1,0.5,0.625]}[facing];
-    if(spout)this.box(m,B,x,y,z,spout,16,true);
+    const B=133,facing=this.world.getMeta(x,y,z)&7,own=this.light.packed(x,y,z);
+    this.box(m,B,x,y,z,HOPPER_BOWL,0,true);
+    for(const q of hopperInner(x,y,z))this.nativeQuad(m,q,own);
+    this.box(m,B,x,y,z,HOPPER_FUNNEL,16,true,null,true);
+    const spout=hopperSpout(facing);
+    if(spout)this.box(m,B,x,y,z,spout,16,true,null,true);
   }
   // BlockFlowerPot (render type 33): the 6/16 pot in the flower_pot texture and its plant as crossed quads sunk into the pot.
   flowerPot(m,x,y,z) {
-    this.box(m,FLOWER_POT,x,y,z,[...POT_BOUNDS],0,true);
-    const c=potContents(this.world,x,y,z);
-    if(!c||!potPlantOf(c.id,c.damage))return;
-    const uvs=rectUvs(tileRect(blockTile(c.id,0,false,c.damage))),light=this.light.packed(x,y,z),py=y+0.1875,a=0.1875,d=0.8125;
-    m.quad([[x+a,py+0.1875,z+a],[x+d,py+0.1875,z+d],[x+d,py+1.0,z+d],[x+a,py+1.0,z+a]],uvs,1,light,true);
-    m.quad([[x+a,py+0.1875,z+d],[x+d,py+0.1875,z+a],[x+d,py+1.0,z+a],[x+a,py+1.0,z+d]],uvs,1,light,true);
+    // render-vessels.js (bytecode-read func_147752_a): the pot, its inner walls and soil, then the plant raised 4/16 (tessellator translation).
+    this.box(m,FLOWER_POT,x,y,z,[...POT_BOUNDS],0,false);
+    const light=this.light.packed(x,y,z);
+    for(const q of potInner(x,y,z))this.nativeQuad(m,q,light);
+    const c=potContents(this.world,x,y,z),native=c&&potPlantOf(c.id,c.damage);
+    if(!native)return;
+    if(native[0]===81){
+      const k=m.p.length;
+      POT_CACTUS.forEach(box=>this.box(m,c.id,x,y,z,box,0,true));
+      for(let i=k+1;i<m.p.length;i+=3)m.p[i]+=0.25;
+      return;
+    }
+    const tile=blockTile(c.id,0,false,c.damage),tint=native[0]===31?colourOf(this.biomeColors.grassAt(x+this.colorX,y,z+this.colorZ)):[1,1,1];
+    for(const q of crossedSquares(x,y,z,0.75,null,tile,tint)){q.verts.forEach(v=>{v[1]+=0.25;});this.nativeQuad(m,q,light);}
   }
   anvil(m,x,y,z) {
     const meta=this.world.getMeta(x,y,z);
@@ -593,7 +583,7 @@ export class MeshMethods {
   }
   // A render-redstone.js quad (icon fractions, v from the icon's top) into the mesher, with its own colour.
   nativeQuad(m, q, light, raw = false) {
-    const r = tileRect(tileByName(q.icon)), packed = Array.isArray(light) ? light : light;
+    const r = tileRect(q.tile ?? tileByName(q.icon)), packed = Array.isArray(light) ? light : light;
     m.quad(q.verts, q.uv.map(([u, v]) => [r.u0 + (r.u1 - r.u0) * u, r.v1 - (r.v1 - r.v0) * v]), 1, packed);
     const k = m.shade.length - 12;
     for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = q.colour[0]; m.shade[k + i * 3 + 1] = q.colour[1]; m.shade[k + i * 3 + 2] = q.colour[2]; }
@@ -722,14 +712,16 @@ export class MeshMethods {
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
   stem(m, b, x, y, z) {
-    const meta = this.world.getMeta(x, y, z), dir = stemDirection(this.world, x, y, z, b), light = this.light.packed(x, y, z), tint = meshAnaglyph.on ? anaglyphFog(stemTint(meta)) : stemTint(meta), // renderBlockStem (blm.m) converts the age colour
-      prefix = b === PUMPKIN_STEM ? "pumpkin_stem_" : "melon_stem_";
-    for (const q of stemQuads(meta, dir)) {
-      const r = tileRect(tileByName(prefix + (q.tile === "connected" ? "connected" : "disconnected")));
-      m.quad(q.verts.map((v) => [x + v[0], y + v[1], z + v[2]]), q.uvs.map(([u, v]) => [r.u0 + (r.u1 - r.u0) * u, r.v1 - (r.v1 - r.v0) * v]), 1, light, true);
-      const k = m.shade.length - 12;
-      for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = tint[0]; m.shade[k + i * 3 + 1] = tint[1]; m.shade[k + i * 3 + 2] = tint[2]; }
-    }
+    // render-vessels.js (bytecode-read func_147795_a / func_147740_a): the small stem 1/16 low, plus the connected plane beside a fruit.
+    const meta = this.world.getMeta(x, y, z), dir = stemDirection(this.world, x, y, z, b), light = this.light.packed(x, y, z), tint0 = meshAnaglyph.on ? anaglyphFog(stemTint(meta)) : stemTint(meta),
+      colour = tint0.map(Math.fround), prefix = b === PUMPKIN_STEM ? "pumpkin_stem_" : "melon_stem_", h = stemBounds(meta)[4], yy = y - 0.0625;
+    const qs = dir < 0 ? stemSmall(x, yy, z, h, prefix + "disconnected") : [...stemSmall(x, yy, z, 0.5, prefix + "disconnected"), ...stemBig(x, yy, z, h, dir, prefix + "connected")];
+    for (const q of qs) { q.colour = colour; this.nativeQuad(m, q, light); }
+  }
+  // RenderBlocks.renderBlockCocoa (render-vessels.js cocoaQuads, bytecode-read func_147772_a).
+  cocoa(m, x, y, z) {
+    const light = this.light.packed(x, y, z);
+    for (const q of cocoaQuads(x, y, z, this.world.getMeta(x, y, z))) this.nativeQuad(m, q, light);
   }
   crossed(m, b, x, y, z) {
     const w = this.world;
@@ -862,7 +854,8 @@ export class MeshMethods {
     else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
     else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
     else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z));
-    else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
+    else if (b===COCOA) this.cocoa(solid,x,y,z);
+    else if (b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
     else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
     else if (b===END_PORTAL_FRAME) this.endFrameBlock(solid,x,y,z);
     else if (b===BEACON) this.beacon(solid,x,y,z);
