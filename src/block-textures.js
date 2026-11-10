@@ -9,6 +9,7 @@ import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARR
 import {FENCE_ITEM_BOXES} from './fences.js';
 import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
+import {GATE_ITEM_BOXES} from './render-shapes.js';
 import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
 import {STEM_CAKE_TILES} from './stems-cake.js';
 import {WART_TILES,wartStage} from './nether-wart.js';
@@ -292,6 +293,8 @@ function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||i
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE||isNetherFence(id)){fenceIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
+  // RenderBlocks.renderBlockAsItem for the fence gate (render type 21, GATE_ITEM_BOXES): three planks boxes in the anvil/stair projection.
+  if(id===1167||id===167){gateIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
  if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);{const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]]);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */{const url=softIcon([[blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop],[blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop],[blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0,drop]]);if(url){icons.set(key,url);return url;}}face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
@@ -322,12 +325,13 @@ function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||i
  }
  // RenderBlocks.renderBlockAsItem for render type 10: the back half (z 0-0.5, full height) then the front half
  // (z 0.5-1, half height) in the same isometric projection as the anvil icon.
- function stairIcon(ctx,id){
+ function gateIcon(ctx){stairIcon(ctx,1167,GATE_ITEM_BOXES);}
+ function stairIcon(ctx,id,boxes=STAIR_ITEM_BOXES){
   const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y],
    paint=(face,points,shade=0)=>{const t=blockTile(id,face),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16,[a,b,c,d]=points;
     ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
     if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};
-  for(const [x0,y0,z0,x1,y1,z1] of STAIR_ITEM_BOXES){
+  for(const [x0,y0,z0,x1,y1,z1] of boxes){
    paint(0,[p(x1,y0,z0),p(x1,y0,z1),p(x1,y1,z1),p(x1,y1,z0)],.2);
    paint(4,[p(x0,y0,z1),p(x1,y0,z1),p(x1,y1,z1),p(x0,y1,z1)],.08);
    paint(2,[p(x0,y1,z0),p(x1,y1,z0),p(x1,y1,z1),p(x0,y1,z1)]);
