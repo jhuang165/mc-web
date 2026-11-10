@@ -80,3 +80,18 @@ test('tileTickRows orders equal time and priority across kinds by the saved crea
  const rows=tileTickRows({fluidTicks:[{order:0,value:f}],fallingTicks:[{order:0,value:a}]});assert.deepEqual(rows.map(r=>r.x),[2,1]);
  const old=tileTickRows({fluidTicks:[{order:0,value:{...f,n:undefined}}],fallingTicks:[{order:0,value:{...a,n:undefined}}]});assert.deepEqual(old.map(r=>r.x),[1,2]);
 });
+test('redstone pending ticks save the shared creation id n while a tree runs: reload and export keep cross-kind order; an older save without n loads',()=>{
+ const a=build(true),live=a.rt.redstone,w=live.world??null;
+ const fl=a.tree.sources.find(s=>s.name==='fluids').sys;
+ // redstone asks first (id 0), a fluid second (id 1), redstone third (id 2), all due at the same time and priority
+ live.scheduleBlockUpdate(30,30,30,55,5,0);fl.world.set(2,60,1,WATER,false);fl.enqueue(2,60,1,WATER,5,0);live.scheduleBlockUpdate(31,30,30,55,5,0);
+ const saved=JSON.parse(JSON.stringify(live.save())),mine=saved.pending.filter(t=>t[0]>=30&&t[1]===30);
+ assert.deepEqual(mine.map(t=>[t[6],t[7]]),[[mine[0][6],mine[0][6]],[mine[1][6],mine[1][6]]]);
+ const fe=fl.save().entries.find(e=>e.x===2&&e.y===60);assert.ok(mine[0][7]<fe.n&&fe.n<mine[1][7]);
+ const rows=tileTickRows({redstoneTicks:mine.map((t,i)=>({order:i,value:{x:t[0],y:t[1],z:t[2],id:t[3],delay:5,priority:0,n:t[7]}})),fluidTicks:[{order:0,value:{...fe,delay:5}}]});
+ assert.deepEqual(rows.map(r=>r.x),[30,2,31]);
+ const b=build(false);assert.equal(b.rt.redstone.save().pending.every(t=>t.length===7),true);
+ const legacy=JSON.parse(JSON.stringify(saved));legacy.pending=legacy.pending.map(t=>t.slice(0,7));
+ const c=build(false);assert.equal(c.rt.redstone.restore(legacy),true);assert.equal(c.rt.redstone.pending.size,legacy.pending.length);
+ const d=build(false);d.rt.redstone.restore(JSON.parse(JSON.stringify(saved)));assert.equal([...d.rt.redstone.pending.values()].find(e=>e.x===30)?.n,mine[0][7]);
+});

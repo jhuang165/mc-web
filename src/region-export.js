@@ -257,7 +257,7 @@ function regionSource(record, w) {
  // Live redstone pending ticks (redstone-live.js save): [x,y,z,id,time,priority,serial] with time on the engine's own clock; t is time - clock time.
  {const rs=record.redstone;for(const list of [rs?.pending,rs?.deferred])for(const [i,e] of (Array.isArray(list)?list:[]).entries()){if(!Array.isArray(e)||![e[0],e[2],e[3],e[4]].every(Number.isFinite))continue;
   const k=`${Math.floor(e[0]/16)},${Math.floor(e[2]/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
-  (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0}});}}
+  (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0,...(Number.isSafeInteger(e[7])?{n:e[7]}:{})}});}}
  // Comparator output signals (redstone-live.js `comparators`: ["x,y,z", signal]), written as TileEntityComparator by exportChunk.
  for(const [i,e] of (Array.isArray(record.redstone?.comparators)?record.redstone.comparators:[]).entries()){if(!Array.isArray(e)||typeof e[0]!=='string'||!Number.isInteger(e[1]))continue;
   const [x,y,z]=e[0].split(',').map(Number);if(![x,y,z].every(Number.isInteger))continue;const k=`${Math.floor(x/16)},${Math.floor(z/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
