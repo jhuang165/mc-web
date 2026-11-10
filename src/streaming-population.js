@@ -202,6 +202,12 @@ export class StreamingPopulation {
     }
     return out;
   }
+  // The generation record of the chunk at local chunk coordinates when it has never been handed over (claimed), else null. Builds the cell when it is
+  // no longer cached (generation is deterministic): used by ring-chests.js for a container reached before its chunk was ever resident.
+  unclaimedRecord(lcx, lcz) {
+    if (this.isMaterialized(lcx, lcz)) return null;
+    return this.cell(lcx >> 3, lcz >> 3).records.get(key(lcx, lcz)) ?? null;
+  }
   saveMaterialized() {
     return { version: 1, cells: Object.fromEntries([...this.materialized].map(([k, mask]) => [k, mask.toString(16)])) };
   }
