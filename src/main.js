@@ -3171,8 +3171,8 @@ function movementTick(controls) {
     { farming: applyFarmUpdates,
       // The tree tells redstone after every fluid run (`step`: fluids write with world.put, which natively is a setBlock that notifies its neighbours at once);
       // fire edits already pass the redstone funnel of world.set. The scene batch follows per kind.
-      step: (name, changes) => { if (name === "fluids") redstoneRuntime?.fluidChanges(changes); },
-      fluids: changes => { scene.updateBlocks(changes); if (!tickTree) redstoneRuntime?.fluidChanges(changes); },
+      step: (name, changes) => { if (name === "fluids") redstoneRuntime?.fluidChanges(changes, true); },
+      fluids: changes => { scene.updateBlocks(changes); if (tickTree) redstoneRuntime?.flush(); else redstoneRuntime?.fluidChanges(changes); },
       fire: changes => scene.updateBlocks(changes) });
   recordHud.tick();
   // NetHandlerPlayClient.handleEntityAttach: boarding any vehicle (cart, boat, pig, horse) shows
