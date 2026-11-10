@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DimensionLive, viewRecord, storedRecord, rulesOf, DIM_KEYS, TILE_KEYS, gameYaw, mcYaw } from "./dimension-live.js";
+import { DimensionLive, viewRecord, storedRecord, rulesOf, DIM_KEYS, TILE_KEYS, gameYaw, mcYaw, advanceWorldClock } from "./dimension-live.js";
 import { DimensionWorld, TerrainPeek } from "./dimension-world.js";
 import { Teleporter, GAME_IDS } from "./dimensions.js";
 import { JavaRandom } from "./java-random.js";
@@ -246,4 +246,21 @@ test("a repeat trip to the same column reuses the cached portal for 600 ticks, e
   assert.deepEqual((await trip()).calls, [[401, 161]]);
   assert.equal(live.cachedExit({ id: "w" }, 0, { x: 400.9, z: 160.9 })?.x, 400);
   assert.equal(live.cachedExit({ id: "w" }, 0, { x: 401, z: 160 }), null, "another column has its own entry");
+});
+
+test("batch 39: advanceWorldClock (main.js advanceTicks) adds the loading screens' ticks to the total time, the weather and the day clock", () => {
+  const advanced = [], times = [];
+  const parts = () => ({ mobs: { worldTicks: 99 }, weather: { advance: (n) => advanced.push(n) }, survival: { time: 1000 }, scene: { setTime: (t) => times.push(t) } });
+  const a = parts();
+  advanceWorldClock(a, 40);
+  assert.equal(a.mobs.worldTicks, 139); assert.equal(a.survival.time, 1040); assert.deepEqual(advanced, [40]); assert.deepEqual(times, [1040]);
+  const frozen = parts(); frozen.survival.timeFrozen = true;
+  advanceWorldClock(frozen, 5);
+  assert.equal(frozen.mobs.worldTicks, 104); assert.equal(frozen.survival.time, 1000, "doDaylightCycle off: the day clock stays");
+  const none = { ...parts(), mobs: {} }; // a world whose total time is not loaded yet
+  advanceWorldClock(none, 7);
+  assert.equal(none.mobs.worldTicks, undefined);
+  const before = advanced.length;
+  advanceWorldClock(parts(), 0); advanceWorldClock(parts(), -3); advanceWorldClock(parts(), NaN);
+  assert.equal(advanced.length, before, "no ticks, no change");
 });

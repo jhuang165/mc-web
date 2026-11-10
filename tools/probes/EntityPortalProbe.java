@@ -190,8 +190,8 @@ public class EntityPortalProbe {
 
     // ---- vehicle: the real EntityMinecartEmpty.onUpdate (xl.h, its own portal section) and EntityBoat.onUpdate (xi.h -> Entity.onUpdate) with their own moveEntity ----
     // Portal blocks at (0, 10..12, 0) are in the world from tick 0 and removed at tick 20; the vehicle rests on the floor inside them.
-    // [tick, inPortal block under the vehicle, portalCounter, timeUntilPortal, inPortal flag, travel ops]. ridden: riddenBy set. riding: ridingEntity set.
-    for(String vehicle:new String[]{"cart","boat"})for(String mode:new String[]{"enter","ridden","riding","noNether"}){
+    // [tick, inPortal block under the vehicle, portalCounter, timeUntilPortal, inPortal flag, travel ops]. ridden: riddenBy set. riding: ridingEntity set. mount (batch 39): the empty vehicle touched the portal at tick 0 and a rider mounts at the start of tick 1, before its onUpdate.
+    for(String vehicle:new String[]{"cart","boat"})for(String mode:new String[]{"enter","ridden","riding","noNether","mount"}){
       TW w=world(0,1,10);bindServer(w,w,w);allowNether=!mode.equals("noNether");
       sa e=vehicle.equals("cart")?new VC(w):new VB(w);e.b(0.5,vehicle.equals("cart")?11.35:11.3,0.5);
       for(int y=10;y<=12;y++)w.cells.put(TW.ck(0,y,0),90);
@@ -200,6 +200,7 @@ public class EntityPortalProbe {
       StringBuilder ticks=new StringBuilder();
       for(int t=0;t<40;t++){
         if(t==20)for(int y=10;y<=12;y++)w.cells.remove(TW.ck(0,y,0));
+        if(t==1&&mode.equals("mount"))fld(sa.class,"l").set(e,entity(TE.class,w,0,0,0,0,0,0)); // batch 39: a rider mounts after the tick-0 collision set inPortal, before the next onUpdate
         log.setLength(0);
         if(e instanceof xl)((xl)e).h();else ((xi)e).h();
         String travel=log.toString();

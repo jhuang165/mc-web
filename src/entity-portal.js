@@ -79,13 +79,18 @@ export class EntityPortals {
   cooldownAfter(e, result) { return result.endPortal ? e.portalCooldown | 0 : 300; }
 }
 
-// A departing cart or boat as the destination's inbox takes it: its save record with the 300-tick cooldown (End portal: the one it had) and without
-// a rider (the player stays behind), and the transferEntityToWorld input. Shared by the live tick (dimension-live.js) and the away run (away-entities.js).
-export function vehicleDeparture(portals, e, r, owner) {
+// A departing entity as the destination's inbox takes it: its save record (a vehicle without a rider, the 300-tick cooldown or, for the End portal, the one it had)
+// and the transferEntityToWorld input in Minecraft units. Shared by the live tick (dimension-live.js depart) and the away run (away-entities.js).
+export function entityDeparture(portals, kind, e, r, owner) {
   const rec = structuredClone(owner.serializeOne(e));
-  delete rec.rider;
+  const vehicle = kind === "cart" || kind === "boat";
+  delete rec.rider; // the player never travels with the vehicle
   rec.portalCooldown = portals.cooldownAfter(e, r) || undefined;
-  return { rec, mc: { x: e.x, y: e.posY, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: e.yaw ?? 0, pitch: 0, teleportDirection: r.direction }, arg: r.arg };
+  const v = { vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0 };
+  const mc = vehicle ? { x: e.x, y: e.posY, z: e.z, ...v, yaw: e.yaw ?? 0, pitch: 0 }
+    : kind === "mob" ? { x: e.x, y: e.y, z: e.z, ...v, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
+    : { x: e.x, y: e.y + POS_Y[kind], z: e.z, ...v, yaw: 0, pitch: 0 };
+  mc.teleportDirection = r.direction;
+  return { rec, mc, arg: r.arg };
 }
-
 export { OVERWORLD, NETHER, END };

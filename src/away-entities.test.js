@@ -125,3 +125,23 @@ test("batch 38: a cart and a boat resting in a portal of the run leave the run's
   assert.deepEqual(t.map((x) => x.kind).sort(), ["boat", "cart"]);
   for (const x of t) { assert.equal(x.arg, -1); assert.equal(x.rec.portalCooldown, 300); assert.ok(!x.rec.rider); }
 });
+
+test("batch 39: a pig, an item and an orb standing in a portal of the run leave it as travellers with their departure tick; a pig elsewhere stays", async () => {
+  const portal = (chunks) => { for (let y = 11; y <= 13; y++) { setBlock(chunks, 3, y, 5, 164); setBlock(chunks, 4, y, 5, 164); } };
+  const pig = (id, x) => ({ id, type: "pig", x, y: 11, z: 5.5, vx: 0, vy: 0, vz: 0, yaw: 0, health: 10, onGround: true });
+  const root = { ...base, entities: [pig("mob-1", 3.5), pig("mob-2", 20.5)], drops: [item(3.5, 11, 5.5)], xpOrbs: [{ x: 3.5, y: 11.3, z: 5.5, value: 3, age: 0, vx: 0, vy: 0, vz: 0, onGround: true }] };
+  const r = await run(root, 150, portal);
+  const t = r.entities.portalTravel;
+  assert.deepEqual(t.map((x) => x.kind).sort(), ["item", "mob", "orb"]);
+  for (const x of t) { assert.equal(x.arg, -1); assert.equal(x.rec.portalCooldown, 300); assert.ok(x.tick >= 1 && x.tick <= 3, `${x.kind} left at tick ${x.tick}: a non-player's maximum in-portal time is 0, so the tick after the collision`); }
+  assert.deepEqual(r.entities.mobs.map((m) => m.id), ["mob-2"], "only the pig outside the portal stays, once");
+  assert.equal(r.entities.drops.length, 0);
+  assert.equal(r.entities.xpOrbs.length, 0);
+});
+
+test("batch 39: an item and an orb pushed sideways through a portal of the run travel", async () => {
+  const portal = (chunks) => { for (let y = 11; y <= 13; y++) { setBlock(chunks, 3, y, 5, 164); setBlock(chunks, 3, y, 6, 164); } };
+  const root = { ...base, drops: [item(2.2, 11.5, 6.2, { mx: 0.35 })], xpOrbs: [{ x: 2.2, y: 11.5, z: 5.9, value: 3, age: 0, vx: 0.35, vy: 0, vz: 0, onGround: false }] };
+  const r = await run(root, 40, portal);
+  assert.deepEqual(r.entities.portalTravel.map((x) => x.kind).sort(), ["item", "orb"]);
+});

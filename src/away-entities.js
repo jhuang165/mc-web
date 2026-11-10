@@ -18,7 +18,7 @@ import { tickPrimedTnt } from "./entity-simulation.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
-import { EntityPortals, vehicleDeparture } from "./entity-portal.js";
+import { EntityPortals, entityDeparture } from "./entity-portal.js";
 import { JavaRandom } from "./java-random.js";
 import { EntityWorld, ENTITY_TYPES } from "./entities.js";
 import { Survival } from "./survival.js";
@@ -187,18 +187,22 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       if (minecarts.carts.length) {
         park(minecarts, "carts", () => minecarts.tick(world, { entities: [], host: cartHost }));
         for (const d of minecarts.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
-        portalTravel("cart", minecarts);
+        portalTravel("cart", minecarts, minecarts.carts);
       }
       if (boats.carts.length) {
         park(boats, "carts", () => boats.tick(world, { entities: [], hooks: {} }));
         for (const d of boats.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
-        portalTravel("boat", boats);
+        portalTravel("boat", boats, boats.carts);
       }
       if (hanging.entities.length) {
         hanging.tick(world, { active: (h) => entityTicks(h.x, h.z) });
         for (const d of hanging.drain()) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay });
       }
       drainMob();
+      portalTravel("mob", mobs, mobs.entities);
+      portalTravel("item", items, items.items);
+      portalTravel("orb", xp, xp.orbs);
+      tickNo++;
       clock++;
     },
     close() { open = false; },
@@ -224,23 +228,27 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     },
   };
   // EntityMinecartTNT and the furnace cart: the explosion; smoke and sounds are not drawn.
-  // Batch 38: carts and boats of the run travel through the Overworld's portals as the live tick's do (entity-portal.js: EntityMinecart.onUpdate / EntityBoat.onUpdate run the
-  // same portal block). A traveller leaves the list at once and is returned in finish().portalTravel; the main thread (dimension-live.js endAway) delivers it into the
-  // destination's inbox with the shared Teleporter when the player is back. The delivery happens after the run, so the Teleporter sees the total time of the return, not the
-  // tick the cart left at; mobs, items and orbs of the run do not travel (not ported).
-  function portalTravel(kind, owner) {
-    const getId = (x, y, z) => world.get(x, y, z);
+  // Batch 38 (carts, boats) and 39 (mobs, items, orbs): the run's entities travel through the Overworld's portals as the live tick's do (entity-portal.js: Entity.onEntityUpdate and
+  // the two cart/boat copies run the same portal block). A traveller leaves its list at once and is returned in finish().portalTravel with the run tick it left at; the main thread
+  // (dimension-live.js finishAway) delivers it into the destination's inbox with the shared Teleporter when the player is back, at the total time of that tick.
+  function portalTravel(kind, owner, list) {
+    if (!list.length) return;
+    const getId = (x, y, z) => world.get(x, y, z), vehicle = kind === "cart" || kind === "boat";
     let gone = null;
-    for (const c of owner.carts) {
+    for (const c of list) {
       if (c.dead) continue;
-      const r = portals.step(c, kind, { dim: 0, getId, ridden: !!(c.rider || c.passenger) });
+      // Entities outside the 32-block rule do not update (and so do not run Entity.onEntityUpdate's portal step); a mob with a rider or a vehicle is not a portal collider.
+      if (!entityTicks(c.x, c.z)) continue;
+      const riding = kind === "mob" && !!(c.rider || c.vehicle || c.ridingEntity || c.riddenBy);
+      const r = portals.step(c, kind, { dim: 0, getId, riding, ridden: vehicle && !!(c.rider || c.passenger) });
       if (!r) continue;
-      const d = vehicleDeparture(portals, c, r, owner);
-      travellers.push({ kind, ...d });
+      const d = entityDeparture(portals, kind, c, r, owner);
+      travellers.push({ kind, tick: tickNo, ...d });
       (gone ??= new Set()).add(c);
     }
-    if (gone) { const keep = owner.carts.filter((c) => !gone.has(c)); owner.carts.length = 0; owner.carts.push(...keep); }
+    if (gone) { const keep = list.filter((c) => !gone.has(c)); list.length = 0; list.push(...keep); }
   }
+  let tickNo = 0;
   const portals = new EntityPortals(), travellers = [];
   const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
   return self;
