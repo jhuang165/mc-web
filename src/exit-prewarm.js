@@ -18,17 +18,24 @@ import { OVERWORLD, NETHER } from "./dimensions.js";
 const IDLE_MS = 30000, RESIDENT_CELLS = 9, SPECULATIVE_CELLS = 5, NETHER_SPECULATIVE = 40, MOVED = 6;
 const SEARCH = 128; // Teleporter.placeInExistingPortal: the saved portals searched are the columns within 128 blocks of the target on both axes
 
-// The portal Teleporter.placeInExistingPortal would pick from `columns` ([x, z] of every saved portal column, sorted by x then z as TerrainPeek.portalColumns
-// lists them): the nearest to the target in the horizontal plane (the search also weighs height, which a column list does not carry; a wrong pick only
-// wastes the prewarm, the trip is unchanged), the first in that order on a tie. Returns [x + 0.5, z + 0.5] or null.
+// The portal Teleporter.placeInExistingPortal would pick from `columns` ([x, z, ys] of every saved portal column, sorted by x then z as TerrainPeek.portalColumns
+// lists them, `ys` the ascending y of its portal blocks): the search (dimensions.js, ahp.b) visits the columns in that order and, in each, scans y from the top
+// down, drops to the bottom block of every portal stack it meets, and keeps the first stack with the strictly smallest 3D distance (to the block centre) from
+// the target (x, y, z). So a tie goes to the earlier column, and inside a column to the higher stack. A column without `ys` counts at the target's height.
+// Returns [x + 0.5, z + 0.5] or null.
 export function savedPortalFor(columns, tt) {
   if (!columns?.length) return null;
-  const lx = Math.floor(tt.x), lz = Math.floor(tt.z);
+  const lx = Math.floor(tt.x), lz = Math.floor(tt.z), ty = Number.isFinite(tt.y) ? tt.y : 0;
   let best = Infinity, at = null;
-  for (const [x, z] of columns) {
+  for (const [x, z, ys] of columns) {
     if (x < lx - SEARCH || x > lx + SEARCH || z < lz - SEARCH || z > lz + SEARCH) continue;
-    const d = (x + 0.5 - tt.x) ** 2 + (z + 0.5 - tt.z) ** 2;
-    if (d < best) { best = d; at = [x + 0.5, z + 0.5]; }
+    const dh = (x + 0.5 - tt.x) ** 2 + (z + 0.5 - tt.z) ** 2;
+    if (!ys?.length) { if (dh < best) { best = dh; at = [x + 0.5, z + 0.5]; } continue; }
+    for (let i = ys.length - 1; i >= 0; i--) { // top down; a stack's bottom is the block whose predecessor is not a portal block
+      if (i > 0 && ys[i - 1] === ys[i] - 1) continue;
+      const d = dh + (ys[i] + 0.5 - ty) ** 2;
+      if (d < best) { best = d; at = [x + 0.5, z + 0.5]; }
+    }
   }
   return at;
 } // MOVED: blocks the target must shift before the wanted units are asked again

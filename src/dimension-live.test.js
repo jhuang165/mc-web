@@ -217,8 +217,8 @@ test("savedPortals lists the destination's saved portal columns from its edits a
   const live = new DimensionLive({ sound() {} }), asked = [];
   live.readEdits = async (id) => { asked.push(id); return [["10,70,20", GAME_IDS.portal], ["10,71,20", GAME_IDS.portal], ["400,70,0", GAME_IDS.portal], ["12,70,22", 1]]; };
   const r = { ...root(), generationVersion: 13, portalArrivals: { 0: { writes: [[11, 70, 5, GAME_IDS.portal, 0]] }, [-1]: { writes: [[-3, 60, -4, GAME_IDS.portal, 0]] } } };
-  assert.deepEqual(await live.savedPortals(r, 0, [-160, 160], [-160, 160]), [[10, 20], [11, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]), "edits and arrivals in the box, one per column");
-  assert.deepEqual(await live.savedPortals(r, -1, [-160, 160], [-160, 160]), [[-3, -4], [10, 20]], "the Nether reads its own view's edits");
+  assert.deepEqual(await live.savedPortals(r, 0, [-160, 160], [-160, 160]), [[10, 20, [70, 71]], [11, 5, [70]]], "edits and arrivals in the box, one per column");
+  assert.deepEqual(await live.savedPortals(r, -1, [-160, 160], [-160, 160]), [[-3, -4, [60]], [10, 20, [70, 71]]], "the Nether reads its own view's edits");
   assert.deepEqual(asked, ["w1", "w1~-1"]);
   assert.deepEqual(await live.savedPortals({ ...r, generationVersion: 12 }, 0, [-160, 160], [-160, 160]), [], "no cells to prewarm below generation 13");
 });

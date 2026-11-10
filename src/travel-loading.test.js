@@ -25,8 +25,8 @@ const run = (edits, { shortcut, stepped }) => {
 
 test('portalColumns lists only the box columns holding the block, in x then z order', () => {
   const peek = new TerrainPeek(floorWorld(), portalEdits([[5, 64, 9, 90], [5, 65, 9, 90], [3, 64, 20, 90], [3, 64, 2, 90], [4, 64, 4, 49], [500, 64, 0, 90]]));
-  assert.deepEqual(peek.portalColumns(90, -10, 10, -10, 30), [[3, 2], [3, 20], [5, 9]]);
-  assert.deepEqual(peek.portalColumns(90, 4, 10, 0, 10), [[5, 9]]);
+  assert.deepEqual(peek.portalColumns(90, -10, 10, -10, 30), [[3, 2, [64]], [3, 20, [64]], [5, 9, [64, 65]]]);
+  assert.deepEqual(peek.portalColumns(90, 4, 10, 0, 10), [[5, 9, [64, 65]]]);
   assert.deepEqual(new TerrainPeek(floorWorld()).portalColumns(90, -1e3, 1e3, -1e3, 1e3), []);
 });
 
