@@ -17,6 +17,15 @@
 // dimension (the world test is mw.o != null; the entity form answers commands.tp.notSameDimension when the two worlds differ): the run prints the
 // native success text and discards the move, because the portal return repositions the player anyway. /kill from a command block is
 // PlayerNotFoundException natively (getCommandSenderAsPlayer) and fails the same way here. /playsound only sends a packet and /testfor only counts.
+// Batch 35: the run also keeps a SHADOW of the player (a Survival and an Experience built from `plan.player.state` / `plan.player.experience`, the state the player
+// has when he returns) and runs each queued command on it at the moment the block fires, so the block's SuccessCount and LastOutput are fresh, a later command in
+// the same run sees an earlier one (/give then /clear, /xp then @p[lm=..], /gamemode then @p[m=..]) and a comparator reads the current count. The queue still replays on
+// the live player at return (the shadow is not applied: the replay reaches the same state and also drops overflow, plays the feedback to the chat, etc.).
+// /spawnpoint with four absolute integers (CommandSetSpawnpoint bp.b, bytecode-read: setSpawnChunk on each matched player, the Overworld respawn point, whatever
+// dimension he stands in) writes the record's playerSpawn; without coordinates it takes the target's CURRENT position, which the run does not know: skipped and counted.
+// /difficulty is global (every WorldServer): the run's mobs use it from then on and the main thread applies the last value on return.
+// /setworldspawn moves the world spawn; ChunkProviderServer.b / ms.b load the chunks within 128 blocks of the spawn that the run reads once at plan time, and the
+// loaded area of THIS run does not move (the planned columns are what the main thread copied): the new spawn is returned and takes effect for the next trip.
 // What this host does with that: the world-only commands (setblock, summon, time, weather, gamerule, setworldspawn, say, me, testforblock, seed, help,
 // defaultgamemode) run on the run's own world and entity systems through the same createCommandHost the live game uses. A selector the native
 // code would resolve to no one (world-restricted) gives the silent zero. A command that would act on the player (the player is in another dimension
@@ -29,6 +38,8 @@ import { cartCommandPosition } from "./command-cart.js";
 import { inSpawnArea } from "./away-plan.js";
 import { selectLocalPlayer as selectLocal, USERNAME_INDEX } from "./command-selector.js";
 import { PLAYER_NAME } from "./death-messages.js";
+import { Survival } from "./survival.js";
+import { Experience } from "./experience.js";
 
 const ALIAS = { w: "tell", msg: "tell" };
 // Queued for the return (they act on the player's state): see the header. spawnpoint would write the Nether record's spawn, so it stays skipped.
@@ -70,12 +81,22 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     updateBlock() {}, destroyBlock: (x, y, z) => breakBlock(x, y, z),
   };
   const host = createCommandHost(env);
-  Object.assign(host, {
+  // The shadow player: the player's state, advanced by the queued commands at the moment they fire (see the header).
+  const shadowSv = new Survival(plan.player?.state ?? {}, plan.player?.mode === 1 ? "creative" : plan.player?.mode === 2 ? "adventure" : "survival");
+  const shadowXp = new Experience(plan.player?.experience ?? {});
+  const modeNumber = () => (shadowSv.mode === "creative" ? 1 : shadowSv.mode === "adventure" ? 2 : 0);
+  const shadowHost = createCommandHost({ ...env, survival: () => shadowSv, experience: () => shadowXp, giveDrop: (stack) => shadowSv.inventory.add(stack), setTime() {},
+    setMode: (m) => { shadowSv.mode = m; shadowSv.inventory.creative = shadowSv.creative; }, setDifficulty() {} });
+  const shared = {
     playerElsewhere: true, skipped: null, awaySkip: () => skip("a selector filter that needs the scoreboard"),
+    playerMode: modeNumber, playerLevel: () => shadowXp.level,
+    playerPosition: () => ({ x: spawn[0], y: spawn[1], z: spawn[2] }),
+  };
+  Object.assign(shadowHost, shared, { print() {}, printPlayer() {}, teleport() {} });
+  Object.assign(host, {
+    ...shared,
     print: (text) => { if (chat.length < CHAT_CAP) chat.push(String(text?.text ?? text)); },
     printPlayer: (text) => { if (chat.length < CHAT_CAP) chat.push(typeof text === "string" ? text : JSON.stringify(text)); },
-    playerMode: () => plan.player?.mode ?? 0, playerLevel: () => plan.player?.level ?? 0,
-    playerPosition: () => ({ x: spawn[0], y: spawn[1], z: spawn[2] }),
     inWorld(x, y, z) {
       const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
       if (y < 0 || y >= 256 || !inSpawnArea(spawn, cx, cz)) return false; // an unloaded chunk: setblock/summon report out of world
@@ -84,9 +105,14 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     },
   });
   host.teleport = () => { stats.tpDiscarded = (stats.tpDiscarded ?? 0) + 1; }; // CommandTeleport moves the player inside the other dimension; the portal return replaces that position
-  for (const name of ["give", "clear", "kill", "setGameMode", "clearEffects", "removeEffect", "addEffect", "enchant", "addLevels", "addExperience", "setSpawnpoint", "setDifficulty", "shareToLan", "saveFile"]) {
+  for (const name of ["give", "clear", "kill", "setGameMode", "clearEffects", "removeEffect", "addEffect", "enchant", "addLevels", "addExperience", "shareToLan", "saveFile"]) {
     host[name] = () => skip(`${name} acts on the player or needs state the run does not have`);
   }
+
+  // The global difficulty (CommandDifficulty -> setDifficultyForAllWorlds): the run's mobs use it from now on; the last value goes back to the main thread.
+  host.setDifficulty = (d) => { state.difficulty = d; const m = entities()?.mobs; if (m) m.difficulty = d; };
+  // CommandSetSpawnpoint: the player's respawn point (the Overworld's), kept in the record like main.js /spawnpoint does.
+  host.setSpawnpoint = (x, y, z) => { active.playerSpawn = [x, y, z]; };
 
   function execute(tile, position, cartId) {
     const before = { successCount: tile.successCount, lastOutput: tile.lastOutput };
@@ -97,10 +123,18 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     const reason = (why) => { stats.skipped++; stats.reasons[why] = (stats.reasons[why] ?? 0) + 1; tile.successCount = before.successCount; tile.lastOutput = before.lastOutput; return before.successCount; };
     const enqueue = () => {
       if (queue.length >= QUEUE_CAP) return reason("the player-command queue is full");
+      // Fire-time effect on the shadow player: SuccessCount and LastOutput now, and the state a later command sees. The replay at return redoes it on the live player.
+      let ran = false;
+      try {
+        const shadowSender = commandBlockSender(shadowHost, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * 50) } : undefined);
+        tile.successCount = createCommandRunner(shadowSender).run(tile.command) ? 1 : 0;
+        ran = true; stats.shadow = (stats.shadow ?? 0) + 1;
+      } catch { tile.successCount = before.successCount; tile.lastOutput = before.lastOutput; }
       queue.push({ tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
       stats.queued++;
-      return before.successCount; // the replay writes SuccessCount and LastOutput
+      return ran ? tile.successCount : before.successCount; // the replay rewrites SuccessCount and LastOutput with the same values
     };
+    if (canon === "spawnpoint" && parts.length !== 4 && parts.length <= 1) return reason("/spawnpoint without coordinates uses the player's position in the other dimension");
     if (NEEDS_PLAYER.has(canon)) return reason(`/${word} needs the player or scoreboard`);
     const at = USERNAME_INDEX[canon];
     if (at !== undefined && parts.length > at) {
@@ -110,7 +144,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
         if (picked === null) { tile.successCount = 0; stats.silent++; return 0; } // z.a: zero matches, zero runs, no message
         if (picked !== undefined) {
           if (DEFER.has(canon)) return enqueue();
-          if (!NO_LASTING_EFFECT.has(canon)) return reason(`/${word} would act on the player in another dimension`);
+          if (!NO_LASTING_EFFECT.has(canon) && canon !== "spawnpoint") return reason(`/${word} would act on the player in another dimension`);
         }
       } else if (DEFER.has(canon) && parts[at].toLowerCase() === PLAYER_NAME.toLowerCase()) return enqueue(); // a literal name finds the player in any dimension
     }
@@ -137,7 +171,8 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     result() {
       const out = { commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
       if (JSON.stringify(weather.save()) !== initialWeather) out.weather = { ...weather.save(), rain: weather.rain, thunder: weather.thunder };
-      if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}) };
+      if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}), ...(active.playerSpawn ? { playerSpawn: active.playerSpawn } : {}) };
+      if (state.difficulty !== undefined) out.difficulty = state.difficulty;
       return out;
     },
   };

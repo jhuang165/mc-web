@@ -316,6 +316,7 @@ export class DimensionLive {
     try {
       if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
       const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.()), chunks: a.chunks, records: a.records };
+      Object.assign(plan.player, this.host.awayPlayer?.() ?? {}); // the player's live state: the run's shadow player (away-commands.js)
       const msg = await new Promise((resolve) => {
         const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
         a.worker.onmessage = ({ data }) => { clearTimeout(t); resolve(data); };
