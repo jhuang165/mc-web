@@ -75,6 +75,7 @@ public class RenderTypes2Probe {
     sun.misc.Unsafe unsafe = (sun.misc.Unsafe) uf.get(null);
     LightFloatProbe.unsafe = unsafe;
     aji.p();
+    adb.l(); // Item.registerItems: the ItemBlocks the pot's plant lookup goes through (Item.getItemFromBlock, Block.getBlockFromItem)
     alb.e(); // BlockFire.func_149843_e: the flammability tables the fire render reads (Bootstrap runs it in the game)
     aha.a(LightFloatProbe.pixels(args[0]));
     agx.a(LightFloatProbe.pixels(args[1]));
@@ -133,7 +134,7 @@ public class RenderTypes2Probe {
       if (c[0] == 140) tiles.put(new agt(8, 8, 8), POT[c[1]] != null ? new apf(adb.a(aji.e(POT[c[1]][0])), POT[c[1]][1]) : new apf());
       aji block = aji.e(c[0]);
       StringBuilder rec = new StringBuilder("{\"id\":").append(c[0]).append(",\"meta\":").append(c[1])
-        .append(c[0] == 140 && POT[c[1]] != null ? ",\"pot\":[" + POT[c[1]][0] + "," + POT[c[1]][1] + "]" : "").append(",\"type\":").append(block.b()).append(",\"tint\":").append(block.d((ahl) w, 8, 8, 8) & 0xffffff).append(",\"ids\":[");
+        .append(c[0] == 140 && POT[c[1]] != null ? ",\"pot\":[" + POT[c[1]][0] + "," + POT[c[1]][1] + "]" : "").append(c[0] == 140 && POT[c[1]] != null ? ",\"plantTint\":" + (aji.e(POT[c[1]][0]).d((ahl) w, 8, 8, 8) & 0xffffff) : "").append(",\"type\":").append(block.b()).append(",\"tint\":").append(block.d((ahl) w, 8, 8, 8) & 0xffffff).append(",\"ids\":[");
       for (int i = 0; i < w.ids.length; i++) rec.append(i > 0 ? "," : "").append(w.ids[i]);
       rec.append("],\"metas\":[");
       for (int i = 0; i < w.ids.length; i++) rec.append(i > 0 ? "," : "").append(w.metas[i]);

@@ -33,7 +33,7 @@ function source(fx) {
     emission: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : lightValues[fx.ids[i]]; },
   };
   const light = { world, packed: (...a) => LightVolume.prototype.packed.call(volume, ...a) };
-  const tint = fx.tint, t = () => tint;
+  const tint = fx.tint, t = () => (fx.plantTint ?? tint); // a pot's plant is coloured by its own block (fern: the grass colour at the pot)
   return { world, light, repeaterLit: (x, y, z) => fx.ids[cellIndex(x, y, z)] === 94, litFurnaces: new Set(), colorX: 0, colorZ: 0, biomeColors: { grass: t, foliage: t, grassAt: t, foliageAt: t, water: t } };
 }
 const layers = (M) => [M.solid, M.water, M.ice, M.flow, M.lava, M.lavaFlow, ...M.fire, M.portal];
@@ -144,7 +144,6 @@ test("render types other than 0: mesher vertices equal RenderBlocks' Tessellator
   // Types not listed here (wire, lever, repeater, comparator, pistons, tripwire, hook, plates,
   // daylight sensor and more) must match the native vertices exactly.
   const KNOWN = {
-    "140:33": [5508, 0, 2376], // flower pot: the executed record has no plant quads (the probe tile entity does not resolve; the port draws the bytecode-read plant)
   };
   assert.ok(Object.keys(stats).length > 25);
   for (const [key, s] of Object.entries(stats)) {

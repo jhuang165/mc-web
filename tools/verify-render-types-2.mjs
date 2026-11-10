@@ -26,7 +26,8 @@ await exec("unzip", ["-q", "-o", jar, "*.class", "-d", classes], { maxBuffer: 1 
 const cp = [probe, classes, lib("log4j-api-2.0-beta9"), lib("guava-15.0"), lib("commons-lang3-3.1"), lib("commons-io-2.4"), lib("gson-2.2.4")].join(path.delimiter);
 await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/LightFloatProbe.java"), path.join(root, "probes/RenderTypes2Probe.java")]);
 const seed = 38;
-const { stdout } = await exec("java", ["-cp", cp, "RenderTypes2Probe", path.join(root, "../public/media/1.7.10/colormap/grass.png"), path.join(root, "../public/media/1.7.10/colormap/foliage.png"), String(seed)], { maxBuffer: 1 << 28 });
+const { stdout, stderr } = await exec("java", ["-cp", cp, "RenderTypes2Probe", path.join(root, "../public/media/1.7.10/colormap/grass.png"), path.join(root, "../public/media/1.7.10/colormap/foliage.png"), String(seed)], { maxBuffer: 1 << 28 });
+if (process.env.PROBE_STDERR) console.error(stderr);
 const data = JSON.parse(stdout.trim().split("\n").filter((l) => l.startsWith("{")).pop());
 assert.ok(data.fixtures.length >= 100);
 const hashClass = async (id) => createHash("sha256").update((await exec("unzip", ["-p", jar, id + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
