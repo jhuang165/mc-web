@@ -26,6 +26,16 @@ public class VillageFightProbe {
   static Object field(Object o, String n) throws Exception { return MobMoveProbe.field(o.getClass(), n).get(o); }
   static void at(sa e, double x, double y, double z) throws Exception { MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(e, x, y, z); }
   // EntityLivingBase.onUpdate sends an equipment packet through (WorldServer) when a slot differs from its previous one; the double has no WorldServer, so previousEquipment follows each swap.
+  // The rest of that block (sv.h bytecode): the previous stack's attribute modifiers come off the attribute map (sv.d), the new one's go on, and previousEquipment follows; so a zombie that
+  // spawned with a sword hits with the sword's damage.
+  static void equipSync(sv e, int slot) throws Exception {
+    add[] prev = (add[]) MobMoveProbe.field(sv.class, "g").get(e); add cur = e.q(slot);
+    if (add.b(prev[slot], cur)) return;
+    tl map = (tl) MobMoveProbe.field(sv.class, "d").get(e);
+    if (prev[slot] != null) map.a(prev[slot].D());
+    if (cur != null) map.b(cur.D());
+    prev[slot] = cur == null ? null : cur.m();
+  }
   static void held(yl e, add stack) throws Exception { e.c(0, stack); ((add[]) MobMoveProbe.field(sv.class, "g").get(e))[0] = e.ak()[0]; }
   static double[] bx(azt b) throws Exception { return new double[] {b.a, b.b, b.c, b.d, b.e, b.f}; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
@@ -61,6 +71,7 @@ public class VillageFightProbe {
 
   static void base(yq z) throws Exception { if (reinforce > 0) ((ti) z.a((th) MobMoveProbe.field(yq.class, "bp").get(null))).a(reinforce); }
   static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
+  static int[][] unloadedChunks = {}; // batch 34: [chunkX, chunkZ] pairs the ChunkProviderServer model has not loaded
   static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
   static final String DEFAULT_TYPES = "VVZZGKK";
   static void scenario(String name, long seed, int ticks, double[][] pos, String[] script) throws Exception { scenario(name, seed, ticks, DEFAULT_TYPES, pos, script); }
@@ -78,6 +89,10 @@ public class VillageFightProbe {
     VillageLiveProbe.W.roofs.add(new int[] {40, 0, 49, 100});
     for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
     VillagerProbe.World.light = light; MobMoveProbe.ProbeWorld.water = water;
+    // batch 34: b34-* records read blocks through the real ChunkCache (VF_CACHE_ALL=1 runs the older ones that way too, to see which of them depend on it) and may leave chunks unloaded
+    boolean cache = name.startsWith("b34-") || System.getenv("VF_CACHE_ALL") != null;
+    VillagerProbe.World.chunkCache = cache; VillagerProbe.World.unloaded.clear();
+    for (int[] u : unloadedChunks) VillagerProbe.World.unloaded.add(VillagerProbe.World.chunkKey(u[0], u[1]));
     for (int t = 0; t < 5; t++) { if (t % 60 == 0) c.a(52, 0, 52); c.a(); }
     ahb w = VillageLiveProbe.world;
     P player = new P(w, "probe");
@@ -98,8 +113,8 @@ public class VillageFightProbe {
     StringBuilder bases = new StringBuilder("[");
     for (int i = 0; i < n; i++) bases.append(i > 0 ? "," : "").append(ents[i] instanceof yq ? num(((ti) ((yq) ents[i]).a((th) MobMoveProbe.field(yq.class, "bp").get(null))).e()) : "null");
     bases.append("]");
-    VillagerProbe.World.immediateZombies = name.startsWith("b33-");
-    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-"); // rows then end with the arrows, and the record lists the shots and conversions
+    VillagerProbe.World.immediateZombies = (name.startsWith("b33-") || name.startsWith("b34-"));
+    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-") || name.startsWith("b34-"); // rows then end with the arrows, and the record lists the shots and conversions
     VillagerProbe.World.spawned.clear();
     SeedRandom.next = 1000000L + seed * 1000; // the first Entity built from here on (an arrow, a converted or reinforcement zombie) gets this seed
     List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
@@ -185,6 +200,7 @@ public class VillageFightProbe {
             for (int k = 0; k < n; k++) if (ents[k] instanceof yv && ((sv) ents[k]).aS() <= 0 && ((sa) ents[k]).s == z.s && ((sa) ents[k]).u == z.u) conv = true;
             if (conv) conversions.add("[" + t + "," + num(z.s) + "," + num(z.t) + "," + num(z.u) + "]");
             for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(z, fn, 0f);
+            for (int slot = 0; slot < 5; slot++) equipSync(z, slot); // batch 34: onSpawnWithEgg may have equipped it: EntityLivingBase.onUpdate's equipment block minus the packet the double cannot send
             zombieRecs.add("[" + t + "," + (conv ? 1 : 0) + "," + num(z.s) + "," + num(z.t) + "," + num(z.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).seed + "," + (z.bZ() ? 1 : 0) + "," + num(z.y) + "]"); // the last field is rotationYaw: EntityLivingBase's constructor rolls it with Math.random (0..2*pi degrees), which no Entity.rand seed reaches
             if (System.getenv("VF_EXTRA") != null) System.err.println("drain " + t + " at ticking index " + i + " of " + ticking.size());
             extraZombies.add(z);
@@ -257,7 +273,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (cache ? ",\"chunkCache\":true" : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -442,6 +458,59 @@ public class VillageFightProbe {
     blocks = new int[][] {}; difficulty = 3; reinforce = 1.0;
     for (int lv : new int[] {15, 10, 9}) { light = lv; scenario("b33-reinforce-light" + lv + "-d3", 260 + lv, 400, "VVzZZGK", arena, new String[] {"0 walk 7 -0.08 -0.04", "60 walk 7 0 0", "80 hit 3 7 1.0 player", "100 hit 3 7 1.0 player", "120 hit 2 7 1.0 player", "150 hit 0 4 1.0 mob"}); }
     difficulty = 2; light = 15; reinforce = 0;
+    // Batch 34 (names b34-*): these records read blocks through the real ChunkCache over real Chunks (chunkCache field of the record), and the finding is that the path search is NOT bounded by the region the
+    // native PathFinder is given (radius (int)(followRange + 16) for a path to an entity, +8 for a block, whole chunk columns, y 0..255, air outside): ayg's open/blocked test (static func_82565_a) reads
+    // entity.worldObj, not the cache, which only serves the swimming start loop. The ring records below were built to catch a region bound; they show there is none (a wall beyond the region still seals).
+    blocks = new int[][] {}; difficulty = 3; light = 15; reinforce = 0;
+    // A ring of 2-high stone around the villagers (x 16..64, z 30..74) with the zombies (range 40) west of it at 36 blocks: a zombie at x 4.5 has chunk columns -4..3 east to x 63, so the east
+    // wall (x 64) and the corners beyond it are outside the cache region; a region-bounded search would find the ring open there, the native one does not (the wall counts).
+    double[][] ringPos = {{40.5, 52.5}, {42.5, 54.5}, {4.5, 52.5}, {4.5, 56.5}, {4.5, 48.5}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 52.5}};
+    blocks = new int[][] {{16, 0, 30, 64, 1, 30, 1, 0}, {16, 0, 74, 64, 1, 74, 1, 0}, {16, 0, 30, 16, 1, 74, 1, 0}, {64, 0, 30, 64, 1, 74, 1, 0}};
+    scenario("b34-ring-east-d3", 300, 700, "VVzZZGK", ringPos, new String[] {"250 hit 1 3 30.0 mob"});
+    // the same ring seen from the east: the golem (range 16, region radius 24) cannot get round the ring's west wall because the wall beyond its region still counts; the zombies at x 70 flood the ring
+    scenario("b34-ring-sealed-d3", 301, 700, "VVzZZGK", new double[][] {{40.5, 52.5}, {42.5, 54.5}, {70.5, 52.5}, {70.5, 56.5}, {70.5, 48.5}, {10.5, 10.5}, {60.5, 120.5}, {72.5, 52.5}}, new String[] {});
+    // a villager in a closed 3x3 stone cell (roof at y 3): zombies at 30 and 38 blocks (inside the range 40, search floods), at 44 (outside: the search starts and ends at once)
+    blocks = new int[][] {{47, 0, 51, 51, 2, 55, 1, 0}, {48, 0, 52, 50, 2, 54, 0, 0}, {47, 3, 51, 51, 3, 55, 1, 0}};
+    scenario("b34-sealed-cell-d3", 302, 600, "VVzZZGK", new double[][] {{49.5, 53.5}, {49.5, 53.5}, {19.5, 53.5}, {11.5, 53.5}, {5.5, 53.5}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 60.5}}, new String[] {});
+    scenario("b34-sealed-cell-d2", 303, 600, "VVzZZGK", new double[][] {{49.5, 53.5}, {49.5, 53.5}, {19.5, 53.5}, {11.5, 53.5}, {5.5, 53.5}, {10.5, 10.5}, {60.5, 120.5}, {8.5, 60.5}}, new String[] {});
+    // a fight across the chunk borders x 48 and x 64 (and z 48): one-block and two-block terrain ON the border columns, Normal and Hard
+    for (int d = 2; d <= 3; d++) {
+      difficulty = d;
+      blocks = new int[][] {{63, 0, 40, 64, 0, 70, 1, 0}, {47, 0, 44, 48, 1, 47, 1, 0}, {47, 0, 58, 48, 1, 62, 1, 0}};
+      scenario("b34-chunk-border-d" + d, 310 + d, 460, "VVzZZGK", arena, fight);
+      scenario("b34-chunk-border-hunt-d" + d, 320 + d, 520, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt);
+    }
+    difficulty = 3;
+    // Hard reinforcements (dark world, base 1.0 as b32-reinforce-d3): the same fight with every chunk loaded and with chunk columns x >= 80 not loaded (ChunkProviderServer.chunkExists false):
+    // yq.a picks a site there, World.spawnEntityInWorld refuses the zombie and yq.a still charges both zombies and stops searching.
+    blocks = new int[][] {}; light = 0; reinforce = 1.0;
+    String[] reinfScript = {"0 walk 7 -0.08 -0.04", "60 walk 7 0 0", "80 hit 3 7 1.0 player", "100 hit 3 7 1.0 player", "120 hit 2 7 1.0 player", "140 hit 3 7 1.0 player", "160 hit 2 7 1.0 player", "180 hit 3 7 1.0 player", "200 hit 0 4 1.0 mob"};
+    for (int sd = 0; sd < 3; sd++) {
+      unloadedChunks = new int[][] {};
+      scenario("b34-reinforce-loaded-" + sd, 330 + sd, 420, "VVzZZGK", arena, reinfScript);
+      java.util.List<int[]> east = new ArrayList<>();
+      for (int cx = 5; cx <= 9; cx++) for (int cz = -2; cz <= 6; cz++) east.add(new int[] {cx, cz});
+      unloadedChunks = east.toArray(new int[0][]);
+      scenario("b34-reinforce-unloaded-" + sd, 330 + sd, 420, "VVzZZGK", arena, reinfScript);
+    }
+    unloadedChunks = new int[][] {}; light = 15; reinforce = 0;
+    // cobblestone walls (renderType 32) and nether fences (113): a 1.5-high line with a gap at z 52 (zombies and the golem path through it or hop; nothing climbs a wall block)
+    for (int k = 0; k < 2; k++) {
+      int id = k == 0 ? 139 : 113; String nm = k == 0 ? "wall" : "nether-fence";
+      blocks = new int[][] {{58, 0, 44, 58, 1, 60, id, 0}, {58, 0, 52, 58, 1, 52, 0, 0}};
+      scenario("b34-" + nm + "-gap-d3", 340 + k, 460, "VVzZZGK", arena, fight33);
+      blocks = new int[][] {{58, 0, 40, 58, 1, 70, id, 0}};
+      scenario("b34-" + nm + "-closed-d3", 342 + k, 460, "VVzZZGK", arena, fight33);
+      scenario("b34-" + nm + "-hunt-d3", 344 + k, 520, "VVzZZGK", farGolem, hunt33);
+    }
+    // arrows into cobweb: bow skeletons east of a web screen shoot at the player and villagers west of it (as b32-arrows-*)
+    blocks = new int[][] {{60, 0, 48, 60, 2, 60, 30, 0}};
+    scenario("b34-arrows-cobweb-d3", 350, 300, "VVGBBB", new double[][] {{54.5, 52.5}, {54.5, 54.5}, {10.5, 10.5}, {66.5, 52.5}, {66.5, 54.5}, {68.5, 53.5}, {52.5, 53.5}}, new String[] {"150 hit 3 6 1.0 player"});
+    // mobs thrown into the air above a web pad: they fall into cobweb (Entity.isInWeb slows the fall to 5 %, and the web blocks a walk) while the fight goes on
+    blocks = new int[][] {{58, 0, 48, 62, 2, 56, 30, 0}};
+    scenario("b34-web-fall-d3", 351, 460, "VVzZZGK", arena, new String[] {"20 move 2 60.5 52.5 12", "30 move 3 59.5 50.5 9", "40 move 0 61.5 54.5 7", "60 move 4 58.5 54.5 20", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player"});
+    blocks = new int[][] {{58, 0, 48, 62, 0, 56, 30, 0}};
+    scenario("b34-web-fall-shallow-d3", 352, 460, "VVzZZGK", arena, new String[] {"20 move 2 60.5 52.5 9", "30 move 3 59.5 50.5 6", "40 move 0 61.5 54.5 5", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player"});
     blocks = new int[][] {};
     difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key

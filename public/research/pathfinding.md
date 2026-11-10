@@ -35,7 +35,8 @@ Ports the 1.7.10 navigation stack and drives pig, cow, sheep, chicken and zombie
 ## Missing or different
 
 - Doors (opening or breaking), villagers, MoveTowardsRestriction, village tasks, and the pig's carrot-on-a-stick/carrot tempt and breeding are not present (the pig has no breeding item here).
-- `PathNavigate` search node cap (`maxNodes`, 1500) and a global budget of 8 path searches per tick (`ai.budget`) are deviations for browser frame time; the original has neither. A denied search simply tries again later.
+- A global budget of 8 path searches per tick (`ai.budget`) and a search node cap (`nodeCap`, 30000 expanded points since batch 34, 6000 before; replays lift it) are deviations for browser frame time; the original has neither. A denied search simply tries again later. The only native bound on a search is the follow-range sphere around the target: a sealed target costs the walkable area inside it, about 5000 points (1.6 ms flat, 4.3 ms on terraced hills) at the zombie's range 40, so only multi-storey caves approach the cap.
+- ChunkCache (batch 34, bytecode-read and pinned by the `b34-*` fight records): `World.getEntityPathToXYZ` / `getPathEntityToEntity` build a `ChunkCache` (radius `(int)(range + 8)` / `(int)(range + 16)` around the entity, whole chunk columns, air outside and for y < 0 or >= 256), but the PathFinder reads it only in its swimming start loop. The open/blocked test (`ayg.a` static, `func_82565_a`) reads `entity.worldObj`, so walls beyond the region still count and the search is not region-bounded; the port needs no cache.
 - The zombie follow-range random bonus and the zombie igniting its target are not applied; the sun-burn rule remains the earlier approximation.
 - `maxSafePointTries` assumes Normal difficulty.
 - No entity-versus-entity collision, so mobs can overlap.
