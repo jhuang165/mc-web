@@ -84,12 +84,14 @@ export class DedicatedSimulation {
     this.redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
     this.redstone.restore(saved.redstone);
     // TileEntityHopper.updateEntity for every hopper in a ticking column (hopper.js), over the shared tile maps; a move tells the
-    // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems).
+    // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems); its
+    // chest and hopper minecarts are inventories a hopper fills and empties.
     const tiles = this.tiles;
     this.hoppers = new Hoppers({
       world: this.world, chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers,
       hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: s => tiles.inventory.maxStack(s), burnTime,
       items: () => this.hopperItems(), active: (x, z) => !this.columns || this.world.isTicking(x, z),
+      carts: () => this.mobs?.minecarts?.carts ?? [], random: this.weather.random, // chest and hopper minecarts (inventory-transfer.js containerAt)
       changed: keys => { for (const key of keys ?? []) this.redstone.containerChanged(...String(key).split(',').map(Number)); },
     });
     const emission = (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`));

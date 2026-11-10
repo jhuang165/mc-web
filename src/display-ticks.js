@@ -19,13 +19,15 @@ const TORCH = 20, FURNACE = 14, LEAVES = 5;
 // This build's ids: lit redstone torch, wire, lit ore, repeater, enchanting table, bookshelf.
 const RS_TORCH = 120, RS_WIRE = 107, RS_ORE_LIT = 65, REPEATER = 112, ENCHANT_TABLE = 86, BOOKSHELF = 21;
 
-// World.doesBlockHaveSolidTopSurface: an opaque full cube, or a full snow layer (meta 7).
+// World.doesBlockHaveSolidTopSurface: an opaque full cube, an upside-down stair, a top slab, an end portal frame, a hopper, the
+// block of redstone, or a full snow layer (meta 7).
 export function solidTopSurface(world, x, y, z) {
   const b = world.get(x, y, z);
   if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z));
   if (b === 165) return (world.getMeta(x, y, z) & 8) !== 0; // a top wood slab (shaped-blocks.js)
   if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
   if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
+  if (b === 133 || b === 123) return true; // the hopper and the block of redstone (rails.js solidTop)
   return normalCube(b) || (b === SNOW_LAYER && (world.getMeta(x, y, z) & 7) === 7);
 }
 

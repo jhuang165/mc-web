@@ -9,7 +9,8 @@
 //   set() clamps to getInventoryStackLimit (64); every adapter reports its block keys through `host.changed(keys)` after a write.
 // Sides are Facing indices: 0 down, 1 up, 2 north, 3 south, 4 west, 5 east.
 //
-//   host = { world, chests(), furnaces(), dispensers(), hoppers(), maxStack(stack), burnTime(stack), changed(keys) }
+//   host = { world, chests(), furnaces(), dispensers(), hoppers(), maxStack(stack), burnTime(stack), changed(keys),
+//            carts?() (minecarts.js records), random? (World.rand, a JavaRandom) }
 import { copyStack, sameStackItem, LargeChestInventory } from "./inventory.js";
 import { openChest } from "./chest.js";
 import { accessibleSlots as brewingSlots, isItemValidForSlot as brewingValid, newBrewingTile } from "./brewing.js";
@@ -45,8 +46,23 @@ export function furnaceAdapter(key, tile, burnTime) {
 }
 
 // func_145893_b: the inventory of a block position, or null. A chest with a normal cube above it (or above its partner)
-// is closed to hoppers (BlockChest.func_149951_m); ocelots and minecart inventories are not modelled.
+// is closed to hoppers (BlockChest.func_149951_m). Without a block inventory, a live chest or hopper minecart whose box meets the
+// cell (IEntitySelector.selectInventories over (x, y, z)-(x + 1, y + 1, z + 1)), picked by World.rand.nextInt(count).
 export function containerAt(host, x, y, z) {
+  return blockContainerAt(host, x, y, z) ?? cartContainerAt(host, x, y, z);
+}
+// EntityMinecartContainer as an IInventory over the cart's slots (internal stacks). A slot still holding an original item this
+// build cannot map (minecarts.js `unmapped`) is occupied: nothing goes into it and it cannot be taken.
+export function cartAdapter(cart) {
+  return arrayAdapter(`cart-${cart.id}`, cart.slots, { keys: [], cart, valid: (i) => !cart.unmapped?.[i] });
+}
+function cartContainerAt(host, x, y, z) {
+  const list = (host.carts?.() ?? []).filter((c) => !c.dead && (c.type === 1 || c.type === 5) && c.bb
+    && c.bb[3] > x && c.bb[0] < x + 1 && c.bb[4] > y && c.bb[1] < y + 1 && c.bb[5] > z && c.bb[2] < z + 1);
+  if (!list.length) return null;
+  return cartAdapter(list[host.random ? host.random.nextInt(list.length) : 0]);
+}
+function blockContainerAt(host, x, y, z) {
   const id = host.world.get(x, y, z), key = `${x},${y},${z}`;
   if (id === BLOCK_CHEST || id === 162) { // chest or trapped chest (chests pair only with their own kind)
     const chests = host.chests(), open = openChest(host.world, chests, x, y, z);

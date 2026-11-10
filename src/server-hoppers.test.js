@@ -132,3 +132,20 @@ test('a hopper minecart pulls from the chest above it, picks up a dropped item, 
   const slots = sim.play.windowState(a).slots;
   assert.equal(slots.filter(([i]) => i < 5).reduce((n, [, s]) => n + (s?.count ?? 0), 0), 5, 'the window shows the cart');
 });
+
+// TileEntityHopper.func_145893_b over the server's carts (simulation.js Hoppers host `carts`): a hopper above a chest minecart
+// fills it, a hopper under it empties it.
+test('hoppers fill a chest minecart from above and empty it from below', () => {
+  const { sim, x0, y, z0, key, place } = arena();
+  place(x0, y, z0, HOPPER, 0);
+  place(x0, y + 2, z0, HOPPER, 0);
+  const cart = sim.mobs.minecarts.spawnChest({ x: x0 + 0.5, y: y + 1.35, z: z0 + 0.5, items: [{ slot: 4, id: 15, damage: 0, count: 2 }] }); // two iron ore (original id)
+  sim.tiles.hoppers[key(x0, y + 2, z0)].items[0] = makeStack(COBBLE, 3, 0);
+  for (let i = 0; i < 5; i++) sim.tick();
+  assert.ok(cart.bb[1] >= y + 1 && cart.bb[1] < y + 1.2, `the cart rests on the lower hopper: ${cart.bb[1]}`);
+  for (let i = 0; i < 100; i++) sim.tick();
+  const bottom = sim.tiles.hoppers[key(x0, y, z0)].items;
+  assert.equal(count(sim.tiles.hoppers[key(x0, y + 2, z0)].items), 0, 'the top hopper emptied into the cart');
+  assert.equal(count(cart.slots), 0, 'the lower hopper emptied the cart');
+  assert.deepEqual(bottom.filter(Boolean).map(s => [s.id, s.count]).sort((a, b) => a[0] - b[0]), [[COBBLE, 3], [IRON_ORE, 2]]);
+});

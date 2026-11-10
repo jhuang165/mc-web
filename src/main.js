@@ -516,6 +516,9 @@ const hopperTiles = new Hoppers({
   maxStack: (s) => survival.inventory.maxStack(s),
   burnTime,
   items: () => items.items,
+  // Chest and hopper minecarts are inventories too (inventory-transfer.js containerAt); a tab on a server leaves them to it.
+  carts: () => (multiplayer ? [] : minecarts?.carts ?? []),
+  get random() { return weather.random; },
   active: (x, z) => !world.streaming || world.isTicking(x, z),
   changed: (keys) => { saved = false; redstoneRuntime?.containerClosed(keys); },
 });

@@ -57,3 +57,33 @@ test("hopper tiles survive Survival save / restore with cooldown and name", () =
   assert.equal(q.hoppers["1,2,3"].name, "Sorter");
   assert.equal(q.hoppers["1,2,3"].items[4].count, 2);
 });
+
+// TileEntityHopper.func_145893_b: with no block inventory, a live chest or hopper minecart whose box meets the cell is the
+// inventory (IEntitySelector.selectInventories), picked by World.rand.nextInt(count); unmapped original items hold their slots.
+test("hoppers pull from and push into chest and hopper minecarts in the cell", async () => {
+  const { containerAt } = await import("./inventory-transfer.js");
+  const { updateHopper } = await import("./hopper.js");
+  const blocks = new Map([["0,0,0", 133]]);
+  const world = { get: (x, y, z) => blocks.get(`${x},${y},${z}`) ?? 0, getMeta: () => 0 };
+  const cart = (id, type, x, y, z) => ({ id, type, dead: false, slots: Array(type === 5 ? 5 : 27).fill(null), unmapped: Array(type === 5 ? 5 : 27).fill(null),
+    bb: [x - 0.49, y, z - 0.49, x + 0.49, y + 0.7, z + 0.49] });
+  const above = cart(1, 1, 0.5, 1.0625, 0.5), below = cart(2, 5, 0.5, -0.9375, 0.5), dead = cart(3, 1, 0.5, 1.0625, 0.5);
+  dead.dead = true;
+  const draws = [];
+  const tile = newHopperTile(), host = {
+    world, chests: () => ({}), furnaces: () => ({}), dispensers: () => ({}), hoppers: () => ({ "0,0,0": tile }), maxStack: () => 64,
+    carts: () => [dead, above, below], random: { nextInt: (n) => { draws.push(n); return 0; } }, items: () => [], changed: () => {},
+  };
+  assert.equal(containerAt(host, 0, 1, 0).cart, above);
+  assert.equal(containerAt(host, 0, 2, 0), null, "the cart's box does not reach the next cell");
+  assert.deepEqual(draws, [1], "World.rand.nextInt(1) for a single cart; nothing when there is none");
+  above.slots[0] = makeStack(4, 2, 0);
+  assert.equal(updateHopper(host, tile, 0, 0, 0, 0), true);
+  assert.equal(tile.items[0]?.count, 1, "pulled one from the chest cart above");
+  assert.equal(above.slots[0].count, 1);
+  tile.cooldown = 0;
+  updateHopper(host, tile, 0, 0, 0, 0);
+  assert.equal(below.slots[0]?.count, 1, "pushed one down into the hopper cart under it");
+  below.slots.fill(null); below.unmapped.fill({ id: 9999, count: 1 });
+  assert.equal(containerAt(host, 0, -1, 0).valid(0, makeStack(4, 1, 0)), false, "a slot holding an unmapped item takes nothing");
+});

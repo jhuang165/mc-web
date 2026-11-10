@@ -56,7 +56,7 @@ export const doorBounds = (world, x, y, z) => doorBoundsFor(doorFlags(world, x, 
 export const doorPassable = (world, x, y, z) => doorIsOpen(world, x, y, z);
 
 // World.doesBlockHaveSolidTopSurface (ahb.a): an opaque normal cube, an upside-down stair, a top slab, a hopper,
-// an end portal frame or a full snow layer.
+// an end portal frame, the block of redstone or a full snow layer.
 export function solidTopSurface(world, x, y, z) {
   const b = world.get(x, y, z), meta = world.getMeta(x, y, z);
   if (normalCube(b)) return true;
@@ -64,6 +64,7 @@ export function solidTopSurface(world, x, y, z) {
   if (b === STONE_SLAB || b === 165) return (meta & 8) !== 0; // 165: the wood slab (shaped-blocks.js)
   if (b === 133) return true; // BlockHopper (blocks-0-40.js)
   if (b === 104) return true; // END_PORTAL_FRAME (fence-rail-reference.json)
+  if (b === 123) return true; // the block of redstone: opaque and rendered as a normal block (rails.js solidTop)
   return b === SNOW_LAYER && (meta & 7) === 7;
 }
 // Material.isReplaceable: air, water, lava, fire, snow, and Material.vine (tall grass, ferns, dead bushes, vines).
