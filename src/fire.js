@@ -26,7 +26,7 @@ const f = Math.fround;
 // blocks of this build (internal ids): logs 5/5, leaves 30/60, planks 5/20,
 // wool 30/60, bookshelf 30/20, tall grass and flowers 60/100, TNT 15/100. Other blocks have 0/0.
 // (The probe dumps the whole 256-entry table: fire-reference.json "table".)
-export const FIRE_INFO = {142:[60,20],143:[60,20],144:[5,5],69:[60,100],70:[5,5],71:[30,60],72:[15,100],83:[60,100],84:[60,100], 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100], [TNT]: [15, 100] };
+export const FIRE_INFO = {87:[5,20],60:[5,20],166:[5,20],165:[5,20],91:[5,20],92:[5,20],93:[5,20],142:[60,20],143:[60,20],144:[5,5],69:[60,100],70:[5,5],71:[30,60],72:[15,100],83:[60,100],84:[60,100], 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100], [TNT]: [15, 100] };
 export const encouragement = (b) => FIRE_INFO[b]?.[0] ?? 0;
 export const flammability = (b) => FIRE_INFO[b]?.[1] ?? 0;
 // Material.getCanBurn (awt.h), which BlockStaticLiquid.func_149...(o) reads: wood, cloth,

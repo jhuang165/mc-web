@@ -38,7 +38,7 @@ function source(fx) {
 }
 const layers = (M) => [M.solid, M.water, M.ice, M.flow, M.lava, M.lavaFlow, ...M.fire, M.portal];
 // The fluid layers sample their own textures (the animated still and flow frames, uv across the whole texture), not the block atlas.
-const fluidIcon = (M, layer) => (layer === M.water ? "water_still" : layer === M.flow ? "water_flow" : layer === M.lava ? "lava_still" : layer === M.lavaFlow ? "lava_flow" : null);
+const fluidIcon = (M, layer) => (layer === M.water ? "water_still" : layer === M.flow ? "water_flow" : layer === M.lava ? "lava_still" : layer === M.lavaFlow ? "lava_flow" : layer === M.fire[0] ? "fire_layer_0" : layer === M.fire[1] ? "fire_layer_1" : null);
 // A vertex: position floats, tile (-1 unknown), in-tile fraction, colour bytes, light int.
 function jsQuads(M) {
   const out = [];
@@ -144,13 +144,7 @@ test("render types other than 0: mesher vertices equal RenderBlocks' Tessellator
   // Types not listed here (wire, lever, repeater, comparator, pistons, tripwire, hook, plates,
   // daylight sensor and more) must match the native vertices exactly.
   const KNOWN = {
-    "118:24": [660, 540, 4740], // cauldron: inner walls and water plane not ported
-    "154:38": [4356, 0, 1260], // hopper: funnel parts
-    "140:33": [2980, 2520, 1908], // flower pot: plant contents
-    "127:28": [0, 864, 0], // cocoa: not ported
-    "104:19": [0, 432, 432], "105:19": [0, 432, 432], // stems: position/uv
-    "117:25": [1352, 1296, 624], // brewing stand
-    "51:3": [0, 120, 24], // fire: side flames
+    "140:33": [5508, 0, 2376], // flower pot: the executed record has no plant quads (the probe tile entity does not resolve; the port draws the bytecode-read plant)
   };
   assert.ok(Object.keys(stats).length > 25);
   for (const [key, s] of Object.entries(stats)) {
