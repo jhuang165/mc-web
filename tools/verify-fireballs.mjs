@@ -39,16 +39,20 @@ await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
  await writeFile(file,out2);}
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','SeedMath','VillageFightProbe','FireballProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','SeedMath','ServerPlayerProbe','VillageFightProbe','FireballProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout,stderr}=await exec('java',['-cp',cp,'FireballProbe'],{maxBuffer:1<<29});
 if(stderr.trim())console.error(stderr.trim().split('\n').slice(0,5).join('\n'));
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.FB_DUMP){await writeFile(process.env.FB_DUMP,JSON.stringify(records)+'\n');process.exit(0);} // development aid (with FB_ONLY): the records of this run, nothing else written
-assert.ok(records.length>=20,'fireball records');
+const b41=records.filter(r=>r.name.startsWith('fb41-')),old=records.filter(r=>!r.name.startsWith('fb41-'));
+assert.ok(process.env.FB_PREFIX?b41.length>=8:old.length>=20,'fireball records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={ym:'EntitySlime',yf:'EntityMagmaCube',yd:'EntityGhast',xx:'EntityBlaze',sr:'EntityFlying',td:'EntityCreature',yg:'EntityMob',sw:'EntityLiving',sv:'EntityLivingBase',sa:'Entity',zg:'EntityLargeFireball',zi:'EntitySmallFireball',ze:'EntityFireball'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
  method:'Batch 39. Unchanged classes in the VillageLiveProbe double (real sight rays, a real EntityPlayer double in closePlayers, real water when `water`), every mob ticked by Entity.onUpdate. Mobs by `types` (s slime, m magma cube, g ghast, b blaze; `sizes` for the first two), then the player, then split slimes in spawn order. Row: [[per entity x, y, z, vx, vy, vz, yaw, onGround, health, target index, type fields, Entity.rand draws], sounds, level events, spawned fireballs]. Entity.rand of a mob is seeded seed*10+index; an entity built mid-run is a SeedRandom (seed listed). The player is never ticked; EntityPlayer.collideWithPlayer is emulated right after each slime update.',
- records};
-await writeFile(path.join(root,'../public/research/fireballs-reference.json'),JSON.stringify(reference)+'\n');
-console.log('fireball records:',records.length,'bytes:',JSON.stringify(reference).length);
+ records:old};
+// Batch 41: fireballs-b41-reference.json (the inGround path and blaze volleys at mobs; mobs ticked: record field tickMobs). The older file is rewritten only with FB_REWRITE_OLD=1.
+const reference41={...reference,method:'Batch 41. Same double, row layout and script ops as fireballs-reference.json, plus: `ground k x y z` sets EntityFireball.inGround, xTile, yTile, zTile and inTile of ball k to the block at (x, y, z) (no 1.7.10 path sets them; EntityFireball.onUpdate then runs natively: ticksAlive counts to 600, a missing or different tile releases the ball with its motion scaled by three Random floats); `air x y z` removes a block; `hurt` kinds a<i> (an arrow shot by mob i) and t<i> (a thrown snowball of mob i). With `tickMobs` every mob is updated each tick before the fireballs (types x skeleton, w snow golem added) and a fireball a mob spawns joins the list at once and ticks in the same pass; `shots` lists them as [tick, large, shooter index, Entity.rand seed].',records:b41};
+if(process.env.FB_PREFIX==='fb41-'||process.env.FB_REWRITE_B41)await writeFile(path.join(root,'../public/research/fireballs-b41-reference.json'),JSON.stringify(reference41)+'\n');
+if(!process.env.FB_PREFIX||process.env.FB_REWRITE_OLD)await writeFile(path.join(root,'../public/research/fireballs-reference.json'),JSON.stringify(reference)+'\n');
+console.log('fireball records:',records.length);

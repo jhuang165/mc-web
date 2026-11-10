@@ -45,9 +45,11 @@ public class FireballProbe {
   static int difficulty = 2;
   static int[][] blocks = {};
   static boolean water = false;
+  static boolean tickMobs = false; // batch 41: every mob (not the player) is updated each tick before the fireballs, and a fireball a mob spawns joins the list at once (World.spawnEntityInWorld) and ticks in the same pass
 
   static void scenario(String name, long seed, int ticks, String types, int[] sizes, double[][] pos, String[] script) throws Exception {
     if (System.getenv("FB_ONLY") != null && !name.equals(System.getenv("FB_ONLY"))) return;
+    if (System.getenv("FB_PREFIX") != null && !name.startsWith(System.getenv("FB_PREFIX"))) return;
     int n = types.length();
     MobMoveProbe.set(VillageLiveProbe.world, "r", rd.values()[difficulty]);
     wc c = VillageLiveProbe.newCollection(seed);
@@ -73,6 +75,8 @@ public class FireballProbe {
         case 's': e = new yn(w); break;
         case 'k': e = new yk(w); break;
         case 'e': e = new ye(w); break;
+        case 'x': e = new yl(w); break; // batch 41: EntitySkeleton (bare, empty hand)
+        case 'w': e = new wr(w); break; // batch 41: EntitySnowman
         case 'm': { yf s = new yf(w); MobMoveProbe.method(ym.class, "a", int.class).invoke(s, sizes[i]); e = s; break; }
         default: throw new RuntimeException(types);
       }
@@ -95,7 +99,7 @@ public class FireballProbe {
     VillageLiveProbe.W.players.put("probe", player);
     VillagerProbe.World.closePlayers = new ArrayList<yz>(Arrays.asList(player));
     List<sa> balls = new ArrayList<>();
-    List<String> made = new ArrayList<>(), rows = new ArrayList<>();
+    List<String> made = new ArrayList<>(), rows = new ArrayList<>(), shots = new ArrayList<>();
     VillagerProbe.World.spawned.clear();
     for (int t = 0; t < ticks; t++) {
       List<String> punches = new ArrayList<>(), hurts = new ArrayList<>();
@@ -137,6 +141,14 @@ public class FireballProbe {
             punches.add("[" + p[2] + "," + hit + "," + num(look.a) + "," + num(look.b) + "," + num(look.c) + "]");
             break;
           }
+          case "ground": { // ground k x y z: the ball is stuck in the block at (x, y, z) (EntityFireball.inGround, xTile, yTile, zTile, inTile), which no 1.7.10 path sets itself
+            sa f = balls.get(Integer.parseInt(p[2]));
+            int gx = Integer.parseInt(p[3]), gy = Integer.parseInt(p[4]), gz = Integer.parseInt(p[5]);
+            fld(ze.class, "e").setInt(f, gx); fld(ze.class, "f").setInt(f, gy); fld(ze.class, "g").setInt(f, gz);
+            fld(ze.class, "h").set(f, w.a(gx, gy, gz)); fld(ze.class, "i").setBoolean(f, true);
+            break;
+          }
+          case "air": VillageLiveProbe.put(Integer.parseInt(p[2]), Integer.parseInt(p[3]), Integer.parseInt(p[4]), p.length > 5 ? Integer.parseInt(p[5]) : 0, 0); break; // air x y z [id]: the cell becomes air, or the given block
           case "look": MobMoveProbe.set(player, "y", Float.parseFloat(p[2])); MobMoveProbe.set(player, "z", Float.parseFloat(p[3])); break;
           case "move": { sa e = all.get(Integer.parseInt(p[2])); at(e, Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : e.t, Double.parseDouble(p[4])); break; }
           case "kill": all.get(Integer.parseInt(p[2])).B(); break;
@@ -144,7 +156,7 @@ public class FireballProbe {
           case "fire": all.get(Integer.parseInt(p[2])).e(Integer.parseInt(p[3])); break;
           case "hurt": { // hurt victim kind amount: kind m<i> a mob attacker (DamageSource.causeMobDamage), p the player, n a fireball without a shooter, s the victim itself
             sv victim = (sv) all.get(Integer.parseInt(p[2]));
-            ro src = p[3].equals("p") ? ro.a((yz) player) : p[3].equals("n") ? ro.a(new zg(w, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1), (sa) null) : p[3].equals("s") ? ro.a(victim) : ro.a((sv) all.get(Integer.parseInt(p[3].substring(1))));
+            ro src = p[3].startsWith("a") ? ro.a((zc) null, all.get(Integer.parseInt(p[3].substring(1)))) : p[3].startsWith("t") ? ro.a((sa) null, all.get(Integer.parseInt(p[3].substring(1)))) : p[3].equals("p") ? ro.a((yz) player) : p[3].equals("n") ? ro.a(new zg(w, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1), (sa) null) : p[3].equals("s") ? ro.a(victim) : ro.a((sv) all.get(Integer.parseInt(p[3].substring(1))));
             boolean hit = victim.a(src, Float.parseFloat(p[4]));
             hurts.add("[" + p[2] + "," + hit + "," + num(victim.aS()) + "]");
             break;
@@ -153,6 +165,22 @@ public class FireballProbe {
         }
       }
       FW.booms.clear(); FW.sets.clear();
+      if (tickMobs) {
+        for (int i = 0; i < n; i++) {
+          sa e = all.get(i);
+          if (e.K) continue;
+          e.aa++;
+          e.h();
+          while (!VillagerProbe.World.spawned.isEmpty()) {
+            Object sp = VillagerProbe.World.spawned.remove(0);
+            if (!(sp instanceof ze)) continue;
+            sa f = (sa) sp;
+            shots.add("[" + t + "," + (f instanceof zg ? 1 : 0) + "," + index(all, fld(ze.class, "a").get(f)) + "," + ((SeedRandom) fld(sa.class, "Z").get(f)).seed + "]");
+            balls.add(f);
+            VillagerProbe.World.entities.add(f);
+          }
+        }
+      }
       for (sa f : new ArrayList<>(balls)) {
         if (f.K) continue;
         f.aa++;
@@ -182,7 +210,7 @@ public class FireballProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     System.out.println("{\"case\":\"fireballs\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + ",\"types\":" + q(types) + ",\"sizes\":" + Arrays.toString(sizes)
       + (water ? ",\"water\":true" : "") + (blocks.length > 0 ? ",\"blocks\":" + Arrays.deepToString(blocks) : "") + ",\"pos\":" + Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"made\":[" + String.join(",", made)
-      + "],\"rows\":[" + String.join(",", rows) + "]}");
+      + "]" + (tickMobs ? ",\"tickMobs\":true,\"shots\":[" + String.join(",", shots) + "]" : "") + ",\"rows\":[" + String.join(",", rows) + "]}");
     VillagerProbe.reset();
   }
 
@@ -292,6 +320,32 @@ public class FireballProbe {
       hurts(0, "n 5"));
     s++;
   }
+  // Batch 41 (names fb41-*): the inGround path executed (EntityFireball.onUpdate with the fields the probe sets; no 1.7.10 path sets them) and blaze volleys at a mob that hurt the blaze.
+  static void scenarios41() throws Exception {
+    long s = 4101;
+    blocks = new int[][] {{60, 5, 60, 60, 5, 60, 1, 0}, {70, 5, 60, 70, 5, 60, 1, 0}, {80, 5, 60, 80, 5, 60, 1, 0}};
+    for (int large = 1; large >= 0; large--) {
+      String k = large == 1 ? "large" : "small";
+      // stuck in a block that stays: ticksAlive counts to 600 and setDead (the ball does not move, hit or explode meanwhile)
+      scenario("fb41-ground-stays-" + k + "-" + s, s, 620, "g", sz(1), new double[][] {{150.5, 150.5, 30}, {150.5, 140.5}}, new String[] {ball(1, large, 0, "0 0 1", 60.5, 6.5, 60.5, 1), "2 ground 0 60 5 60"}); s++;
+      // the block is removed: the ball lets go, its motion scaled by three Random floats, and flies on (ticksAlive and ticksInAir reset)
+      scenario("fb41-ground-released-" + k + "-" + s, s, 80, "g", sz(1), new double[][] {{150.5, 150.5, 30}, {150.5, 140.5}}, new String[] {ball(1, large, 0, "0 0 1", 70.5, 6.5, 60.5, 1), "2 ground 0 70 5 60", "30 air 70 5 60"}); s++;
+      // a different block in its place: still released (the block is no longer the stored tile)
+      scenario("fb41-ground-swapped-" + k + "-" + s, s, 60, "g", sz(1), new double[][] {{150.5, 150.5, 30}, {150.5, 140.5}}, new String[] {ball(1, large, 0, "0 0 1", 80.5, 6.5, 60.5, 1), "2 ground 0 80 5 60", "20 air 80 5 60 20"}); s++;
+    }
+    blocks = new int[][] {};
+    // blaze volleys at a mob: the blaze is hurt by a zombie (mob damage), a skeleton's arrow and a thrown snowball, becomes its target and shoots small fireballs at it
+    tickMobs = true;
+    String[] kinds = {"m1", "a1", "t1"};
+    // (seed 4109 made the idle zombie wander on tick 15, where the port's wandering zombie turns differently from tick 19: a legacy zombie wander gap, not part of this record)
+    for (int k = 0; k < 3; k++) {
+      if (k == 2) s = 4119;
+      scenario("fb41-blaze-volley-" + new String[] {"zombie", "arrow", "snowball"}[k] + "-" + s, s, 300, k == 1 ? "bx" : "bz", sz(2), new double[][] {{60.5, 60.5, 3}, {72.5, 64.5, 0}, {60.5, 105.5}}, new String[] {"3 hurt 0 " + kinds[k] + " 2"}); s++;
+    }
+    s = 4110;
+    scenario("fb41-blaze-volley-far-" + s, s, 300, "bz", sz(2), new double[][] {{60.5, 60.5, 3}, {100.5, 60.5, 0}, {80.5, 105.5}}, new String[] {"3 hurt 0 m1 2"}); s++;
+    tickMobs = false;
+  }
   // One hurt op per victim 0 to 4 at tick `t` (kind and amount as the op names them).
   static String[] hurts(int t, String what) {
     String[] o = new String[5];
@@ -324,6 +378,7 @@ public class FireballProbe {
     MobMoveProbe.set(w, "x", info);
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
-    scenarios();
+    if (System.getenv("FB_PREFIX") == null || !System.getenv("FB_PREFIX").startsWith("fb41")) scenarios();
+    scenarios41();
   }
 }

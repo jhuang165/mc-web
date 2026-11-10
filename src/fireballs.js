@@ -38,6 +38,7 @@ export class Fireballs {
       scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize,
       // The constructor puts the box at the shooter (or at the given position); EntityGhast and EntityBlaze then assign posX/posY/posZ without setPosition, so the
       // box (the water test, the entity query of the first update) stays there until the end of the first update.
+      rand, inGround: false, tile: null, ticksAlive: 0, // inGround: EntityFireball.e/f/g (tile), h (block id), i, and the ticksAlive counter; see stick()
       boxPos: exact || !owner || owner === "player" ? [x, y, z] : [owner.x, owner.y, owner.z],
     };
     this.list.push(ball);
@@ -67,11 +68,13 @@ export class Fireballs {
       b.px = b.x; b.py = b.y; b.pz = b.z;
       if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
       const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
-      b.ticks++;
-      mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
       // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
       const water = waterAcceleration(mobs.world, entityWaterBox(box));
       b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
+      const was = b.inGround;
+      if (was && this.stick(b)) continue;
+      if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
+      mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
       let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
       const entity = this.sweep(b, start, stop, box);
@@ -166,6 +169,22 @@ export class Fireballs {
     }
     return best;
   }
+  // The inGround branch of EntityFireball.onUpdate (executed in FireballProbe, fireballs-b41-reference.json), after super.onUpdate: while the block at the
+  // stored tile is still the stored block the ball only counts ticksAlive (setDead on the 600th) and does nothing else; otherwise it lets go: inGround off,
+  // each motion axis times the float nextFloat() * 0.2F on the ball's own Random, ticksAlive and ticksInAir reset, and the flight below goes on in the same update.
+  // No 1.7.10 path sets inGround (the fields are only read), so nothing in the game calls `stickIn`; it is the tested rule for the day something does.
+  stick(b) {
+    const t = b.tile;
+    if (t && this.mobs.world.get(t.x, t.y, t.z) === t.id) {
+      if (++b.ticksAlive >= 600) b.dead = true;
+      return true;
+    }
+    b.inGround = false;
+    b.vx *= f(b.rand.nextFloat() * f(0.2)); b.vy *= f(b.rand.nextFloat() * f(0.2)); b.vz *= f(b.rand.nextFloat() * f(0.2));
+    b.ticksAlive = 0; b.ticks = 0;
+    return false;
+  }
+  stickIn(b, x, y, z) { b.inGround = true; b.tile = { x, y, z, id: this.mobs.world.get(x, y, z) }; }
   // ze.a(ro, F): a player's hit takes the ball: its motion becomes the look vector, the acceleration look * 0.1 and the player the shooter.
   punch(b, look) {
     if (b.dead || !b.large) return false; // EntityFireball.attackEntityFrom (ze.a) deflects; the small ball's override (zi.a) refuses

@@ -21,6 +21,8 @@ function levelEvent(m, e, sound, volume) {
 const wet = (m, e, t) => e.inWater || !!m.wet?.(e, t.height);
 
 // EntityLiving.onEntityUpdate's roll with the 80 tick interval; the blaze breathes at volume 1, the ghast moans at volume 10.
+// Entity.getDistanceToEntity (sa.e): each axis narrowed to a float, squared and summed in float, then MathHelper.sqrt_float (executed in fireballs-b41-reference.json: the blaze's shot spread rounds differently otherwise).
+const floatDistance = (dx, dy, dz) => { const x = f(dx), y = f(dy), z = f(dz); return f(Math.sqrt(f(f(f(x * x) + f(y * y)) + f(z * z)))); };
 export function fireballMobTalk(m, e) {
   const rand = entityRandom(e);
   if (!livingSoundRoll(e, rand, 80)) return;
@@ -77,7 +79,7 @@ export function blazeThink(m, e, t, aiMoveSpeed) {
     boxMidY: (x) => x.y,
     canSee: (me, target) => brain.canSee(target),
     attackEntity: (me, target, d) => {
-      const out = blazeAttack(s, rand, e, playerView(target), f(Math.sqrt((target.x - e.x) ** 2 + (target.y - e.y) ** 2 + (target.z - e.z) ** 2)));
+      const out = blazeAttack(s, rand, e, playerView(target), floatDistance(e.x - target.x, e.y - target.y, e.z - target.z)); // the blaze's range and spread use this float distance
       me.hasAttacked = s.hasAttacked;
       e.blazeBurning = s.burning;
       if (out.yaw !== null) st.rotationYaw = out.yaw;
