@@ -2581,7 +2581,7 @@ const dims = new DimensionLive({
   totalTime: () => mobs?.saveTotalTime(), // WorldInfo.getWorldTotalTime, the Teleporter cache clock (dimension-live.js clock)
   difficulty: () => worldDifficulty(active, options.difficulty),
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
-  advanceTicks: (n) => { if (n > 0) { weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
+  advanceTicks: (n) => { if (n > 0) { if (mobs?.worldTicks !== undefined) mobs.worldTicks += n; /* WorldInfo total time: the server ticks through loading screens (dimension-live.js clock) */ weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
   // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.
   // The player as he returns: the away run's shadow player starts from it (the queued commands then advance it in firing order).
   awayPlayer: () => { const sp = JSON.parse(JSON.stringify(survival.serialize())); for (const k of TILE_KEYS) delete sp[k]; return { state: sp, experience: experience.serialize(), mode: survival.mode === "creative" ? 1 : survival.mode === "adventure" ? 2 : 0, level: experience.level }; },

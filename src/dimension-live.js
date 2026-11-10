@@ -139,8 +139,8 @@ export class DimensionLive {
     // The mobs, items and orbs that travel (peekFor, deliver) use the same cache, as natively (one Teleporter per WorldServer, driven by the world's total time).
     const ckey = `${record.rootId ?? record.id}:${to}`, now = this.clock(record);
     world.time = now;
-    const kept = this.sharedCache(ckey, now);
-    teleporter.cache = kept.cache; teleporter.keys = kept.keys;
+    const kept = this.sharedCache(ckey, now, world.seed);
+    teleporter.cache = kept.cache; teleporter.keys = kept.keys; teleporter.random = kept.random;
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
       const reuse = teleporter.cache.get(`${Math.floor(tt.x)},${Math.floor(tt.z)}`); // a cache hit searches nothing: the window round the cached portal is the exit's
       const found = reuse ? null : world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
@@ -172,9 +172,9 @@ export class DimensionLive {
     return kept;
   }
   // The Teleporter cache of a root and dimension, created when missing: one per destination world, shared by the player's arrivals and every travelling entity.
-  sharedCache(key, now) {
+  sharedCache(key, now, seed = 0) {
     let kept = this.exitCacheFor(key, now);
-    if (!kept) this.exitCache.set(key, kept = { cache: new Map(), keys: [] });
+    if (!kept) this.exitCache.set(key, kept = { cache: new Map(), keys: [], random: new JavaRandom(seed) }); // the Teleporter's Random(worldSeed) lives as long as its cache
     return kept;
   }
   // The destination world's getTotalWorldTime for the cache sweep and entry times (bytecode-read: Teleporter.removeStalePortalLocations(WorldServer.getTotalWorldTime()) runs in
@@ -240,10 +240,14 @@ export class DimensionLive {
         if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         if (!ringEntityActive(world, e)) continue; // Entity.onEntityUpdate's portal step runs for every updated entity, ring ones too
         if ((kind === "cart" || kind === "boat") && e.dead) continue;
-        // A vehicle with a rider: the collision ignores it; a player rider keeps the vehicle out of every portal here (a port simplification: natively the player stays behind).
+        // A vehicle with a rider: the collision ignores it (so a ridden vehicle never starts a countdown), but one already counting down (the player mounted it after it
+        // touched the portal) still travels at the threshold; its player rider is dismounted where it stood and stays behind (World.removeEntity -> mountEntity(null)).
         const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : at);
         if (!r) continue;
-        if ((kind === "cart" || kind === "boat") && e.rider) continue;
+        if ((kind === "cart" || kind === "boat") && e.rider?.player) {
+          const owner = kind === "cart" ? carts : boats;
+          if (e.rider.vehicle === e) owner.dismount(world, e.rider); else e.rider = null;
+        }
         (gone ??= new Set()).add(e);
         this.depart(root, dim, kind, e, r, { mob: mobs, item: items, orb: xpOrbs, cart: carts, boat: boats }[kind]);
       }
@@ -254,6 +258,7 @@ export class DimensionLive {
     const cooldown = this.portals.cooldownAfter(e, r);
     const vehicle = kind === "cart" || kind === "boat";
     const rec = structuredClone(owner.serializeOne(e));
+    delete rec.rider; // the player never travels with the vehicle
     rec.portalCooldown = cooldown || undefined;
     if (vehicle && e.passenger) { // the copy is made from the vehicle's own NBT: a mob that mounted it after the collision stays behind, unmounted (Entity.updateRidden)
       if (e.passenger.ridingEntity === e) e.passenger.ridingEntity = null;
@@ -322,8 +327,8 @@ export class DimensionLive {
   }
   // The peek's Teleporter on the destination's shared cache at the world's current total time (the player's arrival may have replaced or swept the cache since the last call).
   shareTeleporter(root, to, peek) {
-    const now = this.clock(root), kept = this.sharedCache(`${root.id}:${to}`, now);
-    peek.time = now; peek.teleporter.cache = kept.cache; peek.teleporter.keys = kept.keys;
+    const now = this.clock(root), kept = this.sharedCache(`${root.id}:${to}`, now, peek.seed);
+    peek.time = now; peek.teleporter.cache = kept.cache; peek.teleporter.keys = kept.keys; peek.teleporter.random = kept.random;
     return peek.teleporter;
   }
   async deliver(rootId, from, kind, rec, mc, arg, leashed) {
@@ -420,6 +425,8 @@ export class DimensionLive {
         // Batch 32: mobs, arrows, thrown projectiles, rockets, potions, fireballs and hanging entities (the run returns whole lists).
         root.entities = r.entities.mobs; root.arrows = r.entities.arrows; root.projectiles = r.entities.projectiles; root.thrownPotions = r.entities.potions;
         root.rockets = r.entities.rockets; root.fireballs = r.entities.fireballs; root.hanging = r.entities.hanging;
+        // Batch 38: the carts and boats that went through the Overworld's portals during the run are delivered to their destination's inbox now.
+        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, OVERWORLD, t.kind, t.rec, t.mc, t.arg, false); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
       }
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;
