@@ -55,8 +55,8 @@ export const doorBounds = (world, x, y, z) => doorBoundsFor(doorFlags(world, x, 
 // BlockDoor.getBlocksMovement (akn.b): an open door lets things through (path finding reads it).
 export const doorPassable = (world, x, y, z) => doorIsOpen(world, x, y, z);
 
-// World.doesBlockHaveSolidTopSurface (ahb.a): an opaque normal cube, an upside-down stair, a top slab, a hopper
-// or a full snow layer (hoppers are not in this build).
+// World.doesBlockHaveSolidTopSurface (ahb.a): an opaque normal cube, an upside-down stair, a top slab, a hopper,
+// an end portal frame or a full snow layer.
 export function solidTopSurface(world, x, y, z) {
   const b = world.get(x, y, z), meta = world.getMeta(x, y, z);
   if (normalCube(b)) return true;

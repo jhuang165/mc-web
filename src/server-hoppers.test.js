@@ -108,3 +108,27 @@ test('a powered hopper is locked; comparators read its slots; an open hopper win
   assert.equal(count(sim.tiles.chests[key(x0, y, z0)].items), 4);
   assert.equal(sim.play.windowState(a).slots.slice(0, 5).every(([, s]) => !s), true, 'the window shows the empty hopper');
 });
+
+// EntityMinecartHopper on the gun server: the cart host's hopper transfer (server-mobs.js cartHost) pulls from a chest above the
+// cart and picks up a dropped item over it; using the cart opens its five slots as a hopper window (displayGUIHopperMinecart).
+test('a hopper minecart pulls from the chest above it, picks up a dropped item, and opens as a hopper window', () => {
+  const { sim, a, x0, y, z0, key, place } = arena();
+  const cart = sim.mobs.minecarts.spawnCart(5, { x: x0 + 0.5, y: y + 0.35, z: z0 + 0.5, items: [] });
+  place(x0, y + 1, z0, CHEST);
+  sim.tiles.chests[key(x0, y + 1, z0)].items[0] = makeStack(COBBLE, 3, 0);
+  for (let i = 0; i < 20; i++) sim.tick();
+  assert.equal(count(cart.slots), 3, 'the chest above emptied into the cart');
+  assert.equal(count(sim.tiles.chests[key(x0, y + 1, z0)].items), 0);
+  sim.world.set(x0, y + 1, z0, 0, true, 0); delete sim.tiles.chests[key(x0, y + 1, z0)];
+  sim.play.items.spill([makeStack(IRON_ORE, 2, 0)], x0 + 0.5, y + 1.1, z0 + 0.5);
+  for (let i = 0; i < 30; i++) sim.tick();
+  assert.equal(count(cart.slots), 5, 'the dropped ore went in too');
+  assert.equal(sim.play.itemsNear(a).some(e => e[4] === IRON_ORE), false);
+  const dx = cart.x - a.position.x, dz = cart.z - a.position.z, dy = cart.posY + 0.35 - (a.position.y + 1.62);
+  a.yaw = Math.atan2(-dx, -dz); a.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  assert.equal(sim.edit(a, true), true);
+  assert.equal(a.window?.kind, 'hopper');
+  assert.equal(sim.play.openState(a).title, 'Minecart');
+  const slots = sim.play.windowState(a).slots;
+  assert.equal(slots.filter(([i]) => i < 5).reduce((n, [, s]) => n + (s?.count ?? 0), 0), 5, 'the window shows the cart');
+});

@@ -154,7 +154,7 @@ export function remoteContainer(survival, open, env = {}) {
     return Object.assign(new ChestContainer(inv, new StackArray(Array(rows * 9).fill(null))), { title: open.title ?? undefined });
   }
   if (open.kind === 'dispenser') return Object.assign(new DispenserContainer(inv, { items: Array(9).fill(null) }, noop), open.title ? { title: open.title } : {});
-  if (open.kind === 'hopper') return new HopperContainer(inv, { items: Array(5).fill(null) }, noop);
+  if (open.kind === 'hopper') return new HopperContainer(inv, { items: Array(5).fill(null), name: open.title ?? undefined }, noop);
   if (open.kind === 'merchant') {
     // The villager's offers come with the window's slots (ServerPlay.windowState); trades and their sounds happen on the server.
     const remote = { offers: [], seen: false };

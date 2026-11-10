@@ -372,9 +372,11 @@ export class ServerMobs {
     for (const e of living) { const [vx, vz] = system.pushEntity(e, sized(e)); e.vx += vx; e.vz += vz; }
     for (const d of system.drain()) if (d.stack) this.sim.play.items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion });
   }
-  // The carts' side effects (minecarts.js host): a TNT cart's blast, a furnace cart's smoke, the cart sounds near it.
+  // The carts' side effects (minecarts.js host): a TNT cart's blast, a furnace cart's smoke, the cart sounds near it; a hopper
+  // cart pulls from the container above it and the item entities over it through the server's hopper host (cart-hopper.js).
   cartHost(players) {
     return this._cartHost ??= {
+      transfer: this.sim.hoppers?.host ?? null,
       explode: (cart, x, y, z, power) => this.explode(this.living(), x, y, z, power, { exploder: null, smoking: true }),
       particle: (name, x, y, z, vx, vy, vz) => { for (const p of this.sim.players.values()) if (Math.hypot(p.position.x - x, p.position.z - z) <= 64) this.sim.send(p, { type: 'fx', kind: 'particle', name, x: r3(x), y: r3(y), z: r3(z), vx, vy, vz }); },
       sound: (sound, cart) => this.sound({ sound, position: { x: cart.x, y: cart.posY, z: cart.z } }),

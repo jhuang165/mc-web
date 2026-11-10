@@ -318,13 +318,15 @@ export class ServerPlay {
     return !!result?.handled;
   }
   // A minecart or boat under the crosshair (server-riding.js useVehicle): the use button boards an empty cart or a boat and opens a
-  // chest cart's 27 slots as a chest window; the attack hits it (it breaks after enough hits, spilling a chest cart's contents).
+  // chest cart's 27 slots as a chest window (a hopper cart's five as a hopper window); the attack hits it (it breaks after enough hits, spilling a chest cart's contents).
   useCart(p, cart, place) {
     const s = p.survival;
     const done = useVehicle(this.sim, p, cart, place, {
       swing: () => { p.swing = 6; },
       damage: () => heldAttackDamage(s.held?.id ?? 0, s),
-      openContainer: container => this.open(p, 'chest', container, { cart, key: 'cart-' + cart.id, title: container.title, rows: 3 }),
+      openContainer: container => (container.kind === 'hopper' // displayGUIHopperMinecart: the cart's five slots
+        ? this.open(p, 'hopper', container, { cart, key: 'cart-' + cart.id, title: container.title })
+        : this.open(p, 'chest', container, { cart, key: 'cart-' + cart.id, title: container.title, rows: 3 })),
     });
     return !!done.handled && !done.skipped;
   }
