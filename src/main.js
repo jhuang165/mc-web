@@ -784,6 +784,7 @@ function applyServerHanging(rows) {
 function applyServerPlayer(you) {
   if (!you) return;
   if (Array.isArray(you.maps)) applyServerMaps(you.maps);
+  applyServerSleep(you.sleep); // before the death screen below: a sleeper killed in bed leaves it first
   if (Array.isArray(you.hanging)) applyServerHanging(you.hanging);
   if (Array.isArray(you.achievements)) achievements.unlocked = new Set(you.achievements.filter(id => BY_ACHIEVEMENT[id])); // the server's list
   if (achievementToast.toast?.hint && achievements.has("openInventory")) achievementToast.clear(); // "Taking Inventory" earned here before
@@ -2162,8 +2163,9 @@ function closeChat() {
 function resume() {
   chatOpen = false;
   chatUi.close();
-  // GuiSleepMP: leaving the screen (Escape) sends the stop-sleeping action, wakeUpPlayer(true, true, false).
-  if (bedSleep.sleeping) { bedWake(true, false); return; }
+  // GuiSleepMP: leaving the screen (Escape) sends the stop-sleeping action (C0BPacketEntityAction 3), which
+  // NetHandlerPlayServer turns into wakeUpPlayer(false, true, true): the bed becomes the spawn point.
+  if (bedSleep.sleeping) { bedWake(false, true); return; }
   if (multiplayer && screen === "dead") return; // the gun server's Respawn ends it (applyServerPlayer)
   if (survival.health <= 0 && !multiplayer) {
     screen = "playing";
@@ -2192,7 +2194,7 @@ function showBedScreen() {
     // .mc-button (like the old .button) forces transform:none.
     bedButton.style.cssText = "position:fixed;box-sizing:border-box;left:calc(50% - 100*var(--u));bottom:calc(20*var(--u));width:calc(200*var(--u));height:calc(20*var(--u));--hw:100;z-index:31;display:none";
     bedButton.addEventListener("mousedown", (e) => e.preventDefault());
-    bedButton.onclick = () => bedWake(true, false);
+    bedButton.onclick = () => bedWake(false, true); // C0BPacketEntityAction 3: wakeUpPlayer(false, true, true)
     document.body.append(bedFade, bedButton);
   }
   bedFade.style.display = "block";
@@ -2251,6 +2253,7 @@ function useBed(x, y, z) {
 }
 // EntityPlayer.wakeUpPlayer(resetTimer, update, setSpawn): stand beside the bed (or above its head), clear the occupied bit.
 function bedWake(resetTimer, setSpawn, leaveScreen = true) {
+  if (multiplayer) { if (bedSleep.sleeping) multiplayer.send({ type: 'wake' }); return; } // the server wakes this player (you.sleep)
   const head = bedSleep.bed, feet = bedSleep.wake(world, resetTimer, setSpawn);
   if (!feet) return;
   if (head) scene.updateBlock(head[0], head[2], head[1]);
@@ -2274,6 +2277,30 @@ function tickBed() {
     weather.rainTime = 0; weather.thunderTime = 0; weather.raining = false; weather.thundering = false;
     bedWake(false, true);
   }
+  updateBedFade();
+}
+// The gun server's sleep state (server-beds.js sleepRow): lying in a bed with its timer, the fade after waking, or nothing.
+// The server moves the player and sets the bed's occupied bit; this tab shows the lying view, the Leave Bed screen and the fade.
+function applyServerSleep(row) {
+  const bed = Array.isArray(row?.bed) && row.bed.length === 3 && row.bed.every(Number.isInteger) ? row.bed : null;
+  if (bed) {
+    if (!bedSleep.sleeping || bedSleep.bed.join() !== bed.join()) {
+      closeContainer();
+      bedSleep.reset();
+      bedSleep.begin(world, ...bed, { player: { x: bed[0], y: bed[1], z: bed[2], alive: true }, daytime: false });
+      if (Number.isInteger(row.facing) && row.facing !== bedSleep.facing) {
+        const [dx, dz] = BED_DIR[row.facing & 3];
+        bedSleep.facing = row.facing & 3;
+        bedSleep.pos = { x: Math.fround(bed[0] + 0.5 + dx * 0.4), y: Math.fround(bed[1] + 0.9375), z: Math.fround(bed[2] + 0.5 + dz * 0.4) };
+      }
+      enterSleep(thirdPersonView === 0);
+    }
+  } else if (bedSleep.sleeping) {
+    bedSleep.sleeping = false; bedSleep.bed = null;
+    hideBedScreen();
+    if (screen === "inventory" && !containerView) resume();
+  }
+  bedSleep.timer = Number.isInteger(row?.timer) ? Math.max(0, Math.min(110, row.timer)) : 0;
   updateBedFade();
 }
 // A saved sleeping player lies down again when the bed is still there.

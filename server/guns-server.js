@@ -179,6 +179,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         else if (m.type === 'action') { if (!simulation.action(id, m)) ws.close(1008, 'Invalid action'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'respawn') simulation.respawn(id);
+        else if (m.type === 'wake') simulation.wake(id); // C0BPacketEntityAction 3: Leave Bed
         else if (m.type === 'click') { if (!simulation.click(id, m)) ws.close(1008, 'Invalid click'); }
         else if (m.type === 'close') simulation.closeWindow(id, m.window);
         else if (m.type === 'book') { if (!simulation.book(id, m)) ws.close(1008, 'Invalid book'); }
@@ -359,6 +360,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
 
   function tick() {
     const base = simulation.tick();
+    for (const [id, text] of simulation.tellOut?.splice(0) ?? []) tell(id, text); // a bed's status lines, to one player
     for (const text of simulation.chatOut.splice(0)) system(text); // death messages, sent as chat before the tick that shows them
     const common = JSON.stringify(base).slice(0, -1); // the shared part, closed per player with `you` and `events`
     for (const [id, s] of sessions) {

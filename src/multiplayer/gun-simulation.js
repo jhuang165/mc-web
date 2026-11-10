@@ -39,6 +39,7 @@ import { ServerHanging } from './server-hanging.js';
 import { potionColor } from '../fx.js';
 import { effectRows } from '../status-effects.js';
 import { INVISIBILITY } from '../potion-fx.js';
+import { restoreBed, saveBed, useBed, wake, tickBeds, bedRespawn, settleBedRespawn, sleepRow, sleeperPresence } from './server-beds.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -78,6 +79,7 @@ export class GunSimulation extends DedicatedSimulation {
     this.history = new PositionHistory();
     this.outbox = new Map(); // player id -> events for that player's next tick message
     this.chatOut = [];
+    this.tellOut = []; // [player id, text]: lines for one player's chat (a bed's status messages)
     this.accounts = new Map(saved.accounts ?? []); // account id -> saved player
     this.rules = { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
     this.play = new ServerPlay(this, saved.play ?? {}); // windows, mining, block use and dropped items (server-play.js)
@@ -106,6 +108,7 @@ export class GunSimulation extends DedicatedSimulation {
     p.lastHit = null; p.sentInv = null; p.sentMode = null; p.idleSince = this.ticks;
     p.experience = new Experience(saved?.experience); p.xpCooldown = 0; p.sentXp = null;
     playerStats(this, p, saved); p.sentAchievements = null; // StatisticsFile (server-stats.js)
+    restoreBed(this, p, saved?.bed); // the bed spawn point; a sleeper saved in bed wakes beside it (server-beds.js)
     if (!saved) this.giveKit(p);
     this.play.reset(p);
     this.watch(p); // the saved position's window (the caller waited for its cells: whenReady)
@@ -158,7 +161,7 @@ export class GunSimulation extends DedicatedSimulation {
   }
   removePlayer(id) {
     const p = this.players.get(id);
-    if (p) { p.statsLive?.leaveGame(); dismount(this, p); dropHook(p); this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window and leaves its vehicle
+    if (p) { p.statsLive?.leaveGame(); wake(this, p, true, false); dismount(this, p); dropHook(p); this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window and leaves its vehicle
     this.players.delete(id);
     this.outbox.delete(id);
   }
@@ -166,7 +169,7 @@ export class GunSimulation extends DedicatedSimulation {
     const player = p.survival.serialize();
     for (const key of ['furnaces', 'chests', 'dispensers', 'brewing', 'hoppers']) delete player[key]; // world tiles are saved once
     return { name: p.name, mode: p.survival.mode, position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch, player,
-      experience: p.experience?.serialize(), ...saveStats(p) };
+      experience: p.experience?.serialize(), bed: saveBed(p), ...saveStats(p) };
   }
   // v3 input: movement, look, the selected slot and the newest tick the client has drawn (for lag compensation).
   input(id, message) {
@@ -208,10 +211,15 @@ export class GunSimulation extends DedicatedSimulation {
   // A use-button click (C08PacketPlayerBlockPlacement); digging comes from the held 'mine' action (ServerPlay.tickMining).
   queueEdit(id, message) {
     const p = this.players.get(id);
-    if (!p || p.dead) return false;
+    if (!p || p.dead || p.bed?.sleeping) return false;
     return super.queueEdit(id, message);
   }
-  edit(p, place) { return this.play.edit(p, place); }
+  edit(p, place) { return p.bed?.sleeping ? false : this.play.edit(p, place); }
+  // BlockBed.onBlockActivated (server-play.js's useBed hook).
+  useBed(p, x, y, z) { useBed(this, p, x, y, z); }
+  // C0BPacketEntityAction 3 (the Leave Bed button): wakeUpPlayer(false, true, true), so the bed becomes the spawn point.
+  wake(id) { const p = this.players.get(id); return !!p?.bed?.sleeping && wake(this, p, false, true); }
+  tell(p, text) { this.tellOut.push([p.id, text]); }
   // The attack button (Minecraft.clickMouse(0) on the press, then sendClickBlockToController while held): a mob or player under the
   // crosshair is hit once on the press; a block is dug by the held button (ServerPlay.tickMining).
   mine(p, down) {
@@ -295,8 +303,8 @@ export class GunSimulation extends DedicatedSimulation {
     const s = p.survival;
     Object.assign(s, { health: s.maxHealth, food: 20, saturation: 5, exhaustion: 0, fire: 0, air: 300, hurtTicks: 0, hurtTime: 0, died: false });
     s.effects = new (s.effects.constructor)(); s.effects.player = s;
-    dismount(this, p); dropHook(p);
-    p.position.copy(this.spawnPoint()); p.previous.copy(p.position);
+    dismount(this, p); dropHook(p); wake(this, p, true, false);
+    p.position.copy(bedRespawn(this, p) ?? this.spawnPoint()); p.previous.copy(p.position); // by the bed (server-beds.js), else the world spawn
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     p.fallDistance = 0; p.landedFall = 0; p.flying = false; p.dead = false; p.lastHit = null;
     s.protection = JOIN_PROTECTION;
@@ -349,11 +357,19 @@ export class GunSimulation extends DedicatedSimulation {
       explode: this.mobs ? (p, x, y, z, radius, { destroy }) => this.mobs.explode([...this.players.values()].filter(q => !q.dead), x, y, z, radius,
         { exploder: null, attacker: 'player', smoking: destroy, by: p }) : null,
     };
+    tickBeds(this); // the night skip and each sleeper's timer (server-beds.js)
     // Weapons act first, against where everyone stood when the shooter last saw them (tick - 1 is the newest recorded tick).
-    for (const p of players) { deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
+    for (const p of players) { if (p.bed?.sleeping) { p.combat.queue.length = 0; continue; } deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
     for (const p of players) {
       if (p.dead) { Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.survival.time = this.time; continue; }
+      if (p.bedCheck) settleBedRespawn(this, p); // a respawn whose bed's column just arrived
       if (this.frozen(p)) { p.survival.time = this.time; continue; } // its column is not ticking yet (simulation.js updateViews)
+      if (p.bed?.sleeping) { // EntityPlayer lying in bed: no movement, still hungry, hurt and burning (survival.tick)
+        p.survival.time = this.time;
+        p.survival.tick({ inWater: false, inLava: false });
+        this.play.checkWindow(p);
+        continue;
+      }
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       drainKnockback(p.survival, p.velocity, p.position, this.random);
       // A ridden pig, horse, cart or boat takes the input instead (server-riding.js rideTick); sneak gets off.
@@ -435,11 +451,11 @@ export class GunSimulation extends DedicatedSimulation {
   presence() {
     return super.presence().map(entry => {
       const p = this.players.get(entry.id);
-      const riding = ridingKind(p), hook = hookOf(p);
+      const riding = ridingKind(p), hook = hookOf(p), sleeper = sleeperPresence(p); // lying in its bed (S0APacketUseBed)
       // EntityLivingBase's DataWatcher 7 and 8 and Entity flag 5: the potion particle colour, whether every effect is a beacon's, invisibility.
       const fx = p.dead ? 0 : potionColor(p.survival.effects.active.values()), shown = fx ? { fx, ...(p.survival.effects.allAmbient() ? { ambient: true } : {}) } : {};
       return { ...entry, hurt: p.survival.hurtTime, dead: p.dead, mode: p.survival.mode, ...(riding ? { riding } : {}), ...(hook ? { hook } : {}), ...shown,
-        ...(p.survival.effects.has(INVISIBILITY) ? { invisible: true } : {}) };
+        ...(p.survival.effects.has(INVISIBILITY) ? { invisible: true } : {}), ...(sleeper ? { sleeping: sleeper } : {}) };
     });
   }
   // What only player `p` sees each tick: its health, food and, when changed, its inventory.
@@ -456,6 +472,8 @@ export class GunSimulation extends DedicatedSimulation {
     out.items = this.play.itemsNear(p);
     if (this.mobs) { out.mobs = this.mobs.rows(p); out.thrown = this.mobs.thrownRows(p); out.carts = this.mobs.cartRows(p); out.boats = this.mobs.boatRows(p); }
     out.riding = ridingOf(this, p);
+    const sleep = sleepRow(p);
+    if (sleep) out.sleep = sleep; // the bed and the fade timer (server-beds.js)
     const hanging = this.hanging.rows(p);
     if (hanging) out.hanging = hanging;
     const unlocked = achievementList(p), key = unlocked.join();

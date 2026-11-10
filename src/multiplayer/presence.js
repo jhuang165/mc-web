@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
+import { PlayerBody, PlayerRenderer, SLEEP_SIZE } from '../player-renderer.js';
 import { skinCanvas } from '../skin.js';
 import { gunOf } from '../mods/guns/catalog.js';
 import { gunsEnabled } from '../mods/guns/install.js';
@@ -76,10 +76,12 @@ export class RemotePlayers {
         const a = entry.prev ?? entry.last, b = entry.last, l = (u, v) => u + (v - u) * t, [x, y, z] = entry.hook, [px, py, pz] = entry.hookPrev;
         fishing.push({ id, hook: { px, py, pz, x, y, z }, yaw: p.yaw, pitch: p.pitch, sneaking: !!p.sneak, eye: { x: l(a.x, b.x), y: l(a.y, b.y) + 1.62, z: l(a.z, b.z) } });
       }
-      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
+      const sleeping = sleeperOf(p);
+      entry.renderer.update(entry.body, t, { sleeping, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
         heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding, rodCast: !!entry.hook,
         invisible: p.invisible === true }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
       entry.label.visible = !p.sneak && !p.dead && p.invisible !== true; // RendererLivingEntity.func_110813_b: no name over an invisible player
+      placeLabel(entry, sleeping);
     }
     this.scene.setRemoteFishing?.(fishing);
   }
@@ -114,4 +116,23 @@ export class RemotePlayers {
     for (const p of this.skins.values()) void p.then(t => t?.dispose());
     this.skins.clear();
   }
+}
+
+// A remote player lying in its bed (gun-simulation.js presence `sleeping`, S0APacketUseBed): the renderer's BedSleep-shaped input.
+function sleeperOf(p) {
+  const s = p.sleeping;
+  if (!s || ![s.x, s.y, s.z].every(Number.isFinite) || !Array.isArray(s.offset) || !s.offset.every(Number.isFinite)) return null;
+  return { pos: { x: s.x, y: s.y, z: s.z }, offset: s.offset, facing: s.facing & 3 };
+}
+// The name tag 0.4 over the box top (2.2 above the feet); RendererLivingEntity.passSpecialRender draws a sleeper's 1.5 lower,
+// over its 0.2 lying box at the entity position (not the model's -1.8 offset), so it sits down in the bed. Its first pass
+// ignores the depth buffer, which keeps it seen there.
+const labelAt = new THREE.Vector3();
+function placeLabel(entry, sleeping) {
+  const { label, renderer, material } = entry;
+  if (!sleeping) { label.position.set(0, 2.2, 0); material.depthTest = true; return; }
+  renderer.root.updateMatrixWorld(true);
+  labelAt.set(sleeping.pos.x, sleeping.pos.y - SLEEP_SIZE + SLEEP_SIZE + 0.4 - 1.5, sleeping.pos.z); // the box bottom + its height + 0.4, 1.5 lower
+  label.position.copy(renderer.root.worldToLocal(labelAt));
+  material.depthTest = false;
 }

@@ -302,6 +302,7 @@ export class ServerPlay {
         openHopper: (tile, key, at) => this.open(p, 'hopper', new HopperContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at) }),
         ...this.stations.hooks(this, p),
         touchRedstoneOre: noop,
+        useBed: (x, y, z) => sim.useBed?.(p, x, y, z), // BlockBed.onBlockActivated (server-beds.js)
         lightTnt: (x, y, z) => { sim.mobs?.prime(x, y, z, p); }, // ItemFlintAndSteel on TNT (BlockTNT.onBlockActivated); the edit removes the block
         updateBlock: noop, updateBlocks: noop, // the world's own change log reaches the tabs
         particle: (name, x, y, z, vx, vy, vz) => sim.near(p, { type: 'fx', kind: 'particle', name, x, y, z, vx, vy, vz }, true),
