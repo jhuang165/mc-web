@@ -36,7 +36,18 @@ public class VillageFightProbe {
     if (cur != null) map.b(cur.D());
     prev[slot] = cur == null ? null : cur.m();
   }
-  static void held(yl e, add stack) throws Exception { e.c(0, stack); ((add[]) MobMoveProbe.field(sv.class, "g").get(e))[0] = e.ak()[0]; }
+  // Batch 36: setCurrentItemOrArmor(0) only; EntityLivingBase.onUpdate's equipment block (equipSync, run before each update below) takes the old stack's attribute modifiers off and the new one's on.
+  static void held(sv e, add stack) throws Exception { e.c(0, stack); }
+  // World.updateEntityWithOptionalForce: onUpdate, or updateRidden (onUpdate plus the mount's seat) for an entity that rides, then its rider's update right after.
+  static final java.util.Set<sa> ghosts = new java.util.HashSet<>();
+  static void update(sa e) throws Exception {
+    if (e instanceof sv) for (int slot = 0; slot < 5; slot++) equipSync((sv) e, slot);
+    if (e.m != null) e.ab(); else e.h();
+    if (e.l != null) {
+      if (e.l.K || e.l.m != e) { e.l.m = null; e.l = null; }
+      else if (!ghosts.contains(e.l)) { e.l.aa++; update(e.l); } // a rider the world refused (not added to a chunk) is never ticked: World.updateEntityWithOptionalForce needs addedToChunk
+    }
+  }
   static double[] bx(azt b) throws Exception { return new double[] {b.a, b.b, b.c, b.d, b.e, b.f}; }
   static String searchJson() {
     StringBuilder b = new StringBuilder("[");
@@ -46,6 +57,7 @@ public class VillageFightProbe {
     System.err.println("searches " + VillagerProbe.World.searches.size() + " points " + points + " max " + most + " native ms total " + total / 1e6 + " worst " + worst / 1e6);
     return b.append("]").toString();
   }
+  static boolean b35or36(String name) { return name.startsWith("b35-") || name.startsWith("b36-"); }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
@@ -82,6 +94,7 @@ public class VillageFightProbe {
   static double follow = 0;
   static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
   static int[][] unloadedChunks = {}; // batch 34: [chunkX, chunkZ] pairs the ChunkProviderServer model has not loaded
+  static int eggTimer = 6000; // batch 36: chickens' timeUntilNextEgg (the constructor's nextInt(6000) + 6000 is out of reach of any record)
   static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
   static final String DEFAULT_TYPES = "VVZZGKK";
   static void scenario(String name, long seed, int ticks, double[][] pos, String[] script) throws Exception { scenario(name, seed, ticks, DEFAULT_TYPES, pos, script); }
@@ -91,6 +104,7 @@ public class VillageFightProbe {
   static void scenario(String name, long seed, int ticks, String types, double[][] pos, String[] script) throws Exception {
     int n = types.length();
     if (System.getenv("VF_ONLY") != null && !name.equals(System.getenv("VF_ONLY"))) return; // development aid: run one record
+    if (System.getenv("VF_PREFIX") != null && !name.startsWith(System.getenv("VF_PREFIX"))) return; // development aid: run the records of one batch
     MobMoveProbe.set(VillageLiveProbe.world, "r", rd.values()[difficulty]);
     wc c = VillageLiveProbe.newCollection(seed);
     VillageLiveProbe.W.players.clear();
@@ -100,7 +114,7 @@ public class VillageFightProbe {
     for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
     VillagerProbe.World.light = light; MobMoveProbe.ProbeWorld.water = water;
     // batch 34: b34-* records read blocks through the real ChunkCache (VF_CACHE_ALL=1 runs the older ones that way too, to see which of them depend on it) and may leave chunks unloaded
-    boolean cache = name.startsWith("b34-") || name.startsWith("b35-") || System.getenv("VF_CACHE_ALL") != null;
+    boolean cache = name.startsWith("b34-") || b35or36(name) || System.getenv("VF_CACHE_ALL") != null;
     VillagerProbe.World.chunkCache = cache; VillagerProbe.World.unloaded.clear();
     for (int[] u : unloadedChunks) VillagerProbe.World.unloaded.add(VillagerProbe.World.chunkKey(u[0], u[1]));
     for (int t = 0; t < 5; t++) { if (t % 60 == 0) c.a(52, 0, 52); c.a(); }
@@ -114,6 +128,7 @@ public class VillageFightProbe {
         case 'z': { yq z = new yq(w); dh tag = new dh(); tag.a("CanBreakDoors", true); z.a(tag); base(z); ents[i] = z; break; }
         case 'G': ents[i] = new wt(w); break;
         case 'K': ents[i] = new yl(w); break;
+        case 'C': { wg hen = new wg(w); hen.bu = eggTimer; ents[i] = hen; break; }
         case 'B': { yl k = new yl(w); held(k, ArmorEnchantmentProbe.make(261, 0, ArmorEnchantmentProbe.ench())); ents[i] = k; break; }
         default: throw new RuntimeException(types);
       }
@@ -123,11 +138,13 @@ public class VillageFightProbe {
     StringBuilder bases = new StringBuilder("[");
     for (int i = 0; i < n; i++) bases.append(i > 0 ? "," : "").append(ents[i] instanceof yq ? num(((ti) ((yq) ents[i]).a((th) MobMoveProbe.field(yq.class, "bp").get(null))).e()) : "null");
     bases.append("]");
-    VillagerProbe.World.immediateZombies = (name.startsWith("b33-") || name.startsWith("b34-") || name.startsWith("b35-"));
-    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-") || name.startsWith("b34-") || name.startsWith("b35-"); // rows then end with the arrows, and the record lists the shots and conversions
+    VillagerProbe.World.immediateZombies = (name.startsWith("b33-") || name.startsWith("b34-") || b35or36(name));
+    boolean extras = name.startsWith("b31-") || name.startsWith("b32-") || name.startsWith("b33-") || name.startsWith("b34-") || b35or36(name); // rows then end with the arrows, and the record lists the shots and conversions
     VillagerProbe.World.spawned.clear();
     SeedRandom.next = 1000000L + seed * 1000; // the first Entity built from here on (an arrow, a converted or reinforcement zombie) gets this seed
     List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
+    List<wg> extraChickens = new ArrayList<>(); List<String> chickenRecs = new ArrayList<>(), spawnRecs = new ArrayList<>(); // batch 36
+    VillagerProbe.World.immediateChickens = name.startsWith("b36-");
     Log[] logs = new Log[ents.length];
     for (int i = 0; i < ents.length; i++) {
       sa e = (sa) ents[i];
@@ -162,7 +179,20 @@ public class VillageFightProbe {
             hits.add("[" + t + "," + hit + "," + num(victim.aS()) + "]");
             break;
           }
-          case "equip": held((yl) ents[Integer.parseInt(p[2])], p[3].equals("0") ? null : ArmorEnchantmentProbe.make(Integer.parseInt(p[3]), 0, ArmorEnchantmentProbe.ench())); break; // setCurrentItemOrArmor(0): setCombatTask runs at once
+          case "equip": held((sv) ents[Integer.parseInt(p[2])], p[3].equals("0") ? null : ArmorEnchantmentProbe.make(Integer.parseInt(p[3]), 0, ArmorEnchantmentProbe.ench())); break; // setCurrentItemOrArmor(0): setCombatTask runs at once
+          case "spawn": { // batch 36: "t spawn x z y yaw" SpawnerAnimals' order: a zombie placed, World.spawnEntityInWorld (refused in an unloaded chunk), then onSpawnWithEgg(null) with its chicken-jockey rolls
+            yq z = new yq(w);
+            z.b(Double.parseDouble(p[2]), Double.parseDouble(p[4]), Double.parseDouble(p[3]), Float.parseFloat(p[5]), 0f);
+            boolean in = w.d(z);
+            if (!in) ghosts.add(z);
+            int spawnedBefore = VillagerProbe.World.spawned.size();
+            z.a((sy) null);
+            int kind = 0, near = -1;
+            if (z.m != null) { kind = 2; for (int k = 0; k < ents.length; k++) if (ents[k] == z.m) { kind = 1; near = k; } }
+            boolean chickenIn = false; for (int k = spawnedBefore; k < VillagerProbe.World.spawned.size(); k++) if (VillagerProbe.World.spawned.get(k) instanceof wg) chickenIn = true;
+            spawnRecs.add("[" + t + "," + (in ? 1 : 0) + "," + (z.f() ? 1 : 0) + "," + kind + "," + near + "," + (chickenIn ? 1 : 0) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).seed + "]");
+            break;
+          }
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
           case "move": at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break; // batch 33: optional height
           case "rename": VillageLiveProbe.W.players.remove(player.n); player.n = p[2]; VillageLiveProbe.W.players.put(p[2], player); break;
@@ -173,6 +203,7 @@ public class VillageFightProbe {
       c.a();
       for (Log l : logs) l.log.clear();
       for (yq z : extraZombies) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log.clear();
+      for (wg ch : extraChickens) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log.clear();
       // World.updateEntities walks loadedEntityList by index, so an arrow spawned by a skeleton joins the end and ticks in the same pass; a dead entity
       // (setDead) leaves the list right after its own update (extras records only: the batch 28-30 records kept corpses in the list).
       List<String> tickArrows = new ArrayList<>();
@@ -181,16 +212,17 @@ public class VillageFightProbe {
       ticking.addAll(arrowList); // arrows already in flight (or stuck) tick after every mob, in spawn order
       for (int i = 0; i < ticking.size(); i++) {
         sa e = ticking.get(i);
+        if (e.m != null) { if (!e.m.K && e.m.l == e) continue; e.m.l = null; e.m = null; } // World.updateEntities: a rider updates with its mount (update), not on its own
         if (!e.K || !extras) {
           if (e.K) continue;
           VillagerProbe.World.entities.size();
           e.aa++;
           if (System.getenv("VF_EXTRA") != null && extraZombies.contains(e)) System.err.println("pre " + t + " " + e.s + "," + e.t + "," + e.u + " motion=" + e.v + "," + e.w + "," + e.x + " box=" + java.util.Arrays.toString(bx(e.C)) + " w=" + MobMoveProbe.field(sa.class, "M").getFloat(e));
-          e.h(); // World.updateEntityWithOptionalForce does ++ticksExisted before onUpdate
+          update(e); // World.updateEntityWithOptionalForce does ++ticksExisted before onUpdate (batch 36: and the equipment block, a rider's updateRidden and the rider's own update)
         }
         for (String op : script) { // batch 31: "t equipmid k idx item" swaps the held item right after entity k's update (EntityLiving.onLivingUpdate's pickup runs there natively)
           String[] p = op.split(" ");
-          if (Integer.parseInt(p[0]) == t && p[1].equals("equipmid") && Integer.parseInt(p[2]) == i) held((yl) ents[Integer.parseInt(p[3])], p[4].equals("0") ? null : ArmorEnchantmentProbe.make(Integer.parseInt(p[4]), 0, ArmorEnchantmentProbe.ench()));
+          if (Integer.parseInt(p[0]) == t && p[1].equals("equipmid") && Integer.parseInt(p[2]) == i) held((sv) ents[Integer.parseInt(p[3])], p[4].equals("0") ? null : ArmorEnchantmentProbe.make(Integer.parseInt(p[4]), 0, ArmorEnchantmentProbe.ench()));
         }
         while (!VillagerProbe.World.spawned.isEmpty()) {
           Object sp = VillagerProbe.World.spawned.remove(0);
@@ -204,6 +236,12 @@ public class VillageFightProbe {
             arrowList.add(arrow);
             ticking.add(arrow);
             VillagerProbe.World.entities.add(arrow);
+          } else if (sp instanceof wg && name.startsWith("b36-")) {
+            // Batch 36: a chicken built by a baby zombie's onSpawnWithEgg (a new chicken jockey), spawned and ticked like any mob. Its constructor's Math.random yaw is overwritten by setLocationAndAngles (the zombie's yaw).
+            wg ch = (wg) sp;
+            chickenRecs.add("[" + t + "," + num(ch.s) + "," + num(ch.t) + "," + num(ch.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).seed + "," + num(ch.y) + "," + num(MobMoveProbe.field(sv.class, "aP").getFloat(ch)) + "," + (ch.bZ() ? 1 : 0) + "," + ch.bu + "]");
+            extraChickens.add(ch); arrowList.add(ch); ticking.add(ch);
+            if (!VillagerProbe.World.entities.contains(ch)) VillagerProbe.World.entities.add(ch);
           } else if (sp instanceof yq) {
             // Batch 32: a zombie spawned mid-pass (EntityZombie.onKillEntity's converted villager, or a Hard reinforcement) joins the world list and ticks in this
             // pass like any entity. A conversion stands exactly where a dead villager did; a reinforcement is built by attackEntityFrom on an integer corner.
@@ -277,6 +315,14 @@ public class VillageFightProbe {
             .append(index(ents, extraZombies, z.o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(z))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log)).append("]]");
         }
         row.append("]");
+        if (name.startsWith("b36-")) { // the chickens built during the fight
+          row.append(",[");
+          for (int k = 0; k < extraChickens.size(); k++) { wg ch = extraChickens.get(k); row.append(k > 0 ? "," : "").append("[").append(num(ch.s)).append(",").append(num(ch.t)).append(",").append(num(ch.u)).append(",").append(num(ch.aS())).append(",").append(ch.bZ() ? 1 : 0).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).log)).append("]]"); }
+          row.append("],[");
+          boolean firstFlag = true;
+          for (int k = 0; k < n; k++) if (ents[k] instanceof wg) { row.append(firstFlag ? "" : ",").append(((wg) ents[k]).bZ() ? 1 : 0); firstFlag = false; } // IsChickenJockey of the chickens the record starts with
+          row.append("]");
+        }
       }
       row.append("]");
       rows.add(row.toString());
@@ -285,7 +331,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (cache ? ",\"chunkCache\":true" : "") + (name.startsWith("b35-") ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (cache ? ",\"chunkCache\":true" : "") + (name.startsWith("b36-") ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -563,6 +609,69 @@ public class VillageFightProbe {
       scenario("b35-follow" + (int) fr + "-sealed-d3", 410 + (int) fr, 300, "VVzZZGK", farSealed, new String[] {"150 hit 1 3 30.0 mob"});
     }
     follow = 0;
+    blocks = new int[][] {};
+    difficulty = 2;
+    // Batch 36 (names b36-*): EntityZombie.onSpawnWithEgg's chicken jockeys. "t spawn x z y yaw" places a zombie, calls World.spawnEntityInWorld and then onSpawnWithEgg(null); the child roll (World.rand nextFloat < 0.05)
+    // and the jockey rolls that follow are on World.rand, which VillageLiveProbe.newCollection seeds with the record's seed. The seeds below were found with the port's own draw order and are confirmed by the record
+    // (`spawns`: [tick, spawned, child, 0 none / 1 nearby chicken / 2 new chicken, nearby chicken index, new chicken spawned, zombie Entity.rand seed]). Chickens (C) lay on the egg timer set by `egg`.
+    difficulty = 3; light = 15; reinforce = 0; unloadedChunks = new int[][] {}; blocks = new int[][] {}; follow = 0;
+    java.util.List<int[]> eastGone = new ArrayList<>();
+    for (int cx = 5; cx <= 9; cx++) for (int cz = -2; cz <= 6; cz++) eastGone.add(new int[] {cx, cz});
+    int[][] east = eastGone.toArray(new int[0][]);
+    eggTimer = 90;
+    double[][] nearChickens = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {46.5, 51.5}, {52.5, 80.5}, {76.5, 61.5}, {73.5, 58.5}, {62.5, 58.5}}; // chickens 5 blocks from the spawn site (75.5, 60.5), one of them half a block above ground level of the other
+    double[][] farChickens = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {46.5, 51.5}, {52.5, 80.5}, {76.5, 70.5}, {70.5, 52.5}, {62.5, 58.5}};
+    double[][] eastChickens = {{52.5, 52.5}, {54.5, 52.5}, {66.5, 51.5}, {46.5, 51.5}, {52.5, 80.5}, {91.5, 61.5}, {88.5, 58.5}, {62.5, 58.5}};
+    String[] jockeyOps = {"3 spawn 75.5 60.5 0 90"}, eastOps = {"3 spawn 90.5 60.5 0 90"};
+    scenario("b36-jockey-nearby-d3", 218, 300, "VVZGKCC", nearChickens, jockeyOps);
+    scenario("b36-jockey-nearby-none-d3", 113, 300, "VVZGKCC", farChickens, jockeyOps);
+    scenario("b36-jockey-new-d3", 668, 300, "VVZGKCC", farChickens, jockeyOps);
+    unloadedChunks = east;
+    scenario("b36-jockey-new-unloaded-d3", 668, 300, "VVZGKCC", eastChickens, eastOps);
+    scenario("b36-jockey-nearby-unloaded-d3", 113, 300, "VVZGKCC", eastChickens, eastOps);
+    unloadedChunks = new int[][] {};
+    eggTimer = 6000; difficulty = 3;
+    // Held-item swaps: EntityLivingBase.onUpdate compares each slot with the previous update's stack and moves the item's attribute modifiers (a sword's +4 damage and material bonus) in or out of the attribute map before
+    // onLivingUpdate. "equip" (before the tick) takes effect in that mob's update of the same tick, "equipmid k i item" (after mob k's update, as a loot pickup does) in its next one.
+    blocks = new int[][] {};
+    String[] swords = {"0 walk 7 -0.08 -0.04", "60 walk 7 0 0", "20 equip 3 276", "70 equipmid 2 4 267", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player", "130 equip 3 0", "135 equipmid 3 3 268", "150 hit 0 4 1.0 mob", "200 equip 4 0", "210 equip 4 272", "260 equipmid 4 2 276"};
+    scenario("b36-sword-swap-d3", 4600, 360, "VVzZZGK", arena, swords);
+    scenario("b36-sword-swap-d2", 4601, 360, "VVzZZGK", arena, swords);
+    // a skeleton with a sword melees (AttackOnCollide 1.2) and swaps it for nothing and back mid-fight, hurting the player it reaches
+    scenario("b36-sword-skeleton-d3", 4602, 320, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {46.5, 51.5}, {58.5, 58.5}, {60.5, 60.5}}, new String[] {"0 equip 6 267", "60 equip 6 276", "120 equip 6 0", "160 equip 6 268", "220 equipmid 5 6 276"});
+    difficulty = 3;
+    // Gates and doors on slopes. The east half (x 58..80, z 40..70) is raised one block (stone at y 0, mobs stand at y 1), so every approach to the villagers is a one-block step.
+    int[][] plateau = {{58, 0, 40, 80, 0, 70, 1, 0}};
+    double[][] up = {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5, 1}, {68.5, 55.5, 1}, {62.5, 47.5, 1}, {46.5, 51.5}, {52.5, 80.5}, {62.5, 58.5, 1}};
+    // a fence line standing on the plateau (x 62) with a gate at z 52: closed (go round, or hop the step), open
+    for (int k = 0; k < 2; k++) {
+      String g = k == 0 ? "closed" : "open";
+      blocks = cat.apply(new int[][][] {plateau, new int[][] {{62, 1, 44, 62, 2, 60, 85, 0}, {62, 1, 52, 62, 2, 52, 0, 0}, {62, 1, 52, 62, 1, 52, 107, k == 0 ? 1 : 5}}});
+      scenario("b36-slope-gate-" + g + "-d3", 4610 + k, 460, "VVzZZGK", up, fight33);
+      scenario("b36-slope-gate-" + g + "-hunt-d3", 4612 + k, 520, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5, 1}, {68.5, 55.5, 1}, {62.5, 47.5, 1}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5, 1}}, hunt33);
+    }
+    // a gate on the step itself (the fence line on the plateau's edge column x 58, the gate at z 52 on the plateau) and a gate one block below the plateau (ground level, x 56) with zombies coming off the step
+    blocks = cat.apply(new int[][][] {plateau, new int[][] {{58, 1, 44, 58, 2, 60, 85, 0}, {58, 1, 52, 58, 2, 52, 0, 0}, {58, 1, 52, 58, 1, 52, 107, 5}}});
+    scenario("b36-slope-gate-edge-d3", 4614, 460, "VVzZZGK", up, fight33);
+    blocks = cat.apply(new int[][][] {plateau, new int[][] {{56, 0, 44, 56, 1, 60, 85, 0}, {56, 0, 52, 56, 1, 52, 0, 0}, {56, 0, 52, 56, 0, 52, 107, 1}}});
+    scenario("b36-slope-gate-foot-d3", 4615, 460, "VVzZZGK", up, fight33);
+    // the villagers' house on a raised base: x 47..58 stone at y 0, walls y 1..3 on x 49..56, z 49..56, the door at x 56 z 52 (y 1 and 2) one block above the ground outside; the zombies outside climb the step
+    int[][] baseHouse = {{47, 0, 47, 58, 0, 58, 1, 0}, {49, 1, 49, 56, 3, 49, 4, 0}, {49, 1, 56, 56, 3, 56, 4, 0}, {49, 1, 50, 49, 3, 55, 4, 0}, {56, 1, 50, 56, 3, 55, 4, 0}, {49, 4, 49, 56, 4, 56, 4, 0}};
+    double[][] inHouse = {{52.5, 52.5, 1}, {54.5, 53.5, 1}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {46.5, 40.5}, {52.5, 80.5}, {62.5, 58.5}};
+    for (int k = 0; k < 2; k++) {
+      blocks = cat.apply(new int[][][] {baseHouse, new int[][] {{56, 1, 52, 56, 1, 52, 64, k == 0 ? 0 : 4}, {56, 2, 52, 56, 2, 52, 64, 8}}});
+      scenario("b36-slope-door-" + (k == 0 ? "closed" : "open") + "-d3", 4616 + k, 500, "VVzZZGK", inHouse, hunt33);
+    }
+    // a ramp of three one-block steps up to the plateau door: the zombie that breaks doors (Hard) and the others
+    blocks = cat.apply(new int[][][] {baseHouse, new int[][] {{56, 1, 52, 56, 1, 52, 64, 0}, {56, 2, 52, 56, 2, 52, 64, 8}, {57, 1, 52, 58, 1, 52, 1, 0}}});
+    scenario("b36-slope-door-step-d3", 4618, 500, "VVzZZGK", new double[][] {{52.5, 52.5, 1}, {54.5, 53.5, 1}, {64.5, 52.5}, {68.5, 55.5}, {62.5, 47.5}, {46.5, 40.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt33);
+    // villagers fleeing across storeys (b35's slabs and ramps): zombies on the villagers' storey (1), below (0) and above (2); the golem is a long way off
+    blocks = storeysOf.apply(3);
+    double[][] flee = {{45.5, 53.5, 4}, {47.5, 56.5, 4}, {52.5, 53.5, 4}, {45.5, 62.5, 0}, {46.5, 50.5, 8}, {10.5, 10.5}, {60.5, 120.5}, {30.5, 53.5}};
+    scenario("b36-flee-storeys-d3", 4620, 420, "VVzZZGK", flee, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0"});
+    scenario("b36-flee-storeys-hit-d3", 4621, 420, "VVzZZGK", flee, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0", "150 hit 1 3 30.0 mob"});
+    blocks = storeysOf.apply(3);
+    scenario("b36-flee-ramp-d3", 4622, 500, "VVzZZGK", new double[][] {{33.5, 41.5, 4}, {35.5, 44.5, 4}, {36.5, 40.5, 4}, {30.5, 40.5, 0}, {37.5, 47.5, 8}, {10.5, 10.5}, {60.5, 120.5}, {30.5, 53.5}}, new String[] {"0 walk 7 0.05 0.02", "120 walk 7 0 0"});
     blocks = new int[][] {};
     difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
