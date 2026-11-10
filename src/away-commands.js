@@ -40,6 +40,7 @@ import { selectLocalPlayer as selectLocal, USERNAME_INDEX } from "./command-sele
 import { PLAYER_NAME } from "./death-messages.js";
 import { Survival } from "./survival.js";
 import { Experience } from "./experience.js";
+import { Effects } from "./status-effects.js";
 
 // Inventory tally of a state snapshot ({ state: { slots, armor } }): per (id, damage) the first stack seen and the total count (armor counts with the inventory).
 const keyOf = (st) => `${st.id}:${st.damage | 0}`;
@@ -94,6 +95,46 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   const modeName = (m) => (m === 1 ? "creative" : m === 2 ? "adventure" : "survival");
   const buildShadow = (snap) => { shadowSv = new Survival(snap?.state ?? {}, modeName(snap?.mode)); shadowXp = new Experience(snap?.experience ?? {}); };
   buildShadow(traceStates[0]?.[1] ?? fallbackState);
+  // Batch 37: health, hunger and effects. The trace's samples carry [health, food, saturation, exhaustion, effects] (dimension-live.js traceAway, index 5). The shadow follows what the
+  // player's own body did between two samples as a DIFFERENCE (health, food, saturation, exhaustion; an effect he gained, lost or refreshed), on top of what the commands did to the
+  // shadow. Effects the commands added tick on the shadow (`owned`: regeneration, poison, wither, hunger, saturation per tick, as Effects.tick does; instant health and damage are
+  // applied at once by the command host, Potion.performEffect natively on the next tick); the player's own effects only count down, because what they did to his health is already
+  // in the sample differences. `cmd` is what the commands changed in net; result() returns it as playerDelta. Bytecode-read: CommandEffect (am) only calls
+  // EntityLivingBase.addPotionEffect (yz.c), removePotionEffect (yz.m) and clearActivePotions (yz.aP); no other away-reachable command (give, clear, xp, gamemode, enchant,
+  // spawnpoint, achievement, tell, tellraw) touches health, the food stats or effects, so these are the only fields a command changes.
+  const cmd = { health: 0, food: 0, saturation: 0, exhaustion: 0 }, owned = new Set(), removed = new Set();
+  let shadowT = 0, prevVit = traceSamples[0]?.[5] ?? null, prevT = traceSamples[0]?.[0] ?? 0;
+  const vitals = () => [shadowSv.health, shadowSv.food, shadowSv.saturation, shadowSv.exhaustion];
+  const tracked = (fn) => { const b = vitals(); try { return fn(); } finally { const a = vitals(); cmd.health += a[0] - b[0]; cmd.food += a[1] - b[1]; cmd.saturation += a[2] - b[2]; cmd.exhaustion += a[3] - b[3]; } };
+  // Counts the shadow's effects down by the ticks since the last call; the owned ones also run their per-tick effect.
+  function ageTo(t) {
+    const n = Math.min(Math.floor(t), plan.ticks) - shadowT;
+    if (!(n > 0)) return;
+    shadowT += n;
+    shadowSv.hurtTicks = Math.max(0, (shadowSv.hurtTicks | 0) - n);
+    const active = shadowSv.effects.active;
+    for (const [id, e] of [...active]) {
+      if (owned.has(id)) {
+        const scratch = new Effects(); scratch.active.set(id, e);
+        tracked(() => { for (let i = 0; i < n && e.duration > 0 && shadowSv.health > 0; i++) { shadowSv.hurtTicks = Math.max(0, (shadowSv.hurtTicks | 0) - 1); scratch.tick(shadowSv); } });
+        if (e.duration <= 0) { active.delete(id); owned.delete(id); }
+      } else { e.duration -= n; if (e.duration <= 0) shadowSv.effects.remove(id); }
+    }
+  }
+  // The player's own change between two samples (taken `elapsed` ticks apart).
+  function applyVitals(prev, next, elapsed) {
+    const sv2 = shadowSv, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    if (sv2.health > 0) sv2.health = clamp(Math.fround(sv2.health + (next[0] - prev[0])), 0, sv2.maxHealth);
+    sv2.food = clamp(sv2.food + (next[1] - prev[1]), 0, 20);
+    sv2.saturation = clamp(Math.fround(sv2.saturation + (next[2] - prev[2])), 0, sv2.food);
+    sv2.exhaustion = clamp(Math.fround(sv2.exhaustion + (next[3] - prev[3])), 0, 40);
+    const was = new Map((prev[4] ?? []).map((e) => [e.id, e])), now = new Map((next[4] ?? []).map((e) => [e.id, e]));
+    for (const [id, e] of now) {
+      const old = was.get(id);
+      if (!old || old.amplifier !== e.amplifier || e.duration > old.duration - elapsed + 1) { sv2.effects.active.set(id, { id, duration: e.duration, amplifier: e.amplifier }); owned.delete(id); removed.delete(id); stats.vitalEffects = (stats.vitalEffects ?? 0) + 1; }
+    }
+    for (const [id, old] of was) if (!now.has(id) && old.duration - elapsed > 1) { sv2.effects.remove(id); owned.delete(id); }
+  }
   const modeNumber = () => (shadowSv.mode === "creative" ? 1 : shadowSv.mode === "adventure" ? 2 : 0);
   const shadowHost = createCommandHost({ ...env, survival: () => shadowSv, experience: () => shadowXp, giveDrop: (stack) => shadowSv.inventory.add(stack), setTime() {},
     setMode: (m) => { shadowSv.mode = m; shadowSv.inventory.creative = shadowSv.creative; }, setDifficulty() {} });
@@ -106,6 +147,17 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   };
   // commandBlockSender takes the player's position from host.position(): the shadow's is the traced player, not the world spawn.
   Object.assign(shadowHost, shared, { print() {}, printPlayer() {}, teleport() {}, position: () => shadowPosition() ?? { x: spawn[0], y: spawn[1], z: spawn[2] } });
+  // The commands' own changes to the shadow's body, kept apart from the player's (see above).
+  const copyOf = (id) => { const e = shadowSv.effects.get(id); return e && { ...e }; };
+  const addEffect = shadowHost.addEffect, removeEffect = shadowHost.removeEffect, clearEffects = shadowHost.clearEffects;
+  shadowHost.addEffect = (id, ticks, amp) => {
+    const before = copyOf(id);
+    const r = tracked(() => addEffect(id, ticks, amp)), after = copyOf(id);
+    if (after && (!before || after.amplifier !== before.amplifier || after.duration > before.duration)) { owned.add(id); removed.delete(id); }
+    return r;
+  };
+  shadowHost.removeEffect = (id) => { const r = removeEffect(id); if (r) { owned.delete(id); removed.add(id); } return r; };
+  shadowHost.clearEffects = () => { const ids = [...shadowSv.effects.active.keys()], r = clearEffects(); if (r) for (const id of ids) { owned.delete(id); removed.add(id); } return r; };
   Object.assign(host, {
     ...shared,
     print: (text) => { if (chat.length < CHAT_CAP) chat.push(String(text?.text ?? text)); },
@@ -132,7 +184,12 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   // (id, damage) count difference, gains added, losses removed (armor counts with the inventory, so equipping is neutral). Experience: points gained are added; a drop
   // in total (enchanting, death) takes the snapshot's experience. Game mode: the snapshot's when it changed. Health, hunger and effects are not carried.
   function syncShadow(t) {
-    while (sampleAt + 1 < traceSamples.length && traceSamples[sampleAt + 1][0] <= t) sampleAt++;
+    while (sampleAt + 1 < traceSamples.length && traceSamples[sampleAt + 1][0] <= t) {
+      const next = traceSamples[++sampleAt], vit = next[5];
+      if (vit && prevVit) { ageTo(next[0]); applyVitals(prevVit, vit, next[0] - (prevT ?? 0)); }
+      if (vit) { prevVit = vit; prevT = next[0]; }
+    }
+    ageTo(t);
     while (stateAt + 1 < traceStates.length && traceStates[stateAt + 1][0] <= t) {
       const prev = traceStates[stateAt][1], next = traceStates[++stateAt][1];
       applyChange(prev, next);
@@ -148,6 +205,12 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     for (const [k, e] of now) { const d = e.count - (base.get(k)?.count ?? 0); if (d !== 0) out.push({ stack: e.stack, count: d }); }
     for (const [k, e] of base) if (!now.has(k)) out.push({ stack: e.stack, count: -e.count });
     return out;
+  }
+  // What the effect commands changed in net, for the return (the live player already has everything the trace carried): health and hunger differences, the effects the commands
+  // left on him with the time they have left, and the ones they took away that are still gone at the end.
+  function playerDelta() {
+    const add = [...owned].map((id) => shadowSv.effects.get(id)).filter(Boolean).map((e) => ({ id: e.id, duration: e.duration, amplifier: e.amplifier }));
+    return { health: cmd.health, food: cmd.food, saturation: cmd.saturation, exhaustion: cmd.exhaustion, add, remove: [...removed].filter((id) => !shadowSv.effects.has(id)) };
   }
   function applyChange(prev, next) {
     const before = tally(prev), after = tally(next), inv = shadowSv.inventory;
@@ -182,7 +245,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
       if (queue.length >= QUEUE_CAP) return reason("the player-command queue is full");
       // Fire-time effect on the shadow player: SuccessCount and LastOutput now, and the state a later command sees. The replay at return redoes it on the live player.
       const ran = onShadow(tile, position, before);
-      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
+      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), eff: ran && canon === "effect", tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
       stats.queued++;
       return ran ? tile.successCount : before.successCount; // the replay rewrites SuccessCount and LastOutput with the same values
     };
@@ -231,7 +294,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     cartRun: (cart) => { if (cart.command?.command) execute(cart.command, cartCommandPosition(cart), cart.id); else if (cart.command) cart.command.successCount = 0; },
     result() {
       syncShadow(Infinity);
-      const out = { inventoryDelta: inventoryDelta(), commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
+      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
       if (JSON.stringify(weather.save()) !== initialWeather) out.weather = { ...weather.save(), rain: weather.rain, thunder: weather.thunder };
       if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}), ...(active.playerSpawn ? { playerSpawn: active.playerSpawn } : {}) };
       if (state.difficulty !== undefined) out.difficulty = state.difficulty;
@@ -245,7 +308,22 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
 // each replay writes its tile's SuccessCount (1 when the runner reports success, else 0, as CommandBlockLogic does) and LastOutput.
 // `giveStack(stack)` takes /give's item straight into the inventory: natively the dropped stack (pickup delay 0, owner the player) is collected at once,
 // and here the player may already be leaving the dimension the entity would drop into. `chatCap` bounds the op-feedback lines the replay prints.
-export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null }) {
+// Batch 37: the net change the effect commands made to health, hunger and effects (playerDelta above), applied to the live player's Survival. Effects first (an Absorption or
+// Health Boost the commands removed changes the caps), then the numbers; a health total at or below 0 is a death by damage, taken through Survival.damage like any other.
+export function applyPlayerDelta(survival, d) {
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  for (const id of d.remove ?? []) survival.effects.remove(id);
+  for (const e of d.add ?? []) survival.effects.add(e);
+  if (survival.health > 0) {
+    const health = Math.fround(survival.health + d.health);
+    if (health <= 0) { survival.hurtTicks = 0; survival.protection = 0; survival.damage(survival.health + 1, "magic"); } else survival.health = clamp(health, 0, survival.maxHealth);
+  }
+  survival.food = clamp(survival.food + d.food, 0, 20);
+  survival.saturation = clamp(Math.fround(survival.saturation + d.saturation), 0, survival.food);
+  survival.exhaustion = clamp(Math.fround(survival.exhaustion + d.exhaustion), 0, 40);
+}
+
+export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null, playerDelta = null, survival = null }) {
   const out = { applied: 0, succeeded: 0, failed: 0, muted: 0, byDelta: 0 };
   // Batch 36: give and clear the run's shadow ran at their firing (`inv`) take effect as one net inventory change (see inventoryDelta), not as re-runs on the return state.
   const byDelta = Array.isArray(delta) && !!inventory;
@@ -253,11 +331,14 @@ export function replayPlayerCommands(queue, { host, records = [], carts = [], gi
     for (const d of delta) if (d.count < 0) { let loss = -d.count; for (let i = 0; i < 36 && loss > 0; i++) { const st = inventory.getStack(i); if (st && keyOf(st) === keyOf(d.stack) && st.count > 0) { const take = Math.min(loss, st.count); st.count -= take; loss -= take; if (st.count === 0) inventory.setStack(i, null); } } }
     for (const d of delta) if (d.count > 0) { const st = { ...d.stack, count: d.count }; if (giveStack) giveStack(st); else inventory.add(st); }
   }
+  const byPlayer = !!playerDelta && !!survival;
+  if (byPlayer) applyPlayerDelta(survival, playerDelta);
   let lines = 0;
   const replay = Object.create(host);
   replay.print = (text) => { if (lines++ < chatCap) host.print(text); else out.muted++; };
   if (giveStack) replay.giveDrop = (stack) => giveStack(stack);
   for (const e of queue ?? []) {
+    if (e.eff && byPlayer) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // applyPlayerDelta carries its effect
     if (e.inv && byDelta) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // the delta above carries its effect
     const record = e.cartId !== null && e.cartId !== undefined ? carts.find((c) => c.type === 6 && c.id === e.cartId)?.command : records.find((r) => r.x === e.block?.[0] && r.y === e.block?.[1] && r.z === e.block?.[2]);
     const tile = { command: e.command, successCount: 0, customName: e.name ?? "@", trackOutput: e.trackOutput !== false, lastOutput: null };

@@ -121,6 +121,21 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // thrower that is an EntityPlayerMP in the pearl's own world (mw.o == this.o). The thrower is null (an unloaded save looks it up in a world with no
   // player) or the player in the Nether/End, so nothing teleports: the pearl just dies. The hit mob gets the same 0-damage hurt a snowball does.
   const pearlLands = ({ pearl, hit }) => { if (hit && hit !== "player") thrownHit(mobs, hit, pearl); pearl.dead = true; };
+  // Batch 37: the 32-block rule is read every tick, as World.updateEntities does for every loaded entity (it calls updateEntityWithOptionalForce(e, true) each tick, bytecode-read),
+  // not only for the position an entity had at departure. An entity that has moved to where a chunk within 32 blocks is not loaded keeps its place in its list and does not tick
+  // (park takes it out of the list for the length of the system's tick and puts it back after the others). `obj[key]` is the list; it may be replaced by the system's tick.
+  const park = (obj, key, fn) => {
+    const list = obj[key];
+    if (!list?.length) return fn();
+    const frozen = list.filter((en) => !entityTicks(en.x, en.z));
+    if (!frozen.length) return fn();
+    const gone = new Set(frozen);
+    obj[key] = list.filter((en) => !gone.has(en));
+    stats.held += frozen.length;
+    try { return fn(); } finally { obj[key] = [...obj[key], ...frozen]; }
+  };
+  const stats = { held: 0 };
+  const primedList = { get list() { return primed; }, set list(v) { primed.splice(0, primed.length, ...v); } };
   const late = []; // spills after the gate: an item entity that would never tick, kept as a saved record
   let open = true;
 
@@ -152,28 +167,28 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     // arrows, hanging, carts, boats.
     tick() {
       mobSv.time = clock;
-      if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length) { mobs.lootItems = items; mobs.tick(player, mobSv, 0); }
-      xp.tick(world, null);
+      if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length) { mobs.lootItems = items; park(mobs.potions.projectiles, "balls", () => mobs.tick(player, mobSv, 0)); }
+      park(xp, "orbs", () => xp.tick(world, null));
       drainMob();
-      rockets.tick(world, {});
-      items.tick(world, maxStack);
-      tickPrimedTnt(world, primed, { explode: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }) });
+      park(rockets, "rockets", () => rockets.tick(world, {}));
+      park(items, "items", () => items.tick(world, maxStack));
+      park(primedList, "list", () => tickPrimedTnt(world, primed, { explode: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }) }));
       if (projectiles.balls.length) {
-        projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), pearlLands);
+        park(projectiles, "balls", () => projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), pearlLands));
         for (const h of projectiles.drain()) if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
       }
       drainMob();
       if (arrows.list.length) {
-        arrows.tick(world, { targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
-          igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } });
+        park(arrows, "list", () => arrows.tick(world, { targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
+          igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } }));
         arrows.drain();
       }
       if (minecarts.carts.length) {
-        minecarts.tick(world, { entities: [], host: cartHost });
+        park(minecarts, "carts", () => minecarts.tick(world, { entities: [], host: cartHost }));
         for (const d of minecarts.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
       }
       if (boats.carts.length) {
-        boats.tick(world, { entities: [], hooks: {} });
+        park(boats, "carts", () => boats.tick(world, { entities: [], hooks: {} }));
         for (const d of boats.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
       }
       if (hanging.entities.length) {
@@ -184,6 +199,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       clock++;
     },
     close() { open = false; },
+    park, stats,
     shiftTime(d) { clock += d; }, // /time set or add by a command block
     // Every list in its saved form: the records outside the run unchanged, the run's entities serialized.
     finish() {
@@ -199,7 +215,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         fireballs: [...fireList.filter((r) => !fireIn(r)), ...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])],
         hanging: [...hangSplit.rest, ...hanging.toJSON()],
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
-          mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length },
+          mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length, held: stats.held },
       };
     },
   };
