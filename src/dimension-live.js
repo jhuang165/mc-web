@@ -340,8 +340,12 @@ export class DimensionLive {
     if (!force && now - a.lastTrace < TRACE_EVERY) return;
     a.lastTrace = now;
     const t = Math.max(0, now - a.ticks0 + Math.round(a.tripMs / 50)), { samples, states } = a.trace;
-    if (samples.length < TRACE_SAMPLES) samples.push([t, dimension, pos.x, pos.y, pos.z]);
-    const snap = h.awayPlayer(), key = JSON.stringify(snap);
+    const snap = h.awayPlayer(), st = snap?.state ?? {};
+    // Batch 37: each sample also carries the player's body, [health, food, saturation, exhaustion, effects], for the shadow's health, hunger and effects (away-commands.js).
+    if (samples.length < TRACE_SAMPLES) samples.push([t, dimension, pos.x, pos.y, pos.z, Number.isFinite(st.health) ? [st.health, st.food, st.saturation, st.exhaustion, Array.isArray(st.effects) ? st.effects.map((e) => ({ id: e.id, duration: e.duration, amplifier: e.amplifier })) : []] : null]);
+    // A snapshot is kept only when something the shadow reads from it changed (inventory, experience, game mode): the body's numbers change every few ticks and live in the samples.
+    const { health, food, saturation, exhaustion, timer, air, time, fire, effects, absorption, ...rest } = st; // eslint-disable-line no-unused-vars
+    const key = JSON.stringify({ ...snap, state: rest });
     if (key === a.traceKey) return;
     a.traceKey = key;
     if (states.length < TRACE_STATES) states.push([t, snap]); else states[states.length - 1] = [t, snap];

@@ -58,3 +58,100 @@ test("an item that moves off the loaded area's 32-block margin freezes where it 
   assert.ok(wide.x > edge.x + 5, `the same item in a wider area kept flying (${wide.x})`);
   assert.equal(wide.y, 11, "and landed");
 });
+
+// ---- Batch 37: health, hunger and effects in the shadow player ----
+import { Survival } from "./survival.js";
+import { Experience } from "./experience.js";
+import { createCommandHost } from "./command-host.js";
+import { replayPlayerCommands, applyPlayerDelta } from "./away-commands.js";
+const tile = (command, x) => ({ x, y: 11, z: 3, command, successCount: 7, customName: "@", trackOutput: true, lastOutput: "old" });
+const runTimed = async (blocks, trace, ticks = 200) => {
+  const root = { ...base, player: { time: 6000 }, redstone: { version: 1, clock: 0, time: 0, pending: blocks.map(([, t], i) => [3 + i, 11, 3, 137, t, 0, 1 + i]), events: [] },
+    commandBlocks: blocks.map(([c], i) => tile(c, 3 + i)) };
+  const cols = stateColumns(root), plan = { ...awayPlan(root, cols, ticks, 2), chunks: floorChunks(cols), records: [], trace };
+  for (let i = 0; i < blocks.length; i++) setBlock(plan.chunks, 3 + i, 11, 3, COMMAND_BLOCK);
+  return runAway(plan);
+};
+const at = (r, x) => r.commandBlocks.find((t) => t.x === x);
+const body = (health, effects = [], food = 20) => ({ ...(() => { const s = new Survival({ health, food, effects }, "survival"); return { state: JSON.parse(JSON.stringify(s.serialize())), experience: new Experience({}).serialize(), mode: 0, level: 0 }; })() });
+const vit = (health, effects = [], food = 20, sat = 5, exh = 0) => [health, food, sat, exh, effects];
+const live = (data) => { const survival = new Survival(data, "survival"); const env = { active: () => ({ mode: "survival", allowCommands: true }), world: () => null, weather: () => null, mobs: () => null, survival: () => survival, experience: () => new Experience(), position: () => ({ x: 0, y: 40, z: 0 }), seed: () => "x", stackName: () => "", giveDrop() {}, refreshInventory() {}, changed() {}, setTime() {}, updateBlock() {}, destroyBlock() {} }; return { survival, host: createCommandHost(env) }; };
+
+test("a Regeneration the command gave heals the shadow tick by tick; the return gets the net health and the time the effect has left", async () => {
+  const trace = { samples: [[0, -1, 0, 64, 0, vit(10)]], states: [[0, body(10)]] };
+  const r = await runTimed([["effect @p 10 30 1", 10]], trace);
+  assert.equal(at(r, 3).successCount, 1);
+  assert.equal(r.playerDelta.health, 8, "Regeneration II heals every 25 ticks (duration % 25 == 0): 600 575 ... 425 over the 191 ticks left (a block due at time 10 fires on run tick 9)");
+  assert.deepEqual(r.playerDelta.add, [{ id: 10, duration: 409, amplifier: 1 }]);
+  assert.deepEqual(r.playerDelta.remove, []);
+  const l = live({ health: 10 });
+  const out = replayPlayerCommands(r.playerCommands, { host: l.host, records: r.commandBlocks, playerDelta: r.playerDelta, survival: l.survival });
+  assert.equal(l.survival.health, 18);
+  assert.deepEqual(l.survival.effects.get(10), { id: 10, duration: 409, amplifier: 1 });
+  assert.deepEqual([out.applied, out.succeeded, out.byDelta], [1, 1, 1], "not re-run on the live player");
+  assert.equal(at(r, 3).successCount, 1, "the fire-time SuccessCount stays");
+});
+
+test("an instant heal acts at the firing on the health the player had then (his own regeneration is added as a difference, capped at the maximum)", async () => {
+  const trace = { samples: [[0, -1, 0, 64, 0, vit(10)], [100, -1, 0, 64, 0, vit(14)]], states: [[0, body(10)]] };
+  const r = await runTimed([["effect @p 6 1 1", 150]], trace);
+  assert.equal(r.playerDelta.health, 6, "14 + 8 is capped at 20: the command changed 6");
+  assert.deepEqual(r.playerDelta.add, []);
+  const l = live({ health: 14 });
+  replayPlayerCommands(r.playerCommands, { host: l.host, records: r.commandBlocks, playerDelta: r.playerDelta, survival: l.survival });
+  assert.equal(l.survival.health, 20);
+  const dmg = await runTimed([["effect @p 7 1 0", 50]], { samples: [[0, -1, 0, 64, 0, vit(10)]], states: [[0, body(10)]] });
+  assert.equal(dmg.playerDelta.health, -6, "Instant Damage 6 (magic)");
+});
+
+test("an effect the command removes stays removed on the return; one the player drank again later is his", async () => {
+  const speed = (duration, amplifier = 0) => [{ id: 1, duration, amplifier }];
+  const trace = { samples: [[0, -1, 0, 64, 0, vit(20, speed(1000))], [100, -1, 0, 64, 0, vit(20, speed(900))]], states: [[0, body(20, speed(1000))]] };
+  const r = await runTimed([["effect @p 1 0", 20], ["effect @p 1 0", 150]], trace);
+  assert.deepEqual([3, 4].map((x) => at(r, x).successCount), [1, 0], "the first removes Speed, the second finds none");
+  assert.deepEqual(r.playerDelta.remove, [1]);
+  const l = live({ effects: speed(800) });
+  replayPlayerCommands(r.playerCommands, { host: l.host, records: r.commandBlocks, playerDelta: r.playerDelta, survival: l.survival });
+  assert.equal(l.survival.effects.has(1), false);
+  const drank = { samples: [[0, -1, 0, 64, 0, vit(20, speed(1000))], [100, -1, 0, 64, 0, vit(20, speed(3000))]], states: [[0, body(20, speed(1000))]] };
+  const again = await runTimed([["effect @p 1 0", 20], ["effect @p 1 0", 150]], drank);
+  assert.deepEqual([3, 4].map((x) => at(again, x).successCount), [1, 1], "the potion he drank at tick 100 is removable at 150");
+  assert.deepEqual(again.playerDelta.remove, [1]);
+});
+
+test("the player's own effects only count down in the shadow: a poison he has does not hurt the shadow twice", async () => {
+  const poison = (d) => [{ id: 19, duration: d, amplifier: 0 }];
+  const trace = { samples: [[0, -1, 0, 64, 0, vit(20, poison(300))], [100, -1, 0, 64, 0, vit(17, poison(200))]], states: [[0, body(20, poison(300))]] };
+  const r = await runTimed([["effect @p 10 5 0", 120]], trace, 200);
+  // Regeneration I (interval 50) for 100 ticks from run tick 119, 81 ticks left: it heals at duration 100 and 50 (the first tick it runs), so exactly 2; the 3 points the poison took
+  // between the samples are the player's own difference (-3 applied to the shadow, not to the command's net).
+  assert.equal(r.playerDelta.health, 2);
+  assert.equal(r.playerDelta.add.length, 1);
+});
+
+test("applyPlayerDelta: hunger, effects and a lethal total through Survival.damage", () => {
+  const l = live({ health: 5, food: 10, saturation: 3, exhaustion: 1 });
+  applyPlayerDelta(l.survival, { health: 4, food: 15, saturation: 4, exhaustion: 2, add: [{ id: 1, duration: 100, amplifier: 0 }], remove: [] });
+  assert.deepEqual([l.survival.health, l.survival.food, l.survival.saturation, l.survival.exhaustion], [9, 20, 7, 3], "food caps at 20, saturation at the food level");
+  assert.equal(l.survival.effects.get(1).duration, 100);
+  applyPlayerDelta(l.survival, { health: -30, food: 0, saturation: 0, exhaustion: 0, add: [], remove: [1] });
+  assert.equal(l.survival.health, 0);
+  assert.equal(l.survival.died, true);
+  assert.equal(l.survival.effects.has(1), false);
+});
+
+test("the trace samples carry the body and a vitals-only change does not fill the snapshot list", async () => {
+  const { DimensionLive } = await import("./dimension-live.js");
+  const root = { ...base, id: "w3", player: {} };
+  let tick = 0, health = 20;
+  const host = { ticks: () => tick, chunks: () => [], dirty() {}, player: () => ({ x: 0, y: 70, z: 0 }), awayPlayer: () => ({ state: { health, food: 18, saturation: 2, exhaustion: 0.5, timer: tick, air: 300, time: tick, effects: [{ id: 1, duration: 500 - tick, amplifier: 0 }], slots: [] }, experience: {}, mode: 0, level: 0 }) };
+  const dims = new DimensionLive(host);
+  dims.away = { rootId: root.id, ticks0: 0, tripMs: 0, chunks: [], records: [], columns: [], trace: { samples: [], states: [] }, lastTrace: -20, traceKey: null };
+  for (let i = 0; i < 100; i++) { tick++; if (i === 40) health = 17; dims.traceAway(-1, { x: 0, y: 70, z: 0 }); }
+  const { samples, states } = dims.away.trace;
+  assert.equal(samples.length, 5);
+  assert.deepEqual(samples[0][5].slice(0, 4), [20, 18, 2, 0.5]);
+  assert.equal(samples[0][5][4][0].id, 1);
+  assert.equal(samples[4][5][0], 17);
+  assert.equal(states.length, 1, "health, timers and effect durations moved, but nothing the shadow reads from a snapshot");
+});
