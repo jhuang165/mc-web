@@ -1,0 +1,17 @@
+# netherload (batch 40)
+
+## Summary
+- Root cause found: it is a game bug, not a test-script problem. `VoxelScene.warmShaders` (called in `main.js` `launch` while the trip's "Downloading terrain" screen shows) awaited three's `renderer.compileAsync`. That function polls every collected material with `properties.get(material).currentProgram.isReady()` inside a `setTimeout`. The render loop keeps running during a trip, and `MobRenderer.update` / `DropRenderer.remove` dispose the per-entity materials of mobs and items that left the old view. A disposed material has no program, so the poll threw `Cannot read properties of undefined (reading 'isReady')` inside the timer and the promise never settled. `launch` waited forever, `dims.busy` stayed true, and the screen stayed up (the scripted trips waited 240 s).
+- Why it depended on a pig or portal edits: with nothing new to compile, all programs are ready at the first synchronous check and the promise resolves before any disposal. A pig (or item) in the old view adds materials/programs whose link is still pending, so polling spans the frames where the old mob materials are disposed. It is older than batch 39 (same `warmShaders` since the shader warm-up was added).
+- Evidence (artifacts `b40-netherload/run1-7.log`, `away.mjs`): stalled runs had meshes done (`trip:meshed` mark) but no `trip:shaders` mark; a page error `Cannot read properties of undefined (reading 'isReady')` was recorded; wrapping `material.dispose` showed `MobRenderer.update` and `DropRenderer.remove` disposing ShaderMaterials during the trip; a fresh `compileAsync` called afterwards resolved in 3 to 7 ms.
+- Fix: new `src/shader-warm.js` `compileReady(renderer, scene, camera)`: `renderer.compile` for the materials, own poll every 10 ms that drops a material with no program, never throws, gives up after 20 s. `scene.js` `warmShaders` uses it (3-line change). Native behaviour unchanged (the player still arrives after the transfer; this only affects the port's shader warm-up).
+
+## Verification
+- Focused: `shader-warm.test.js` 4 pass (ready at once, links later, disposed while polling does not hang or throw, timeout and throwing compile). Without the fix the disposal case is the hang (the old code path threw in a timer). Full suite and build left to the lead.
+- Browser (muted headless Chrome, port 5401, `artifacts/b40-netherload/away.mjs`, the batch 39 trip: lit Overworld portal, pig, item and orb standing in it, trip starts in the same turn): before the fix 7 of 8 runs stalled on "Downloading terrain" for the 60 s the script waited (the one that loaded had no new materials to compile). After the fix 5 of 5 loaded: total trip-to-idle 8214, 8240, 8281, 8423, 8553 ms, which includes a fixed 8 s wait in the script (so the load itself is under about 0.6 s); load average at those runs 4.9 to 7.3 (1-minute, read by the script). No stall, no page errors except a pre-existing 404 resource.
+- The unit test does not drive three itself; the browser loop is the end-to-end proof.
+
+## Follow-ups (proposed gap lines)
+- After the trip back, the scripted check saw `dupIds: 1` in the Nether mob list (one mob id twice) in all fixed runs; not investigated (outside the loading path, may be the delivered pig and a saved copy).
+- Playwright `browser.close()` hung in this headless setup after the script finished; `away.mjs` now exits explicitly.
+- The full away-portal trip check (batch 39 follow-up) can now run; this track only confirmed the Nether loads, not the away-delivery results.

@@ -1,4 +1,5 @@
 import { BEACON } from "./pyramid.js";
+import { compileReady } from "./shader-warm.js";
 import { END_PORTAL } from "./eye-of-ender.js"; // drawn by end-portal-renderer.js
 import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
 import { isChestShaped } from "./chest-blocks.js"; // chest, trapped chest and ender chest are drawn by chest-renderer.js
@@ -188,7 +189,7 @@ export class VoxelScene {
   // Compiles the programs of everything visible now (the End sky, portal layers ...) so the first frame does not link them. Programs
   // already built are cached, so a second call costs nothing. Resolves when done; never rejects.
   warmShaders() {
-    try { return Promise.resolve(this.renderer.compileAsync(this.scene, this.camera)).catch(() => {}); } catch { return Promise.resolve(); }
+    try { return compileReady(this.renderer, this.scene, this.camera); } catch { return Promise.resolve(); } // not renderer.compileAsync: it hangs when a mob's material is disposed meanwhile (shader-warm.js)
   }
   setWorld(world, { defer = false } = {}) {
     this.effects.clear();
