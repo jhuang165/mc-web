@@ -109,14 +109,14 @@ function fluidScene(perWrite) {
   const put = s.world.put.bind(s.world), external = s.rt.redstone.external.bind(s.rt.redstone);
   s.world.put = (...a) => { const r = put(...a); if (r) log.push(["put", a[0], a[1], a[2], a[3]]); return r; };
   s.rt.redstone.external = (...a) => { log.push(["external", a[0], a[1], a[2]]); return external(...a); };
-  if (perWrite) fluids.onWrite = (a, b, c, d, e) => s.rt.fluidChanges([[a, b, c, d, e]], true);
+  if (perWrite) fluids.writers.push((a, b, c, d, e) => s.rt.fluidChanges([[a, b, c, d, e]], true));
   fluids.schedule(x, y, z, 1);
   const observers = { farming() {}, fluids() { s.rt.flush(); }, fire() {}, step: perWrite ? undefined : (name, changes) => { if (name === "fluids") s.rt.fluidChanges(changes, true); } };
   for (let t = 1; t <= 14; t++) tickWorldSystems({ farming: { tick: () => [] }, fluids, fire: null, tickTree: s.tickTree, redstone: s.rt }, { time: t, daylight: 1, x, z }, observers);
   return { s, log, world: s.world.snapshot(), redstone: s.rt.save(), fluids: fluids.save() };
 }
 
-test("with fluids.onWrite redstone hears every write of a fluid run before the next write", () => {
+test("with fluids.writers redstone hears every write of a fluid run before the next write", () => {
   const a = fluidScene(true), writes = a.log.filter((e) => e[0] === "put" && (e[4] === 0 || e[4] === WATER || e[4] === 8 || e[4] === 9) );
   assert.ok(writes.length >= 3, "the water broke dust and spread");
   // Every put that replaced a redstone part is immediately followed by the engine's external() for that cell.

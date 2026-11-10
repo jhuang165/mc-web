@@ -355,6 +355,9 @@ export function attachTickTree({ fluids, fire, falling, redstone, foreign, now =
       else if (r.kind === 'foreign') foreignIds.set(r.e, id);
       else r.e.id = id;
     }
+    // Fluids write with world.put (no world.onChange): each write notifies the falling blocks around it, as the native setBlock does (a sand block over a plant
+    // that water replaces must start to fall).
+    if (fluids && falling && !fluids.writers.includes(falling.fluidWrite)) { falling.fluidWrite = (x, y, z, old, now) => falling.changed(x, y, z, old, now); fluids.writers.push(falling.fluidWrite); }
     if (fluids) fluids.ids = tree;
     if (fire) fire.ids = tree;
     if (falling) falling.ids = tree;
