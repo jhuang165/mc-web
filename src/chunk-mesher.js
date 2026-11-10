@@ -18,7 +18,8 @@ import { tileByName } from './block-textures.js';
 import { lilyPadCornerUv } from "./lily-pad.js";
 import { PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
-import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
+import { wireQuads, leverBaseBounds, leverHandleQuads, hookPlateBounds, hookQuads } from "./render-redstone.js";
+import { pistonQuads, isPistonBase, PISTON_HEAD, dispenserPistonBounds } from "./dispenser-piston.js";
 import { mhSin, mhCos, smoothFace, flatFace, lightEmission } from "./lighting.js";
 import { anaglyphFog } from "./post-shaders.js";
 import { meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js";
@@ -30,7 +31,7 @@ import { NETHER_FENCE, QUARTZ_BLOCK } from "./nether-blocks.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
 import { BED_DIR, bedTexture } from './bed.js';
-import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
+import { solidTopSurface, isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
 // 0.6 east/west, 0.8 north/south, 0.5 bottom, 1.0 top.
@@ -59,6 +60,7 @@ const turnUvs = (uvs, fi, r) => uvs.forEach((uv, i) => {
   const [s, t] = TURN[fi]((uv[0] - r.u0) / (r.u1 - r.u0), (r.v1 - uv[1]) / (r.v1 - r.v0));
   uvs[i] = [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
 });
+const flatTop = (fn, all = false) => Object.assign(fn, { flatTop: true, flatAll: all }); // a face-name function whose top face takes the flat lighting path
 export const hides = (b) => opaqueCube(b) && ((b !== 5 && b !== 71) || leavesOpaque());
 // Smooth Lighting: Off lights each face flat from one cell (renderStandardBlockWithColorMultiplier), Minimum
 // uses the full-cube ambient occlusion path for every block, Maximum switches to the interpolating partial
@@ -194,8 +196,11 @@ export class MeshMethods {
   // brightness with no face shading. Vertices follow the original order.
   torch(m, x, y, z, tileId = 20) {
     const meta = this.world.getMeta(x, y, z), light = this.light.packed(x, y, z), t = blockTile(tileId, 0),
-      tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16,
-      uv = (u, v) => [(tx + u) / W, 1 - (ty + v) / H];
+      tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16;
+    this.torchAt(m, x, y, z, meta, (u, v) => [(tx + u) / W, 1 - (ty + v) / H], light);
+  }
+  // The renderTorchAtAngle model at a (possibly fractional) base position; uv maps tile pixels to atlas fractions.
+  torchAt(m, x, y, z, meta, uv, light) {
     const lean = Math.fround(0.4), wall = 0.5 - lean, rise = Math.fround(0.2);
     let px = x, py = y, pz = z, dx = 0, dz = 0;
     if (meta === 1) [px, py, dx] = [x - wall, y + rise, -lean];
@@ -227,19 +232,21 @@ export class MeshMethods {
   // top, bottom and south faces, z on the west face, 1 - x north and 1 - z east (the mirrored
   // field_152631_f mapping, which for the centred fence post equals the plain one); v = z on the
   // top and bottom, 1 - y on the sides. A face on the cell boundary is skipped next to an opaque cube.
-  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0, renderAllFaces = false) {
+  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0, renderAllFaces = false, named = null, ownUv = false, rotTop = 0) {
     const w = this.world, L = this.light, lo = [x0, y0, z0], hi = [x1, y1, z1];
     FACES.forEach((f, fi) => {
       const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
+      if (typeof named === "function" && named(fi) === null) return; // a face the model never draws
       if (!renderAllFaces && (b === STONE_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
-      const r = tileRect(blockTile(b, fi, false, meta)),
+      const r = tileRect(named ? tileByName(typeof named === "function" ? named(fi) : named) : blockTile(b, fi, false, meta)),
         corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
-        st = (p) => [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi],
+        st = (p) => fi === 2 && rotTop ? [null, [p[2], 1 - p[0]], [1 - p[0], 1 - p[2]], [1 - p[2], p[0]]][rotTop] : ownUv ? [[z0 + z1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [x0 + x1 - p[0], 1 - p[1]]][fi] : [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi], // ownUv: renderFaceXPos / ZNeg run (min + max) - p, like the door's end caps (the stairs' locked bounds keep 1 - p)
         uvs = corners.map((p) => {
-          const [s, t] = st(p);
+          let [s, t] = st(p);
+          if (fi === 2 && named && named.topShift) { s += named.topShift[0]; t += named.topShift[1]; }
           return [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
         }),
-        s = shadeFace(L, x, y, z, fi, corners, boundary, partialBox(lo, hi));
+        s = named && named.flatTop && (fi === 2 || named.flatAll) ? flatFace(L, x, y, z, fi, corners, boundary) : shadeFace(L, x, y, z, fi, corners, boundary, partialBox(lo, hi)); // the diode's top is always flat; a lit repeater (light 9) takes the flat path on every face, like any emitting block
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
   }
@@ -314,11 +321,17 @@ export class MeshMethods {
   // RenderBlocks render type 16/17 (piston base/extension): rotated native quads from dispenser-piston.js,
   // flat cell brightness instead of per-vertex AO.
   piston(m,b,x,y,z) {
-    const meta=this.world.getMeta(x,y,z),light=this.light.packed(x,y,z);
-    for(const q of pistonQuads(b,meta)){
-      const r=tileRect(namedTile(q.icon));
-      m.quad(q.verts.map(v=>[x+v[0],y+v[1],z+v[2]]),q.verts.map(v=>[r.u0+(r.u1-r.u0)*v[3],r.v1-(r.v1-r.v0)*v[4]]),q.shade,light,true);
-    }
+    let last=0;const meta=this.world.getMeta(x,y,z),L=this.light,bounds=!b===PISTON_HEAD&&(meta&7)>5?[0,0,0,1,1,1]:dispenserPistonBounds(b,meta),partial=partialBox(bounds.slice(0,3),bounds.slice(3));
+    pistonQuads(b,meta).forEach((q,i)=>{
+      const r=tileRect(namedTile(q.icon)),uvs=q.verts.map(v=>[r.u0+(r.u1-r.u0)*v[3],r.v1-(r.v1-r.v0)*v[4]]),verts=q.verts.map(v=>[x+v[0],y+v[1],z+v[2]]);
+      if(i>5){m.quad(verts,uvs,q.shade,last);return;} // the head's arm quads are drawn directly (renderPistonExtension) with the Tessellator brightness the last face left
+      // The six faces go through renderStandardBlock (renderPistonBase / renderPistonExtension), so they take its per-face lighting.
+      const fi=[3,2,5,4,1,0][i],f=FACES[fi],axis=fi>>1,plane=q.verts[0][axis],boundary=plane<=0||plane>=1;
+      if(boundary&&hides(this.world.get(x+f.n[0],y+f.n[1],z+f.n[2])))return; // aji.a (shouldSideBeRendered): an opaque neighbour hides the face
+      const corners=q.verts.map(v=>[v[0],v[1],v[2]]),s=shadeFace(L,x,y,z,fi,corners,boundary,partial);
+      last=s.packed[3];
+      m.quad(verts,uvs,s.ao.map(a=>a*q.shade),s.packed);
+    });
   }
   // RenderBlocks render type 35: native four-piece metal silhouette, with the
   // metadata orientation and damaged top tile. BlockAnvil.shouldSideBeRendered
@@ -420,7 +433,7 @@ export class MeshMethods {
   redstone(m, b, x, y, z) {
     const w = this.world, meta = w.getMeta(x, y, z), light = this.light.packed(x, y, z);
     if (b === REDSTONE_WIRE) this.wire(m, x, y, z, light);
-    else if (b === STONE_PRESSURE_PLATE || b === WOODEN_PRESSURE_PLATE || b === STONE_BUTTON) this.box(m, b, x, y, z, redstoneBounds(b, meta), meta, true);
+    else if (b === STONE_PRESSURE_PLATE || b === WOODEN_PRESSURE_PLATE || b === STONE_BUTTON) this.box(m, b, x, y, z, redstoneBounds(b, meta), meta, false, null, true);
     else if (b === LEVER) this.lever(m, x, y, z, meta, light);
     else if (b === REPEATER) this.repeater(m, x, y, z, meta, light);
     else if (b === TRIPWIRE_HOOK) this.hook(m, x, y, z, meta, light);
@@ -435,56 +448,30 @@ export class MeshMethods {
     if (b === REDSTONE_TORCH || b === REDSTONE_TORCH_OFF) this.torch(m, x, y, z, b);
     else if (isCube2(b)) this.cube(m, b, x, y, z);
     else if (b === COMPARATOR || b === COMPARATOR_POWERED) this.comparator(m, b, x, y, z, meta, light);
-    else this.box(m, b, x, y, z, redstoneBounds2(b, meta), meta, b !== DAYLIGHT_SENSOR);
+    else this.box(m, b, x, y, z, redstoneBounds2(b, meta), meta, false, null, true);
   }
-  // BlockRedstoneComparator (render type 37): a 1/8 slab (top comparator_off/on, sides stone slab, bottom torch texture)
-  // with two rear torches and a front torch that is raised in subtract mode (metadata bit 2).
+  // RenderBlocks.renderBlockRedstoneComparator / the diode slab (render type 37): the same 1/8 slab as the repeater (comparator_off/on top, powered state
+  // from the block id), a front torch (lit in subtract mode, metadata bit 4, and 3/16 lower unless subtracting) and two rear torches 3/16 either side
+  // (lit when the block is powered or metadata bit 8 is set), all upright and 3/16 below the cell floor as in the native vertices.
   comparator(m, b, x, y, z, meta, light) {
-    this.box(m, b, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true);
-    const dir = meta & 3, subtract = (meta & 4) !== 0, lit = b === COMPARATOR_POWERED;
+    const powered = b === COMPARATOR_POWERED, lit = powered || (meta & 8) !== 0, subtract = (meta & 4) !== 0, dir = meta & 3;
+    this.box(m, b, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true, flatTop((fi) => (fi === 2 ? (lit ? "comparator_on" : "comparator_off") : fi === 3 ? null : "stone_slab_top"), powered), true, dir);
     const rotate = (side, back) => [dir === 1 ? -back : dir === 3 ? back : dir === 0 ? side : -side, dir === 0 ? back : dir === 2 ? -back : dir === 1 ? side : -side];
-    const torches = [[0, -0.3125, subtract, subtract ? 0.625 : 0.3125], [-0.25, 0.25, lit, 0.5], [0.25, 0.25, lit, 0.5]];
-    const r = 0.0625;
-    for (const [side, back, on, height] of torches) {
-      const t = tileRect(tileByName(on ? "redstone_torch_on" : "redstone_torch_off")), U = (p) => t.u0 + ((t.u1 - t.u0) * p) / 16, V = (p) => t.v1 - ((t.v1 - t.v0) * p) / 16;
-      const [ox, oz] = rotate(side, back), cx = x + 0.5 + ox, cz = z + 0.5 + oz, y0 = y + 0.125, y1 = y0 + height;
-      const sides = [[[-r, -r], [r, -r]], [[r, -r], [r, r]], [[r, r], [-r, r]], [[-r, r], [-r, -r]]];
-      for (const [[ax, az], [bx, bz]] of sides) m.quad([[cx + ax, y0, cz + az], [cx + bx, y0, cz + bz], [cx + bx, y1, cz + bz], [cx + ax, y1, cz + az]], [[U(7), V(16)], [U(9), V(16)], [U(9), V(16 - height * 16)], [U(7), V(16 - height * 16)]], 1, light, true);
-      m.quad([[cx - r, y1, cz + r], [cx + r, y1, cz + r], [cx + r, y1, cz - r], [cx - r, y1, cz - r]], [[U(7), V(8)], [U(9), V(8)], [U(9), V(6)], [U(7), V(6)]], 1, light, true);
+    for (const [side, back, on, drop] of [[0.1875, 0.25, lit, 0.1875], [-0.1875, 0.25, lit, 0.1875], [0, -0.3125, subtract, subtract ? 0.1875 : 0.375]]) {
+      const t = tileRect(tileByName(on ? "redstone_torch_on" : "redstone_torch_off")), [ox, oz] = rotate(side, back);
+      this.torchAt(m, x + ox, y - drop, z + oz, 0, (u, v) => [t.u0 + ((t.u1 - t.u0) * u) / 16, t.v1 - ((t.v1 - t.v0) * v) / 16], light);
     }
   }
+  // RenderBlocks.renderBlockRedstoneWire (render-redstone.js wireQuads): the cell's brightness, every quad drawn from one side.
   wire(m, x, y, z, light) {
-    const { w, e, n, s } = wireArms(this.world, x, y, z), climb = wireClimbs(this.world, x, y, z), tint = wireTint(0);
-    const lineX = (w || e) && !n && !s, lineZ = (n || s) && !w && !e, cross = !lineX && !lineZ;
-    const uOf = (r, p) => r.u0 + ((r.u1 - r.u0) * p) / 16, vOf = (r, p) => r.v1 - ((r.v1 - r.v0) * p) / 16;
-    const setTint = (c) => { const k = m.shade.length - 12; for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = c[0]; m.shade[k + i * 3 + 1] = c[1]; m.shade[k + i * 3 + 2] = c[2]; } };
-    const y0 = y + 0.015625, px = [0, 0, 16, 16];
-    let x0 = x, x1 = x + 1, z0 = z, z1 = z + 1;
-    if (cross) {
-      if (!w) { x0 += 0.3125; px[0] = 5; }
-      if (!e) { x1 -= 0.3125; px[2] = 11; }
-      if (!n) { z0 += 0.3125; px[1] = 5; }
-      if (!s) { z1 -= 0.3125; px[3] = 11; }
-    }
-    const names = cross ? ["redstone_dust_cross", "redstone_dust_cross_overlay"] : ["redstone_dust_line", "redstone_dust_line_overlay"];
-    names.forEach((name, k) => {
-      const r = tileRect(tileByName(name)), verts = [[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]],
-        pts = [[px[0], px[3]], [px[2], px[3]], [px[2], px[1]], [px[0], px[1]]];
-      m.quad(verts, pts.map(([u, v]) => (lineX ? [uOf(r, v), vOf(r, u)] : [uOf(r, u), vOf(r, v)])), 1, light, true);
-      setTint(k === 0 ? tint : [1, 1, 1]);
-    });
-    // Strips up the side of a normal cube that carries dust on top.
-    const top = y + 1.021875, q = 0.015625;
-    const strips = [[climb.w, x + q, null], [climb.e, x + 1 - q, null], [climb.n, null, z + q], [climb.s, null, z + 1 - q]];
-    for (const [on, sx, sz] of strips) {
-      if (!on) continue;
-      const verts = sx !== null ? [[sx, top, z + 1], [sx, y, z + 1], [sx, y, z], [sx, top, z]] : [[x, top, sz], [x, y, sz], [x + 1, y, sz], [x + 1, top, sz]];
-      ["redstone_dust_line", "redstone_dust_line_overlay"].forEach((name, k) => {
-        const r = tileRect(tileByName(name));
-        m.quad(verts, [[r.u0, r.v1], [r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1]], 1, light, true);
-        setTint(k === 0 ? tint : [1, 1, 1]);
-      });
-    }
+    for (const q of wireQuads(this.world, x, y, z)) this.nativeQuad(m, q, light, true);
+  }
+  // A render-redstone.js quad (icon fractions, v from the icon's top) into the mesher, with its own colour.
+  nativeQuad(m, q, light, raw = false) {
+    const r = tileRect(tileByName(q.icon)), packed = Array.isArray(light) ? light : light;
+    m.quad(q.verts, q.uv.map(([u, v]) => [r.u0 + (r.u1 - r.u0) * u, r.v1 - (r.v1 - r.v0) * v]), 1, packed);
+    const k = m.shade.length - 12;
+    for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = q.colour[0]; m.shade[k + i * 3 + 1] = q.colour[1]; m.shade[k + i * 3 + 2] = q.colour[2]; }
   }
   // Axis-aligned textured box with the whole tile on every face (shaded by direction).
   tbox(m, name, x, y, z, [x0, y0, z0, x1, y1, z1], light) {
@@ -517,38 +504,76 @@ export class MeshMethods {
     const p = [T([x0, y0, z0]), T([x1, y1, z1])];
     return [0, 1, 2].map((i) => Math.min(p[0][i], p[1][i])).concat([0, 1, 2].map((i) => Math.max(p[0][i], p[1][i])));
   }
-  // BlockLever (render type 12): a cobblestone base and a stick that leans one way off and the other on.
+  // RenderBlocks.renderBlockLever (render-redstone.js): a cobblestone-textured standard block in the lever's base bounds, then the handle's
+  // six quads, rotated about the base by the metadata and tilted by the thrown bit, at the cell's brightness.
   lever(m, x, y, z, meta, light) {
-    const T = this.leverFrame(meta, x, y, z), base = this.localBox(T, [0.25, 0, 0.25, 0.75, 0.1875, 0.75]), tilt = meta & 8 ? 0.25 : -0.25;
-    this.tbox(m, "cobblestone", 0, 0, 0, base, light);
-    this.stick(m, "lever", T([0.5, 0.1875, 0.5]), T([0.5 + tilt, 0.6875, 0.5]), 0.0625, light, [7, 6, 9, 16]);
+    this.box(m, LEVER, x, y, z, leverBaseBounds(meta), meta, false, "cobblestone", true);
+    for (const q of leverHandleQuads(x, y, z, meta, mhCos, mhSin)) this.nativeQuad(m, q, light);
   }
-  // BlockRedstoneRepeater (render type 15): a 1/8 slab with its top texture, and two torches (fixed and delay).
+  // RenderBlocks.renderBlockRedstoneDiode (render type 15): the 1/8 slab through renderStandardBlock (stone slab sides, the repeater_off/on top, the
+  // usual culling), then two upright torches 3/16 below the cell floor, the delay torch first and the fixed one 5/16 behind the centre (the
+  // probe's native vertices, render-types-2.test.js). The powered state comes from the scene's repeaterLit.
   repeater(m, x, y, z, meta, light) {
-    this.box(m, REPEATER, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true);
-    const dir = meta & 3, delay = (meta >> 2) & 3, val = [-0.0625, 0.0625, 0.1875, 0.3125][delay], r = 0.0625;
-    const t = tileRect(tileByName("redstone_torch_off")), U = (p) => t.u0 + ((t.u1 - t.u0) * p) / 16, V = (p) => t.v1 - ((t.v1 - t.v0) * p) / 16;
-    for (const d of [-0.3125, val]) {
-      const cx = x + 0.5 + (dir === 1 ? -d : dir === 3 ? d : 0), cz = z + 0.5 + (dir === 0 ? d : dir === 2 ? -d : 0), y0 = y + 0.125, y1 = y0 + 0.625;
-      const sides = [[[-r, -r], [r, -r]], [[r, -r], [r, r]], [[r, r], [-r, r]], [[-r, r], [-r, -r]]];
-      for (const [[ax, az], [bx, bz]] of sides) m.quad([[cx + ax, y0, cz + az], [cx + bx, y0, cz + bz], [cx + bx, y1, cz + bz], [cx + ax, y1, cz + az]], [[U(7), V(16)], [U(9), V(16)], [U(9), V(0)], [U(7), V(0)]], 1, light, true);
-      m.quad([[cx - r, y1, cz + r], [cx + r, y1, cz + r], [cx + r, y1, cz - r], [cx - r, y1, cz - r]], [[U(7), V(8)], [U(9), V(8)], [U(9), V(6)], [U(7), V(6)]], 1, light, true);
-    }
+    const lit = this.repeaterOn(x, y, z), top = lit ? "repeater_on" : "repeater_off", dir = meta & 3,
+      delay = [-0.0625, 0.0625, 0.1875, 0.3125][(meta >> 2) & 3];
+    this.box(m, REPEATER, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true, flatTop((fi) => (fi === 2 ? top : fi === 3 ? null : "stone_slab_top"), lit), true, dir);
+    if (!this.diodeLocked(x, y, z, dir)) return this.diodeTorches(m, x, y, z, meta, delay, -0.3125, lit, light, true);
+    // A side-locked repeater draws a bedrock bar (3/4 wide, 1/8 thick, from 1/8 to 1/4 up) where the delay torch would stand.
+    const c = 0.5 + (dir === 0 || dir === 3 ? delay : -delay), bar = dir & 1 ? [c - 0.0625, 0.125, 0.125, c + 0.0625, 0.25, 0.875] : [0.125, 0.125, c - 0.0625, 0.875, 0.25, c + 0.0625];
+    const barNamed = flatTop((fi) => (fi === 3 ? null : "bedrock"), lit);
+    barNamed.topShift = dir & 1 ? [0.5 - c, 0] : [0, 0.5 - c]; // the bar's top texture is centred on the bar (native dir 2; the other facings are mirrored guesses)
+    this.box(m, REPEATER, x, y, z, bar, 0, true, barNamed, true);
+    this.diodeTorches(m, x, y, z, meta, delay, -0.3125, lit, light, false);
   }
-  // BlockTripWireHook: a plank plate on its wall and the hook sprite.
+  // BlockRedstoneDiode locking (bytecode-read): a powered repeater or comparator beside it that faces into it, on either side of its axis.
+  diodeLocked(x, y, z, dir) {
+    const side = (nx, nz, face) => {
+      const b = this.world.get(nx, y, nz), d = this.world.getMeta(nx, y, nz) & 3;
+      return (b === REPEATER && this.repeaterOn(nx, y, nz) || b === COMPARATOR_POWERED) && [3, 4, 2, 5][d] === face;
+    };
+    return dir & 1 ? side(x, z + 1, 3) || side(x, z - 1, 2) : side(x - 1, z, 4) || side(x + 1, z, 5);
+  }
+  repeaterOn(x, y, z) {
+    const r = this.repeaterLit;
+    return typeof r === "function" ? !!r(x, y, z) : !!(r && r.get(`${x},${y},${z}`));
+  }
+  // Two upright diode torches at offsets d0 (the delay torch) and d1 along the facing, 3/16 below the cell floor.
+  diodeTorches(m, x, y, z, meta, d0, d1, lit, light, delayTorch = true) {
+    const r = tileRect(tileByName(lit ? "redstone_torch_on" : "redstone_torch_off")), dir = meta & 3,
+      uv = (u, v) => [r.u0 + ((r.u1 - r.u0) * u) / 16, r.v1 - ((r.v1 - r.v0) * v) / 16];
+    for (const d of delayTorch ? [d0, d1] : [d1]) this.torchAt(m, x + (dir === 1 ? -d : dir === 3 ? d : 0), y - 0.1875, z + (dir === 0 ? d : dir === 2 ? -d : 0), 0, uv, light);
+  }
+  // RenderBlocks.renderBlockTripWireSource (render-redstone.js hookQuads): a planks-textured plate through renderStandardBlock, the two rotated arm
+  // boxes and, on an attached hook, the two wire strips, all at the cell's brightness.
   hook(m, x, y, z, meta, light) {
-    const T = this.leverFrame([3, 2, 4, 1][meta & 3], x, y, z), plate = this.localBox(T, [0.375, 0, 0.3125, 0.625, 0.125, 0.6875]);
-    this.tbox(m, "planks_oak", 0, 0, 0, plate, light);
-    const r = tileRect(tileByName("trip_wire_source"));
-    m.quad([[0.2, 0.125, 0.5], [0.8, 0.125, 0.5], [0.8, 0.6875, 0.5], [0.2, 0.6875, 0.5]].map((p) => T(p)), [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]], 1, light, true);
+    this.box(m, TRIPWIRE_HOOK, x, y, z, hookPlateBounds(meta & 3), meta, false, "planks_oak", true);
+    for (const q of hookQuads(x, y, z, meta, !solidTopSurface(this.world, x, y - 1, z), mhCos, mhSin)) this.nativeQuad(m, q, light);
   }
-  // BlockTripWire (render type 30): a thin strip along the axis its neighbours (tripwire or hook) lie on.
+  // RenderBlocks.renderBlockTripWire (render type 30): a 1/32 thick strip 1.5/16 above the floor (3.5/16 when disarmed, metadata bit 2) in the cell's
+  // brightness, drawn from the cell edge to the centre in quarter-block pieces for every side with a connection (BlockTripWire.func_150139_a: a tripwire
+  // of the same disarmed bit, or a hook facing back), both faces; with no connection it runs north-south. The texture's rows 0-2 show a loose wire, 2-4 an
+  // attached one (metadata bit 4). The z pieces are the probe's native quads (render-types-2.test.js); the x pieces are bytecode-read, not probed.
   tripwire(m, x, y, z, meta, light) {
-    const w = this.world, linked = (px, pz) => { const q = w.get(px, y, pz); return q === TRIPWIRE || q === TRIPWIRE_HOOK; };
-    const alongX = linked(x - 1, z) || linked(x + 1, z), h = y + (meta & 2 ? 0.1 : 0.0625), r = tileRect(tileByName("trip_wire"));
-    const a = 0.4375, b = 0.5625;
-    const verts = alongX ? [[x, h, z + a], [x + 1, h, z + a], [x + 1, h, z + b], [x, h, z + b]] : [[x + a, h, z], [x + b, h, z], [x + b, h, z + 1], [x + a, h, z + 1]];
-    m.quad(verts, [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]], 1, light, true);
+    const w = this.world, r = tileRect(tileByName("trip_wire")), attached = (meta & 4) !== 0, disarmed = (meta & 2) !== 0,
+      v0 = r.v1 - ((r.v1 - r.v0) * (attached ? 2 : 0)) / 16, v1 = r.v1 - ((r.v1 - r.v0) * (attached ? 4 : 2)) / 16, h = y + (disarmed ? 3.5 : 1.5) / 16,
+      OX = [0, -1, 0, 1], OZ = [1, 0, -1, 0], connected = (dir) => {
+        const nx = x + OX[dir], nz = z + OZ[dir], b = w.get(nx, y, nz), nm = w.getMeta(nx, y, nz);
+        if (b === TRIPWIRE_HOOK) return (nm & 3) === [2, 3, 0, 1][dir];
+        return b === TRIPWIRE && (nm & 2) === (meta & 2);
+      };
+    let north = connected(2), south = connected(0), west = connected(1), east = connected(3);
+    if (!north && !south && !west && !east) north = south = true;
+    const f2 = 0.5 - 0.03125 / 2, f3 = f2 + 0.03125, piece = (verts) => {
+      const uv = [[r.u0, v0], [r.u0, v1], [r.u1, v1], [r.u1, v0]];
+      m.quad(verts, uv, 1, light);
+      m.quad([verts[3], verts[2], verts[1], verts[0]], [uv[3], uv[2], uv[1], uv[0]], 1, light);
+    };
+    const zPiece = (za, zb) => piece([[x + f2, h, z + za], [x + f3, h, z + za], [x + f3, h, z + zb], [x + f2, h, z + zb]]),
+      xPiece = (xa, xb) => piece([[x + xa, h, z + f3], [x + xa, h, z + f2], [x + xb, h, z + f2], [x + xb, h, z + f3]]);
+    if (north) { zPiece(0.25, 0); zPiece(0.5, 0.25); }
+    if (south) { zPiece(0.75, 0.5); zPiece(1, 0.75); }
+    if (west) { xPiece(0.25, 0); xPiece(0.5, 0.25); }
+    if (east) { xPiece(0.75, 0.5); xPiece(1, 0.75); }
   }
   vine(m,x,y,z) {
     const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;
@@ -750,6 +775,7 @@ export class ChunkMesher extends MeshMethods {
   get colorX() { return this.src.colorX; }
   get colorZ() { return this.src.colorZ; }
   get litFurnaces() { return this.src.litFurnaces; }
+  get repeaterLit() { return this.src.repeaterLit; }
 }
 export const MESH_METHODS = Object.getOwnPropertyNames(MeshMethods.prototype).filter((n) => n !== "constructor");
 
