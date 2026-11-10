@@ -1017,6 +1017,7 @@ export class Brain {
       // EntityCow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent 4, sheep eat grass 5, wander, watch the
       // player (6 blocks), look idle. EntityPig (wo): swim 0, panic 1, controlled by player 2, mate 3, tempt 4 (carrot on a
       // stick) and 4 (carrot), follow parent 5, wander 6, watch 7, look idle 8 (pig-saddle.js).
+      if (e.type === "chicken" && ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e); // the chicken's Entity.rand drives its tasks (village-fight-b36 records)
       this.navigator.setAvoidsWater(true);
       if (e.type === "pig") {
         this.control = new ControlledByPlayer(this);
@@ -1128,9 +1129,10 @@ export class Brain {
   }
   // EntitySkeleton.setCombatTask (yl.bZ): removes the bow and the melee task, then adds the one for the held item (priority 4, so last in the list as natively).
   // The held-slot bow (id 261) decides; it is re-read here instead of at each equipment write, so a swap takes effect at the skeleton's next AI tick.
-  syncCombatTask() {
+  // `reset` is a held-slot write (EntitySkeleton.setCurrentItemOrArmor(0)): setCombatTask removes both attack tasks (resetting a running one) and adds the fresh choice even when the item is a sword for a sword.
+  syncCombatTask(reset = false) {
     const bow = this.e.equipment?.[0]?.id === 261;
-    if (this.combatTask && this.combatBow === bow) return;
+    if (this.combatTask && this.combatBow === bow && !reset) return;
     if (this.combatTask) this.tasks.remove(this.combatTask);
     this.combatBow = bow;
     // EntitySkeleton keeps its aiArrowAttack and aiAttackOnCollide as fields built once: a swap back reuses the old object with its timers and last target position

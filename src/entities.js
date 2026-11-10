@@ -682,7 +682,8 @@ export function mobHitAmount(e) {
   if (e.type === "slime") return slimeDamage(e.size);
   if (e.type === "magma_cube") return magmaDamage(e.size);
   if (FIXED_ATTACK.has(e.type)) return ENTITY_TYPES[e.type].damage;
-  return attackDamage(e, ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0);
+  const worn = e.attackEquipment ?? e.equipment; // the attribute map's view (EntityLivingBase.onUpdate syncs it each update)
+  return attackDamage(e, ENTITY_TYPES[e.type].damage, worn ? attackBonus(worn) : 0);
 }
 // The player's attackDamage attribute with the held item's modifier (1 bare-handed): swords
 // 5 + tier (gold 5), axes 4, pickaxes 3 and shovels 2 + tier, only for an item actually held.
@@ -1070,8 +1071,10 @@ export class EntityWorld {
     // zombie gets no setLocationAndAngles, so that is its heading (the mob's other yaw fields stay 0). Unseedable natively; a replay overrides it from the record in entitySeed.
     if (kind === "reinforce") { const yaw = Math.fround(Math.random() * 3.1415927410125732 * 2.0); e.rotationYaw = e.rotationYawHead = yaw; e.yaw = (-yaw * Math.PI) / 180; }
     this.entitySeed?.(e, kind); // replay hook (village-fight-replay.js): the new mob's Entity.rand
-    this.onSpawnWithEgg(e);
+    // SpawnerAnimals and EntityZombie.attackEntityFrom call World.spawnEntityInWorld before onSpawnWithEgg, so a rider's mount (a chicken jockey's chicken, a spider jockey's skeleton)
+    // joins the list after it and updates after it.
     this.entities.push(e);
+    this.onSpawnWithEgg(e);
     return e;
   }
   // EntityLiving.onLivingUpdate's pickup loop (gamerule mobGriefing) for each live equipment mob with canPickUpLoot:
@@ -1084,11 +1087,12 @@ export class EntityWorld {
     if (!items?.items?.length || !gameRule("mobGriefing")) return;
     if (!e.canPickUpLoot || !(e.health > 0) || !GEAR_TYPES.has(e.type)) return;
     const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
+    const held = e.equipment?.[0];
     for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
       const live = toLiveStack(stack);
       if (live) this.events.push({ drop: live.id, count: 1, ...(live.damage ? { damage: live.damage } : {}), ...(live.enchantments ? { enchantments: live.enchantments } : {}), position: { x: e.x, y: e.y, z: e.z } });
     }
-    this.ai.brains?.get?.(e)?.syncCombatTask?.();
+    this.ai.brains?.get?.(e)?.syncCombatTask?.(e.equipment?.[0] !== held); // setCurrentItemOrArmor(0) re-runs setCombatTask even for another sword
   }
   // The rolled equipment, drop chances and pickup flag of a spawn (mob-equipment.js); the stacks are native.
   applyGear(e, r) {
@@ -1134,7 +1138,8 @@ export class EntityWorld {
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
-      if (r.child && !opts.ghost) this.chickenJockeyRolls(e, r);
+      // A zombie World.spawnEntityInWorld refused (`ghost`, an unloaded chunk) still runs the whole child roll: a chicken found is flagged and carries it, a new one is built and rolled but not spawned.
+      if (r.child) this.chickenJockeyRolls(e, r, !!opts.ghost);
       // The rolls as saved AttributeModifiers (mob-attributes.js, probed in interchange-reference.json); the leader's max-health bonus is one of them.
       e.modifiers = cleanModifiers(r.modifiers);
       if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
@@ -1199,17 +1204,19 @@ export class EntityWorld {
   }
   // EntityZombie.onSpawnWithEgg for a child: `r` holds the rolls already drawn (zombieSpawnRolls). A chicken found is made a
   // jockey and mounted; a new one is created at the zombie's place and yaw, rolled, flagged, spawned and mounted.
-  chickenJockeyRolls(zombie, r) {
+  chickenJockeyRolls(zombie, r, ghost = false) {
     const heightOf = (m) => this.size(m)[1];
+    if (ghost) zombie.unspawned = true; // never in the world list, never dead: the mount keeps it as its rider (World.updateEntityWithOptionalForce only frees a dead rider)
     if (r.nearbyChicken) {
       const c = freeChickenNear(zombie, this.entities, (o) => this.size(o));
       if (c) { c.chickenJockey = true; mountEntity(zombie, c, heightOf); }
     } else if (r.newChicken) {
       const c = this.create("chicken", zombie.x, zombie.y, zombie.z);
       setLocationAndAngles(c, zombie.x, zombie.y, zombie.z, zombie.rotationYaw ?? 0, 0);
+      if (!ghost) this.entitySeed?.(c, "jockey-chicken"); // replay hook: the new chicken's Entity.rand
       this.onSpawnWithEgg(c);
       c.chickenJockey = true;
-      this.entities.push(c);
+      if (!ghost) this.entities.push(c); // World.spawnEntityInWorld (ahb.d) refuses it in a chunk that is not loaded, yet the zombie still mounts it
       mountEntity(zombie, c, heightOf);
     }
   }
@@ -1865,17 +1872,21 @@ export class EntityWorld {
     if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     releaseDead(this.entities);
-    const riders = [], peacefulGone = [];
+    const peacefulGone = [];
+    // Entity.updateRidden ends with updateRiderPosition: the seat is taken right after the rider's own update, before the next mob of the list moves (b36 records: a mob after the mount pushes the rider at its new seat).
+    let rider = null;
+    const seat = () => { if (rider?.ridingEntity) endRidden(rider, (m) => this.size(m)[1]); rider = null; };
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     const order = this.tickOrder = ridingOrder(this.entities.slice());
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     for (const e of order) {
+      seat();
       if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
-      if (e.ridingEntity) { riders.push(e); beginRidden(e); }
+      if (e.ridingEntity) { rider = e; beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
@@ -1958,6 +1969,9 @@ export class EntityWorld {
           light = this.ai.brightness(bx, by, bz);
         if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
       }
+      // EntityLivingBase.onUpdate's equipment block (before onLivingUpdate, so before the AI): when a slot differs from the last update's, the old stack's attribute modifiers leave the
+      // attribute map and the new one's join it. A sword given after a mob's own update (loot pickup, another mob's hit) therefore adds its damage from the NEXT update (b36 records).
+      if (e.equipment) e.attackEquipment = e.equipment.map((s) => (s ? { id: s.id } : null));
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
@@ -1985,7 +1999,7 @@ export class EntityWorld {
     }
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
-    for (const e of riders) if (e.ridingEntity) endRidden(e, (m) => this.size(m)[1]);
+    seat();
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).
@@ -2508,10 +2522,10 @@ export class EntityWorld {
     if (!e.onGround && e.vy < 0) e.vy *= 0.6;
     e.wingRotation = f(e.wingRotation + f(e.wingRotDelta * 2));
     if (e.growingAge >= 0 && !e.chickenJockey && --e.eggTimer <= 0) {
-      const r = this.random, pitch = f(f(f(r() - r()) * f(0.2)) + 1);
+      const rand = entityRandom(e), pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1); // EntityChicken draws on its own Entity.rand: two floats for the pitch, then nextInt(6000)
       this.events.push({ sound: "mob.chicken.plop", volume: 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
       this.events.push({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
-      e.eggTimer = Math.floor(r() * 6000) + 6000;
+      e.eggTimer = rand.nextInt(6000) + 6000;
     }
   }
   // EntityWolf.onUpdate and onLivingUpdate's wet shake (wolf.js updateWolf), then its effects: the shake sound
