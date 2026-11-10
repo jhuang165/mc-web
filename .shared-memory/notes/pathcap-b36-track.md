@@ -1,0 +1,14 @@
+# pathcap (batch 36): exact path search without the 30000 point cap
+
+## Summary
+- `src/pathfinding.js`: the PathFinder is cheaper with identical results. (1) A per-search page cache of `getVerticalOffset` (16x16x16 Int8 pages on a page table centred on the target, pages pooled; nothing the cell test reads changes during one search). A flat typed array over the whole box was rejected: a range-156 sphere is 30M cells. (2) PathPoints come from a module level pool and an open addressing hash table keyed by `makeHash` alone (same collision behaviour as the original IntHashMap, which also looks up by hash only); the returned PathEntity holds copies. (3) No array allocation per expansion. The heap (`Path`) is unchanged.
+- Cap: `LIVE_NODE_CAP` = 250000 expanded points (was 30000), `getPathNodeCap` exported. Largest follow range found: zombie/pigman 40 x (1 + gauss*0.05) x (1 + d0), d0 up to 1.5*1.5, so about 156; its flat sealed flood is about 55000 expanded points in a synthetic arena, so no realistic native search reaches the cap. Remaining deviation (documented in `public/research/pathfinding.md`): a flood beyond 250000 expanded points is truncated.
+- Speed (Node, load average about 6, best of 6; `artifacts/b36-pathcap/bench.mjs`, sealed target, zombie 30 away, typed-array world): flat 27582 expanded 8.9 ms (before 9.7-11.4), 34725 10.2 ms, 42460 11.2 ms (before 14.5-17.5), 54680 15 ms (before 18.5-19.8); hills 28938 13 ms, 45255 17 ms (before 23), 59714 26 ms (before 30-34). On the Map-keyed replay world (slow `get`, `replay-bench.mjs`): b35 range-100 flood 30686 expanded 30 ms -> 15 ms; tower 28167 expanded 52 ms -> 26 ms. With a cheap `get` the gain is modest (about 20-30%); the cache matters when `get` is costly. Not measured on the live chunk-backed World.
+- Tests: new range-100 sealed-target test replays b35-follow100-sealed-d3 with the live cap restored on every finder and compares each search's point count and outcome with the native record (max 31191 points); new pooled-point independence test.
+
+## Verification
+- Focused: `src/pathfinding.test.js` 8 pass; `src/ai.test.js` + `src/village-fight-b3*.test.js` (b31-b35) 98 pass before the cap edit, `ai` + b34 + b35 re-run after: pass. Full `npm test` and `npm run build` left to the lead. No browser check (no rendering change).
+
+## Follow-ups (proposed gap lines)
+- A range-100+ search still costs 15-30 ms (one to two frames) in one call. Options, not built: (a) amortise by running the search in a Worker over a world snapshot (needs a block snapshot of the sphere; the answer arrives some ticks late, which changes AI timing); (b) a deterministic time-sliced A* resumed over several ticks, which also delays the path; (c) rely on the per-tick budget of 8 searches and accept a hitch; (d) a typed-array heap (struct of arrays) for another 10-20% (not tried).
+- Live-world cost of `get` for a range-156 flood not measured.
