@@ -144,19 +144,13 @@ test("render types other than 0: mesher vertices equal RenderBlocks' Tessellator
   // Types not listed here (wire, lever, repeater, comparator, pistons, tripwire, hook, plates,
   // daylight sensor and more) must match the native vertices exactly.
   const KNOWN = {
-    "107:21": [3456, 9360, 5040], // fence gate: only the closed shape is close, open and wall variants differ
-    "139:32": [468, 0, 24], // cobblestone wall: post/arm uv rows
     "118:24": [660, 540, 4740], // cauldron: inner walls and water plane not ported
     "154:38": [4356, 0, 1260], // hopper: funnel parts
-    "145:35": [3972, 0, 0], // anvil: light only on some vertices
     "140:33": [2980, 2520, 1908], // flower pot: plant contents
     "127:28": [0, 864, 0], // cocoa: not ported
     "104:19": [0, 432, 432], "105:19": [0, 432, 432], // stems: position/uv
-    "120:26": [466, 924, 900], // end portal frame: eye and frame boxes
     "117:25": [1352, 1296, 624], // brewing stand
-    "122:27": [576, 0, 0], // dragon egg: light only
     "51:3": [0, 120, 24], // fire: side flames
-    "77:0": [1060, 0, 0], "143:0": [632, 0, 0], // buttons: one-vertex AO weighting on the thin face at AO 1/2
   };
   assert.ok(Object.keys(stats).length > 25);
   for (const [key, s] of Object.entries(stats)) {
