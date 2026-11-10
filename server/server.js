@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
-import { PROTOCOL } from '../src/multiplayer/protocol.js';
+import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
@@ -135,7 +135,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     ws.send(JSON.stringify(message));
   };
-  const broadcast = message => { for (const ws of sockets.values()) send(ws, message); };
+  // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
+  const broadcast = message => { let plain; for (const ws of sockets.values()) send(ws, ws.chunks || !message.chunks ? message : (plain ??= expandChunks(message))); };
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
     let pathname;
@@ -173,7 +174,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
             old.replaced = true; old.close(1008, 'You logged in from another location');
           }
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
-          joined = true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
+          joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(), self: simulation.savePlayer(simulation.players.get(id)) });
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;

@@ -1,5 +1,6 @@
 import { World, BLOCKS } from '../world.js';
-import { PROTOCOL, serverUrl, decodeColumn, chunkPacketCells } from './protocol.js';
+import { PROTOCOL, serverUrl, decodeColumn, expandChunks } from './protocol.js';
+export { expandChunks };
 
 export function restoreReplica(snapshot) {
   const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion);
@@ -13,12 +14,6 @@ export function restoreReplica(snapshot) {
   return world;
 }
 
-// S21 equivalents (`chunks`) become the cells of their changed sections, applied after the ordinary cells of the same tick.
-export function expandChunks(message) {
-  if (!message.chunks?.length) return message;
-  return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined };
-}
-
 export class DedicatedClient {
   constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {} } = {}) {
     Object.assign(this, { onTick, onChat, onBlocks, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
@@ -30,7 +25,7 @@ export class DedicatedClient {
     return new Promise((resolve, reject) => {
       let welcomed = false;
       const timeout = setTimeout(() => { reject(new Error('Server did not respond. Check that Tailscale is connected.')); this.close(); }, 15000);
-      ws.onopen = () => this.send({ type: 'join', protocol: PROTOCOL, session });
+      ws.onopen = () => this.send({ type: 'join', protocol: PROTOCOL, chunks: true, session });
       ws.onmessage = event => {
         try {
           const message = JSON.parse(event.data);

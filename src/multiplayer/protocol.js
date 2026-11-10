@@ -1,7 +1,9 @@
-// Browser protocol v3 (v2: account sessions replace the shared join key; v3: ticks may carry whole-chunk resends, see splitChanges).
+// Browser protocol v2 (v2: account sessions replace the shared join key). A client that joins with `chunks: true` may get whole-chunk resends
+// (`chunks`, see splitChanges); any other client gets those cells as plain `changes` (expandChunks), so older v2 clients keep working.
+// The number stays 2: the guns branch uses 3 for its own wire format, and equal numbers must mean the same format.
 // These are port-state messages, not Java Edition packets.
 // See public/research/multiplayer.md for the deliberate wire-format decision.
-export const PROTOCOL = 3;
+export const PROTOCOL = 2;
 export const DEFAULT_SERVER = 'wss://ledoge0.tail92abaf.ts.net/multiplayer';
 export const IDLE_INPUT = Object.freeze({ forward: 0, strafe: 0, jump: false, sneak: false, sprint: false });
 export const validName = name => typeof name === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(name);
@@ -95,4 +97,9 @@ export function chunkPacketCells(packet) {
     cells.push([packet.x * 16 + xi, y, packet.z * 16 + zi, column.blocks[i], column.meta[i]]);
   }
   return cells;
+}
+// A tick with `chunks` back to plain cells (for a client that did not ask for chunk resends, and inside the client that did).
+export function expandChunks(message) {
+  if (!message.chunks?.length) return message;
+  return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined };
 }

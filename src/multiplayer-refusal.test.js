@@ -120,3 +120,27 @@ test('a dedicated tick with 64 changes in one chunk sends the chunk packet and t
   assert.equal(small.chunks, undefined);
   assert.equal(small.changes.length, 63);
 });
+
+test('chunk resends go only to clients that joined with chunks: true; an older protocol 2 client gets the same cells as changes', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'mc-web-chunks-'));
+  const simulation = new DedicatedSimulation({ seed: 'chunk-optin', biome: 'java', generationVersion: 9 });
+  const app = await createDedicatedServer({ port: 0, token, dataFile: path.join(dir, 'world.json'), simulation, tickMs: 10, saveMs: 60000 });
+  t.after(async () => { await app.close(); await rm(dir, { recursive: true, force: true }); });
+  const connect = async (name, extra) => {
+    const { session } = await app.accounts.register({ invite: token, name, password: 'correct horse' }, token);
+    const ws = new WebSocket(`ws://127.0.0.1:${app.port}/multiplayer`, { origin }), next = inbox(ws);
+    await once(ws, 'open');
+    ws.send(JSON.stringify({ type: 'join', protocol: PROTOCOL, session, ...extra }));
+    await next(m => m.type === 'welcome');
+    return { ws, next };
+  };
+  const modern = await connect('Modern', { chunks: true }), legacy = await connect('Legacy', {});
+  for (let i = 0; i < 64; i++) simulation.world.put(i % 16, 100 + (i >> 4), 3, 3, 0);
+  const a = await modern.next(m => m.type === 'tick' && m.chunks?.length);
+  const b = await legacy.next(m => m.type === 'tick' && m.tick === a.tick);
+  assert.equal(b.chunks, undefined);
+  const key = c => c.join();
+  assert.deepEqual(b.changes.map(key).sort(), expandChunks(a).changes.map(key).sort());
+  assert.ok(b.changes.some(c => c[0] === 5 && c[1] === 101 && c[2] === 3 && c[3] === 3));
+  modern.ws.close(); legacy.ws.close();
+});
