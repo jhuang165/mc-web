@@ -96,7 +96,7 @@ Not exact (pinned in `KNOWN` in the test, they may only improve):
 
 Findings fixed from the records: doors always draw all six faces with flat light and the end-cap uv `(min + max) - p`; fences with no connection still draw the x bars; log, hay and quartz side uvs turn per face in uv space; fluid layers sample their own texture (raw uv), draw the sides twice, read brightness without emission and treat only `Material.isSolid` neighbours as solid for corner heights (`fluids.js` `materialSolid`, list from the native `materialSolid` output); pumpkin and workbench faces were mirrored; stained glass next to a different colour always draws the face; single slab sides cull only by an opaque cube or a same-half single slab, top and bottom never; cake bottom culls by its bounds; stairs use `renderAllFaces` false. All six culling neighbourhoods of batch 36 now match, so `CULLING_KNOWN` in `light-float.test.js` is empty.
 
-Not done: the slab "light 0 re-queries the cell below" rule in `aji.c(ahl,x,y,z)`.
+Done in batch 40: the slab "light 0 re-queries the cell below" rule in `aji.c(ahl,x,y,z)` (see "Batch 40 slab light" below).
 
 ## Batch 38 panes
 
@@ -149,3 +149,9 @@ Native rules found: the hopper bowl, funnel and spout draw every face and the fu
 Bytecode-read only (not executed in the record): the flower pot plant. The probe's tile entity map does not resolve, so every pot record has the pot, walls and soil but no plant; the plant (crossed squares at 0.75 scale raised 0.25, cactus boxes, fern grass tint) follows `func_147752_a` and is unverified vertex by vertex. Connected (bent) stems have no fixtures (the probe's stems are all meta-age disconnected), so `stemBig` is bytecode-read. Cocoa ages and facings, cauldron levels and brewing bottle bits are all executed.
 
 Fire change outside the mesher: `FIRE_INFO` gained 53/85/125/126/134/135/136's build ids (stairs, fence, slabs) with the native 5/20, so fire now also spreads and catches on them; `fire.test.js` pins the new keys.
+
+## Batch 40 slab light
+
+`Block.getMixedBrightnessForBlock` (`aji.c(ahl,x,y,z)`, bytecode-read): the brightness of the cell is `getLightBrightnessForSkyBlocks(x,y,z, block.getLightValue())`; if that is 0 and the block in the cell is a `BlockSlab` (`alj`: stone, sandstone and wood single slabs and both double blocks), it answers the same call for the cell below (`y-1`, that cell's own block and lightValue, no second slab test). `lighting.js` `LightVolume.packed` and `mesh-region.js` `RegionLight.packed` now do this (`cellPacked` plus `isSlabBlock`, port ids 102, 103, 82, 165, 166). `away-light.js` is unchanged on purpose: it answers `World.getBlockLightValue` for mobs, which has its own neighbour max and no slab rule.
+
+Evidence: `tools/probes/SlabLightProbe.java` + `tools/verify-slab-light.mjs` run the unchanged `blm.b` over 408 neighbourhoods (slabs, stairs, farmland, soul sand, snow layers, fences, plants under opaque cubes, beside torches and glowstone, in dark cells, at an edge) at AO 0/1/2 and write `slab-light-reference.json` (30924 vertices); `src/slab-light.test.js` replays them: every compared vertex (position, colour bytes, light) matches, and 3 further checks prove the fixtures reach the rule (without it the mesher differs). The same replay found a culling gap: sandstone and wood single slabs did not use the single-slab `shouldSideBeRendered` rule (only stone did); fixed in `chunk-mesher.js` `slabCulled`.

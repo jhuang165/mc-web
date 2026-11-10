@@ -48,9 +48,10 @@ export const FACES = [
 // Fancy graphics: leaves are not opaque at render time, so faces next to them draw; Fast makes both leaf
 // blocks opaque (BlockLeaves.setGraphicsLevel), so faces between and against leaves are culled.
 // BlockSlab.shouldSideBeRendered (single slab; bytecode-read and replayed in render-types.test.js): the side faces follow aji.a (hidden by an
-// opaque cube) and are also dropped against a single slab of the same half; the top and bottom faces are never dropped.
+// opaque cube) and are also dropped against a single slab of the same half (any of the stone, sandstone and wood single slabs: BlockSlab.func_150003_a
+// is every single slab block, batch 40 slab light); the top and bottom faces are never dropped.
 const slabCulled = (w, b, meta, x, y, z, fi, f, boundary) => {
-  const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2], nb = w.get(nx, ny, nz), single = nb === STONE_SLAB || nb === WOOD_SLAB, nbTop = single && (w.getMeta(nx, ny, nz) & 8) !== 0, top = (meta & 8) !== 0;
+  const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2], nb = w.get(nx, ny, nz), single = nb === STONE_SLAB || nb === WOOD_SLAB || nb === SANDSTONE_SLAB, nbTop = single && (w.getMeta(nx, ny, nz) & 8) !== 0, top = (meta & 8) !== 0;
   if (fi === 2 || fi === 3) return false; // the top and bottom: a single slab is not an opaque cube, so either the aji.a test or the same-half test passes
   return (boundary && hides(nb)) || (single && nbTop === top);
 };
@@ -241,7 +242,7 @@ export class MeshMethods {
     FACES.forEach((f, fi) => {
       const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
       if (typeof named === "function" && named(fi) === null) return; // a face the model never draws
-      if (typeof renderAllFaces === "function" ? renderAllFaces(f) : !renderAllFaces && (b === STONE_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
+      if (typeof renderAllFaces === "function" ? renderAllFaces(f) : !renderAllFaces && (b === STONE_SLAB || b === SANDSTONE_SLAB || b === WOOD_SLAB ? slabCulled(w, b, meta, x, y, z, fi, f, boundary) : boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2])))) return;
       const r = tileRect(named ? tileByName(typeof named === "function" ? named(fi) : named) : blockTile(b, fi, false, meta)),
         corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
         st = (p) => uvFn ? uvFn(fi, p) : fi === 2 && rotTop ? [null, [p[2], 1 - p[0]], [1 - p[0], 1 - p[2]], [1 - p[2], p[0]]][rotTop] : ownUv ? [[z0 + z1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [x0 + x1 - p[0], 1 - p[1]]][fi] : [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi], // ownUv: renderFaceXPos / ZNeg run (min + max) - p, like the door's end caps (the stairs' locked bounds keep 1 - p)

@@ -250,6 +250,23 @@ export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), fl
 }
 // ChunkCache/World.getLightBrightnessForSkyBlocks packing: sky << 20 | block << 4.
 export const pack = (sky, block) => (sky << 20) | (block << 4);
+// World.getLightBrightnessForSkyBlocks with the block's own lightValue, for one cell of `vol` (skyAt, blockAt, emission, world.get).
+export function cellPacked(vol, x, y, z, emissive = true) {
+  const b = vol.world.get(x, y, z);
+  let sky, block;
+  if (useNeighborBrightness(b)) {
+    sky = Math.max(vol.skyAt(x, y + 1, z), vol.skyAt(x + 1, y, z), vol.skyAt(x - 1, y, z), vol.skyAt(x, y, z + 1), vol.skyAt(x, y, z - 1));
+    block = Math.max(vol.blockAt(x, y + 1, z), vol.blockAt(x + 1, y, z), vol.blockAt(x - 1, y, z), vol.blockAt(x, y, z + 1), vol.blockAt(x, y, z - 1));
+  } else {
+    sky = vol.skyAt(x, y, z);
+    block = vol.blockAt(x, y, z);
+  }
+  return pack(sky, Math.max(block, b && emissive ? vol.emission(x, y, z, b) : 0));
+}
+// Block.getMixedBrightnessForBlock (aji.c(ahl, x, y, z), bytecode-read and executed by SlabLightProbe): a cell holding a BlockSlab (alj: the stone,
+// sandstone and wood half slabs and their double blocks) whose brightness comes out 0 (sky 0 and block 0) answers the brightness of the cell below
+// instead, taken with that block's lightValue and without a second slab test. Every other block answers its own cell.
+export const isSlabBlock = (b) => b === DOUBLE_STONE_SLAB || b === 103 || b === 82 || b === 165 || b === 166; // port ids: stone slab 103, sandstone slab 82, wood slab 165, double wood slab 166
 export const unpack = (packed) => [(packed >> 16) & 0xffff, packed & 0xffff];
 // RenderBlocks.getAoBrightness: zero samples take the face centre's value.
 export function aoBrightness(a, b, c, centre) {
@@ -308,16 +325,8 @@ export class LightVolume {
   // light-float-reference.json) of a use-neighbour-brightness block takes the larger of the cells above, east, west, south and north (not below).
   // `emissive` false is the lightValue 0 of BlockLiquid.getMixedBrightnessForBlock (the cell's own emission is left out).
   packed(x, y, z, emissive = true) {
-    const b = this.world.get(x, y, z);
-    let sky, block;
-    if (useNeighborBrightness(b)) {
-      sky = Math.max(this.skyAt(x, y + 1, z), this.skyAt(x + 1, y, z), this.skyAt(x - 1, y, z), this.skyAt(x, y, z + 1), this.skyAt(x, y, z - 1));
-      block = Math.max(this.blockAt(x, y + 1, z), this.blockAt(x + 1, y, z), this.blockAt(x - 1, y, z), this.blockAt(x, y, z + 1), this.blockAt(x, y, z - 1));
-    } else {
-      sky = this.skyAt(x, y, z);
-      block = this.blockAt(x, y, z);
-    }
-    return pack(sky, Math.max(block, b && emissive ? this.emission(x, y, z, b) : 0));
+    const p = cellPacked(this, x, y, z, emissive);
+    return p === 0 && isSlabBlock(this.world.get(x, y, z)) ? cellPacked(this, x, y - 1, z, emissive) : p;
   }
   // World.getBlockLightValue: the larger of daylight-reduced sky and block light.
   level(x, y, z, subtracted = 0) {
