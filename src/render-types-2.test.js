@@ -17,24 +17,27 @@ import { tileByName, ATLAS_COLUMNS, ATLAS_ROWS } from "./block-textures.js";
 
 const ref = JSON.parse(readFileSync(new URL("../public/research/render-types-2-reference.json", import.meta.url), "utf8"));
 const lightValues = JSON.parse(readFileSync(new URL("../public/research/light-float-reference.json", import.meta.url), "utf8")).lightValues; // aji.m() per original id, from the batch 36 record
-const R = 2, N = 5, B = 8;
-const cellIndex = (x, y, z) => { const dx = x - B, dy = y - B, dz = z - B; return Math.abs(dx) > R || Math.abs(dy) > R || Math.abs(dz) > R ? -1 : ((dx + R) * N + (dy + R)) * N + (dz + R); };
+const R = 2, N = 5;
+// Batch 40 fixtures carry their own position (fx.pos); the earlier ones sit at (8, 8, 8).
+const posOf = (fx) => fx.pos ?? [8, 8, 8];
+const cellIndex = (x, y, z, [bx, by, bz] = [8, 8, 8]) => { const dx = x - bx, dy = y - by, dz = z - bz; return Math.abs(dx) > R || Math.abs(dy) > R || Math.abs(dz) > R ? -1 : ((dx + R) * N + (dy + R)) * N + (dz + R); };
 const f32 = new Float32Array(1), i32 = new Int32Array(f32.buffer);
 const bitsToFloat = (b) => { i32[0] = b; return f32[0]; };
 
 function source(fx) {
+  const P = posOf(fx), ci = (x, y, z) => cellIndex(x, y, z, P);
   const cells = fx.ids.map((id, i) => fromOriginal(id, fx.metas[i]) || { id: 0, meta: 0 });
-  const world = { height: 64, get: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : cells[i].meta; } };
+  const world = { height: 256, get: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].meta; } };
   world.solid = (x, y, z) => { const b = world.get(x, y, z); return solidBlock(b, world.getMeta(x, y, z)); };
   const volume = {
     world,
-    skyAt: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : fx.light[i] >> 4; },
-    blockAt: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : fx.light[i] & 15; },
-    emission: (x, y, z) => { const i = cellIndex(x, y, z); return i < 0 ? 0 : lightValues[fx.ids[i]]; },
+    skyAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] >> 4; },
+    blockAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] & 15; },
+    emission: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : lightValues[fx.ids[i]]; },
   };
   const light = { world, packed: (...a) => LightVolume.prototype.packed.call(volume, ...a) };
   const tint = fx.tint, t = () => (fx.plantTint ?? tint); // a pot's plant is coloured by its own block (fern: the grass colour at the pot)
-  return { world, light, repeaterLit: (x, y, z) => fx.ids[cellIndex(x, y, z)] === 94, litFurnaces: new Set(), colorX: 0, colorZ: 0, biomeColors: { grass: t, foliage: t, grassAt: t, foliageAt: t, water: t } };
+  return { world, light, repeaterLit: (x, y, z) => fx.ids[ci(x, y, z)] === 94, litFurnaces: new Set(), colorX: 0, colorZ: 0, biomeColors: { grass: t, foliage: t, grassAt: t, foliageAt: t, water: t } };
 }
 const layers = (M) => [M.solid, M.water, M.ice, M.flow, M.lava, M.lavaFlow, ...M.fire, M.portal];
 // The fluid layers sample their own textures (the animated still and flow frames, uv across the whole texture), not the block atlas.
@@ -99,9 +102,9 @@ function run() {
   try {
     for (const [n, fx] of ref.fixtures.entries()) for (const ao of [0, 1, 2]) {
       render.ao = ao;
-      const src = source(fx), mesher = new ChunkMesher(src), b = src.world.get(B, B, B);
+      const src = source(fx), mesher = new ChunkMesher(src), P = posOf(fx), b = src.world.get(...P);
       const M = { solid: new Mesher(), water: new Mesher(), ice: new Mesher(), flow: new Mesher(), lava: new Mesher(), lavaFlow: new Mesher(), fire: [new Mesher(), new Mesher()], portal: new Mesher() };
-      mesher.meshBlock(M, b, B, B, B);
+      mesher.meshBlock(M, b, ...P);
       const s = (stats[`${fx.id}:${fx.type}`] ??= { id: fx.id, type: fx.type, fixtures: 0, vertices: 0, exact: 0, nativeOnly: 0, jsOnly: 0, order: 0, bad: Object.fromEntries(FIELDS.map((f) => [f, 0])) });
       const jsG = group(jsQuads(M)), nat = group(nativeQuads(fx.ao[ao]));
       if (process.env.RT_DUMP && +process.env.RT_DUMP === n && ao === 0) { console.log("port keys", [...jsG.keys()].join("\n  ")); console.log("native keys", [...nat.keys()].join("\n  ")); }

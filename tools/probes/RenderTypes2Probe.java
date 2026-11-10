@@ -60,6 +60,63 @@ public class RenderTypes2Probe {
   // BlockFlowerPot.createNewTileEntity by metadata (func_149929_a): {block id, damage} of the plant, null for empty.
   static final int[][] POT = {null, {38, 0}, {37, 0}, {6, 0}, {6, 1}, {6, 2}, {6, 3}, {40, 0}, {39, 0}, {81, 0}, {32, 0}, {31, 2}, {6, 4}, {6, 5}, null, null};
 
+
+  // Batch 40 fixtures: {id, meta, x, y, z, density index, then forced neighbour cells as groups of dx, dy, dz, id, meta}.
+  static final java.util.List<int[]> EXTRA_LIST = new ArrayList<>();
+  static void add(int id, int meta, int x, int y, int z, int d, int... forced) {
+    int[] e = new int[6 + forced.length];
+    e[0] = id; e[1] = meta; e[2] = x; e[3] = y; e[4] = z; e[5] = d;
+    System.arraycopy(forced, 0, e, 6, forced.length);
+    EXTRA_LIST.add(e);
+  }
+  static final int[][] POSITIONS = {{37, 70, -22}, {-5, 3, 129}, {1000, 64, -1000}, {-33, 200, 17}, {12345, 12, -6789}, {0, 0, 0}};
+  static int[][] extras() {
+    // Iron bars (101, type 18): the sixteen masks of the four horizontal neighbours (north -z, south +z, west -x, east +x) as stone or air, then bars, panes and glass next to bars.
+    int[][] dirs = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
+    for (int mask = 0; mask < 16; mask++) {
+      int[] forced = new int[20];
+      for (int k = 0; k < 4; k++) { forced[k * 5] = dirs[k][0]; forced[k * 5 + 1] = dirs[k][1]; forced[k * 5 + 2] = dirs[k][2]; forced[k * 5 + 3] = (mask >> k & 1) != 0 ? 1 : 0; forced[k * 5 + 4] = 0; }
+      add(101, 0, 8, 8, 8, mask % 3, forced);
+    }
+    int[] linked = {101, 102, 20, 95, 160, 18, 53, 44};
+    for (int k = 0; k < linked.length; k++) add(101, 0, 8, 8, 8, k % 3, 1, 0, 0, linked[k], linked[k] == 95 || linked[k] == 160 ? 5 : 0, -1, 0, 0, linked[(k + 3) % linked.length], 0, 0, 1, 0, 101, 0);
+    // Stems (104 pumpkin, 105 melon): fully grown (7) next to the fruit in each direction (-x, +x, -z, +z), two fruits (the first direction wins), the other stem's fruit, and age 6 with fruit.
+    int[][] fruitDir = {{-1, 0, 0}, {1, 0, 0}, {0, 0, -1}, {0, 0, 1}};
+    for (int stem = 104; stem <= 105; stem++) {
+      int fruit = stem == 104 ? 86 : 103, other = stem == 104 ? 103 : 86;
+      for (int k = 0; k < 4; k++) add(stem, 7, 8, 8, 8, k % 3, fruitDir[k][0], 0, fruitDir[k][2], fruit, 0);
+      add(stem, 7, 8, 8, 8, 1, 1, 0, 0, fruit, 0, 0, 0, 1, fruit, 0);
+      add(stem, 7, 8, 8, 8, 2, 0, 0, -1, fruit, 0, -1, 0, 0, fruit, 0);
+      add(stem, 7, 8, 8, 8, 0, -1, 0, 0, other, 0);
+      add(stem, 6, 8, 8, 8, 1, 1, 0, 0, fruit, 0);
+      add(stem, 7, 37, 70, -22, 2, 0, 0, 1, fruit, 0);
+      add(stem, 3, -5, 3, 129, 0, -1, 0, 0, fruit, 0);
+    }
+    // Position hashed drawing: tall grass (31 grass 1, fern 2, dead shrub 0), dandelion 37, red flowers 38, double plants 175 (lower and upper halves), lily pad 111, fire 51, and the unhashed plants beside them.
+    for (int i = 0; i < POSITIONS.length; i++) {
+      int[] q = POSITIONS[i];
+      int[] metas31 = {0, 1, 2};
+      for (int m : metas31) if (i < 4) add(31, m, q[0], q[1], q[2], (i + m) % 3);
+      add(37, 0, q[0], q[1], q[2], i % 3);
+      add(38, i % 9, q[0], q[1], q[2], (i + 1) % 3);
+      add(175, new int[] {0, 2, 3, 8, 9, 10}[i], q[0], q[1], q[2], (i + 2) % 3);
+      add(111, 0, q[0], q[1], q[2], i % 3);
+      add(51, i % 2 == 0 ? 0 : 5, q[0], q[1], q[2], (i + 1) % 3);
+      if (i < 3) { add(32, 0, q[0], q[1], q[2], i); add(6, i, q[0], q[1], q[2], i); add(39, 0, q[0], q[1], q[2], i); add(40, 0, q[0], q[1], q[2], i); add(83, 0, q[0], q[1], q[2], i); add(140, 11, q[0], q[1], q[2], i); }
+    }
+    add(111, 0, 41, 66, 7, 1); add(111, 0, 42, 66, 7, 1); add(111, 0, 41, 66, 8, 1); add(111, 0, -17, 62, -9, 0);
+    add(51, 0, 9, 8, 8, 2); add(51, 3, 8, 9, 8, 1); add(51, 15, 8, 8, 9, 0);
+    return EXTRA_LIST.toArray(new int[0][]);
+  }
+  static final int[][] EXTRAS = extras();
+
+  // Chunk.getSavedLightValue (apx.a(ahn, x, y, z)) with chunk-local x and z, answered from the world's cell map.
+  public static class C2 extends apx {
+    C2() { super((ahb) null, 0, 0); }
+    public int a(ahn type, int x, int y, int z) { return world.b(type, cx * 16 + x, y, cz * 16 + z); }
+    LightFloatProbe.W world; int cx, cz;
+  }
+
   static void entry(StringBuilder out, int[] raw, int used) {
     out.append("[");
     for (int i = 0; i < used; i++) {
@@ -92,11 +149,17 @@ public class RenderTypes2Probe {
     w.ids = new int[N * N * N]; w.metas = new int[N * N * N]; w.sky = new int[N * N * N]; w.blk = new int[N * N * N];
     w.bx = 8; w.by = 8; w.bz = 8;
     try { LightFloatProbe.set(w, "s", new Random(5)); } catch (Throwable e) { System.err.println("no rand field"); }
-    LightFloatProbe.C chunk = (LightFloatProbe.C) unsafe.allocateInstance(LightFloatProbe.C.class);
-    chunk.world = w;
-    java.util.Map<agt, aor> tiles = new java.util.HashMap<>();
-    LightFloatProbe.set(chunk, "i", tiles); // Chunk.chunkTileEntityMap: the flower pot render reads its plant from the tile entity (TileEntityFlowerPot, apf)
-    w.chunk = chunk;
+    // One Chunk per chunk coordinate: the light of a block that does not read its neighbours' brightness goes Chunk.getSavedLightValue with chunk-local
+    // x and z, so the stand-in maps them back to world cells; the tile entity map is the chunk's (key = chunk-local position).
+    java.util.Map<Long, C2> chunks = new java.util.HashMap<>();
+    w.chunkAt = (cx, cz) -> chunks.computeIfAbsent(((long) cx << 32) ^ (cz & 0xffffffffL), k -> {
+      try {
+        C2 c = (C2) unsafe.allocateInstance(C2.class);
+        c.world = w; c.cx = cx; c.cz = cz;
+        LightFloatProbe.set(c, "i", new java.util.HashMap<agt, aor>()); // Chunk.chunkTileEntityMap: the flower pot render reads its plant from the tile entity (TileEntityFlowerPot, apf)
+        return c;
+      } catch (Exception e) { throw new RuntimeException(e); }
+    });
     blm rb = (blm) unsafe.allocateInstance(blm.class);
     LightFloatProbe.set(rb, "a", w);
     LightFloatProbe.set(rb, "q", bao.M);
@@ -107,9 +170,15 @@ public class RenderTypes2Probe {
 
     StringBuilder out = new StringBuilder("{\"fixtures\":[");
     int count = 0;
-    for (int f = 0; f < 3 * CENTRES.length; f++) {
-      int[] c = CENTRES[f % CENTRES.length];
-      double density = new double[] {0.12, 0.35, 0.65}[(f / CENTRES.length) % 3];
+    for (int f = 0; f < 3 * CENTRES.length + EXTRAS.length; f++) {
+      boolean extra = f >= 3 * CENTRES.length;
+      int[] ex = extra ? EXTRAS[f - 3 * CENTRES.length] : null;
+      int[] c = extra ? ex : CENTRES[f % CENTRES.length];
+      // Batch 40 additions: fixtures at other positions (ex[2..4]) and with forced neighbour cells (ex[6..], groups of dx, dy, dz, id, meta), drawn after
+      // every batch 38 fixture so the earlier records keep their random draws.
+      int px = extra ? ex[2] : 8, py = extra ? ex[3] : 8, pz = extra ? ex[4] : 8;
+      w.bx = px; w.by = py; w.bz = pz;
+      double density = new double[] {0.12, 0.35, 0.65}[extra ? ex[5] : (f / CENTRES.length) % 3];
       for (int i = 0; i < N * N * N; i++) {
         boolean air = g.nextDouble() > density;
         int[] n = air ? NEIGHBOURS[g.nextInt(7)] : NEIGHBOURS[g.nextInt(NEIGHBOURS.length)];
@@ -119,6 +188,7 @@ public class RenderTypes2Probe {
         w.blk[i] = dark ? 0 : (g.nextInt(3) == 0 ? g.nextInt(16) : 0);
         if (g.nextInt(6) == 0) w.sky[i] = 15;
       }
+      if (extra) for (int k = 6; k + 4 < ex.length; k += 5) { int fs = LightFloatProbe.slot(ex[k], ex[k + 1], ex[k + 2]); w.ids[fs] = ex[k + 3]; w.metas[fs] = ex[k + 4]; w.sky[fs] = 15; w.blk[fs] = 0; }
       w.ids[centre] = c[0]; w.metas[centre] = c[1];
       w.sky[centre] = g.nextInt(16); w.blk[centre] = g.nextInt(4) == 0 ? g.nextInt(16) : 0;
       w.biomeSeed = g.nextInt(1000);
@@ -130,11 +200,11 @@ public class RenderTypes2Probe {
       }
       // The double plant (blm.a(ako, ...)) draws nothing for an upper half without the plant below it.
       if (c[0] == 175 && (c[1] & 8) != 0) { int below = LightFloatProbe.slot(0, -1, 0); w.ids[below] = 175; w.metas[below] = (g.nextInt(2) == 0) ? 0 : g.nextInt(6); }
-      tiles.clear();
-      if (c[0] == 140) tiles.put(new agt(8, 8, 8), POT[c[1]] != null ? new apf(adb.a(aji.e(POT[c[1]][0])), POT[c[1]][1]) : new apf());
+      chunks.values().forEach(k -> { try { ((java.util.Map<agt, aor>) LightFloatProbe.get(k, "i")).clear(); } catch (Exception e) { throw new RuntimeException(e); } });
+      if (c[0] == 140) ((java.util.Map<agt, aor>) LightFloatProbe.get(w.e(px >> 4, pz >> 4), "i")).put(new agt(px & 15, py, pz & 15), POT[c[1]] != null ? new apf(adb.a(aji.e(POT[c[1]][0])), POT[c[1]][1]) : new apf());
       aji block = aji.e(c[0]);
       StringBuilder rec = new StringBuilder("{\"id\":").append(c[0]).append(",\"meta\":").append(c[1])
-        .append(c[0] == 140 && POT[c[1]] != null ? ",\"pot\":[" + POT[c[1]][0] + "," + POT[c[1]][1] + "]" : "").append(c[0] == 140 && POT[c[1]] != null ? ",\"plantTint\":" + (aji.e(POT[c[1]][0]).d((ahl) w, 8, 8, 8) & 0xffffff) : "").append(",\"type\":").append(block.b()).append(",\"tint\":").append(block.d((ahl) w, 8, 8, 8) & 0xffffff).append(",\"ids\":[");
+        .append(c[0] == 140 && POT[c[1]] != null ? ",\"pot\":[" + POT[c[1]][0] + "," + POT[c[1]][1] + "]" : "").append(c[0] == 140 && POT[c[1]] != null ? ",\"plantTint\":" + (aji.e(POT[c[1]][0]).d((ahl) w, px, py, pz) & 0xffffff) : "").append(extra ? ",\"pos\":[" + px + "," + py + "," + pz + "]" : "").append(",\"type\":").append(block.b()).append(",\"tint\":").append(block.d((ahl) w, px, py, pz) & 0xffffff).append(",\"ids\":[");
       for (int i = 0; i < w.ids.length; i++) rec.append(i > 0 ? "," : "").append(w.ids[i]);
       rec.append("],\"metas\":[");
       for (int i = 0; i < w.ids.length; i++) rec.append(i > 0 ? "," : "").append(w.metas[i]);
@@ -146,7 +216,7 @@ public class RenderTypes2Probe {
         settings.j = ao;
         LightFloatProbe.field(bmh.class, "x").setBoolean(t, false);
         t.b();
-        try { rb.b(block, 8, 8, 8); } catch (Throwable e) { failed = true; System.err.println("render failed " + c[0] + ":" + c[1] + " " + e + " at " + e.getStackTrace()[0] + " " + e.getStackTrace()[1] + " " + e.getStackTrace()[2] + " " + e.getStackTrace()[3] + " " + e.getStackTrace()[4]); }
+        try { rb.b(block, px, py, pz); } catch (Throwable e) { failed = true; System.err.println("render failed " + c[0] + ":" + c[1] + " " + e + " at " + e.getStackTrace()[0] + " " + e.getStackTrace()[1] + " " + e.getStackTrace()[2] + " " + e.getStackTrace()[3] + " " + e.getStackTrace()[4]); }
         int[] raw = (int[]) LightFloatProbe.get(t, "f");
         int used = (Integer) LightFloatProbe.get(t, "q");
         rec.append(ao > 0 ? "," : "");
