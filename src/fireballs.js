@@ -6,12 +6,14 @@ import { JavaRandom } from "./java-random.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
 import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
-import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell } from "./blaze-ghast.js";
+import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell, lookVector } from "./blaze-ghast.js";
+import { waterAcceleration, entityWaterBox } from "./fluids.js";
+import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
-export const FIRE_IMMUNE = new Set(["blaze", "ghast", "magma_cube", "zombie_pigman", "wither_skeleton", "wither"]);
+export const FIRE_IMMUNE = new Set(["blaze", "ghast", "magma_cube", "pigman", "zombie_pigman", "wither_skeleton", "wither"]);
 // ze.h: the sweep grows each candidate box by this (getCollisionBorderSize 0.3 for the mob; the player's pick uses 1.0 for the fireball).
 const SWEEP = 0.3, PICK_BORDER = 1;
 const seedOf = (mobs) => Math.floor(mobs.random() * 2 ** 48);
@@ -26,14 +28,17 @@ export class Fireballs {
   get balls() { return this.list; }
   find(id) { return this.list.find((b) => b.id === id && !b.dead) ?? null; }
   // EntityFireball(world, shooter, dx, dy, dz) at (x, y, z): the aim gets 0.4 * gaussian per axis (x, y, z) on the ball's own Random, then
-  // acceleration = aim / |aim| * 0.1. `exact` is the (world, x, y, z, ax, ay, az) form of the dispenser: the acceleration as given.
+  // acceleration = aim / |aim| * 0.1. `exact` is the (world, x, y, z, ax, ay, az) form of the dispenser: the aim as given, normalised the same way.
   launch({ large, owner = null, x, y, z, dx = 0, dy = 0, dz = 0, power = FIREBALL.defaultPower, exact = null }) {
     const rand = new JavaRandom(this.mobs.fireballSeed?.(owner, large) ?? seedOf(this.mobs)); // fireballSeed: the replays' recorded Entity.rand seed
-    const [ax, ay, az] = exact ?? fireballAcceleration(dx, dy, dz, rand);
+    const [ax, ay, az] = exact ? fireballAcceleration(...exact) : fireballAcceleration(dx, dy, dz, rand); // the dispenser form normalises too, without the noise
     const ball = {
       id: "fb-" + this.next++, type: "fireball", kind: large ? "fireball" : "smallFireball", large: !!large, owner, health: 1,
       x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, ax, ay, az, power, ticks: 0, dead: false,
       scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize,
+      // The constructor puts the box at the shooter (or at the given position); EntityGhast and EntityBlaze then assign posX/posY/posZ without setPosition, so the
+      // box (the water test, the entity query of the first update) stays there until the end of the first update.
+      boxPos: exact || !owner || owner === "player" ? [x, y, z] : [owner.x, owner.y, owner.z],
     };
     this.list.push(ball);
     return ball;
@@ -50,42 +55,58 @@ export class Fireballs {
     if (y < 0 || y >= 256) return false;
     return !w.streaming || w.isLoaded(x, z) || !!this.mobs.ring?.holds(x, z);
   }
+  // The box ze.h leaves behind (setPosition at the end of the update): the ball's own feet position, or the constructor's on the first update.
+  boxOf(b) {
+    const [x, y, z] = b.ticks === 0 && b.boxPos ? b.boxPos : [b.x, b.y, b.z], r = b.width / 2;
+    return [x - r, y, z - r, x + r, y + b.width, z + r];
+  }
   tick() {
     const mobs = this.mobs;
     for (const b of this.list) {
       if (b.dead || !mobs.isActive(b)) continue; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
       b.px = b.x; b.py = b.y; b.pz = b.z;
       if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
+      const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
       b.ticks++;
       mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
+      // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
+      const water = waterAcceleration(mobs.world, entityWaterBox(box));
+      b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
       let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
-      const entity = this.sweep(b, start, stop);
+      const entity = this.sweep(b, start, stop, box);
       if (entity) { hit = { entity: entity.target }; aimPart(entity); }
-      if (hit) { this.impact(b, hit); continue; }
-      const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z));
-      fireballStep(b, water >= 8 && water <= 9);
+      if (hit) this.impact(b, hit); // the update goes on: the ball still moves (it is only marked dead)
+      fireballStep(b, water.wet);
     }
     this.list = this.list.filter((b) => !b.dead);
   }
   // ze.h's entity pass: every collidable entity box grown by 0.3 against the swept segment, the shooter skipped for 25 ticks; nearest wins.
-  sweep(b, a, z) {
+  sweep(b, a, z, own = this.boxOf(b)) {
     const mobs = this.mobs, boxes = [];
+    // World.getEntitiesWithinAABBExcludingEntity: the ball's box grown by its motion and by 1 each way (a stale box on the first update).
+    const q = [own[0] + Math.min(b.vx, 0) - 1, own[1] + Math.min(b.vy, 0) - 1, own[2] + Math.min(b.vz, 0) - 1, own[3] + Math.max(b.vx, 0) + 1, own[4] + Math.max(b.vy, 0) + 1, own[5] + Math.max(b.vz, 0) + 1];
+    const near = (c) => c[3] > q[0] && c[0] < q[3] && c[4] > q[1] && c[1] < q[4] && c[5] > q[2] && c[2] < q[5];
     for (const e of mobs.entities) {
-      if (!(e.health > 0) || (e === b.owner && b.ticks < FIREBALL.ownerGrace)) continue;
+      if (e === b.owner && b.ticks < FIREBALL.ownerGrace) continue; // ticksInAir < 25, the ball's own counter (a punch does not reset it)
       if (e.type === "ender_dragon") boxes.push(...dragonPartTargets(e)); // the parts are the collidable entities, not the 16 x 8 box
-      else boxes.push({ target: e, box: pushBox(e, ...mobs.size(e)) });
+      else { const box = pushBox(e, ...mobs.size(e)); if (near(box)) boxes.push({ target: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
     }
     const p = mobs.ai?.player;
-    if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) boxes.push({ target: { player: true }, box: pushBox(p, p.width, p.height) });
-    let best = null, bd = Infinity;
+    if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) { const box = pushBox(p, p.width, p.height); if (near(box)) boxes.push({ target: { player: true }, box }); }
+    for (const o of this.list) { // EntityLargeFireball.canBeCollidedWith (the small one is not)
+      if (o === b || o.dead || !o.large) continue;
+      const box = this.boxOf(o);
+      if (near(box)) boxes.push({ target: { ball: o }, box });
+    }
+    let best = null, bd = 0;
     const area = sweepArea(b);
     for (const c of boxes) {
       if (c.reach && !c.reach(area)) continue; // a dragon part: the world lists it only for the dragon's own box and chunk (ze.h's query box)
       const g = SWEEP, box = [c.box[0] - g, c.box[1] - g, c.box[2] - g, c.box[3] + g, c.box[4] + g, c.box[5] + g], r = intercept(box, a, z);
       if (!r) continue;
-      const d = (r.vec[0] - a[0]) ** 2 + (r.vec[1] - a[1]) ** 2 + (r.vec[2] - a[2]) ** 2;
-      if (d < bd) { bd = d; best = c; }
+      const d = Math.hypot(r.vec[0] - a[0], r.vec[1] - a[1], r.vec[2] - a[2]);
+      if (d < bd || bd === 0) { bd = d; best = c; } // ze.h's own test: a distance of exactly 0 is replaced by the next hit
     }
     return best;
   }
@@ -98,7 +119,10 @@ export class Fireballs {
         const s = mobs.ai?.survival;
         return !!s && s.damage(n, "fireball", true, "fireball", owner && owner !== "player" ? owner : undefined); // the source entity is the shooter
       }
-      return mobs.damage(t, n, from?.x ?? b.x, from?.z ?? b.z, byPlayer, null, { name: "fireball", fireball: true, player: byPlayer });
+      if (t?.ball) return this.hitBall(t.ball, owner); // EntityFireball.attackEntityFrom from the other ball's DamageSource
+      // DamageSource.causeFireballDamage(ball, shooter): the shooter is the source entity; without one (a dispenser's ball) it is the ball itself, which knocks back from its own
+      // position and, for an EntityMob on the legacy action state, becomes the dead entityToAttack that the next update clears.
+      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }) });
     };
     if (b.large) {
       if (hit.entity) damage(FIREBALL.largeDamage);
@@ -114,6 +138,19 @@ export class Fireballs {
       if (mobs.world.get(x, y, z) === 0) mobs.ignite?.(x, y, z);
     }
     b.dead = true;
+  }
+  // ze.a(ro, F) for a damage source whose entity is `shooter`: the ball takes the shooter's look vector (motion and acceleration) and the shooter as its own.
+  hitBall(target, shooter) {
+    if (!shooter || target.dead) return false;
+    const look = this.lookOf(shooter);
+    if (!look) return false;
+    deflect(target, look);
+    target.owner = shooter;
+    return true;
+  }
+  lookOf(e) {
+    if (e === "player") return this.mobs.playerLook?.() ?? null;
+    return lookVector(e.rotationYaw ?? 0, e.rotationPitch ?? 0, mhSin, mhCos);
   }
   // The first ball a player's ray meets, grown by the collision border 1.0 (ze.ao), nearer than `wallDistance`.
   pick(origin, dir, reach, wallDistance = reach) {
@@ -131,10 +168,9 @@ export class Fireballs {
   }
   // ze.a(ro, F): a player's hit takes the ball: its motion becomes the look vector, the acceleration look * 0.1 and the player the shooter.
   punch(b, look) {
-    if (b.dead) return false;
+    if (b.dead || !b.large) return false; // EntityFireball.attackEntityFrom (ze.a) deflects; the small ball's override (zi.a) refuses
     deflect(b, look);
-    b.owner = "player";
-    b.ticks = 0;
+    b.owner = "player"; // ticksInAir goes on counting: the player is only skipped while the ball is under 25 ticks old
     return true;
   }
   // The browser save (main.js `active.fireballs`): the flight state of every live ball. The shooter is a mob id, "player" or absent. A ball
