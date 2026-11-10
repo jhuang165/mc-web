@@ -625,6 +625,7 @@ scoreboard.onChange = () => { saved = false; };
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
 let multiplayer = null, remotePlayers = null, worldWriterAvailable = false;
+let serverPortal = false; // the gun server says this player stands in a Nether portal (you.portal): the swirl overlay and its sound
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -783,6 +784,7 @@ function applyServerHanging(rows) {
 // What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
 function applyServerPlayer(you) {
   if (!you) return;
+  serverPortal = !!you.portal;
   if (Array.isArray(you.maps)) applyServerMaps(you.maps);
   applyServerSleep(you.sleep); // before the death screen below: a sleeper killed in bed leaves it first
   if (Array.isArray(you.hanging)) applyServerHanging(you.hanging);
@@ -1017,6 +1019,8 @@ async function joinMultiplayer(settings) {
     onTick: applyMultiplayerTick,
     onColumns: applyMultiplayerColumns,
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
+    onTravel: () => remoteTravel(client),
+    onDimension: message => { void enterRemoteDimension(client, message); },
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
   multiplayer = client;
@@ -1030,7 +1034,8 @@ async function joinMultiplayer(settings) {
     const self = snapshot.players.find(p => p.id === client.id);
     streamStorage?.dispose(); streamStorage = null;
     const mode = welcome.you?.mode ?? welcome.self.mode ?? 'survival';
-    const record = { id: 'remote-' + client.id, remote: true, name: 'Gun server', seed: snapshot.seed,
+    const record = { id: 'remote-' + client.id, remote: true, name: 'Gun server', seed: snapshot.seed, dragonSpawned: true, // the server's End has its own dragon
+      ...(snapshot.dimension ? { dimension: snapshot.dimension } : {}),
       biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode, difficulty: 2, mods: { guns: true },
       position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time },
       entities: [], weather: snapshot.weather, allowCommands: false, edits: [],
@@ -1049,6 +1054,40 @@ async function joinMultiplayer(settings) {
     if (active?.remote) leaveToTitle(false);
     throw error;
   }
+}
+// The gun server took this player through a portal (or out of the End, or home after a death in another world):
+// Entity.travelToDimension's portal.travel sound, then GuiDownloadTerrain until the new world comes (enterRemoteDimension).
+function remoteTravel(client) {
+  if (multiplayer !== client || screen === 'home') return;
+  if (screen === 'playing') sounds.play('portal.travel', { volume: 0.25, pitch: 0.8 + Math.random() * 0.4 });
+  closeChat(); hideBedScreen();
+  screen = 'home'; tripLoading = true; keys.clear(); $('#hud').classList.add('hidden');
+  gui.show(downloadTerrainScreen());
+}
+// NetHandlerPlayClient.handleRespawn for the gun server's Nether, End or Overworld: this tab's world becomes the one the server
+// sent (its window, time and weather), with the player where the Teleporter put it; the ticks buffered meanwhile then apply.
+async function enterRemoteDimension(client, message) {
+  if (multiplayer !== client) return;
+  try {
+    if (screen !== 'home') remoteTravel(client);
+    await nextPaint();
+    const snapshot = message.world, prepared = restoreReplica(snapshot);
+    const self = snapshot.players.find(p => p.id === client.id) ?? { x: message.you.x, y: message.you.y, z: message.you.z };
+    sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds
+    const record = { ...active, mode: message.you?.mode ?? message.self.mode ?? active.mode, position: { ...self, yaw: message.self.yaw, pitch: message.self.pitch },
+      player: { ...message.self.player, time: snapshot.time }, entities: [], weather: snapshot.weather, edits: [], dragonSpawned: true };
+    if (snapshot.dimension) record.dimension = snapshot.dimension; else delete record.dimension;
+    remotePlayers?.clear();
+    await launch(record, prepared, { slice: true });
+    if (multiplayer !== client || client.socket?.readyState !== WebSocket.OPEN) return;
+    applyServerPlayer(message.you);
+    client.start();
+    sendMultiplayerInput();
+  } catch (error) {
+    if (multiplayer !== client) return;
+    client.close(); leaveMultiplayer(); leaveToTitle(false);
+    gui.show(errorScreen({ title: 'Disconnected', message: `Could not enter the new world: ${error?.message ?? error}`, cancel: showMultiplayer }));
+  } finally { tripLoading = false; }
 }
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
@@ -3771,7 +3810,7 @@ function movementTick(controls) {
     else if (eating) eating = tickPlayerItemUse(eating, heldId(), { eat }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
     if (screen === 'playing' && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
     // The server's effects on this player (applyEffectRows): Speed and Slowness in the view, the swirls and the Nausea warp.
-    if (screen !== 'dead') { ownPotionParticles(); portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, false); }
+    if (screen !== 'dead') { ownPotionParticles(); portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, serverPortal); dims.portalFrame(portalTimer, serverPortal); }
     easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects.moveSpeedMultiplier() * (gunsEnabled() ? guns.speed() : 1), bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
     return;
   }

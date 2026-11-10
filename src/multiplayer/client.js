@@ -2,6 +2,12 @@ import { World, BLOCKS } from '../world.js';
 import { ChunkProviderGenerate, BiomeTerrainState } from '../terrain-generator.js';
 import { javaSeed, javaTemperature, biomeLayerOptions } from '../java-world.js';
 import { PROTOCOL, BUILD_ID, serverUrl, decodeColumn } from './protocol.js';
+import { providerOf, actualHeight, NETHER, END } from '../dimensions.js';
+import { END_BIOME_ID } from '../end-generator.js';
+
+// BiomeGenHell and BiomeGenEnd, as DimensionWorld has them (dimension-world.js): one biome for the whole dimension.
+const NETHER_BIOME = Object.freeze({ id: 8, name: 'Hell', rainfall: 0, snowy: false, temperature: 2, topBlock: 150 });
+const END_BIOME = Object.freeze({ id: END_BIOME_ID, name: 'Sky', rainfall: 0, snowy: false, temperature: 0.5, topBlock: 152 });
 
 const SPAN = 8, COLUMN = 16 * 16 * 256;
 let replicaInit = null; // the snapshot ReplicaWorld's constructor is building from (World's constructor calls generate())
@@ -20,12 +26,23 @@ export class ReplicaWorld extends World {
   generate() {
     const s = replicaInit, seed = javaSeed(this.seed);
     if (!Number.isInteger(s?.originX) || !Number.isInteger(s?.originZ) || s.originX % 16 || s.originZ % 16) throw new Error('Unsupported multiplayer world');
+    // The server's Nether or End (server-dimensions.js): no Overworld biomes, no sky, the dimension's height for the renderer.
+    if (s.dimension === NETHER || s.dimension === END) {
+      const d = s.dimension, provider = providerOf(d);
+      Object.assign(this, { dimension: d, isEnd: d === END, hasNoSky: provider.hasNoSky, isHell: provider.isHellWorld, originX: 0, originZ: 0, javaSeed: seed,
+        javaGenerator: { manager: { cache: new Map() } }, seaLevel: d === NETHER ? 32 : 0 });
+      this.biomeAt = () => (d === NETHER ? NETHER_BIOME : END_BIOME);
+      this.temperatureAt = () => (d === NETHER ? 2 : 0.5);
+      return;
+    }
     const gen = new ChunkProviderGenerate(seed, this.worldType, new BiomeTerrainState(), biomeLayerOptions(this.generationVersion)), manager = gen.manager;
     Object.assign(this, { originX: s.originX, originZ: s.originZ, javaSeed: seed, javaGenerator: gen });
     if (Array.isArray(s.nativeSpawn) && s.nativeSpawn.length === 3 && s.nativeSpawn.every(Number.isInteger)) this.nativeSpawn = [...s.nativeSpawn];
     this.biomeAt = (x, z) => manager.biomeAt(x + this.originX, z + this.originZ);
     this.temperatureAt = (x, y, z) => javaTemperature(this.biomeAt(x, z), x + this.originX, y, z + this.originZ);
   }
+  // World.getActualHeight: 128 in the Nether and the End.
+  get actualHeight() { return actualHeight(this.dimension ?? 0); }
   // Only the server's columns: a column it did not send is air (it never is, for a valid message).
   terrainFor(cx, cz) { return this.baseColumns.get(`${cx},${cz}`) ?? { blocks: new Uint8Array(COLUMN), metadata: new Uint8Array(COLUMN) }; }
   rememberEdit() {} // a column that comes back is sent again whole
@@ -75,8 +92,10 @@ export function restoreReplica(snapshot) {
 }
 
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onColumns = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onClose, onColumns, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1, columns: [] });
+  // `onTravel(message)`: this player left its world through a portal (GuiDownloadTerrain until the new one comes); `onDimension(message)`:
+  // its new world arrived (S07PacketRespawn); the tab relaunches on it and calls start() again.
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onColumns = () => {}, onTravel = () => {}, onDimension = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onClose, onColumns, onTravel, onDimension, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1, columns: [] });
   }
   // `session`: the profile session (profile.js); the server takes the account's name. `pack`: this tab's weapon-rules
   // fingerprint (fingerprint.js); a gun server refuses a join whose build or pack differs from its own.
@@ -97,6 +116,9 @@ export class DedicatedClient {
             resolve(message); return;
           }
           if (message.type === 'error') throw new Error(message.text);
+          if (message.type === 'travel') { this.onTravel(message); return; }
+          // A new world: what was buffered or still due for the old one is dropped; its ticks wait until the tab has it on screen.
+          if (message.type === 'dimension') { this.ready = false; this.pending = null; this.columns = []; this.players = message.world.players; this.onDimension(message); return; }
           if (!this.ready) this.buffer(message);
           else this.apply(message);
         } catch (error) { reject(error); this.onClose(error.message); this.close(); }

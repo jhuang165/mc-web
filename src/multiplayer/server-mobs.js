@@ -457,11 +457,13 @@ export class ServerMobs {
   // Explosion.doExplosionA/B on the server's blocks, tiles and items, then on every player in reach (applyExplosion's player part,
   // which is written for one player, is skipped and run here per player).
   // `by`: the player whose grenade or rocket this is; another player it hurts (PvP on) is that player's kill.
-  explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true, by = null } = {}) {
+  // `flaming` (Explosion.isFlaming: a bed in the Nether or the End, an ender crystal): fire on a third of the cleared cells above
+  // an opaque block (fire.js ignite).
+  explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, by = null } = {}) {
     const sim = this.sim, tiles = Object.create(sim.tiles, { health: { value: 0 } });
     applyExplosion({ world: sim.world, weather: sim.weather, mobs: this.ew, items: sim.play.items, xpOrbs: this.orbs, arrows: this.arrows, projectiles: this.projectiles,
       falling: null, primed: this.primed, hanging: sim.hanging?.hanging ?? null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
-    { x, y, z, size, exploder, attacker, smoking });
+    { x, y, z, size, exploder, attacker, smoking, flaming }, flaming ? { ignite: (fx, fy, fz) => sim.fire.ignite(fx, fy, fz) } : undefined);
     sim.hanging?.drops(); // the paintings and frames it broke (hanging.js explode)
     for (const p of players) {
       if (by && p !== by && sim.config?.pvp === false) continue;

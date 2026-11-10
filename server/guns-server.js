@@ -76,7 +76,9 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     // Streamed (infinite) terrain: the columns around each player, generated ahead of them in a worker thread (server-world.js).
     if (streamed) { saved = await migrateToStreamed(saved, dataFile, log); await serverWorldReady; }
     const port = saved.biome === STREAMED_BIOME ? nodeWorkerPort(Worker, new URL('./stream-worker.js', import.meta.url)) : null;
-    simulation = new GunSimulation(saved, { config, port });
+    // The Nether and the End get their own generator workers when someone first travels there (server-dimensions.js).
+    const makePort = port ? () => nodeWorkerPort(Worker, new URL('./stream-worker.js', import.meta.url)) : null;
+    simulation = new GunSimulation(saved, { config, port, makePort });
   }
   simulation.isOp = p => admin.opLevel(p.account) > 0;
   const sessions = new Map(); // player id -> { ws, account, name, session, checkedAt, unavailableSince }
@@ -119,6 +121,9 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
   const kick = (id, text) => { const s = sessions.get(id); if (s) s.ws.close(1008, reason(text)); };
   const byName = name => [...sessions.entries()].find(([, s]) => s.name.toLowerCase() === String(name).toLowerCase());
   const level = id => admin.opLevel(sessions.get(id)?.account) ?? 0;
+  // The world a player is in and its player there ([null, null] while it travels between worlds).
+  const here = id => { const sim = simulation.simOf?.(id) ?? (simulation.players.has(id) ? simulation : null); return [sim, sim?.players.get(id) ?? null]; };
+  const leave = id => (simulation.simOf?.(id) ?? simulation).removePlayer(id); // a player mid-trip is saved by the Overworld
   // S05PacketSpawnPosition: the world spawn as integers (the tab's compass and the compasses in its item frames point at it).
   const spawnPosition = () => { const s = simulation.worldSpawn(); return [Math.floor(s.x), Math.floor(s.y), Math.floor(s.z)]; };
 
@@ -135,24 +140,27 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     const op = admin.lists.ops.get(admin.resolve(profile.id));
     if (config.whitelist && !admin.whitelisted(profile.id) && !op) return ws.close(1008, MESSAGES.whitelist);
     // A streamed world: the terrain around where this player appears is generated before it joins (GuiDownloadTerrain meanwhile).
-    const start = simulation.columns && simulation.startFor?.(profile.id);
-    if (start) { await simulation.columns.whenReady(simulation.columns.windowAt(start.x, start.z)); if (ws.readyState !== 1 || closing) return; }
+    // The world it was saved in: the Overworld, the Nether or the End (server-dimensions.js).
+    const home = simulation.dims?.joinSim(profile.id) ?? simulation;
+    const start = home.columns && home.startFor?.(profile.id);
+    if (start) { await home.columns.whenReady(home.columns.windowAt(start.x, start.z)); if (ws.readyState !== 1 || closing) return; }
     const previous = [...sessions.entries()].find(([, s]) => s.account === profile.id);
     if (!previous && sessions.size >= config.maxPlayers && !op?.bypassesPlayerLimit) return ws.close(1008, MESSAGES.full);
     if (previous) {
       const [oldId, old] = previous;
-      old.replaced = true; sessions.delete(oldId); simulation.removePlayer(oldId); old.ws.close(1008, MESSAGES.replaced);
+      old.replaced = true; sessions.delete(oldId); leave(oldId); old.ws.close(1008, MESSAGES.replaced);
     }
     const id = randomUUID();
     // A website rename could collide with a connected player's old name; the account ID stays the key either way.
     if (byName(profile.name)) return ws.close(1008, MESSAGES.replaced);
-    simulation.addPlayer(id, profile.name, profile.id, { skin: profile.skin });
+    const joined = home;
+    joined.addPlayer(id, profile.name, profile.id, { skin: profile.skin });
     sessions.set(id, { ws, account: profile.id, name: profile.name, session: m.session, checkedAt: now(), unavailableSince: null });
     ws.playerId = id;
-    const p = simulation.players.get(id);
+    const p = joined.players.get(id);
     p.sendColumns = null; // the welcome carries its whole window
-    sendTerrain(ws, { type: 'welcome', protocol: PROTOCOL, build, pack: rules.pack, id, world: simulation.snapshot(p.view ?? null), self: simulation.savePlayer(p),
-      you: simulation.you(p), spawn: spawnPosition(), motd: config.motd, pvp: config.pvp !== false, op: level(id) });
+    sendTerrain(ws, { type: 'welcome', protocol: PROTOCOL, build, pack: rules.pack, id, world: joined.snapshot(p.view ?? null), self: joined.savePlayer(p),
+      you: joined.you(p), spawn: spawnPosition(), motd: config.motd, pvp: config.pvp !== false, op: level(id) });
     if (!previous) system(`${profile.name} joined the game`);
     log(`[join] ${profile.name} (${profile.id})`);
   }
@@ -175,21 +183,24 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
           joining = true;
           return void join(ws, m).catch(error => { log(`Join failed: ${error.message}`); ws.close(1011, 'Server error'); }).finally(() => { joining = false; clearTimeout(timer); });
         }
-        if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
-        else if (m.type === 'action') { if (!simulation.action(id, m)) ws.close(1008, 'Invalid action'); }
-        else if (m.type === 'edit') simulation.queueEdit(id, m);
-        else if (m.type === 'respawn') simulation.respawn(id);
-        else if (m.type === 'wake') simulation.wake(id); // C0BPacketEntityAction 3: Leave Bed
-        else if (m.type === 'click') { if (!simulation.click(id, m)) ws.close(1008, 'Invalid click'); }
-        else if (m.type === 'close') simulation.closeWindow(id, m.window);
-        else if (m.type === 'book') { if (!simulation.book(id, m)) ws.close(1008, 'Invalid book'); }
-        else if (m.type === 'trade') { if (!simulation.trade(id, m)) ws.close(1008, 'Invalid trade'); }
-        else if (m.type === 'enchant' || m.type === 'anvil' || m.type === 'beacon') { if (!simulation.station(id, m)) ws.close(1008, 'Invalid station'); }
-        else if (m.type === 'drop') simulation.drop(id, m.all === true);
-        else if (m.type === 'creative') simulation.creative(id, m);
-        else if (m.type === 'gun') { if (!simulation.gun(id, m)) ws.close(1008, 'Invalid gun action'); }
-        else if (m.type === 'stats') simulation.requestStats(id); // C16PacketClientStatus REQUEST_STATS
-        else if (m.type === 'status') simulation.clientStatus(id, m.status); // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
+        // Between worlds (a portal trip) only chat is read; the rest is what the tab did in the world it left.
+        const [sim] = here(id);
+        if (!sim && m.type !== 'chat') return;
+        if (m.type === 'input') { if (!sim.input(id, m)) ws.close(1008, 'Invalid input'); }
+        else if (m.type === 'action') { if (!sim.action(id, m)) ws.close(1008, 'Invalid action'); }
+        else if (m.type === 'edit') sim.queueEdit(id, m);
+        else if (m.type === 'respawn') sim.respawn(id);
+        else if (m.type === 'wake') sim.wake(id); // C0BPacketEntityAction 3: Leave Bed
+        else if (m.type === 'click') { if (!sim.click(id, m)) ws.close(1008, 'Invalid click'); }
+        else if (m.type === 'close') sim.closeWindow(id, m.window);
+        else if (m.type === 'book') { if (!sim.book(id, m)) ws.close(1008, 'Invalid book'); }
+        else if (m.type === 'trade') { if (!sim.trade(id, m)) ws.close(1008, 'Invalid trade'); }
+        else if (m.type === 'enchant' || m.type === 'anvil' || m.type === 'beacon') { if (!sim.station(id, m)) ws.close(1008, 'Invalid station'); }
+        else if (m.type === 'drop') sim.drop(id, m.all === true);
+        else if (m.type === 'creative') sim.creative(id, m);
+        else if (m.type === 'gun') { if (!sim.gun(id, m)) ws.close(1008, 'Invalid gun action'); }
+        else if (m.type === 'stats') sim.requestStats(id); // C16PacketClientStatus REQUEST_STATS
+        else if (m.type === 'status') sim.clientStatus(id, m.status); // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
         else if (m.type === 'chat' && typeof m.text === 'string') {
           const text = cleanText(m.text);
           if (text.startsWith('/')) command(id, text.slice(1));
@@ -202,7 +213,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       const id = ws.playerId;
       if (!id || ws.replaced || !sessions.has(id)) return;
       const name = sessions.get(id).name;
-      sessions.delete(id); simulation.removePlayer(id);
+      sessions.delete(id); leave(id);
       system(`${name} left the game`);
     });
   });
@@ -223,16 +234,22 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       const usage = 'Usage: /tp [target player] <destination player> OR /tp [target player] <x> <y> <z>';
       const who = args.length === 2 || args.length === 4 ? byName(args.shift()) : [id, sessions.get(id)];
       if (!who || !args.length) return who ? usage : 'That player cannot be found';
-      const p = simulation.players.get(who[0]);
+      const [sim, p] = here(who[0]);
+      if (!p) return 'That player cannot be found';
       let to;
-      if (args.length === 1) { const dest = byName(args[0]); if (!dest) return 'That player cannot be found'; to = { ...simulation.players.get(dest[0]).position }; }
+      if (args.length === 1) {
+        const dest = byName(args[0]), [destSim, q] = dest ? here(dest[0]) : [null, null];
+        if (!q) return 'That player cannot be found';
+        if (destSim !== sim) return 'Unable to teleport because players are not in the same dimension'; // CommandTeleport
+        to = { ...q.position };
+      }
       else if (args.length === 3) {
         const axes = ['x', 'y', 'z'].map((k, i) => { const a = args[i], rel = a.startsWith('~'), n = Number(rel ? a.slice(1) || 0 : a);
           return Number.isFinite(n) ? (rel ? p.position[k] + n : k === 'y' ? n : Math.floor(n) === n && !a.includes('.') ? n + .5 : n) : NaN; });
         if (axes.some(Number.isNaN) || Math.abs(axes[0]) > 3e7 || Math.abs(axes[2]) > 3e7 || axes[1] < -512 || axes[1] > 512) return usage;
         to = { x: axes[0], y: axes[1], z: axes[2] };
       } else return usage;
-      simulation.teleport(p, to);
+      sim.teleport(p, to);
       return `Teleported ${who[1].name} to ${to.x.toFixed(2)}, ${to.y.toFixed(2)}, ${to.z.toFixed(2)}`;
     }],
     // CommandTime: set <value|day|night> | add <value>.
@@ -260,14 +277,16 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       return 'Game rule has been updated';
     }],
     list: [0, () => `There are ${sessions.size}/${config.maxPlayers} players online: ${[...sessions.values()].map(s => s.name).join(', ')}`],
-    kill: [0, id => { const p = simulation.players.get(id); if (p && !p.dead) { p.survival.health = 0; p.lastHit = null; } return null; }],
+    kill: [0, id => { const [, p] = here(id); if (p && !p.dead) { p.survival.health = 0; p.lastHit = null; } return null; }],
     gamemode: [2, (id, [mode, target]) => {
       const name = /^\d$/.test(mode ?? '') ? ['survival', 'creative', 'adventure'][+mode] : { s: 'survival', c: 'creative', a: 'adventure' }[mode] ?? mode;
       const m = ['survival', 'creative', 'adventure'].includes(name) ? name : null;
       if (!m) return 'Usage: /gamemode <survival|creative|adventure> [player]';
       const entry = target ? byName(target) : [id, sessions.get(id)];
       if (!entry) return `Player ${target} not found`;
-      simulation.setMode(simulation.players.get(entry[0]), m);
+      const [sim, p] = here(entry[0]);
+      if (!p) return `Player ${target ?? entry[1].name} not found`;
+      sim.setMode(p, m);
       return `Set ${entry[1].name}'s game mode to ${m}`;
     }],
     give: [2, (id, [target, item, amount, data]) => {
@@ -280,14 +299,18 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       if (!Number.isInteger(damage) || damage < 0 || damage > 32767) return usage;
       const stack = simulation.findItem(item, damage);
       if (!stack) return `There is no such item with name ${item}`;
-      const given = simulation.give(simulation.players.get(entry[0]), stack, count);
+      const [sim, p] = here(entry[0]);
+      if (!p) return `Player ${target} not found`;
+      const given = sim.give(p, stack, count);
       if (!given) return `${entry[1].name}'s inventory is full`;
       return `Given ${stackName(stack, ITEMS) || ITEMS[stack.id].name} * ${given} to ${entry[1].name}`; // a potion by its damage value (ItemPotion's name)
     }],
     kit: [2, (id, [target]) => {
       const entry = target ? byName(target) : [id, sessions.get(id)];
       if (!entry) return `Player ${target} not found`;
-      simulation.giveKit(simulation.players.get(entry[0]));
+      const [sim, p] = here(entry[0]);
+      if (!p) return `Player ${target ?? entry[1].name} not found`;
+      sim.giveKit(p);
       return `Gave the arena kit to ${entry[1].name}`;
     }],
     kick: [3, (id, [name, ...words]) => {
@@ -348,7 +371,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         s.unavailableSince = null;
         if (!sessions.has(id)) continue;
         if (!profile || profile.id !== s.account) { kick(id, MESSAGES.signIn); continue; }
-        const p = simulation.players.get(id);
+        const p = simulation.playerOf?.(id) ?? simulation.players.get(id);
         if (p && profile.skin !== p.skin) p.skin = profile.skin;
         if (p && profile.name !== s.name && !byName(profile.name)) { system(`${s.name} is now known as ${profile.name}`); s.name = p.name = profile.name; }
       } catch {
@@ -359,17 +382,29 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
   }
 
   function tick() {
-    const base = simulation.tick();
+    const dims = simulation.dims;
+    // Players that came out of a portal since the last tick get their new world (the 'dimension' message, S07PacketRespawn and
+    // the chunks around them), before its first tick message.
+    for (const [p, sim] of dims?.arrivals.splice(0) ?? []) {
+      const s = sessions.get(p.id);
+      if (!s || sim.players.get(p.id) !== p) continue;
+      p.sendColumns = null;
+      sendTerrain(s.ws, { type: 'dimension', world: sim.snapshot(p.view), self: sim.savePlayer(p), you: sim.you(p), spawn: spawnPosition() });
+    }
+    const bases = new Map([[simulation, simulation.tick()]]);
+    for (const [d, base] of dims?.tick() ?? []) bases.set(dims.get(d), base);
     for (const [id, text] of simulation.tellOut?.splice(0) ?? []) tell(id, text); // a bed's status lines, to one player
     for (const text of simulation.chatOut.splice(0)) system(text); // death messages, sent as chat before the tick that shows them
-    const common = JSON.stringify(base).slice(0, -1); // the shared part, closed per player with `you` and `events`
+    for (const [id, dimension] of dims?.departures.splice(0) ?? []) { const s = sessions.get(id); if (s) send(s.ws, { type: 'travel', dimension }); } // GuiDownloadTerrain
+    const commons = new Map(); // the shared part of each world's message, closed per player with `you` and `events`
     for (const [id, s] of sessions) {
-      const p = simulation.players.get(id);
-      if (!p) continue;
-      send(s.ws, `${common},"you":${JSON.stringify(simulation.you(p))},"events":${JSON.stringify(simulation.drainEvents(p))}}`);
-      const columns = simulation.drainColumns?.(p); // a streamed world: the columns of this player's new window, after the tick that moved it
+      const [sim, p] = here(id);
+      if (!p || !bases.has(sim)) continue;
+      if (!commons.has(sim)) commons.set(sim, JSON.stringify(bases.get(sim)).slice(0, -1));
+      send(s.ws, `${commons.get(sim)},"you":${JSON.stringify(sim.you(p))},"events":${JSON.stringify(sim.drainEvents(p))}}`);
+      const columns = sim.drainColumns?.(p); // a streamed world: the columns of this player's new window, after the tick that moved it
       if (columns) sendTerrain(s.ws, columns);
-      if (config.idleTimeout > 0 && simulation.ticks - p.idleSince > config.idleTimeout * 1200) kick(id, MESSAGES.idle);
+      if (config.idleTimeout > 0 && sim.ticks - p.idleSince > config.idleTimeout * 1200) kick(id, MESSAGES.idle);
     }
   }
   const tickTimer = setInterval(() => {
@@ -393,6 +428,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     await save();
     await admin.save().catch(() => {});
     simulation.columns?.dispose();
+    simulation.dims?.dispose();
   }
   return { server, simulation, admin, config, rules, build, status, save, close, tick, port: server.address().port };
 }

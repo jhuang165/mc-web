@@ -15,6 +15,11 @@ import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
+import { NetherLive } from '../nether-portal-live.js';
+import { solidTopSurface } from '../doors-panes.js';
+import { normalCube } from '../world.js';
+import { gameRule } from '../game-rules.js';
+import { providerOf } from '../dimensions.js';
 import { LiveRedstone } from '../redstone-live.js';
 import { installDispensers } from '../dispense.js';
 import { dispenseFirework } from '../fireworks-live.js';
@@ -58,11 +63,13 @@ export class DedicatedSimulation {
     this.players = new Map();
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
+    this.pendingViews = new Map(); // player id -> a portal arrival's window (server-dimensions.js)
     this.actions = [];
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
     this.weather = new Weather().restore(saved.weather).restoreSimulation(saved.worldRandom);
     this.farming = new Farming(this.world, saved.farms);
-    this.fluids = new Fluids(this.world, { random: this.weather.random });
+    // The Nether's lava spreads further and faster and water cannot be placed; neither the Nether nor the End has a sky (fluids.js).
+    this.fluids = new Fluids(this.world, { random: this.weather.random, nether: !!this.world.isHell, skyless: !!this.world.dimension });
     this.fluids.load(saved.fluidTicks);
     this.fire = new Fire(this.world, { weather: () => this.weather,
       stillLava: (x, y, z) => !this.fluids.pending.has(this.fluids.key(x, y, z, LAVA)),
@@ -76,10 +83,17 @@ export class DedicatedSimulation {
     this.falling = new FallingBlocks(this.world, { drop: noop, apply: noop }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: noop, apply: noop }).watch();
+    // Nether portals (BlockFire.onBlockAdded lights a complete obsidian frame, a broken frame takes its portal down), the portal's
+    // pig zombies (BlockPortal.updateTick, Overworld only) and nether wart (nether-portal-live.js).
+    this.netherLive = new NetherLive(this.world, { random: this.weather.random, apply: noop,
+      drop: (stacks, x, y, z) => { this.play?.items.dropBlock(stacks.map(d => makeStack(d.id, d.count, d.damage || 0)), x, y, z); },
+      pigman: at => { this.mobs?.ew.spawnPortalPigman(at, this.weather.random); },
+      difficulty: () => this.config?.difficulty ?? 2, mobSpawning: () => gameRule('doMobSpawning'),
+      solidTop: (x, y, z) => solidTopSurface(this.world, x, y, z), normalCube }).watch();
     this.redstone = new LiveRedstone(this.world, {
       primeTnt: (x, y, z) => { this.mobs?.prime(x, y, z); }, // BlockTNT.onNeighborBlockChange when powered (the engine removes the block)
       entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
-      environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
+      environment: () => ({ sky: this.world.hasNoSky ? 0 : 15, skylightSubtracted: this.darkness, celestialAngle: this.celestialAngle * Math.PI * 2, noSky: !!this.world.hasNoSky }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
       // Comparators read the shared tile inventories (redstone-runtime.js containerSlotsOf), as in the browser.
       containerSlots: containerSlotsOf(this.world, { chests: () => this.tiles.chests, furnaces: () => this.tiles.furnaces, dispensers: () => this.tiles.dispensers,
@@ -107,7 +121,7 @@ export class DedicatedSimulation {
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
-    this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b);
+    this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.netherLive.randomTick(x, y, z, b);
     // Instance hook sees *every* write, including untracked and fluid/redstone
     // writes. Store only the final cell value per tick; never wrap World globally.
     const put = this.world.put.bind(this.world);
@@ -149,7 +163,9 @@ export class DedicatedSimulation {
   }
   // The weather tick's thunder sounds and the bolts that flashed (the gun server forwards and strikes them; this base drops them).
   weatherEvents() {}
-  get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
+  // WorldProvider.calculateCelestialAngle: the Nether's 0.5 and the End's 0, else the time of day.
+  get celestialAngle() { return providerOf(this.world.dimension ?? 0).fixedAngle ?? celestialAngle(this.time, 1); }
+  get darkness() { return this.world.hasNoSky ? skylightSubtracted(this.celestialAngle, 0, 0) : skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
     if ([...this.players.values()].some(p => p.resumeKey === resumeKey)) throw new Error('That player is already connected.');
@@ -180,8 +196,10 @@ export class DedicatedSimulation {
       const had = new Set(p.view && !p.sendColumns ? [...this.columns.keys(p.view)].map(k => k.join(',')) : []);
       p.view = want; p.sendColumns = [...this.columns.keys(want)].filter(k => !had.has(k.join(',')));
     }
-    this.reside(players.map(p => p.view).filter(Boolean));
-    this.columns.prefetchAround(players.map(p => p.position));
+    // A portal arrival's window (server-dimensions.js) stays resident while its trip finishes.
+    const pending = [...this.pendingViews.values()];
+    this.reside([...players.map(p => p.view).filter(Boolean), ...pending]);
+    this.columns.prefetchAround([...players.map(p => p.position), ...pending.map(w => ({ x: w.minX + 64, z: w.minZ + 64 }))]);
   }
   // The columns player `p` lacks for its new window, as they stand after this tick (sent after the tick message), or null.
   drainColumns(p) {
@@ -289,7 +307,7 @@ export class DedicatedSimulation {
   // A streamed world's player whose column is not ticking (its window is still being generated) waits, like an unloaded chunk.
   frozen(p) { return !!this.columns && !this.world.isTicking(p.position.x, p.position.z); }
   tickWorld(beforeLit) {
-    this.weather.tick(this.world);
+    if (this.world.hasNoSky) this.weather.tickDimension(this.world); else this.weather.tick(this.world); // no weather in the Nether or the End
     this.weatherEvents(this.weather.drain(), this.weather.struck);
     this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, hoppers: this.hoppers, redstone: this.redstone },
@@ -309,7 +327,7 @@ export class DedicatedSimulation {
   // `view`: a streamed world's window ({ minX, minZ }) whose columns this tab gets; a finite world sends all of them.
   snapshot(view = null) {
     const w = this.world, columns = view ? [...this.columns.keys(view)].map(([cx, cz]) => w.chunkAt(cx, cz)) : [...w.chunks.values()];
-    return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion, ...(view ? { window: view, originX: w.originX, originZ: w.originZ, nativeSpawn: w.nativeSpawn ?? null } : {}),
+    return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion, ...(w.dimension ? { dimension: w.dimension } : {}), ...(view ? { window: view, originX: w.originX, originZ: w.originZ, nativeSpawn: w.nativeSpawn ?? null } : {}),
       time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weatherState(), redstone: { lit: [...this.redstone.lit] } };
   }
   save() {

@@ -5,6 +5,7 @@
 import { BedSleep, activateBed, nextMorning, verifyRespawn, wakeSavedSleeper, BED_TEXT, BED_DIR } from '../bed.js';
 import { HOSTILE, ENTITY_TYPES } from '../entities.js';
 import { dismount } from './server-riding.js';
+import { bedExplosion } from '../dimension-live.js';
 
 // World.isDaytime: skylightSubtracted < 4 (the rain and thunder darken it too).
 export const daytime = sim => sim.darkness < 4;
@@ -33,6 +34,12 @@ function monsterIn(sim, b) {
 // BlockBed.onBlockActivated for player p on either half of the bed at (x, y, z). The status lines go to p alone.
 export function useBed(sim, p, x, y, z) {
   if (p.dead || !p.bed || p.bed.sleeping) return;
+  // WorldProvider.canRespawnHere false (the Nether, the End): the bed goes and explodes at its head, power 5, flaming.
+  const boom = bedExplosion(sim.world, x, y, z);
+  if (boom) {
+    if (boom.cells.length) sim.mobs?.explode([...sim.players.values()].filter(q => !q.dead), boom.x, boom.y, boom.z, boom.size, { smoking: true, flaming: true });
+    return;
+  }
   const out = activateBed(sim.world, x, y, z, p.bed, {
     player: { x: p.position.x, y: p.position.y, z: p.position.z, alive: !p.dead && p.survival.health > 0 },
     daytime: daytime(sim),

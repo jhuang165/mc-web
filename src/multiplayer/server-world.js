@@ -38,15 +38,31 @@ export class ServerColumns {
   static same(a, b) { return !!a && !!b && a.minX === b.minX && a.minZ === b.minZ; }
   *keys(w) { for (let cx = w.minX / 16; cx < w.minX / 16 + SPAN; cx++) for (let cz = w.minZ / 16; cz < w.minZ / 16 + SPAN; cz++) yield [cx, cz]; }
   // Every population cell of window `w` is built (or the window's columns are resident already), so moving there does not generate here.
+  // A Nether or End world (dimension-world.js) has no population cells: the worker builds whole columns (world.pregenerated).
   ready(w) {
-    if (!this.prefetch || this.prefetch.failed || !this.prefetch.cells) return true;
-    for (const [cx, cz] of this.keys(w)) if (!this.world.chunks.has(columnKey(cx, cz)) && !this.world.population.hasCell(Math.floor(cx / CELL), Math.floor(cz / CELL))) return false;
+    if (!this.prefetch || this.prefetch.failed) return true;
+    const cells = this.prefetch.cells, world = this.world;
+    for (const [cx, cz] of this.keys(w)) {
+      if (world.chunks.has(columnKey(cx, cz))) continue;
+      if (cells ? !world.population.hasCell(Math.floor(cx / CELL), Math.floor(cz / CELL)) : !world.pregenerated.has(columnKey(cx, cz))) return false;
+    }
     return true;
   }
-  // Ask the worker for what the players at these positions will need next (nearest first, two requests in flight).
-  prefetchAround(points) { if (this.prefetch) for (const p of points) this.prefetch.update(p.x, p.z); }
+  // Ask the worker for what the players at these positions will need next (nearest first, two requests in flight). Prefetched
+  // columns (Nether/End) are kept for every position's square, not only the last one's.
+  prefetchAround(points) {
+    const f = this.prefetch;
+    if (!f) return;
+    if (!f.cells && !f.failed) {
+      const keep = new Set();
+      for (const p of points) if (Number.isFinite(p.x) && Number.isFinite(p.z)) for (const u of f.units(p.x, p.z)) keep.add(columnKey(...u));
+      for (const k of this.world.pregenerated.keys()) if (!keep.has(k)) this.world.pregenerated.delete(k);
+    }
+    for (const p of points) f.update(p.x, p.z, { trim: f.cells });
+  }
   whenReady(w) {
     if (this.ready(w) || !this.prefetch) return Promise.resolve();
+    if (!this.prefetch.cells) return this.prefetch.whenHas([...this.keys(w)].filter(([cx, cz]) => !this.world.chunks.has(columnKey(cx, cz))));
     return this.prefetch.whenHas([...new Map([...this.keys(w)].map(([cx, cz]) => [columnKey(Math.floor(cx / CELL), Math.floor(cz / CELL)), [Math.floor(cx / CELL), Math.floor(cz / CELL)]])).values()]);
   }
   // A column as World.streamAround builds it: the generated (or stored) terrain, then every remembered write to it.
@@ -135,6 +151,7 @@ export class ServerLight {
   }
   skyAt(x, y, z) {
     const w = this.world;
+    if (w.hasNoSky) return 0; // the Nether and the End have no sky light (WorldProvider.hasNoSky)
     if (y >= w.height) return 15;
     const blocks = w.columnBlocks(x, z);
     if (!blocks) return 15;

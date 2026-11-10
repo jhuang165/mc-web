@@ -31,8 +31,11 @@ export const trigger = (p, id) => !!p?.achievements && BY_ID[id] && p.achievemen
 
 // StatisticsFile.func_150873_a on an unlock: the chat line every player sees (ServerConfigurationManager.sendChatMsg), and the toast
 // on the unlocking player's tab.
+// To every player on the server, in every world (ServerConfigurationManager.sendChatMsg); a player mid-trip hears it on arrival.
 function announce(sim, p, id) {
-  for (const q of sim.players.values()) sim.send(q, { type: 'achievement', id, by: p.name, self: q === p });
+  const root = sim.root ?? sim, trip = root.dims?.transit.get(p.id);
+  if (trip) trip.events.push({ type: 'achievement', id, by: p.name, self: true });
+  for (const [q, s] of root.everyone?.() ?? [...sim.players.values()].map(q => [q, sim])) s.send(q, { type: 'achievement', id, by: p.name, self: q === p });
 }
 
 // The world-wide observers, installed once: dropped stacks, the mobs' deaths, hits and births, and the server's crafting slots.

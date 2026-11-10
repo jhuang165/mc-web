@@ -40,6 +40,8 @@ import { potionColor } from '../fx.js';
 import { effectRows } from '../status-effects.js';
 import { INVISIBILITY } from '../potion-fx.js';
 import { restoreBed, saveBed, useBed, wake, tickBeds, bedRespawn, settleBedRespawn, sleepRow, sleeperPresence } from './server-beds.js';
+import { ServerDimensions } from './server-dimensions.js';
+import { PortalState, readPlayerPortalState, OVERWORLD, END, GAME_IDS } from '../dimensions.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -72,21 +74,34 @@ const describe = (victim, hit) => {
 const finishDrinking = player => finishDrinkingItem(player, finishMilk);
 export class GunSimulation extends DedicatedSimulation {
   // config: the server.properties values (properties.js readServerConfig), canEdit(p) -> op check for spawn protection.
-  constructor(saved = {}, { world = null, port = null, config = {}, random = Math.random, isOp = () => false } = {}) {
+  // `root`: the Overworld's simulation when this one is its Nether or End (server-dimensions.js); `makePort()` makes those worlds'
+  // generator workers.
+  constructor(saved = {}, { world = null, port = null, config = {}, random = Math.random, isOp = () => false, root = null, makePort = null } = {}) {
     super({ ...saved, version: saved.version === 2 ? 1 : saved.version, players: [] }, { world, port });
+    this.root = root;
     this.config = { gamemode: 'survival', difficulty: 2, pvp: true, spawnProtection: 16, forceGamemode: false, ...config };
     this.random = random; this.isOp = isOp;
     this.history = new PositionHistory();
     this.outbox = new Map(); // player id -> events for that player's next tick message
     this.chatOut = [];
     this.tellOut = []; // [player id, text]: lines for one player's chat (a bed's status messages)
-    this.accounts = new Map(saved.accounts ?? []); // account id -> saved player
-    this.rules = { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
+    this.accounts = root?.accounts ?? new Map(saved.accounts ?? []); // account id -> saved player
+    this.rules = root?.rules ?? { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
+    if (root) { this.chatOut = root.chatOut; this.tellOut = root.tellOut; } // one server's chat
     this.play = new ServerPlay(this, saved.play ?? {}); // windows, mining, block use and dropped items (server-play.js)
     this.hanging = new ServerHanging(this, saved.hanging ?? null); // paintings and item frames (server-hanging.js)
-    this.maps = this.mobs ? new ServerMaps(this, saved.maps ?? null) : null; // the world's filled maps (server-maps.js)
+    this.maps = this.mobs && !root ? new ServerMaps(this, saved.maps ?? null) : null; // the world's filled maps (server-maps.js; the Overworld's only)
     watchServerStats(this); // the statistics and achievements of drops, kills, hits and breeding (server-stats.js)
+    // A streamed Overworld has the Nether and the End (server-dimensions.js), made when someone first travels there.
+    this.dimension = world?.dimension ?? OVERWORLD;
+    this.dims = !root && this.world.streaming && !this.world.dimension ? new ServerDimensions(this, saved.dimensions ?? {}, { makePort }) : null;
   }
+  // The world player `id` is in (null while it travels), and the player wherever it is.
+  simOf(id) { return this.dims ? this.dims.simOf(id) : this.players.has(id) ? this : null; }
+  playerOf(id) { return this.dims ? this.dims.playerOf(id) : this.players.get(id) ?? null; }
+  travelling(id) { return !!this.dims?.transit.has(id); }
+  // Every connected player in every world, with its world.
+  *everyone() { for (const sim of this.dims?.all() ?? [this]) for (const p of sim.players.values()) yield [p, sim]; }
   // A streamed world has mobs (server-mobs.js); the finite test arenas stay empty. Runs inside super(): config, random and play
   // are read later, when the mobs tick.
   createMobs(saved) { return this.world.streaming ? new ServerMobs(this, saved.mobs ?? {}) : null; }
@@ -109,6 +124,7 @@ export class GunSimulation extends DedicatedSimulation {
     p.experience = new Experience(saved?.experience); p.xpCooldown = 0; p.sentXp = null;
     playerStats(this, p, saved); p.sentAchievements = null; // StatisticsFile (server-stats.js)
     restoreBed(this, p, saved?.bed); // the bed spawn point; a sleeper saved in bed wakes beside it (server-beds.js)
+    p.portal = new PortalState().restore(readPlayerPortalState(saved?.portal)); // Entity's portalCounter and timeUntilPortal
     if (!saved) this.giveKit(p);
     this.play.reset(p);
     this.watch(p); // the saved position's window (the caller waited for its cells: whenReady)
@@ -121,9 +137,9 @@ export class GunSimulation extends DedicatedSimulation {
     s.furnaceActive = () => false; // the shared furnaces tick once per world tick (tickWorld), not once per player
     return s;
   }
-  spawnPoint() { return this.world.spawn(); }
+  spawnPoint() { return this.root ? this.root.spawnPoint() : this.world.spawn(); }
   // WorldInfo's spawn point (spawn protection's centre): the native world spawn, which spawn() scatters players around.
-  worldSpawn() { const w = this.world, n = w.nativeSpawn; return n ? { x: n[0] - w.originX, y: n[1], z: n[2] - w.originZ } : w.spawn(); }
+  worldSpawn() { if (this.root) return this.root.worldSpawn(); const w = this.world, n = w.nativeSpawn; return n ? { x: n[0] - w.originX, y: n[1], z: n[2] - w.originZ } : w.spawn(); }
   // Where an account's player appears when it joins: its saved position, else null (the world spawn, always resident).
   startFor(account) { return this.accounts.get(account)?.position ?? null; }
   giveKit(p) {
@@ -161,6 +177,7 @@ export class GunSimulation extends DedicatedSimulation {
   }
   removePlayer(id) {
     const p = this.players.get(id);
+    if (!p && this.dims?.drop(id)) { this.outbox.delete(id); return; } // left while travelling
     if (p) { p.statsLive?.leaveGame(); wake(this, p, true, false); dismount(this, p); dropHook(p); this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window and leaves its vehicle
     this.players.delete(id);
     this.outbox.delete(id);
@@ -169,7 +186,7 @@ export class GunSimulation extends DedicatedSimulation {
     const player = p.survival.serialize();
     for (const key of ['furnaces', 'chests', 'dispensers', 'brewing', 'hoppers']) delete player[key]; // world tiles are saved once
     return { name: p.name, mode: p.survival.mode, position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch, player,
-      experience: p.experience?.serialize(), bed: saveBed(p), ...saveStats(p) };
+      experience: p.experience?.serialize(), bed: saveBed(p), ...saveStats(p), portal: p.portal?.save(), ...(this.dimension ? { dimension: this.dimension } : {}) };
   }
   // v3 input: movement, look, the selected slot and the newest tick the client has drawn (for lag compensation).
   input(id, message) {
@@ -293,6 +310,7 @@ export class GunSimulation extends DedicatedSimulation {
   }
   // Java's spawn-protection: within the radius of the world spawn only operators change blocks. PvP is not affected.
   canBreak(p, [x, , z]) {
+    if (this.root) return true; // spawn protection is the Overworld's (MinecraftServer.isBlockProtected: dimension 0)
     const r = this.config.spawnProtection, s = this.worldSpawn();
     if (!(r > 0) || this.isOp(p)) return true;
     return Math.max(Math.abs(Math.floor(x) - Math.floor(s.x)), Math.abs(Math.floor(z) - Math.floor(s.z))) > r;
@@ -304,11 +322,13 @@ export class GunSimulation extends DedicatedSimulation {
     Object.assign(s, { health: s.maxHealth, food: 20, saturation: 5, exhaustion: 0, fire: 0, air: 300, hurtTicks: 0, hurtTime: 0, died: false });
     s.effects = new (s.effects.constructor)(); s.effects.player = s;
     dismount(this, p); dropHook(p); wake(this, p, true, false);
-    p.position.copy(bedRespawn(this, p) ?? this.spawnPoint()); p.previous.copy(p.position); // by the bed (server-beds.js), else the world spawn
-    Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     p.fallDistance = 0; p.landedFall = 0; p.flying = false; p.dead = false; p.lastHit = null;
     s.protection = JOIN_PROTECTION;
     p.combat.reset(); p.eating = null; this.play.reset(p);
+    // WorldProvider.canRespawnHere: no respawning in the Nether or the End, it is the Overworld's bed or spawn.
+    if (this.root) { this.root.dims.travel(p, OVERWORLD, { respawn: true }); return true; }
+    p.position.copy(bedRespawn(this, p) ?? this.spawnPoint()); p.previous.copy(p.position); // by the bed (server-beds.js), else the world spawn
+    Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     return true;
   }
   // A teleport moves the player and resets fall and velocity; the client takes the new position from its next tick (you.x).
@@ -398,9 +418,10 @@ export class GunSimulation extends DedicatedSimulation {
       if (p.swing) p.swing--;
       this.play.checkWindow(p);
       this.play.tickMining(p);
+      this.portalTick(p, from); // last: a trip takes the player out of this world
     }
     for (const p of players) {
-      if (p.dead || p.survival.health > 0) continue;
+      if (p.dead || p.survival.health > 0 || !this.players.has(p.id)) continue;
       p.dead = true;
       const hit = p.lastHit && this.ticks - p.lastHit.tick < 100 ? p.lastHit : null;
       const reason = p.survival.lastDamage;
@@ -417,6 +438,25 @@ export class GunSimulation extends DedicatedSimulation {
       p.mining = null; p.mineHeld = false;
     }
     this.history.record(this.ticks, this.players.values());
+  }
+  // BlockPortal / BlockEndPortal.onEntityCollidedWithBlock for the cells the player's box touches (Entity.func_145775_I, the box
+  // shrunk by 0.001), then Entity.onEntityUpdate's portal timer. A rider or a ridden player is not taken. Starts the trip
+  // (server-dimensions.js); `p.portalShown` is the tab's portal overlay.
+  portalTick(p, from) {
+    const dims = (this.root ?? this).dims, state = p.portal;
+    if (!dims || !state) return false;
+    const w = this.world, { x, y, z } = p.position, hw = 0.299;
+    let nether = false, end = false;
+    for (let bx = Math.floor(x - hw); bx <= Math.floor(x + hw); bx++) for (let by = Math.floor(y + 0.001); by <= Math.floor(y + 1.799); by++) for (let bz = Math.floor(z - hw); bz <= Math.floor(z + hw); bz++) {
+      const b = w.get(bx, by, bz);
+      if (b === GAME_IDS.portal) nether = true; else if (b === GAME_IDS.endPortal) end = true;
+    }
+    const riding = !!p.rider?.vehicle;
+    if (end && !riding) { p.portalShown = false; return dims.travel(p, END); } // BlockEndPortal: travelToDimension(1) at once
+    if (nether && !riding) state.setInPortal(from.x, from.z, x, z);
+    p.portalShown = state.inPortal;
+    const to = state.tick(this.dimension, { creative: p.survival.creative, riding });
+    return to !== null && dims.travel(p, to);
   }
   // CombatTracker's line (death-messages.js) for a death no player caused: a mob, an arrow, a blast, lava, drowning.
   trackerLine(p) {
@@ -472,6 +512,7 @@ export class GunSimulation extends DedicatedSimulation {
     out.items = this.play.itemsNear(p);
     if (this.mobs) { out.mobs = this.mobs.rows(p); out.thrown = this.mobs.thrownRows(p); out.carts = this.mobs.cartRows(p); out.boats = this.mobs.boatRows(p); }
     out.riding = ridingOf(this, p);
+    if (p.portalShown) out.portal = true; // in a Nether portal: the tab's swirl and nausea (EntityPlayerSP.timeInPortal)
     const sleep = sleepRow(p);
     if (sleep) out.sleep = sleep; // the bed and the fade timer (server-beds.js)
     const hanging = this.hanging.rows(p);
@@ -491,9 +532,12 @@ export class GunSimulation extends DedicatedSimulation {
   }
   drainEvents(p) { const e = this.outbox.get(p.id) ?? []; this.outbox.delete(p.id); return e; }
   save() {
+    const dimensions = this.dims?.save(); // the other worlds' players go into the shared accounts first
     for (const p of this.players.values()) this.accounts.set(p.account, this.savePlayer(p));
+    for (const [, trip] of this.dims?.transit ?? []) { const saved = this.savePlayer(trip.p); if (trip.from) saved.dimension = trip.from; else delete saved.dimension; this.accounts.set(trip.p.account, saved); }
     const base = super.save();
     delete base.players;
-    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save(), ...(this.mobs ? { mobs: this.mobs.save() } : {}), ...(this.maps ? { maps: this.maps.save() } : {}), hanging: this.hanging.save() };
+    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save(), ...(this.mobs ? { mobs: this.mobs.save() } : {}), ...(this.maps ? { maps: this.maps.save() } : {}), hanging: this.hanging.save(),
+      ...(dimensions && Object.keys(dimensions).length ? { dimensions } : {}) };
   }
 }

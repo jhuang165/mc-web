@@ -121,11 +121,12 @@ export class StreamPrefetch {
   // Requests in flight on the main worker (window columns, cells and its own ring request; ring-worker requests do not count).
   windowPending() { let n = 0; for (const k of this.pending) if (k[0] !== 'r' || k === this.mainRing) n++; return n; }
   has([x, z]) { return this.cells ? this.world.population.hasCell(x, z) : this.world.pregenerated.has(key(x, z)); }
-  // Called once per tick with the player's position: requests missing units and trims the column cache.
-  update(x, z) {
+  // Called once per tick with the player's position: requests missing units and trims the column cache. `trim` false keeps the
+  // cached columns of other positions (the gun server's several players in one Nether/End world trim to their union themselves).
+  update(x, z, { trim = true } = {}) {
     if (this.failed || !Number.isFinite(x) || !Number.isFinite(z)) return;
     const wanted = this.units(x, z);
-    if (!this.cells) {
+    if (!this.cells && trim) {
       const keep = new Set(wanted.map((u) => key(...u)));
       for (const k of this.world.pregenerated.keys()) if (!keep.has(k)) this.world.pregenerated.delete(k);
     }
