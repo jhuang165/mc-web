@@ -1,6 +1,7 @@
 // Authoritative integrated-server explosion orchestration from main.js. This
 // module mutates world/entity state directly while leaving rendering, audio,
 // container presentation and UI notifications to synchronous hooks.
+import { explosionReaches } from "./ring-events.js";
 import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
 import { explodeBlocks, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
@@ -121,7 +122,8 @@ export function applyExplosion(state, request, hooks = {}) {
     }
   }
 
-  burst(x, y, z, size, smoking ? explosion.list : [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+  // S27 reaches only a player within 64 blocks (WorldServer.newExplosion), and the client's huge explosion particle has no other range test (ring-events.js).
+  if (explosionReaches(x, y, z, position)) burst(x, y, z, size, smoking ? explosion.list : [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
   sound("random.explode", { volume: 4, pitch: explosion.pitch, position: { x, y, z } });
 
   const changes = [];

@@ -69,6 +69,7 @@ import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
+import { tracksMob } from "./ring-events.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
@@ -1853,6 +1854,7 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
+    this.watching = player; // drainClientSounds: the one client (ring-events.js)
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
@@ -2642,10 +2644,11 @@ export class EntityWorld {
     return saved;
   }
   // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.
+  // Only a client that tracks the mob gets status 2 or 3 (EntityTrackerEntry), so a hurt or death sound of a mob outside its tracking square never plays (ring-events.js).
   drainClientSounds() {
     const sounds = this.clientSounds;
     this.clientSounds = [];
-    return sounds;
+    return this.watching ? sounds.filter((s) => !s.position?.type || tracksMob(s.position, this.watching)) : sounds;
   }
   drain() {
     const events = this.events;

@@ -286,6 +286,8 @@ import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
 import { loadFontResources, onFontChange, font, setFontAnaglyph } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
+import { ringEntityActive } from "./streaming-ticks.js";
+import { trackedWithin, ROCKET_TRACKING } from "./ring-events.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
 setOriginalBlockMapper(fromOriginal);
@@ -2674,7 +2676,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
-  rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
+  rockets.tick(world, { ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
