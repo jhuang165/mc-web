@@ -281,7 +281,7 @@ export class Boats extends Minecarts {
     let dx = other.x - boat.x, dz = other.z - boat.z;
     const m = Math.max(Math.abs(dx), Math.abs(dz));
     if (!(m >= 0.009999999776482697)) return [0, 0];
-    const d = Math.sqrt(m);
+    const d = f(Math.sqrt(m)); // MathHelper.sqrt_double returns a float (probed: boat-cow records)
     dx /= d; dz /= d;
     let k = 1 / d;
     if (k > 1) k = 1;

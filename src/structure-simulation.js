@@ -85,7 +85,7 @@ function vehicleBlockers(state) {
 }
 
 // The player's and each mob's share of the push of the vehicles they stand against, then the passenger links and the drops.
-function pushAndDrain(state, hooks, system) {
+function pushAndDrain(state, hooks, system, mobsPushed = false) {
   const { velocity, alive = true } = state;
   const { living, sized, pBox, player } = vehicleBlockers(state);
   if (alive) {
@@ -93,7 +93,7 @@ function pushAndDrain(state, hooks, system) {
     velocity.x += vx;
     velocity.z += vz;
   }
-  for (const e of living) {
+  if (!mobsPushed) for (const e of living) {
     const [vx, vz] = system.pushEntity(e, sized(e));
     e.vx += vx;
     e.vz += vz;
@@ -121,7 +121,17 @@ export function tickMinecartOne(state, hooks, cart) {
 /** The part of tickMinecartSimulation that follows the walk: the cart's pushes on the player and the mobs, the passenger links, the leftover drops. */
 export function finishMinecartSimulation(state, hooks = {}) {
   if (!state.minecarts?.carts.length) return [];
-  return pushAndDrain(state, hooks, state.minecarts);
+  return pushAndDrain(state, hooks, state.minecarts, true);
+}
+/**
+ * A mob's own collideWithNearbyEntities against the carts (or boats): EntityLivingBase.onLivingUpdate ends with it, so the push runs inside the mob's update
+ * (the walk reaches it with the position the mob has after its move, before a rider's seat is taken), not after the whole walk. Called by EntityWorld.push.
+ */
+export function pushMobOnVehicles(state, system, e) {
+  if (!system?.carts.length || !state.mobs) return;
+  const [w, h] = state.mobs.size(e), [vx, vz] = system.pushEntity(e, mobBox(e.x, e.y, e.z, w, h));
+  e.vx += vx;
+  e.vz += vz;
 }
 
 /**
@@ -293,5 +303,5 @@ export function tickBoatOne(state, hooks, boat) {
 }
 export function finishBoatSimulation(state, hooks = {}) {
   if (!state.boats?.carts.length) return [];
-  return pushAndDrain(state, hooks, state.boats);
+  return pushAndDrain(state, hooks, state.boats, true);
 }
