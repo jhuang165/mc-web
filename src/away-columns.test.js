@@ -51,3 +51,16 @@ test("a crowded spawn area does not push an entity's column out of the plan: wor
   assert.ok(cols.some(([x, z]) => x === 7 && z === 0), "the far pig's own column is planned");
   for (const p of pigs) assert.ok(cols.some(([x, z]) => x === Math.floor(p.x / 16) && z === Math.floor(p.z / 16)), `column of ${p.id}`);
 });
+
+// Batch 45 awayedge: a natively loaded column the run holds no copy of is treated as not loaded for the entities near it (they would meet air there).
+test("an entity within 8 blocks of a spawn-area column the run did not copy is held; one inside the copied block falls", async () => {
+  const r = { ...base, drops: [
+    { stack: { id: 4, count: 1, damage: 0 }, x: 8.5, y: 20, z: 8.5, mx: 0, my: 0, mz: 0, age: 0, delay: 0 }, // centre of the 3 x 3 copy: every column within 8 blocks is copied
+    { stack: { id: 4, count: 2, damage: 0 }, x: -8.5, y: 20, z: 8.5, mx: 0, my: 0, mz: 0, age: 0, delay: 0 }, // chunk (-1, 0): the column at x -32..-17 is not copied
+  ] };
+  const cols = []; for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) cols.push([x, z]);
+  const out = await runAway({ ...awayPlan(r, cols, 40), chunks: cols.map(([x, z]) => floorColumn(x, z)), records: [] });
+  const byCount = Object.fromEntries(out.entities.drops.map((d) => [d.stack.count, d.y]));
+  assert.ok(byCount[1] < 12, "the centre item fell to the floor");
+  assert.equal(byCount[2], 20, "the edge item did not tick");
+});

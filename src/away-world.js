@@ -32,6 +32,7 @@ import { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDG
 
 export { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan };
 const key = (cx, cz) => `${cx},${cz}`;
+const EDGE = 8; // blocks: how near an entity may come to a natively loaded column the run holds no copy of (see entityTicks)
 
 // Runs `plan.ticks` away ticks over `plan.chunks` (live column copies) and `plan.records` (the columns' stored edits, as readChunkColumns returns them).
 // Resolves { columns, fluidTicks, fireTicks, fallingTicks, falling, redstone, pistons, tiles, drops, stats } or null when nothing ran.
@@ -65,6 +66,10 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const entityTicks = (x, z) => {
     const bx = Math.floor(x), bz = Math.floor(z);
     if (!wanted.has(key(bx >> 4, bz >> 4))) return false;
+    // Batch 45: a column inside the loaded area that the run did not copy is loaded natively (spawn chunks, the 128-block rule above) but the worker has no terrain for it, so
+    // an entity walking into it would meet air. The port holds an entity that comes within EDGE blocks of such a column, as it holds one outside the copied set (the real rule
+    // is 32 blocks from an unloaded chunk; the copied halo is one chunk, so the hold is nearer). Columns the area does not load are covered by the 32-block loop below.
+    for (let cx = (bx - EDGE) >> 4; cx <= (bx + EDGE) >> 4; cx++) for (let cz = (bz - EDGE) >> 4; cz <= (bz + EDGE) >> 4; cz++) if (!wanted.has(key(cx, cz)) && loadedChunk(cx, cz)) return false;
     if (areas.every((s) => Math.abs(bx - s[0]) <= 80 && Math.abs(bz - s[2]) <= 80)) return true; // 32 blocks further still lie inside every loaded area: skip the chunk loop
     for (let cx = (bx - 32) >> 4; cx <= (bx + 32) >> 4; cx++) for (let cz = (bz - 32) >> 4; cz <= (bz + 32) >> 4; cz++) if (!loadedChunk(cx, cz)) return false;
     return true;
@@ -164,7 +169,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   };
 
   ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
-  if (ents) ents.falling = falling;
+  if (ents) { ents.falling = falling; falling.joined = (e) => ents.mobs.joined(e, "falling"); } // falling blocks tick in the one entity walk (away-entities.js)
   // (an entry held back in an unloaded column does nothing for the rest of the run, so it does not keep the run going)
   const work = (list) => { for (const e of list) if (ticking(e.x, e.z)) return true; return false; };
   const idle = () => !work(fluids.pending.values()) && !work(fire.queue.heap) && !work(falling.pending.values()) && !work(live.tree) && !live.thisTick.length
@@ -198,7 +203,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     freezeUnloadedRedstone();
     tree.tick({ x: 0, z: 0 }, { fluids: () => rt.flush() });
     live.sendQueuedBlockEvents();
-    if (entities) { if (ents) ents.park(falling, "entities", () => falling.tick()); else falling.tick(); }
+    if (entities) { if (ents) falling.tick({ entities: false }); else falling.tick(); }
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
     if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); sv.tickFurnaces(); }
