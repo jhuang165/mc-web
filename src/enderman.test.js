@@ -281,8 +281,9 @@ test("chase: a player target that is not staring is followed after 30 ticks beyo
   // Feet 0.12: the server player's eye (feet + 1.62) is at 1.74 as these ender positions were laid out for.
   const away = { x: 0.5, y: 0.12, z: 0.5, yaw: 90, pitch: 0, helmet: 0 }, staring = { x: 0.5, y: 0.12, z: 0.5, yaw: 0, pitch: 0, helmet: 0 };
   const log = attempts(away, ender(0.5, 1, 30.5), 33, 900);
-  assert.deepEqual(log.slice(0, 29), new Array(29).fill(0));
-  assert.deepEqual(log.slice(29), [1, 1, 1, 1], "the first attempt is tick 30 and every later tick retries while it fails");
+  // ya.e(): `bs++ >= 30` post-increments, so the first attempt is the 31st tick of the chase (batch 43: the batch 42 chase records replay exactly with it).
+  assert.deepEqual(log.slice(0, 30), new Array(30).fill(0));
+  assert.deepEqual(log.slice(30), [1, 1, 1], "the first attempt is tick 31 and every later tick retries while it fails");
   assert.deepEqual(attempts(away, ender(0.5, 1, 10.5), 40, 100), new Array(40).fill(0), "within 16 blocks it just walks");
   const e = ender(0.5, 0.29, 6.5);
   // ya.e(): `sa.f(sa) < 16.0D` is getDistanceSqToEntity, so 4 blocks (batch 42 b42-enderman-* records: no teleport attempt from a stare at 8 blocks, bytecode-read at 782).
