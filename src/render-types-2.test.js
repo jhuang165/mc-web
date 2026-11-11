@@ -15,7 +15,10 @@ import { meshAnaglyph } from "./anaglyph.js";
 import { solidBlock } from "./world.js";
 import { tileByName, ATLAS_COLUMNS, ATLAS_ROWS } from "./block-textures.js";
 
-const ref = JSON.parse(readFileSync(new URL("../public/research/render-types-2-reference.json", import.meta.url), "utf8"));
+// Batch 42: the same replay also runs the record at other world positions (render-types-2-pos-reference.json, tools/verify-render-types-2-pos.mjs); each fixture keeps its record for the icon table.
+const load = (name) => { const r = JSON.parse(readFileSync(new URL(`../public/research/${name}`, import.meta.url), "utf8")); for (const fx of r.fixtures) fx.icons = r.icons; return r; };
+const ref = load("render-types-2-reference.json"), refPos = load("render-types-2-pos-reference.json");
+const allFixtures = [...ref.fixtures, ...refPos.fixtures];
 const lightValues = JSON.parse(readFileSync(new URL("../public/research/light-float-reference.json", import.meta.url), "utf8")).lightValues; // aji.m() per original id, from the batch 36 record
 const R = 2, N = 5;
 // Batch 40 fixtures carry their own position (fx.pos); the earlier ones sit at (8, 8, 8).
@@ -27,12 +30,16 @@ const bitsToFloat = (b) => { i32[0] = b; return f32[0]; };
 function source(fx) {
   const P = posOf(fx), ci = (x, y, z) => cellIndex(x, y, z, P);
   const cells = fx.ids.map((id, i) => fromOriginal(id, fx.metas[i]) || { id: 0, meta: 0 });
-  const world = { height: 256, get: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].meta; } };
+  // No blocks below 0 or above 255 (Chunk.getBlock of the executed World; the position probe restores that, the older records never reach those cells).
+  const inWorld = (y) => y >= 0 && y < 256;
+  const world = { height: 256, get: (x, y, z) => { const i = inWorld(y) ? ci(x, y, z) : -1; return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = inWorld(y) ? ci(x, y, z) : -1; return i < 0 ? 0 : cells[i].meta; } };
   world.solid = (x, y, z) => { const b = world.get(x, y, z); return solidBlock(b, world.getMeta(x, y, z)); };
   const volume = {
     world,
-    skyAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] >> 4; },
-    blockAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] & 15; },
+    // World.getSkyBlockTypeBrightness (ahb.a(ahn, x, y, z), executed unchanged in the probe): y below 0 reads y 0, y of 256 and above answers the type's default
+    // (sky 15, block 0) without touching a cell.
+    skyAt: (x, y, z) => { if (y >= 256) return 15; const i = ci(x, Math.max(0, y), z); return i < 0 ? 0 : fx.light[i] >> 4; },
+    blockAt: (x, y, z) => { if (y >= 256) return 0; const i = ci(x, Math.max(0, y), z); return i < 0 ? 0 : fx.light[i] & 15; },
     emission: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : lightValues[fx.ids[i]]; },
   };
   const light = { world, packed: (...a) => LightVolume.prototype.packed.call(volume, ...a) };
@@ -64,13 +71,13 @@ function jsQuads(M) {
   }
   return out;
 }
-function nativeQuads(flat) {
+function nativeQuads(flat, icons) {
   const out = [];
   for (let q = 0; q < flat.length / 28; q++) {
     const v = [];
     for (let i = 0; i < 4; i++) {
       const o = (q * 4 + i) * 7, c = flat[o + 5], u = bitsToFloat(flat[o + 3]), idx = Math.floor(u / 2);
-      v.push({ pos: [bitsToFloat(flat[o]), bitsToFloat(flat[o + 1]), bitsToFloat(flat[o + 2])], icon: ref.icons[idx], frac: u - 2 * idx, v: bitsToFloat(flat[o + 4]), col: [c & 255, (c >> 8) & 255, (c >> 16) & 255], light: flat[o + 6] });
+      v.push({ pos: [bitsToFloat(flat[o]), bitsToFloat(flat[o + 1]), bitsToFloat(flat[o + 2])], icon: icons[idx], frac: u - 2 * idx, v: bitsToFloat(flat[o + 4]), col: [c & 255, (c >> 8) & 255, (c >> 16) & 255], light: flat[o + 6] });
     }
     out.push(v);
   }
@@ -100,13 +107,13 @@ function run() {
   render.fancy = true;
   const stats = {}, details = [];
   try {
-    for (const [n, fx] of ref.fixtures.entries()) for (const ao of [0, 1, 2]) {
+    for (const [n, fx] of allFixtures.entries()) for (const ao of [0, 1, 2]) {
       render.ao = ao;
       const src = source(fx), mesher = new ChunkMesher(src), P = posOf(fx), b = src.world.get(...P);
       const M = { solid: new Mesher(), water: new Mesher(), ice: new Mesher(), flow: new Mesher(), lava: new Mesher(), lavaFlow: new Mesher(), fire: [new Mesher(), new Mesher()], portal: new Mesher() };
       mesher.meshBlock(M, b, ...P);
       const s = (stats[`${fx.id}:${fx.type}`] ??= { id: fx.id, type: fx.type, fixtures: 0, vertices: 0, exact: 0, nativeOnly: 0, jsOnly: 0, order: 0, bad: Object.fromEntries(FIELDS.map((f) => [f, 0])) });
-      const jsG = group(jsQuads(M)), nat = group(nativeQuads(fx.ao[ao]));
+      const jsG = group(jsQuads(M)), nat = group(nativeQuads(fx.ao[ao], fx.icons));
       if (process.env.RT_DUMP && +process.env.RT_DUMP === n && ao === 0) { console.log("port keys", [...jsG.keys()].join("\n  ")); console.log("native keys", [...nat.keys()].join("\n  ")); }
       s.fixtures++;
       for (const [k, list] of nat) {

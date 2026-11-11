@@ -40,7 +40,7 @@ public class RenderTypesPosProbe {
     bao.M = new bao();
     bao.M.u = settings;
     int N = LightFloatProbe.N;
-    LightFloatProbe.W w = (LightFloatProbe.W) unsafe.allocateInstance(LightFloatProbe.W.class);
+    LightFloatProbe.W w = (LightFloatProbe.W) unsafe.allocateInstance(RenderTypes2PosProbe.W2.class) /* batch 42: clamps y to 0..255 in getSavedLightValue and has no blocks outside 0..255, as the unchanged World does */;
     LightFloatProbe.set(w, "t", unsafe.allocateInstance(aqq.class));
     w.ids = new int[N * N * N]; w.metas = new int[N * N * N]; w.sky = new int[N * N * N]; w.blk = new int[N * N * N];
     java.util.Map<Long, C3> chunks = new java.util.HashMap<>();

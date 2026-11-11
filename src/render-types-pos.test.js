@@ -26,12 +26,15 @@ function source(fx) {
   const P = posOf(fx), ci = (x, y, z) => cellIndex(x, y, z, P);
   // The furnace's facing (original metadata 2-5) lives in the port's state, and the mesher reads it as the metadata of block 14.
   const cells = fx.ids.map((id, i) => { const c = fromOriginal(id, fx.metas[i]) || { id: 0, meta: 0 }; return c.id === 14 && c.state?.facing ? { ...c, meta: c.state.facing } : c; });
-  const world = { height: 256, get: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : cells[i].meta; } };
+  // No blocks below 0 or above 255 (batch 42: the probe's world now answers air there, like the unchanged World).
+  const inWorld = (y) => y >= 0 && y < 256;
+  const world = { height: 256, get: (x, y, z) => { const i = inWorld(y) ? ci(x, y, z) : -1; return i < 0 ? 0 : cells[i].id; }, getMeta: (x, y, z) => { const i = inWorld(y) ? ci(x, y, z) : -1; return i < 0 ? 0 : cells[i].meta; } };
   world.solid = (x, y, z) => { const b = world.get(x, y, z); return solidBlock(b, world.getMeta(x, y, z)); };
   const volume = {
     world,
-    skyAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] >> 4; },
-    blockAt: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : fx.light[i] & 15; },
+    // World.getSkyBlockTypeBrightness: y below 0 reads y 0, y of 256 and above answers the default (sky 15, block 0); the raw reads clamp to 0..255.
+    skyAt: (x, y, z) => { if (y >= 256) return 15; const i = ci(x, Math.max(0, y), z); return i < 0 ? 0 : fx.light[i] >> 4; },
+    blockAt: (x, y, z) => { if (y >= 256) return 0; const i = ci(x, Math.max(0, y), z); return i < 0 ? 0 : fx.light[i] & 15; },
     emission: (x, y, z) => { const i = ci(x, y, z); return i < 0 ? 0 : lightValues[fx.ids[i]]; },
   };
   const light = { world, packed: (...a) => LightVolume.prototype.packed.call(volume, ...a) };

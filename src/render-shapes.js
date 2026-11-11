@@ -37,8 +37,8 @@ export function gateRenderPlan(meta, lowered) {
   return out;
 }
 
-// RenderBlocks.renderBlockAsItem for render type 21 (the fence gate in a hand or inventory slot, blm.a(aji, int, float), bytecode-read, not executed or wired into
-// the icon code yet): NOT the world path above. Three boxes, each drawn with its six faces (icon faces 0..5 of the gate block, planks) around a -0.5 translate, with
+// RenderBlocks.renderBlockAsItem for render type 21 (the fence gate in a hand or inventory slot, blm.a(aji, int, float); bytecode-read in batch 41, executed in batch 42:
+// public/research/item-render-reference.json, src/item-render.test.js, all three boxes and their faces agree): NOT the world path above. Three boxes, each drawn with its six faces (icon faces 0..5 of the gate block, planks) around a -0.5 translate, with
 // f = 1/16: [0.5 - f, 0.3, 0, 0.5 + f, 1, 2f], [0.5 - f, 0.3, 1 - 2f, 0.5 + f, 1, 1] (two posts) and [0.5 - f, 0.5, 0, 0.5 + f, 1 - f, 1] (one bar across).
 export const GATE_ITEM_BOXES = Object.freeze([[0.4375, 0.3, 0, 0.5625, 1, 0.125], [0.4375, 0.3, 0.875, 0.5625, 1, 1], [0.4375, 0.5, 0, 0.5625, 0.9375, 1]]);
 
@@ -59,4 +59,32 @@ const form = (f, c, lo, hi) => (f === 0 ? c : f === 1 ? 1 - c : f === 2 ? lo + h
 export function anvilUv(facing, fi, p, box) {
   const axis = fi >> 1, o = [0, 1, 2].filter((k) => k !== axis), [swap, uf, vf] = ANVIL_UV[facing & 3][fi], ua = o[swap ? 1 : 0], va = o[swap ? 0 : 1];
   return [form(uf, p[ua], box[ua], box[ua + 3]), form(vf, p[va], box[va], box[va + 3])];
+}
+
+// Batch 42: renderBlockAsItem executed (tools/probes/ItemRenderProbe.java, public/research/item-render-reference.json). Every block whose render type RenderBlocks.renderItemIn3d
+// accepts draws as boxes between a translate of -0.5 (type 0, 31, 39 and 26 first turn 90 degrees about y) with all six faces per box, in the order -y, +y, -z, +z, -x, +x.
+// ITEM_BOXES: the boxes of the blocks whose item is NOT a unit cube, keyed by the ORIGINAL block id (blm.a(aji, meta, f) sets the block's own item bounds first:
+// Block.setBlockBoundsForItemRender, so a carpet is 1/16 high, a plate a 4/16 slab in the middle of the cube, a button a small block). Stairs (STAIR_ITEM_BOXES in
+// stairs.js), fences (FENCE_ITEM_BOXES in fences.js), the gate (above), the anvil (anvilModelBoxes) and the beacon (BEACON_ITEM_BOXES) have their own tables; the dragon egg
+// (122) is drawn by BlockDragonEgg's layered loop (one draw of 48 quads), not as boxes, and the chests (22) go through TileEntityRendererChestHelper (no Tessellator boxes).
+const SLAB = Object.freeze([0, 0, 0, 1, 0.5, 1]), PLATE = Object.freeze([0, 0.375, 0, 1, 0.625, 1]), BUTTON = Object.freeze([0.3125, 0.375, 0.375, 0.6875, 0.625, 0.625]);
+export const ITEM_BOXES = Object.freeze({
+  44: [SLAB], 126: [SLAB], 60: [[0, 0, 0, 1, 0.9375, 1]], 70: [PLATE], 72: [PLATE], 147: [PLATE], 148: [PLATE], 77: [BUTTON], 143: [BUTTON],
+  78: [[0, 0, 0, 1, 0.125, 1]], 96: [[0, 0.40625, 0, 1, 0.59375, 1]], 116: [[0, 0, 0, 1, 0.75, 1]], 120: [[0, 0, 0, 1, 0.8125, 1]], 151: [[0, 0, 0, 1, 0.375, 1]],
+  171: [[0, 0, 0, 1, 0.0625, 1]], 92: [[0.0625, 0, 0.0625, 0.9375, 0.5, 0.9375]], 139: [[0, 0, 0.3125, 1, 0.8125, 0.6875], [0.25, 0, 0.25, 0.75, 1, 0.75]],
+});
+// renderBlockAsItem type 34 (the beacon): inner obsidian base (metadata 1 faces), the beacon core (metadata 2), then the glass shell (metadata 0).
+export const BEACON_ITEM_BOXES = Object.freeze([[0.125, 0, 0.125, 0.875, 0.1875, 0.875], [0.1875, 0.1875, 0.1875, 0.8125, 0.875, 0.8125], [0, 0, 0, 1, 1, 1]]);
+
+// The uv of an item box vertex (renderFaceXPos ... with no uv rotation, executed): face order +x, -x, +y, -y, +z, -z as FACES in chunk-mesher.js; p = the vertex, box =
+// [x0, y0, z0, x1, y1, z1]. XPos and ZNeg run (min + max) - p on their horizontal axis, so a thin box shows a strip of the texture; the other faces use p; vertical v is 1 - y.
+// A face whose box reaches outside the block on one of its axes (the fence bars, z -1/8 to 9/8) takes the whole texture along that axis instead of a crop. Returns [s, t] in
+// tile fractions (t from the top).
+export function itemBoxUv(fi, p, box) {
+  const along = (a, mode) => { // mode 0: c, 1: 1 - c, 2: (min + max) - c
+    const lo = box[a], hi = box[a + 3];
+    if (lo < 0 || hi > 1) { const n = (p[a] - lo) / (hi - lo); return mode === 0 ? n : 1 - n; }
+    return mode === 0 ? p[a] : mode === 1 ? 1 - p[a] : lo + hi - p[a];
+  };
+  return [[along(2, 2), along(1, 1)], [along(2, 0), along(1, 1)], [along(0, 0), along(2, 0)], [along(0, 0), along(2, 0)], [along(0, 0), along(1, 1)], [along(0, 2), along(1, 1)]][fi];
 }

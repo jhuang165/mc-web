@@ -25,7 +25,7 @@ const classes = path.join(out, "classes"), probe = path.join(out, "probe");
 for (const d of [classes, probe]) await mkdir(d, { recursive: true });
 await exec("unzip", ["-q", "-o", jar, "*.class", "-d", classes], { maxBuffer: 1 << 24 });
 const cp = [probe, classes, lib("log4j-api-2.0-beta9"), lib("guava-15.0"), lib("commons-lang3-3.1"), lib("commons-io-2.4"), lib("gson-2.2.4")].join(path.delimiter);
-await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/LightFloatProbe.java"), path.join(root, "probes/RenderTypesProbe.java"), path.join(root, "probes/RenderTypesPosProbe.java")]);
+await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/LightFloatProbe.java"), path.join(root, "probes/RenderTypesProbe.java"), path.join(root, "probes/RenderTypes2Probe.java"), path.join(root, "probes/RenderTypes2PosProbe.java"), path.join(root, "probes/RenderTypesPosProbe.java")]);
 const seed = 41;
 const { stdout } = await exec("java", ["-cp", cp, "RenderTypesPosProbe", path.join(root, "../public/media/1.7.10/colormap/grass.png"), path.join(root, "../public/media/1.7.10/colormap/foliage.png"), String(seed)], { maxBuffer: 1 << 28 });
 const data = JSON.parse(stdout.trim().split("\n").filter((l) => l.startsWith("{")).pop());
