@@ -557,8 +557,9 @@ export function bodyTurn(e) {
 }
 // The client entity's body turn: EntityLiving.func_110146_f is the body helper for an AI-enabled mob (LEGACY_MOVE lists the others, which use the
 // walking-direction turn of EntityLivingBase.func_110146_f), then the same prev-angle wraps.
+const CLIENT_LEGACY_TURN = new Set(["ghast", "squid"]);
 export function clientBodyTurn(c) {
-  if (!LEGACY_MOVE.has(c.type)) return bodyTurn(c);
+  if (!LEGACY_MOVE.has(c.type) && !CLIENT_LEGACY_TURN.has(c.type)) return bodyTurn(c);
   legacyBodyTurn(c, c.x - c.px, c.z - c.pz);
   c.prevRotationYaw = nearAngle(c.prevRotationYaw, c.rotationYaw);
   c.prevRenderYawOffset = nearAngle(c.prevRenderYawOffset, c.renderYawOffset);
@@ -1921,7 +1922,14 @@ export class EntityWorld {
     const [w, h] = this.size(m);
     c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
-    moveEntityWithHeading(this.world, c, w, h, 0);
+    // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's
+    // override is moveEntity alone: its gravity and swimming are the server's (isRemote guards them), so the client squid only coasts on packets
+    if (m.type === "squid") moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+    else if (m.type === "ghast") {
+      moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+      const friction = c.inWater ? 0.8 : c.onGround ? f(f(0.6) * f(0.91)) : f(0.91);
+      c.vx *= friction; c.vy *= friction; c.vz *= friction;
+    } else moveEntityWithHeading(this.world, c, w, h, 0);
   }
   // Entity.onEntityUpdate on the client entity: handleWaterMovement (which pushes a living entity along the flow) and handleLavaMovement at the
   // client entity's own box. EntityMagmaCube.handleLavaMovement is false.
@@ -1929,6 +1937,16 @@ export class EntityWorld {
     const [w, h] = this.size(m), r = w / 2;
     c.inWater = inWater(this.world, c, w, h);
     c.inLava = m.type === "magma_cube" ? false : inLava(this.world, [c.x - r, c.y, c.z - r, c.x + r, c.y + h, c.z + r]);
+    // the start of onLivingUpdate that runs on both sides: EntityBlaze (airborne and falling) and EntityWither damp the vertical motion by 0.6
+    if (m.type === "blaze" && !c.onGround && c.vy < 0) c.vy *= 0.6;
+    else if (m.type === "wither") c.vy *= 0.6000000238418579;
+  }
+  // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
+  // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
+  clientAfterMove(c, m) {
+    clientBodyTurn(c);
+    if (m.type !== "bat") return;
+    if (c.batHanging) { c.vx = c.vy = c.vz = 0; c.y = Math.floor(c.y) + 1 - f(c.height); } else c.vy *= 0.6000000238418579;
   }
   /** The client entity's position for drawing: previous and current client positions (RenderManager's partial tick), or null when the
    *  client has no entity for it or the player rides it (the camera follows the live mount). A mob that rides another is drawn where its
@@ -1988,7 +2006,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
-    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c) => clientBodyTurn(c), pre: (c, m) => this.clientEnvironment(c, m) }));
+    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }));
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)

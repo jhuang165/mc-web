@@ -7,18 +7,24 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { MobTracker, TrackerEntry, ClientEntity } from "./entity-tracker.js";
-import { moveEntityWithHeading, clientBodyTurn } from "./entities.js";
 import { mountEntity } from "./mob-riding.js";
+import { EntityWorld } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/tracker-mounts-reference.json", import.meta.url), "utf8"));
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0 };
-const SIZES = { pig: [0.9, 0.9], chicken: [0.3, 0.7], spider: [1.4, 0.9], zombie: [0.6, 1.8], skeleton: [0.6, 1.8] };
+const SIZES = { pig: [0.9, 0.9], chicken: [0.3, 0.7], spider: [1.4, 0.9], zombie: [0.6, 1.8], skeleton: [0.6, 1.8], ghast: [4, 4], blaze: [0.6, 1.8], wither: [0.9, 4], bat: [0.5, 0.9], squid: [0.95, 0.95] };
 const CASES = {
   ridePig: { mount: "pig", rider: "zombie" },
   rideChicken: { mount: "chicken", rider: "zombie" },
   rideSpider: { mount: "spider", rider: "skeleton" },
   riderFirst: { mount: "pig", rider: "zombie", riderFirst: true },
   leash: { mount: "pig", rider: "zombie", leash: true },
+  // the flyers: their own client onUpdate (EntityFlying, EntitySquid, EntityBat, EntityWither, EntityBlaze), a zombie stands beside them
+  flyGhast: { mount: "ghast", rider: "zombie" },
+  flyBlaze: { mount: "blaze", rider: "zombie" },
+  flyWither: { mount: "wither", rider: "zombie", velocity: false },
+  flyBat: { mount: "bat", rider: "zombie", velocity: false },
+  flySquid: { mount: "squid", rider: "zombie" },
 };
 const KINDS = { hg: "move", hh: "moveLook", hi: "look", ik: "teleport", ht: "head", fz: "spawn", hy: "velocity" };
 // the probe's packet of a tick as [index, kind, ...fields]; the metadata and property packets (hw, il) are not modelled
@@ -48,7 +54,7 @@ function replay(name) {
   let log = [];
   const emit = TrackerEntry.prototype.emit;
   TrackerEntry.prototype.emit = function (p) {
-    log.push(p.type === "attach" ? ["attach", p.mode, index(p.entity), p.mode === 0 ? (p.vehicle ? index(p.vehicle) : -1) : p.holder ? index(live.find((m) => m.uuid === p.holder.uuid)) : -1] : p.type === "destroy" ? ["destroy"]
+    if (p.type !== "meta") log.push(p.type === "attach" ? ["attach", p.mode, index(p.entity), p.mode === 0 ? (p.vehicle ? index(p.vehicle) : -1) : p.holder ? index(live.find((m) => m.uuid === p.holder.uuid)) : -1] : p.type === "destroy" ? ["destroy"]
       : p.type === "spawn" ? [index(this.e), "spawn", p.x, p.y, p.z, p.vx, p.vy, p.vz] : p.type === "move" ? [index(this.e), "move", p.dx, p.dy, p.dz]
       : p.type === "moveLook" ? [index(this.e), "moveLook", p.dx, p.dy, p.dz, p.yaw, p.pitch] : p.type === "look" ? [index(this.e), "look", p.yaw, p.pitch]
       : p.type === "teleport" ? [index(this.e), "teleport", p.x, p.y, p.z, p.yaw, p.pitch] : p.type === "head" ? [index(this.e), "head", p.head] : [index(this.e), "velocity", p.vx, p.vy, p.vz]);
@@ -56,12 +62,14 @@ function replay(name) {
   };
   const player = { x: 0.5, y: 0, z: 0.5 };
   const size = (e) => SIZES[e.type];
-  const physics = Object.assign((c, e) => { c.clientUnloaded = false; moveEntityWithHeading(grass, c, SIZES[e.type][0], SIZES[e.type][1], 0); }, { turn: clientBodyTurn });
+  // EntityWorld's own client hooks on the probe's flat world
+  const host = { world: grass, size: (m) => SIZES[m.type] }, P = EntityWorld.prototype;
+  const physics = Object.assign((c, e) => P.moveClient.call(host, c, e), { turn: (c, e) => P.clientAfterMove.call(host, c, e), pre: (c, e) => P.clientEnvironment.call(host, c, e) });
   let bad = 0, worst = 0;
   try {
     record.inputs.forEach((inp, t) => {
       const [mx, my, mz, yaw, vx, vy, vz, mounted] = inp, [rx, ry, rz] = inp.slice(-3);
-      Object.assign(mount, { x: mx, y: my, z: mz, vx, vy, vz, rotationYaw: yaw, rotationYawHead: yaw, renderYawOffset: yaw });
+      Object.assign(mount, { x: mx, y: my, z: mz, vx, vy, vz, rotationYaw: yaw, rotationYawHead: yaw, renderYawOffset: yaw, batHanging: inp.length > 16 && inp[13] === 1 });
       Object.assign(rider, { x: rx, y: ry, z: rz });
       if (mounted) { if (rider.ridingEntity !== mount) mountEntity(rider, mount, (m) => SIZES[m.type][1]); } else if (rider.ridingEntity) mountEntity(rider, null, (m) => SIZES[m.type][1]);
       if (spec.leash) mount.leash = inp[9] ? { holder: "mob", holderUuid: rider.uuid } : undefined;
@@ -81,6 +89,7 @@ function replay(name) {
         const exp = [w[1], w[2], w[3], w[4], w[5], w[6], w[9], w[10], w[11], w[13], w[14], w[15], w[16]];
         got.forEach((v, k) => { const d = Math.abs(v - exp[k]); worst = Math.max(worst, d); if (d > 1e-9) { bad++; if (bad < 6) console.log(`${name} t${t} entity ${i} field ${k}: got ${v} want ${exp[k]}`); } });
         assert.equal(c.onGround, w[8], `${name} tick ${t}: onGround ${i}`);
+        if (w.length > 17) assert.equal(c.batHanging ? 1 : 0, w[17], `${name} tick ${t}: bat hanging ${i}`);
         const riding = c.ridingEntity ? index(tracker.liveOf(c.ridingEntity)) : -1;
         assert.equal(riding, w[7], `${name} tick ${t}: riding ${i}`);
         const holder = c.leash?.type ? index(tracker.liveOf(c.leash)) : -1;
@@ -99,7 +108,6 @@ for (const name of Object.keys(CASES)) {
 
 // ---- EntityWorld wiring: the drawn positions, the rope and the player's own mount ----
 import { World } from "./world.js";
-import { EntityWorld } from "./entities.js";
 import { JavaRandom } from "./java-random.js";
 import { HeadlessColumns, attachRing } from "./headless-columns.js";
 import { seatPosition } from "./mob-riding.js";

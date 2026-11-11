@@ -26,6 +26,7 @@ public class TrackerMountsProbe {
   static int id(sa e) { return e.y(); }
   static int idx(int entityId) { return entityId < 0 ? -1 : indexOf.getOrDefault(entityId, -2); }
 
+  static boolean sendVel = true; // EntityTracker.trackEntity: the bat and the wither do not send velocity
   interface Make { sa make(ChickenProbe.World w) throws Exception; }
   static Make of(Class<?> c) { return w -> { Constructor<?> k = c.getConstructor(ahb.class); return (sa) k.newInstance(w); }; }
 
@@ -56,6 +57,12 @@ public class TrackerMountsProbe {
       clientById.put(eid, c);
       clientOrder.removeIf(o -> o == clientById.get(eid));
       clientOrder.add(c);
+      return;
+    }
+    if (p instanceof hw) {
+      // S1C (bjb.a(hw)): the watched objects update the client's data watcher; only the bat's hanging flag is read back here
+      hw s = (hw) p; sa c = clientById.get((Integer) MobMoveProbe.field(hw.class, "a").get(p));
+      if (c instanceof we) { Object dw = MobMoveProbe.field(sa.class, "af").get(c); dw.getClass().getMethod("a", List.class).invoke(dw, s.c()); }
       return;
     }
     if (p instanceof hx) {
@@ -124,7 +131,7 @@ public class TrackerMountsProbe {
 
     place(mount, rider, r0);
     my[] entries = new my[2];
-    entries[0] = new my(mount, 80, 3, true);
+    entries[0] = new my(mount, 80, 3, sendVel);
     entries[1] = new my(rider, 80, 3, true);
     int[] order = riderFirst ? new int[]{1, 0} : new int[]{0, 1};
     List<String> events = new ArrayList<>();
@@ -167,7 +174,7 @@ public class TrackerMountsProbe {
         sa c = clientById.get(id(servers.get(i)));
         client.append(i > 0 ? "," : "");
         if (c == null) client.append("[0]");
-        else client.append("[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "p")) + "," + num(d(c, "q")) + "," + num(d(c, "r")) + "," + (c.m == null ? -1 : cidx(c.m)) + "," + MobMoveProbe.b(c, "D") + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + (c instanceof sw && ((sw) c).bO() != null ? cidx(((sw) c).bO()) : -1) + "," + num(MobMoveProbe.fl(c, "y")) + "," + num(MobMoveProbe.fl(c, "z")) + "," + num(MobMoveProbe.fl(c, "aM")) + "," + num(MobMoveProbe.fl(c, "aO")) + "]");
+        else client.append("[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "p")) + "," + num(d(c, "q")) + "," + num(d(c, "r")) + "," + (c.m == null ? -1 : cidx(c.m)) + "," + MobMoveProbe.b(c, "D") + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + (c instanceof sw && ((sw) c).bO() != null ? cidx(((sw) c).bO()) : -1) + "," + num(MobMoveProbe.fl(c, "y")) + "," + num(MobMoveProbe.fl(c, "z")) + "," + num(MobMoveProbe.fl(c, "aM")) + "," + num(MobMoveProbe.fl(c, "aO")) + "," + (c instanceof we && ((we) c).bP() ? 1 : 0) + "]");
       }
       client.append("]");
     }
@@ -181,6 +188,7 @@ public class TrackerMountsProbe {
     TrackerProbe.place(mount, r[0], r[1], r[2], (float) r[3], 0f, (float) r[3]); TrackerProbe.chunk(mount);
     MobMoveProbe.field(sv.class, "aM").setFloat(mount, (float) r[3]); // renderYawOffset (EntityChicken.updateRiderPosition reads it)
     TrackerProbe.set(mount, "v", r[4]); TrackerProbe.set(mount, "w", r[5]); TrackerProbe.set(mount, "x", r[6]);
+    if (mount instanceof we && r.length > 13) ((we) mount).a(r[13] != 0); // EntityBat.setIsBatHanging: the data watcher the tracker sends as S1C
     boolean mounted = r[7] != 0;
     if (mounted && rider.m != mount) rider.a(mount);
     if (!mounted && rider.m != null) { rider.a((sa) null); }
@@ -213,5 +221,15 @@ public class TrackerMountsProbe {
     System.out.println(run("riderFirst", pig, zombie, true, t -> new double[]{8.5 + 0.1 * t, 0, 5.5, 0, 0.1, 0, 0, 1}, 100));
     // leash: the pig is leashed to the zombie standing still from tick 10 to tick 70
     System.out.println(run("leash", pig, zombie, false, t -> new double[]{8.5 + 0.08 * t, 0, 5.5, 0, 0.08, 0, 0, 0, 1, (t >= 10 && t < 70) ? 1 : 0, 12.5, 0, 5.5}, 100));
+    // The flyers (batch 43 part 2): the executed client class of each, next to a zombie standing still at (20, 0, 20)
+    Make ghast = of(yd.class), blaze = of(xx.class), wither = of(xc.class), squid = of(ws.class), bat = of(we.class);
+    System.out.println(run("flyGhast", ghast, zombie, false, t -> new double[]{8.5 + (t < 60 ? 0.15 * t : 9), 10 + 0.4 * Math.sin(t / 9.0), 5.5 + (t < 30 ? 0 : 0.05 * (t - 30)), t < 30 ? 0 : (t - 30) * 3, t < 60 ? 0.15 : 0, 0.04 * Math.cos(t / 9.0), t < 30 ? 0 : 0.05, 0, 1, 0, 20, 0, 20}, 140));
+    System.out.println(run("flyBlaze", blaze, zombie, false, t -> new double[]{8.5 + 0.06 * t, 3 + (t < 70 ? 0.05 * t : 3.5 - 0.03 * (t - 70)), 5.5, t * 2, 0.06, t < 70 ? 0.05 : -0.03, 0, 0, 1, 0, 20, 0, 20}, 140));
+    sendVel = false;
+    System.out.println(run("flyWither", wither, zombie, false, t -> new double[]{8.5 + 0.08 * t, 6 + 0.5 * Math.sin(t / 12.0), 5.5, t * 1.5, 0.08, 0.04 * Math.cos(t / 12.0), 0, 0, 1, 0, 20, 0, 20}, 140));
+    // the bat: flying, hanging from tick 40 (the data watcher goes out as S1C), flying again from tick 100
+    System.out.println(run("flyBat", bat, zombie, false, t -> new double[]{8.5 + (t < 40 ? 0.1 * t : t < 100 ? 4 : 4 + 0.1 * (t - 100)), 9.3 + (t < 40 ? 0.03 * t : t < 100 ? 0 : 0.02 * (t - 100)), 5.5, t * 4, t < 40 ? 0.1 : t < 100 ? 0 : 0.1, t < 40 ? 0.03 : t < 100 ? 0 : 0.02, 0, 0, 1, 0, 20, 0, 20, (t >= 40 && t < 100) ? 1 : 0}, 140));
+    sendVel = true;
+    System.out.println(run("flySquid", squid, zombie, false, t -> new double[]{8.5 + 0.05 * t, 12 - 0.04 * t, 5.5, t * 2.5, 0.05, -0.04, 0, 0, 1, 0, 20, 0, 20}, 140));
   }
 }

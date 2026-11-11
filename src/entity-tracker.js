@@ -32,11 +32,11 @@ import { mountEntity, seatPosition } from "./mob-riding.js";
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
 export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
-// Mobs whose client class moves by its own code (EntityFlying, EntitySquid, EntityBat, the dragon, the wither, the blaze's onLivingUpdate): the
-// client entity follows the position packets only.
-// mobs that are not an EntityCreature (td): the mounts a skeleton does not copy the body yaw of
-const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon"]);
-export const CLIENT_PHYSICS_OFF = new Set(["ghast", "squid", "bat", "ender_dragon", "wither", "blaze"]);
+// Mobs whose client class is not run at all: the dragon moves by its ring buffer of positions (dragon.js) and keeps its live position. The
+// ghast (EntityFlying), squid, bat, wither and blaze run their own client onUpdate (entities.js moveClient, clientEnvironment and
+// clientAfterMove), as the executed flyGhast / flySquid / flyBat / flyWither / flyBlaze records show.
+export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon", "bat"]);
+const CLIENT_PHYSICS_OFF = new Set(["ender_dragon"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)
 const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
 
@@ -90,6 +90,7 @@ export class TrackerEntry {
     this.lastVX = this.lastVY = this.lastVZ = 0; // j, k, l: the motion last sent
     this.packets = []; // what the client will process, oldest first
     this.lastRiding = null; // EntityTrackerEntry.w: the vehicle last sent in S1B(0)
+    this.lastHang = !!e.batHanging; // the bat's hanging flag in the data watcher the client last got
     this.lastLeash = ""; // the leash holder last sent in S1B(1) (a key of leashKey)
   }
   emit(packet) { this.packets.push(packet); this.view.log?.(packet); } // to the client's queue (and a test log)
@@ -155,6 +156,8 @@ export class TrackerEntry {
       const head = angle(e.rotationYawHead ?? 0);
       if (Math.abs(head - this.lastHead) >= 4) { this.send({ type: "head", head: byte(head) }); this.lastHead = head; }
     }
+    // sendMetadataToAllAssociatedPlayers: the bat's hanging flag (data watcher index 16) is the one watched object that moves a client entity
+    if (e.type === "bat" && !!e.batHanging !== this.lastHang) { this.lastHang = !!e.batHanging; this.send({ type: "meta", batHanging: this.lastHang }); }
     // Entity.velocityChanged (knockback): the motion goes out at once, to everyone tracking
     if (e.velocityChanged) { this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) }); e.velocityChanged = false; }
     this.ticks++;
@@ -176,6 +179,7 @@ export class TrackerEntry {
           this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
         } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(angle(e.rotationYaw ?? 0)), pitch: byte(angle(e.rotationPitch ?? 0)), head: byte(angle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        if (e.type === "bat") { this.lastHang = !!e.batHanging; this.emit({ type: "meta", batHanging: this.lastHang }); } // the spawn's S1C
         // after the spawn: S1B(0) for a rider and S1B(1) for a leashed mob (the periodic one in sendLocation still goes out at the entry's first tick)
         if (e.ridingEntity) this.emit({ type: "attach", mode: 0, entity: e, vehicle: e.ridingEntity });
         const held = holderOf(e.leash);
@@ -201,6 +205,7 @@ export class ClientEntity {
     this.rotationYaw = this.prevRotationYaw = this.rotationPitch = this.prevRotationPitch = this.tyaw = this.tpitch = 0;
     this.rotationYawHead = this.prevRotationYawHead = this.renderYawOffset = this.prevRenderYawOffset = 0;
     this.bodyTicks = 0; this.bodyHeadYaw = 0; // EntityBodyHelper's counters
+    this.batHanging = false; // EntityBat's data watcher flag, from S1C
     this.height = 0; // the client class's own size, kept by the tracker
     this.leash = null; // EntityLiving.leashedToEntity: { player: true }, a ClientEntity, or { knot: true, x, y, z }
   }
@@ -227,6 +232,7 @@ export class ClientEntity {
       this.tx = this.sx / 32; this.ty = this.sy / 32 + 0.015625; this.tz = this.sz / 32; this.increments = CLIENT_INTERPOLATION;
       this.tyaw = unangle(p.yaw); this.tpitch = unangle(p.pitch);
     } else if (p.type === "head") this.rotationYawHead = unangle(p.head);
+    else if (p.type === "meta") this.batHanging = !!p.batHanging;
     else if (p.type === "velocity") { this.vx = p.vx / 8000; this.vy = p.vy / 8000; this.vz = p.vz / 8000; }
     else if (p.type === "attach") {
       // NetHandlerPlayClient.handleEntityAttach (bytecode-read): the vehicle or holder is looked up now, and a missing one clears the link
@@ -327,14 +333,14 @@ export class MobTracker {
   }
   // The entry and the client entity of a new tracked entity (object-tracker.js overrides this for items, orbs and projectiles)
   create(e, size) {
-    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, wasGround: !!e.onGround };
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, hang: !!e.batHanging, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) {
     const jumped = en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0;
-    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health };
+    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) };
   }
-  settle(e, en) { en.health = e.health; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
+  settle(e, en) { en.health = e.health; en.hang = !!e.batHanging; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
   // The client takes the queue in order; a destroy (EntityPlayerMP.func_152339_d) is flushed by the player's next update, one tick later.
   flush(en) {
     const keep = [];
