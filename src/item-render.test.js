@@ -11,9 +11,11 @@ import { FENCE_ITEM_BOXES } from "./fences.js";
 import { anvilModelBoxes } from "./anvil-block.js";
 import { tileRect } from "./block-textures.js";
 
-const ref = JSON.parse(readFileSync(new URL("../public/research/item-render-reference.json", import.meta.url), "utf8"));
+const raw = JSON.parse(readFileSync(new URL("../public/research/item-render-reference.json", import.meta.url), "utf8"));
+// The chest family (render type 22: 54, 130, 146) draws the chest model, not RenderBlocks boxes; it is checked against chest-item-reference.json (icon-quads.test.js).
+const ref = { ...raw, items: raw.items.filter((e) => e.type !== 22) };
 const bf = new Float32Array(1), bi = new Int32Array(bf.buffer), fl = (b) => { bi[0] = b; return bf[0]; };
-const draws = (it) => it.events.filter((e) => e[0] === "D").map((e) => { const q = []; for (let i = 0; i < e[1]; i++) { const o = i * 8, u = fl(e[2][o + 3]), idx = Math.floor(u / 2); q.push({ p: [fl(e[2][o]), fl(e[2][o + 1]), fl(e[2][o + 2])], s: u - 2 * idx, t: fl(e[2][o + 4]), icon: ref.icons[idx] }); } return q; });
+const draws = (it) => it.events.filter((e) => e[0] === "D").flatMap((e) => { const out = []; for (let k = 0; k < e[1]; k += 4) { const q = []; for (let i = k; i < k + 4; i++) { const o = i * 8, u = fl(e[2][o + 3]), idx = Math.floor(u / 2); q.push({ p: [fl(e[2][o]), fl(e[2][o + 1]), fl(e[2][o + 2])], s: u - 2 * idx, t: fl(e[2][o + 4]), icon: ref.icons[idx] }); } out.push(q); } return out; }); // the dragon egg is one draw of 48 quads
 // Boxes of an item: every six consecutive draws (renderFaceYNeg, YPos, ZNeg, ZPos, XNeg, XPos) are one box; its extent is the vertices' bounding box.
 const boxesOf = (it) => { const d = draws(it), out = []; for (let i = 0; i + 6 <= d.length; i += 6) { const lo = [9, 9, 9], hi = [-9, -9, -9]; for (const q of d.slice(i, i + 6)) for (const v of q) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v.p[k]); hi[k] = Math.max(hi[k], v.p[k]); } out.push({ box: [...lo, ...hi], quads: d.slice(i, i + 6) }); } return out; };
 const item = (id, meta = 0) => ref.items.find((e) => e.id === id && e.meta === meta);
@@ -22,8 +24,10 @@ const same = (a, b, what) => { assert.equal(a.length, b.length, what); a.forEach
 test("the recorded item draws are boxes of six faces and the unit cubes are the rest", () => {
   const types = new Set(ref.items.map((e) => e.type));
   assert.deepEqual([...types].sort((a, b) => a - b), [0, 10, 11, 13, 16, 21, 26, 27, 31, 32, 34, 35, 39].sort((a, b) => a - b));
-  for (const it of ref.items) if (it.id !== 122) assert.equal(draws(it).length % 6, 0, `${it.id}:${it.meta}`);
-  assert.deepEqual(ref.failed.map((f) => +f.split(":")[0]).filter((v, i, a) => a.indexOf(v) === i), [54, 130, 146], "only the chest family needs a tile entity renderer");
+  for (const it of ref.items) assert.equal(draws(it).length % 6, 0, `${it.id}:${it.meta}`);
+  // Batch 43: the stub GL11 has display lists, scale and push/pop, so the chest family (type 22, the tile entity renderer) runs too; nothing fails.
+  assert.deepEqual(raw.failed, [], "every item runs");
+  assert.deepEqual(raw.items.filter((e) => e.type === 22).map((e) => e.id).sort((a, b) => a - b), [54, 130, 146], "only the chest family needs a tile entity renderer");
 });
 
 test("stairs, fences, the gate and the beacon: the port's boxes are the executed item boxes", () => {
@@ -37,7 +41,7 @@ test("every non-cube type 0 item and the wall have their boxes in ITEM_BOXES, an
   const unit = (b) => b.every((v, i) => v === [0, 0, 0, 1, 1, 1][i]);
   const seen = new Set();
   for (const it of ref.items) {
-    if ([10, 11, 21, 34, 35, 27].includes(it.type)) continue;
+    if ([10, 11, 21, 34, 35].includes(it.type)) continue; // (27, the dragon egg, is eight stacked boxes in ITEM_BOXES)
     const bs = boxesOf(it).map((b) => b.box);
     if (bs.length === 1 && unit(bs[0])) { assert.equal(ITEM_BOXES[it.id], undefined, `${it.id} is a cube`); continue; }
     assert.ok(ITEM_BOXES[it.id], `item ${it.id}:${it.meta} (type ${it.type}) has no ITEM_BOXES entry`);

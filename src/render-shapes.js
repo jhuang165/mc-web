@@ -1,3 +1,4 @@
+import { eggBoxes } from './dragon-egg.js';
 // RenderBlocks box sequences for the fence gate (renderBlockFenceGate, blm.a(ala, x, y, z)) and the cobblestone wall (renderBlockWall,
 // blm.a(aoi, x, y, z)), replayed against public/research/render-types-2-reference.json by src/render-types-2.test.js.
 // Bytecode-read AND executed: the box order, bounds and the uvRotateTop field (blm.v) below come from running the unchanged method's bytecode
@@ -66,12 +67,13 @@ export function anvilUv(facing, fi, p, box) {
 // ITEM_BOXES: the boxes of the blocks whose item is NOT a unit cube, keyed by the ORIGINAL block id (blm.a(aji, meta, f) sets the block's own item bounds first:
 // Block.setBlockBoundsForItemRender, so a carpet is 1/16 high, a plate a 4/16 slab in the middle of the cube, a button a small block). Stairs (STAIR_ITEM_BOXES in
 // stairs.js), fences (FENCE_ITEM_BOXES in fences.js), the gate (above), the anvil (anvilModelBoxes) and the beacon (BEACON_ITEM_BOXES) have their own tables; the dragon egg
-// (122) is drawn by BlockDragonEgg's layered loop (one draw of 48 quads), not as boxes, and the chests (22) go through TileEntityRendererChestHelper (no Tessellator boxes).
+// (122) is BlockDragonEgg's eight stacked rows (dragon-egg.js eggBoxes; one draw of 48 quads, every face's uv fits itemBoxUv, batch 43), and the chests (22) go through
+// TileEntityRendererChestHelper (chest-item-model.js).
 const SLAB = Object.freeze([0, 0, 0, 1, 0.5, 1]), PLATE = Object.freeze([0, 0.375, 0, 1, 0.625, 1]), BUTTON = Object.freeze([0.3125, 0.375, 0.375, 0.6875, 0.625, 0.625]);
 export const ITEM_BOXES = Object.freeze({
   44: [SLAB], 126: [SLAB], 60: [[0, 0, 0, 1, 0.9375, 1]], 70: [PLATE], 72: [PLATE], 147: [PLATE], 148: [PLATE], 77: [BUTTON], 143: [BUTTON],
   78: [[0, 0, 0, 1, 0.125, 1]], 96: [[0, 0.40625, 0, 1, 0.59375, 1]], 116: [[0, 0, 0, 1, 0.75, 1]], 120: [[0, 0, 0, 1, 0.8125, 1]], 151: [[0, 0, 0, 1, 0.375, 1]],
-  171: [[0, 0, 0, 1, 0.0625, 1]], 92: [[0.0625, 0, 0.0625, 0.9375, 0.5, 0.9375]], 139: [[0, 0, 0.3125, 1, 0.8125, 0.6875], [0.25, 0, 0.25, 0.75, 1, 0.75]],
+  122: eggBoxes(), 171: [[0, 0, 0, 1, 0.0625, 1]], 92: [[0.0625, 0, 0.0625, 0.9375, 0.5, 0.9375]], 139: [[0, 0, 0.3125, 1, 0.8125, 0.6875], [0.25, 0, 0.25, 0.75, 1, 0.75]],
 });
 // renderBlockAsItem type 34 (the beacon): inner obsidian base (metadata 1 faces), the beacon core (metadata 2), then the glass shell (metadata 0).
 export const BEACON_ITEM_BOXES = Object.freeze([[0.125, 0, 0.125, 0.875, 0.1875, 0.875], [0.1875, 0.1875, 0.1875, 0.8125, 0.875, 0.8125], [0, 0, 0, 1, 1, 1]]);
@@ -88,3 +90,11 @@ export function itemBoxUv(fi, p, box) {
   };
   return [[along(2, 2), along(1, 1)], [along(2, 0), along(1, 1)], [along(0, 0), along(2, 0)], [along(0, 0), along(2, 0)], [along(0, 0), along(1, 1)], [along(0, 2), along(1, 1)]][fi];
 }
+
+// The corners of a box face for the face order +x, -x, +y, -y, +z, -z (0 = the box's minimum on that axis, 1 = its maximum), counter-clockwise seen from outside; shared by
+// the held / dropped geometry (first-person.js boxItemGeometry) and the inventory icon quads (icon-quads.js).
+export const BOX_FACE_CORNERS = Object.freeze([
+  [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]],
+  [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+  [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]],
+]);
