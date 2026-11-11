@@ -97,18 +97,19 @@ export function feedHorse(h, itemId, { creative = false } = {}) {
     out.age = Math.min(0, h.age + feed.growth * 20);
     used = true;
   }
-  // Golden apple / golden carrot put a tame adult in love (wf.f(yz)).
-  if ((itemId === 396 || itemId === 322) && h.tame && h.age >= 0 && !h.inLove) {
+  // Golden apple / golden carrot give a tame adult (age 0) love every time, in love already or not (wf.f(yz), bytecode wi.a(yz) 339-357; b45 records: love 600 again).
+  if ((itemId === 396 || itemId === 322) && h.tame && h.age === 0) {
     out.inLove = true;
+    out.loveFed = true;
     used = true;
   }
   // Temper rises whenever the horse is untamed or something above was used (probe: a tame
-  // adult at full health is just mounted with temper unchanged).
-  if ((used || !h.tame) && feed.temper > 0) {
+  // adult at full health is just mounted with temper unchanged), while it is below the maximum (v(int) is gated on temper < cw()).
+  if ((used || !h.tame) && feed.temper > 0 && h.temper < MAX_TEMPER) {
     out.temper = Math.min(MAX_TEMPER, h.temper + feed.temper);
     used = true;
   }
-  if (!used && !h.tame) used = true;
+  // A feed nothing used (a wild horse given hay at full health, or any food at maximum temper) falls through to interactHorse: the wild horse rears and the stack is kept (wi.a(yz) 496-527; b45 record feed-wild-170).
   return { horse: out, used, consume: used && !creative };
 }
 
@@ -161,10 +162,10 @@ export function childOf(a, b, r) {
     const marking = j1 < 2 ? a.variant & 65280 : j1 < 4 ? b.variant & 65280 : (r.nextInt(5) << 8) & 65280;
     child.variant = colour | marking;
   }
-  child.maxHealth = f((a.maxHealth + b.maxHealth + rollMaxHealth(r)) / 3);
+  child.maxHealth = (a.maxHealth + b.maxHealth + rollMaxHealth(r)) / 3; // the attribute is a double (20.333333333333332 in the probe), not a float
   child.jump = (a.jump + b.jump + rollJump(r)) / 3;
   child.speed = (a.speed + b.speed + rollSpeed(r)) / 3;
-  child.health = Math.min(HORSE_BASE_HEALTH, child.maxHealth); // original leaves 53 > max; clamped (documented)
+  child.health = HORSE_BASE_HEALTH; // the foal keeps the constructor's health 53 above its averaged maximum (probe rows and b45 records), until its first setHealth clamps it
   return child;
 }
 

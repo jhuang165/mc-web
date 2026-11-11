@@ -138,4 +138,40 @@ public class EndermanWolfScenarios {
     sc("b44pd-witch-player-6353", 6353, 300, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
     sc("b44pd-creeper-watch-6354", 6354, 300, "X", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
   }
+
+  // Batch 45 (horses): EntityHorse records through the real EntityPlayer.interactWith and EntityAIMate. Q, q tame horses (variants 258 and 773, max health 24 and 18, speed 0.25 and 0.3, jump 0.55 and 0.65), D a tame donkey,
+  // R a wild horse, F a wild foal, Y a tame foal (all max health 20 or fixed as in EndermanWolfProbe.b45Horse), V a horse built by onSpawnWithEgg (its draws are in the record's `init`; a following V
+  // passes the GroupData on). Items: 353 sugar, 296 wheat, 260 apple, 297 bread, 170 hay block, 396 golden carrot, 322 golden apple.
+  static void run45() throws Exception {
+    double[][] one = {{70.5, 64.5}, {64.5, 60.5}}, pair = {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}};
+    // spawn-time rolls (onSpawnWithEgg: follow-range gaussian, type and colour or donkey, foal roll, health, speed, jump) over seeds, alone and as a herd
+    for (int k = 0; k < 40; k++) sc("b45hs-spawn-" + (7001 + k), 7001 + k, 4, "V", one, "0 look 90 0", "0 creative 1 on");
+    for (int k = 0; k < 6; k++) sc("b45hs-herd-" + (7101 + k), 7101 + k, 4, "VVVV", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {70.5, 67.5}, {73.5, 67.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    // feeding a hurt tame horse each food (heal, temper, golden food puts it in love), the foods on a tame and a wild foal, and on a wild adult (temper)
+    int[] foods = {353, 296, 260, 297, 170, 396, 322};
+    for (int k = 0; k < foods.length; k++) {
+      int f = foods[k];
+      sc("b45hs-feed-tame-" + f + "-" + (7201 + k), 7201 + k, 40, "Q", one, "0 holdn " + f + " 16", "4 health 0 5", "5 use 0", "14 health 0 5", "15 use 0", "24 health 0 5", "25 use 0", "0 look 90 0"); // hurt each time: a full-health tame adult is mounted, which the probe player cannot do
+      sc("b45hs-feed-foal-" + f + "-" + (7211 + k), 7211 + k, 40, "YF", pair, "0 holdn " + f + " 16", "5 use 0", "5 use 1", "15 use 0", "15 use 1", "0 look 90 0");
+      sc("b45hs-feed-wild-" + f + "-" + (7221 + k), 7221 + k, 40, "R", one, "0 holdn " + f + " 16", "0 health 0 10", "5 use 0", "10 use 0", "30 use 0", "0 look 90 0");
+    }
+    // taming temper by feeding a wild horse many times, and a foal grown by repeated feeding
+    sc("b45hs-feed-wild-many-7231", 7231, 200, "R", one, "0 holdn 296 64", "0 health 0 5", "5 use 0", "25 use 0", "45 use 0", "65 use 0", "85 use 0", "105 use 0", "125 use 0", "145 use 0", "165 use 0", "0 look 90 0");
+    sc("b45hs-foal-grow-7232", 7232, 300, "Y", one, "0 holdn 353 64", "5 use 0", "20 use 0", "40 use 0", "60 use 0", "80 use 0", "100 use 0", "0 look 90 0");
+    sc("b45hs-foal-grow-7233", 7233, 300, "F", one, "0 holdn 297 64", "5 use 0", "20 use 0", "40 use 0", "60 use 0", "80 use 0", "100 use 0", "0 look 90 0");
+    // foals follow an adult horse; a tame adult in love needs a partner (alone it just waits)
+    sc("b45hs-follow-foal-7234", 7234, 400, "YQ", new double[][] {{78.5, 64.5}, {70.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b45hs-love-alone-7235", 7235, 300, "Q", one, "0 holdn 396 8", "5 use 0", "0 look 90 0");
+    // breeding two tame adults fed golden carrots or apples: horse x horse (colour, marking, health, speed, jump from both and a fresh roll), horse x donkey (a mule), donkey x donkey
+    for (int k = 0; k < 6; k++) sc("b45hs-breed-horse-" + (7301 + k), 7301 + k, 400, "Qq", pair, "0 holdn " + (k % 2 == 0 ? 396 : 322) + " 64", "2 use 0", "4 use 1", "0 look 90 0");
+    for (int k = 0; k < 4; k++) sc("b45hs-breed-mule-" + (7311 + k), 7311 + k, 400, k % 2 == 0 ? "QD" : "DQ", pair, "0 holdn 396 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b45hs-breed-donkey-7321", 7321, 400, "DD", pair, "0 holdn 396 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b45hs-breed-donkey-7322", 7322, 400, "DD", pair, "0 holdn 322 64", "2 use 0", "4 use 1", "0 look 90 0");
+    // breeding that must not happen: a hurt parent, a foal, a wild horse and a third horse in love between three
+    sc("b45hs-breed-hurt-7331", 7331, 300, "Qq", pair, "0 holdn 396 64", "0 health 0 5", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b45hs-breed-wild-7332", 7332, 300, "QR", pair, "0 holdn 396 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b45hs-breed-three-7333", 7333, 500, "Qqq", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {70.5, 67.5}, {64.5, 60.5}}, "0 holdn 396 64", "2 use 0", "4 use 1", "6 use 2", "0 look 90 0");
+    // after a birth the parents are 5999 ticks from adult (growing age 6000) and cannot breed again; the run is long enough to see them age
+    sc("b45hs-breed-again-7334", 7334, 700, "Qq", pair, "0 holdn 396 64", "2 use 0", "4 use 1", "0 look 90 0");
+  }
 }

@@ -47,7 +47,7 @@ import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crysta
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
-import { HORSE_ENTITY, horseRideThink, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { HORSE_ENTITY, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
@@ -451,6 +451,15 @@ function takeAnchorBox(e) {
   if (!b) return null;
   delete e.anchorBox;
   return b.slice();
+}
+// Entity.setSize on a box the entity keeps: the minimum corner stays, and a wider box is nudged back by the growth (moveEntity(oldWidth - width, 0, oldWidth - width); its collisions are not modelled),
+// so the centre ends half the growth towards -x and -z. The move has dy 0, so onGround is false until the next real move. EntityHorse resizes its foal this way every tick (horse-live.js).
+export function resizeBox(e, w0, h0, w1, h1) {
+  w0 = f(w0); h0 = f(h0); w1 = f(w1); h1 = f(h1);
+  const bb = takeAnchorBox(e) ?? keptBox(e, w0, h0) ?? [e.x - w0 / 2, e.y, e.z - w0 / 2, e.x + w0 / 2, e.y + h0, e.z + w0 / 2];
+  bb[3] = bb[0] + w1; bb[4] = bb[1] + h1; bb[5] = bb[2] + w1;
+  if (w1 > w0) { const d = w0 - w1; bb[0] += d; bb[3] += d; bb[2] += d; bb[5] += d; e.x = (bb[0] + bb[3]) / 2; e.z = (bb[2] + bb[5]) / 2; e.onGround = false; }
+  boxes.set(e, [bb, w1, h1]);
 }
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
@@ -1247,7 +1256,7 @@ export class EntityWorld {
       opts.group = { horse: r.group };
       Object.assign(e, r.fields);
       this.addSpawnBonus(e, r.followBonus);
-      if (e.growingAge < 0) { const t = ENTITY_TYPES.horse, k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; }
+      if (e.growingAge < 0) { const t = ENTITY_TYPES.horse, k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; e.anchorBox = e.spawnBox.slice(); /* setSize keeps minX/minZ: the foal's centre moves on its first step (b45 records) */ }
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
       for (let i = kittenLitter(world); i > 0 && this.entities.length < (opts.limit ?? 40); i--) {
@@ -1902,6 +1911,7 @@ export class EntityWorld {
       ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,entityRandom,isRaining:()=>this.isRaining?.(),
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
+      horseCanMate,
       moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,{...base,width:base.width*scale,height:base.height*scale},forward);},
       wearHeld:(amount)=>this.wearStick?.(this.ai.survival,amount),
       eatGrass:(e)=>this.eatGrass(e),
@@ -2217,7 +2227,9 @@ export class EntityWorld {
       this.lootPickupOne(e);
       // EntityAgeable.onLivingUpdate (rx.e) ages after EntityLiving's (AI, move, push, loot), then EntityAnimal.onLivingUpdate (wf.e, bytecode-read): a mob that is not an adult loses its love,
       // otherwise inLove counts down and every 10th tick draws the heart particle's arguments on Entity.rand (3 gaussians, then 3 floats; the server's spawnParticle is a no-op).
+      const wasAge = e.growingAge;
       if (e.growingAge < 0 && e.type !== 'zombie') e.growingAge++; else if (e.growingAge > 0) e.growingAge--;
+      if (e.type === "horse" && wasAge < 0) this.horseGrowSize(e, wasAge); // EntityHorse.setScaleForAge: the foal's box widens every tick
       if (ANIMALS.has(e.type)) {
         if (e.growingAge !== 0) e.love = 0;
         if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);
