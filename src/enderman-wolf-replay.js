@@ -6,11 +6,14 @@ import { WATER, LAVA, WEB } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
 import { revengeOf } from "./revenge-target.js";
 import { setPathNodeCap } from "./pathfinding.js";
+import { makeStack } from "./inventory.js";
+import { itemFromOriginal } from "./region-import.js";
 
 // Replays one EndermanWolfProbe record (public/research/enderman-wolf-b42-reference.json): the same arena, entity Randoms seeded like the probe's (seed * 10 + index) and logging their draws as
 // VillageFightProbe.Log does (nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d"), the player a plain record the host would give the mobs (position, look, helmet,
 // game mode, sneaking, invisibility). Per tick a state is [mob rows, sounds, player health lost, player revenge index].
 export const reference42 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b42-reference.json", import.meta.url)));
+export const reference44 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b44-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
@@ -20,7 +23,9 @@ class LogRandom extends JavaRandom {
   nextGaussian() { this.log.push("g"); this.inGauss = true; try { return super.nextGaussian(); } finally { this.inGauss = false; } }
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
-const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie" };
+const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
+  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom" }; // b44: the other EntityAITasks mobs (lower case: a baby)
+const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
 const ITEM_OF = { 352: 311, 319: 202 };
 const key = (x, y, z) => `${x},${y},${z}`;
 const PORT_ID = { 1: 3, 9: WATER, 20: 9 };
@@ -56,12 +61,14 @@ function run(r) {
   [...types].forEach((ch, i) => {
     const [x, z, y0 = 0] = r.pos[i], e = ew.create(TYPE_OF[ch], x, y0, z);
     ew.entities.push(e);
-    e.growingAge = 0; e.onGround = true;
+    e.growingAge = "cpm".includes(ch) ? -24000 : 0; e.onGround = true;
     if (e.type === "zombie") e.knockbackResistance = 0;
     for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = 0;
     e.yaw = 0;
     if (ch === "T" || ch === "S" || ch === "O") { e.owner = "player"; e.health = 20; if (ch === "O") e.ownerUuid = "someone"; if (ch === "S") e.sitWish = true; }
     if (ch === "A") e.angry = true;
+    if (ch === "U") { e.owner = "player"; e.health = 10; }
+    if (ch === "R") { e.horse.maxHealth = e.health = 20; e.horse.speed = f32(0.2); } // fixed in the probe too (the rolled health and speed are not task draws)
     const lr = new LogRandom(BigInt(r.seed * 10 + i)); logs.push(lr); setEntityRandom(e, lr);
     ents.push(e);
   });
@@ -71,6 +78,7 @@ function run(r) {
   ew.ai.player.unticked = true;
   ew.ai.budget.perTick = Infinity;
   ew.look = { yaw: 180 * RAD, pitch: 0 };
+  ew.playerLook = () => ew.look; // OcelotTempt's scared check reads the player's view
   const script = r.script.map((s) => s.split(" ")), vel = new Array(n + 1).fill(null).map(() => [0, 0]), states = [];
   const idxOf = (b) => (!b ? -1 : b.isPlayer ? n : ents.indexOf(b.e ?? b));
   for (let t = 0; t < r.ticks; t++) {
@@ -85,6 +93,19 @@ function run(r) {
       else if (op === "creative") survival.mode = p[3] === "on" ? "creative" : "survival";
       else if (op === "adventure") survival.mode = p[3] === "on" ? "adventure" : "survival";
       else if (op === "invisible") { if (p[3] === "on") survival.effects.add({ id: 14, duration: 1e9, amplifier: 0 }); else survival.effects.remove(14); }
+      else if (op === "holdn") {
+        const m = p[2] === "0" ? null : itemFromOriginal(Number(p[2]), 0);
+        survival.inventory.main[0] = m ? makeStack(m.id, Number(p[3]), m.damage ?? 0) : null; survival.inventory.current = 0; held = m ? m.id : 0;
+      }
+      else if (op === "health") ents[Number(p[2])].health = Number(p[3]);
+      else if (op === "use") {
+        // player-edit-simulation.js's order for the mobs here: wolf, ocelot, then EntityAnimal.interact (feed).
+        const e = ents[Number(p[2])];
+        if (e.type === "wolf") ew.wolfInteract(e, survival);
+        else if (e.type === "ocelot") ew.ocelotInteract(e, survival);
+        else ew.feed(e, survival.inventory.held?.id ?? 0, survival);
+        held = survival.inventory.held?.id ?? 0;
+      }
       else if (op === "hold") held = ITEM_OF[p[2]] ?? Number(p[2]); // original item id -> the project's (bone 352 -> 311, raw porkchop 319 -> 202); the player's held item id (the beg tasks)
       else if (op === "sneak") ew.ai.player.sneaking = p[3] === "on";
       else if (op === "angry") ents[Number(p[2])].angry = true;
@@ -103,13 +124,17 @@ function run(r) {
     for (const l of logs) l.log.length = 0;
     ew.events.length = 0;
     ew.tick(player, survival, held);
+    if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
+    // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
+    ew.entities = ew.entities.filter((x) => ents.includes(x));
     const sounds = ew.events.filter((e) => e.sound).map((e) => [e.sound, e.volume, e.pitch]);
     const damage = 1000 - survival.health;
     survival.health = 1000;
     const rows = ents.map((e, i) => {
       const b = ew.ai.brain(e);
       const flags = e.type === "enderman" ? [e.screaming ? 1 : 0, e.aggressive ? 1 : 0, e.stareCount ?? 0, e.chaseTimer ?? 0, e.carried ?? 0]
-        : e.type === "wolf" ? [e.angry ? 1 : 0, e.sitting ? 1 : 0, e.owner ? 1 : 0, e.sitWish ? 1 : 0, e.inWater ? 1 : 0] : [];
+        : e.type === "wolf" ? [e.angry ? 1 : 0, e.sitting ? 1 : 0, e.owner ? 1 : 0, e.sitWish ? 1 : 0, e.inWater ? 1 : 0, ...(r.ext ? [e.love ?? 0, e.growingAge] : [])]
+        : r.ext && ANIMALS.has(e.type) ? [e.love ?? 0, e.growingAge] : [];
       return [e.x, e.y, e.z, e.removedHealth ?? e.health, idxOf(b.attackTarget), e.revenge ? (revengeOf(e) === "player" ? n : idxOf(revengeOf(e))) : -1, flags, logs[i].log.slice(), [e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.jumping ? 1 : 0, e.moveForward ?? 0, e.moveStrafing ?? 0]];
     });
     states.push([rows, sounds, damage, idxOf(ew.ai.player.hurtBy)]);
@@ -134,7 +159,7 @@ export function firstDivergence(r, got) {
       if (JSON.stringify(w[7]) !== JSON.stringify(g[7])) return [t, i, "draws", w[7], g[7]];
       for (let k = 0; k < 11; k++) if (!same(w[8][k], g[8][k])) return [t, i, ["vx", "vy", "vz", "yaw", "pitch", "headYaw", "bodyYaw", "onGround", "jumping", "moveForward", "moveStrafing"][k], w[8][k], g[8][k]];
     }
-    const ws = want[1].map(soundOf), gs = have[1].map((s) => [s[0], s[1], s[2]]);
+    const ws = want[1].map(soundOf).filter(([name]) => name !== "" && name !== "none"), gs = have[1].map((s) => [s[0], s[1], s[2]]);
     if (JSON.stringify(ws) !== JSON.stringify(gs)) return [t, "sounds", ws, gs];
     if (Math.abs(want[2] - have[2]) > 1e-9) return [t, "player damage", want[2], have[2]];
     if (want[3] !== have[3]) return [t, "player revenge", want[3], have[3]];

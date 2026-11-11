@@ -89,4 +89,50 @@ public class EndermanWolfScenarios {
     sc("b43wd-wolf-follow-two-5113", 5113, 400, "TT", new double[][] {{62.5, 64.5}, {60.5, 62.5}, {64.5, 64.5}}, "10 walk 2 0.15 0", "120 walk 2 0 0", "200 move 2 40.5 64.5");
     sc("b43wd-wolf-follow-wild-5114", 5114, 300, "WT", new double[][] {{70.5, 64.5}, {62.5, 64.5}, {64.5, 64.5}}, "10 walk 2 0.1 0.05", "150 walk 2 0 0");
   }
+  // Batch 44 (passivedraws): every other EntityAITasks mob on Entity.rand. C cow, M mooshroom, P pig, R horse, L wild ocelot, U tamed ocelot (owner: the player), G iron golem, N snow golem, K witch, X creeper
+  // (lower case c, m, p, l: a baby, growing age -24000, after construction). Items: 296 wheat, 391 carrot, 349 raw fish, 352 bone, 319 raw porkchop, 26 bed block.
+  static void run44() throws Exception {
+    double[][] far = {{70.5, 64.5}, {94.5, 64.5}}, near = {{70.5, 64.5}, {66.5, 64.5}};
+    String all = "CMPRLUGNKX";
+    for (int k = 0; k < all.length(); k++) {
+      String t = String.valueOf(all.charAt(k));
+      sc("b44pd-idle-far-" + t + "-" + (6001 + k), 6001 + k, 700, t, far, "0 look 90 0", "0 creative 1 on");
+      sc("b44pd-idle-near-" + t + "-" + (6101 + k), 6101 + k, 700, t, near, "0 look 90 0", "0 creative 1 on");
+    }
+    // panic: the player's melee hit makes cows, pigs, horses panic (EntityAIPanic draws findRandomTarget); wolf-free
+    for (String t : new String[] {"C", "M", "P", "R", "L"}) sc("b44pd-panic-" + t + "-6201", 6201, 400, t, near, "0 look 90 0", "5 melee 0", "120 melee 0");
+    // tempt: wheat for cows, carrots for pigs, raw fish for ocelots; the player walks away and back
+    sc("b44pd-tempt-cow-6211", 6211, 500, "CM", new double[][] {{74.5, 64.5}, {70.5, 60.5}, {64.5, 64.5}}, "0 holdn 296 64", "0 look 270 0", "200 walk 2 0.1 0", "300 walk 2 0 0", "350 hold 0");
+    sc("b44pd-tempt-pig-6212", 6212, 500, "P", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 holdn 391 64", "0 look 270 0", "150 walk 1 0.1 0", "250 walk 1 0 0", "350 hold 0");
+    sc("b44pd-tempt-ocelot-6213", 6213, 500, "L", new double[][] {{72.5, 64.5}, {64.5, 64.5}}, "0 holdn 349 64", "0 look 270 0", "100 walk 1 0.1 0", "200 walk 1 0 0", "350 hold 0");
+    // breeding: two animals fed wheat or carrots, walking together and a baby after 60 ticks (6 hearts of Entity.rand draws, the experience orb's nextInt(7))
+    sc("b44pd-breed-cow-6221", 6221, 400, "CC", new double[][] {{70.5, 64.5}, {74.5, 64.5}, {64.5, 60.5}}, "0 holdn 296 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b44pd-breed-mooshroom-6222", 6222, 400, "MM", new double[][] {{70.5, 64.5}, {73.5, 66.5}, {64.5, 60.5}}, "0 holdn 296 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b44pd-breed-pig-6223", 6223, 400, "PP", new double[][] {{70.5, 64.5}, {74.5, 64.5}, {64.5, 60.5}}, "0 holdn 391 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b44pd-breed-pig-6224", 6224, 400, "PP", new double[][] {{70.5, 62.5}, {80.5, 68.5}, {64.5, 60.5}}, "0 holdn 391 64", "2 use 0", "6 use 1", "0 look 90 0");
+    sc("b44pd-breed-cow-pig-6225", 6225, 300, "CP", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 60.5}}, "0 holdn 296 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b44pd-breed-ocelot-6226", 6226, 400, "UU", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}}, "0 holdn 349 64", "2 use 0", "4 use 1", "0 look 90 0");
+    // follow parent: a baby calf and piglet within 8 blocks of an adult
+    sc("b44pd-follow-cow-6231", 6231, 500, "cC", new double[][] {{78.5, 64.5}, {70.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b44pd-follow-pig-6232", 6232, 500, "pPp", new double[][] {{78.5, 64.5}, {70.5, 64.5}, {72.5, 70.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b44pd-follow-mooshroom-6233", 6233, 400, "mM", new double[][] {{76.5, 64.5}, {70.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    // wolves: taming with bones (nextInt(3) per bone), healing a tamed wolf with meat, mating two tamed wolves with meat
+    sc("b44pd-wolf-tame-6301", 6301, 300, "W", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 holdn 352 64", "5 use 0", "8 use 0", "11 use 0", "14 use 0", "17 use 0", "20 use 0", "23 use 0", "26 use 0", "29 use 0", "32 use 0", "0 look 90 0");
+    sc("b44pd-wolf-tame-6302", 6302, 300, "WW", new double[][] {{68.5, 64.5}, {70.5, 62.5}, {64.5, 64.5}}, "0 holdn 352 64", "5 use 0", "8 use 0", "11 use 0", "14 use 0", "17 use 1", "20 use 1", "23 use 1", "26 use 1", "29 use 1", "32 use 0", "0 look 90 0");
+    sc("b44pd-wolf-feed-6311", 6311, 300, "T", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 health 0 6", "0 holdn 319 16", "5 use 0", "15 use 0", "25 use 0", "35 use 0", "45 use 0", "0 look 90 0");
+    sc("b44pd-wolf-feed-sit-6312", 6312, 300, "S", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 health 0 10", "0 holdn 319 16", "5 use 0", "15 use 0", "25 use 0", "0 look 90 0");
+    sc("b44pd-wolf-breed-6321", 6321, 400, "TT", new double[][] {{68.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, "0 holdn 319 64", "2 use 0", "4 use 1", "0 look 90 0");
+    sc("b44pd-wolf-breed-6322", 6322, 400, "TT", new double[][] {{68.5, 60.5}, {75.5, 66.5}, {64.5, 64.5}}, "0 holdn 319 64", "2 use 0", "6 use 1", "0 look 90 0");
+    sc("b44pd-wolf-breed-sit-6323", 6323, 300, "ST", new double[][] {{68.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, "0 holdn 319 64", "2 use 0", "4 use 1", "0 look 90 0", "100 sit 0 off");
+    sc("b44pd-ocelot-tame-6331", 6331, 300, "L", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 holdn 349 64", "5 use 0", "9 use 0", "13 use 0", "17 use 0", "21 use 0", "25 use 0", "29 use 0", "33 use 0", "0 look 90 0", "0 sneak 1 on");
+    // avoid entity: a creeper steps away from an ocelot (6 blocks); a wild ocelot keeps 16 blocks from the player. Ocelot sit: a tamed ocelot rolls nextDouble each tick and finds the bed
+    sc("b44pd-creeper-avoid-6341", 6341, 400, "XL", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {94.5, 64.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b44pd-ocelot-avoid-6342", 6342, 400, "L", new double[][] {{70.5, 64.5}, {58.5, 64.5}}, "0 look 90 0");
+    EndermanWolfProbe.scenario("b44pd-ocelot-sit-bed-6343", 6343, 1500, "U", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 creative 1 on"}, new int[0][0], new int[][] {{72, 0, 64, 72, 0, 64, 26, 0}}, false, 15);
+    // iron golem against a zombie, a snow golem throwing at a zombie, a witch throwing at the player, a creeper with a survival player left at range
+    sc("b44pd-golem-zombie-6351", 6351, 400, "GZ", new double[][] {{70.5, 64.5}, {76.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b44pd-snow-zombie-6352", 6352, 400, "NZ", new double[][] {{70.5, 64.5}, {78.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b44pd-witch-player-6353", 6353, 300, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    sc("b44pd-creeper-watch-6354", 6354, 300, "X", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
+  }
 }
