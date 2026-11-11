@@ -41,7 +41,7 @@ export const potionEffects = (damage) => POTIONS[damage] ?? [];
 export const isSplashPotion = (damage) => (damage & 16384) !== 0;
 export const SPLASH_EFFECT = { SLOWNESS: 2, WEAKNESS: 18, POISON: 19, HARM: 7, HEAL: 6 };
 
-// EntityWitch.onLivingUpdate on the server, drinking half (yp.e): the countdown ends the drink, which hands the held potion's effects
+// EntityWitch.onLivingUpdate on the server, drinking half (yp.e): the countdown (a post-decrement test, so a drink started with 32 ends on its 33rd later update) ends the drink, which hands the held potion's effects
 // (and the speed penalty goes away); with no drink running each of five chained rolls on Entity.rand may start one. The final
 // nextFloat() < 7.5E-4 is the client particle event (world.setEntityState 15); it is drawn all the same. `ctx`:
 // { rand, inWater, burning, health, maxHealth, target, targetDistSq, hasEffect(id) }. Mutates `w` ({ drinking, timer, held }) and
@@ -50,7 +50,7 @@ export function witchDrink(w, ctx) {
   const out = { finished: null, started: null };
   const rand = ctx.rand;
   if (w.drinking) {
-    if (--w.timer <= 0) {
+    if (w.timer-- <= 0) { // `witchAttackTimer-- <= 0` tests the old value: the timer shows -1 on the finishing tick (creeperwitch-b45 records), 33 ticks after the start
       w.drinking = false;
       const held = w.held;
       w.held = null;

@@ -27,6 +27,7 @@ export class WitchPotions {
     }, !!e.drinking);
     if (!choice) return null;
     const at = throwSpawn(e, f((-e.yaw * 180) / Math.PI), WITCH.eyeHeight), rng = this.projectiles.rng(),
+      pre = heading(rng, 0, 1, 0, 0, 0), // EntityThrowable(world, thrower) aims once with inaccuracy 0: three gaussians on the potion's own random before the witch's own aim (creeperwitch-b45 records)
       h = heading(rng, choice.dx, choice.dy, choice.dz, choice.velocity, choice.inaccuracy),
       ball = { ...h, ...at, kind: "potion", damage: choice.damage, owner: e, px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
