@@ -30,6 +30,7 @@ export class WitchPotions {
       h = heading(rng, choice.dx, choice.dy, choice.dz, choice.velocity, choice.inaccuracy),
       ball = { ...h, ...at, kind: "potion", damage: choice.damage, owner: e, px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
+    this.mobs.joined?.(ball, "potion"); // entity-simulation.js (entityWalkers): the potion's place in World.loadedEntityList
     return ball;
   }
   // ItemPotion.onItemRightClick: EntityPotion(world, player, damage): launched like a thrown snowball from the eye, 0.5 velocity, 1.0
@@ -43,6 +44,7 @@ export class WitchPotions {
       at = { x: feet.x - f(c * f(0.16)), y: feet.y + f(1.62) - 0.10000000149011612, z: feet.z - f(s * f(0.16)) },
       ball = { ...h, ...at, kind, damage, owner: "player", px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
+    this.mobs.joined?.(ball, "potion");
     return ball;
   }
   // Browser snapshot of the potions in flight (like Projectiles.serialize): Pos, Motion, Rotation, the potion damage value, the flight age and
@@ -61,17 +63,26 @@ export class WitchPotions {
     }
   }
   tick(player, survival) {
-    const mobs = this.mobs, p = this.projectiles;
+    const p = this.projectiles;
     if (!p.balls.length) return;
+    for (const b of [...p.balls]) this.tickOne(b, player, survival);
+    this.reap();
+  }
+  // One potion's update (EntityThrowable.onUpdate) and its impact, where the loaded-entity walk reaches it (entity-simulation.js entityWalkers).
+  tickOne(ball, player, survival, extra = []) {
+    const mobs = this.mobs, p = this.projectiles;
+    if (ball.dead) return;
     const targets = mobTargets(mobs.entities.filter((e) => e.health > 0), null);
     for (const t of targets) if (t.ref.type === "witch") t.thrower = true; // the thrower is skipped for the first 5 ticks (every witch here)
     if (player && survival && survival.health > 0) {
       const hw = f(f(0.6) / 2);
       targets.push({ ref: "player", playerThrower: true, box: [player.x - hw, player.y, player.z - hw, player.x + hw, player.y + f(1.8), player.z + hw] });
     }
-    p.tick(mobs.world, targets);
+    targets.push(...extra); // the carts and boats: EntityThrowable's sweep hits any collidable entity (entity-simulation.js vehicleTargets)
+    p.tickOne(mobs.world, ball, targets);
     for (const ev of p.drain()) { if (ev.potion) this.impact(ev.potion, player, survival); else if (ev.expBottle) this.expImpact(ev.expBottle); }
   }
+  reap() { this.projectiles.reap(); }
   // EntityExpBottle.onImpact: 3 + nextInt(5) + nextInt(5) experience in getXPSplit orbs at the bottle (drained as `xp` events), then world
   // event 2002 with colour 0 at the rounded position (the break particles and game.potion.smash) like EntityPotion's.
   expImpact({ x, y, z }) {

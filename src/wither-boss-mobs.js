@@ -144,10 +144,12 @@ function breakBlocks(m, e, rand) {
 
 // The wither skulls in flight: Fireballs' sweep and owner grace, with the skull's own motion factor, impact and no fire.
 export class WitherSkulls extends Fireballs {
-  launch({ owner, x, y, z, dx, dy, dz, blue = false }) {
-    const rand = new JavaRandom(Math.floor(this.mobs.random() * 2 ** 48)), [ax, ay, az] = fireballAcceleration(dx, dy, dz, rand);
+  // `exact` is the (world, x, y, z, ax, ay, az) form (EntityFireball's second constructor): the aim as given, normalised the same way, with no noise.
+  launch({ owner, x, y, z, dx, dy, dz, blue = false, exact = null }) {
+    const rand = new JavaRandom(Math.floor(this.mobs.random() * 2 ** 48)), [ax, ay, az] = exact ? fireballAcceleration(...exact) : fireballAcceleration(dx, dy, dz, rand);
     const b = { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue, large: false, owner, health: 1, x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, ax, ay, az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size };
     this.list.push(b);
+    this.mobs.joined?.(b, "skull"); // entity-simulation.js (entityWalkers): World.spawnEntityInWorld, the end of loadedEntityList
     return b;
   }
   accepts(kind) { return kind === "witherSkull"; }
@@ -155,24 +157,22 @@ export class WitherSkulls extends Fireballs {
   build(r) {
     return { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue: false, large: false, owner: null, health: 1, x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size };
   }
-  tick() {
+  // EntityWitherSkull.onUpdate (EntityFireball's flight with the skull's own factor) for one skull, where the loaded-entity walk reaches it.
+  tickOne(b) {
     const mobs = this.mobs;
-    for (const b of this.list) {
-      if (b.dead || !mobs.isActive(b)) continue; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
-      b.px = b.x; b.py = b.y; b.pz = b.z;
-      if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
-      b.ticks++;
-      mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
-      const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
-      let hit = rayTraceBlocks(mobs.world, start, end);
-      const entity = this.sweep(b, start, hit ? hit.vec : end);
-      if (entity) { hit = { entity: entity.target }; aimPart(entity); }
-      if (hit) { this.impact(b, hit); continue; }
-      const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)), wet = water >= 8 && water <= 9, k = wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
-      b.x += b.vx; b.y += b.vy; b.z += b.vz;
-      b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
-    }
-    this.list = this.list.filter((b) => !b.dead);
+    if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
+    b.px = b.x; b.py = b.y; b.pz = b.z;
+    if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    b.ticks++;
+    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
+    const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
+    let hit = rayTraceBlocks(mobs.world, start, end);
+    const entity = this.sweep(b, start, hit ? hit.vec : end);
+    if (entity) { hit = { entity: entity.target }; aimPart(entity); }
+    if (hit) this.impact(b, hit); // the update goes on: the skull still moves (EntityFireball.onUpdate only marks it dead)
+    const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)), wet = water >= 8 && water <= 9, k = wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
+    b.x += b.vx; b.y += b.vy; b.z += b.vz;
+    b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
   }
   // zp.a(azu): 8 damage from the wither (a mob source) and a 5 heal on a kill, the wither effect by difficulty, then a power 1 explosion.
   impact(b, hit) {

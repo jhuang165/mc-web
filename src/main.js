@@ -220,7 +220,7 @@ import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked } from "./entity-simulation.js";
 import { ObjectTracker, objectViews } from "./object-tracker.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
-import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
+import { tickLivingSimulation, drainMobEvents, explodeEvent } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
@@ -2749,8 +2749,24 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     document.documentElement.style.setProperty("--compass-frames", String(compassFrames));
     document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
   }
+  const dropVehicleItem = (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); saved = false; };
+  const cartHooks = { drop: dropVehicleItem, cartHost };
+  const boatHooks = {
+    drop: dropVehicleItem,
+    particle: ([kind, x, y, z, mx, my, mz]) => scene.fx.spawn(kind, x, y, z, mx, my, mz),
+    splash: (b, volume, pitch) => sounds.play("game.neutral.swim.splash", { volume, pitch, position: { x: b.x, y: b.posY, z: b.z } }),
+    clear: (x, y, z, block) => {
+      if (block === SNOW_LAYER) { if (world.set(x, y, z, 0)) scene.updateBlock(x, z, y); } else breakBlock([x, y, z]);
+      saved = false;
+    },
+  };
   entityTick = { state: { world, items, primed, projectiles, arrows, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking,
-    width: PHYSICS.width, height: PHYSICS.height }, hooks: {
+    minecarts, boats, hanging, velocity, rider, alive: survival.health > 0, width: PHYSICS.width, height: PHYSICS.height }, hooks: {
+    carts: cartHooks,
+    boats: boatHooks,
+    hangingActive: (e) => !world.streaming || world.isTicking(e.x, e.z),
+    hangingDrop: (d) => { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; },
+    mobExplosion: (ev) => explodeEvent(ev, explodeAt),
     maxStack: st => survival.inventory.maxStack(st),
     smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),
     explodeTnt: explodeAt,
@@ -2809,23 +2825,14 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   statsLive.fishing(fishing);
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
   // contents and the broken cart's items become item entities.
-  if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
-    drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
-    cartHost,
-  }).length) saved = false;
+  if (!isWalked(mobs)) {
+  if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, cartHooks).length) saved = false;
   // EntityBoat.onUpdate: buoyancy, rider input, breakage; its splash particles and cleared snow or lily pads.
-  if (tickBoatSimulation({ world, boats, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
-    drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
-    particle: ([kind, x, y, z, mx, my, mz]) => scene.fx.spawn(kind, x, y, z, mx, my, mz),
-    splash: (b, volume, pitch) => sounds.play("game.neutral.swim.splash", { volume, pitch, position: { x: b.x, y: b.posY, z: b.z } }),
-    clear: (x, y, z, block) => {
-      if (block === SNOW_LAYER) { if (world.set(x, y, z, 0)) scene.updateBlock(x, z, y); } else breakBlock([x, y, z]);
-      saved = false;
-    },
-  }).length) saved = false;
+  if (tickBoatSimulation({ world, boats, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, boatHooks).length) saved = false;
   // EntityHanging.onUpdate: the surface check every 100 ticks; broken ones drop their items.
-  hanging.tick(world, { active: (e) => !world.streaming || world.isTicking(e.x, e.z) });
+  hanging.tick(world, { active: entityTick.hooks.hangingActive });
   spawnHangingDrops();
+  } // walked: carts, boats and hanging entities run in the list walk (entity-simulation.js)
   const vehicle = vehicleState();
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
@@ -3283,7 +3290,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
-  if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
+  if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }

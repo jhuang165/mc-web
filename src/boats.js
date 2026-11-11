@@ -45,6 +45,7 @@ export class Boats extends Minecarts {
     this.setPosition(boat, x, y + BOAT_Y_OFFSET, z);
     boat.px = boat.x; boat.py = boat.posY; boat.pz = boat.z;
     this.carts.push(boat);
+    this.joined?.(boat); // entity-simulation.js (entityWalkers): the boat's place in World.loadedEntityList
     return boat;
   }
   // Entity.setPosition: the box from posY - yOffset.
@@ -261,11 +262,17 @@ export class Boats extends Minecarts {
   }
   tick(world, { entities = [], hooks = {} } = {}) {
     const out = [];
-    // World.updateEntityWithOptionalForce: +-32 blocks loaded (the window, or the ring's 5 x 5 chunk test; natural-spawning.md "Round 7").
-    for (const boat of [...this.carts]) if (!boat.dead && ringEntityActive(world, boat)) out.push(...this.tickBoat(world, boat, entities, hooks).map((p) => (hooks.particle?.(p), p)));
-    this.carts = this.carts.filter((c) => !c.dead);
+    for (const boat of [...this.carts]) out.push(...this.tickOne(world, boat, entities, hooks));
+    this.reap();
     return out;
   }
+  // One boat's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers). World.updateEntityWithOptionalForce: +-32 blocks loaded
+  // (the window, or the ring's 5 x 5 chunk test; natural-spawning.md "Round 7"). Returns the splash particles.
+  tickOne(world, boat, entities = [], hooks = {}) {
+    if (boat.dead || !ringEntityActive(world, boat)) return [];
+    return this.tickBoat(world, boat, entities, hooks).map((p) => (hooks.particle?.(p), p));
+  }
+  reap() { this.carts = this.carts.filter((c) => !c.dead); }
   // Entity.applyEntityCollision(other) on `boat`: both are pushed apart by 0.05 / sqrt(distance) along the larger axis.
   // With `mutual`, `other` is another boat that receives its share; otherwise the share is returned for the entity
   // (the player or a mob, whose own collideWithNearbyEntities calls this).

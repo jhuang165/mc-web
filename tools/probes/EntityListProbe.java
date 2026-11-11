@@ -1,5 +1,8 @@
 import java.util.*;
 
+// Batch 44 adds minecarts (EntityMinecartEmpty xs), boats (xi), paintings (tb, the 100-tick onValidSurface check), potions (zo), snowballs (zj) and wither skulls (zp)
+// and the riding rule of World.updateEntities (a rider is skipped in the loop and updated right after its mount, through updateRidden). Entities spawned in
+// the pass (a broken painting's item) are listed per tick after the main states.
 // Batch 43: World.updateEntities walks ONE loadedEntityList in insertion order. This probe puts the real, unchanged EntityItem (xk), EntityTNTPrimed (xw),
 // EntityArrow (zc), EntityXPOrb (sq) and a mob on a map-backed World double (XpOrbProbe.XW: blocks, collision boxes, the entity queries over one list) and
 // walks that list by index exactly as World.updateEntities does (ticksExisted++ then onUpdate; an entity spawned in the pass joins the end and updates in it;
@@ -9,11 +12,27 @@ import java.util.*;
 // orb: age, value; mob: health), explosions [x, y, z, power].
 public class EntityListProbe {
   static List<String> booms = new ArrayList<>();
+  static List<sa> extras = new ArrayList<>();
   public static class EW extends XpOrbProbe.XW {
     EW() { super(); }
     public float n(int x, int y, int z) { return 1.0f; } // World.getLightBrightness: light 15 everywhere (a wandering mob reads it)
     public int k(int x, int y, int z) { return 15; }
-    public boolean d(sa e) { entities.add(e); return true; } // World.spawnEntityInWorld: the end of loadedEntityList
+    public boolean d(sa e) { // World.spawnEntityInWorld: the end of loadedEntityList
+      if (e instanceof xk) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityItem's constructor draws the sideways motion from Math.random: fixed here (the replay passes the same motion)
+      entities.add(e); extras.add(e); return true;
+    }
+    // World.getCollidingBoundingBoxes: the blocks, then the entity boxes within 0.25 (getBoundingBox for a boat, getCollisionBox for the mover): carts and boats only
+    public List a(sa entity, azt box) {
+      List out = super.a(entity, box);
+      List list = b(entity, box.b(0.25, 0.25, 0.25));
+      for (Object o : list) {
+        azt bb = ((sa) o).J();
+        if (bb != null && bb.b(box)) out.add(bb);
+        bb = entity.h((sa) o);
+        if (bb != null && bb.b(box)) out.add(bb);
+      }
+      return out;
+    }
     public List a(Class c, azt box) { return a(c, box, (sj) null); }
     public List a(Class c, azt box, sj selector) {
       List out = new ArrayList();
@@ -49,11 +68,18 @@ public class EntityListProbe {
       case "arrow": e = new zc(w, x, y, z); break;
       case "orb": e = new sq(w, x, y, z, Integer.parseInt(s[7])); break;
       case "cow": e = new Cow(w); break;
+      case "cart": e = new xs(w, x, y, z); PlayerStepProbe.field(sa.class, "c").setInt(e, 1); break; // EntityMinecartEmpty (id set as VehicleProbe does)
+      case "boat": { xi bt = new xi(w, x, y, z); bt.y = Float.parseFloat(s[7]); bt.A = bt.y; PlayerStepProbe.field(sa.class, "c").setInt(bt, 1); e = bt; break; }
+      case "painting": { HangingProbe.seed = 1; HangingProbe.P pt = new HangingProbe.P(w, (int) x, (int) y, (int) z, Integer.parseInt(s[7])); PlayerStepProbe.field(ss.class, "e").setInt(pt, Integer.parseInt(s[8])); e = pt; break; }
+      case "potion": e = new zo(w, x, y, z, Integer.parseInt(s[7])); break; // EntityPotion (a dispenser's form: no thrower)
+      case "snowball": e = new zj(w, x, y, z); break;
+      case "skull": e = new zp(w, x, y, z, Double.parseDouble(s[4]), Double.parseDouble(s[5]), Double.parseDouble(s[6])); break; // EntityFireball(World, x, y, z, ax, ay, az): the aim normalised to 0.1, no noise
       default: throw new RuntimeException(s[0]);
     }
+    PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
+    if (s[0].equals("painting") || s[0].equals("skull")) return e; // placed by their constructors; a fireball starts with no motion
     e.b(x, y, z); // setPosition: the entity constructors differ in yOffset use; the listed point is the feet/box position as the port's records use it
     e.v = Double.parseDouble(s[4]); e.w = Double.parseDouble(s[5]); e.x = Double.parseDouble(s[6]);
-    PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
     return e;
   }
   static String state(sa e) throws Exception {
@@ -63,7 +89,19 @@ public class EntityListProbe {
     else if (e instanceof zc) b.append("," + (PlayerStepProbe.field(zc.class, "i").getBoolean(e) ? 1 : 0) + "," + ((zc) e).b);
     else if (e instanceof sq) b.append("," + ((sq) e).a + "," + ((sq) e).f());
     else if (e instanceof sv) b.append("," + ((sv) e).aS());
+    else if (e instanceof xl) b.append("," + num(e.y) + "," + num(e.z));
+    else if (e instanceof xi) b.append("," + num(e.y) + "," + num(((xi) e).f()));
+    else if (e instanceof zp) b.append("," + (((zp) e).f() ? 1 : 0));
     return b.append("]").toString();
+  }
+  // World.updateEntityWithOptionalForce: lastTickPos and prevRotation, ticksExisted++, then updateRidden (a rider) or onUpdate; the rider of this entity is updated right after it
+  static void update(sa e) {
+    e.S = e.s; e.T = e.t; e.U = e.u; e.A = e.y; e.B = e.z;
+    e.aa++;
+    if (e.m != null) e.ab(); else e.h();
+    if (e.l != null) {
+      if (e.l.K || e.l.m != e) { e.l.m = null; e.l = null; } else update(e.l);
+    }
   }
   static void scenario(String name, int ticks, String[]... specs) throws Exception {
     if (System.getenv("EL_ONLY") != null && !name.contains(System.getenv("EL_ONLY"))) return;
@@ -77,21 +115,37 @@ public class EntityListProbe {
     MobMoveProbe.field(ahb.class, "u").set(w, new ArrayList()); // worldAccesses: World.spawnParticle walks it
     w.cells = new HashMap<>();
     w.entities = new ArrayList<>();
+    Object info = PlantProbe.unsafe.allocateInstance(ays.class); // the world info of the game rules: a skull's explosion reads mobGriefing
+    MobMoveProbe.set(info, "x", new agy());
+    MobMoveProbe.set(w, "x", info);
+    ((agy) w.O()).a("mobGriefing", "true");
     booms.clear();
+    extras.clear();
+    List<String[]> ents = new ArrayList<>(), sets = new ArrayList<>();
+    for (String[] sp : specs) {
+      if (sp[0].equals("wall")) for (int[] c : HangingProbe.plane(Integer.parseInt(sp[7]), Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]))) w.put(c[0], c[1], c[2], c[3], c[4]);
+      else if (sp[0].equals("set") && Integer.parseInt(sp[9]) < 0) w.put(Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]), Integer.parseInt(sp[7]), 0); // before the entities exist
+      else if (sp[0].equals("set")) sets.add(sp); // a block change at the start of tick `join`
+      else ents.add(sp);
+    }
     List<sa> all = new ArrayList<>();
-    int[] join = new int[specs.length];
-    for (int i = 0; i < specs.length; i++) { all.add(make(w, specs[i])); join[i] = Integer.parseInt(specs[i][9]); }
+    int[] join = new int[ents.size()];
+    for (int i = 0; i < ents.size(); i++) { all.add(make(w, ents.get(i))); join[i] = Integer.parseInt(ents.get(i)[9]); }
+    for (int i = 0; i < ents.size(); i++) if (ents.get(i)[0].equals("cow") && !ents.get(i)[8].equals("0")) all.get(i).a(all.get(Integer.parseInt(ents.get(i)[8]) - 1)); // Entity.mountEntity
     List<String> rows = new ArrayList<>();
     P player = null;
-    for (String[] sp : specs) if (sp[0].equals("orb")) { player = (P) PlantProbe.unsafe.allocateInstance(P.class); player.o = w; player.s = 0.5; player.t = 0.0; player.u = 0.5; PlayerStepProbe.field(sa.class, "C").set(player, azt.a(0.2, 0.0, 0.2, 0.8, 1.8, 0.8)); }
+    for (String[] sp : ents) if (sp[0].equals("orb")) { player = (P) PlantProbe.unsafe.allocateInstance(P.class); player.o = w; player.s = 0.5; player.t = 0.0; player.u = 0.5; PlayerStepProbe.field(sa.class, "C").set(player, azt.a(0.2, 0.0, 0.2, 0.8, 1.8, 0.8)); }
     for (int t = 0; t < ticks; t++) {
+      for (String[] st : sets) if (Integer.parseInt(st[9]) == t) w.put(Integer.parseInt(st[1]), Integer.parseInt(st[2]), Integer.parseInt(st[3]), Integer.parseInt(st[7]), 0);
       for (int i = 0; i < all.size(); i++) if (join[i] == t) w.entities.add(all.get(i));
       booms.clear();
       for (int i = 0; i < w.entities.size(); i++) { // the list is walked by index: an entity spawned in the pass joins the end and updates in it
         sa e = w.entities.get(i);
-        if (e.K) continue;
-        e.aa++;
-        e.h();
+        if (e.m != null) { // World.updateEntities: a rider is updated right after its mount; a dead or released mount frees it
+          if (!e.m.K && e.m.l == e) continue;
+          e.m.l = null; e.m = null;
+        }
+        if (!e.K) update(e);
       }
       w.entities.removeIf(e -> e.K);
       if (player != null) { // the network tick after the world's entities: EntityPlayer.onUpdate counts xpCooldown down, onLivingUpdate collides with the entities around (list order)
@@ -101,7 +155,9 @@ public class EntityListProbe {
       }
       StringBuilder row = new StringBuilder("[[");
       for (int i = 0; i < all.size(); i++) row.append(i > 0 ? "," : "").append(state(all.get(i)));
-      row.append("],[").append(String.join(",", booms)).append("],").append(player == null ? "[]" : "[" + player.xp + "," + player.bt + "]").append("]");
+      row.append("],[").append(String.join(",", booms)).append("],").append(player == null ? "[]" : "[" + player.xp + "," + player.bt + "]").append(",[");
+      for (int i = 0; i < extras.size(); i++) row.append(i > 0 ? "," : "").append(state(extras.get(i))); // entities spawned in a pass (spawn order, dead ones frozen)
+      row.append("]]");
       rows.add(row.toString());
     }
     StringBuilder sp = new StringBuilder();
@@ -114,6 +170,19 @@ public class EntityListProbe {
   static String[] arrow(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"arrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   static String[] orb(double x, double y, double z, int value, int join) { return new String[] {"orb", "" + x, "" + y, "" + z, "0", "0", "0", "" + value, "0", "" + join}; }
   static String[] tnt(double x, double y, double z, int fuse, int join) { return new String[] {"tnt", "" + x, "" + y, "" + z, "0", "0", "0", "" + fuse, "0", "" + join}; }
+
+  // Batch 44 kinds. cow: b = 1 + the index (among the entity specs) of the vehicle it rides, 0 for none
+  static String[] rider(double x, double y, double z, int vehicle, int join) { return new String[] {"cow", "" + x, "" + y, "" + z, "0", "0", "0", "0", "" + (vehicle + 1), "" + join}; }
+  static String[] cart(double x, double y, double z, double vx, double vz, int join) { return new String[] {"cart", "" + x, "" + y, "" + z, "" + vx, "0", "" + vz, "0", "0", "" + join}; }
+  static String[] boat(double x, double y, double z, double vx, double yaw, int join) { return new String[] {"boat", "" + x, "" + y, "" + z, "" + vx, "0", "0", "" + yaw, "0", "" + join}; }
+  // a painting at the wall tile (tx, ty, tz) facing dir; `counter` presets EntityHanging's private 100-tick counter (the check runs when it reads 100)
+  static String[] painting(int tx, int ty, int tz, int dir, int counter, int join) { return new String[] {"painting", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "" + counter, "" + join}; }
+  static String[] potion(double x, double y, double z, double vx, double vy, double vz, int meta, int join) { return new String[] {"potion", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + meta, "0", "" + join}; }
+  static String[] snowball(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"snowball", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
+  // a wither skull: the aim (ax, ay, az) is normalised to 0.1 by EntityFireball's second constructor, as a dispenser's ball is
+  static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
+  static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
+  static String[] setBlock(int x, int y, int z, int id, int tick) { return new String[] {"set", "" + x, "" + y, "" + z, "0", "0", "0", "" + id, "0", "" + tick}; }
 
   public static void main(String[] args) throws Exception {
     aji.p(); adb.l();
@@ -139,7 +208,30 @@ public class EntityListProbe {
     scenario("tnt-push-ab", 4, tnt(0.5, 0.5, 0.5, 0, 0), tnt(2.5, 0.5, 0.5, 80, 0));
     scenario("tnt-push-ba", 4, tnt(2.5, 0.5, 0.5, 80, 0), tnt(0.5, 0.5, 0.5, 0, 0));
     // kinds mixed: the blast pushes an item that is updated before it (it moves, then is pushed) or after it (pushed, then moves); the old fixed order ran every item before every TNT
-    scenario("tnt-item-ab", 4, tnt(0.5, 0.5, 0.5, 0, 0), item(2.5, 0.3, 0.5, 0.0, 4, 0, 0));
-    scenario("tnt-item-ba", 4, item(2.5, 0.3, 0.5, 0.0, 4, 0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    scenario("tnt-item-ab", 4, tnt(0.5, 0.5, 0.5, 0, 0), item(1.5, 0.3, 0.5, 0.0, 4, 0, 0));
+    scenario("tnt-item-ba", 4, item(1.5, 0.3, 0.5, 0.0, 4, 0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+
+    // Batch 44. A cow rides a minecart: the loop skips the rider and updates it right after its mount (updateRidden), whichever way round the two are listed
+    scenario("cart-rider-cart-first", 8, cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), rider(0.5, 0.5, 0.5, 0, 0));
+    scenario("cart-rider-cow-first", 8, rider(0.5, 0.5, 0.5, 1, 0), cart(0.5, 0.5, 0.5, 0.3, 0.0, 0));
+    // two carts meet: the first of the list to update pushes the other, which is then moved by its own update
+    scenario("carts-collide-ab", 14, cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), cart(3.5, 0.5, 0.5, -0.3, 0.0, 0));
+    scenario("carts-collide-ba", 14, cart(3.5, 0.5, 0.5, -0.3, 0.0, 0), cart(0.5, 0.5, 0.5, 0.3, 0.0, 0));
+    // a boat drifts into a cart coming the other way: whichever updates first moves, then meets the other
+    scenario("boat-cart-ab", 14, boat(0.5, 0.5, 0.5, 0.25, 0, 0), cart(2.2, 0.5, 0.5, -0.15, 0.0, 0));
+    scenario("boat-cart-ba", 14, cart(2.2, 0.5, 0.5, -0.15, 0.0, 0), boat(0.5, 0.5, 0.5, 0.25, 0, 0));
+    // a painting loses its wall: the surface check runs at the 100th update (the counter is preset to 98: ticks 0, 1 count, tick 2 checks), the wall goes at tick 2;
+    // the painting item joins the end of the list in that pass and updates in it
+    scenario("painting-wall-first", 7, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 98, 0), item(3.5, 0.3, 2.5, 0.0, 4, 0, 0), cart(1.5, 0.5, 3.5, 0.2, 0.0, 0), rider(1.5, 0.5, 3.5, 2, 0), setBlock(0, 3, 0, 0, 2));
+    scenario("painting-wall-last", 7, setBlock(0, 3, 0, 1, -1), item(3.5, 0.3, 2.5, 0.0, 4, 0, 0), cart(1.5, 0.5, 3.5, 0.2, 0.0, 0), rider(1.5, 0.5, 3.5, 1, 0), painting(0, 3, 0, 0, 98, 0), setBlock(0, 3, 0, 0, 2));
+    // a witch's potion (harming, splash) lands beside a cow riding a cart that moves: the cow's distance, so the damage, depends on who updates first
+    scenario("potion-cart-ab", 10, cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), rider(0.5, 0.5, 0.5, 0, 0), potion(1.8, 0.25, 1.8, 0.0, 0.0, -0.3, 32732, 0));
+    scenario("potion-cart-ba", 10, potion(1.8, 0.25, 1.8, 0.0, 0.0, -0.3, 32732, 0), cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), rider(0.5, 0.5, 0.5, 1, 0));
+    // a snow golem's snowball flies at a cow riding a cart that moves
+    scenario("snowball-cart-ab", 10, cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), rider(0.5, 0.5, 0.5, 0, 0), snowball(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0));
+    scenario("snowball-cart-ba", 10, snowball(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0), cart(0.5, 0.5, 0.5, 0.3, 0.0, 0), rider(0.5, 0.5, 0.5, 1, 0));
+    // a wither skull hits the ground beside an item: the blast pushes it after it moved (item first) or before (skull first)
+    scenario("skull-item-ab", 12, item(1.5, 0.3, 0.5, 0.0, 4, 0, 0), skull(0.5, 1.5, 0.5, 0.0, -1.0, 0.0, 0));
+    scenario("skull-item-ba", 12, skull(0.5, 1.5, 0.5, 0.0, -1.0, 0.0, 0), item(1.5, 0.3, 0.5, 0.0, 4, 0, 0));
   }
 }

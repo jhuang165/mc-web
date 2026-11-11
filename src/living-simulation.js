@@ -1,6 +1,12 @@
 // Browser-independent ordering for the living mob/player-XP part of the live
 // movement tick. Simulation mutations are synchronous; callers own presentation.
 
+/** One queued mob explosion event run through `explode(x, y, z, size, options, event)`; a walked entity's explosion runs in its own update (entity-simulation.js). */
+export function explodeEvent(event, explode) {
+  const e = event.explode;
+  explode(e.x, e.y, e.z, e.size, { exploder: e.source, attacker: e.source, smoking: e.smoking ?? true, flaming: e.flaming ?? false, blue: !!e.blue }, event);
+}
+
 /**
  * Route queued mob events in their live order. Each event is consumed in the
  * order sound, death XP spawn, explosion, item drop, then eat-grass observer.
@@ -31,10 +37,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
       pitch: event.pitch,
     }, event);
     if (event.xp) xpOrbs.spawn(event.xp, event.position);
-    if (event.explode) explode(
-      event.explode.x, event.explode.y, event.explode.z, event.explode.size,
-      { exploder: event.explode.source, attacker: event.explode.source, smoking: event.explode.smoking ?? true, flaming: event.explode.flaming ?? false, blue: !!event.explode.blue }, event,
-    );
+    if (event.explode) explodeEvent(event, explode);
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
     if (event.eatGrass) eatGrass(event.eatGrass, event);
     // A villager's EntityAIOpenDoor swung a door: its two cells need redrawing.

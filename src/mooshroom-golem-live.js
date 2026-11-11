@@ -23,17 +23,28 @@ export class GolemBalls {
   shoot(e, target) {
     const rand = entityRandom(e), at = throwSpawn(e, f((-e.yaw * 180) / Math.PI), SNOW_GOLEM.eyeHeight), rng = this.projectiles.rng(),
       a = aimFor(e, target, at.y), h = heading(rng, a.dx, a.dy, a.dz, SNOW_GOLEM.ballVelocity, SNOW_GOLEM.ballInaccuracy);
-    this.projectiles.balls.push({ ...h, ...at, kind: "snowball", owner: e, px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false });
+    const ball = { ...h, ...at, kind: "snowball", owner: e, px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
+    this.projectiles.balls.push(ball);
+    this.mobs.joined?.(ball, "golemBall"); // entity-simulation.js (entityWalkers): the ball's place in World.loadedEntityList
     this.mobs.events.push({ sound: SNOW_GOLEM.shootSound, volume: 1, pitch: f(1 / f(f(rand.nextFloat() * f(0.4)) + f(0.8))), position: { x: e.x, y: e.y, z: e.z } });
   }
   tick() {
-    const mobs = this.mobs, p = this.projectiles;
+    const p = this.projectiles;
     if (!p.balls.length) return;
+    for (const b of [...p.balls]) this.tickOne(b);
+    this.reap();
+  }
+  // One snowball's update, where the loaded-entity walk reaches it (entity-simulation.js entityWalkers).
+  tickOne(ball, extra = [], vehicleHit = () => {}) {
+    const mobs = this.mobs, p = this.projectiles;
+    if (ball.dead) return;
     const targets = mobTargets(mobs.entities.filter((e) => e.health > 0), null);
     for (const t of targets) if (t.ref.type === "snow_golem") t.thrower = true;
-    p.tick(mobs.world, targets, (ref, ball) => { if (ref && ref.type) thrownHit(mobs, ref, ball.owner ?? ref, ball); });
+    targets.push(...extra); // the carts and boats (entity-simulation.js vehicleTargets)
+    p.tickOne(mobs.world, ball, targets, (ref, b) => { if (typeof ref?.type === "string") thrownHit(mobs, ref, b.owner ?? ref, b); else if (ref) vehicleHit(ref); });
     p.drain();
   }
+  reap() { this.projectiles.reap(); }
   serialize() { return []; }
 }
 

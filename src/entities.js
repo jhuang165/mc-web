@@ -2050,7 +2050,29 @@ export class EntityWorld {
       out.push(m);
     }
     while (i < keyed.length) out.push(keyed[i++][1]);
-    return out;
+    return this.seatRiders(out);
+  }
+  // World.updateEntities skips an entity riding a live mount and updateEntityWithOptionalForce updates the rider right after the mount's own update
+  // (the rider's updateRidden, then the seat): a mob riding a walked cart or boat goes where its mount stands in the list, whatever its own stamp.
+  seatRiders(out) {
+    const mounts = this.walkOf;
+    if (!mounts || !out.some((e) => e.ridingEntity && mounts.has(e.ridingEntity))) return out;
+    const listed = new Set(out), res = [];
+    for (const e of out) {
+      const m = e.ridingEntity;
+      if (m && mounts.has(m) && listed.has(m)) continue;
+      res.push(e);
+      const rider = mounts.has(e) ? e.passenger : null;
+      if (rider && rider.ridingEntity === e && listed.has(rider)) res.push(rider);
+    }
+    return res;
+  }
+  // The explosion events a walked entity queued during its own update (a wither skull's), taken out of the queue so they run where the entity
+  // stands in the list, as World.newExplosion does natively; every other event keeps its place for the usual drain.
+  takeExplosions() {
+    const taken = [];
+    for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i].explode) taken.unshift(...this.events.splice(i, 1));
+    return taken;
   }
   tickMobs(player, survival, heldItem=0) {
     const night = !this.world.dimension &&
@@ -2065,11 +2087,11 @@ export class EntityWorld {
     this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }));
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
-    this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
-    // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
-    this.potions?.tick(player, survival);
-    this._skulls?.tick(); // wither skulls (wither-boss-mobs.js)
-    this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
+    // Leash knots, witch potions, wither skulls and snow golem snowballs tick in the walk below when `walks` holds their kind (entity-simulation.js entityWalkers).
+    if (!this.walks?.has("knot")) this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
+    if (!this.walks?.has("potion")) this.potions?.tick(player, survival); // witch-potions.js; main.js attaches it
+    if (!this.walks?.has("skull")) this._skulls?.tick(); // wither skulls (wither-boss-mobs.js)
+    if (!this.walks?.has("golemBall")) this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick: SpawnerAnimals.findChunksForSpawning (spawner-animals.js) while gamerule doMobSpawning is true, before the
     // entities update. worldTicks stands in for WorldInfo.getWorldTotalTime (animals every 400 ticks).
     this.worldTicks = (this.worldTicks ?? -1) + 1;

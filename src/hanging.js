@@ -103,6 +103,7 @@ export class Hanging {
     const e = this.make(kind, dir, tx, ty, tz, extra);
     Object.assign(e, { x, y, z, bb: [x - 0.25, y, z - 0.25, x + 0.25, y + 0.5, z + 0.25], summoned: true });
     this.entities.push(e);
+    this.joined?.(e); // entity-simulation.js (entityWalkers): the entity's place in World.loadedEntityList
     return e;
   }
 
@@ -158,6 +159,7 @@ export class Hanging {
     const e = kind === "painting" ? this.createPainting(world, x, y, z, dir) : this.createFrame(x, y, z, dir);
     if (!this.valid(world, e)) return { used: true, entity: null };
     this.entities.push(e);
+    this.joined?.(e);
     return { used: true, entity: e };
   }
 
@@ -217,13 +219,15 @@ export class Hanging {
 
   // EntityHanging.onUpdate (server side): every 100th tick re-check the surface.
   tick(world, { active = () => true } = {}) {
-    for (const e of [...this.entities]) {
-      if (e.dead || !active(e)) continue;
-      // Native `tickCounter1++ == 100`: the check runs on the 101st update, then the counter restarts.
-      if (e.ticks++ === 100) {
-        e.ticks = 0;
-        if (!this.valid(world, e)) this.kill(e, null);
-      }
+    for (const e of [...this.entities]) this.tickOne(world, e, active);
+  }
+  // One entity's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers). A killed entity leaves `entities` at once.
+  tickOne(world, e, active = () => true) {
+    if (e.dead || !active(e)) return;
+    // Native `tickCounter1++ == 100`: the check runs on the 101st update, then the counter restarts.
+    if (e.ticks++ === 100) {
+      e.ticks = 0;
+      if (!this.valid(world, e)) this.kill(e, null);
     }
   }
 

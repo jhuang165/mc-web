@@ -450,19 +450,17 @@ export class Projectiles {
       if (b.kind === "potion") {
         this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null } });
         b.dead = true;
-        return;
-      }
-      // EntityExpBottle.onImpact (spawn-eggs.js, applied by witch-potions.js): the break position goes out as an event; an entity hit does not matter.
-      if (b.kind === "expBottle") {
+      } else if (b.kind === "expBottle") {
+        // EntityExpBottle.onImpact (spawn-eggs.js, applied by witch-potions.js): the break position goes out as an event; an entity hit does not matter.
         this.events.push({ expBottle: { x: b.x, y: b.y, z: b.z } });
         b.dead = true;
-        return;
+      } else {
+        if (hit) { aimPart(hit); onHit(hit.ref, b); }
+        if (b.kind === "egg") this.layEggs(b);
+        if (!this.clientParticles) for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
+        b.dead = true;
       }
-      if (hit) { aimPart(hit); onHit(hit.ref, b); }
-      if (b.kind === "egg") this.layEggs(b);
-      if (!this.clientParticles) for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
-      b.dead = true;
-      return;
+      // EntityThrowable.onUpdate goes on after onImpact: the dead entity still moves, turns and falls once (the record of the update).
     }
     b.x += b.mx;
     b.y += b.my;
