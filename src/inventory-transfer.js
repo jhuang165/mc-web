@@ -44,6 +44,15 @@ export function furnaceAdapter(key, tile, burnTime) {
   });
 }
 
+// True while the container at a position cannot be read yet: its column's saved containers (or a never-resident chest's generated loot) are
+// still loading (batch 43 tileedits). Natively that chunk is simply loaded, so a hopper or cart that finds this true skips its whole update
+// (transfer and item pickup) and retries next tick, instead of reading null and falling back to picking items up from the world.
+export function containerPending(host, x, y, z) {
+  const id = host.world.get(x, y, z);
+  if (id === BLOCK_CHEST || id === 162) return host.seedChest?.(x, y, z) === false;
+  return (id === BLOCK_FURNACE || id === BLOCK_DISPENSER || id === BLOCK_DROPPER || id === BLOCK_HOPPER || id === BLOCK_BREWING_STAND) && host.containerReady?.(x, z) === false;
+}
+
 // func_145893_b: the inventory of a block position, or null. A chest with a normal cube above it (or above its partner)
 // is closed to hoppers (BlockChest.func_149951_m); ocelots and minecart inventories are not modelled.
 export function containerAt(host, x, y, z) {

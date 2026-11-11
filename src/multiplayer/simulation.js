@@ -1,4 +1,4 @@
-import { World, PHYSICS, WATER, LAVA, raycast, collides } from '../world.js';
+import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, raycast, collides } from '../world.js';
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
@@ -20,11 +20,11 @@ import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
 import { serverClick } from '../server-handlers.js';
-import { Signs } from '../signs.js';
-import { Skulls } from '../skull.js';
-import { Beacons } from '../pyramid.js';
+import { Signs, ITEM_SIGN, SIGN_LINES, isSign, placeSign } from '../signs.js';
+import { Skulls, SKULL, ITEM_SKULL, placeSkull } from '../skull.js';
+import { Beacons, BEACON, pyramidLevel, applyBeaconPick, isPaymentItem } from '../pyramid.js';
 import { MobSpawners } from '../mob-spawner.js';
-import { describeTiles } from '../tile-sync.js';
+import { describeTiles, describeCell } from '../tile-sync.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -59,8 +59,10 @@ export class DedicatedSimulation {
     this.changes = new Map();
     this.actions = [];
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
-    // The tile entities a chunk resend describes to the clients (tile-sync.js); flower pots live on the world. Filled from the save only: no
-    // dedicated message places or edits a sign, skull, spawner or beacon yet.
+    // The tile entities the clients are told about (tile-sync.js); flower pots live on the world. Signs and skulls are placed by `edit`, a sign's
+    // text comes in by `updateSign` (C12), a beacon's effects by `chooseBeacon` (MC|Beacon) and a spawner's mob by `setSpawnerEntity`; each
+    // marks its cell (`tileChanged`) and the next tick sends the description packet (S33 / S35) with the cell changes.
+    this.dirtyTiles = new Set();
     const te = saved.tileEntities ?? {};
     this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners) };
     this.weather = new Weather().restore(saved.weather).restoreSimulation(saved.worldRandom);
@@ -157,6 +159,15 @@ export class DedicatedSimulation {
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
     const id = state.heldTool;
     if (id === WATER || id === LAVA) return false;
+    // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
+    // open-editor message; a head keeps its type and (on top of a block) its rotation. No wither is built here (no soul sand id is passed).
+    if (id === ITEM_SIGN) {
+      return placeSign({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, target }, { signs: this.tileEntities.signs,
+        openEditor: tile => { tile.editor = p.id; p.openSign = [tile.x, tile.y, tile.z]; } }).placed;
+    }
+    if (id === ITEM_SKULL) {
+      return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, { skulls: this.tileEntities.skulls, difficulty: 0 }).placed;
+    }
     return placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
@@ -164,6 +175,49 @@ export class DedicatedSimulation {
         return collides(w, other.position.x, other.position.y, other.position.z);
       }),
     }).placed;
+  }
+  // Marks the tile entity at a cell for a description packet on the next tick (World.markBlockForUpdate on a tile edit).
+  tileChanged(x, y, z) { this.dirtyTiles.add(`${x},${y},${z}`); }
+  // NetHandlerPlayServer.processUpdateSign (C12): only the sign's editable tile, edited by the player it names as editor, takes the lines;
+  // each line over 15 characters or with a disallowed one becomes "!?". Anything else is dropped silently (the original logs a warning).
+  updateSign(id, m) {
+    const p = this.players.get(id);
+    if (!p || ![m?.x, m?.y, m?.z].every(Number.isInteger) || !Array.isArray(m.text) || m.text.length !== SIGN_LINES || !m.text.every(t => typeof t === 'string')) return false;
+    const tile = this.tileEntities.signs.tile(m.x, m.y, m.z);
+    if (!tile || !tile.editable || tile.editor !== id || !isSign(this.world.get(m.x, m.y, m.z))) return false;
+    if (!this.tileEntities.signs.update(m.x, m.y, m.z, m.text)) return false;
+    this.tileChanged(m.x, m.y, m.z);
+    return true;
+  }
+  // The MC|Beacon custom payload: the tile takes the picks only while a payment sits in its slot (`tile.payment`; one item is consumed), each pick
+  // checked against the pyramid level (applyBeaconPick). The level is refreshed here from the pyramid; the original recounts it every 80 ticks.
+  chooseBeacon(id, m) {
+    if (!this.players.has(id) || ![m?.x, m?.y, m?.z, m?.primary, m?.secondary].every(Number.isInteger) || this.world.get(m.x, m.y, m.z) !== BEACON) return false;
+    const tile = this.tileEntities.beacons.ensure(m.x, m.y, m.z), w = this.world;
+    tile.levels = pyramidLevel((x, y, z) => w.get(x, y, z), (x, y, z) => { for (let yy = y; yy < w.height; yy++) if (w.solid(x, yy, z)) return false; return true; }, m.x, m.y, m.z);
+    // The dedicated server has no container windows: the held payment item stands in for the beacon slot (players are creative, so nothing is spent).
+    const held = this.players.get(id).survival.held;
+    if (!tile.payment && held && isPaymentItem(held.id)) tile.payment = { id: held.id, count: 1, damage: held.damage ?? 0 };
+    if (!applyBeaconPick(tile, m.primary, m.secondary)) return false;
+    this.tileChanged(m.x, m.y, m.z);
+    return true;
+  }
+  // MobSpawnerBaseLogic.setEntityName followed by markBlockForUpdate. 1.7.10's spawn egg has no spawner branch (spawn-egg-use.js), so no client
+  // message reaches this; it is the server-side hook for a command or an operator tool.
+  setSpawnerEntity(x, y, z, entityId) {
+    const spawner = this.world.get(x, y, z) === MOB_SPAWNER ? this.tileEntities.spawners.get(x, y, z) : null;
+    if (!spawner || typeof entityId !== 'string' || !entityId || entityId.length > 64) return false;
+    spawner.entityId = entityId;
+    this.tileChanged(x, y, z);
+    return true;
+  }
+  // A tile entity goes with its block (BlockContainer.breakBlock / World.removeTileEntity).
+  dropTiles(x, y, z, block) {
+    const t = this.tileEntities;
+    if (!isSign(block)) t.signs.remove(x, y, z);
+    if (block !== SKULL) t.skulls.remove(x, y, z);
+    if (block === BEACON) t.beacons.ensure(x, y, z); else t.beacons.remove(x, y, z); // BlockContainer.onBlockAdded makes the tile, a default one
+    if (block === MOB_SPAWNER) { if (!t.spawners.get(x, y, z)) t.spawners.add({ x, y, z }); } else t.spawners.remove(x, y, z);
   }
   tick() {
     const beforeLit = new Set(this.redstone.lit);
@@ -191,9 +245,21 @@ export class DedicatedSimulation {
     for (const [x, y, z] of this.changes.values()) this.light.update(x, y, z);
     const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
+    for (const [x, y, z, b] of final) this.dropTiles(x, y, z, b);
     // PlayerInstance.sendChunkUpdate: under 64 changed cells in a chunk go as cells, 64 resend the chunk (protocol.js splitChanges).
     const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`), (cx, cz, mask) => describeTiles(this.tileEntities, cx, cz, mask));
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+    // sendChunkUpdate's other branches: each changed cell that is not inside a resent chunk sends its tile entity's description, and so does an
+    // edited tile (dirtyTiles). They ride in `tiles`; expandChunks adds the descriptions of the resent chunks.
+    const tiles = [], seen = new Set(), covered = (x, y, z) => chunks.some(c => c.x === x >> 4 && c.z === z >> 4 && (c.mask >> (y >> 4) & 1));
+    for (const [x, y, z] of [...changes, ...[...this.dirtyTiles].map(k => k.split(',').map(Number))]) {
+      const key = `${x},${y},${z}`;
+      if (seen.has(key) || covered(x, y, z)) continue;
+      seen.add(key);
+      const t = describeCell(this.tileEntities, x, y, z);
+      if (t) tiles.push(t);
+    }
+    this.dirtyTiles.clear();
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
