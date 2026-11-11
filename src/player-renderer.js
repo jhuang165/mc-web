@@ -15,7 +15,7 @@ import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
 import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
-import { glintMesh, blockItemGeometry } from "./first-person.js";
+import { glintMesh, blockItemGeometry, blockItemTurn } from "./first-person.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
@@ -518,7 +518,7 @@ export class PlayerRenderer {
     } else if (blockItemGeometry(id)) {
       this.heldMaterial = this.material({ map: this.atlas });
       mesh = new THREE.Mesh((this.heldGeometry = blockItemGeometry(id)), this.heldMaterial);
-      mesh.rotation.y = Math.PI / 2;
+      mesh.rotation.y = blockItemTurn(id);
     } else {
       const g = (this.heldGeometry = new THREE.BoxGeometry(1, 1, 1)), uv = g.attributes.uv;
       for (let face = 0; face < 6; face++) {

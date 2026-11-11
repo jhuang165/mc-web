@@ -98,3 +98,15 @@ export const BOX_FACE_CORNERS = Object.freeze([
   [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
   [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]],
 ]);
+
+// RenderBlocks.renderBlockAsItem for the cactus (render type 13, executed in item-render-reference.json): not a box. The top and the bottom are full quads, the four sides are
+// inset 1/16 (renderBlockCactus' own inset). Quads of [x, y, z, s, t] (s right, t from the top of the texture fraction), the face index in the port's order +x, -x, +y, -y, +z, -z
+// choosing the texture. The item is not turned (type 13 is not among the types renderBlockAsItem turns).
+export const CACTUS_ITEM_QUADS = Object.freeze([
+  [3, [[0, 0, 1, 0, 1], [0, 0, 0, 0, 0], [1, 0, 0, 1, 0], [1, 0, 1, 1, 1]]],
+  [2, [[1, 1, 1, 1, 1], [1, 1, 0, 1, 0], [0, 1, 0, 0, 0], [0, 1, 1, 0, 1]]],
+  [5, [[0, 1, 0.0625, 1, 0], [1, 1, 0.0625, 0, 0], [1, 0, 0.0625, 0, 1], [0, 0, 0.0625, 1, 1]]],
+  [4, [[0, 1, 0.9375, 0, 0], [0, 0, 0.9375, 0, 1], [1, 0, 0.9375, 1, 1], [1, 1, 0.9375, 1, 0]]],
+  [1, [[0.0625, 1, 1, 1, 0], [0.0625, 1, 0, 0, 0], [0.0625, 0, 0, 0, 1], [0.0625, 0, 1, 1, 1]]],
+  [0, [[0.9375, 0, 1, 0, 1], [0.9375, 0, 0, 1, 1], [0.9375, 1, 0, 1, 0], [0.9375, 1, 1, 0, 0]]],
+].map(([fi, q]) => Object.freeze([fi, Object.freeze(q.map(Object.freeze))])));
