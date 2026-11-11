@@ -303,7 +303,7 @@ test("a velocity packet comes before the position packet and carries (int)(m * 8
   e.x = 1.5; e.vx = 5; e.vy = -0.0001;
   entry.sendLocation(); entry.sendLocation(); entry.sendLocation();
   assert.deepEqual(packets.map((p) => p.type), ["velocity", "move"]);
-  assert.deepEqual([packets[0].vx, packets[0].vy], [31200, Math.trunc(-0.0001 * 8000)]);
+  assert.deepEqual([packets[0].vx, packets[0].vy], [31200, 0]);
 });
 
 test("Entity.velocityChanged sends the motion at once and clears the flag", () => {
