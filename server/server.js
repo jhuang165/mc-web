@@ -210,7 +210,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.refusal && ws) send(ws, { type: 'chat', name: '', text: player.refusal });
         if (player.blocks && ws) send(ws, { type: 'blocks', changes: player.blocks });
         if (player.openSign && ws) send(ws, { type: 'signEditor', x: player.openSign[0], y: player.openSign[1], z: player.openSign[2] }); // S36 open sign editor
-        player.refusal = null; player.blocks = null; player.openSign = null;
+        for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
+        player.refusal = null; player.blocks = null; player.openSign = null; player.effectsOut = null;
       }
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }

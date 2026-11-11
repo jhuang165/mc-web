@@ -9,7 +9,7 @@ import { World } from './world.js';
 import { seedRingChest } from './ring-chests.js';
 import { updateHopper, HOPPER } from './hopper.js';
 import { hopperSuck } from './cart-hopper.js';
-import { newHopperTile, containerPending } from './inventory-transfer.js';
+import { newHopperTile, containerPending, PENDING_LIMIT } from './inventory-transfer.js';
 import { makeStack } from './inventory.js';
 
 const CHEST = 41, FURNACE = 14;
@@ -60,4 +60,32 @@ test('a furnace above the hopper and a hopper cart wait the same way', async () 
   assert.equal(cart.slots.some(Boolean), false);
   await ring.manager.ensure([[40, 40]]);
   assert.equal(containerPending(ring.host, 640, 71, 641), false);
+});
+
+// Batch 44: the wait is bounded. A load that never finishes (the residency manager neither fails nor delivers) holds a hopper for
+// PENDING_LIMIT consecutive updates, then it proceeds with the container treated as absent (it picks up the dropped item).
+test('a hopper waits at most PENDING_LIMIT updates for a load that never finishes, then proceeds as if no container were there', () => {
+  const ring = build(false);
+  ring.host.containerReady = () => false; // a column that never loads (furnace case: the reach answer stays false)
+  ring.blocks['640,71,641'] = FURNACE;
+  for (let i = 0; i < PENDING_LIMIT; i++) {
+    assert.equal(updateHopper(ring.host, ring.tile, 640, 70, 641, 0), false, `update ${i + 1} waits`);
+    assert.equal(ring.entities[0].dead, false);
+  }
+  assert.equal(updateHopper(ring.host, ring.tile, 640, 70, 641, 0), true, 'update PENDING_LIMIT + 1 proceeds');
+  assert.equal(ring.entities[0].dead, true, 'the dropped item was picked up (container absent)');
+});
+
+test('the wait count restarts once the container is readable, and two hoppers on one container count separately', () => {
+  const ring = build(false);
+  let ready = false;
+  ring.host.containerReady = () => ready;
+  ring.blocks['640,71,641'] = FURNACE;
+  for (let i = 0; i < PENDING_LIMIT - 1; i++) assert.equal(containerPending(ring.host, 640, 71, 641, 'a'), true);
+  assert.equal(containerPending(ring.host, 640, 71, 641, 'b'), true, 'another waiter starts at 1');
+  ready = true;
+  assert.equal(containerPending(ring.host, 640, 71, 641, 'a'), false, 'readable: not pending, count dropped');
+  ready = false;
+  for (let i = 0; i < PENDING_LIMIT; i++) assert.equal(containerPending(ring.host, 640, 71, 641, 'a'), true, 'a full wait again');
+  assert.equal(containerPending(ring.host, 640, 71, 641, 'a'), false);
 });

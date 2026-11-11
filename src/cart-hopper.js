@@ -21,7 +21,7 @@ export function hopperSuck(cart, host) {
   if (ring && transfer.world.ringReads && !ring.writable(cart.x, cart.z)) return false;
   const maxStack = transfer.maxStack, inv = arrayAdapter("", cart.slots, { keys: [], cart });
   const x = Math.floor(cart.x), y = Math.floor(cart.posY) + 1, z = Math.floor(cart.z);
-  if (containerPending(transfer, x, y, z)) return false; // the saved containers above are still loading: wait, do not fall back to items
+  if (containerPending(transfer, x, y, z, `cart${cart.id ?? ""}@${x},${y},${z}`)) return false; // the saved containers above are still loading: wait, do not fall back to items
   const above = containerAt(transfer, x, y, z);
   let got = false;
   if (above) { got = suckFromInventory(inv, above, maxStack); if (got) touch(transfer, inv, above); }

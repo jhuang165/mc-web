@@ -45,12 +45,26 @@ export function furnaceAdapter(key, tile, burnTime) {
 }
 
 // True while the container at a position cannot be read yet: its column's saved containers (or a never-resident chest's generated loot) are
-// still loading (batch 43 tileedits). Natively that chunk is simply loaded, so a hopper or cart that finds this true skips its whole update
-// (transfer and item pickup) and retries next tick, instead of reading null and falling back to picking items up from the world.
-export function containerPending(host, x, y, z) {
+// still loading (batch 43 tileedits). Natively that chunk is simply loaded (bytecode-read in batch 44: TileEntityHopper.func_145893_b reads
+// World.getTileEntity, which goes through getChunkFromChunkCoords and ChunkProviderServer.provideChunk, loading the chunk on demand; rim-piston-reference.json
+// is the executed record), so a hopper or cart that finds this true skips its whole update (transfer and item pickup) and retries next tick,
+// instead of reading null and falling back to picking items up from the world.
+// The wait is bounded (batch 44): a read that fails ends it at once (ContainerResidency.reach), and a waiter that has been refused for
+// PENDING_LIMIT consecutive calls (30 s of ticks) stops waiting and proceeds as if the container were absent, so a load that never finishes
+// cannot freeze a hopper for good. `waiter` names who waits (the hopper's own key, so two hoppers on one chest count separately).
+export const PENDING_LIMIT = 600;
+const waits = new WeakMap();
+export function containerPending(host, x, y, z, waiter = `${x},${y},${z}`) {
   const id = host.world.get(x, y, z);
-  if (id === BLOCK_CHEST || id === 162) return host.seedChest?.(x, y, z) === false;
-  return (id === BLOCK_FURNACE || id === BLOCK_DISPENSER || id === BLOCK_DROPPER || id === BLOCK_HOPPER || id === BLOCK_BREWING_STAND) && host.containerReady?.(x, z) === false;
+  const raw = id === BLOCK_CHEST || id === 162 ? host.seedChest?.(x, y, z) === false
+    : (id === BLOCK_FURNACE || id === BLOCK_DISPENSER || id === BLOCK_DROPPER || id === BLOCK_HOPPER || id === BLOCK_BREWING_STAND) && host.containerReady?.(x, z) === false;
+  let map = waits.get(host);
+  if (!raw) { map?.delete(waiter); return false; }
+  if (!map) waits.set(host, map = new Map());
+  const n = (map.get(waiter) ?? 0) + 1;
+  if (map.size > 4096) map.clear(); // waiters of removed hoppers never clear themselves
+  map.set(waiter, n);
+  return n <= PENDING_LIMIT;
 }
 
 // func_145893_b: the inventory of a block position, or null. A chest with a normal cube above it (or above its partner)
