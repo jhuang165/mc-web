@@ -35,7 +35,8 @@ function mobAttackEntity(e, st, target, d, height) {
 
 // One update of the action state. `ew` is the EntityWorld, `e` the mob. The returned flag is not used; the state lives in
 // ew.silverfishState(e) (target, path, entityAge, attackTime) and the results go to e (rotation, moveForward, jumping, idle).
-export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom) {
+// `hooks` (optional, for other EntityMob subclasses on this flow, e.g. the enderman): { findPlayerToAttack(me) } replaces the spider/pigman/EntityMob search.
+export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom, hooks = null) {
   const m = ew.ai.brain(e), p = ew.ai.player, s = ew.ai.survival, st = ew.silverfishState(e), spider = isSpider(e.type), pigman = e.type === "pigman";
   st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
   st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
@@ -54,6 +55,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom) {
     closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
     // EntitySpider.bR: only in light below 0.5, no sight test. EntityPigZombie.bR: nothing while calm. EntityMob.bR: a visible player.
     findPlayerToAttack: (me) => {
+      if (hooks?.findPlayerToAttack) return hooks.findPlayerToAttack(me);
       if (spider) return light < 0.5 ? ew.ai.closestVulnerablePlayer(me, 16) : null;
       if (pigman && !((e.angerLevel | 0) > 0)) return null;
       const c = ew.ai.closestVulnerablePlayer(me, 16);
@@ -61,7 +63,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom) {
     },
     isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
     isCreative: (x) => x === p && !!s.creative,
-    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
+    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? f(1.62) : x.eyeHeight),
     boxMidY: (x) => x.y,
     canSee: (me, target) => m.canSee(target),
     attackEntity: (me, target, d) => {
@@ -79,6 +81,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom) {
   st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
   e.idle = st.entityAge;
   e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+  e.rotationYawHead = e.rotationYaw; // EntityLiving.onLivingUpdate without AI (sw.e): updateEntityActionState, then rotationYawHead = rotationYaw
   e.moveForward = st.moveForward; e.jumping = st.jumping;
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }

@@ -226,7 +226,7 @@ export class LookHelper {
     m.rotationPitch = 0;
     if (this.looking) {
       this.looking = false;
-      const dx = this.x - m.x, dy = this.y - (m.y + m.eyeHeight), dz = this.z - m.z, flat = Math.sqrt(dx * dx + dz * dz);
+      const dx = this.x - m.x, dy = this.y - (m.y + m.eyeHeight), dz = this.z - m.z, flat = f(Math.sqrt(dx * dx + dz * dz)); // MathHelper.sqrt_double (qh.a(D)F) returns a float (tu.a, bytecode-read)
       const yaw = f(f((Math.atan2(dz, dx) * 180) / DEG) - 90), pitch = f(-((Math.atan2(dy, flat) * 180) / DEG));
       m.rotationPitch = limitAngle(m.rotationPitch, pitch, this.deltaPitch);
       m.rotationYawHead = limitAngle(m.rotationYawHead, yaw, this.deltaYaw);
@@ -964,12 +964,7 @@ export class Brain {
       this.targets.add(1, new NearestAttackable(this));
       this.targets.add(2, new HurtByTarget(this, false));
     } else if (e.type === "enderman") {
-      // EntityEnderman (ya) is legacy AI in 1.7.10 (no task list): this build approximates it with swim, melee chase (the stare rule
-      // in enderman-live.js picks the target) and wander; see public/research/enderman.md.
-      this.tasks.add(0, new Swim(this));
-      this.tasks.add(2, new AttackOnCollide(this, A.chase, "player"));
-      this.tasks.add(7, new Wander(this, A.wander));
-      this.targets.add(1, new HurtByTarget(this, false));
+      // EntityEnderman (ya) is legacy AI in 1.7.10 (no task list): enderman-live.js runs EntityCreature.updateEntityActionState (legacy-creature.js flow).
     } else if (e.type === "blaze" || e.type === "ghast") {
       buildBlazeGhastTasks(this, { Wander, WatchClosest, LookIdle, NearestAttackable, HurtByTarget, AttackOnCollide }); // blaze-ghast-mobs.js
     } else if (e.type === "wither") {
@@ -1008,7 +1003,8 @@ export class Brain {
     } else if (e.type === "snow_golem") {
       buildSnowGolemTasks(this, { Wander, WatchClosest, LookIdle, ArrowAttack, TargetBase }); // EntitySnowman (wr), mooshroom-golem-live.js
     } else if (e.type === "wolf") {
-      // EntityWolf (wv): wolf-ai.js lists its tasks and targets and the Brain overrides.
+      // EntityWolf (wv): wolf-ai.js lists its tasks and targets and the Brain overrides. Its EntityAI* draw on Entity.rand (enderman-wolf records).
+      if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
       buildWolfTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate });
     } else if (e.type === "ocelot") {
       // EntityOcelot (wn): ocelot-ai.js lists its tasks and targets and the Brain overrides.
@@ -1017,7 +1013,7 @@ export class Brain {
       // EntityCow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent 4, sheep eat grass 5, wander, watch the
       // player (6 blocks), look idle. EntityPig (wo): swim 0, panic 1, controlled by player 2, mate 3, tempt 4 (carrot on a
       // stick) and 4 (carrot), follow parent 5, wander 6, watch 7, look idle 8 (pig-saddle.js).
-      if (e.type === "chicken" && ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e); // the chicken's Entity.rand drives its tasks (village-fight-b36 records)
+      if ((e.type === "chicken" || e.type === "sheep") && ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e); // the chicken's Entity.rand drives its tasks (village-fight-b36 records)
       this.navigator.setAvoidsWater(true);
       if (e.type === "pig") {
         this.control = new ControlledByPlayer(this);

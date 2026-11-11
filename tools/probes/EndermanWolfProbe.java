@@ -9,16 +9,25 @@ import java.util.Random;
 // VillageLiveProbe double (the same one VillageFightProbe uses; no village is involved). Unchanged 1.7.10 classes, executed.
 //   types: one letter per mob: E enderman, W wild wolf, A angry wild wolf, T tamed wolf (owner = the probe player, standing), S tamed sitting wolf (EntityAISit wish on), H sheep, Z zombie (bare), G a second tamed
 //   wolf owned by the player is `T` again; `O` is a tamed wolf of another owner (a random UUID). The probe player has the index types.length.
-//   rows per tick: [mobs: [x, y, z, health, target index, revenge index, flags, draws], sounds, player health lost, player revenge index, player ticks]
+//   rows per tick: [mobs: [x, y, z, health, target index, revenge index, flags, draws, [motion x, y, z, yaw, pitch, head yaw, body yaw offset, onGround, isJumping, moveForward, moveStrafing]], sounds, player health lost, player revenge index, player ticks]
 //   flags: enderman [screaming, aggressive, bt stare timer, bs teleport timer, carried block id]; wolf [angry, sitting, tamed, sit wish, wet]; others []
 //   script ops ("tick op args"): look yaw pitch | helmet blockId | day on|off | rain on|off | move idx x z [y] | walk idx dx dz | creative|adventure|invisible|sneak idx on|off | melee victim (the player's real
 //   EntityPlayer.attackTargetEntityWithCurrentItem) | hit victim attacker dmg mob (DamageSource.causeMobDamage) | angry idx | sit idx on|off | setpitch.
-// Entity.rand of every mob is a logging Random (VillageFightProbe.Log: nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b"; nextDouble is not logged).
+// Entity.rand of every mob is a logging Random (DLog over VillageFightProbe.Log: nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d").
 public class EndermanWolfProbe {
   public static class EW extends VillageLiveProbe.W {
     public void a(double x, double y, double z, String sound, float volume, float pitch) { VillagerProbe.World.sounds.add(sound + "|" + volume + "|" + pitch + "@"); }
     public boolean y(int x, int y, int z) { return VillageLiveProbe.W.rain && i(x, y, z); } // World.canLightningStrikeAt in a flat plains world: raining, open sky
   }
+
+  // Batch 43: the Entity.rand log also records nextDouble ("d"; the doubles inside nextGaussian are not logged separately), so every draw of the stream is compared, not only the typed ones.
+  public static class DLog extends VillageFightProbe.Log {
+    boolean inGauss;
+    DLog(long seed) { super(seed); }
+    public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
+    public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
+  }
+  static float flv(Class<?> c, Object o, String n) throws Exception { return MobMoveProbe.field(c, n).getFloat(o); }
 
   static String q(String s) { return "\"" + s + "\""; }
   static int index(Object[] ents, Object e) { for (int k = 0; k < ents.length; k++) if (ents[k] == e) return k; return -1; }
@@ -59,7 +68,7 @@ public class EndermanWolfProbe {
     for (int i = 0; i < ents.length; i++) {
       sa e = (sa) ents[i];
       for (String fn : new String[] {"y", "aO", "aM", "aN", "aP"}) MobMoveProbe.set(e, fn, 0f);
-      logs[i] = new VillageFightProbe.Log(seed * 10 + i);
+      logs[i] = new DLog(seed * 10 + i);
       MobMoveProbe.set(e, "Z", logs[i]);
       VillageFightProbe.at(e, pos[i][0], pos[i].length > 2 ? pos[i][2] : 0, pos[i][1]);
       MobMoveProbe.set(e, "D", true);
@@ -126,7 +135,8 @@ public class EndermanWolfProbe {
         if (e instanceof ya) { ya en = (ya) e; flags = "[" + (en.cd() ? 1 : 0) + "," + (MobMoveProbe.b(en, "bv") ? 1 : 0) + "," + MobMoveProbe.field(ya.class, "bt").getInt(en) + "," + MobMoveProbe.field(ya.class, "bs").getInt(en) + "," + aji.b(en.cb()) + "]"; }
         if (e instanceof wv) { wv wf = (wv) e; flags = "[" + (wf.ci() ? 1 : 0) + "," + (wf.ca() ? 1 : 0) + "," + (wf.bZ() ? 1 : 0) + "," + (MobMoveProbe.b(wf.cc(), "b") ? 1 : 0) + "," + (e.L() ? 1 : 0) + "]"; }
         row.append("[").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append(",").append(VillageFightProbe.num(((sv) e).aS()))
-          .append(",").append(index(ents, tgt)).append(",").append(index(ents, rv)).append(",").append(flags).append(",[").append(VillageFightProbe.draws(logs[i].log)).append("]]");
+          .append(",").append(index(ents, tgt)).append(",").append(index(ents, rv)).append(",").append(flags).append(",[").append(VillageFightProbe.draws(logs[i].log)).append("],[").append(VillageFightProbe.num(e.v)).append(",").append(VillageFightProbe.num(e.w)).append(",").append(VillageFightProbe.num(e.x)).append(",")
+          .append(VillageFightProbe.num(e.y)).append(",").append(VillageFightProbe.num(e.z)).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aO"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aM"))).append(",").append(e.D ? 1 : 0).append(",").append(MobMoveProbe.b(e, "bc") ? 1 : 0).append(",").append(VillageFightProbe.num(flv(sv.class, e, "be"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "bd"))).append("]]");
       }
       row.append("],[");
       for (int k = 0; k < VillagerProbe.World.sounds.size(); k++) row.append(k > 0 ? "," : "").append(q(VillagerProbe.World.sounds.get(k)));

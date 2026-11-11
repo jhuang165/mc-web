@@ -58,7 +58,7 @@ export function tameableTasks(m, { Task }) {
       return !m.onGround;
     }
     startExecuting() {
-      const t = m.attackTarget, dx = t.x - m.x, dz = t.z - m.z, len = Math.sqrt(dx * dx + dz * dz);
+      const t = m.attackTarget, dx = t.x - m.x, dz = t.z - m.z, len = f(Math.sqrt(dx * dx + dz * dz)); // MathHelper.sqrt_double returns a float
       if (len > 0) {
         e.vx += (dx / len) * 0.5 * 0.800000011920929 + e.vx * 0.20000000298023224;
         e.vz += (dz / len) * 0.5 * 0.800000011920929 + e.vz * 0.20000000298023224;

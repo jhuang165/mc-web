@@ -9,8 +9,12 @@ for (const r of reference.records) {
   });
 }
 
-test("enderman/wolf b42: the compared windows keep covering the stare, anger and revenge decisions", () => {
-  let compared = 0;
-  for (const r of reference.records) compared += comparedTicks(r, replayEndermanWolf(r));
-  assert.ok(compared >= 2800, `compared ${compared} ticks`); // of 11270 recorded; the rest is open work (mob wandering and chase timing), see public/research/enderman.md
+test("enderman/wolf b42: every recorded tick is compared, with every Random draw", () => {
+  let compared = 0, total = 0;
+  for (const r of reference.records) {
+    compared += comparedTicks(r, replayEndermanWolf(r));
+    total += r.ticks;
+  }
+  assert.equal(compared, total);
+  assert.ok(total > 11000, `recorded ${total} ticks`);
 });
