@@ -1979,7 +1979,7 @@ export class EntityWorld {
       // each tick, before the rotation re-roll reads it; then EntityWaterMob.onEntityUpdate's ws.M() call (its flow push)
       if (c.inWater && wasInWater === false) enterWater(null, { x: c.x, z: c.z, minY: c.y, width: w, mx: c.vx, my: c.vy, mz: c.vz }, c.rand);
       livingSoundRoll(c, c.rand, SQUID.talkInterval);
-      this.clientSquidWet(c);
+      c.clientAir(this.clientSquidWet(c)); // EntityWaterMob.onEntityUpdate: ws.M() decides the air
     }
   }
   // ws.M() on the client entity: the water in its shrunk box pushes it along the flow (swimSquid record). Returns whether it is wet.
@@ -2095,6 +2095,11 @@ export class EntityWorld {
     this.tracker ??= new MobTracker(this.viewChunks);
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }));
+    // What the client copies did: the dragon's wing flap sound and its death puffs (the server's own particle accessor is a no-op)
+    for (const x of this.tracker.takeFx()) {
+      if (x.particle) this.fx?.spawn(x.particle, x.x, x.y, x.z, 0, 0, 0);
+      else if (x.sound && !x.silent) this.clientSounds.push({ sound: x.sound, volume: x.volume, pitch: x.pitch, position: { x: x.x, y: x.y, z: x.z }, clientOnly: true });
+    }
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     // Leash knots, witch potions, wither skulls and snow golem snowballs tick in the walk below when `walks` holds their kind (entity-simulation.js entityWalkers).

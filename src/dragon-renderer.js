@@ -251,9 +251,10 @@ export function animateDragon(r, e, pose, partial, client = null) {
   const s = e.dragon, st = r.dragonRig;
   if (!s) return;
   // the ring buffer of past positions and the wing clock are the client copy's (entity-tracker.js dragonUpdate); the death and crystal state stays live
-  const cd = client?.dragon, clientRing = cd ? { health: e.health, dragon: cd } : e;
+  // the health (data watcher, from the spawn packet and S1C) and the death counter are the client copy's too: RenderDragon and BossStatus read the rendered entity
+  const cd = client?.dragon, health = client?.health ?? e.health, deathTicks = cd?.deathTicks ?? s.deathTicks, clientRing = cd ? { health, dragon: cd } : e;
   // RenderDragon.doRender: BossStatus.setBossStatus(dragon, ...) every drawn frame (boss-bar.js keeps it 100 frames).
-  setBossStatus({ health: e.health, maxHealth: DRAGON_MAX_HEALTH }, dragonBossStatus(e).name, false);
+  setBossStatus({ health, maxHealth: DRAGON_MAX_HEALTH }, dragonBossStatus(e).name, false);
   const wing = cd ?? s, t = wing.prevAnim + (wing.anim - wing.prevAnim) * partial, p = dragonPose((n) => movementOffsets(clientRing, n, partial), t);
   // rotateCorpse: rotatef(-f3, y), rotatef(pitch * 10, x), translatef(0, 0, 1); the 180 turn the other living rigs get from
   // RendererLivingEntity is part of this frame's convention, so the three rotations are conjugated by it.
@@ -265,16 +266,16 @@ export function animateDragon(r, e, pose, partial, client = null) {
   // ModelDragon.render prologue: glTranslatef(0, f7 - 2, -3), glRotatef(f7 * 2, x).
   st.bobG.position.set(0, 2 - p.f7, 3);
   st.bobG.rotation.x = p.f7 * 2 * RAD;
-  const dying = s.deathTicks > 0;
-  updateDeathRays(st.deathRays, s.deathTicks, partial);
+  const dying = deathTicks > 0;
+  updateDeathRays(st.deathRays, deathTicks, partial);
   st.passes.forEach((m, i) => poseModel(m, p));
   // RenderDragon.renderModel: the exploding texture goes first with an alpha test of deathTicks / 200, then the normal skin only
   // where that pass drew (GL_EQUAL); the eyes always on top.
   st.passes[1].head.parent.visible = dying;
-  r.materials[1].uniforms.alphaTest.value = Math.max(0, s.deathTicks / 200);
+  r.materials[1].uniforms.alphaTest.value = Math.max(0, deathTicks / 200);
   r.materials[0].depthFunc = dying ? THREE.EqualDepth : THREE.LessEqualDepth;
   const h = s.healer, b = st.beam;
-  b.pivot.visible = !!h && e.health > 0;
+  b.pivot.visible = !!h && health > 0;
   if (b.pivot.visible) {
     const t2 = (h.innerRotation ?? 0) + partial, w = (Math.sin(t2 * 0.2) / 2 + 0.5), bob = (w * w + w) * 0.2;
     const dx = h.x - pose.x, dy = bob + h.y - 1 - pose.y, dz = h.z - pose.z, horizontal = Math.hypot(dx, dz), length = Math.hypot(dx, dy, dz);

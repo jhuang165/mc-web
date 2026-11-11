@@ -10,7 +10,7 @@ import { gameRule } from "./game-rules.js";
 import { createExitPortal } from "./exit-portal.js";
 import {
   DRAGON_MAX_HEALTH, DRAGON_WIDTH, DRAGON_HEIGHT, DRAGON_SOUNDS, createDragonState, dragonTick, deathTick, attackFromPart,
-  livingHurt, partBox, wingFlapPitch,
+  livingHurt, partBox,
 } from "./dragon.js";
 
 export const ENDER_DRAGON = "ender_dragon";
@@ -18,10 +18,6 @@ export const ENDER_DRAGON_TYPE = Object.freeze({ health: DRAGON_MAX_HEALTH, widt
 const OBSIDIAN = 22, BEDROCK = 11, END_STONE = 152;
 const RANDOMS = new WeakMap();
 const rngOf = (e) => { let r = RANDOMS.get(e); if (!r) RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48)))); return r; };
-// The client copy of the entity has its own Entity.rand (the wing flap pitch draws from it, not from the server's).
-const CLIENT_RANDOMS = new WeakMap();
-const clientRngOf = (e) => { let r = CLIENT_RANDOMS.get(e); if (!r) CLIENT_RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48)))); return r; };
-export const setDragonClientRandom = (e, r) => CLIENT_RANDOMS.set(e, r);
 export const setDragonRandom = (e, r) => RANDOMS.set(e, r);
 
 const meets = (a, b) => a[0] < b[3] && a[3] > b[0] && a[1] < b[4] && a[4] > b[1] && a[2] < b[5] && a[5] > b[2];
@@ -88,7 +84,7 @@ export function dragonHost(mobs, e, ctx = {}) {
       return true;
     },
     griefing: gameRule("mobGriefing"),
-    particle: (name, x, y, z) => mobs.fx?.spawn(name, x, y, z, 0, 0, 0),
+    particle: () => {}, // WorldServer's accessor (mp.a(String, 6 doubles), bytecode-read) returns at once: the particles are the client copy's (entity-tracker.js)
     orb: (amount) => mobs.events.push({ xp: amount, position: at }),
     worldEvent: (id, x, y, z) => { if (id === DRAGON_SOUNDS.deathEvent) mobs.events.push({ sound: "mob.enderdragon.end", volume: DRAGON_SOUNDS.volume, pitch: 1, position: { x, y, z } }); },
     portal(x, z) {
@@ -128,9 +124,7 @@ export function dragonUpdate(mobs, e, player, survival) {
       mobs.events.push({ sound: DRAGON_SOUNDS.growl, volume: DRAGON_SOUNDS.volume, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
     }
   }
-  // The client's wing flap sound is the first thing xa.e does (isRemote), on the animTime pair left by the previous tick.
-  const flap = wingFlapPitch(s.prevAnim, s.anim, clientRngOf(e));
-  if (flap !== null) mobs.clientSounds?.push({ sound: DRAGON_SOUNDS.wings, volume: DRAGON_SOUNDS.volume, pitch: flap, position: e, clientOnly: true }); // client-only: needs the client's entity (entities.js drainClientSounds)
+  // The wing flap sound and the death puffs belong to the client copy (entity-tracker.js ClientEntity.dragonUpdate); the server's spawnParticle is a no-op.
   dragonTick(e, host);
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
   e.rotationYawHead = e.renderYawOffset = e.rotationYaw;
