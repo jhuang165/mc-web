@@ -233,5 +233,33 @@ public class EntityListProbe {
     // a wither skull hits the ground beside an item: the blast pushes it after it moved (item first) or before (skull first)
     scenario("skull-item-ab", 12, item(1.5, 0.3, 0.5, 0.0, 4, 0, 0), skull(0.5, 1.5, 0.5, 0.0, -1.0, 0.0, 0));
     scenario("skull-item-ba", 12, skull(0.5, 1.5, 0.5, 0.0, -1.0, 0.0, 0), item(1.5, 0.3, 0.5, 0.0, 4, 0, 0));
+
+    // Batch 45. Explosion.doExplosionA takes every entity in the box (attackEntityFrom with the explosion source, then the motion): a TNT beside a minecart (it breaks at 40+
+    // damage: 10 per point, so only a cart about 7.8 blocks away survives with a wobble), a boat, a thrown potion and a snowball, with the target listed before or after the TNT
+    scenario("boom-cart-near-ab", 6, tnt(0.5, 0.5, 0.5, 0, 0), cart(2.5, 0.5, 0.5, 0.0, 0.0, 0));
+    scenario("boom-cart-near-ba", 6, cart(2.5, 0.5, 0.5, 0.0, 0.0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    scenario("boom-cart-far-ab", 8, tnt(0.5, 0.5, 0.5, 0, 0), cart(8.3, 0.5, 0.5, 0.0, 0.0, 0));
+    scenario("boom-boat-near-ab", 6, tnt(0.5, 0.5, 0.5, 0, 0), boat(2.5, 0.5, 0.5, 0.0, 0, 0));
+    scenario("boom-boat-near-ba", 6, boat(2.5, 0.5, 0.5, 0.0, 0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    scenario("boom-boat-far-ab", 8, tnt(0.5, 0.5, 0.5, 0, 0), boat(8.3, 0.5, 0.5, 0.0, 0, 0));
+    scenario("boom-potion-ab", 6, tnt(0.5, 0.5, 0.5, 0, 0), potion(3.5, 5.0, 0.5, 0.0, 0.0, 0.0, 32732, 0));
+    scenario("boom-potion-ba", 6, potion(3.5, 5.0, 0.5, 0.0, 0.0, 0.0, 32732, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    scenario("boom-snowball-ab", 6, tnt(0.5, 0.5, 0.5, 0, 0), snowball(3.5, 5.0, 0.5, 0.0, 0.0, 0.0, 0));
+    scenario("boom-snowball-ba", 6, snowball(3.5, 5.0, 0.5, 0.0, 0.0, 0.0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    // EntityThrowable's ray takes any canBeCollidedWith entity in the sweep box, a painting included: a snowball breaks it (attackEntityFrom, 0 damage; the drop joins the list),
+    // a potion shatters on it and leaves it standing (the wall block goes at tick 4, before the hit, so the dropped item is not pushed out of it: that draws an unseeded random)
+    scenario("snowball-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), snowball(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("potion-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), potion(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 32732, 0), setBlock(0, 3, 0, 0, 4));
+    // A mob's own update ends with collideWithNearbyEntities: it pushes the cart or boat beside it (applyEntityCollision) inside its turn, so the list order decides
+    // whether it meets the vehicle before or after the vehicle moved. A slow cart only pushes; a fast empty one (above 0.1) also takes the cow aboard
+    scenario("cart-cow-ab", 10, cart(0.55, 0.5, 0.5, 0.05, 0.0, 0), cow(1.5, 0.0, 0.5, 0.0, 0));
+    scenario("cart-cow-ba", 10, cow(1.5, 0.0, 0.5, 0.0, 0), cart(0.55, 0.5, 0.5, 0.05, 0.0, 0));
+    scenario("cart-cow-mount-ab", 10, cart(0.55, 0.5, 0.5, 0.3, 0.0, 0), cow(1.5, 0.0, 0.5, 0.0, 0));
+    scenario("cart-cow-mount-ba", 10, cow(1.5, 0.0, 0.5, 0.0, 0), cart(0.55, 0.5, 0.5, 0.3, 0.0, 0));
+    scenario("boat-cow-ab", 10, boat(0.55, 0.5, 0.5, 0.05, 0, 0), cow(1.5, 0.0, 0.5, 0.0, 0));
+    scenario("boat-cow-ba", 10, cow(1.5, 0.0, 0.5, 0.0, 0), boat(0.55, 0.5, 0.5, 0.05, 0, 0));
+    // a cow riding one cart is pushed by a second cart: the push uses the position the rider has after its own update, before the seat is taken
+    scenario("cart-rider-push-ab", 10, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), rider(0.5, 0.5, 0.5, 0, 0), cart(1.5, 0.5, 0.5, -0.05, 0.0, 0));
+    scenario("cart-rider-push-ba", 10, cart(1.5, 0.5, 0.5, -0.05, 0.0, 0), cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), rider(0.5, 0.5, 0.5, 1, 0));
   }
 }
