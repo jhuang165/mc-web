@@ -68,4 +68,25 @@ public class EndermanWolfScenarios {
     sc("b42-wolf-tamed-hit-by-zombie-4129", 4129, 260, "TZ", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}}, "10 hit 0 1 1.0 mob");
     sc("b42-wolf-help-tamed-4130", 4130, 260, "WTW", new double[][] {{67.5, 64.5}, {62.5, 64.5}, {70.5, 66.5}, {64.5, 64.5}}, "5 melee 0");
   }
+  // Batch 43 (wanderdraws): long runs that make the native wander, look and carry draws, wolves begging and following. The player looks away (yaw 90) so no stare starts; item 352 is a bone, 319 raw porkchop.
+  static void run43() throws Exception {
+    double[][] away = {{72.5, 64.5}, {64.5, 64.5}};
+    for (int k = 0; k < 3; k++) sc("b43wd-enderman-idle-" + (5001 + k), 5001 + k, 1500, "E", away, "0 look 90 0");
+    sc("b43wd-enderman-idle-pair-5004", 5004, 1200, "EE", new double[][] {{72.5, 64.5}, {64.5, 72.5}, {64.5, 64.5}}, "0 look 180 0");
+    // a 7 x 7 patch of dirt (3) and grass (2) around the enderman: it picks one (nextInt(20) then a random cell) and sets it down again (nextInt(2000))
+    int[][] patch = {{68, 0, 60, 76, 0, 68, 3, 0}, {70, 0, 62, 74, 0, 66, 2, 0}};
+    // seeds picked so that the runs pick and set down blocks: 5011 picks once, 5021 picks and sets down, 5023 twice, 5031 picks, sets down and picks again
+    for (int[] k : new int[][] {{5011, 4000}, {5021, 3500}, {5023, 3500}, {5031, 3000}}) EndermanWolfProbe.scenario("b43wd-enderman-carry-" + k[0], k[0], k[1], "E", away, new String[] {"0 look 90 0"}, new int[0][0], patch, false, 15);
+    double[][] wolf = {{70.5, 64.5}, {64.5, 60.5}};
+    sc("b43wd-wolf-idle-wild-5101", 5101, 1200, "W", wolf, "0 look 90 0");
+    sc("b43wd-wolf-idle-tamed-5102", 5102, 1200, "T", wolf, "0 look 90 0");
+    sc("b43wd-wolf-beg-wild-5103", 5103, 400, "W", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 hold 352", "120 hold 0", "180 hold 352", "260 hold 319", "300 hold 352");
+    sc("b43wd-wolf-beg-tamed-5104", 5104, 400, "T", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 hold 319", "100 hold 352", "160 hold 319", "250 hold 0", "300 hold 319");
+    sc("b43wd-wolf-beg-far-5105", 5105, 300, "WT", new double[][] {{76.5, 64.5}, {60.5, 64.5}, {64.5, 64.5}}, "0 hold 352", "100 move 2 70.5 64.5", "100 hold 319");
+    // follow owner: the owner walks away (start at 10 blocks, stop at 2), then jumps beyond 12 blocks and the wolf teleports into the ring around it
+    sc("b43wd-wolf-follow-5111", 5111, 500, "T", new double[][] {{62.5, 64.5}, {64.5, 64.5}}, "10 walk 1 0.12 0", "150 walk 1 0 0", "250 move 1 110.5 64.5", "300 walk 1 0 0.1", "400 walk 1 0 0");
+    sc("b43wd-wolf-follow-sit-5112", 5112, 400, "S", new double[][] {{62.5, 64.5}, {64.5, 64.5}}, "10 walk 1 0.12 0", "100 sit 0 off", "250 move 1 110.5 64.5");
+    sc("b43wd-wolf-follow-two-5113", 5113, 400, "TT", new double[][] {{62.5, 64.5}, {60.5, 62.5}, {64.5, 64.5}}, "10 walk 2 0.15 0", "120 walk 2 0 0", "200 move 2 40.5 64.5");
+    sc("b43wd-wolf-follow-wild-5114", 5114, 300, "WT", new double[][] {{70.5, 64.5}, {62.5, 64.5}, {64.5, 64.5}}, "10 walk 2 0.1 0.05", "150 walk 2 0 0");
+  }
 }

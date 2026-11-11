@@ -58,7 +58,7 @@ export function tameableTasks(m, { Task }) {
       return !m.onGround;
     }
     startExecuting() {
-      const t = m.attackTarget, dx = t.x - m.x, dz = t.z - m.z, len = Math.sqrt(dx * dx + dz * dz);
+      const t = m.attackTarget, dx = t.x - m.x, dz = t.z - m.z, len = f(Math.sqrt(dx * dx + dz * dz)); // MathHelper.sqrt_double returns a float
       if (len > 0) {
         e.vx += (dx / len) * 0.5 * 0.800000011920929 + e.vx * 0.20000000298023224;
         e.vz += (dz / len) * 0.5 * 0.800000011920929 + e.vz * 0.20000000298023224;
@@ -155,7 +155,7 @@ export function buildWolfTasks(m, K) {
     }
     return true;
   };
-  // EntityAIBeg (ty, 8), mutex 2: a bone for a wild wolf, a favourite meat for a tamed one, held within 8 blocks.
+  // EntityAIBeg (ty, 8), mutex 2: a bone for a wild wolf or a favourite meat for any wolf, held within 8 blocks.
   class Beg extends Task {
     constructor(range) {
       super();
@@ -164,8 +164,9 @@ export function buildWolfTasks(m, K) {
       this.player = null;
       this.timer = 0;
     }
+    // ty.a(yz) (bytecode-read): a bone for an untamed wolf, otherwise (also for an untamed wolf) wv.c(stack), a favourite meat.
     interesting(p) {
-      return isTamed(e) ? WOLF_MEAT.has(p.held) : p.held === BONE;
+      return (!isTamed(e) && p.held === BONE) || WOLF_MEAT.has(p.held);
     }
     shouldExecute() {
       this.player = m.ai.closestPlayer(m, this.range);

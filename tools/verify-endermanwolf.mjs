@@ -1,5 +1,5 @@
 // Records batch 42 enderman and wolf targeting (tools/probes/EndermanWolfProbe.java, scenarios in EndermanWolfScenarios.java) against a real EntityPlayerMP from the unchanged 1.7.10 classes into
-// public/research/enderman-wolf-b42-reference.json; src/enderman-wolf-b42.test.js replays it. Run with MC_RESEARCH=<dir with minecraft-1.7.10.jar>.
+// public/research/enderman-wolf-b42-reference.json (EW_SET=b43: the batch 43 scenarios into enderman-wolf-b43-reference.json); src/enderman-wolf-b42.test.js and enderman-wolf-b43.test.js replay them. Run with MC_RESEARCH=<dir with minecraft-1.7.10.jar>.
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {mkdir,readFile,writeFile,access,rm} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';import path from 'node:path';import os from 'node:os';import {createHash} from 'node:crypto';import assert from 'node:assert/strict';
 const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url)),exists=p=>access(p).then(()=>true,()=>false);
@@ -58,16 +58,17 @@ await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','SeedMath','ServerPlayerProbe','VillageFightProbe','EndermanWolfProbe','EndermanWolfScenarios'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
-const {stdout,stderr}=await exec('java',['-cp',cp,'EndermanWolfProbe'],{maxBuffer:1<<29});
+const set=process.env.EW_SET==='b43'?'b43':'b42'; // EW_SET=b43 records the batch 43 scenarios (b43wd- prefix) into enderman-wolf-b43-reference.json
+const {stdout,stderr}=await exec('java',['-cp',cp,'EndermanWolfProbe',...(set==='b43'?['b43']:[])],{maxBuffer:1<<29});
 if(process.env.EW_ERR)await writeFile(process.env.EW_ERR,stderr);
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.EW_DUMP){await writeFile(process.env.EW_DUMP,JSON.stringify(records)+'\n');process.exit(0);}
-assert.ok(records.length>=55,'records');
+assert.ok(records.length>=(set==='b43'?17:55),'records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={ya:'EntityEnderman',wv:'EntityWolf',tg:'EntityTameable',vr:'EntityAITargetNonTamed',vs:'EntityAIOwnerHurtByTarget',vt:'EntityAIOwnerHurtTarget',vn:'EntityAIHurtByTarget',vu:'EntityAITarget',mw:'EntityPlayerMP',ahb:'World'};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:classes_,
- method:'Batch 42. Unchanged classes on the VillageLiveProbe double (no village), the player a real EntityPlayerMP (ServerPlayerProbe), every mob ticked by Entity.onUpdate. Per tick: [mob rows [x,y,z,health,target index,revenge index,flags,draws], sounds, player health lost, player revenge index, player ticks]; the player has index types.length. See EndermanWolfProbe.java for types and script ops.',
+ method:(set==='b43'?'Batch 43 (wanderdraws): the batch 42 harness (Entity.rand logs now include nextDouble as d, row element 8 = [motion x y z, yaw, pitch, head yaw, body yaw, onGround, jumping, moveForward, moveStrafing]); long idle wanders, carried blocks, begging and following wolves. ':'Batch 42. ')+'Unchanged classes on the VillageLiveProbe double (no village), the player a real EntityPlayerMP (ServerPlayerProbe), every mob ticked by Entity.onUpdate. Per tick: [mob rows [x,y,z,health,target index,revenge index,flags,draws], sounds, player health lost, player revenge index, player ticks]; the player has index types.length. See EndermanWolfProbe.java for types and script ops.',
  records};
-await writeFile(path.join(root,'../public/research/enderman-wolf-b42-reference.json'),JSON.stringify(reference)+'\n');
+await writeFile(path.join(root,'../public/research/enderman-wolf-'+set+'-reference.json'),JSON.stringify(reference)+'\n');
 console.log('records',records.length);

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { EntityWorld, ENTITY_TYPES, mobPose, sheepHeadDrop, sheepHeadPitch } from "./entities.js";
+import { EntityWorld, setEntityRandom, ENTITY_TYPES, mobPose, sheepHeadDrop, sheepHeadPitch } from "./entities.js";
 import { FLEECE_COLORS, sheepColor, childColor } from "./sheep.js";
 import { JavaRandom } from "./lighting.js";
 import { Survival, ITEMS } from "./survival.js";
@@ -27,6 +27,7 @@ const javaRandom = (seed) => {
   };
 };
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
+const ZERO = { nextInt: () => 0, nextFloat: () => 0, nextDouble: () => 0, nextBoolean: () => false, nextGaussian: () => 0 };
 const sheepWorld = (extra = {}, world = grass, random) => new EntityWorld(world, [{ id: "mob-1", type: "sheep", x: 64, y: 0, z: 64, health: 8, color: 0, ...extra }], random);
 const far = { x: 64, y: 0, z: 100 };
 
@@ -104,6 +105,7 @@ test("a sheep eats grass in 40 ticks: dirt below, bare fleece grows back, and th
   // random() = 0 passes the 1-in-1000 roll on a tick where EntityAITasks looks for tasks:
   // tickCount (= age - 1 here) divisible by 3, so the first tick of an age 0 sheep.
   const w = sheepWorld({ sheared: true, age: 0 }, world, () => 0), e = w.entities[0], p = new Survival();
+  setEntityRandom(e, ZERO); // the sheep's EntityAI* draw on Entity.rand
   w.tick(far, p);
   assert.equal(e.eatTimer, 39);
   assert.equal((e.age - 1) % 3, 0);
@@ -121,10 +123,12 @@ test("a sheep eats grass in 40 ticks: dirt below, bare fleece grows back, and th
 test("tall grass is destroyed instead of the dirt, a lamb grows 60 seconds, and panic interrupts grazing", () => {
   const edits = [], world = { ...grass, get: (x, y, z) => (y === 0 ? (edits.length ? 0 : 39) : y < 0 ? 1 : 0), set: (x, y, z, b) => edits.push([x, y, z, b]) },
     w = sheepWorld({ growingAge: -2000, age: 0 }, world, () => 0), e = w.entities[0], p = new Survival();
+  setEntityRandom(e, ZERO);
   for (let i = 0; i < 37; i++) w.tick(far, p);
   assert.deepEqual(edits, [[64, 0, 64, 0]]);
   assert.ok(e.growingAge > -2000 + 1200 - 1 && e.growingAge < -2000 + 1200 + 40);
   const q = sheepWorld({ age: 0 }, grass, () => 0), s = q.entities[0];
+  setEntityRandom(s, ZERO);
   q.tick(far, p);
   assert.ok(s.eatTimer > 0);
   q.damage(s, 1, 60, 64);

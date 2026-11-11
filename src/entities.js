@@ -12,7 +12,7 @@ import { gameRule } from "./game-rules.js";
 import { spiderDrops, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, anchoredShrunkBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
-import { endermanTick, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
+import { endermanTick, endermanThink, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
 import { creatureActionState, SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
@@ -588,6 +588,8 @@ export function jump(e) {
 // Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
 // isAIEnabled false (probed attributes2 `aiEnabled`): getAIMoveSpeed is 0.1 and the water acceleration 0.02; EntityCreature.updateEntityActionState
 // puts the movementSpeed attribute in moveForward. The ghast, squid and dragon move by their own code.
+// Mobs whose body yaw follows EntityLivingBase.func_110146_f instead of EntityBodyHelper (not isAIEnabled in 1.7.10): only the enderman so far, the one with native yaw records.
+const LEGACY_BODY = new Set(["enderman"]);
 export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "giant", "pigman", "enderman", "slime", "magma_cube", "blaze"]);
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
@@ -1006,6 +1008,7 @@ export class EntityWorld {
     const by = sourceEntity(this, e, source);
     if (by) { e.revenge = (e.age || 0) + 1; noteRevenge(e, by); }
     if (source.player) e.recentlyHit = 100;
+    else if (source.attacker?.type === "wolf" && wolfTamed(source.attacker)) e.recentlyHit = 100; // EntityLivingBase.attackEntityFrom: a tamed wolf's hit counts as a player hit for drops (no attackingPlayer)
     if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
@@ -2069,7 +2072,7 @@ export class EntityWorld {
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
@@ -2610,8 +2613,7 @@ export class EntityWorld {
   // (0.4 volume, pitch (r - r) * 0.2 + 1) and the splash particles of the shaking fur.
   wolfUpdate(e, t) {
     const rand = entityRandom(e), brain = this.ai.brain(e);
-    // The AI half of the wolf's tick: a target that died is dropped.
-    if (brain.attackTarget && !brain.attackTarget.alive) brain.attackTarget = null;
+    // No target check here: a dead target ends through EntityAITarget.continueExecuting/resetTask in the 3-tick task update, as in 1.7.10.
     const out = updateWolf(e, { inWater: !!e.inWater, onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand });
     if (out.shakeSound) this.events.push({ sound: WOLF_SOUNDS.shake, volume: WOLF_SOUNDS.volume, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } });
     for (let i = 0; i < out.splashes; i++) {
@@ -2681,7 +2683,20 @@ export class EntityWorld {
   // rotationYaw is set by EntityMoveHelper and the head by EntityLookHelper (ai.js).
   turnBody(e) {
     const dx = e.x - e.px, dz = e.z - e.pz;
-    if (dx * dx + dz * dz > 2.500000277905201e-7) {
+    if (LEGACY_BODY.has(e.type)) {
+      // EntityLivingBase.onUpdate's tail with EntityLivingBase.func_110146_f (sv.f(FF), bytecode-read): a mob that is not isAIEnabled (sw.f only delegates to the body helper when bk()) eases
+      // renderYawOffset 0.3 of the way to the movement direction (while it moved more than 0.0025 squared), then holds it within 75 degrees of rotationYaw; the head follows rotationYaw (legacy-creature.js).
+      const sq = f(dx * dx + dz * dz);
+      let want = e.renderYawOffset;
+      if (sq > f(0.0025000002)) want = f(f(f(f(Math.atan2(dz, dx)) * f(180)) / f(Math.PI)) - 90);
+      e.renderYawOffset = f(e.renderYawOffset + f(wrapDegrees(f(want - e.renderYawOffset)) * f(0.3)));
+      let d = wrapDegrees(f(e.rotationYaw - e.renderYawOffset));
+      if (d < -75) d = -75;
+      if (d >= 75) d = 75;
+      e.renderYawOffset = f(e.rotationYaw - d);
+      if (d * d > 2500) e.renderYawOffset = f(e.renderYawOffset + f(d * f(0.2)));
+      e.bodyHeadYaw = e.rotationYawHead; e.bodyTicks = 0;
+    } else if (dx * dx + dz * dz > 2.500000277905201e-7) {
       e.renderYawOffset = e.rotationYaw;
       e.rotationYawHead = clampYaw(e.renderYawOffset, e.rotationYawHead, 75);
       e.bodyHeadYaw = e.rotationYawHead;
