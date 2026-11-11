@@ -11,6 +11,7 @@ import { setPathNodeCap } from "./pathfinding.js";
 // VillageFightProbe.Log does (nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d"), the player a plain record the host would give the mobs (position, look, helmet,
 // game mode, sneaking, invisibility). Per tick a state is [mob rows, sounds, player health lost, player revenge index].
 export const reference42 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b42-reference.json", import.meta.url)));
+export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   nextBoolean() { const r = super.nextBoolean(); this.log.push("b"); return r; }
@@ -20,6 +21,7 @@ class LogRandom extends JavaRandom {
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie" };
+const ITEM_OF = { 352: 311, 319: 202 };
 const key = (x, y, z) => `${x},${y},${z}`;
 const PORT_ID = { 1: 3, 9: WATER, 20: 9 };
 function plain(blocks = []) {
@@ -30,7 +32,7 @@ function plain(blocks = []) {
   }
   return { numericSeed: 1, height: 256, floorBelow: true, minX: -3e7, maxX: 3e7, minZ: -3e7, maxZ: 3e7,
     get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? PORT_ID[1] : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
-    set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
+    set: (x, y, z, b, _notify, m = 0) => cells.set(key(x, y, z), [b, m]), put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 const RAD = Math.PI / 180;
 
@@ -43,7 +45,7 @@ function run(r) {
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = 2;
   ew.worldRandom = new JavaRandom(r.seed);
-  let day = false, rain = false, bright = r.bright;
+  let day = false, rain = false, bright = r.bright, held = 0;
   ew.isDaytime = () => day;
   ew.isRaining = () => rain;
   ew.brightnessLevel = () => bright;
@@ -83,6 +85,7 @@ function run(r) {
       else if (op === "creative") survival.mode = p[3] === "on" ? "creative" : "survival";
       else if (op === "adventure") survival.mode = p[3] === "on" ? "adventure" : "survival";
       else if (op === "invisible") { if (p[3] === "on") survival.effects.add({ id: 14, duration: 1e9, amplifier: 0 }); else survival.effects.remove(14); }
+      else if (op === "hold") held = ITEM_OF[p[2]] ?? Number(p[2]); // original item id -> the project's (bone 352 -> 311, raw porkchop 319 -> 202); the player's held item id (the beg tasks)
       else if (op === "sneak") ew.ai.player.sneaking = p[3] === "on";
       else if (op === "angry") ents[Number(p[2])].angry = true;
       else if (op === "sit") ents[Number(p[2])].sitWish = p[3] === "on";
@@ -96,10 +99,10 @@ function run(r) {
       }
     }
     player.x += vel[n][0]; player.z += vel[n][1];
-    ew.ai.beginTick(player, survival, 0);
+    ew.ai.beginTick(player, survival, held);
     for (const l of logs) l.log.length = 0;
     ew.events.length = 0;
-    ew.tick(player, survival, 0);
+    ew.tick(player, survival, held);
     const sounds = ew.events.filter((e) => e.sound).map((e) => [e.sound, e.volume, e.pitch]);
     const damage = 1000 - survival.health;
     survival.health = 1000;

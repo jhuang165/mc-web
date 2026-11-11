@@ -21,13 +21,13 @@ function playerView(mobs, p) {
 
 function environment(mobs, e) {
   const world = mobs.world, ai = mobs.ai;
-  const orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.id ?? 0;
+  const orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[0] ?? 0; // toOriginal returns [id, meta]
   const raining = () => !!mobs.isRaining?.();
   const w = {
     blockExists: (x, y, z) => y >= 0 && y < HEIGHT,
     blocksMovement: (x, y, z) => cellBoxes(world, x, y, z).length > 0,
-    blockId: (x, y, z) => (y < 0 || y >= HEIGHT ? 0 : orig(x, y, z)),
-    blockMeta: (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.meta ?? 0,
+    blockId: (x, y, z) => ((y < 0 && !world.floorBelow) || y >= HEIGHT ? 0 : orig(x, y, z)), // floorBelow: a test world whose floor lies at y < 0 (the probe records)
+    blockMeta: (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[1] ?? 0,
     isNormalCube: (x, y, z) => normalCube(world.get(x, y, z)),
     collides: (b) => {
       for (let x = Math.floor(b.minX); x < Math.floor(b.maxX + 1); x++)

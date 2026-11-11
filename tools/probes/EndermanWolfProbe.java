@@ -16,6 +16,9 @@ import java.util.Random;
 // Entity.rand of every mob is a logging Random (DLog over VillageFightProbe.Log: nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d").
 public class EndermanWolfProbe {
   public static class EW extends VillageLiveProbe.W {
+    // Batch 43: EntityEnderman picks a block (World.setBlock(.., air)) and places it back (setBlock with flags 3); the probe world keeps blocks in a cell map. VillageLiveProbe.W.f removes the cells above and below too (the door
+    // hack), so setBlockToAir is not used here: the pick calls b(IIILaji)Z, which reaches this d.
+    public boolean d(int x, int y, int z, aji b, int meta, int flags) { VillagerProbe.World.cells.put(VillagerProbe.key(x, y, z), new int[] {aji.b(b), meta}); return true; }
     public void a(double x, double y, double z, String sound, float volume, float pitch) { VillagerProbe.World.sounds.add(sound + "|" + volume + "|" + pitch + "@"); }
     public boolean y(int x, int y, int z) { return VillageLiveProbe.W.rain && i(x, y, z); } // World.canLightningStrikeAt in a flat plains world: raining, open sky
   }
@@ -99,6 +102,7 @@ public class EndermanWolfProbe {
           case "adventure": ServerPlayerProbe.gameType(player, p[3].equals("on") ? ahk.d : ahk.b); break;
           case "invisible": player.d(p[3].equals("on")); break;
           case "sneak": player.b(p[3].equals("on")); break;
+          case "hold": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2]))); break; } // batch 43: the held item of the player (beg tasks)
           case "angry": ((wv) ents[Integer.parseInt(p[2])]).l(true); break;
           case "sit": ((wv) ents[Integer.parseInt(p[2])]).cc().a(p[3].equals("on")); break;
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
@@ -174,6 +178,6 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "x", info);
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
-    EndermanWolfScenarios.run();
+    if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }
