@@ -1920,18 +1920,36 @@ export class EntityWorld {
     return (this.orderCount = (this.orderCount ?? 0) + 1);
   }
   // `order` (the mobs in walking order) with the live fireballs placed among them by stamp: a ball launched before a mob joined updates before it, as it does natively.
+  // `this.walks` (entity-simulation.js entityWalkers) adds arrows, thrown entities, items, orbs, TNT and falling blocks to that list: each has a stamp from
+  // `joined` when it spawned, or is placed after the mobs known so far when it has none (a saved one, or a spawn site that does not report).
+  joined(e, kind) {
+    const w = this.walks?.get(kind);
+    if (!w) return;
+    this.orderSeqs ??= new WeakMap();
+    this.orderSeqs.set(e, this.orderStamp()); // World.spawnEntityInWorld: appended at the end of loadedEntityList
+    if (this.tickOrder) { (this.walkOf ??= new WeakMap()).set(e, w); this.tickOrder.push(e); } // spawned in the pass: it updates in this pass
+  }
   withBalls(order) {
-    const balls = this._fireballs?.list;
-    if (!balls?.length) return order;
+    const balls = this._fireballs?.list, others = [];
+    if (this.walks?.size) {
+      this.walkOf ??= new WeakMap();
+      for (const w of this.walks.values()) for (const e of w.list()) if (!e.dead) { others.push(e); this.walkOf.set(e, w); }
+    }
+    if (!balls?.length && !others.length) return order;
     const next = this.orderStamp();
-    for (const b of balls) if (!this.orderSeqs.has(b)) this.orderSeqs.set(b, next - 0.5); // a restored ball: after the mobs known so far
-    const seq = (e) => this.orderSeqs.get(e) ?? 0, live = balls.filter((b) => !b.dead).sort((a, b) => seq(a) - seq(b)), out = [];
+    for (const b of balls ?? []) if (!this.orderSeqs.has(b)) this.orderSeqs.set(b, next - 0.5); // a restored ball: after the mobs known so far
+    for (const o of others) if (!this.orderSeqs.has(o)) this.orderSeqs.set(o, next - 0.5);
+    for (const b of balls ?? []) if (!b.dead) others.push(b);
+    // stamps looked up once per entity (the walk runs every tick over every item, orb and arrow), then a numeric sort of the pairs
+    const seqs = this.orderSeqs, keyed = others.map((e) => [seqs.get(e) ?? 0, e]), out = [];
+    keyed.sort((a, b) => a[0] - b[0]);
     let i = 0;
     for (const m of order) {
-      while (i < live.length && seq(live[i]) < seq(m)) out.push(live[i++]);
+      const sm = seqs.get(m) ?? 0;
+      while (i < keyed.length && keyed[i][0] < sm) out.push(keyed[i++][1]);
       out.push(m);
     }
-    while (i < live.length) out.push(live[i++]);
+    while (i < keyed.length) out.push(keyed[i++][1]);
     return out;
   }
   tickMobs(player, survival, heldItem=0) {
@@ -1971,6 +1989,8 @@ export class EntityWorld {
       seat();
       if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
+      const walk = this.walkOf?.get(e);
+      if (walk) { walk.tick(e); continue; } // an arrow, item, orb, thrown entity, TNT or falling block (entity-simulation.js)
       if (e.type === "fireball") { this._fireballs.tickOne(e); continue; } // a ball (fireballs.js) updates where it stands in the list
       if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
@@ -2089,6 +2109,7 @@ export class EntityWorld {
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
+    for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
     this.tickOrder = null;
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the

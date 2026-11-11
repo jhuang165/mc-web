@@ -337,6 +337,7 @@ export class Projectiles {
     const rand = this.rng(), h = launch(rand, feet, yaw, pitch),
       ball = { ...h, kind, px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand, random: rand, dead: false };
     this.balls.push(ball);
+    this.joined?.(ball); // entity-simulation.js (entityWalkers): the ball's place in World.loadedEntityList
     return ball;
   }
   // ItemEgg.onItemRightClick (ack.a) spawns an EntityEgg (zl) the same way.
@@ -381,10 +382,14 @@ export class Projectiles {
   // hits. Ender pearls require `onPearlImpact({pearl,world,hit,target,block})`;
   // it runs synchronously and owns impact ordering and server-only death.
   tick(world, targets = [], onHit = () => {}, onPearlImpact = null) {
-    for (const b of this.balls) if (!b.dead && ringEntityActive(world,b)) this.step(world, b, targets, onHit, onPearlImpact);
-    this.balls = this.balls.filter((b) => !b.dead);
-    if (this.ownsEffects) this.effects.tick(world);
+    for (const b of this.balls) this.tickOne(world, b, targets, onHit, onPearlImpact);
+    this.reap();
+    this.tickEffects(world);
   }
+  reap() { this.balls = this.balls.filter((b) => !b.dead); }
+  tickEffects(world) { if (this.ownsEffects) this.effects.tick(world); }
+  // One ball's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
+  tickOne(world, b, targets = [], onHit = () => {}, onPearlImpact = null) { if (!b.dead && ringEntityActive(world, b)) this.step(world, b, targets, onHit, onPearlImpact); }
   step(world, b, targets, onHit, onPearlImpact = null) {
     b.px = b.x;
     b.py = b.y;

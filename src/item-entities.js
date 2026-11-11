@@ -44,6 +44,7 @@ export class ItemEntities {
         px: x, py: posY - W, pz: z,
       };
     this.items.push(item);
+    this.joined?.(item); // entity-simulation.js (entityWalkers): the entity's place in World.loadedEntityList
     return item;
   }
   // Block.dropBlockAsItem (func_149642_a): 0.7-wide random spread inside the
@@ -234,61 +235,64 @@ export class ItemEntities {
   }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
-    for (const e of this.items) {
-      if (e.dead || !ringEntityActive(world,e)) continue;
-      let wasWet = false;
-      // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
-      // its own box to World.handleMaterialAcceleration, unshrunk.
-      if (world.getMeta) {
-        const { wet, push } = waterAcceleration(world, this.box(e));
-        e.mx += push[0];
-        e.my += push[1];
-        e.mz += push[2];
-        if (wet) e.fire = 0;
-        wasWet = wet;
-      }
-      this.burn(world, e);
-      e.ticks++;
-      if (e.delay > 0) e.delay--;
-      e.px = e.x;
-      e.py = e.y;
-      e.pz = e.z;
-      e.my -= 0.03999999910593033;
-      const noClip = this.pushOut(world, e);
-      e.noClip = noClip; // kept for a piston push between ticks (push()); not saved
-      e.inWater = wasWet;
-      this.move(world, e, noClip, wasWet);
-      const moved = Math.trunc(e.px) !== Math.trunc(e.x) || Math.trunc(e.py + W) !== Math.trunc(e.y + W) || Math.trunc(e.pz) !== Math.trunc(e.z);
-      if (moved || e.ticks % 25 === 0) {
-        // EntityItem.onUpdate: an item whose cell is lava is thrown up and
-        // sideways with a fizz (volume 0.4, pitch 2 + 0.4 * random).
-        if (world.get(Math.floor(e.x), Math.floor(e.y + W), Math.floor(e.z)) === LAVA) {
-          const r = this.random;
-          e.my = 0.20000000298023224;
-          e.mx = f(f(r() - r()) * 0.2);
-          e.mz = f(f(r() - r()) * 0.2);
-          this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z });
-        }
-        const [a, b, c, d, g, h] = this.box(e);
-        for (const o of this.remote ? [] : this.items) {
-          if (o === e || o.dead) continue;
-          // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
-          if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
-          const [oa, ob, oc, od, og, oh] = this.box(o);
-          if (od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5) this.combine(e, o, maxStack);
-          if (e.dead) break;
-        }
-      }
-      // EntityItem.onUpdate: the block below the item's minY sets the ground drag (0.98 on ice).
-      const drag = e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.98)) : f(0.98);
-      e.mx *= drag;
-      e.my *= 0.9800000190734863;
-      e.mz *= drag;
-      if (e.onGround) e.my *= -0.5;
-      e.age++;
-      if ((!this.remote && e.age >= LIFETIME) || e.y + W < -64) e.dead = true;
+    for (const e of this.items) this.tickOne(world, e, maxStack);
+    this.reap();
+  }
+  reap() { this.items = this.items.filter((e) => !e.dead); }
+  // One item's update: a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) calls this where the item stands in it.
+  tickOne(world, e, maxStack = () => 64) {
+    if (e.dead || !ringEntityActive(world,e)) return;
+    let wasWet = false;
+    // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
+    // its own box to World.handleMaterialAcceleration, unshrunk.
+    if (world.getMeta) {
+      const { wet, push } = waterAcceleration(world, this.box(e));
+      e.mx += push[0];
+      e.my += push[1];
+      e.mz += push[2];
+      if (wet) e.fire = 0;
+      wasWet = wet;
     }
-    this.items = this.items.filter((e) => !e.dead);
+    this.burn(world, e);
+    e.ticks++;
+    if (e.delay > 0) e.delay--;
+    e.px = e.x;
+    e.py = e.y;
+    e.pz = e.z;
+    e.my -= 0.03999999910593033;
+    const noClip = this.pushOut(world, e);
+    e.noClip = noClip; // kept for a piston push between ticks (push()); not saved
+    e.inWater = wasWet;
+    this.move(world, e, noClip, wasWet);
+    const moved = Math.trunc(e.px) !== Math.trunc(e.x) || Math.trunc(e.py + W) !== Math.trunc(e.y + W) || Math.trunc(e.pz) !== Math.trunc(e.z);
+    if (moved || e.ticks % 25 === 0) {
+      // EntityItem.onUpdate: an item whose cell is lava is thrown up and
+      // sideways with a fizz (volume 0.4, pitch 2 + 0.4 * random).
+      if (world.get(Math.floor(e.x), Math.floor(e.y + W), Math.floor(e.z)) === LAVA) {
+        const r = this.random;
+        e.my = 0.20000000298023224;
+        e.mx = f(f(r() - r()) * 0.2);
+        e.mz = f(f(r() - r()) * 0.2);
+        this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+      }
+      const [a, b, c, d, g, h] = this.box(e);
+      for (const o of this.remote ? [] : this.items) {
+        if (o === e || o.dead) continue;
+        // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
+        if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
+        const [oa, ob, oc, od, og, oh] = this.box(o);
+        if (od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5) this.combine(e, o, maxStack);
+        if (e.dead) break;
+      }
+    }
+    // EntityItem.onUpdate: the block below the item's minY sets the ground drag (0.98 on ice).
+    const drag = e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.98)) : f(0.98);
+    e.mx *= drag;
+    e.my *= 0.9800000190734863;
+    e.mz *= drag;
+    if (e.onGround) e.my *= -0.5;
+    e.age++;
+    if ((!this.remote && e.age >= LIFETIME) || e.y + W < -64) e.dead = true;
   }
   // EntityPlayer.onLivingUpdate collides the player's box grown by (1, 0.5, 1)
   // with items; EntityItem.onCollideWithPlayer stores what fits once the

@@ -80,7 +80,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   mobs.lootItems = items; // equipment mobs with canPickUpLoot pick items up (mob-equipment.md)
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;
-  xpOrbs.tick(world, position);
+  if (!mobs.walks?.has("orb")) xpOrbs.tick(world, position); // walked: the orbs updated in mobs.tick's list walk (entity-simulation.js entityWalkers)
   if (survival.health > 0) {
     const oldLevel = experience.level;
     const amount = xpOrbs.collect(position, width, height);
