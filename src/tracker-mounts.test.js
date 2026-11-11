@@ -30,6 +30,9 @@ const CASES = {
   // batch 44: a squid through a still water slab (the client's own rotation, tentacles and flow push) and the Ender Dragon's client branch
   swimSquid: { mount: "squid", rider: "zombie", water: true },
   flyDragon: { mount: "ender_dragon", rider: "zombie" },
+  // batch 45: the dragon's death (health 0 through S1C at tick 60: the client's own death branch) and a squid out of the water (its air, S1C every tick)
+  dragonDeath: { mount: "ender_dragon", rider: "zombie" },
+  squidAir: { mount: "squid", rider: "zombie" },
 };
 // the probe's water slab for swimSquid (MW.slab): x >= 11, y 0..9, still water (metadata 0)
 const slab = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : x >= 11 && y < 10 ? WATER : 0), getMeta: () => 0, surface: () => 0 };
@@ -61,7 +64,7 @@ function checkExtra(name, t, c, want) {
     const s = c.squid;
     near([s.pitch, s.prevPitch, s.yaw, s.prevYaw, s.rotation, s.prevRotation, s.tentacle, s.prevTentacle, s.motionSpeed, s.rotationVelocity, s.rotateSpeed, s.vecX, s.vecY, s.vecZ], want, "squid");
   } else if (c.dragon) {
-    const d = c.dragon, health = { health: 200, dragon: d };
+    const d = c.dragon, health = { health: c.health ?? 200, dragon: d };
     near([d.prevAnim, d.anim, d.ri], want.slice(0, 3), "dragon");
     const got = [];
     for (let n = 0; n <= 24; n++) got.push(...movementOffsets(health, n, 1));
@@ -69,6 +72,23 @@ function checkExtra(name, t, c, want) {
     if (want.length > got.length + 3) for (let n = 0; n < 64; n++) got.push(...movementOffsets(health, n, 1));
     near(got, want.slice(3), "offsets");
   }
+}
+// batch 45: what the client copy keeps beyond the packets (TrackerMountsProbe.moreOf): the dragon's client health, deathTicks and its seven parts
+// (x, y, z, box), or the squid's air
+function checkMore(name, t, c, want) {
+  if (!want?.length) return;
+  const near = (got, exp, what) => got.forEach((v, k) => assert.ok(Math.abs(v - exp[k]) <= 1e-9, `${name} tick ${t} ${what}[${k}]: got ${v} want ${exp[k]}`));
+  if (c.dragon) {
+    near([c.health, c.dragon.deathTicks], want.slice(0, 2), "dragon health/deathTicks");
+    const got = [];
+    for (const part of c.dragon.parts) got.push(part.x, part.y, part.z, ...part.box);
+    near(got, want.slice(2), "dragon parts");
+  } else if (c.squid) assert.equal(c.air, want[0], `${name} tick ${t}: squid air`);
+}
+// the client's sounds and particles of a tick as the probe's MW logs them ([at | snd | fx, name, ...]); the pitch is a float
+function fxOf(list) {
+  return list.map((x) => x.particle ? ["fx", x.particle, x.x, x.y, x.z] : x.silent ? ["at", x.sound, x.x ?? x.entity.x, x.y ?? x.entity.y, x.z ?? x.entity.z, x.volume, Math.fround(x.pitch)]
+    : ["snd", x.sound, x.x, x.y, x.z, x.volume, Math.fround(x.pitch)]);
 }
 function replay(name) {
   const record = ref.cases[name], spec = CASES[name];
@@ -99,6 +119,10 @@ function replay(name) {
       Object.assign(mount, { x: mx, y: my, z: mz, vx, vy, vz, rotationYaw: yaw, rotationYawHead: yaw, renderYawOffset: yaw, batHanging: inp.length > 16 && inp[13] === 1 });
       Object.assign(rider, { x: rx, y: ry, z: rz });
       if (mounted) { if (rider.ridingEntity !== mount) mountEntity(rider, mount, (m) => SIZES[m.type][1]); } else if (rider.ridingEntity) mountEntity(rider, null, (m) => SIZES[m.type][1]);
+      // the server's own values the metadata packets carry: the dragon's health (row field 14) and the squid's air (EntityWaterMob counts it down
+      // out of the water: -20 is reset to 0, the damage of that tick is not part of the packets)
+      if (mount.type === "ender_dragon") mount.health = inp.length > 16 ? inp[14] : 200;
+      if (mount.type === "squid" && name === "squidAir") { mount.air = (mount.air ?? 300) - 1; if (mount.air === -20) mount.air = 0; }
       if (spec.leash) mount.leash = inp[9] ? { holder: "mob", holderUuid: rider.uuid } : undefined;
       // the entries run in list order: riderFirst puts the rider ahead of its mount
       const order = spec.riderFirst ? [rider, mount] : [mount, rider];
@@ -112,6 +136,10 @@ function replay(name) {
       if (cm?.dragon && !cm.seeded) { cm.seeded = true; cm.rand = new JavaRandom(77); }
       tracker.clientTick(physics);
       checkExtra(name, t, cm, record.extra[t]);
+      if (cm) checkMore(name, t, cm, record.more?.[t]);
+      const gotFx = fxOf(tracker.takeFx().filter((x) => x.entity === mount)), wantFx = record.fx.find((f) => f[0] === t)?.[1] ?? [];
+      assert.equal(gotFx.length, wantFx.length, `${name} tick ${t}: client effects ${JSON.stringify(gotFx)} vs ${JSON.stringify(wantFx)}`);
+      gotFx.forEach((g, k) => g.forEach((v, i) => typeof v === "number" ? assert.ok(Math.abs(v - wantFx[k][i]) <= 1e-9 || v === Math.fround(wantFx[k][i]), `${name} tick ${t} effect ${k}[${i}]: got ${v} want ${wantFx[k][i]}`) : assert.equal(v, wantFx[k][i], `${name} tick ${t} effect ${k}[${i}]`)));
       const row = record.client[t];
       row.forEach((w, i) => {
         const c = tracker.clientIfTracked(live[i]);
@@ -184,21 +212,30 @@ test("a mob riding a mob is drawn where the client's updateRiderPosition put it,
   assert.equal(zombie.x, pig.x, "the live rider stays on the live mount");
 });
 
-test("a mount the player rides is a client entity that follows the player's movement; the camera still reads the live mount", () => {
+test("a pig the player rides is moved by the packets alone (no client code reads its rider); a ridden horse still follows the live one", () => {
+  // Bytecode scan (batch 45): no class on the pig's client path reads riddenByEntity, and isClientWorld is true only for EntityPlayerSP, so the
+  // client pig interpolates S14 / S18 like any mob (the executed ridePig record). The horse steers from its rider (wi.e(FF)); that is not ported.
   const { mobs, pig, tick } = pair();
   tick();
   pig.rider = { vehicle: { entity: pig } };
   for (let t = 0; t < 10; t++) { pig.x += 0.2; pig.z -= 0.1; pig.rotationYaw = 10 * t; pig.renderYawOffset = 10 * t; tick(); }
   const c = mobs.clientPosition(pig);
   assert.ok(c, "drawn from the client entity");
-  assert.deepEqual([c.x, c.y, c.z, c.rotationYaw, c.renderYawOffset], [pig.x, pig.y, pig.z, pig.rotationYaw, pig.renderYawOffset]);
-  assert.ok(Math.abs((c.x - c.px) - 0.2) < 1e-9, "the previous client position is last tick's");
-  // the player gets off: the client entity goes back to the packets and carries on from where it stood
-  pig.rider = null;
-  const before = c.x;
-  tick();
-  assert.ok(Math.abs(c.x - before) < 0.25, "no snap on dismount");
+  assert.ok(pig.x - c.x > 0.1, "the ridden pig trails its live position like an unridden one");
+  assert.ok(c.rotationYaw !== pig.rotationYaw, "and keeps the packets' angles");
   assert.ok(Math.abs(pig.x - 102.5) < 1e-9, "the live mount is untouched by the client entity");
+  const { mobs: m2, tick: tick2, pig: horse } = pair();
+  horse.type = "horse";
+  tick2();
+  horse.rider = { vehicle: { entity: horse } };
+  for (let t = 0; t < 10; t++) { horse.x += 0.2; horse.z -= 0.1; horse.rotationYaw = 10 * t; horse.renderYawOffset = 10 * t; tick2(); }
+  const h = m2.clientPosition(horse);
+  assert.deepEqual([h.x, h.y, h.z, h.rotationYaw, h.renderYawOffset], [horse.x, horse.y, horse.z, horse.rotationYaw, horse.renderYawOffset]);
+  assert.ok(Math.abs((h.x - h.px) - 0.2) < 1e-9, "the previous client position is last tick's");
+  horse.rider = null;
+  const before = h.x;
+  tick2();
+  assert.ok(Math.abs(h.x - before) < 0.25, "no snap on dismount");
 });
 
 test("the lead rope runs between client positions: a holder mob is drawn at its client entity", () => {
@@ -234,4 +271,12 @@ test("the drawn body yaw, head yaw and pitch are the client copy's, the rest of 
   assert.equal(pose.age, 7.5);
   assert.equal(live.renderYawOffset, 20, "the live mob is not modified");
   assert.equal(mobPose(live, 0.5).bodyYaw, 15);
+});
+
+// batch 45: NetHandlerPlayClient.handleSpawnMob (bytecode-read, then executed in the probe): the client dragon's seven parts take the ids dragonId + 1 .. + 7
+test("the client dragon's seven parts are numbered right after the dragon (spawn packet id)", () => {
+  const ids = ref.cases.dragonDeath.partIds;
+  assert.equal(ids.length, 7);
+  ids.forEach((id, i) => assert.equal(id, ids[0] + i));
+  assert.equal(new Set(ref.cases.dragonDeath.events[0][1].filter((p) => p[0] === "spawn").map((p) => p[1])).size, 2);
 });

@@ -319,7 +319,8 @@ export function updateParts(e, host) {
   placePart(s, 1, e.x + f(sy * 0.5), e.y, e.z - f(cy * 0.5));
   placePart(s, 5, e.x + f(cy * 4.5), e.y + 2, e.z + f(sy * 4.5));
   placePart(s, 6, e.x - f(cy * 4.5), e.y + 2, e.z - f(sy * 4.5));
-  if (e.hurtTime === 0 && host.living) {
+  // the wing sweep and the head attack run only on the server (EntityDragon.onLivingUpdate: !isRemote && hurtTime == 0); the client copy passes no host
+  if (host && e.hurtTime === 0 && host.living) {
     for (const w of [5, 6]) {
       const b = expand(s.parts[w].box, 4, 2, 4);
       collideWithEntities(e, [b[0], b[1] - 2, b[2], b[3], b[4] - 2, b[5]], host);
@@ -335,6 +336,7 @@ export function updateParts(e, host) {
     const sa = mhSin(ang), ca = mhCos(ang), a = f(1.5), b = f((j + 1) * 2);
     placePart(s, 2 + j, e.x - f(f(f(sy * a) + f(sa * b)) * cp), e.y + (t[1] - r5[1]) * 1 - f(f(b + a) * sp) + 1.5, e.z + f(f(f(cy * a) + f(ca * b)) * cp));
   }
+  if (!host) return; // the client copy: destroyBlocksInAABB and the bA flag are the server's (!isRemote)
   const h = destroyBlocks(e, s.parts[HEAD].box, host);
   const bd = destroyBlocks(e, s.parts[1].box, host);
   s.slowed = h || bd;
