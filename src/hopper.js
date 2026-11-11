@@ -85,7 +85,7 @@ export function updateHopper(host, tile, x, y, z, meta) {
   const maxStack = host.maxStack, key = `${x},${y},${z}`;
   // A neighbour whose saved containers are still loading: wait (no transfer, no pickup, no cooldown); natively that chunk is loaded.
   const [fx, fy, fz] = FACING_OFFSETS[hopperFacing(meta)];
-  if (containerPending(host, x + fx, y + fy, z + fz) || containerPending(host, x, y + 1, z)) return false;
+  if (containerPending(host, x + fx, y + fy, z + fz, `${key}>`) || containerPending(host, x, y + 1, z, `${key}^`)) return false; // bounded: PENDING_LIMIT calls
   const self = arrayAdapter(key, tile.items, { hopper: tile, received: () => { tile.cooldown = TRANSFER_COOLDOWN; } });
   let moved = false, target = null, above = null;
   if (tile.items.some(Boolean)) {

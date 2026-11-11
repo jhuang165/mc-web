@@ -107,3 +107,13 @@ for (const [name, spec, moves] of [
     } else assert.deepEqual(ring.mid.slice(0, 8), ring.end.slice(0, 8), "the refused line is unchanged before and after the chunk arrives (cells in chunk 15 read as air until it is held)");
   });
 }
+
+// Batch 44: the no-op event exists only where the decision truly needs the unheld chunk. A line that native canExtend refuses from cells the
+// ring already holds (obsidian right beside the piston) queues no block event at all, exactly as natively; only a line that reaches the unheld
+// chunk (above: 13 blocks, obsidian in chunk 15) waits, because its answer depends on cells that read as air here.
+test("rim piston: a refusal decided inside held cells queues no event (native: the event is not added)", () => {
+  const ring = run(true, { count: 0, id: O_STONE, obsidianAt: 1 }), resident = run(false, { count: 0, id: O_STONE, obsidianAt: 1 });
+  assert.equal(ring.waiting, 0, "no event waits");
+  assert.equal(resident.waiting, 0);
+  assert.deepEqual(ring.end, resident.end);
+});

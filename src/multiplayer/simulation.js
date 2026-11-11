@@ -23,6 +23,8 @@ import { serverClick } from '../server-handlers.js';
 import { Signs, ITEM_SIGN, SIGN_LINES, isSign, placeSign } from '../signs.js';
 import { Skulls, SKULL, ITEM_SKULL, placeSkull } from '../skull.js';
 import { Beacons, BEACON, pyramidLevel, applyBeaconPick, isPaymentItem } from '../pyramid.js';
+import { tickBeacons } from '../pyramid-live.js';
+import { canSeeSky } from '../weather.js';
 import { MobSpawners } from '../mob-spawner.js';
 import { describeTiles, describeCell } from '../tile-sync.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
@@ -194,7 +196,7 @@ export class DedicatedSimulation {
   chooseBeacon(id, m) {
     if (!this.players.has(id) || ![m?.x, m?.y, m?.z, m?.primary, m?.secondary].every(Number.isInteger) || this.world.get(m.x, m.y, m.z) !== BEACON) return false;
     const tile = this.tileEntities.beacons.ensure(m.x, m.y, m.z), w = this.world;
-    tile.levels = pyramidLevel((x, y, z) => w.get(x, y, z), (x, y, z) => { for (let yy = y; yy < w.height; yy++) if (w.solid(x, yy, z)) return false; return true; }, m.x, m.y, m.z);
+    tile.levels = pyramidLevel((x, y, z) => w.get(x, y, z), (x, y, z) => canSeeSky(w, x, y, z), m.x, m.y, m.z);
     // The dedicated server has no container windows: the held payment item stands in for the beacon slot (players are creative, so nothing is spent).
     const held = this.players.get(id).survival.held;
     if (!tile.payment && held && isPaymentItem(held.id)) tile.payment = { id: held.id, count: 1, damage: held.damage ?? 0 };
@@ -238,6 +240,13 @@ export class DedicatedSimulation {
     this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
+    // TileEntityBeacon.updateEntity: every 80 world ticks the pyramid check, then the effects for the players in range (pyramid-live.js, the
+    // singleplayer tick). Each grant also goes to that player as an S1D entity-effect message (`effectsOut`, delivered by the connection).
+    tickBeacons(this.tileEntities.beacons, { world: this.world, time: this.time, apply: (pl, e) => {
+      const p = pl.player;
+      p.survival.effects.add(e);
+      (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });
+    }, players: [...this.players.values()].map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height, player: p })) });
     for (const key of new Set([...beforeLit, ...this.redstone.lit])) if (beforeLit.has(key) !== this.redstone.lit.has(key)) {
       const [x, y, z] = key.split(',').map(Number);
       this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
