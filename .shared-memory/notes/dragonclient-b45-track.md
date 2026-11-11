@@ -33,3 +33,6 @@ Not executed (bytecode-read only): the NetHandlerPlayClient spawn dispatch, the 
 - A ridden pig now trails the camera by the interpolation lag because the camera still uses the live seat.
 - The dragon's client crystal search (only its nextInt(10) draw is modelled) and the client playing the living sound (draws only, `silent`).
 - Boat and minecart client copies of a player rider (object-tracker.js) are unexamined.
+
+## Lead change on merge
+- The ridden pig's copy follows the live pig again (`MobTracker.serverTick`, `tracker-mounts.test.js`). With the copy packet-driven while the camera and seat use the live pig, the drawn pig trailed its rider by the interpolation lag, which native does not show (natively the rider sits on the client pig). Moving the seat and camera to the client copy is the follow-up; the bytecode finding (no client code reads the pig's rider) stands.

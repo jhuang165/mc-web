@@ -380,7 +380,7 @@ export class ClientEntity {
   // client copy takes the rider's yaw and half its pitch and jumps on its own. That is NOT ported: this copy just follows the live horse. A ridden pig
   // is different: no EntityPig / EntityAnimal / EntityCreature / EntityLiving / EntityLivingBase client code reads riddenByEntity (the field is read
   // only by the server paths: interact, fall, canBeSteered), and EntityLivingBase.isClientWorld is true only for EntityPlayerSP (blk.br), so the client
-  // pig is moved by the packets alone, as the executed ridePig record shows; the rider's seat follows that copy. The camera still uses the live seat.
+  // pig is moved by the packets alone, as the executed ridePig record shows; natively the rider's seat follows that copy. The port's camera and seat still use the live pig, so serverTick keeps the copy on it (not native).
   followLive(e) {
     this.x = e.x; this.y = e.y; this.z = e.z; this.vx = e.vx ?? 0; this.vy = e.vy ?? 0; this.vz = e.vz ?? 0; this.onGround = !!e.onGround;
     this.tx = this.x; this.ty = this.y; this.tz = this.z; this.increments = 0;
@@ -526,7 +526,7 @@ export class MobTracker {
       }
       c.dead = e.health <= 0;
       c.step(...hooks(e));
-      if (e.rider && e.type !== "pig") c.followLive(e); // the player rides it (entities.js sets `rider`); a ridden pig is NOT client-driven (see followLive)
+      if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`). Natively a ridden pig is packet-driven (see followLive), but the port's camera and seat still follow the live pig, so its copy follows it too until the seat moves to the client copy (lead, batch 45: otherwise the drawn pig trails its rider)
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;
