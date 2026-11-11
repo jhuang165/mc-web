@@ -101,11 +101,15 @@ test("a beacon's effects (MC|Beacon) and a spawner's mob arrive as S35 descripti
   s.world.put(64, 11, 64, BEACON, 0, false); s.world.put(70, 11, 70, MOB_SPAWNER, 0, false);
   const placed = s.tick();
   assert.deepEqual(placed.tiles.map((t) => [t.kind, t.action ?? null]), [["beacon", 3], ["spawner", 1]], "S35 actions 3 (beacon) and 1 (spawner) for placed blocks");
+  assert.equal(s.chooseBeacon("alice", { x: 64, y: 11, z: 64, primary: 1, secondary: 0 }), false, "no window open: ignored");
+  s.openBeacon(p, 64, 11, 64);
   assert.equal(s.chooseBeacon("alice", { x: 64, y: 11, z: 64, primary: 1, secondary: 0 }), false, "no payment in the slot: ignored");
-  s.input("alice", hot({ id: 302 }));
+  assert.equal(s.setBeaconPayment("alice", { item: { id: 302, damage: 0 } }), true);
   assert.equal(s.chooseBeacon("alice", { x: 64, y: 11, z: 64, primary: 1, secondary: 0 }), true, "an iron ingot pays");
   const tick = s.tick();
   assert.deepEqual(tick.tiles, [{ kind: "beacon", action: 3, x: 64, y: 11, z: 64, primary: 1, secondary: 0, levels: 1 }]);
+  assert.equal(s.chooseBeacon("alice", { x: 64, y: 11, z: 64, primary: 10, secondary: 0 }), false, "the one ingot was consumed");
+  s.setBeaconPayment("alice", { item: { id: 302 } });
   assert.equal(s.chooseBeacon("alice", { x: 64, y: 11, z: 64, primary: 10, secondary: 0 }), true);
   assert.equal(s.tileEntities.beacons.get(64, 11, 64).primary, 0, "a level 1 beacon refuses a tier 4 effect (validPrimary)");
   s.tick();

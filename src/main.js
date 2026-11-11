@@ -619,10 +619,27 @@ function applyMultiplayerTick(message) {
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   remotePlayers?.sync(message.players, multiplayer.id);
 }
+// S36 open sign editor: the tile is the one the S33 description made (editable here, as the native client sets it); closing the editor sends C12.
+function openMultiplayerSign({ x, y, z }) {
+  if (!multiplayer?.ready || !active?.remote || !isSign(world.get(x, y, z)) || screen !== 'playing') return;
+  const tile = signs.tile(x, y, z) ?? signs.create(x, y, z);
+  tile.editable = true; screen = 'inventory'; mining = null; mineHeld = false;
+  const client = multiplayer;
+  openSignEditor(signEditHost(gui, { close: resume, markUnsaved: () => {} }), signs, tile, world, text => { tile.editable = false; client.updateSign(x, y, z, text); });
+}
+// S2D open window (ContainerBeacon): the tile entity data comes from the server; the payment slot and the picks are sent as they change.
+function openMultiplayerBeacon({ x, y, z, levels, primary, secondary, payment }) {
+  if (!multiplayer?.ready || !active?.remote || world.get(x, y, z) !== BEACON || screen !== 'playing') return;
+  const tile = beacons.ensure(x, y, z);
+  Object.assign(tile, { levels: Number.isInteger(levels) ? levels : -1, primary: primary | 0, secondary: secondary | 0, payment: payment ? { id: payment.id, count: 1, damage: payment.damage | 0 } : null });
+  useBeacon(`${x},${y},${z}`);
+  containerView.remote = { client: multiplayer, x, y, z, sent: payment?.id ?? null };
+}
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
     onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
+    onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
@@ -2156,8 +2173,9 @@ function closeContainer() {
   enchantExtras?.dispose();
   enchantExtras = null;
   if (!containerView) return;
-  const { container, kind, key } = containerView;
+  const { container, kind, key, remote } = containerView;
   containerView = null;
+  remote?.client.closeWindow(); // C0D
   if (kind === "chest") redstoneRuntime?.containerClosed(container.keys); else if (key) redstoneRuntime?.containerClosed([key]);
   const overlay = $("#modal");
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
@@ -2377,6 +2395,8 @@ function useBeacon(key) {
 }
 function refreshBeacon(view) {
   const tile = view.container.tile, pick = view.pick ??= { primary: tile.primary, secondary: tile.secondary }, payment = !!view.container.payment;
+  const remote = view.remote, pay = view.container.payment?.id ?? null;
+  if (remote && remote.sent !== pay) { remote.sent = pay; remote.client.setBeaconPayment(view.container.payment); } // a click on the window's slot 0
   const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }), mouseX: view.gx, mouseY: view.gy }) /* renderItemAndEffectIntoGUI only: no count */, ui = $("#beacon-ui");
   if (ui && ui.dataset.shown !== html) { ui.dataset.shown = html; ui.innerHTML = html; }
 }
@@ -2384,7 +2404,10 @@ function beaconClick(button) {
   const view = containerView, tile = view.container.tile, pick = view.pick, kind = button.dataset.beacon;
   if (kind === "cancel") return resume();
   if (button.getAttribute("aria-disabled") === "true") return;
-  if (kind === "confirm") { if (view.container.payment && pick.primary > 0 && view.container.confirm(pick.primary, pick.secondary)) { sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }); resume(); } return; }
+  if (kind === "confirm") {
+    if (view.remote && view.container.payment && pick.primary > 0) { view.remote.client.chooseBeacon(view.remote.x, view.remote.y, view.remote.z, pick.primary, pick.secondary); view.container.pay.stacks[0] = null; tile.payment = null; view.remote.sent = null; sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }); resume(); return; } // MC|Beacon: the server validates and applies; its S35 follows
+    if (view.remote) return;
+    if (view.container.payment && pick.primary > 0 && view.container.confirm(pick.primary, pick.secondary)) { sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }); resume(); } return; }
   const id = +button.dataset.id;
   if (+button.dataset.tier < 3) pick.primary = validPrimary(tile.levels, id) || pick.primary; else pick.secondary = validSecondary(tile.levels, id) || pick.secondary;
   refreshBeacon(view);

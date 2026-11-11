@@ -37,7 +37,8 @@ export function drawSignGui(ctx, model, { standing, blink, image }) {
 }
 
 // `host`: {show(title, canvas, { done, standing, tick, closed }), close(), markUnsaved()}; `signs` the Signs store; `tile` the tile.
-export function openSignEditor(host, signs, tile, world) {
+// `onClose(lines)` runs once when the editor stops, whatever closed it (GuiEditSign.onGuiClosed sends C12 then): the multiplayer client sends `sign`.
+export function openSignEditor(host, signs, tile, world, onClose) {
   const standing = world?.get?.(tile.x, tile.y, tile.z) === SIGN_POST, S = signGuiGeometry(standing);
   const model = new SignEditModel(tile.text), image = loadGuiImage(SIGN_TEXTURE); // converted while 3D Anaglyph is on
   const canvas = document.createElement('canvas');
@@ -52,7 +53,7 @@ export function openSignEditor(host, signs, tile, world) {
   // GuiEditSign.drawScreen draws the lines through FontRenderer every frame: a line with a section sign (§k picks new glyphs each draw) repaints per animation frame
   let raf = 0;
   const frame = () => { if (stopped) return; if (model.lines.some((l) => l.includes('§'))) paint(); raf = requestAnimationFrame(frame); };
-  const stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); offAtlas(); window.removeEventListener('keydown', onKey, true); };
+  const stop = () => { if (stopped) return; stopped = true; onClose?.([...model.lines]); if (raf) cancelAnimationFrame(raf); offAtlas(); window.removeEventListener('keydown', onKey, true); };
   const finish = () => { save(); stop(); host.close(); };
   const onKey = (e) => {
     if (!canvas.isConnected) { stop(); return; }
