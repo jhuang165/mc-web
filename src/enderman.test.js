@@ -264,7 +264,7 @@ test("daylight under open sky, water and rain teleport it; water and rain hurt i
   assert.deepEqual(moved, { night: 0, sun: 7, shade: 0, water: 173, rain: 173, dimSun: 0 });
 });
 
-test("chase: a player target that is not staring is followed after 30 ticks beyond 16 blocks; a staring one makes it blink", () => {
+test("chase: a player target that is not staring is followed after 30 ticks beyond 16 blocks; a staring one within 4 blocks makes it blink", () => {
   assert.ok(reference.chase.every((c) => c.firstTeleportTick >= 30 && c.firstTeleportTick <= 40));
   const target = { id: "player", x: 0.5, y: 0.12, z: 0.5, eye: E.PLAYER_EYE_OFFSET };
   const attempts = (player, e, ticks, distSq) => {
@@ -285,7 +285,10 @@ test("chase: a player target that is not staring is followed after 30 ticks beyo
   assert.deepEqual(log.slice(29), [1, 1, 1, 1], "the first attempt is tick 30 and every later tick retries while it fails");
   assert.deepEqual(attempts(away, ender(0.5, 1, 10.5), 40, 100), new Array(40).fill(0), "within 16 blocks it just walks");
   const e = ender(0.5, 0.29, 6.5);
-  assert.deepEqual(attempts(staring, e, 3, 36), [1, 1, 1], "a staring player within 16 blocks: teleportRandomly each tick");
+  // ya.e(): `sa.f(sa) < 16.0D` is getDistanceSqToEntity, so 4 blocks (batch 42 b42-enderman-* records: no teleport attempt from a stare at 8 blocks, bytecode-read at 782).
+  assert.deepEqual(attempts(staring, e, 3, 9), [1, 1, 1], "a staring player within 4 blocks: teleportRandomly each tick");
+  assert.deepEqual(attempts(staring, ender(0.5, 0.29, 6.5), 3, 16), [0, 0, 0], "exactly 4 blocks is not within");
+  assert.deepEqual(attempts(staring, ender(0.5, 0.29, 6.5), 3, 64), [0, 0, 0], "8 blocks: it just chases");
   assert.equal(e.chaseTimer, 0);
   assert.deepEqual(attempts(staring, ender(0.5, 0.29, 30.5), 40, 900), new Array(40).fill(0), "a staring player far away: nothing");
 });
