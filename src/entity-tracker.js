@@ -412,6 +412,8 @@ export class MobTracker {
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
     for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
+    // Bytecode-read, not executed (Batch 45): native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id), i.e. bucket order, not
+    // this list order; the port has no shared entity-id counter, so the relative order of different entities' packets within a tick is the live list's (each entity's own stream is unchanged).
     for (const e of mobs) {
       const height = size(e)[1];
       const en = this.entries.get(e);
