@@ -25,6 +25,18 @@ public class GL11 {
   public static void glNewList(int id, int mode) { open = new ArrayList<>(); lists.put(id, open); }
   public static void glEndList() { open = null; }
   public static void glCallList(int id) { events.addAll(lists.get(id)); }
+  public static void glColor3f(float r, float g, float b) {}
+  public static void glDepthMask(boolean on) {}
+  public static void glDepthFunc(int f) {}
+  public static void glMatrixMode(int m) {}
+  public static int glGenTextures() { return 1; }
+  public static void glBindTexture(int target, int id) {}
+  public static void glTexParameteri(int target, int name, int v) {}
+  public static void glTexParameterf(int target, int name, float v) {}
+  public static void glPixelStorei(int name, int v) {}
+  public static void glTexImage2D(int a, int b, int c, int d, int e, int f, int g, int h, java.nio.IntBuffer data) {}
+  public static void glTexSubImage2D(int a, int b, int c, int d, int e, int f, int g, int h, java.nio.IntBuffer data) {}
+  public static void glDeleteTextures(int id) {}
   public static void glEnable(int cap) {}
   public static void glDisable(int cap) {}
   public static void glEnableClientState(int a) {}

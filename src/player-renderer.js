@@ -286,24 +286,30 @@ export function armorLayer(id, pass, color = LEATHER_COLOR) {
 const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword", "fishing_rod"]);
 // Item.isFull3D: tools, hoes and swords, plus the stick, bone and carrot on a stick (setFull3D / abp.f).
 export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311 || id === 2100;
-// "block" draws the cube, "tool" a full-3D sprite, "flat" any other sprite and "bow" the
-// bow's own transform (RenderPlayer and RenderBiped test `item.id == Items.bow.itemID`).
-export const heldKind = (id, damage = 0) => (id === 127 ? "bow" : itemTexture(id, damage) ? (isFull3D(id) ? "tool" : "flat") : "block");
+// "block" draws the cube, "tool" a full-3D sprite, "rod" a full-3D sprite that also shouldRotateAroundOrigin (the fishing rod and the carrot on a
+// stick), "flat" any other sprite and "bow" the bow's own transform (RenderPlayer and RenderBiped test `item == Items.bow`).
+const ROTATES_AROUND_ORIGIN = (id) => id === FISHING_ROD || id === 2100;
+export const heldKind = (id, damage = 0) => (id === 127 ? "bow" : itemTexture(id, damage) ? (isFull3D(id) ? (ROTATES_AROUND_ORIGIN(id) ? "rod" : "tool") : "flat") : "block");
 
-// The matrix from the right arm's frame (after postRender) to the item.
-export function heldItemMatrix(kind) {
+// The matrix from the part the item hangs on (after postRender) to the item. `origin` "arm" is the right arm of RenderPlayer and RenderBiped (zombies,
+// pigmen, skeletons); "nose" is RenderWitch, which hangs the item on ModelWitch's nose and adds two rotations before ItemRenderer.renderItem.
+// `blocking` is the player's blocking sword (getItemInUseCount > 0 and EnumAction.block): the full-3D branch shifts and turns the item first.
+// All of it is executed in public/research/held-pose-reference.json (src/held-pose.test.js).
+export function heldItemMatrix(kind, { origin = "arm", blocking = false } = {}) {
   const m = new THREE.Matrix4(), t = new THREE.Matrix4(),
     translate = (x, y, z) => m.multiply(t.makeTranslation(x, y, z)),
     rotate = (axis, deg) => m.multiply(axis === "x" ? t.makeRotationX(deg * RAD) : axis === "y" ? t.makeRotationY(deg * RAD) : t.makeRotationZ(deg * RAD)),
-    scale = (x, y, z) => m.multiply(t.makeScale(x, y, z));
-  translate(-0.0625, 0.4375, 0.0625);
+    scale = (x, y, z) => m.multiply(t.makeScale(x, y, z)),
+    nose = origin === "nose";
+  if (nose) translate(-0.0625, 0.53125, 0.21875);
+  else translate(-0.0625, 0.4375, 0.0625);
   if (kind === "block") {
     let s = 0.5;
     translate(0, 0.1875, -0.3125);
     s *= 0.75;
     rotate("x", 20);
     rotate("y", 45);
-    scale(-s, -s, s);
+    scale(nose ? s : -s, -s, s); // RenderWitch turns y only
   } else {
     if (kind === "bow") {
       // The bow branch of RenderPlayer.renderSpecials (bop.a): it is held upright, a
@@ -314,8 +320,18 @@ export function heldItemMatrix(kind) {
       scale(s, -s, s);
       rotate("x", -100);
       rotate("y", 45);
-    } else if (kind === "tool") {
+    } else if (kind === "tool" || kind === "rod") {
       const s = 0.625;
+      if (kind === "rod") {
+        rotate("z", 180);
+        translate(0, -0.125, 0);
+      }
+      if (blocking) {
+        translate(0.05, 0, -0.1);
+        rotate("y", -50);
+        rotate("x", -10);
+        rotate("z", -60);
+      }
       translate(0, 0.1875, 0);
       scale(s, -s, s);
       rotate("x", -100);
@@ -328,6 +344,12 @@ export function heldItemMatrix(kind) {
       rotate("x", -90);
       rotate("z", 20);
     }
+  }
+  if (nose) {
+    rotate("x", -15);
+    rotate("z", 40);
+  }
+  if (kind !== "block") {
     // ItemRenderer.renderItem's 2D branch.
     translate(0, -0.3, 0);
     scale(1.5, 1.5, 1.5);
@@ -483,8 +505,11 @@ export class PlayerRenderer {
     this.armorNodes.push(group);
   }
   syncHeld(id, damage = 0, color = undefined, glint = false) {
+    // RenderPlayer.renderSpecials (bop.a, executed in held-pose-reference.json): while the player's bobber is out (fishEntity != null) the hand
+    // holds a plain stick, not the cast rod icon (that icon is the first person one, first-person.js).
+    if (id === FISHING_ROD && rodState.cast) { id = 300; damage = 0; color = undefined; glint = false; }
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
+      cast = 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldId = id;
@@ -496,7 +521,7 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
-    const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && rodState.cast ? 1 : 0);
+    const kind = heldKind(id, damage), url = itemTexture(id, damage);
     let mesh;
     const chestUrl = !url && chestItemTexture(id);
     if (chestUrl) {
