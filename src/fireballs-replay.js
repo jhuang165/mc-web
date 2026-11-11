@@ -3,6 +3,7 @@ import { JavaRandom } from "./lighting.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { EntityWorld, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
+import { thrownHit } from "./projectiles.js";
 import { slimeFields } from "./slime.js";
 import { setGameRuleSource } from "./game-rules.js";
 import { drainKnockback } from "./player-knockback.js";
@@ -18,7 +19,8 @@ import { plain, LogRandom } from "./legacy-ai-replay.js";
 // value is its entityToAttack index (-1 none) for the mobs in TARGETING.
 export const fireballReference = JSON.parse(readFileSync(new URL("../public/research/fireballs-reference.json", import.meta.url))).records;
 export const fireballReference41 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b41-reference.json", import.meta.url))).records; // batch 41: inGround and blaze volleys at a mob
-const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant", x: "skeleton", w: "snow_golem" };
+export const fireballReference42 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b42-reference.json", import.meta.url))).records; // batch 42: one entity list order, ghast balls at mobs
+const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant", x: "skeleton", w: "snow_golem", i: "iron_golem" };
 // The mobs whose entityToAttack (td.bT) the record keeps: the legacy-action-state mobs (EntityZombie and the other AI-task mobs keep it unused in 1.7.10).
 const TARGETING = new Set(["blaze", "silverfish", "giant", "spider", "pigman"]);
 const NUM = Number;
@@ -33,10 +35,12 @@ export function replayFireballs(r) {
   const rules = {};
   setGameRuleSource((name) => (name in rules ? rules[name] : true));
   const ents = [];
+  const late = new Set(r.script.filter((s) => ["join", "idle"].includes(s.split(" ")[1])).map((s) => NUM(s.split(" ")[2]))); // `join k`: mob k joins the list on that tick (a mob created after the balls before it)
   [...types].forEach((ch, i) => {
-    const type = TYPE_OF[ch], [x, z, y0 = 0] = r.pos[i], e = ew.create(type, x, y0, z);
+    const type = TYPE_OF[ch], [x, z, y0 = 0] = r.pos[i], e = type === "iron_golem" ? ew.spawnIronGolem(x, y0, z, false) : ew.create(type, x, y0, z);
     if (type === "magma_cube") Object.assign(e, slimeFields(r.sizes[i], () => 0));
-    ew.entities.push(e);
+    if (type === "iron_golem") ew.entities.splice(ew.entities.indexOf(e), 1);
+    if (!late.has(i)) ew.entities.push(e);
     e.growingAge = 0; e.onGround = type !== "ghast";
     for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = 0;
     e.yaw = 0;
@@ -49,20 +53,22 @@ export function replayFireballs(r) {
   ew.ai.player.unticked = true;
   const pending = { seed: 0n }, balls = [], killed = new Set(), sets = [];
   let shotAt = 0;
-  ew.fireballSeed = () => (r.tickMobs ? BigInt(r.shots[shotAt++]?.[3] ?? 0) : pending.seed); // tickMobs: the mobs launch their own balls, with the seeds the probe recorded
+  let scripted = false;
+  ew.fireballSeed = () => (r.tickMobs && !scripted ? BigInt(r.shots[shotAt++]?.[3] ?? 0) : pending.seed); // tickMobs: the mobs launch their own balls, with the seeds the probe recorded
   ew.ignite = (x, y, z) => { sets.push([x, y, z, 51]); ew.world.put(x, y, z, FIRE, 0); }; // World.setBlock: the cell is fire for the next ball
   let look = [0, 0, 1], madeAt = 0;
   ew.playerLook = () => look;
-  const pv = { x: 0, y: 0, z: 0 }, targetOf = (e) => { const t = TARGETING.has(e.type) ? ew.silverfishState(e).target : null; return !t ? -1 : t === ew.ai.player ? n : ents.indexOf(t.e ?? t); }, states = []; // the player double's motion: only knockback moves it
+  const pv = { x: 0, y: 0, z: 0 }, targetOf = (e) => { const t = e.type === "ghast" ? (e.ghast?.hasTarget ? ew.ai.player : null) : TARGETING.has(e.type) ? ew.silverfishState(e).target : null; return !t ? -1 : t === ew.ai.player ? n : ents.indexOf(t.e ?? t); }, states = []; // the player double's motion: only knockback moves it
   for (let t = 0; t < r.ticks; t++) {
     const punches = [], hurts = [];
     for (const s of r.script) {
       const p = s.split(" ");
       if (NUM(p[0]) !== t) continue;
       if (p[1] === "ball") {
-        pending.seed = BigInt(r.made[madeAt++][10]);
-        balls.push(ew.fireballs.launch({ large: p[2] === "1", owner: ents[NUM(p[3])], x: NUM(p[7]), y: NUM(p[8]), z: NUM(p[9]), dx: NUM(p[4]), dy: NUM(p[5]), dz: NUM(p[6]), power: p[10] ? NUM(p[10]) : 1 }));
-      } else if (p[1] === "exact") {
+        pending.seed = BigInt(r.made[madeAt++][10]); scripted = true;
+        balls.push(ew.fireballs.launch({ large: p[2] === "1", owner: ents[NUM(p[3])], x: NUM(p[7]), y: NUM(p[8]), z: NUM(p[9]), dx: NUM(p[4]), dy: NUM(p[5]), dz: NUM(p[6]), power: p[10] ? NUM(p[10]) : 1 })); scripted = false;
+      } else if (p[1] === "join") ew.entities.push(ents[NUM(p[2])]);
+      else if (p[1] === "exact") {
         madeAt++;
         balls.push(ew.fireballs.launch({ large: p[2] === "1", owner: null, x: NUM(p[3]), y: NUM(p[4]), z: NUM(p[5]), exact: [NUM(p[6]), NUM(p[7]), NUM(p[8])], power: p[9] ? NUM(p[9]) : 1 }));
       } else if (p[1] === "punch") {
@@ -73,6 +79,9 @@ export function replayFireballs(r) {
       else if (p[1] === "ground") { const b = balls[NUM(p[2])]; ew.fireballs.stickIn(b, NUM(p[3]), NUM(p[4]), NUM(p[5])); }
       else if (p[1] === "air") ew.world.put(NUM(p[2]), NUM(p[3]), NUM(p[4]), p[5] ? NUM(p[5]) : 0, 0);
       else if (p[1] === "kill") { const e = ents[NUM(p[2])]; killed.add(e); ew.entities.splice(ew.entities.indexOf(e), 1); }
+      else if (p[1] === "idle") continue;
+      else if (p[1] === "snow") { const v = ents[NUM(p[2])], before = v.health; thrownHit(ew, v, ents[NUM(p[3])], { kind: "snowball", x: 0, y: 0, z: 0 }); hurts.push([NUM(p[2]), v.health < before, v.health]); }
+      else if (p[1] === "health") ents[NUM(p[2])].health = NUM(p[3]);
       else if (p[1] === "rule") rules[p[2]] = p[3] === "true";
       else if (p[1] === "hurt") {
         const v = ents[NUM(p[2])], k = p[3], amount = NUM(p[4]);

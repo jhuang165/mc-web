@@ -31,7 +31,7 @@ export class GolemBalls {
     if (!p.balls.length) return;
     const targets = mobTargets(mobs.entities.filter((e) => e.health > 0), null);
     for (const t of targets) if (t.ref.type === "snow_golem") t.thrower = true;
-    p.tick(mobs.world, targets, (ref, ball) => { if (ref && ref.type) thrownHit(mobs, ref, ball.owner ?? ref); });
+    p.tick(mobs.world, targets, (ref, ball) => { if (ref && ref.type) thrownHit(mobs, ref, ball.owner ?? ref, ball); });
     p.drain();
   }
   serialize() { return []; }

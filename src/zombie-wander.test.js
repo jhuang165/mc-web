@@ -27,7 +27,7 @@ test("the zombie wander records cover flat, slope, water, sun and fire and every
 // it, the wander included (the replay world's light brightness is 15 everywhere, as the probe's).
 import { readFileSync } from "node:fs";
 import { replayFireballs, fireballDivergence } from "./fireballs-replay.js";
-const volley4109 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b42-reference.json", import.meta.url))).records;
+const volley4109 = JSON.parse(readFileSync(new URL("../public/research/fireballs-wander4109-reference.json", import.meta.url))).records;
 test("native b41 volley with the wandering zombie (seed 4109) replays exactly", () => {
   assert.equal(volley4109.length, 1);
   const r = volley4109[0];

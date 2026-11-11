@@ -62,8 +62,18 @@ test("the blaze crackle is a client-only sound at the blaze, never a server even
   for (let i = 0; i < 400; i++) {
     w.tick(p, s);
     assert.ok(!w.events.some((x) => x.sound === "fire.fire"));
-    for (const c of w.clientSounds ?? []) if (c.sound === "fire.fire") { heard++; assert.equal(c.clientOnly, true); assert.equal(c.position, w.entities[0]); }
+    for (const c of w.clientSounds ?? []) if (c.sound === "fire.fire") { heard++; assert.equal(c.clientOnly, true); assert.equal(c.position, w.entities[0]); assert.equal(c.offset, 0.5); }
     if (w.clientSounds) w.clientSounds.length = 0;
   }
   assert.ok(heard > 0);
+});
+
+test("the delivered crackle sits at posX + 0.5, posY + 0.5, posZ + 0.5 of the client's blaze (bytecode-read)", () => {
+  const w = make("blaze"), s = new Survival({ slots: [], time: 6000 }, "survival"), p = player();
+  w.tick(p, s);
+  w.drainClientSounds();
+  const blaze = w.entities[0];
+  w.clientSounds.push({ sound: "fire.fire", volume: 1, pitch: 1, position: blaze, clientOnly: true, offset: 0.5 });
+  const [out] = w.drainClientSounds().filter((c) => c.sound === "fire.fire"), c = w.tracker.entryOf(blaze, w.size(blaze)[0]).client;
+  assert.deepEqual(out.position, { x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 });
 });

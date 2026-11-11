@@ -42,6 +42,9 @@ export class Fireballs {
       boxPos: exact || !owner || owner === "player" ? [x, y, z] : [owner.x, owner.y, owner.z],
     };
     this.list.push(ball);
+    const w = this.mobs, seq = w.orderStamp?.(); // World.spawnEntityInWorld: the end of loadedEntityList, walked by index, so a ball launched in the pass updates in it
+    if (seq !== undefined) w.orderSeqs.set(ball, seq);
+    w.tickOrder?.push(ball);
     return ball;
   }
   // The shooter is "dead" (setDead) when it is gone from the world: ze.h removes the ball then.
@@ -62,27 +65,30 @@ export class Fireballs {
     return [x - r, y, z - r, x + r, y + b.width, z + r];
   }
   tick() {
+    for (const b of this.list) this.tickOne(b);
+    this.reap();
+  }
+  reap() { this.list = this.list.filter((b) => !b.dead); }
+  // EntityFireball.onUpdate for one ball.
+  tickOne(b) {
     const mobs = this.mobs;
-    for (const b of this.list) {
-      if (b.dead || !mobs.isActive(b)) continue; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
-      b.px = b.x; b.py = b.y; b.pz = b.z;
-      if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
-      const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
-      // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
-      const water = waterAcceleration(mobs.world, entityWaterBox(box));
-      b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
-      const was = b.inGround;
-      if (was && this.stick(b)) continue;
-      if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
-      mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
-      const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
-      let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
-      const entity = this.sweep(b, start, stop, box);
-      if (entity) { hit = { entity: entity.target }; aimPart(entity); }
-      if (hit) this.impact(b, hit); // the update goes on: the ball still moves (it is only marked dead)
-      fireballStep(b, water.wet);
-    }
-    this.list = this.list.filter((b) => !b.dead);
+    if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
+    b.px = b.x; b.py = b.y; b.pz = b.z;
+    if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
+    // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
+    const water = waterAcceleration(mobs.world, entityWaterBox(box));
+    b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
+    const was = b.inGround;
+    if (was && this.stick(b)) return;
+    if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
+    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
+    const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
+    let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
+    const entity = this.sweep(b, start, stop, box);
+    if (entity) { hit = { entity: entity.target }; aimPart(entity); }
+    if (hit) this.impact(b, hit); // the update goes on: the ball still moves (it is only marked dead)
+    fireballStep(b, water.wet);
   }
   // ze.h's entity pass: every collidable entity box grown by 0.3 against the swept segment, the shooter skipped for 25 ticks; nearest wins.
   sweep(b, a, z, own = this.boxOf(b)) {

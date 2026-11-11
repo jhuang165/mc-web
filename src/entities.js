@@ -1913,6 +1913,27 @@ export class EntityWorld {
     });
   }
   gearViewOf(e) { return (e && this.views?.get(e)) ?? e; } // the view gearViews() made of `e` (the aimed mob is compared by identity)
+  // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
+  orderStamp() {
+    this.orderSeqs ??= new WeakMap();
+    for (const e of this.entities) if (!this.orderSeqs.has(e)) this.orderSeqs.set(e, (this.orderCount = (this.orderCount ?? 0) + 1));
+    return (this.orderCount = (this.orderCount ?? 0) + 1);
+  }
+  // `order` (the mobs in walking order) with the live fireballs placed among them by stamp: a ball launched before a mob joined updates before it, as it does natively.
+  withBalls(order) {
+    const balls = this._fireballs?.list;
+    if (!balls?.length) return order;
+    const next = this.orderStamp();
+    for (const b of balls) if (!this.orderSeqs.has(b)) this.orderSeqs.set(b, next - 0.5); // a restored ball: after the mobs known so far
+    const seq = (e) => this.orderSeqs.get(e) ?? 0, live = balls.filter((b) => !b.dead).sort((a, b) => seq(a) - seq(b)), out = [];
+    let i = 0;
+    for (const m of order) {
+      while (i < live.length && seq(live[i]) < seq(m)) out.push(live[i++]);
+      out.push(m);
+    }
+    while (i < live.length) out.push(live[i++]);
+    return out;
+  }
   tickMobs(player, survival, heldItem=0) {
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
@@ -1944,12 +1965,13 @@ export class EntityWorld {
     const seat = () => { if (rider?.ridingEntity) endRidden(rider, (m) => this.size(m)[1]); rider = null; };
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
-    const order = this.tickOrder = ridingOrder(this.entities.slice());
+    const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     for (const e of order) {
       seat();
       if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
+      if (e.type === "fireball") { this._fireballs.tickOne(e); continue; } // a ball (fireballs.js) updates where it stands in the list
       if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
       if (e.ridingEntity) { rider = e; beginRidden(e); }
@@ -2067,7 +2089,8 @@ export class EntityWorld {
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
-    this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js): after the mobs (a ball is created after its shooter, and World.spawnEntityInWorld appends to the list the pass is still walking, so a ball launched this tick updates this tick; executed in fireballs-b41-reference.json)
+    this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
+    this.tickOrder = null;
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).
@@ -2710,7 +2733,8 @@ export class EntityWorld {
       if (!m?.type) { out.push(s); continue; }
       const en = tracker.entryOf(m, this.size(m)[0]); // a mob that spawned this tick enters the tracker now (addEntityToTracker)
       if ( !en.client.present || (!s.clientOnly && !en.entry.tracked)) continue;
-      out.push({ ...s, position: { x: en.client.x, y: en.client.y, z: en.client.z } });
+      const o = s.offset ?? 0; // EntityBlaze.onLivingUpdate plays its crackle at posX + 0.5, posY + 0.5, posZ + 0.5 of the client entity (bytecode-read)
+      out.push({ ...s, position: { x: en.client.x + o, y: en.client.y + o, z: en.client.z + o } });
     }
     return out;
   }

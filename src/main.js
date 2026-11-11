@@ -2712,7 +2712,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
     projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
-    projectileHit: e => e !== "player" && thrownHit(mobs, e, position),
+    projectileHit: (e, ball) => e !== "player" && thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
