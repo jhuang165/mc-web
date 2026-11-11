@@ -1,3 +1,4 @@
+import { bindIds } from "./entity-ids.js";
 import { ringEntityActive } from './streaming-ticks.js';
 // EntityMinecartChest (xm) with EntityMinecartContainer (xp) and EntityMinecart (xl) from the
 // Minecraft Java 1.7.10 JAR: a 0.98 x 0.7 box with yOffset 0.35, gravity 0.04, the derailed
@@ -113,8 +114,9 @@ const normalize = (x, y, z) => {
 export class Minecarts {
   // `rails` maps internal block ids to rail kinds; `random(cart)` returns the cart's Entity.rand
   // (a JavaRandom); `maxStack(stack)` is Item.getItemStackLimit for browser stacks.
-  constructor({ rails = defaultRails(), random = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48)), maxStack = (s) => ITEMS[s.id]?.stack ?? 64 } = {}) {
-    Object.assign(this, { rails, makeRandom: random, maxStack, carts: [], nextId: 1 });
+  constructor({ rails = defaultRails(), random = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48)), maxStack = (s) => ITEMS[s.id]?.stack ?? 64, ids } = {}) {
+    Object.assign(this, { rails, makeRandom: random, maxStack, carts: [] });
+    bindIds(this, ids); // entity-ids.js: one counter for every entity list
     // Item drops ({ stack, original, x, posY, z, motion, delay }): stack is null when the original
     // item has no browser mapping. Feed them to ItemEntities.spawn(stack, x, posY, z, {delay, motion}).
     this.drops = [];

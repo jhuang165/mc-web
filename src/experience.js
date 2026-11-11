@@ -46,25 +46,25 @@ const boxAt=(x,posY,z)=>[x-HALF,posY-HALF,z-HALF,x+HALF,posY-HALF+SIZE,z+HALF];
 let nextId=0;
 // The EntityXPOrb(world, x, y, z, value) constructor at posY `y`: rotationYaw, then motion from
 // Math.random(), each (float)(r * 0.2 [- 0.1]) * 2F.
-export function newOrb(value,x,y,z,random=Math.random){
+export function newOrb(value,x,y,z,random=Math.random,ids=null){
  random();
  const vx=f(f(random()*0.2-0.1)*2),vy=f(f(random()*0.2)*2),vz=f(f(random()*0.2-0.1)*2);
- return seed({x,y:y-HALF,z,value,age:0,health:5,fire:0,vx,vy,vz,onGround:false},y);
+ return seed({x,y:y-HALF,z,value,age:0,health:5,fire:0,vx,vy,vz,onGround:false},y,ids);
 }
-const seed=(o,posY=o.y+HALF)=>({...o,posY,bb:boxAt(o.x,posY,o.z),px:o.x,py:o.y,pz:o.z,color:0,retarget:0,target:false,id:nextId++,fallDistance:0});
+const seed=(o,posY=o.y+HALF,ids=null)=>({...o,posY,bb:boxAt(o.x,posY,o.z),px:o.x,py:o.y,pz:o.z,color:0,retarget:0,target:false,id:ids?ids.take():nextId++,fallDistance:0});
 export class ExperienceOrbs {
  // `random` is the orbs' Entity.rand (lava and pickup sounds, push-out speed); `wet(orb)` is
  // Entity.isWet (rain; EntityXPOrb.handleWaterMovement never sets inWater).
- constructor(saved=[],random=Math.random){
-  this.random=random;this.sounds=[];this.cooldown=0;
+ constructor(saved=[],random=Math.random,ids=null){
+  this.random=random;this.ids=ids;this.sounds=[];this.cooldown=0; // ids: entity-ids.js, the shared Entity.nextEntityID when the caller has one
   this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value].every(Number.isFinite)&&o.value>0&&o.value<=2477).map(o=>{
    // Saves before 0.21.4 stored the remaining lifetime (`life`) instead of xpOrbAge.
    const age=Number.isFinite(o.age)?o.age:Number.isFinite(o.life)?LIFETIME-o.life:0,n=k=>Number.isFinite(o[k])?o[k]:0;
-   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.max(0,Math.trunc(age)),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})});
+   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.max(0,Math.trunc(age)),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})},undefined,ids);
   }).filter(o=>o.age<LIFETIME&&o.health>0):[];
  }
  // `p` is the spawn point (posY): EntityXPOrb.getXPSplit pieces, one orb each.
- spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push(newOrb(n,p.x,p.y,p.z));}
+ spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push(newOrb(n,p.x,p.y,p.z,Math.random,this.ids));}
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
  // not check isDead, so later hits in the same tick keep counting down.
  hurt(o,source,amount){o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}

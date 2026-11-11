@@ -14,6 +14,7 @@
 // from the minimum), which inverts the thickness axis (min > max). Every consumer therefore behaves as
 // Java does: only a block cell that contains the whole thickness blocks placement, and two hanging
 // entities never see each other as overlapping.
+import { bindIds } from "./entity-ids.js";
 import { JavaRandom } from "./java-random.js";
 import { collisionBoxes } from "./world.js";
 import { materialSolid } from "./plants.js";
@@ -69,8 +70,9 @@ const intersects = (a, b) => b[3] > a[0] && b[0] < a[3] && b[4] > a[1] && b[1] <
 
 export class Hanging {
   // `random(entity)` returns the entity's Entity.rand (a JavaRandom).
-  constructor({ random = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } = {}) {
-    Object.assign(this, { makeRandom: random, entities: [], nextId: 1 });
+  constructor({ random = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48)), ids } = {}) {
+    Object.assign(this, { makeRandom: random, entities: [] });
+    bindIds(this, ids); // entity-ids.js
     // Item drops ({ stack, x, posY, z, delay }) for the caller to spawn as item entities.
     this.drops = [];
   }

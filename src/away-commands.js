@@ -73,7 +73,9 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     const v = t[k];
     return typeof v === "function" ? v.bind(t) : v;
   } });
-  const now = () => (plan.time ?? 0) - (plan.ticks - state.ran) + state.timeShift; // the saved clock is the end of the trip
+  // The saved clock is the end of the trip. `state.ran` is the 0-based index of the tick in progress: WorldServer.tick (mt.b, bytecode-read) adds 1 to the total time (ays.c) BEFORE it
+  // runs tickUpdates (mt.a(Z), the block ticks and so the command blocks), so tick index n sees T0 + n + 1 (batch 42: it read T0 + n, one early; the last tick now sees plan.time).
+  const now = () => (plan.time ?? 0) - (plan.ticks - state.ran - 1) + state.timeShift;
   const env = {
     active: () => active, world: () => seen, weather: () => weather, survival: () => sv,
     mobs: () => entities()?.mobs ?? null, minecarts: () => entities()?.minecarts, spawners: () => null, rockets: () => entities()?.rockets,
@@ -158,6 +160,12 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   };
   shadowHost.removeEffect = (id) => { const r = removeEffect(id); if (r) { owned.delete(id); removed.add(id); } return r; };
   shadowHost.clearEffects = () => { const ids = [...shadowSv.effects.active.keys()], r = clearEffects(); if (r) for (const id of ids) { owned.delete(id); removed.add(id); } return r; };
+  // Batch 42: /xp from a command block acts on the shadow at its firing like give and clear (CommandXP, bytecode-read: addExperience / addExperienceLevel on the matched player). The
+  // shadow's own calls are recorded in order and go back as `xpOps`; the return applies them to the live experience as one net change instead of re-running the command.
+  const xpOps = [];
+  const addExperience = shadowHost.addExperience, addLevels = shadowHost.addLevels;
+  shadowHost.addExperience = (n) => { xpOps.push(["points", n]); return addExperience(n); };
+  shadowHost.addLevels = (n) => { xpOps.push(["levels", n]); return addLevels(n); };
   Object.assign(host, {
     ...shared,
     print: (text) => { if (chat.length < CHAT_CAP) chat.push(String(text?.text ?? text)); },
@@ -245,7 +253,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
       if (queue.length >= QUEUE_CAP) return reason("the player-command queue is full");
       // Fire-time effect on the shadow player: SuccessCount and LastOutput now, and the state a later command sees. The replay at return redoes it on the live player.
       const ran = onShadow(tile, position, before);
-      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), eff: ran && canon === "effect", tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
+      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), xpd: ran && canon === "xp", eff: ran && canon === "effect", tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
       stats.queued++;
       return ran ? tile.successCount : before.successCount; // the replay rewrites SuccessCount and LastOutput with the same values
     };
@@ -294,7 +302,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     cartRun: (cart) => { if (cart.command?.command) execute(cart.command, cartCommandPosition(cart), cart.id); else if (cart.command) cart.command.successCount = 0; },
     result() {
       syncShadow(Infinity);
-      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
+      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), ...(queue.some((q) => q.xpd) ? { xpOps } : {}), commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
       if (JSON.stringify(weather.save()) !== initialWeather) out.weather = { ...weather.save(), rain: weather.rain, thunder: weather.thunder };
       if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}), ...(active.playerSpawn ? { playerSpawn: active.playerSpawn } : {}) };
       if (state.difficulty !== undefined) out.difficulty = state.difficulty;
@@ -323,7 +331,7 @@ export function applyPlayerDelta(survival, d) {
   survival.exhaustion = clamp(Math.fround(survival.exhaustion + d.exhaustion), 0, 40);
 }
 
-export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null, playerDelta = null, survival = null }) {
+export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null, playerDelta = null, survival = null, xpOps = null }) {
   const out = { applied: 0, succeeded: 0, failed: 0, muted: 0, byDelta: 0 };
   // Batch 36: give and clear the run's shadow ran at their firing (`inv`) take effect as one net inventory change (see inventoryDelta), not as re-runs on the return state.
   const byDelta = Array.isArray(delta) && !!inventory;
@@ -333,12 +341,16 @@ export function replayPlayerCommands(queue, { host, records = [], carts = [], gi
   }
   const byPlayer = !!playerDelta && !!survival;
   if (byPlayer) applyPlayerDelta(survival, playerDelta);
+  // Batch 42: the /xp commands the shadow ran at their firing (`xpd`) arrive as the shadow's recorded calls, applied in order to the live experience.
+  const byXp = Array.isArray(xpOps);
+  if (byXp) for (const [kind, n] of xpOps) { if (kind === "levels") host.addLevels(n); else host.addExperience(n); }
   let lines = 0;
   const replay = Object.create(host);
   replay.print = (text) => { if (lines++ < chatCap) host.print(text); else out.muted++; };
   if (giveStack) replay.giveDrop = (stack) => giveStack(stack);
   for (const e of queue ?? []) {
     if (e.eff && byPlayer) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // applyPlayerDelta carries its effect
+    if (e.xpd && byXp) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // the xpOps above carry its effect
     if (e.inv && byDelta) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // the delta above carries its effect
     const record = e.cartId !== null && e.cartId !== undefined ? carts.find((c) => c.type === 6 && c.id === e.cartId)?.command : records.find((r) => r.x === e.block?.[0] && r.y === e.block?.[1] && r.z === e.block?.[2]);
     const tile = { command: e.command, successCount: 0, customName: e.name ?? "@", trackOutput: e.trackOutput !== false, lastOutput: null };

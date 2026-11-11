@@ -31,6 +31,7 @@ import { drainMobEvents } from "./living-simulation.js";
 import { isWet, canSeeSky } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
+import { EntityIds } from "./entity-ids.js";
 
 // Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
 // A spawner cart only moves: MobSpawnerBaseLogic needs a player within 16 blocks, so nothing spawns with nobody there. The hopper cart
@@ -72,18 +73,17 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const carts = { inside: cartList.filter(simCart), rest: cartList.filter((c) => !simCart(c)) };
   const boatsSplit = { inside: boatList.filter(simBoat), rest: boatList.filter((b) => !simBoat(b)) };
 
+  // One Entity.nextEntityID for every list of the run, starting above the live counter (plan.idBase: the next free id of the page, set by finishAway) and above every id in the saved lists.
+  const ids = new EntityIds(Math.max(plan.idBase ?? 1, 1 + Math.max(0, ...[mobList, cartList, boatList, hangList].flatMap((l) => (Array.isArray(l) ? l : []).map((r) => (typeof r?.id === "string" ? Number(r.id.replace("mob-", "")) : r?.id | 0)).filter(num)))));
   const items = new ItemEntities(random);
   items.load(drops.inside, readStack, 0);
-  const xp = new ExperienceOrbs(orbs.inside, random);
+  const xp = new ExperienceOrbs(orbs.inside, random, ids);
   const primed = tnt.inside.filter((t) => [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(num))
     .map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse, random }), { vx: t.vx, vy: t.vy, vz: t.vz }));
-  const minecarts = Minecarts.fromJSON({ version: 1, carts: carts.inside });
-  const boats = Boats.fromJSON(boatsSplit.inside);
-  const top = Math.max(0, ...cartList.map((c) => c.id | 0), ...boatList.map((b) => b.id | 0));
-  minecarts.nextId = Math.max(minecarts.nextId, top + 1);
-  boats.nextId = Math.max(boats.nextId, minecarts.nextId);
+  const minecarts = Minecarts.fromJSON({ version: 1, carts: carts.inside }, { ids });
+  const boats = Boats.fromJSON(boatsSplit.inside, { ids });
   minecarts.blockHook = (x, y, z) => { rt.redstone.collide(x, y, z); rt.flush(); };
-  const arrows = new Arrows(random), projectiles = new Projectiles(random), rockets = new FireworkRockets(new JavaRandom(BigInt(seed) * 40503n + 3n)), hanging = Hanging.fromJSON(hangSplit.inside);
+  const arrows = new Arrows(random), projectiles = new Projectiles(random), rockets = new FireworkRockets(new JavaRandom(BigInt(seed) * 40503n + 3n)), hanging = Hanging.fromJSON(hangSplit.inside, { ids });
   arrows.load(arrowSplit.inside); projectiles.load(ballSplit.inside);
   rockets.load({ rockets: rocketSplit.inside });
   arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
@@ -92,9 +92,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const mobSv = new Survival({}, "survival");
   mobSv.health = 0;
   const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
-  const mobs = new EntityWorld(world, mobSplit.inside, random);
-  const mobTop = Math.max(0, ...mobList.map((m) => Number(String(m?.id).replace("mob-", "")) + 1).filter(num));
-  mobs.nextId = Math.max(mobs.nextId, mobTop);
+  const mobs = new EntityWorld(world, mobSplit.inside, random, ids);
   mobs.ai.player.absent = true;
   if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
   let clock = Number.isFinite(plan.time) ? plan.time : 0;
