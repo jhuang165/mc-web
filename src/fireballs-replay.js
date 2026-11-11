@@ -20,12 +20,13 @@ import { plain, LogRandom } from "./legacy-ai-replay.js";
 export const fireballReference = JSON.parse(readFileSync(new URL("../public/research/fireballs-reference.json", import.meta.url))).records;
 export const fireballReference41 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b41-reference.json", import.meta.url))).records; // batch 41: inGround and blaze volleys at a mob
 export const fireballReference42 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b42-reference.json", import.meta.url))).records; // batch 42: one entity list order, ghast balls at mobs
+export const fireballReference43 = JSON.parse(readFileSync(new URL("../public/research/fireballs-b43-reference.json", import.meta.url))).records; // batch 43: idle wanderers, silverfish deaths, golem and blaze, draws per entity
 const TYPE_OF = { z: "zombie", p: "pigman", b: "blaze", g: "ghast", m: "magma_cube", s: "spider", k: "silverfish", e: "giant", x: "skeleton", w: "snow_golem", i: "iron_golem" };
 // The mobs whose entityToAttack (td.bT) the record keeps: the legacy-action-state mobs (EntityZombie and the other AI-task mobs keep it unused in 1.7.10).
 const TARGETING = new Set(["blaze", "silverfish", "giant", "spider", "pigman"]);
 const NUM = Number;
 
-export function replayFireballs(r) {
+export function replayFireballs(r, hooks = {}) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = r.difficulty ?? 2;
@@ -34,7 +35,10 @@ export function replayFireballs(r) {
   ew.brightnessLevel = () => 15; // the probe world's light brightness is 15 everywhere, below the floor too (a try under the floor weighs the same as one above for a zombie's wander)
   const rules = {};
   setGameRuleSource((name) => (name in rules ? rules[name] : true));
-  const ents = [];
+  // EntityLiving.despawnEntity is setDead: the native row keeps the health it had and isDead 1; the port marks a despawn as health 0 / death 20 (a corpse's removal), so the replay reads the health at the despawn
+  const gone = new Map(), despawn = ew.ai.deps.despawn;
+  ew.ai.deps.despawn = (e) => { if (!gone.has(e)) gone.set(e, e.health); despawn(e); }; // setDead can run twice in one update (the silverfish)
+  const ents = [], logs = [];
   const late = new Set(r.script.filter((s) => ["join", "idle"].includes(s.split(" ")[1])).map((s) => NUM(s.split(" ")[2]))); // `join k`: mob k joins the list on that tick (a mob created after the balls before it)
   [...types].forEach((ch, i) => {
     const type = TYPE_OF[ch], [x, z, y0 = 0] = r.pos[i], e = type === "iron_golem" ? ew.spawnIronGolem(x, y0, z, false) : ew.create(type, x, y0, z);
@@ -44,7 +48,7 @@ export function replayFireballs(r) {
     e.growingAge = 0; e.onGround = type !== "ghast";
     for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = 0;
     e.yaw = 0;
-    setEntityRandom(e, new LogRandom(BigInt(r.seed * 10 + i)));
+    const lr = new LogRandom(BigInt(r.seed * 10 + i)); logs.push(lr); setEntityRandom(e, lr);
     ents.push(e);
   });
   const survival = new Survival({}, "survival");
@@ -93,6 +97,7 @@ export function replayFireballs(r) {
       }
       else if (p[1] === "fire") { const i = NUM(p[2]); if (i === n) survival.setFire?.(NUM(p[3])); else ents[i].fire = NUM(p[3]) * 20; }
     }
+    for (const l of logs) l.log.length = 0; // the probe clears the logs after the tick's script ops
     ew.ai.beginTick(player, survival, 0);
     ew.events.length = 0;
     survival.health = 1000 - (states.length ? 1000 - states[states.length - 1].playerHealth : 0);
@@ -103,10 +108,11 @@ export function replayFireballs(r) {
     for (const ev of ew.events) if (ev.explode) { const x = ev.explode; booms.push([x.x, x.y, x.z, x.size, x.flaming ? 1 : 0, x.smoking ? 1 : 0, x.source ? 1 : 0]); }
     states.push({
       playerHealth: survival.health,
-      ents: [...ents.map((e) => [e.x, e.y, e.z, e.vx ?? 0, e.vy ?? 0, e.vz ?? 0, e.health, e.fire ?? 0, killed.has(e) ? 1 : 0, targetOf(e)]), [player.x, player.y, player.z, pv.x, pv.y, pv.z, survival.health, survival.fire ?? 0, 0, -1]],
+      ents: [...ents.map((e) => [e.x, e.y, e.z, e.vx ?? 0, e.vy ?? 0, e.vz ?? 0, gone.has(e) ? gone.get(e) : e.health, e.fire ?? 0, killed.has(e) || gone.has(e) || (e.health <= 0 && (e.death ?? 0) >= 20) ? 1 : 0, targetOf(e)]), [player.x, player.y, player.z, pv.x, pv.y, pv.z, survival.health, survival.fire ?? 0, 0, -1]],
       balls: balls.map((b) => [b.large ? 1 : 0, b.owner === "player" ? n : b.owner ? ents.indexOf(b.owner) : -1, b.x, b.y, b.z, b.vx, b.vy, b.vz, b.ax, b.ay, b.az, b.dead ? 1 : 0, b.ticks, b.ticksAlive ?? 0, b.large ? b.power : 0]),
-      booms, sets: sets.splice(0), punches, hurts,
+      booms, sets: sets.splice(0), punches, hurts, draws: [...logs.map((l) => l.log.slice()), []], // the player double draws nothing
     });
+    hooks.onTick?.(t, ew, ents);
   }
   return { ew, ents, states, balls, survival };
 }
@@ -126,6 +132,7 @@ export function fireballDivergence(r, got) {
     if (JSON.stringify(want[3]) !== JSON.stringify(g.sets)) return [t, "sets", want[3], g.sets];
     if (JSON.stringify(want[4]) !== JSON.stringify(g.punches)) return [t, "punches", want[4], g.punches];
     if (JSON.stringify(want[5]) !== JSON.stringify(g.hurts)) return [t, "hurts", want[5], g.hurts];
+    if (r.draws) for (let i = 0; i < want[6].length; i++) if (JSON.stringify(want[6][i]) !== JSON.stringify(g.draws[i])) return [t, "draws", i, want[6][i], g.draws[i]]; // Entity.rand draws of each mob
   }
   return null;
 }

@@ -47,6 +47,7 @@ public class FireballProbe {
   static boolean water = false;
   static long SMALL_SEED = Long.parseLong(System.getenv().getOrDefault("FB_SMALL_SEED", "4211"));
   static boolean unified = false; // batch 42: one loaded entity list in insertion order (World.updateEntities): mobs, then balls as they are launched, a mob that `join`s later after them
+  static boolean drawLog = false; // batch 43: a seventh row section lists the Entity.rand draws of each entity of that tick
   static boolean tickMobs = false; // batch 41: every mob (not the player) is updated each tick before the fireballs, and a fireball a mob spawns joins the list at once (World.spawnEntityInWorld) and ticks in the same pass
 
   static void scenario(String name, long seed, int ticks, String types, int[] sizes, double[][] pos, String[] script) throws Exception {
@@ -187,6 +188,7 @@ public class FireballProbe {
         }
       }
       FW.booms.clear(); FW.sets.clear();
+      if (drawLog) for (sa e : all) { Object lr = fld(sa.class, "Z").get(e); if (lr instanceof VillageFightProbe.Log) ((VillageFightProbe.Log) lr).log.clear(); }
       if (unified) {
         for (int i = 0; i < loaded.size(); i++) { // the list is walked by index: a ball a mob launches joins the end and updates in this pass
           sa e = loaded.get(i);
@@ -242,18 +244,25 @@ public class FireballProbe {
           .append(num(f.v)).append(",").append(num(f.w)).append(",").append(num(f.x)).append(",").append(num(fld(ze.class, "b").getDouble(f))).append(",").append(num(fld(ze.class, "c").getDouble(f))).append(",").append(num(fld(ze.class, "d").getDouble(f))).append(",")
           .append(f.K ? 1 : 0).append(",").append(fld(ze.class, "au").getInt(f)).append(",").append(fld(ze.class, "at").getInt(f)).append(",").append(f instanceof zg ? fld(zg.class, "e").getInt(f) : 0).append("]");
       }
-      row.append("],[").append(String.join(",", FW.booms)).append("],[").append(String.join(",", FW.sets)).append("],[").append(String.join(",", punches)).append("],[").append(String.join(",", hurts)).append("]]");
+      row.append("],[").append(String.join(",", FW.booms)).append("],[").append(String.join(",", FW.sets)).append("],[").append(String.join(",", punches)).append("],[").append(String.join(",", hurts)).append("]");
+      if (drawLog) {
+        row.append(",[");
+        for (int i = 0; i < all.size(); i++) { Object lr = fld(sa.class, "Z").get(all.get(i)); row.append(i > 0 ? "," : "").append("[").append(lr instanceof VillageFightProbe.Log ? drawsOf(((VillageFightProbe.Log) lr).log) : "").append("]"); }
+        row.append("]");
+      }
+      row.append("]");
       rows.add(row.toString());
     }
     StringBuilder sc = new StringBuilder();
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     System.out.println("{\"case\":\"fireballs\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + ",\"types\":" + q(types) + ",\"sizes\":" + Arrays.toString(sizes)
       + (water ? ",\"water\":true" : "") + (blocks.length > 0 ? ",\"blocks\":" + Arrays.deepToString(blocks) : "") + ",\"pos\":" + Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"made\":[" + String.join(",", made)
-      + "]" + (unified ? ",\"unified\":true" : "") + (tickMobs ? ",\"tickMobs\":true,\"shots\":[" + String.join(",", shots) + "]" : "") + ",\"rows\":[" + String.join(",", rows) + "]}");
+      + "]" + (unified ? ",\"unified\":true" : "") + (drawLog ? ",\"draws\":true" : "") + (tickMobs ? ",\"tickMobs\":true,\"shots\":[" + String.join(",", shots) + "]" : "") + ",\"rows\":[" + String.join(",", rows) + "]}");
     VillagerProbe.reset();
   }
 
 
+  static String drawsOf(List<String> log) { StringBuilder s = new StringBuilder(); for (String d : log) s.append(s.length() > 0 ? "," : "").append("\"").append(d).append("\""); return s.toString(); }
   static String ball(int t, int large, int shooter, String aim, double x, double y, double z, int power) { return t + " ball " + large + " " + shooter + " " + aim + " " + x + " " + y + " " + z + (power != 1 ? " " + power : ""); }
   static String exact(int t, int large, double x, double y, double z, double ax, double ay, double az) { return t + " exact " + large + " " + x + " " + y + " " + z + " " + ax + " " + ay + " " + az; }
   static int[] sz(int n) { return new int[n]; }
@@ -447,6 +456,32 @@ public class FireballProbe {
     }
     unified = false; tickMobs = false;
   }
+  // Batch 43 (names fb43-*): legacy wanderers over many seeds with draws logged per entity (the player far away, or 22 blocks off), the silverfish
+  // hide and despawn deaths, the small ghast balls at mobs on the seeds batch 42 avoided, and an iron golem next to a blaze with the blaze dying.
+  static void scenarios43() throws Exception {
+    unified = true; tickMobs = true; drawLog = true;
+    int[][] idle = {{'s', 4301}, {'s', 4311}, {'s', 4318}, {'p', 4311}, {'p', 4318}, {'b', 4301}, {'b', 4302}, {'k', 4301}, {'k', 4302}, {'k', 4306}, {'k', 4307}, {'k', 4312}, {'k', 4320}};
+    for (int[] c : idle) {
+      char k = (char) c[0];
+      scenario("fb43-idle-" + k + "-" + c[1], c[1], 120, "" + k, sz(1), new double[][] {{60.5, 60.5, k == 'b' ? 3 : 0}, {150.5, 150.5, 0}}, new String[] {});
+    }
+    String victims = "zxbpsk";
+    for (long s : new long[] {4213, 4214, 4222, 4226}) {
+      List<String> o = new ArrayList<>();
+      double[][] pos = new double[victims.length() + 2][];
+      pos[0] = new double[] {150.5, 150.5, 30};
+      for (int v = 0; v < victims.length(); v++) { pos[1 + v] = new double[] {36.5 + v * 4, 66.5, 0}; o.add(ball(1, 0, 0, "0 0 40", 36.5 + v * 4, 1.0, v == 1 ? 64.0 : 60.5, 1)); }
+      pos[victims.length() + 1] = new double[] {60.5, 76.5, 0};
+      scenario("fb43-ghast-mobs-small-" + s, s, 24, "g" + victims, sz(victims.length() + 1), pos, o.toArray(new String[0]));
+    }
+    // An iron golem (index 0) next to a blaze (index 1; EntityIronGolem's EntityAINearestAttackableTarget takes any IMob within 16), the player third.
+    // {seed, blaze dx, dz, dy, player x, player z}
+    double[][] golem = {{4413, 1.5, 0, 0, 60.5, 105.5}, {4469, 1.5, 0, 0, 60.5, 66.5}, {4525, 1.5, 0, 0, 54.5, 60.5}, {4461, 1.5, 0, 3, 60.5, 105.5}, {4419, 4, 0, 0, 60.5, 105.5},
+      {4516, 1.5, 0, 5, 54.5, 60.5}, {4521, 6, 0, 1, 54.5, 60.5}, {4411, 2.5, 0, 0, 60.5, 105.5}, {4426, 6, 0, 0, 60.5, 105.5}, {4486, 12, 0, 1, 60.5, 105.5}};
+    for (double[] g : golem)
+      scenario("fb43-golem-blaze-" + (long) g[0], (long) g[0], 40, "ib", sz(2), new double[][] {{60.5, 60.5, 0}, {60.5 + g[1], 60.5 + g[2], g[3]}, {g[4], g[5], 0}}, new String[] {});
+    unified = false; tickMobs = false; drawLog = false;
+  }
   // One hurt op per victim 0 to 4 at tick `t` (kind and amount as the op names them).
   static String[] hurts(int t, String what) {
     String[] o = new String[5];
@@ -482,5 +517,6 @@ public class FireballProbe {
     if (System.getenv("FB_PREFIX") == null || !System.getenv("FB_PREFIX").startsWith("fb4")) scenarios();
     scenarios41();
     scenarios42();
+    scenarios43();
   }
 }
