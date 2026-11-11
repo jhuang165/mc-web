@@ -10,9 +10,21 @@ import java.util.List;
 public class GL11 {
   public static final List<String> events = new ArrayList<>();
   public static java.util.function.Supplier<String> onDraw;
-  public static void glTranslatef(float x, float y, float z) { events.add("[\"T\"," + x + "," + y + "," + z + "]"); }
-  public static void glRotatef(float a, float x, float y, float z) { events.add("[\"R\"," + a + "," + x + "," + y + "," + z + "]"); }
-  public static void glColor4f(float r, float g, float b, float a) { events.add("[\"C\"," + r + "," + g + "," + b + "," + a + "]"); }
+  public static void glTranslatef(float x, float y, float z) { add("[\"T\"," + x + "," + y + "," + z + "]"); }
+  public static void glRotatef(float a, float x, float y, float z) { add("[\"R\"," + a + "," + x + "," + y + "," + z + "]"); }
+  public static void glColor4f(float r, float g, float b, float a) { add("[\"C\"," + r + "," + g + "," + b + "," + a + "]"); }
+  public static void glScalef(float x, float y, float z) { add("[\"S\"," + x + "," + y + "," + z + "]"); }
+  public static void glPushMatrix() { add("[\"P\"]"); }
+  public static void glPopMatrix() { add("[\"O\"]"); }
+  // Display lists (ModelRenderer compiles its boxes into one): events while a list is open go to that list, glCallList replays the list's events inline.
+  static int nextList = 1;
+  static List<String> open;
+  static final java.util.Map<Integer, List<String>> lists = new java.util.HashMap<>();
+  static void add(String e) { (open != null ? open : events).add(e); }
+  public static int glGenLists(int n) { int id = nextList; nextList += n; return id; }
+  public static void glNewList(int id, int mode) { open = new ArrayList<>(); lists.put(id, open); }
+  public static void glEndList() { open = null; }
+  public static void glCallList(int id) { events.addAll(lists.get(id)); }
   public static void glEnable(int cap) {}
   public static void glDisable(int cap) {}
   public static void glEnableClientState(int a) {}
@@ -22,5 +34,5 @@ public class GL11 {
   public static void glTexCoordPointer(int a, int b, java.nio.FloatBuffer d) {}
   public static void glTexCoordPointer(int a, int b, java.nio.ShortBuffer d) {}
   public static void glVertexPointer(int a, int b, java.nio.FloatBuffer d) {}
-  public static void glDrawArrays(int mode, int first, int count) { events.add(onDraw.get()); }
+  public static void glDrawArrays(int mode, int first, int count) { add(onDraw.get()); }
 }
