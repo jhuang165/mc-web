@@ -7,6 +7,10 @@
 // portal traveller uses, delivered when the dimension next loads), at the traced position, and the live player dies on return with an empty inventory, through the usual death
 // path (death screen, message "killed by magic" or the wither, respawn at the Overworld spawn or bed). Derived, not executed: the place and time are the trace's samples (about
 // one a second), and what the live player picked up or used between the death tick and the return is not reproduced.
+// Batch 44, when the live player dies: at the return (this file), not at the tick. The run is computed when he comes back (beginAway only copies the departure; the worker ticks
+// the whole trip in finishAway), because the shadow reads the live player's inventory, health and effects at each trace sample, and those exist only once the trip is over. A kill
+// forwarded as it happens would need the worker to tick alongside the live Nether at 20 ticks a second and read the live player; that is not bounded here. `tick` (the run tick of
+// the death) is kept in the result for the log. Natively both dimensions tick in one server and he would die at that tick, in his own dimension.
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs, Experience } from "./experience.js";
 import { ruleOn } from "./game-rules.js";
@@ -30,5 +34,5 @@ export function placeAwayDeath(root, death, random = Math.random) {
     inbox.drops = [...(inbox.drops ?? []), ...out.drops];
     inbox.xpOrbs = [...(inbox.xpOrbs ?? []), ...out.xpOrbs];
   }
-  return { keepInventory, cause: death.cause || "magic", dimension: dim, drops: out.drops.length, orbs: out.xpOrbs.length, points: out.points };
+  return { keepInventory, cause: death.cause || "magic", tick: death.tick | 0, dimension: dim, drops: out.drops.length, orbs: out.xpOrbs.length, points: out.points };
 }

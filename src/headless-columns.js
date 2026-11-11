@@ -49,6 +49,15 @@ export function compactColumn(blocks, metadata, height = 256) {
   return { h, top: topSection * 16, blocks: out, meta: Uint32Array.from(meta) };
 }
 
+// A compact column as the full-height arrays of a WorldChunk ({ blocks, meta }, index (lx * 16 + lz) * height + y): what the away run copies for a column the
+// streamed window does not hold but the ring does (dimension-live.js beginAway through main.js `chunks`).
+export function fullColumn(col, height = 256) {
+  const blocks = new Uint8Array(256 * height), meta = new Uint8Array(256 * height);
+  for (let c = 0; c < 256; c++) blocks.set(col.blocks.subarray(c * col.h, (c + 1) * col.h), c * height);
+  for (const k of col.meta) { const i = k >> 4, c = Math.floor(i / col.h); meta[c * height + (i - c * col.h)] = k & 15; }
+  return { blocks, meta };
+}
+
 // The metadata of cell index i (c * h + y) of a compact column.
 function metaOf(col, i) {
   const keys = col.meta;

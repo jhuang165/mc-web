@@ -274,7 +274,7 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
-import { createRing, attachRing } from "./headless-columns.js";
+import { createRing, attachRing, fullColumn } from "./headless-columns.js";
 import { seedRingChest } from "./ring-chests.js";
 import { applyTiles } from "./tile-sync.js";
 import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.js";
@@ -2602,7 +2602,8 @@ const dims = new DimensionLive({
   ticks: () => tickCounter,
   totalTime: () => mobs?.saveTotalTime(), // WorldInfo.getWorldTotalTime, the Teleporter cache clock (dimension-live.js clock)
   difficulty: () => worldDifficulty(active, options.difficulty),
-  chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
+  // A column outside the streamed window comes from the headless ring (headless-columns.js, 21 x 21 chunks around the player) when it holds it; any other column is not copied.
+  chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); if (c) return [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }]; const r = world.ringSink?.column?.(x, z); return r ? [{ x, z, ...fullColumn(r, world.height) }] : []; }),
   entityIds, // the shared Entity.nextEntityID: finishAway hands the away run its start (plan.idBase)
   advanceTicks: (n) => advanceWorldClock({ mobs, weather, survival, scene }, n), // WorldInfo total time too: the server ticks through loading screens (dimension-live.js clock)
   // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.

@@ -242,7 +242,9 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         hanging: [...hangSplit.rest, ...hanging.toJSON()],
         portalTravel: travellers,
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
-          mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length, held: stats.held },
+          mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length, held: stats.held,
+          // Batch 44: records outside the run (their column was not copied or the 32-block rule holds them): kept as saved, not ticked, so an entity absent from a delivery can be traced to it.
+          outside: [drops, orbs, tnt, carts, boatsSplit, mobSplit, arrowSplit, ballSplit, potionSplit, rocketSplit, hangSplit].reduce((n, s) => n + s.rest.length, 0) },
       };
     },
   };
