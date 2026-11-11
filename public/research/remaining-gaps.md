@@ -2,6 +2,70 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 43
+
+Batch 43 covered these areas:
+- **More objects drawn where the client sees them.**
+  - Tracked kinds: eyes of ender, firework rockets, fishing hooks and witch-thrown potions are now on the tracker, each with its own range and update rate. Their client copies run the native client behaviour.
+  - Metadata: the item stack, arrow crit flag, firework item, TNT fuse and falling block id and meta now arrive through the metadata packet. Renderers read the client copy, not the live entity.
+  - Knocks: items, orbs, TNT and falling blocks send a velocity update when hurt or pushed by an explosion.
+  - Falling blocks: they move with step height 0 as natively, so they no longer climb half slabs. Their packet uses the native block id (9 executed scenarios, `tracker-extras-reference.json`).
+- **Mounts, riders, leashes and flyers on the client.**
+  - The tracker sends the attach packet for riding and leashing. Rider, mount and leash holder positions follow the client entities, and the lead is drawn between them.
+  - Water and lava flags come from the client entity's own box.
+  - Ghasts, squid, blazes, the Wither and bats have their own client motion. The bat's hanging flag travels as metadata. Ghasts and squid turn their bodies the legacy way (10 executed client scenarios, `tracker-mounts-reference.json`).
+- **Enderman and wolf, every tick.**
+  - Enderman: it runs the native `EntityCreature` wander flow, with its own pick, teleport and place draws. Its first chase teleport attempt is on the 31st chase tick.
+  - Endermen pick up and place blocks again. A lookup read the block id wrongly, so the live game never found a block to carry.
+  - Wolf and sheep: their AI tasks draw on the entity's own random. A wild wolf also begs for meat, and a tamed wolf's kill counts as a player kill for rare drops.
+  - Replays: all 59 batch 42 records (11,270 ticks) and 17 new ones replay exactly, comparing positions, motion, yaw, sounds and every draw ([enderman.md](enderman.md), [wolf.md](wolf.md)).
+- **Idle legacy mobs and corpses.**
+  - Silverfish: they keep the 0.98 forward decay between ticks and age 2 extra ticks in bright light. 120 idle spider, pigman, blaze and silverfish runs then replayed exactly.
+  - Seeds 4213, 4214, 4222 and 4226: the silverfish deaths at tick 0 were the replay's handling of `setDead`.
+  - Corpses: a dying mob drops its strafe, and a dying blaze still hovers. The golem against a blaze matched on 168 layouts, so the batch 42 miss could not be reproduced (27 executed records with each entity's draws, [blaze-ghast.md](blaze-ghast.md)).
+- **One entity list for more kinds.** Arrows, thrown entities, items, XP orbs, primed TNT and falling blocks update in one insertion-ordered walk with the mobs and fireballs, as `World.updateEntities` walks `loadedEntityList`. Executed records show the order decides which merged stack survives, which orb the player takes first and whether a blast meets an item before or after it moves (13 of 15 replay exactly, [blaze-ghast.md](blaze-ghast.md)).
+- **Inventory icons and held blocks.**
+  - Icons: slabs, plates, buttons, carpet, trapdoors, farmland, the dragon egg and the other non-cube items draw their executed boxes in the inventory, with the native GUI transform and GL pixel-centre edges. Flat icons use the same edge model.
+  - Block item ids: ids such as the stone slab item use the block's geometry in the hand and on the ground.
+  - Chests: the chest, trapped chest and ender chest items are executed through the chest model and match pixel for pixel ([post-shaders.md](post-shaders.md)).
+- **Away run.**
+  - Riding and leashes: mounted pairs and chains run together while all their members are inside the 32-block rule. A mob on the player's lead keeps it and runs.
+  - Hanging entities: paintings and item frames use their real position for that rule.
+  - Shadow kill: it drops the inventory and experience where the player was, in that dimension, and the live player dies through the usual path on return.
+  - Wall stamp: a command block's output time follows the trip's measured elapsed time ([dimensions.md](dimensions.md)).
+- **Tile edits in multiplayer.**
+  - Cell resends: resends of fewer than 64 cells and tile edits now carry the sign, skull, spawner, beacon and flower pot descriptions with the native action ids.
+  - Messages: the server has messages and native checks for editing a sign and choosing beacon effects. Placing a sign or skull makes its tile.
+  - Hoppers: a hopper or hopper cart beside a column whose saved containers are still loading waits instead of picking up items ([streaming.md](streaming.md), [multiplayer.md](multiplayer.md)).
+
+Still open from batch 43:
+- Tracker:
+  - Client-side arrow and thrown hits, and the snowball and egg impact particles, are not modelled.
+  - The rocket spark trail starts at the server rocket.
+  - A hooked entity's pull and the hook after it lands are approximate.
+  - The angler end of the line and the drawn yaw of mobs come from the live entities.
+  - The Ender Dragon's position ring buffer and the squid's tentacle fields are not on the client copy.
+  - A player-ridden mount keeps its live position.
+  - The tracker's id-ordered set is not modelled.
+- Mobs:
+  - Cows, pigs and other passive mobs still draw on the world random.
+  - The enderman records cover only flat ground and water, and the wolf records have no mating, feeding or taming.
+  - Two golem layouts differ by about 1e-7 at one tick.
+  - Minecarts, boats, hanging entities, mob potions, golem snowballs and wither skulls still tick outside the one list, and so does the away run.
+- Rendering:
+  - The chest hand and drop model uvs, and the cactus and piston hand models, are not compared against native.
+  - The held 3D sprite items are unchanged, and the item atlas is unused.
+- Away:
+  - The death screen after a shadow kill shows on return, not at the tick.
+  - An entity whose column was not copied at departure cannot tick.
+  - In one smoke trip of three an item and an orb were not delivered. Two reruns, here and in the track, delivered everything, so the cause is not known.
+- Ring and multiplayer:
+  - The client has no sign editor or beacon screen for the new messages.
+  - Beacon effects are not applied in the dedicated world.
+  - A waiting hopper has no timeout.
+  - Saves imported at 16/17 keep the quiet neighbour callbacks.
+  - A rim piston queues a no-op event where native refuses.
+
 ## Done in batch 42
 
 Batch 42 covered these areas:
@@ -20,35 +84,7 @@ Batch 42 covered these areas:
   - Chests: a ring hopper reaching a chest in a visited and evicted column waits for that column's saved containers instead of making an empty chest. The first loot lookup in an unbuilt area is built by the generation worker.
   - Resends: a resent chunk carries the sign, skull, spawner, beacon and flower pot descriptions that `PlayerInstance` sends after it (executed `getDescriptionPacket`, [streaming.md](streaming.md)).
 
-Still open from batch 42:
-- Tracker:
-  - The metadata of tracked objects (stack, crit flag, fuse) is read from the live entity.
-  - Client-side arrow and thrown hits are not modelled.
-  - Fireworks, eyes of ender, fishing hooks and mob-thrown potions, plus mounts, riders and leash holders, are drawn at live positions.
-  - Items and orbs send no velocity update when knocked.
-  - Falling blocks move with step height 0.5 where Java uses 0.
-  - The tracker's id-ordered set is not modelled.
-- Mobs:
-  - The enderman and wolf wander draws on `Entity.rand` are not made by the port, so the replays compare about a quarter of the recorded ticks.
-  - Idle spiders, pigmen and blazes wander differently on some seeds.
-  - A silverfish dies at tick 0 on four seeds.
-  - An iron golem beside a blaze does not attack it on tick 9 as natively.
-  - Arrows, items, orbs, TNT and falling blocks still tick in their own lists. Path searches beyond 250000 points are truncated.
-- Rendering:
-  - Inventory icons of thin blocks (wood slab, plates, buttons, carpet, trapdoor, farmland) are full cubes, and the dragon egg icon is flat.
-  - Item ids that map to blocks draw cubes in the hand.
-  - The item atlas is recorded but unused, and flat icons keep 4x4 edge coverage.
-  - The chest-family items and the anvil block uv table are not executed.
-  - Flying, swimming and boss mobs are interpolated without client physics.
-- Travel and away:
-  - A loss that would kill the shadow player kills the live player on return.
-  - Ridden mobs and entities outside the 32-block rule do not travel while away.
-  - The away delivery check is a unit chain plus one smoke trip.
-- Ring:
-  - Cell resends of fewer than 64 cells carry no tile descriptions, and there are no sign, skull, spawner or beacon edit messages.
-  - A hopper above an evicted column that is still loading picks up items for that tick.
-  - Saves imported at 16/17 keep the quiet neighbour callbacks.
-  - A rim piston queues a no-op event where native refuses.
+Still open from batch 42: carried into the batch 43 list above, except the items batch 43 closed.
 
 ## Done in batch 41
 

@@ -100,6 +100,19 @@ Batch 42 (2026-11-10, eight Sonnet tracks in `../wt42-<name>` on `batch42-<name>
 - Atlas uvs must go through `tileOrigin`/`tileRect`/`tileAtUv`. `ATLAS_COLUMNS` is 32 and there is no grid maths.
 - Verification: see `b42-lead-track.md`. Pushed to github main by the lead.
 
+Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>`, cut from e644dabc2, merged --no-ff on `batch43-lead`; lead note `b43-lead-track.md`; the gun side runs separately):
+- 0.72.0, by track:
+  - trackerextras: eyes, rockets, fishing hooks and witch potions on `object-tracker.js`; S1C metadata on client copies; `velocityChanged` on knocked items, orbs, TNT and falling blocks; falling step height 0. Evidence: `TrackerExtrasProbe`.
+  - trackermounts: S1B attach, riders, mounts and leash holders on client entities; client motion for ghast, squid, blaze, wither and bat (`clientBodyTurn`, `clientEnvironment`). Evidence: `TrackerMountsProbe`.
+  - wanderdraws: the enderman runs the `legacy-creature.js` flow through `endermanThink`; wolf and sheep tasks draw `Entity.rand`; strict `enderman-wolf-replay.js` over every tick; endermen carry blocks again (`toOriginal` returns an array).
+  - legacywander: silverfish forward decay and `entityAge`; corpses zero strafing and blazes hover; the fireball replay keeps health on `setDead`; `fireballs-b43-reference.json` logs each entity's draws.
+  - entitylist: `entityWalkers` and `EntityWorld.joined` stamps put arrows, thrown entities, items, orbs, TNT and falling blocks in the one `withBalls` walk; each kind has `tickOne`/`reap`. Evidence: `EntityListProbe`.
+  - thinicons: `icon-quads.js`, `item-boxes.js` and `chest-item-model.js`; executed boxes for non-cube icons; block item ids fold to the block; `ChestItemProbe`.
+  - awayride: mounted units and player leads run while away; `away-death.js` places a shadow kill's drops; measured wall step.
+  - tileedits: `describeCell` for cell resends and tile edits; `sign`/`beacon`/`signEditor` messages; `containerPending` makes hoppers wait on loading columns.
+- `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
+- Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
+
 Batch 22 (2026-11-07, claude-b22-lead, five Sonnet tracks merged into main):
 - Container UI (`container-screens.md`, `container-screens.js`): every container screen and the book open in a native GuiContainer shell (default background gradient, guiLeft/guiTop origin math, glyph labels at bytecode-read positions); `modal()` is gone. Horse and villager screens were not opened live; book width (320) assumed.
 - Debug keys (`debug-screen.md`, `debug-keys.js`): F3+B entity hitboxes, F3+S/T refresh, F3+C simulated crash dialog, F-keys on every screen, F3 overlay drawn under open GUIs. F3+C does not exit; hitbox line width and a few entity sizes assumed.
