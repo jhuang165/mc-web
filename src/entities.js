@@ -2288,6 +2288,9 @@ export class EntityWorld {
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
       }
+    // The carts and boats beside it push it (their applyEntityCollision) in its own update, when the loaded-entity walk holds them (entity-simulation.js `pushMob`).
+    this.walks?.get("cart")?.pushMob?.(e);
+    this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
     if (p?.alive && boxesMeet(near, pushBox(p, p.width, p.height))) applyEntityCollision(p, e, false, true);
     if (e.type === "iron_golem") this.golemTailTick(e);

@@ -2778,15 +2778,16 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       scene.drops.pickup(item, position);
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
-    projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
-    projectileHit: (e, ball) => e !== "player" && thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
+    // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
+    projectileTargets: () => [...mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), ...hangingArrowTargets(hanging)],
+    projectileHit: (e, ball) => e === "player" ? false : hanging.entities.includes(e) ? thrownAtHanging(e) : thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
-        hit:(e,source)=>e!=="player"&&mobs?.attackEntityFrom(e,source.amount,{
+        hit:(e,source)=>e!=="player"&&(hanging.entities.includes(e)?thrownAtHanging(e):mobs?.attackEntityFrom(e,source.amount,{
           name:'thrown',player:!!source.thrower,attacker:'projectile',
           ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
-        }),
+        })),
         particle:()=>{}, // the client's copy of the pearl portals on impact (object-tracker.js, Projectiles.clientImpact)
         teleport:({from,to})=>{
           // Count the physical movement preceding the teleport, not its displacement.
@@ -3127,11 +3128,14 @@ const cartHost = {
   changed: () => { saved = false; },
   runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
+// EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a painting or item frame: attackEntityFrom(thrown by the player, 0) breaks it (a frame with an item loses the item).
+function thrownAtHanging(e) { hanging.attack(e, { player: true, creative: survival.creative }); spawnHangingDrops(); saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
-  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
+  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
     survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, {
     ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
+    vehicleDrop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),
     updateBlocks: changes => scene.updateBlocks(changes),
