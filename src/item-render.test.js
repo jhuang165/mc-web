@@ -11,7 +11,9 @@ import { FENCE_ITEM_BOXES } from "./fences.js";
 import { anvilModelBoxes } from "./anvil-block.js";
 import { tileRect } from "./block-textures.js";
 
-const ref = JSON.parse(readFileSync(new URL("../public/research/item-render-reference.json", import.meta.url), "utf8"));
+const raw = JSON.parse(readFileSync(new URL("../public/research/item-render-reference.json", import.meta.url), "utf8"));
+// The chest family (render type 22: 54, 130, 146) draws the chest model, not RenderBlocks boxes; it is checked against chest-item-reference.json (icon-quads.test.js).
+const ref = { ...raw, items: raw.items.filter((e) => e.type !== 22) };
 const bf = new Float32Array(1), bi = new Int32Array(bf.buffer), fl = (b) => { bi[0] = b; return bf[0]; };
 const draws = (it) => it.events.filter((e) => e[0] === "D").flatMap((e) => { const out = []; for (let k = 0; k < e[1]; k += 4) { const q = []; for (let i = k; i < k + 4; i++) { const o = i * 8, u = fl(e[2][o + 3]), idx = Math.floor(u / 2); q.push({ p: [fl(e[2][o]), fl(e[2][o + 1]), fl(e[2][o + 2])], s: u - 2 * idx, t: fl(e[2][o + 4]), icon: ref.icons[idx] }); } out.push(q); } return out; }); // the dragon egg is one draw of 48 quads
 // Boxes of an item: every six consecutive draws (renderFaceYNeg, YPos, ZNeg, ZPos, XNeg, XPos) are one box; its extent is the vertices' bounding box.
@@ -23,7 +25,9 @@ test("the recorded item draws are boxes of six faces and the unit cubes are the 
   const types = new Set(ref.items.map((e) => e.type));
   assert.deepEqual([...types].sort((a, b) => a - b), [0, 10, 11, 13, 16, 21, 26, 27, 31, 32, 34, 35, 39].sort((a, b) => a - b));
   for (const it of ref.items) assert.equal(draws(it).length % 6, 0, `${it.id}:${it.meta}`);
-  assert.deepEqual(ref.failed.map((f) => +f.split(":")[0]).filter((v, i, a) => a.indexOf(v) === i), [54, 130, 146], "only the chest family needs a tile entity renderer");
+  // Batch 43: the stub GL11 has display lists, scale and push/pop, so the chest family (type 22, the tile entity renderer) runs too; nothing fails.
+  assert.deepEqual(raw.failed, [], "every item runs");
+  assert.deepEqual(raw.items.filter((e) => e.type === 22).map((e) => e.id).sort((a, b) => a - b), [54, 130, 146], "only the chest family needs a tile entity renderer");
 });
 
 test("stairs, fences, the gate and the beacon: the port's boxes are the executed item boxes", () => {

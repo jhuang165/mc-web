@@ -13,7 +13,9 @@ import { FENCE_ITEM_BOXES } from "./fences.js";
 import { CHEST_ITEM_PREFIX, CHEST_ITEM_PARTS, modelBoxQuads } from "./chest-item-model.js";
 
 const read = (n) => JSON.parse(readFileSync(new URL(`../public/research/${n}`, import.meta.url), "utf8"));
-const ref = read("item-render-reference.json"), chest = read("chest-item-reference.json");
+const raw = read("item-render-reference.json"), chest = read("chest-item-reference.json");
+// The chest family (render type 22) is the chest model, matched against chest-item-reference.json below, not a RenderBlocks box item.
+const ref = { ...raw, items: raw.items.filter((e) => e.type !== 22) };
 const bf = new Float32Array(1), bi = new Int32Array(bf.buffer), fl = (b) => { bi[0] = b; return bf[0]; };
 // Each texel carries its own (x, y) so a raster says which texel every pixel shows.
 const tile = (() => { const d = new Uint8Array(16 * 16 * 4); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) d.set([x * 16 + 1, y * 16 + 1, 7, 255], (y * 16 + x) * 4); return { data: d, w: 16, h: 16 }; })();
