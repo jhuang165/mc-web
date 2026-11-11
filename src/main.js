@@ -217,7 +217,7 @@ import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
-import { tickEntitySimulation } from "./entity-simulation.js";
+import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked } from "./entity-simulation.js";
 import { ObjectTracker, objectViews } from "./object-tracker.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
@@ -421,6 +421,9 @@ const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn 
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
 let primed = [], genPrimed = null;
+const joinedAs = (kind) => (e) => mobs?.joined(e, kind); // World.spawnEntityInWorld: a new entity's place in the loaded-entity list (entity-simulation.js entityWalkers)
+watchJoin(primed, joinedAs("tnt"));
+let entityTick = null; // this tick's { state, hooks } for tickEntitySimulation, which the walk in EntityWorld.tickMobs reads
 let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
 const THROWN_KINDS = ["snowball", "egg", "enderPearl", "potion", "expBottle"];
 const thrownOf = (kind) => [...projectiles.balls, ...(mobs?.potions?.balls ?? [])].filter((b) => b.kind === kind); // the witch's potions are tracked like the player's
@@ -502,12 +505,14 @@ let survival = new Survival({}, "creative"),
   containerView = null;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
+items.joined = (e) => mobs?.joined(e, "item");
 // Every system reads the game rules of the world being played (game-rules.js); a /gamerule edit applies on the next read.
 setGameRuleSource((name) => ruleOn(active, name));
 // gamerule doTileDrops: block drops are skipped while it is false (commands.js / command-host.js).
 { const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
+projectiles.joined = (e) => mobs?.joined(e, "thrown");
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const compass = createCompass();
 let compassEpoch = 0, compassShownFrames = COMPASS_FRAMES;
@@ -520,6 +525,7 @@ const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
 // bow draw drives (EntityRenderer.fovModifierHand and its previous value).
 const arrows = new Arrows();
+arrows.joined = (e) => mobs?.joined(e, "arrow");
 const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div><div id="pumpkin-blur" hidden></div>
@@ -1299,6 +1305,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         saved=false;
       },
     }, record.falling).watch();
+    falling.joined = (e) => mobs?.joined(e, "falling");
     falling.load(record.fallingTicks);
     // Saved ticks the lists above cannot hold (tile-ticks.js): taken at their due time, run only if the cell still holds a block the port ticks.
     foreignTicks = new ForeignTicks(record.foreignTicks, (x, y, z) => (world.inside(x, y, z) ? world.get(x, y, z) : -1), {
@@ -1322,7 +1329,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
     fire.load(record.fireTicks);
-    experience=new Experience(record.experience);entityIds.reserveRecord(record);xpOrbs=new ExperienceOrbs(record.xpOrbs,undefined,entityIds);playerTicks=0;
+    experience=new Experience(record.experience);entityIds.reserveRecord(record);xpOrbs=new ExperienceOrbs(record.xpOrbs,undefined,entityIds);xpOrbs.joined=(e)=>mobs?.joined(e,"orb");playerTicks=0;
     // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
     xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
     // BlockRailBase and BlockTorch.onNeighborBlockChange: unsupported rails and torches drop.
@@ -1384,7 +1391,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       dispense: {
         rng: () => arrows.rng(),
         spawnItem: (stack, x, y, z, mx, my, mz) => { items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
-        arrow: (e) => { arrows.list.push(arrows.make(e, e.rand, { shooter: null, pickup: 1 })); },
+        arrow: (e) => { const a = arrows.make(e, e.rand, { shooter: null, pickup: 1 }); arrows.list.push(a); arrows.joined(a); },
         thrown: (kind, e) => {
           const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
           if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
@@ -1469,6 +1476,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.walks = entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }); // arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
     mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
     if (Array.isArray(record.fireballs) && record.fireballs.length) { mobs.fireballs.load(record.fireballs, world.dimension ?? 0); mobs.skulls.load(record.fireballs, world.dimension ?? 0); } // blaze/ghast fireballs and wither skulls in flight
@@ -1567,7 +1575,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     rockets.load(record.rockets);
     fishing.load(record.fishing);
     objectTracker = new ObjectTracker(); // a fresh client world: nothing is tracked yet
-    primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+    primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz })), joinedAs("tnt"));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
@@ -2667,7 +2675,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
     foreignTicks?.tick(mobs?.saveTotalTime());
-    falling.tick();
+    falling.tick({ entities: !isWalked(mobs) }); // walked: the entity updates run in EntityWorld.tickMobs's list walk
     world.redstoneBlocks?.tick();
     scene.setFalling?.(objectViews(objectTracker, falling.entities, "falling"));
   }
@@ -2708,8 +2716,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     document.documentElement.style.setProperty("--compass-frames", String(compassFrames));
     document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
   }
-  tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position, sneaking: !!motion.sneaking,
-    width: PHYSICS.width, height: PHYSICS.height }, {
+  entityTick = { state: { world, items, primed, projectiles, arrows, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking,
+    width: PHYSICS.width, height: PHYSICS.height }, hooks: {
     maxStack: st => survival.inventory.maxStack(st),
     smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),
     explodeTnt: explodeAt,
@@ -2751,13 +2759,18 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       } }),
     arrowsCollected: () => { renderHotbar(); saved = false; },
     flushArrows,
-  });
+  } };
+  tickEntitySimulation(entityTick.state, entityTick.hooks);
+  const trackObjects = () => {
   if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
     objectTracker.update(lists, position, world);
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
   }
+  };
+  entityTick.track = trackObjects;
+  if (!isWalked(mobs)) trackObjects();
   fishing.tick(fishingHost());
   statsLive.fishing(fishing);
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
@@ -3236,6 +3249,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }

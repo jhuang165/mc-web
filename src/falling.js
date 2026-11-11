@@ -120,11 +120,13 @@ export class FallingBlocks {
     }
     const e = spawnFalling(b, w.getMeta(x, y, z), x, y, z, this.entityRandom());
     this.entities.push(e);
+    this.joined?.(e); // entity-simulation.js (entityWalkers): the entity's place in World.loadedEntityList
     return e;
   }
   // One server tick: WorldServer.tickUpdates (due scheduled updates whose block is still there),
   // then the entities, the new ones included, as World.updateEntities runs after it.
-  tick() {
+  // `entities: false`: the entity updates belong to a walk that holds every kind in one list (entity-simulation.js (entityWalkers)), which calls tickOne and reap.
+  tick({ entities = true } = {}) {
     // With a shared TickTree (tile-ticks.js) the scheduled updates are taken there, in one tree with the other kinds; only the entities tick here.
     if (!this.ids) {
       this.time++;
@@ -138,9 +140,12 @@ export class FallingBlocks {
         if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
       }
     }
-    for (const e of this.entities) if (!e.dead && ringEntityActive(this.world,e)) this.tickEntity(e);
-    this.entities = this.entities.filter((e) => !e.dead);
+    if (!entities) return;
+    for (const e of this.entities) this.tickOne(e);
+    this.reap();
   }
+  tickOne(e) { if (!e.dead && ringEntityActive(this.world, e)) this.tickEntity(e); }
+  reap() { this.entities = this.entities.filter((e) => !e.dead); }
   // The pieces of the scheduled-update part the shared tick tree drives: the clock and ring pause with the due list in tree order (time, priority,
   // creation), taking the head, and running a taken entry.
   beginTick() {

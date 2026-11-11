@@ -189,6 +189,7 @@ export class Arrows {
       shooter: "player", pickup: creative ? 2 : 1, crit,
     });
     this.list.push(arrow);
+    this.joined?.(arrow); // entity-simulation.js (entityWalkers): the arrow's place in World.loadedEntityList
     return arrow;
   }
   // The skeleton's arrow: velocity 1.6, inaccuracy 14 - difficulty * 4, canBePickedUp 0,
@@ -209,6 +210,7 @@ export class Arrows {
     const pitch = f(f(1) / f(f(mr.nextFloat() * f(0.4)) + f(0.8)));
     this.events.push({ sound: "random.bow", volume: 1, pitch, position: { x: mob.x, y: mob.y, z: mob.z } });
     this.list.push(arrow);
+    this.joined?.(arrow); // entity-simulation.js (entityWalkers): the arrow's place in World.loadedEntityList
     return arrow;
   }
   drain() {
@@ -232,9 +234,12 @@ export class Arrows {
   // EntityArrow.onUpdate for every arrow. `ctx`: targets (arrowTargets), mobs (the
   // EntityWorld, for damage), survival (the player's) and player ({ x, z }, for knockback).
   tick(world, ctx = {}) {
-    for (const a of this.list) if (!a.dead && ringEntityActive(world,a)) this.step(world, a, ctx);
-    this.list = this.list.filter((a) => !a.dead);
+    for (const a of this.list) this.tickOne(world, a, ctx);
+    this.reap();
   }
+  reap() { this.list = this.list.filter((a) => !a.dead); }
+  // One arrow's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
+  tickOne(world, a, ctx = {}) { if (!a.dead && ringEntityActive(world, a)) this.step(world, a, ctx); }
   step(world, a, ctx) {
     // Entity.onUpdate / onEntityUpdate: previous position and angles, water (which
     // also puts a fire out), fire, lava and the -64 void.

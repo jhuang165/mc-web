@@ -64,7 +64,7 @@ export class ExperienceOrbs {
   }).filter(o=>o.age<LIFETIME&&o.health>0):[];
  }
  // `p` is the spawn point (posY): EntityXPOrb.getXPSplit pieces, one orb each.
- spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push(newOrb(n,p.x,p.y,p.z,Math.random,this.ids));}
+ spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128)){const o=newOrb(n,p.x,p.y,p.z,Math.random,this.ids);this.orbs.push(o);this.joined?.(o);}} // joined: entity-simulation.js (entityWalkers), the orb's place in World.loadedEntityList
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
  // not check isDead, so later hits in the same tick keep counting down.
  hurt(o,source,amount){o.velocityChanged=true;/* Entity.setBeenAttacked (S12 by the tracker) */o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}
@@ -105,47 +105,50 @@ export class ExperienceOrbs {
  // EntityXPOrb.onUpdate [sq.h] for every orb; `player` is the server player's feet (EntityPlayerMP,
  // getEyeHeight 1.62F) or null. A client world's orbs (object-tracker.js) pass the client player's eye height, 0.12F.
  tick(world,player,eye=EYE){
-  for(const o of this.orbs){
-   if(!ringEntityActive(world,o))continue;
-   o.px=o.x;o.py=o.y;o.pz=o.z;
-   // Entity.onEntityUpdate: EntityXPOrb.handleWaterMovement pushes with the unshrunk box only;
-   // then the fire countdown (onFire 1 when the counter is a multiple of 20) and lava (lava 4,
-   // setFire(15)), and the void below -64.
-   if(world.getMeta){const {push}=waterAcceleration(world,o.bb);o.vx+=push[0];o.vy+=push[1];o.vz+=push[2];}
-   if(o.fire>0){if(o.fire%20===0)this.hurt(o,'onFire',1);o.fire--;}
-   if(world.getMeta&&inLava(world,o.bb)){this.hurt(o,'lava',4);o.fire=Math.max(o.fire,300);}
-   if(o.posY<-64)o.dead=true;
-   o.vy-=0.029999999329447746;
-   // The orb's cell is lava: thrown up and sideways with a fizz (0.4, 2 + r * 0.4).
-   if(world.get(Math.floor(o.x),Math.floor(o.posY),Math.floor(o.z))===LAVA){
-    const r=this.random;
-    o.vy=0.20000000298023224;o.vx=f(f(f(r())-f(r()))*f(0.2));o.vz=f(f(f(r())-f(r()))*f(0.2));
-    this.sounds.push({name:'random.fizz',volume:f(0.4),pitch:f(2+f(f(r())*f(0.4))),x:o.x,y:o.posY,z:o.z});
-   }
-   // func_145771_j at the box centre; unlike EntityItem the result does not set noClip.
-   const push=entityPushOut(world,o.x,(o.bb[1]+o.bb[4])/2,o.z,o.bb,this.random);
-   if(push)o[['vx','vy','vz'][push[0]]]=push[1];
-   // Every 20 - entityId % 100 ticks of xpColor (every tick once that is below 1) an orb with no
-   // target, or one farther than 8 blocks, looks for the closest player within 8 (distance
-   // squared < 64, from posY to the player's feet).
-   if(o.retarget<o.color-20+o.id%100){
-    const d2=player?(o.x-player.x)**2+(o.posY-player.y)**2+(o.z-player.z)**2:Infinity;
-    if(!o.target||d2>64)o.target=d2<64;
-    o.retarget=o.color;
-   }
-   if(o.target&&player){
-    const dx=(player.x-o.x)/8,dy=(player.y+eye-o.posY)/8,dz=(player.z-o.z)/8,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
-    let pull=1-d;
-    if(pull>0){pull*=pull;o.vx+=dx/d*pull*0.1;o.vy+=dy/d*pull*0.1;o.vz+=dz/d*pull*0.1;}
-   }
-   this.move(world,o,o.vx,o.vy,o.vz);
-   const fr=o.onGround?f(slipperiness(world.get(Math.floor(o.x),Math.floor(o.bb[1])-1,Math.floor(o.z)))*f(0.98)):f(0.98);
-   o.vx*=fr;o.vy*=0.9800000190734863;o.vz*=fr;
-   if(o.onGround)o.vy*=-0.8999999761581421;
-   o.color++;
-   if(++o.age>=LIFETIME)o.dead=true;
+  for(const o of this.orbs)this.tickOne(world,o,player,eye);
+  this.reap();
+ }
+ reap(){this.orbs=this.orbs.filter(o=>!o.dead);}
+ // One orb's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
+ tickOne(world,o,player,eye=EYE){
+  if(o.dead||!ringEntityActive(world,o))return;
+  o.px=o.x;o.py=o.y;o.pz=o.z;
+  // Entity.onEntityUpdate: EntityXPOrb.handleWaterMovement pushes with the unshrunk box only;
+  // then the fire countdown (onFire 1 when the counter is a multiple of 20) and lava (lava 4,
+  // setFire(15)), and the void below -64.
+  if(world.getMeta){const {push}=waterAcceleration(world,o.bb);o.vx+=push[0];o.vy+=push[1];o.vz+=push[2];}
+  if(o.fire>0){if(o.fire%20===0)this.hurt(o,'onFire',1);o.fire--;}
+  if(world.getMeta&&inLava(world,o.bb)){this.hurt(o,'lava',4);o.fire=Math.max(o.fire,300);}
+  if(o.posY<-64)o.dead=true;
+  o.vy-=0.029999999329447746;
+  // The orb's cell is lava: thrown up and sideways with a fizz (0.4, 2 + r * 0.4).
+  if(world.get(Math.floor(o.x),Math.floor(o.posY),Math.floor(o.z))===LAVA){
+   const r=this.random;
+   o.vy=0.20000000298023224;o.vx=f(f(f(r())-f(r()))*f(0.2));o.vz=f(f(f(r())-f(r()))*f(0.2));
+   this.sounds.push({name:'random.fizz',volume:f(0.4),pitch:f(2+f(f(r())*f(0.4))),x:o.x,y:o.posY,z:o.z});
   }
-  this.orbs=this.orbs.filter(o=>!o.dead);
+  // func_145771_j at the box centre; unlike EntityItem the result does not set noClip.
+  const push=entityPushOut(world,o.x,(o.bb[1]+o.bb[4])/2,o.z,o.bb,this.random);
+  if(push)o[['vx','vy','vz'][push[0]]]=push[1];
+  // Every 20 - entityId % 100 ticks of xpColor (every tick once that is below 1) an orb with no
+  // target, or one farther than 8 blocks, looks for the closest player within 8 (distance
+  // squared < 64, from posY to the player's feet).
+  if(o.retarget<o.color-20+o.id%100){
+   const d2=player?(o.x-player.x)**2+(o.posY-player.y)**2+(o.z-player.z)**2:Infinity;
+   if(!o.target||d2>64)o.target=d2<64;
+   o.retarget=o.color;
+  }
+  if(o.target&&player){
+   const dx=(player.x-o.x)/8,dy=(player.y+eye-o.posY)/8,dz=(player.z-o.z)/8,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+   let pull=1-d;
+   if(pull>0){pull*=pull;o.vx+=dx/d*pull*0.1;o.vy+=dy/d*pull*0.1;o.vz+=dz/d*pull*0.1;}
+  }
+  this.move(world,o,o.vx,o.vy,o.vz);
+  const fr=o.onGround?f(slipperiness(world.get(Math.floor(o.x),Math.floor(o.bb[1])-1,Math.floor(o.z)))*f(0.98)):f(0.98);
+  o.vx*=fr;o.vy*=0.9800000190734863;o.vz*=fr;
+  if(o.onGround)o.vy*=-0.8999999761581421;
+  o.color++;
+  if(++o.age>=LIFETIME)o.dead=true;
  }
  // Entity.moveEntity with stepHeight 0; the tail hurts on cactus and fire cells and runs the
  // fire counter (fireResistance 1), with a rain fizz when wet. The orb's tick moves by its motion;
