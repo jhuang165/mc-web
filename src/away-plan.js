@@ -3,7 +3,7 @@
 export const AWAY_ENTITY_TICKS = 1200; // mt.h: the entity/tile-entity gate after the last player leaves
 export const SPAWN_RADIUS = 128; // ms.b: chunk centres within +-128 blocks of the world spawn stay loaded
 export const MAX_AWAY_TICKS = 72000; // one hour; longer trips are capped (a bound, not a native rule)
-export const MAX_COLUMNS = 64;
+export const MAX_COLUMNS = 160; // batch 44: was 64, which dropped the columns of entities far from the spawn (the cap sorted halos and entity columns together by distance)
 export const WALL_BUDGET_MS = 4000;
 const HALO = 1;
 
@@ -17,7 +17,7 @@ const TILE_SIM = ["furnaces", "hoppers", "brewing"], TILE_DATA = ["dispensers", 
 const tileCols = (map) => Object.keys(map ?? {}).map((k) => { const [x, , z] = k.split(",").map(Number); return [col(x), col(z)]; });
 
 // The spawn-area columns that hold anything an away run advances: scheduled ticks, falling blocks, redstone state, tile entities.
-// Returns [[cx, cz]] nearest the spawn first, with the halo, capped at MAX_COLUMNS. [] when there is no work.
+// Returns [[cx, cz]]: the columns that hold work (nearest the spawn first), then their halos, capped at MAX_COLUMNS. [] when there is no work.
 export function stateColumns(root) {
   const spawn = spawnOf(root), work = new Map(), all = (list) => { for (const [cx, cz] of list) if (inSpawnArea(spawn, cx, cz)) work.set(key(cx, cz), [cx, cz]); };
   const xyz = (list) => (list ?? []).map((e) => [col(e.x ?? e[0]), col(e.z ?? e[2])]);
@@ -40,8 +40,10 @@ export function stateColumns(root) {
   for (const [cx, cz] of work.values()) for (let dx = -HALO; dx <= HALO; dx++) for (let dz = -HALO; dz <= HALO; dz++) {
     if (inSpawnArea(spawn, cx + dx, cz + dz)) out.set(key(cx + dx, cz + dz), [cx + dx, cz + dz]);
   }
-  const dist = ([cx, cz]) => (cx * 16 + 8 - spawn[0]) ** 2 + (cz * 16 + 8 - spawn[2]) ** 2;
-  return [...out.values()].sort((a, b) => dist(a) - dist(b)).slice(0, MAX_COLUMNS);
+  const dist = ([cx, cz]) => (cx * 16 + 8 - spawn[0]) ** 2 + (cz * 16 + 8 - spawn[2]) ** 2, byDistance = (a, b) => dist(a) - dist(b);
+  // The columns that hold the work come first, their halos after: a cap cuts halo columns before it cuts a column an entity or a scheduled tick stands in.
+  const core = [...work.values()].sort(byDistance), halo = [...out.values()].filter(([cx, cz]) => !work.has(key(cx, cz))).sort(byDistance);
+  return [...core, ...halo].slice(0, MAX_COLUMNS);
 }
 
 // Everything the main thread sends the worker: the world recipe, the column list is read separately (stored edits per column).
