@@ -29,6 +29,7 @@ export function replayFireballs(r) {
   ew.difficulty = r.difficulty ?? 2;
   ew.worldRandom = new JavaRandom(r.seed);
   ew.isDaytime = () => false;
+  ew.brightnessLevel = () => 15; // the probe world's light brightness is 15 everywhere, below the floor too (a try under the floor weighs the same as one above for a zombie's wander)
   const rules = {};
   setGameRuleSource((name) => (name in rules ? rules[name] : true));
   const ents = [];
