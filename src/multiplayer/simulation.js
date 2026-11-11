@@ -159,6 +159,8 @@ export class DedicatedSimulation {
     // Block activations that don't open a GUI remain shared.
     const [x, y, z] = target.block, b = this.world.get(x, y, z);
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
+    // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
+    if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     const id = state.heldTool;
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
@@ -191,15 +193,40 @@ export class DedicatedSimulation {
     this.tileChanged(m.x, m.y, m.z);
     return true;
   }
-  // The MC|Beacon custom payload: the tile takes the picks only while a payment sits in its slot (`tile.payment`; one item is consumed), each pick
-  // checked against the pyramid level (applyBeaconPick). The level is refreshed here from the pyramid; the original recounts it every 80 ticks.
+  // ContainerBeacon as a server window: the dedicated server keeps one open beacon per player (`p.beaconWindow`), whose single payment slot is the
+  // tile's own (TileEntityBeacon is the IInventory, so the item stays in the tile when the window closes). The level is refreshed from the pyramid
+  // here; the original recounts it every 80 ticks. Players are creative, so a payment taken from the client's slot is not subtracted from an inventory.
+  openBeacon(p, x, y, z) {
+    const tile = this.tileEntities.beacons.ensure(x, y, z), w = this.world;
+    tile.levels = pyramidLevel((cx, cy, cz) => w.get(cx, cy, cz), (cx, cy, cz) => canSeeSky(w, cx, cy, cz), x, y, z);
+    p.beaconWindow = [x, y, z]; p.openBeacon = [x, y, z];
+    return true;
+  }
+  // ContainerBeacon.canInteractWith: the block must remain and the player be within 8 blocks of its centre.
+  beaconWindowOf(id) {
+    const p = this.players.get(id), win = p?.beaconWindow;
+    if (!win) return null;
+    const [x, y, z] = win;
+    if (this.world.get(x, y, z) !== BEACON || (p.position.x - x - .5) ** 2 + (p.position.y - y - .5) ** 2 + (p.position.z - z - .5) ** 2 > 64) { p.beaconWindow = null; return null; }
+    return this.tileEntities.beacons.ensure(x, y, z);
+  }
+  // The payment slot of the open window (a C0E click on slot 0): only an iron ingot, gold ingot, diamond or emerald fits, one at a time (zy.a).
+  setBeaconPayment(id, m) {
+    const tile = this.beaconWindowOf(id), item = m?.item;
+    if (!tile) return false;
+    if (item === null) { tile.payment = null; return true; }
+    if (!item || !Number.isInteger(item.id) || !isPaymentItem(item.id)) return false;
+    tile.payment = { id: item.id, count: 1, damage: Number.isInteger(item.damage) ? item.damage : 0 };
+    return true;
+  }
+  // C0D close window.
+  closeWindow(id) { const p = this.players.get(id); if (p) p.beaconWindow = null; }
+  // The MC|Beacon custom payload (NetHandlerPlayServer): only while the player has a beacon window open at that cell and a payment sits in slot 0
+  // (one item is consumed); each pick is checked against the pyramid level (applyBeaconPick).
   chooseBeacon(id, m) {
-    if (!this.players.has(id) || ![m?.x, m?.y, m?.z, m?.primary, m?.secondary].every(Number.isInteger) || this.world.get(m.x, m.y, m.z) !== BEACON) return false;
-    const tile = this.tileEntities.beacons.ensure(m.x, m.y, m.z), w = this.world;
-    tile.levels = pyramidLevel((x, y, z) => w.get(x, y, z), (x, y, z) => canSeeSky(w, x, y, z), m.x, m.y, m.z);
-    // The dedicated server has no container windows: the held payment item stands in for the beacon slot (players are creative, so nothing is spent).
-    const held = this.players.get(id).survival.held;
-    if (!tile.payment && held && isPaymentItem(held.id)) tile.payment = { id: held.id, count: 1, damage: held.damage ?? 0 };
+    if (![m?.x, m?.y, m?.z, m?.primary, m?.secondary].every(Number.isInteger)) return false;
+    const tile = this.beaconWindowOf(id), win = this.players.get(id)?.beaconWindow;
+    if (!tile || win[0] !== m.x || win[1] !== m.y || win[2] !== m.z) return false;
     if (!applyBeaconPick(tile, m.primary, m.secondary)) return false;
     this.tileChanged(m.x, m.y, m.z);
     return true;

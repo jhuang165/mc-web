@@ -183,6 +183,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
+        else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
+        else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'chat' && typeof m.text === 'string') {
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
@@ -210,8 +212,12 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.refusal && ws) send(ws, { type: 'chat', name: '', text: player.refusal });
         if (player.blocks && ws) send(ws, { type: 'blocks', changes: player.blocks });
         if (player.openSign && ws) send(ws, { type: 'signEditor', x: player.openSign[0], y: player.openSign[1], z: player.openSign[2] }); // S36 open sign editor
+        if (player.openBeacon && ws) { // S2D open window for ContainerBeacon, with the tile's levels, effects and payment slot
+          const t = simulation.tileEntities.beacons.get(...player.openBeacon);
+          send(ws, { type: 'beaconWindow', x: player.openBeacon[0], y: player.openBeacon[1], z: player.openBeacon[2], levels: t.levels, primary: t.primary, secondary: t.secondary, payment: t.payment ? { id: t.payment.id, damage: t.payment.damage ?? 0 } : null });
+        }
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
-        player.refusal = null; player.blocks = null; player.openSign = null; player.effectsOut = null;
+        player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null;
       }
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
