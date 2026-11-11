@@ -101,6 +101,7 @@ function system(actions, functions) {
     FLOWERS: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom: new JavaRandom(1), itemRand: new JavaRandom(2),
     serverAcceptsClick: () => true, // server-handlers.test.js covers the C08/C07/C02 gate
     applyHangingEdit: () => false, hanging: null, aimedHanging: null, spawnHangingDrops: () => {}, // paintings and frames: hanging.test.js
+    objectTracker: null, objectViews: (_tracker, list) => list, // main.js draws arrows at their client positions (object-tracker.js); no client entities here
     editActionLog, ITEMS, BOW, ARROW, copyStack, useBucket, milkCow, MILK_BUCKET, DRINK_TICKS, releaseBow, captureBucketTarget,
     ...actions,
     sounds: { unlock: () => log.push("unlock"), play: (name, options) => log.push(["play", name, options]) },
