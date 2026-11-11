@@ -63,7 +63,7 @@ const {stdout,stderr}=await exec('java',['-cp',cp,'EndermanWolfProbe',...(set===
 if(process.env.EW_ERR)await writeFile(process.env.EW_ERR,stderr);
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.EW_DUMP){await writeFile(process.env.EW_DUMP,JSON.stringify(records)+'\n');process.exit(0);}
-assert.ok(records.length>=(set==="b44"?52:set==='b43'?17:55),'records');
+assert.ok(records.length>=(set==="b44"?54:set==='b43'?17:55),'records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={ya:'EntityEnderman',wv:'EntityWolf',tg:'EntityTameable',vr:'EntityAITargetNonTamed',vs:'EntityAIOwnerHurtByTarget',vt:'EntityAIOwnerHurtTarget',vn:'EntityAIHurtByTarget',vu:'EntityAITarget',mw:'EntityPlayerMP',ahb:'World',...(set==='b44'?{wf:'EntityAnimal',rx:'EntityAgeable',wh:'EntityCow',wm:'EntityMooshroom',wo:'EntityPig',wi:'EntityHorse',wn:'EntityOcelot',wt:'EntityIronGolem',wr:'EntitySnowman',yp:'EntityWitch',xz:'EntityCreeper',ua:'EntityAIMate',vk:'EntityAITempt',uh:'EntityAIFollowParent',vc:'EntityAIWander',un:'EntityAIWatchClosest',vb:'EntityAILookIdle',ud:'EntityAIEatGrass',tw:'EntityAIAvoidEntity',vg:'EntityAIRunAroundLikeCrazy',uw:'EntityAIOcelotSit',uz:'EntityAIPanic'}:{})};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
