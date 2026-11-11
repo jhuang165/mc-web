@@ -431,6 +431,20 @@ let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, 
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
+  // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
+  objectTracker.hooks.sound = (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } });
+  objectTracker.hooks.clientTargets = () => {
+    const out = [];
+    for (const [live, en] of mobs?.tracker?.entries ?? []) {
+      const c = en.client;
+      if (!c.present || !(live.health > 0)) continue;
+      const [w, h] = mobs.size(live);
+      out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
+    }
+    out.push({ ref: "player", box: [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2], immune: survival.creative });
+    return out;
+  };
+  objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;
   if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; }
 }

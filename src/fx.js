@@ -436,10 +436,11 @@ const D02 = 0.20000000298023224;
 // Entity.handleWaterMovement (sa.N), on the first tick in water (not the entity's first
 // update): the splash sound's volume and pitch, then 1 + width * 20 "bubble" (sinking by
 // up to 0.2) and as many "splash" at the box floor's next block, +-width around it.
-export function enterWater(fx, e, rand) {
+export function enterWater(fx, e, rand, onSound = null) {
   let volume = f(f(Math.sqrt(e.mx * e.mx * D02 + e.my * e.my + e.mz * e.mz * D02)) * f(0.2));
   if (volume > 1) volume = 1;
   const pitch = f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.4)));
+  onSound?.(volume, pitch); // Entity.handleWaterMovement plays the splash before the particles
   const w = f(e.width), top = f(Math.floor(e.minY) + 1), n = f(1 + f(w * 20));
   for (const name of ["bubble", "splash"])
     for (let i = 0; i < n; i++) {

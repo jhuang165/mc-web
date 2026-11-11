@@ -77,6 +77,7 @@ public class TrackerItemsProbe {
       c = spawn(p);
       if (clientSpawned != null) clientSpawned.accept(c);
       c.d(p instanceof fw ? ((fw) p).c() : ((fx) p).c()); // Entity.setEntityId: the client entity has the server's id (the orb's homing check uses id % 100)
+      if (spawnedPacket != null) spawnedPacket.accept(c, p); // batch 45: the arrow's shooter lookup (bjb.a(fw) after addEntityToWorld)
       MobMoveProbe.field(sa.class, "bZ").setInt(c, p instanceof fw ? ((fw) p).d() : ((fx) p).d());
       MobMoveProbe.field(sa.class, "ca").setInt(c, p instanceof fw ? ((fw) p).e() : ((fx) p).e());
       MobMoveProbe.field(sa.class, "cb").setInt(c, p instanceof fw ? ((fw) p).f() : ((fx) p).f());
@@ -216,6 +217,7 @@ public class TrackerItemsProbe {
   }
   static boolean pendingDestroy;
   static Class<?> clientWorldClass = CW2.class; // batch 44: a client world double that records spawnParticle and makeFireworks
+  static java.util.function.BiConsumer<sa, Object> spawnedPacket; // batch 45: runs after the client entity has its id
   static java.util.function.Consumer<sa> clientSpawned; // batch 44: runs right after the client entity is built (reseeds Entity.rand)
   static java.util.function.Supplier<String> tickHook; // batch 44: one entry per client tick (the particles of the tick)
   static List<String> tickLog = new ArrayList<>();

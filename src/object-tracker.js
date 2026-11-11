@@ -13,7 +13,8 @@
 // expires, a client snowball flies on through the block its server twin died in until the destroy packet arrives.
 // Batch 44 (tools/probes/TrackerHitsProbe.java, public/research/tracker-hits-reference.json): the client copies emit their own particles (impacts of
 // thrown entities, the crit trail, bubbles and water splash of arrows and hooks, rocket sparks, S1A 17 -> makeFireworks) through `particle` and `events`.
-// Not modelled: the client's own entity hits (arrows, thrown entities and hooks against client mobs: needs the client mob boxes of entity-tracker.js),
+// Batch 45: arrows and hooks search the client world's entities (`hooks.clientTargets`); attackEntityFrom answers false there, so an arrow ricochets and a hook never attaches.
+// Not modelled of the client's own entity hits: non-living collidables (boats, carts, hanging) and dragon parts as targets, a burning arrow's setFire(5) on a client copy,
 // the chunk send queue, and a client world's lava hop random draws.
 import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-tracker.js";
 import { toOriginal, fromOriginal } from "./block-registry.js";
@@ -232,12 +233,12 @@ export class ObjectClient extends ClientEntity {
     } else if (spec.arrow) {
       s.x = this.x; s.y = this.y; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.yaw = this.yaw; s.pitch = this.pitch; s.dead = false;
       s.crit = ((this.meta.get(16) ?? 0) & 1) === 1; // EntityArrow.getIsCritical reads the data watcher (S1C), not the shooter's state
-      t.sims.arrows.step(world, s, {}); t.sims.arrows.events.length = 0;
+      t.sims.arrows.step(world, s, t.clientHitContext(s, this)); t.sims.arrows.events.length = 0;
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch;
       if (s.dead) this.present = false;
     } else if (spec.thrown) {
       s.x = this.x; s.y = this.y; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.yaw = this.yaw; s.pitch = this.pitch; s.dead = false;
-      t.sims.balls.step(world, s, [], () => {}); t.sims.balls.events.length = 0;
+      t.sims.balls.step(world, s, [], () => {}); t.sims.balls.events.length = 0; // EntityThrowable.onUpdate searches for entities only under !isRemote: no targets
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch;
       if (s.dead) this.present = false;
     } else if (spec.eye) {
@@ -249,6 +250,7 @@ export class ObjectClient extends ClientEntity {
       const h = f(ITEM_W / 2);
       Object.assign(s, { x: this.x, y: this.y, z: this.z, mx: this.vx, my: this.vy, mz: this.vz, yaw: this.yaw, pitch: this.pitch, box: [this.x - h, this.y, this.z - h, this.x + h, this.y + ITEM_W, this.z + h], onGround: this.onGround });
       const out = tickRocket(s, world, s.rand, { remote: true, server: false });
+      if (out.launch) t.sound("fireworks.launch", s.x, s.y, s.z, 3, 1); // playSoundAtEntity, not under !isRemote: the client copy plays it too
       if (out.spark) t.particle("fireworksSpark", ...out.spark); // EntityFireworkRocket.onUpdate: the client's trail, from the client's own rand
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch; this.onGround = s.onGround;
     } else if (spec.hook) {
@@ -281,16 +283,35 @@ export class ObjectTracker extends MobTracker {
     // snowballpoof of an impact go to the thrown simulator's effect renderer. `events` collects what a status packet made the client do.
     this.log = null; this.hooks = {}; this.events = [];
     const spawn = (name, ...a) => this.particle(name, ...a);
-    balls.sink = spawn; balls.spawner = { spawn }; arrows.fx = { spawn };
+    balls.sink = spawn; balls.soundSink = arrows.soundSink = (...a) => this.sound(...a); balls.spawner = { spawn }; arrows.fx = { spawn };
   }
   particle(name, x, y, z, vx, vy, vz) {
     this.log?.push([name, x, y, z, vx, vy, vz]);
     if (name === "snowballpoof") this.sims.balls.poof(x, y, z);
     else this.hooks.particle?.(name, x, y, z, vx, vy, vz);
   }
+  // The client world's playSoundAtEntity (RenderGlobal.playSound): every call is logged like the particles and handed to `hooks.sound(name, x, y, z, volume, pitch)`.
+  sound(name, x, y, z, volume, pitch) {
+    this.log?.push(["sound:" + name, x, y, z, volume, pitch, 0]);
+    this.hooks.sound?.(name, x, y, z, volume, pitch);
+  }
+  // The client world's collidable entities near a client copy: `hooks.clientTargets()` -> [{ ref, box, immune }] (main.js: the client mob copies and the
+  // client player; a creative player is immune). Only EntityArrow and EntityFishHook search them (EntityThrowable's search is under !isRemote).
+  targets() { return this.hooks.clientTargets?.() ?? []; }
+  // attackEntityFrom on a client-world entity: World.isRemote makes it return false (executed: the logged call answers 0). The player's own call is not logged.
+  attack(ref, damage) {
+    if (ref !== "player") this.log?.push(["call:attackEntityFrom:" + ref.type, ref.x, ref.y, ref.z, damage, 0, 0]);
+    this.hooks.attack?.(ref, damage);
+    return false;
+  }
+  // the ctx of Arrows.step for a client copy: its shooter is the live arrow's (EntityArrow's S0E data id resolves to it), skipped for 5 ticks
+  clientHitContext(s, client) {
+    s.shooter = client?.shooterLive === undefined ? null : this.hooks.clientOf?.(client.shooterLive) ?? null;
+    return { remote: true, targets: this.targets(), attack: (ref, dmg) => this.attack(ref, dmg) };
+  }
   drainEvents() { const e = this.events; this.events = []; return e; }
   // the env of a client fish hook: no angler, no entities, no fish timers (FishHook.tick's remote branch)
-  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, canSeeSky: () => false, sound() {}, particle() {}, fx: { spawn: (...a) => this.particle(...a) }, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
+  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, entities: (area) => this.targets().filter((t) => t.box[3] > area[0] && t.box[0] < area[3] && t.box[4] > area[1] && t.box[1] < area[4] && t.box[5] > area[2] && t.box[2] < area[5]).map((t) => ({ ...t, angler: t.ref === "player" })), hitEntity: (ref) => this.attack(ref, 0), canSeeSky: () => false, sound: (name, v, p, at) => this.sound(name, at.x, at.y, at.z, v, p), particle() {}, fx: { spawn: (...a) => this.particle(...a) }, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
   // the simulator state a client entity starts with
   newSim(c) {
     const k = c.kind, s = this.sims;
@@ -331,7 +352,9 @@ export class ObjectTracker extends MobTracker {
     const object = spec.orb ? { orb: true, value: e.value } : { kind, data: spec.data(p), objectType: spec.type };
     const dirty = kind === "item" || (kind === "arrow" && p.crit) || (kind === "firework" && !!p.stack?.fireworks); // updateObject calls in the entity's constructor
     const entry = new ObjectEntry(p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object }, this.view, new Watcher(metaValues(kind, p), dirty));
-    return { entry, client: new ObjectClient(kind, this), health: p.health, wasGround: false };
+    const client = new ObjectClient(kind, this);
+    client.shooterLive = e.shooter; // the arrow's shooter, for the client copy's 5-tick skip
+    return { entry, client, health: p.health, wasGround: false };
   }
   observe(e, en) {
     const p = this.read(this.kinds.get(e), e, en.entry.e);

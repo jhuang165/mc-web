@@ -148,8 +148,7 @@ export class FishHook {
     const wasWater = this.water;
     this.water = wet.wet;
     if (wet.wet && wasWater === false) {
-      const sp = enterWater(env.fx ?? null, { x: this.x, z: this.z, minY: this.bb[1], width: WIDTH, mx: this.vx, my: this.vy, mz: this.vz }, this.rand);
-      if (!env.remote) env.sound?.('game.neutral.swim.splash', sp.volume, sp.pitch);
+      enterWater(env.fx ?? null, { x: this.x, z: this.z, minY: this.bb[1], width: WIDTH, mx: this.vx, my: this.vy, mz: this.vz }, this.rand, (volume, pitch) => env.sound?.('game.neutral.swim.splash', volume, pitch, this)); // Entity.playSound: client copies play it too (executed: tracker-hits-reference.json)
     }
     this.vx += wet.push[0]; this.vy += wet.push[1]; this.vz += wet.push[2];
   }
@@ -204,7 +203,7 @@ export class FishHook {
     ];
     let target = null, d0 = 0;
     const grow = f(0.3);
-    for (const e of (env.remote ? [] : env.entities?.(area) ?? [])) {
+    for (const e of env.entities?.(area) ?? []) { // not gated by isRemote: a client's hook searches the client world's entity list too
       if (e.angler && this.ticksInAir < 5) continue;
       const b = e.box, r = intercept([b[0] - grow, b[1] - grow, b[2] - grow, b[3] + grow, b[4] + grow, b[5] + grow], start, end);
       if (!r) continue;
@@ -212,7 +211,7 @@ export class FishHook {
       if (d < d0 || d0 === 0) { target = e; d0 = d; }
     }
     if (target) {
-      if (env.hitEntity?.(target.ref) ?? true) this.hooked = target.ref;
+      if (env.remote ? (env.hitEntity?.(target.ref), false) : (env.hitEntity?.(target.ref) ?? true)) this.hooked = target.ref;
     } else if (block) this.inGround = true;
 
     if (!this.inGround) this.fly(env);
@@ -224,12 +223,11 @@ export class FishHook {
     const from = { x: this.x, y: this.y, z: this.z };
     moveEntity(world, this, WIDTH, WIDTH, this.vx, this.vy, this.vz, 0);
     // Entity.canTriggerWalking is true for the hook: the step counter of moveEntity plays the swim sound while it is in water, which draws two floats
-    // of its Entity.rand (client and server alike; the executed client hook shows them). The block step sound of func_145780_a is not played here.
+    // of its Entity.rand (client and server alike; the executed client hook shows them).
     this.stepEntity ??= { type: 'fishHook', stepDistance: 0, nextStep: 1, inWater: false };
     const st = this.stepEntity;
     Object.assign(st, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, inWater: this.water === true });
-    for (const ev of mobStepEvents(world, st, from, { random: () => rand.nextFloat() }))
-      if (!env.remote && ev.sound === 'game.neutral.swim') env.sound?.(ev.sound, ev.volume, ev.pitch);
+    for (const ev of mobStepEvents(world, st, from, { random: () => rand.nextFloat() })) env.sound?.(ev.sound, ev.volume, ev.pitch, this); // the swim sound and func_145780_a's step sound, client and server alike
     const flat = f(Math.sqrt(this.vx * this.vx + this.vz * this.vz));
     this.yaw = f((Math.atan2(this.vx, this.vz) * 180) / PI_D);
     this.pitch = f((Math.atan2(this.vy, flat) * 180) / PI_D);

@@ -405,8 +405,10 @@ export class Projectiles {
     b.water = inWater(world, b.x, b.y, b.z);
     // Entity.handleWaterMovement: the first tick in water (not the first update) splashes.
     if (b.water && wasWater === false) {
-      const s = enterWater(this.spawner, { x: b.x, z: b.z, minY: b.y, width: f(0.25), mx: b.mx, my: b.my, mz: b.mz }, b.rand);
-      this.events.push({ sound: "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: b.x, y: b.y, z: b.z } });
+      enterWater(this.spawner, { x: b.x, z: b.z, minY: b.y, width: f(0.25), mx: b.mx, my: b.my, mz: b.mz }, b.rand, (volume, pitch) => {
+        if (this.soundSink) this.soundSink("game.neutral.swim.splash", b.x, b.y, b.z, volume, pitch); // a client copy
+        else this.events.push({ sound: "game.neutral.swim.splash", volume, pitch, position: { x: b.x, y: b.y, z: b.z } });
+      });
     }
     if (b.y < -64) b.dead = true;
     b.ticks++;
