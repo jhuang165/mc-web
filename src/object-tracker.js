@@ -218,3 +218,19 @@ export class ObjectTracker extends MobTracker {
   }
   clientEntity(e) { const en = this.entries.get(e); return en?.client.present ? en.client : null; }
 }
+
+// What a renderer draws: the live entity with its position replaced by the client entity's (x/y/z and the previous tick, in the live
+// entity's own y convention). Without a client entity (not yet spawned on the client, or out of range) it is the live entity itself.
+// The view object of one entity is stable (renderers key their meshes by it) and reads every other field through the live entity.
+const VIEWS = new WeakMap();
+export function objectView(tracker, e, kind) {
+  const c = tracker.clientEntity(e);
+  if (!c) return e;
+  const off = OBJECT_KINDS[kind].yOff;
+  let v = VIEWS.get(e);
+  if (!v) VIEWS.set(e, (v = Object.create(e)));
+  v.x = c.x; v.y = c.y - off; v.z = c.z; v.px = c.px; v.py = c.py - off; v.pz = c.pz;
+  if (c.sim && (kind === "arrow" || OBJECT_KINDS[kind].thrown)) { v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.sim.prevYaw ?? c.yaw; v.prevPitch = c.sim.prevPitch ?? c.pitch; }
+  return v;
+}
+export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));

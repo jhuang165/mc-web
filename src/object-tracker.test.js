@@ -1,6 +1,7 @@
 // Batch 42 tracker for items, experience orbs, arrows, thrown projectiles, falling blocks and primed TNT (object-tracker.js), replayed against the
 // executed 1.7.10 classes (tools/probes/TrackerItemsProbe.java, public/research/tracker-items-reference.json): the unchanged EntityTrackerEntry
 // tracking a real server entity, and the real client entity made from its packets and ticked with its own onUpdate.
+import { objectView } from "./object-tracker.js";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
@@ -105,4 +106,17 @@ test("mutation check: a destroy applied in the tick it is sent (not one client t
   assert.equal(rec.client[gone + 1][0], 0);
   const bad = replay("snowball", (tr) => { const flush = tr.flush.bind(tr); tr.flush = (en) => { for (const p of en.entry.packets) if (p.type === "destroy") p.after = 0; flush(en); }; });
   assert.ok(bad.length > 0);
+});
+
+test("objectView draws at the client position in the entity's own y convention and keeps its identity", () => {
+  const e = { x: 9, y: 9, z: 9, px: 9, py: 9, pz: 9, stack: { id: 1 } };
+  const c = { x: 1, y: 2.125, z: 3, px: 0.5, py: 2.125, pz: 2.5 };
+  const tracker = { clientEntity: (x) => (x === e ? c : null) };
+  const v = objectView(tracker, e, "item");
+  assert.deepEqual([v.x, v.y, v.z, v.px, v.py, v.pz], [1, 2, 3, 0.5, 2, 2.5]);
+  assert.equal(v.stack, e.stack);
+  c.x = 4;
+  assert.equal(objectView(tracker, e, "item"), v);
+  assert.equal(v.x, 4);
+  assert.equal(objectView({ clientEntity: () => null }, e, "item"), e);
 });
