@@ -5,7 +5,9 @@ import { ITEMS } from "./survival.js";
 import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, ANVIL } from "./world.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
-import { GATE_ITEM_BOXES } from './render-shapes.js';
+import { GATE_ITEM_BOXES, ITEM_BOXES, itemBoxUv, anvilUv } from './render-shapes.js';
+import { FENCE_ITEM_BOXES } from './fences.js';
+import { toOriginal } from './block-registry.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
@@ -28,20 +30,37 @@ const BLOCK_FACES=[
   {v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]]},{v:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]},
   {v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]},{v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]]},
 ];
-function anvilItemGeometry(meta){return boxItemGeometry(anvilModelBoxes(meta),(fi)=>blockTile(ANVIL,fi,false,meta));}
+// RenderBlocks.renderBlockAsItem for render type 35 (executed, item-render-reference.json): always the facing 0 boxes whatever the stack's damage (0-2), every face on the
+// anvil_base tile except the top of the last box (the damage's anvil_top_damaged_n), each face's texture turned as facing 0 of the world model (anvilUv).
+function anvilItemGeometry(damage,scale=1){const meta=(damage&3)<<2;return boxItemGeometry(anvilModelBoxes(0),(fi,k)=>k===3?blockTile(ANVIL,fi,false,meta):blockTile(ANVIL,fi===2?0:fi,false,0),scale,(fi,p,box)=>anvilUv(0,fi,p,box));}
+// The box list of a block item that the unchanged renderBlockAsItem draws as boxes instead of a unit cube (null: a cube or a sprite item): stairs, the gate, fences and the
+// ITEM_BOXES blocks, found through the original id of a port block id (< 256).
+export function itemModelBoxes(id){
+ if(STAIRS[id])return STAIR_ITEM_BOXES;
+ if(isGateItem(id))return GATE_ITEM_BOXES;
+ if(!(id>0&&id<256))return null;
+ const o=toOriginal(id,0)?.[0];
+ return ITEM_BOXES[o]??(o===85||o===113?FENCE_ITEM_BOXES:null);
+}
+// The geometry a block item takes in a hand, a dropped item (`scale` .25) or an inventory model, or null when it is a plain cube.
+export function blockItemGeometry(id,damage=0,scale=1){
+ if(id===ANVIL)return anvilItemGeometry(damage,scale);
+ const boxes=itemModelBoxes(id);
+ return boxes?boxItemGeometry(boxes,(fi)=>blockTile(id,fi,false,damage),scale):null;
+}
 // RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
 export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
 // RenderBlocks.renderBlockAsItem for render type 21 (GATE_ITEM_BOXES), at `scale` of a block. `id` is the fence gate item (1167) or block (167).
 export function gateItemGeometry(id=1167,scale=1){return boxItemGeometry(GATE_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
 export const isGateItem=(id)=>id===1167||id===167;
-export function boxItemGeometry(boxes,tileOf,scale=1){
+// Every box with its six faces, the texture cropped to the face's extent as renderFaceXPos... do (itemBoxUv, executed in item-render-reference.json); `uvOf(fi,p,box)` replaces it (the anvil's turned faces).
+export function boxItemGeometry(boxes,tileOf,scale=1,uvOf=itemBoxUv){
  const positions=[],uvs=[],indices=[];
- for(const [x0,y0,z0,x1,y1,z1] of boxes)for(let fi=0;fi<BLOCK_FACES.length;fi++){
-  const face=BLOCK_FACES[fi],tile=tileOf(fi),r=tileRect(tile),base=positions.length/3;
-  const rect=[[r.u0,r.v0],[r.u1,r.v0],[r.u1,r.v1],[r.u0,r.v1]];
-  for(let i=0;i<4;i++){const v=face.v[i];positions.push(((v[0]?x1:x0)-.5)*scale,((v[1]?y1:y0)-.5)*scale,((v[2]?z1:z0)-.5)*scale);uvs.push(...rect[i]);}
+ for(const [bk,box] of boxes.entries()){const [x0,y0,z0,x1,y1,z1]=box;for(let fi=0;fi<BLOCK_FACES.length;fi++){
+  const face=BLOCK_FACES[fi],tile=tileOf(fi,bk),r=tileRect(tile),base=positions.length/3;
+  for(let i=0;i<4;i++){const v=face.v[i],p=[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0],[s,t]=uvOf(fi,p,box);positions.push((p[0]-.5)*scale,(p[1]-.5)*scale,(p[2]-.5)*scale);uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}
   indices.push(base,base+1,base+2,base,base+2,base+3);
- }
+ }}
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }
 // RenderItem.renderEffect / ItemRenderer glint (ItemStack.hasEffect): the item's geometry again, with
@@ -258,8 +277,8 @@ export class FirstPerson {
     if (chestUrl) {
       mesh = chestItemModel(this.material({ map: pixelTexture(chestUrl) }));
       mesh.rotation.y = Math.PI / 2;
-    } else if(id===ANVIL||STAIRS[id]||isGateItem(id)){
-      mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):isGateItem(id)?gateItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
+    } else if(blockItemGeometry(id,meta)){
+      mesh=new THREE.Mesh(blockItemGeometry(id,meta),this.material({map:this.atlas,alphaTest:.1}));
       mesh.rotation.y=Math.PI/2;
     } else if (url) {
       mesh = new THREE.Mesh(

@@ -4,9 +4,8 @@
 // one to five copies by stack size.
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
-import { itemTexture, pixelTexture, glintMesh, stairItemGeometry, gateItemGeometry, isGateItem } from "./first-person.js";
+import { itemTexture, pixelTexture, glintMesh, blockItemGeometry } from "./first-person.js";
 import { itemFrameTag } from "./item-animation.js";
-import { STAIRS } from "./stairs.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEMS } from "./survival.js";
 import { spriteGeometry } from "./sprite-geometry.js";
@@ -31,8 +30,7 @@ export class DropRenderer {
   }
   cube(id, damage = 0) {
     const key = id + ":" + damage;
-    if (!this.cubes.has(key) && STAIRS[id]) this.cubes.set(key, stairItemGeometry(id, 0.25));
-    if (!this.cubes.has(key) && isGateItem(id)) this.cubes.set(key, gateItemGeometry(id, 0.25));
+    if (!this.cubes.has(key)) { const boxes = blockItemGeometry(id, damage, 0.25); if (boxes) this.cubes.set(key, boxes); } // renderBlockAsItem boxes (stairs, gate, anvil, slabs, plates, ...)
     if (!this.cubes.has(key)) {
       const g = new THREE.BoxGeometry(0.25, 0.25, 0.25), uv = g.attributes.uv;
       for (let f = 0; f < 6; f++) {

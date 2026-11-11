@@ -9,7 +9,7 @@ import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARR
 import {FENCE_ITEM_BOXES} from './fences.js';
 import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
-import {GATE_ITEM_BOXES} from './render-shapes.js';
+import {GATE_ITEM_BOXES,BEACON_ITEM_BOXES} from './render-shapes.js';
 import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
 import {STEM_CAKE_TILES} from './stems-cake.js';
 import {WART_TILES,wartStage} from './nether-wart.js';
@@ -302,7 +302,7 @@ function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||i
  // RenderBlocks.renderBlockAsItem (type 34): the inner boxes first, then the glass shell over them.
  function beaconIcon(ctx){
   const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y];
-  for(const [m,[x0,y0,z0,x1,y1,z1]] of [[1,[.125,.00625,.125,.875,.1875,.875]],[2,[.1875,.1875,.1875,.8125,.875,.8125]],[0,[0,0,0,1,1,1]]]){
+  for(const [m,[x0,y0,z0,x1,y1,z1]] of BEACON_ITEM_BOXES.map((box,i)=>[[1,2,0][i],box])){ // executed boxes: the base starts at y 0 (item-render-reference.json)
    const paint=(face,points,shade=0)=>{const t=blockTile(173,face,false,m),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16,[a,b,c,d]=points;
     ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
     if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};

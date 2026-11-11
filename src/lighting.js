@@ -252,11 +252,15 @@ export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), fl
 export const pack = (sky, block) => (sky << 20) | (block << 4);
 // World.getLightBrightnessForSkyBlocks with the block's own lightValue, for one cell of `vol` (skyAt, blockAt, emission, world.get).
 export function cellPacked(vol, x, y, z, emissive = true) {
-  const b = vol.world.get(x, y, z);
+  const b = vol.world.get(x, y, z), top = (vol.world.height ?? HEIGHT) - 1;
+  // World.getSkyBlockTypeBrightness (ahb.a(ahn, III), executed in render-types-2-pos-reference.json): y below 0 becomes 0 before the block test, y of 256 and
+  // above answers the default (skyAt/blockAt); the use-neighbour-brightness cells read their neighbours through World.getSavedLightValue (ahb.b), which clamps
+  // y to 0..255, so the cell above a block at y 255 is y 255 itself (not the open-sky 15 of "outside").
+  const yc = Math.max(0, y), up = Math.min(top, yc + 1);
   let sky, block;
-  if (useNeighborBrightness(b)) {
-    sky = Math.max(vol.skyAt(x, y + 1, z), vol.skyAt(x + 1, y, z), vol.skyAt(x - 1, y, z), vol.skyAt(x, y, z + 1), vol.skyAt(x, y, z - 1));
-    block = Math.max(vol.blockAt(x, y + 1, z), vol.blockAt(x + 1, y, z), vol.blockAt(x - 1, y, z), vol.blockAt(x, y, z + 1), vol.blockAt(x, y, z - 1));
+  if (y <= top && useNeighborBrightness(y < 0 ? vol.world.get(x, yc, z) : b)) {
+    sky = Math.max(vol.skyAt(x, up, z), vol.skyAt(x + 1, yc, z), vol.skyAt(x - 1, yc, z), vol.skyAt(x, yc, z + 1), vol.skyAt(x, yc, z - 1));
+    block = Math.max(vol.blockAt(x, up, z), vol.blockAt(x + 1, yc, z), vol.blockAt(x - 1, yc, z), vol.blockAt(x, yc, z + 1), vol.blockAt(x, yc, z - 1));
   } else {
     sky = vol.skyAt(x, y, z);
     block = vol.blockAt(x, y, z);
