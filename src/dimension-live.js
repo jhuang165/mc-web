@@ -13,6 +13,7 @@ import { JavaRandom } from "./java-random.js";
 import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits, listBaseColumns, readBaseColumns, readChunkColumns, writeChunkColumns } from "./world-storage.js";
+import { placeAwayDeath } from "./away-death.js";
 import { stateColumns, awayPlan, MAX_AWAY_TICKS } from "./away-plan.js";
 import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
@@ -373,7 +374,7 @@ export class DimensionLive {
       if (!chunks.length) return;
       const records = await this.readColumns(root.id, list);
       const worker = this.makeAwayWorker(), ready = new Promise((resolve) => { worker.onmessage = ({ data }) => { if (data.type === "ready") resolve(true); }; worker.onerror = () => resolve(false); });
-      this.away = { rootId: root.id, ticks0: h.ticks(), tripMs: 0, chunks, records, columns: list, worker, ready, trace: { samples: [], states: [] }, lastTrace: -TRACE_EVERY, traceKey: null };
+      this.away = { rootId: root.id, ticks0: h.ticks(), wall0: Date.now(), tripMs: 0, chunks, records, columns: list, worker, ready, trace: { samples: [], states: [] }, lastTrace: -TRACE_EVERY, traceKey: null };
       this.traceAway(OVERWORLD, h.player?.() ?? {}, true); // the state he leaves with (away-commands.js shadow player)
     } catch (error) { console.warn("away run not prepared:", error); this.away = null; }
   }
@@ -402,10 +403,10 @@ export class DimensionLive {
     const a = this.away;
     this.away = null;
     if (!a || a.rootId !== root.id) { a?.worker?.terminate(); return null; }
-    const ticks = Math.min(MAX_AWAY_TICKS, (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50));
+    const rawTicks = (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50), ticks = Math.min(MAX_AWAY_TICKS, rawTicks);
     try {
       if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
-      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.()), chunks: a.chunks, records: a.records, tickBase: a.ticks0, trace: a.trace, idBase: this.host.entityIds?.next };
+      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.(), Date.now(), a.wall0, rawTicks), chunks: a.chunks, records: a.records, tickBase: a.ticks0, trace: a.trace, idBase: this.host.entityIds?.next };
       Object.assign(plan.player, this.host.awayPlayer?.() ?? {}); // the player's live state: the run's shadow player (away-commands.js)
       const msg = await new Promise((resolve) => {
         const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
@@ -433,6 +434,7 @@ export class DimensionLive {
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;
       if (r.world) Object.assign(root, r.world);
+      if (r.playerDeath) r.deathPlaced = placeAwayDeath(root, r.playerDeath); // batch 43: a shadow kill puts its drops in the dimension he died in; awayResult kills the live player
       this.host.awayResult?.(r, root);
       if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
       if (r.columns.length) await this.writeColumns(root.id, r.columns);

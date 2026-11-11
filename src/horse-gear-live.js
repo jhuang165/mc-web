@@ -61,6 +61,9 @@ export function installHorseGear(EntityWorld) {
   // Where a lead's other end is: the player's feet or the knot (block centre, EntityLeashKnot.setPosition(x + .5, y + .5, z + .5)).
   proto.leashHolder = function (e) {
     const l = e.leash;
+    // Away run (away-entities.js): the player is in another dimension. td.bL steps only when the holder's world is the mob's own (bytecode-read, batch 43), and sw.bL keeps a
+    // holder that is not dead, so the lead stays on and does nothing.
+    if (l?.holder === "player" && this.ai?.player?.absent) return { away: true, x: 0, y: 0, z: 0 };
     if (l?.holder === "player") { const p = this.ai?.player; return p && p.alive !== false ? { x: p.x, y: p.y, z: p.z, player: true } : null; }
     // Another mob holds (EntityLiving.func_110162_b with a living holder): found by UUID among this world's mobs; a dead or missing one holds nothing.
     if (l?.holder === "mob") { const m = this.leashHolderMob(l); return m ? { x: m.x, y: m.y, z: m.z, mob: m } : null; }
@@ -205,7 +208,7 @@ export function installHorseGear(EntityWorld) {
   // EntityLiving.updateLeashedState (sw.bL) then EntityCreature.func_142017_o (td.bL), once a tick (probe leash-reference.json `path`).
   proto.leashTick = function (e) {
     let st = leashStates.get(e);
-    if (e.leash && !st) { leashStates.set(e, (st = { task: null })); this.leashRestore(e); }
+    if (e.leash && !st) { leashStates.set(e, (st = { task: null })); if (!(e.leash.holder === "player" && this.ai?.player?.absent)) this.leashRestore(e); } // an away run's mob is already live: its holder (the player, in another world) is not looked up
     if (e.leash) {
       const h = this.leashHolder(e);
       // sw.bL: only a missing or dead holder frees the mob. A corpse in its 20-tick death animation keeps the lead (td.bL still runs) and the lead
@@ -214,6 +217,7 @@ export function installHorseGear(EntityWorld) {
     }
     if (!e.leash) { this.leashRelease(e); return; }
     const h = this.leashHolder(e);
+    if (h.away) return;
     setHomeArea(e, Math.trunc(h.x), Math.trunc(h.y), Math.trunc(h.z), G.LEASH_HOME_RADIUS);
     e.leashHome = true;
     const sitting = (e.type === "wolf" || e.type === "ocelot") && e.sitting === true;

@@ -32,12 +32,13 @@ import { isWet, canSeeSky } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
 import { EntityIds } from "./entity-ids.js";
+import { linkVehicleRiders } from "./vehicle-riders.js";
 
 // Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
 // A spawner cart only moves: MobSpawnerBaseLogic needs a player within 16 blocks, so nothing spawns with nobody there. The hopper cart
 // transfers through the run's Hoppers host. The command cart (6) needs the command interpreter and stays frozen as saved.
 const CART_TYPES = new Set([0, 1, 2, 3, 4, 5]); // 6 (command cart) joins when the run has a command host (away-commands.js)
-// Mobs the run leaves as saved: the dimension bosses, and anything riding, ridden, leashed or carrying the player.
+// Mobs the run leaves as saved: the dimension bosses (and any unit with a member that is outside the loaded rule or whose lead holder is missing; see simMob).
 const FROZEN_MOBS = new Set(["ender_dragon", "ender_crystal", "wither"]);
 const PLAYER_FAR = 1e9; // the stand-in position of the absent player (never read as a target: `absent` and not alive)
 const num = (v) => Number.isFinite(v);
@@ -48,28 +49,47 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // Entities update only where every chunk within 32 blocks is loaded (entityTicks, away-world.js); tile entities and block writes use `ticking`.
   const at = (r) => num(r?.x) && num(r?.z) && entityTicks(r.x, r.z);
   const split = (list) => { const inside = [], rest = []; for (const r of Array.isArray(list) ? list : []) (at(r) ? inside : rest).push(r); return { inside, rest }; };
-  const ridden = new Set(plan.ridden ?? []);
   const seed = Number(BigInt.asUintN(32, BigInt(plan.editSequence | 0) * 40503n + BigInt(plan.ticks | 0)));
   const rng = new JavaRandom(BigInt(seed) * 2654435761n + 11n);
   const random = () => rng.nextDouble();
 
   const drops = split(e.drops), orbs = split(e.xpOrbs), tnt = split(e.tnt);
-  const mobList = Array.isArray(e.mobs) ? e.mobs : [], mounts = new Set(mobList.map((m) => m?.riding).filter((r) => typeof r === "string"));
-  // A lead whose other end is a knot in a ticked column runs (horse-gear-live.js recreates the knot from the record and the fence check keeps it);
-  // a lead held by the player or another mob, or a lost lead, stays as saved.
-  const leashOk = (m) => !m.leash || (!m.leash.holder && !m.leash.lost && [m.leash.knot?.x, m.leash.knot?.y, m.leash.knot?.z].every(Number.isInteger) && entityTicks(m.leash.knot.x, m.leash.knot.z));
-  const simMob = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && !m.riding && !mounts.has(m.id) && leashOk(m) && !m.playerRides;
+  const mobList = Array.isArray(e.mobs) ? e.mobs : [];
+  const cartList = Array.isArray(e.minecarts?.carts) ? e.minecarts.carts : [], boatList = Array.isArray(e.boats) ? e.boats : [];
+  // Batch 43: riders, mounts and leashed mobs tick as natively. World.updateEntities ticks a mount through updateEntityWithOptionalForce and the mount then updates its rider
+  // (the rider's own list entry is skipped while it is mounted, bytecode-read), so a mounted pair is one unit: it runs when every member is in the 32-block rule and is
+  // left as saved otherwise. Units are the connected sets of the saved `riding` links (mob -> mob, mob -> "cart-N" or "boat-N"). The player who rode a mob or cart when he left
+  // is gone (his seat is empty natively), so `playerRides` and a cart's `rider: true` do not hold a unit back.
+  const unit = new Map(), root = (k) => { while (unit.get(k) !== k) { unit.set(k, unit.get(unit.get(k))); k = unit.get(k); } return k; };
+  const touch = (k) => { if (!unit.has(k)) unit.set(k, k); return k; };
+  const join = (a, b) => unit.set(root(touch(a)), root(touch(b)));
+  for (const m of mobList) if (m && typeof m.id === "string") { touch(m.id); if (typeof m.riding === "string") join(m.id, m.riding); }
+  const leashHolderOf = (m) => (m.leash?.holder === "mob" && typeof m.leash.holderUuid === "string" ? mobList.find((o) => o?.uuid === m.leash.holderUuid) : null);
+  for (const m of mobList) { const h = m && leashHolderOf(m); if (h && typeof m.id === "string" && typeof h.id === "string") join(m.id, h.id); }
+  const cartOk = (c) => at(c) && (CART_TYPES.has(c.type) || (c.type === 6 && runCommand)), boatOk = (b) => at(b);
+  // A lead to a knot runs when the knot's column ticks (horse-gear-live.js recreates the knot from the record and the fence check keeps it); a lead to the absent player
+  // stays on (td.bL steps only when the holder is in the mob's own world, bytecode-read; away-entities sets `mobs.ai.player.absent`); a lost lead stays as saved.
+  const leashOk = (m) => !m.leash || (!m.leash.lost && (m.leash.holder === "player" || (m.leash.holder === "mob" ? !!leashHolderOf(m) : [m.leash.knot?.x, m.leash.knot?.y, m.leash.knot?.z].every(Number.isInteger) && entityTicks(m.leash.knot.x, m.leash.knot.z))));
+  const mobOk = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && leashOk(m);
+  const bad = new Set(); // roots of units with a member that cannot run
+  for (const m of mobList) if (m && typeof m.id === "string" && !mobOk(m)) bad.add(root(m.id));
+  for (const m of mobList) if (m && typeof m.riding === "string" && /^(cart|boat)-/.test(m.riding)) {
+    const v = (m.riding.startsWith("cart") ? cartList.find((c) => `cart-${c.id}` === m.riding) : boatList.find((b) => `boat-${b.id}` === m.riding));
+    if (!v || !(m.riding.startsWith("cart") ? cartOk(v) : boatOk(v))) bad.add(root(m.id));
+  }
+  for (const m of mobList) if (m && typeof m.riding === "string" && !/^(cart|boat)-/.test(m.riding) && !mobList.some((o) => o?.id === m.riding)) bad.add(root(m.id)); // a mount the list does not hold
+  const simMob = (m) => !!m && (typeof m.id !== "string" || !bad.has(root(m.id))) && mobOk(m);
   const mobSplit = { inside: mobList.filter(simMob), rest: mobList.filter((m) => !simMob(m)) };
+  const simVehicle = (key, ok) => ok && !(unit.has(key) && bad.has(root(key)));
   const arrowSplit = split(e.arrows);
   const ballSplit = (() => { const inside = [], rest = []; for (const r of Array.isArray(e.projectiles) ? e.projectiles : []) (at(r) ? inside : rest).push(r); return { inside, rest }; })();
   const potionSplit = split(e.potions);
   const rocketList = Array.isArray(e.rockets?.rockets) ? e.rockets.rockets : [], rocketSplit = { inside: rocketList.filter(at), rest: rocketList.filter((r) => !at(r)) };
   const fireList = Array.isArray(e.fireballs) ? e.fireballs : [], fireIn = (r) => (r?.dimension ?? 0) === 0 && at(r);
-  const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => num(r?.tx) && num(r?.tz) && entityTicks(r.tx, r.tz);
+  const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => (num(r?.x) && num(r?.z) ? entityTicks(r.x, r.z) : num(r?.tx) && num(r?.tz) && entityTicks(r.tx, r.tz)); // the rule reads posX/posZ, which sit up to 0.5625 off the tile (EntityHanging.func_82330_g)
   const hangSplit = { inside: hangList.filter(hangAt), rest: hangList.filter((r) => !hangAt(r)) };
-  const cartList = Array.isArray(e.minecarts?.carts) ? e.minecarts.carts : [], boatList = Array.isArray(e.boats) ? e.boats : [];
-  const simCart = (c) => at(c) && (CART_TYPES.has(c.type) || (c.type === 6 && runCommand)) && !c.rider && !ridden.has(`cart-${c.id}`);
-  const simBoat = (b) => at(b) && !b.rider && !ridden.has(`boat-${b.id}`);
+  const simCart = (c) => simVehicle(`cart-${c.id}`, cartOk(c));
+  const simBoat = (b) => simVehicle(`boat-${b.id}`, boatOk(b));
   const carts = { inside: cartList.filter(simCart), rest: cartList.filter((c) => !simCart(c)) };
   const boatsSplit = { inside: boatList.filter(simBoat), rest: boatList.filter((b) => !simBoat(b)) };
 
@@ -94,6 +114,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
   const mobs = new EntityWorld(world, mobSplit.inside, random, ids);
   mobs.ai.player.absent = true;
+  linkVehicleRiders(mobs.entities, boats.carts, minecarts.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart (main.js does the same on load)
   if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
   let clock = Number.isFinite(plan.time) ? plan.time : 0;
   const subtracted = () => skylightSubtracted(celestialAngle(clock), weather.rainStrength(1), weather.weightedThunder(1));
@@ -241,7 +262,9 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       const r = portals.step(c, kind, { dim: 0, getId, riding, ridden: vehicle && !!(c.rider || c.passenger) });
       if (!r) continue;
       const d = entityDeparture(portals, kind, c, r, owner);
-      travellers.push({ kind, tick: tickNo, ...d });
+      // Live depart(): a mob that mounted the vehicle after the collision stays behind, unmounted (the copy is made from the vehicle's own NBT).
+      if (vehicle && c.passenger) { if (c.passenger.ridingEntity === c) c.passenger.ridingEntity = null; c.passenger = null; }
+      travellers.push({ kind, tick: tickNo, ...d, leashed: kind === "mob" && c.leash?.holder === "player" });
       (gone ??= new Set()).add(c);
     }
     if (gone) { const keep = list.filter((c) => !gone.has(c)); list.length = 0; list.push(...keep); }
