@@ -82,18 +82,27 @@ export function putTile(atlasLevels, atlasWidth, levels, x, y, size = 16) {
 // takes the first covered sample's texel with its alpha scaled by the covered fraction (4 x 4 samples, the canvas's edge anti-aliasing).
 // `shade` is the black source-atop overlay (colour x (1 - shade), alpha unchanged); `drop` the rows cut off the top of the tile.
 // Layers are painted in order with straight-alpha source-over, so a pixel covered by one layer is that texel's bytes exactly.
+// A layer with `gl: true` is rasterised as the GL does a polygon: no anti-aliasing (the frame buffer has no multisampling), a pixel belongs to the
+// face exactly when its centre is inside the face's parallelogram (the tile rectangle under the matrix), ties on an edge going to the top-left
+// owner, the texel is the one under that centre (GL_NEAREST) and the alpha is the texel's, never scaled by a covered fraction. That is how
+// renderItemIntoGUI's cube reaches the screen (icon-cube.js); layers without it keep the canvas 4 x 4 coverage the flat icons use.
 export function rasterIcon(width, height, layers, size = 16) {
   const out = new Uint8Array(width * height * 4), SUB = 4;
-  for (const { tile, matrix: [a, b, c, d, e, f0], shade = 0, drop = 0 } of layers) {
+  for (const { tile, matrix: [a, b, c, d, e, f0], shade = 0, drop = 0, gl = false } of layers) {
     const det = a * d - b * c, mul = 1 - shade;
     const local = (X, Y) => [((X - e) * d - (Y - f0) * c) / det, (a * (Y - f0) - b * (X - e)) / det];
     const texel = (lx, ly) => (lx >= 0 && lx < size && ly >= drop && ly < size ? Math.min(size - 1, Math.floor(ly - drop)) * size + Math.min(size - 1, Math.floor(lx)) : -1);
+    const inside = gl ? glFace([a, b, c, d, e, f0], size, drop) : null;
     for (let py = 0; py < height; py++) for (let px = 0; px < width; px++) {
       const [cx, cy] = local(px + 0.5, py + 0.5);
-      let first = texel(cx, cy), covered = 0;
-      for (let j = 0; j < SUB; j++) for (let i = 0; i < SUB; i++) {
-        const [lx, ly] = local(px + (i + 0.5) / SUB, py + (j + 0.5) / SUB), t = texel(lx, ly);
-        if (t >= 0) { covered++; if (first < 0) first = t; }
+      let first, covered = 0;
+      if (gl) { if (!inside(px + 0.5, py + 0.5)) continue; first = texel(Math.min(cx, size - 1e-9), cy); covered = SUB * SUB; if (first < 0) first = texel(Math.max(0, Math.min(size - 1e-9, cx)), Math.max(drop, Math.min(size - 1e-9, cy))); }
+      else {
+        first = texel(cx, cy);
+        for (let j = 0; j < SUB; j++) for (let i = 0; i < SUB; i++) {
+          const [lx, ly] = local(px + (i + 0.5) / SUB, py + (j + 0.5) / SUB), t = texel(lx, ly);
+          if (t >= 0) { covered++; if (first < 0) first = t; }
+        }
       }
       if (first < 0) continue;
       const o = (py * width + px) * 4, s = first * 4, sa = (tile[s + 3] / 255) * (covered / (SUB * SUB));
@@ -107,6 +116,19 @@ export function rasterIcon(width, height, layers, size = 16) {
     }
   }
   return out;
+}
+
+// The GL coverage test of one face: the tile rectangle (0, drop)-(size, size) under the canvas matrix is a convex quad; a point is inside when
+// it is on the inner side of all four edges, and a point exactly on an edge counts only for a top or left edge (the usual top-left rule).
+// y runs down the screen, as in the GUI projection, so an edge is "top" when it is horizontal and the interior lies below it, "left" when it
+// goes up the screen with the interior to its right.
+export function glFace([a, b, c, d, e, f0], size = 16, drop = 0) {
+  const P = [[0, drop], [size, drop], [size, size], [0, size]].map(([u, v]) => [a * u + c * v + e, b * u + d * v + f0]);
+  const area = P.reduce((s, p, i) => { const q = P[(i + 1) % 4]; return s + p[0] * q[1] - q[0] * p[1]; }, 0), sign = area < 0 ? -1 : 1;
+  const edges = P.map((p, i) => { let q = P[(i + 1) % 4]; if (sign < 0) { q = p; p = P[(i + 1) % 4]; } // wind every quad the same way (positive area in y-down screen space)
+    const dx = q[0] - p[0], dy = q[1] - p[1];
+    return { p, dx, dy, owns: dy < 0 || (dy === 0 && dx > 0) }; });
+  return (x, y) => edges.every(({ p, dx, dy, owns }) => { const w = dx * (y - p[1]) - dy * (x - p[0]); return w > 0 || (w === 0 && owns); });
 }
 
 const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
