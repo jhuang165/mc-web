@@ -13,7 +13,7 @@ import { fromOriginal } from "./block-registry.js";
 import { render } from "./render-settings.js";
 import { meshAnaglyph } from "./anaglyph.js";
 import { solidBlock } from "./world.js";
-import { tileByName, ATLAS_COLUMNS, ATLAS_ROWS } from "./block-textures.js";
+import { tileByName, tileRect, tileAtUv } from "./block-textures.js";
 
 const ref = JSON.parse(readFileSync(new URL("../public/research/render-types-reference.json", import.meta.url), "utf8"));
 const lightValues = JSON.parse(readFileSync(new URL("../public/research/light-float-reference.json", import.meta.url), "utf8")).lightValues; // aji.m() per original id, from the batch 36 record
@@ -53,7 +53,7 @@ function jsQuads(M) {
       v.push({ pos: [0, 1, 2].map((c) => Math.fround(layer.p[k * 3 + c])), u, t, col, light: (layer.light[k * 2 + 1] << 16) | layer.light[k * 2] });
     }
     // The tile of a quad is the one under its uv centroid (a torch side's uv runs from edge to edge of its tile).
-    const cu = v.reduce((a, e) => a + e.u, 0) / 4, ct = v.reduce((a, e) => a + e.t, 0) / 4, tile = Math.floor(cu * ATLAS_COLUMNS) + ATLAS_COLUMNS * Math.floor((1 - ct) * ATLAS_ROWS);
+    const cu = v.reduce((a, e) => a + e.u, 0) / 4, ct = v.reduce((a, e) => a + e.t, 0) / 4, tile = tileAtUv(cu, ct);
     const icon = fluidIcon(M, layer);
     for (const e of v) { e.tile = tile; if (icon) e.icon = icon; }
     out.push(v);
@@ -83,14 +83,14 @@ function compareVertex(js, nat, rect) {
   const bad = [];
   if (!near(js.pos, nat.pos)) bad.push("position");
   const fu = js.icon ? js.u : (js.u - rect.u0) / (rect.u1 - rect.u0), fv = js.icon ? 1 - js.t : (rect.v1 - js.t) / (rect.v1 - rect.v0);
-  if (Math.abs(fu - nat.frac) > 3e-3 || Math.abs(fv - nat.v) > 3e-3) bad.push("uv"); // within 0.05 texel: the port insets every tile by 0.02 texel (tileRect, torches by none), and the native u carries the icon index (2 * index + fraction), good to about 6e-5
+  if (Math.abs(fu - nat.frac) > 3e-3 || Math.abs(fv - nat.v) > 3e-3) bad.push("uv"); // within 0.05 texel: tileRect insets by the native 0.01 texel (torches by none), and the native u carries the icon index (2 * index + fraction), good to about 6e-5
   if (js.icon ? js.icon !== nat.icon : tileByName(nat.icon) !== js.tile) bad.push("tile");
   if (!near(js.col, nat.col)) bad.push("colour");
   if (js.light !== nat.light) bad.push("light");
   return bad;
 }
 
-const tileRectFor = (tile) => { const x = tile % ATLAS_COLUMNS, y = Math.floor(tile / ATLAS_COLUMNS); return { u0: (x * 16 + 0.02) / (ATLAS_COLUMNS * 16), u1: ((x + 1) * 16 - 0.02) / (ATLAS_COLUMNS * 16), v0: 1 - ((y + 1) * 16 - 0.02) / (ATLAS_ROWS * 16), v1: 1 - (y * 16 + 0.02) / (ATLAS_ROWS * 16) }; };
+const tileRectFor = (tile) => (tile < 0 ? { u0: 0, u1: 1, v0: 0, v1: 1 } : tileRect(tile)); /* fluids are not atlas tiles */ // the Stitcher position with the native 0.01 texel sprite inset
 function run() {
   const saved = { ...render }, anaglyph = meshAnaglyph.on;
   meshAnaglyph.on = false;

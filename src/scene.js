@@ -24,7 +24,7 @@ import { tileByName } from './block-textures.js';
 import { lilyPadCornerUv } from "./lily-pad.js";
 import { BiomeColorField, PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { biomeFacts } from "./biomes.js";
-import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
+import { createBlockAtlas, blockTile, tileRect, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, flatFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";

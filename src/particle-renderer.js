@@ -6,7 +6,7 @@
 // the lightmap brightness at its own cell (Entity.getBrightnessForRender).
 import * as THREE from "three";
 import { worldMaterial } from "./light-material.js";
-import { ATLAS_COLUMNS, ATLAS_ROWS } from "./block-textures.js";
+import { tileRect } from "./block-textures.js";
 import { PARTICLE_LIMIT, particleBasis, particleQuad, particleLightCell, quantize } from "./particles.js";
 
 export class ParticleRenderer {
@@ -40,9 +40,9 @@ export class ParticleRenderer {
     for (let i = list.length - n; i < list.length; i++) {
       const p = list[i];
       if (p.tile < 0) continue;
-      const col = p.tile % ATLAS_COLUMNS, row = Math.floor(p.tile / ATLAS_COLUMNS),
-        // Atlas image rows run downwards; texture v runs upwards.
-        corners = particleQuad(p, partial, basis, [col / ATLAS_COLUMNS, (col + 1) / ATLAS_COLUMNS], [row / ATLAS_ROWS, (row + 1) / ATLAS_ROWS]),
+      // The sprite's own uv span (TextureAtlasSprite.getMinU..getMaxV, 0.01 texel inset) at its Stitcher position. Atlas image rows run downwards; texture v runs upwards.
+      const t = tileRect(p.tile),
+        corners = particleQuad(p, partial, basis, [t.u0, t.u1], [1 - t.v1, 1 - t.v0]),
         packed = volume ? volume.packed(...particleLightCell(p)) : 15 << 20,
         r = quantize(p.r), g = quantize(p.g), b = quantize(p.b), sky = (packed >> 16) & 0xffff, block = packed & 0xffff;
       for (let c = 0; c < 4; c++) {
