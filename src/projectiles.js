@@ -307,6 +307,10 @@ export class Projectiles {
     this.balls = [];
     // A client world's projectiles (object-tracker.js): EntityThrowable.onImpact does its work under !isRemote, so the entity flies on.
     this.remote = false;
+    // EntityThrowable.onUpdate runs onImpact on the client too: its spawnParticle calls (snowballpoof, portal) go to `sink(name, x, y, z, vx, vy, vz)`.
+    // `clientParticles` (the integrated server's projectiles) leaves them to the client copy (object-tracker.js): the server world has no particles.
+    this.sink = null;
+    this.clientParticles = false;
     this.events = [];
     // The client Fx (main.js) for the bubbles and water-entry splash.
     this.spawner = null;
@@ -432,6 +436,7 @@ export class Projectiles {
         d0 = d1;
       }
     }
+    if ((hit || block) && this.remote) this.clientImpact(b); // the client's entity flies on (the destroy packet ends it)
     if ((hit || block) && !this.remote) {
       if (b.kind === "enderPearl") {
         if (typeof onPearlImpact !== "function") throw new Error("Ender pearl impact requires a synchronous adapter hook");
@@ -455,7 +460,7 @@ export class Projectiles {
       }
       if (hit) { aimPart(hit); onHit(hit.ref, b); }
       if (b.kind === "egg") this.layEggs(b);
-      for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
+      if (!this.clientParticles) for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
       b.dead = true;
       return;
     }
@@ -479,6 +484,24 @@ export class Projectiles {
     b.my *= drag;
     b.mz *= drag;
     b.my -= f(b.kind === "potion" ? 0.05 : b.kind === "expBottle" ? 0.07 : 0.03); // EntityPotion / EntityExpBottle.getGravityVelocity
+  }
+  // The client half of EntityThrowable.onImpact (bytecode-read: tracker-hits-reference.json replays it): EntitySnowball and EntityEgg spawn eight
+  // snowballpoof at the entity with zero velocity, EntityEnderPearl 32 portal at (posX, posY + rand.nextDouble() * 2, posZ) with gaussian x and z
+  // velocity (draws in that order, from the entity's own Entity.rand); EntityPotion and EntityExpBottle do nothing on the client (the S28 does it).
+  // The attack, the chicks, the teleport and the death are under !isRemote. A hit entity only matters as the reason for the impact.
+  clientImpact(b) {
+    if (b.kind === "snowball" || b.kind === "egg") for (let i = 0; i < PARTICLES; i++) this.emit("snowballpoof", b.x, b.y, b.z, 0, 0, 0);
+    else if (b.kind === "enderPearl") {
+      for (let i = 0; i < 32; i++) {
+        const y = b.y + b.rand.nextDouble() * 2, vx = b.rand.nextGaussian(), vz = b.rand.nextGaussian();
+        this.emit("portal", b.x, y, b.z, vx, 0, vz);
+      }
+    }
+  }
+  emit(name, x, y, z, vx, vy, vz) {
+    if (this.sink) this.sink(name, x, y, z, vx, vy, vz);
+    else if (name === "snowballpoof") this.poof(x, y, z);
+    else this.spawner?.spawn(name, x, y, z, vx, vy, vz);
   }
   // new EntityBreakingFX(world, x, y, z, snowball) (bju) -> EntityFX (bkm).
   // Entity.rand draws the texture jitter, scale and lifetime (in that order);

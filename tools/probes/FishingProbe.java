@@ -57,7 +57,8 @@ public class FishingProbe {
     public boolean i(int x, int y, int z) { return sky; }
     public boolean d(int x, int y, int z) { return true; }
     public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) { return true; }
-    public boolean a(azt box, awt material, sa entity) { return false; }
+    // handleMaterialAcceleration is the real one (batch 44: until then a stub that never found water; the hook does enter the lake)
+    public void a(String name, double x, double y, double z, double vx, double vy, double vz) {} // World.spawnParticle: the server's has no one to send to (the water splash of Entity.handleWaterMovement)
     public void a(sa entity, String sound, float volume, float pitch) { events.add("sound|" + sound + "|" + volume + "|" + pitch); }
     public List a(sa entity, azt box) {
       List<azt> out = new ArrayList<>();

@@ -7,13 +7,14 @@
 // Bytecode-read (not executed): EntityTracker.addEntityToTracker's type table and ranges (clamped to 144 like the mobs'), the S0E type and
 //  data codes, the client handlers (bjb.a(fw), a(fx), a(S14), a(S18), a(S12)), Entity.setPositionAndRotation2 (the box is lifted out of
 //  blocks 1/32 deep; EntityArrow only sets position and rotation) and the onUpdate branches the client does not run (EntityItem merging
-//  and lifetime, the falling block's landing, EntityThrowable's impact, TNT's explosion are all under !isRemote).
+//  and lifetime, the falling block's landing, TNT's explosion and the damage of EntityThrowable.onImpact are all under !isRemote; its particles are not).
 // Quirks the reference shows: an XP orb spawns on the client at the packet position unscaled (x, y and z in 1/32 blocks as blocks, until the
 // first position packet), its homing uses the client player's eye height 0.12 where the server's is 1.62, a client item never merges or
 // expires, a client snowball flies on through the block its server twin died in until the destroy packet arrives.
-// Not modelled: S1C metadata (the stack, the arrow's crit flag, TNT's fuse: the renderers read those from the live server entity), the
-// client's own entity hits (arrows and thrown entities against client mobs), the thrown entity's client impact particles, fireworks,
-// eyes of ender, fishing hooks, the chunk send queue, and a client world's lava hop random draws.
+// Batch 44 (tools/probes/TrackerHitsProbe.java, public/research/tracker-hits-reference.json): the client copies emit their own particles (impacts of
+// thrown entities, the crit trail, bubbles and water splash of arrows and hooks, rocket sparks, S1A 17 -> makeFireworks) through `particle` and `events`.
+// Not modelled: the client's own entity hits (arrows, thrown entities and hooks against client mobs: needs the client mob boxes of entity-tracker.js),
+// the chunk send queue, and a client world's lava hop random draws.
 import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-tracker.js";
 import { toOriginal, fromOriginal } from "./block-registry.js";
 import { originalOfLive } from "./item-names.js";
@@ -181,13 +182,21 @@ export class ObjectClient extends ClientEntity {
       this.place(this.sx / 32, this.sy / 32 + 0.015625, this.sz / 32, angleByte(p.yaw), angleByte(p.pitch));
     } else if (p.type === "meta") { for (const [, idx, value] of p.list) this.meta.set(idx, value); }
     else if (p.type === "velocity") this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
+    else if (p.type === "status") this.handleStatus(p.status);
     else if (p.type === "destroy") this.present = false;
+  }
+  // S1A, Entity.handleHealthUpdate. Only EntityFireworkRocket overrides it (17: World.makeFireworks at the client's position and motion with the
+  // Fireworks tag of its data watcher object 8); EntityFishHook does not (the pull of a hooked entity reaches the client as that entity's own packets).
+  handleStatus(status) {
+    if (status === 17 && this.spec.rocket) this.tracker.events.push({ firework: { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, fireworks: this.meta.get(8)?.fireworks ?? null } });
   }
   // EntityFishHook.onUpdate on the client: the 3 tick interpolation towards the last position packet, else the flight with the S12 motion
   stepHook(world) {
     const s = this.sim, fish = this.fish;
     s.prevYaw = this.yaw; s.prevPitch = this.pitch;
     if (fish && fish.inc > 0) {
+      Object.assign(s, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz }); setHookBox(s);
+      s.waterMovement(this.tracker.hookEnv(world)); this.vx = s.vx; this.vy = s.vy; this.vz = s.vz; // super.onUpdate runs before the interpolation
       const wrap = (d) => { d %= 360; if (d >= 180) d -= 360; if (d < -180) d += 360; return d; };
       this.x += (fish.x - this.x) / fish.inc; this.y += (fish.y - this.y) / fish.inc; this.z += (fish.z - this.z) / fish.inc;
       this.yaw = f(this.yaw + wrap(fish.yaw - this.yaw) / fish.inc);
@@ -222,6 +231,7 @@ export class ObjectClient extends ClientEntity {
       if (s.dead) this.present = false;
     } else if (spec.arrow) {
       s.x = this.x; s.y = this.y; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.yaw = this.yaw; s.pitch = this.pitch; s.dead = false;
+      s.crit = ((this.meta.get(16) ?? 0) & 1) === 1; // EntityArrow.getIsCritical reads the data watcher (S1C), not the shooter's state
       t.sims.arrows.step(world, s, {}); t.sims.arrows.events.length = 0;
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch;
       if (s.dead) this.present = false;
@@ -238,7 +248,8 @@ export class ObjectClient extends ClientEntity {
     } else if (spec.rocket) {
       const h = f(ITEM_W / 2);
       Object.assign(s, { x: this.x, y: this.y, z: this.z, mx: this.vx, my: this.vy, mz: this.vz, yaw: this.yaw, pitch: this.pitch, box: [this.x - h, this.y, this.z - h, this.x + h, this.y + ITEM_W, this.z + h], onGround: this.onGround });
-      tickRocket(s, world, s.rand, { remote: true, server: false });
+      const out = tickRocket(s, world, s.rand, { remote: true, server: false });
+      if (out.spark) t.particle("fireworksSpark", ...out.spark); // EntityFireworkRocket.onUpdate: the client's trail, from the client's own rand
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch; this.onGround = s.onGround;
     } else if (spec.hook) {
       this.stepHook(world);
@@ -266,10 +277,20 @@ export class ObjectTracker extends MobTracker {
     items.remote = true; balls.remote = true;
     this.sims = { items, orbs, arrows, balls };
     this.ctx = { world: null, player: null };
-    this.hookRand = balls.rng();
+    // The client world's spawnParticle: every call is logged (tests) and handed to `hooks.particle(name, x, y, z, vx, vy, vz)` (main.js); the
+    // snowballpoof of an impact go to the thrown simulator's effect renderer. `events` collects what a status packet made the client do.
+    this.log = null; this.hooks = {}; this.events = [];
+    const spawn = (name, ...a) => this.particle(name, ...a);
+    balls.sink = spawn; balls.spawner = { spawn }; arrows.fx = { spawn };
   }
+  particle(name, x, y, z, vx, vy, vz) {
+    this.log?.push([name, x, y, z, vx, vy, vz]);
+    if (name === "snowballpoof") this.sims.balls.poof(x, y, z);
+    else this.hooks.particle?.(name, x, y, z, vx, vy, vz);
+  }
+  drainEvents() { const e = this.events; this.events = []; return e; }
   // the env of a client fish hook: no angler, no entities, no fish timers (FishHook.tick's remote branch)
-  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, canSeeSky: () => false, sound() {}, particle() {}, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
+  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, canSeeSky: () => false, sound() {}, particle() {}, fx: { spawn: (...a) => this.particle(...a) }, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
   // the simulator state a client entity starts with
   newSim(c) {
     const k = c.kind, s = this.sims;
@@ -279,7 +300,7 @@ export class ObjectTracker extends MobTracker {
     if (c.spec.thrown) { const rand = s.balls.rng(); return { kind: k, x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0, px: 0, py: 0, pz: 0, prevYaw: 0, prevPitch: 0, ticks: 0, rand, random: rand, dead: false }; }
     if (c.spec.eye) return { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false };
     if (c.spec.rocket) { const r = createRocket(c.x, c.y, c.z, null, s.balls.rng()); r.rand = s.balls.rng(); return r; } // the client's constructor draws its own random motion, the S12 replaces it
-    if (c.spec.hook) return new FishHook(this.hookRand);
+    if (c.spec.hook) return new FishHook(s.balls.rng()); // its own Entity.rand
     return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, fuse: 80, px: 0, py: 0, pz: 0 };
   }
   // Copies the live entity into the stand-in the tracker entry reads (Java's posY and field names).
@@ -328,7 +349,9 @@ export class ObjectTracker extends MobTracker {
     for (const kind in lists) for (const e of lists[kind]) { this.kinds.set(e, kind); all.push(e); }
     // removeEntityFromAllTrackingPlayers: the destroy goes out now and the client entity lives until its queue flushes (one tick later)
     const alive = new Set(all);
-    for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); this.dying.push(en); }
+    for (const [e, en] of this.entries) if (!alive.has(e)) {
+      if (e.exploded && this.kinds.get(e) === "firework") en.entry.send({ type: "status", id: en.entry.e.id, status: 17 }); // World.setEntityState(rocket, 17), then setDead
+      en.entry.remove(); this.entries.delete(e); this.dying.push(en); }
     super.serverTick(all, player, () => [0]);
     for (const e of this.kinds.keys()) if (!this.entries.has(e)) this.kinds.delete(e);
   }
@@ -361,7 +384,7 @@ export function objectView(tracker, e, kind) {
   if (c.sim && (spec.arrow || spec.thrown || spec.eye || spec.rocket || spec.hook)) { v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.sim.prevYaw ?? c.yaw; v.prevPitch = c.sim.prevPitch ?? c.pitch; }
   // what the S1C and the spawn packet gave the client entity: the renderers read these, not the live entity's fields
   if (kind === "item") { const st = c.meta?.get(10); if (st) v.stack = st; }
-  else if (kind === "arrow") v.crit = ((c.meta?.get(16) ?? 0) & 1) === 1;
+  else if (kind === "arrow") { v.crit = ((c.meta?.get(16) ?? 0) & 1) === 1; if (c.sim) { v.shake = c.sim.shake; v.inGround = c.sim.inGround; } } // the client's own stick and arrowShake
   else if (kind === "tnt") if (c.sim) v.fuse = c.sim.fuse; // the fuse is not synchronised: the client's own countdown from 80
   else if (kind === "falling" && c.sim?.block !== undefined) { v.block = c.sim.block; v.meta = c.sim.meta; }
   return v;

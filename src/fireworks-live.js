@@ -22,13 +22,15 @@ export class FireworkRockets {
   // The integrated game is server and client at once: one tick draws the spark trail and makes the death.
   // `ringActive(rocket)` (EntityFireworkRocket updates only where World.updateEntityWithOptionalForce's 32-block test holds) and
   // `tracked(rocket)` (status 17 reaches only a tracking client, 64 blocks; ring-events.js) are optional hooks.
+  // With `hooks.clientCopies` the trail and the explosion belong to the client's copy (object-tracker.js: the rocket's client onUpdate and the S1A 17):
+  // the server rocket draws no sparks and hooks.explode is not called.
   tick(world, hooks = {}) {
     for (const r of this.rockets) {
       if (hooks.ringActive && !hooks.ringActive(r)) continue;
-      const out = tickRocket(r, world, this.random, { remote: true, server: true });
+      const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true });
       if (out.launch) hooks.sound?.('fireworks.launch', r.x, r.y, r.z, 3, 1, false);
       if (out.spark) hooks.spark?.(...out.spark);
-      if (out.explode && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);
+      if (out.explode && !hooks.clientCopies && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);
     }
     this.rockets = this.rockets.filter((r) => !r.dead);
   }

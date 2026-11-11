@@ -7,6 +7,9 @@
 import { JavaRandom } from './java-random.js';
 import { GaussianRandom, heading, intercept, rayTraceBlocks } from './projectiles.js';
 import { moveEntity } from './entities.js';
+import { waterAcceleration, entityWaterBox } from './fluids.js';
+import { enterWater } from './fx.js';
+import { mobStepEvents } from './mob-steps.js';
 import { mhSin, mhCos } from './lighting.js';
 import { itemInfo, addRandomEnchantment } from './enchantments.js';
 
@@ -102,8 +105,9 @@ export const setBox = (e) => {
 };
 
 // EntityFishHook. `rand` is its Entity.rand (nextFloat/nextInt/nextGaussian); world.rand is passed to
-// retrieve(). The hook never counts as in water (handleWaterMovement shrinks its 0.25 box by 0.8), keeps
-// the xTile/yTile/zTile = 0 and inTile = null of a fresh entity (so a landed hook is released and
+// retrieve(). handleWaterMovement shrinks its 0.25 box by 0.8 (an inverted box), so it only counts as in water
+// while a water cell's block range still reaches it (batch 44: the executed client hook splashes when it enters
+// water; see tools/probes/TrackerHitsProbe.java hookWater). It keeps the xTile/yTile/zTile = 0 and inTile = null of a fresh entity (so a landed hook is released and
 // re-lands each tick), and despawns only when the player stops holding the rod or is over 32 blocks away.
 export class FishHook {
   constructor(rand = new GaussianRandom(Math.floor(Math.random() * 2 ** 48))) {
@@ -111,7 +115,7 @@ export class FishHook {
     Object.assign(this, {
       x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, px: 0, py: 0, pz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0,
       onGround: false, collidedH: false, fallDistance: 0, shake: 0, inGround: false, ticksInGround: 0, ticksInAir: 0,
-      ticksCatchable: 0, ticksCaughtDelay: 0, ticksCatchableDelay: 0, fishApproachAngle: 0, hooked: null, dead: false,
+      ticksCatchable: 0, ticksCaughtDelay: 0, ticksCatchableDelay: 0, fishApproachAngle: 0, hooked: null, dead: false, water: null,
     });
   }
   // EntityFishHook(World, EntityPlayer) (xe.<init>): `player` is { x, y, z (feet), yaw, pitch } in Minecraft
@@ -137,6 +141,18 @@ export class FishHook {
     setBox(h);
     return h;
   }
+  // Entity.handleWaterMovement (in Entity.onEntityUpdate, so it also runs on the ticks a client hook interpolates): the first tick in water (not the
+  // first update) splashes (`env.fx` is the client's spawnParticle; the draws happen on the server too), and flowing water pushes.
+  waterMovement(env) {
+    const wet = this.y < 0 ? { wet: false, push: [0, 0, 0] } : waterAcceleration(env.world, entityWaterBox(this.bb));
+    const wasWater = this.water;
+    this.water = wet.wet;
+    if (wet.wet && wasWater === false) {
+      const sp = enterWater(env.fx ?? null, { x: this.x, z: this.z, minY: this.bb[1], width: WIDTH, mx: this.vx, my: this.vy, mz: this.vz }, this.rand);
+      if (!env.remote) env.sound?.('game.neutral.swim.splash', sp.volume, sp.pitch);
+    }
+    this.vx += wet.push[0]; this.vy += wet.push[1]; this.vz += wet.push[2];
+  }
   // EntityFishHook.onUpdate (xe.h). `env`:
   //   world { get, getMeta, solid }, player { x, y, z, valid (alive and holding the rod), luck, lure },
   //   canLightningStrike(x, y, z), canSeeSky(x, y, z), sound(name, volume, pitch),
@@ -151,6 +167,7 @@ export class FishHook {
     this.px = this.x; this.py = this.y; this.pz = this.z;
     this.prevPitch = this.pitch;
     this.prevYaw = this.yaw;
+    this.waterMovement(env);
     if (this.y < -64) { this.dead = true; return false; }
     const dx = this.x - p.x, dy = this.y - p.y, dz = this.z - p.z;
     // the angler check, the hooked entity, the entity search and the fish timers are all under !isRemote (env.remote: a client's copy)
@@ -169,9 +186,9 @@ export class FishHook {
     // inTile is null, so the block at (0, 0, 0) never equals it: a landed hook is released at once.
     if (this.inGround) {
       this.inGround = false;
-      this.vx *= rand.nextFloat() * f(0.2);
-      this.vy *= rand.nextFloat() * f(0.2);
-      this.vz *= rand.nextFloat() * f(0.2);
+      this.vx *= f(rand.nextFloat() * f(0.2));
+      this.vy *= f(rand.nextFloat() * f(0.2));
+      this.vz *= f(rand.nextFloat() * f(0.2));
       this.ticksInGround = 0;
       this.ticksInAir = 0;
     } else this.ticksInAir++;
@@ -204,7 +221,15 @@ export class FishHook {
   // The airborne half of xe.h: moveEntity, rotation smoothing, water slices, the catch timer and drag.
   fly(env) {
     const { world } = env, rand = this.rand, p = env.player;
+    const from = { x: this.x, y: this.y, z: this.z };
     moveEntity(world, this, WIDTH, WIDTH, this.vx, this.vy, this.vz, 0);
+    // Entity.canTriggerWalking is true for the hook: the step counter of moveEntity plays the swim sound while it is in water, which draws two floats
+    // of its Entity.rand (client and server alike; the executed client hook shows them). The block step sound of func_145780_a is not played here.
+    this.stepEntity ??= { type: 'fishHook', stepDistance: 0, nextStep: 1, inWater: false };
+    const st = this.stepEntity;
+    Object.assign(st, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, inWater: this.water === true });
+    for (const ev of mobStepEvents(world, st, from, { random: () => rand.nextFloat() }))
+      if (!env.remote && ev.sound === 'game.neutral.swim') env.sound?.(ev.sound, ev.volume, ev.pitch);
     const flat = f(Math.sqrt(this.vx * this.vx + this.vz * this.vz));
     this.yaw = f((Math.atan2(this.vx, this.vz) * 180) / PI_D);
     this.pitch = f((Math.atan2(this.vy, flat) * 180) / PI_D);
