@@ -21,8 +21,8 @@ test("the dropped scale shrinks the model and the block id counts as the item", 
 });
 
 test("the inventory icon, the held model, the third-person hand and the dropped item all use the gate boxes", () => {
-  for (const f of ["block-textures.js", "first-person.js", "drop-renderer.js", "player-renderer.js"]) {
+  for (const f of ["item-boxes.js", "block-textures.js", "first-person.js", "drop-renderer.js", "player-renderer.js"]) {
     const s = readFileSync(new URL("./" + f, import.meta.url), "utf8");
-    assert.match(s, /gateIcon|GATE_ITEM_BOXES|gateItemGeometry|blockItemGeometry/, f);
+    assert.match(s, /itemSpec|GATE_ITEM_BOXES|gateItemGeometry|blockItemGeometry/, f);
   }
 });

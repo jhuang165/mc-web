@@ -31,13 +31,32 @@ function rotate(m, deg, x, y, z) {
   return mul(m, r);
 }
 
+// The float32 GL matrix stack operations, for the other icon models (icon-quads.js composes a model's own translate / scale / rotate events in front of the cube matrix).
+export const gl = { identity, mul, translate, scale, rotate };
+// A point under a column-major matrix: [x, y, z] in the GUI's pixel units (eye-space z too; the depth buffer holds -z).
+export function transformPoint(m, x, y, z) {
+  return [0, 1, 2].map((r) => f(f(f(m[r] * x) + f(m[4 + r] * y)) + f(f(m[8 + r] * z) + m[12 + r])));
+}
+
+// renderItemIntoGUI's own calls, before renderBlockAsItem's turn and translate (the recorded event lists of item-render-reference.json start with those two).
+export function guiBase() {
+  let m = identity();
+  m = translate(m, -2, 3, -3); m = scale(m, 10, 10, 10); m = translate(m, 1, 0.5, 1); m = scale(m, 1, 1, -1);
+  m = rotate(m, 210, 1, 0, 0); m = rotate(m, 45, 0, 1, 0); m = rotate(m, -90, 0, 1, 0);
+  return m;
+}
+// The model-view of a block item's box model: renderBlockAsItem turns types 0, 31, 39 and 26 by 90 degrees about y first (`turned`); the stair, fence, gate, beacon and anvil
+// types only translate by -0.5 (item-render-reference.json). Same units as cubeModelView.
+export function boxModelView(turned) {
+  if (turned) return cubeModelView();
+  return (BOX_FLAT ??= translate(guiBase(), -0.5, -0.5, -0.5));
+}
+let BOX_FLAT;
 let CUBE;
 // The model-view matrix (slot at the origin, one unit = one GUI pixel) applied to block coordinates in [0, 1].
 export function cubeModelView() {
   if (CUBE) return CUBE;
-  let m = identity();
-  m = translate(m, -2, 3, -3); m = scale(m, 10, 10, 10); m = translate(m, 1, 0.5, 1); m = scale(m, 1, 1, -1);
-  m = rotate(m, 210, 1, 0, 0); m = rotate(m, 45, 0, 1, 0); m = rotate(m, -90, 0, 1, 0);
+  let m = guiBase();
   m = rotate(m, 90, 0, 1, 0); m = translate(m, -0.5, -0.5, -0.5);
   return (CUBE = m);
 }

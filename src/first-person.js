@@ -2,12 +2,10 @@ import * as THREE from "three";
 import { firstPersonMatrix } from "./first-person-pose.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
-import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, ANVIL } from "./world.js";
-import { anvilModelBoxes } from './anvil-block.js';
-import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
-import { GATE_ITEM_BOXES, ITEM_BOXES, itemBoxUv, anvilUv } from './render-shapes.js';
-import { FENCE_ITEM_BOXES } from './fences.js';
-import { toOriginal } from './block-registry.js';
+import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
+import { itemSpec, isGateItem } from './item-boxes.js';
+import { STAIR_ITEM_BOXES } from './stairs.js';
+import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS } from './render-shapes.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
@@ -25,34 +23,21 @@ import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animati
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
-const BLOCK_FACES=[
-  {v:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]]},{v:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]]},
-  {v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]]},{v:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]},
-  {v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]},{v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]]},
-];
-// RenderBlocks.renderBlockAsItem for render type 35 (executed, item-render-reference.json): always the facing 0 boxes whatever the stack's damage (0-2), every face on the
-// anvil_base tile except the top of the last box (the damage's anvil_top_damaged_n), each face's texture turned as facing 0 of the world model (anvilUv).
-function anvilItemGeometry(damage,scale=1){const meta=(damage&3)<<2;return boxItemGeometry(anvilModelBoxes(0),(fi,k)=>k===3?blockTile(ANVIL,fi,false,meta):blockTile(ANVIL,fi===2?0:fi,false,0),scale,(fi,p,box)=>anvilUv(0,fi,p,box));}
+const BLOCK_FACES=BOX_FACE_CORNERS.map((v)=>({v}));
 // The box list of a block item that the unchanged renderBlockAsItem draws as boxes instead of a unit cube (null: a cube or a sprite item): stairs, the gate, fences and the
-// ITEM_BOXES blocks, found through the original id of a port block id (< 256).
-export function itemModelBoxes(id){
- if(STAIRS[id])return STAIR_ITEM_BOXES;
- if(isGateItem(id))return GATE_ITEM_BOXES;
- if(!(id>0&&id<256))return null;
- const o=toOriginal(id,0)?.[0];
- return ITEM_BOXES[o]??(o===85||o===113?FENCE_ITEM_BOXES:null);
-}
-// The geometry a block item takes in a hand, a dropped item (`scale` .25) or an inventory model, or null when it is a plain cube.
+// ITEM_BOXES blocks, found through the block an item id stands for (item-boxes.js itemBlockId: 1103, the stone slab item, and the other ItemBlock / ItemSlab ids).
+export function itemModelBoxes(id){const m=itemSpec(id,0,blockTile);return m&&m.kind!=='anvil'&&m.kind!=='beacon'?m.boxes:null;}
+// The geometry a block item takes in a hand, a dropped item (`scale` .25) or an inventory model, or null when it is a plain cube. The anvil and the beacon use their own
+// face textures (item-boxes.js itemSpec).
 export function blockItemGeometry(id,damage=0,scale=1){
- if(id===ANVIL)return anvilItemGeometry(damage,scale);
- const boxes=itemModelBoxes(id);
- return boxes?boxItemGeometry(boxes,(fi)=>blockTile(id,fi,false,damage),scale):null;
+ const m=itemSpec(id,damage,blockTile);
+ return m?boxItemGeometry(m.boxes,m.tileOf,scale,m.uvOf):null;
 }
 // RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
 export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
 // RenderBlocks.renderBlockAsItem for render type 21 (GATE_ITEM_BOXES), at `scale` of a block. `id` is the fence gate item (1167) or block (167).
 export function gateItemGeometry(id=1167,scale=1){return boxItemGeometry(GATE_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
-export const isGateItem=(id)=>id===1167||id===167;
+export { isGateItem };
 // Every box with its six faces, the texture cropped to the face's extent as renderFaceXPos... do (itemBoxUv, executed in item-render-reference.json); `uvOf(fi,p,box)` replaces it (the anvil's turned faces).
 export function boxItemGeometry(boxes,tileOf,scale=1,uvOf=itemBoxUv){
  const positions=[],uvs=[],indices=[];

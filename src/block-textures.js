@@ -6,22 +6,21 @@ import {atlasMips,mipChain} from './render-settings.js';
 import * as THREE from 'three';
 import {setColormaps,itemGrassColor,itemFoliageColor,PINE,BIRCH,LILY_PAD_COLOR} from './biome-colors.js';
 import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,BED,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,isCrop,isFlower} from './world.js';
-import {FENCE_ITEM_BOXES} from './fences.js';
 import {bedTexture} from './bed.js';
-import {anvilModelBoxes} from './anvil-block.js';
-import {GATE_ITEM_BOXES,BEACON_ITEM_BOXES} from './render-shapes.js';
 import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
 import {STEM_CAKE_TILES} from './stems-cake.js';
 import {WART_TILES,wartStage} from './nether-wart.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
-import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
+import {STAIRS} from './stairs.js';
 import {isNetherBlock,isNetherFence,quartzTexture} from './nether-blocks.js';
 import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,SLAB_TEXTURES,stoneBrickTexture} from './stone-utility.js';
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 import {CHEST_ICON_TEXTURES,chestIconTexture,drawChestIcon} from './chest-icon.js';
 import {anaglyphRgba,anaglyphMultiplier,meshAnaglyph} from './anaglyph.js';
-import {cubeFaces} from './icon-cube.js';
+import {boxModelView} from './icon-cube.js';
+import {boxQuads,rasterQuads,chestIconQuads} from './icon-quads.js';
+import {itemSpec,itemBlockId} from './item-boxes.js';
 import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile,rasterIcon,encodePngStored,pngDataUrl,hasTranslucent} from './atlas-texels.js';
 import {decodePng} from './png-codec.js';
 import {setIconResolver} from './gui-anaglyph.js';
@@ -305,74 +304,28 @@ export function createBlockAtlas(){
  // drawn from the already converted atlas, which the DOM conversion must not convert again. Chest icons draw the raw entity texture.
  const chestUrls=new Set();
  function icon(id,damage=0){const url=iconRaw(id,damage);return url+'#mcicon='+id+':'+damage+(canvas.__agDone===true&&!chestUrls.has(url)?':ag':'');}
- // A translucent texel (ice, stained glass) drawn on the 2D canvas and read back by toDataURL drifts through premultiplied rounding. An icon
+ // Blocks whose item is a flat sprite in the inventory (RenderItem draws their icon texture, not a model): levers, plants, panes, rails, crops and so on.
+const SPRITE_ICON=new Set([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141]);
+const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id);
+// A block item's box model (item-boxes.js itemSpec, or the unit cube) as a 64x64 icon at scale 4: executed boxes, renderItemIntoGUI's matrix, GL pixel-centre edges. null before the tiles load.
+function boxIcon(id,damage){
+ const spec=itemSpec(id,damage,blockTile),texOf=new Map();let missing=false;
+ const tex=i=>{if(!texOf.has(i)){const l=exactLevels(false,TILES[i],0);texOf.set(i,l&&{data:l[0],w:16,h:16});}const t=texOf.get(i);if(!t)missing=true;return t;};
+ const quads=boxQuads(spec?spec.boxes:[[0,0,0,1,1,1]],(fi,k)=>tex(spec?spec.tileOf(fi,k):blockTile(id,fi,false,damage)),spec?.uvOf);
+ return missing?null:pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,quads,4,boxModelView(spec?spec.turned:true))));
+}
+// A translucent texel (ice, stained glass) drawn on the 2D canvas and read back by toDataURL drifts through premultiplied rounding. An icon
 // with any translucent face texel is composed from the exact tile bytes instead (atlas-texels.js rasterIcon) and written as a PNG that reads
 // back exactly; opaque icons keep the canvas path, which is lossless for them. layers: [tile index, canvas matrix, shade, drop].
-function softIcon(layers,gl=false){const tiles=[];for(const[i]of layers){const l=exactLevels(false,TILES[i],0);if(!l)return null;tiles.push(l[0]);}if(!gl&&!tiles.some(hasTranslucent))return null;const H=gl?64:70;return pngDataUrl(encodePngStored(64,H,rasterIcon(64,H,layers.map(([,matrix,shade,drop],k)=>({tile:tiles[k],matrix,shade,drop,gl}))))); }
-function iconRaw(id,damage=0){syncCanvases();if(id===1139)id=139;if(id===1940||id===1941)id-=1778;if(id>=1140&&id<=1148)id-=1000;if(id===1177||id===1178)id-=1000;if(id===1100)id=GLASS_PANE;if(id>=1135&&id<=1137)id-=1000;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER||id===DROPPER?3:1;}const chest=chestIconTexture(id),key=id+':'+damage+(chest?':'+chest:'');if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
-  if(chest){drawChestIcon(x,images.get(chest));const url=c.toDataURL();icons.set(key,url);chestUrls.add(url);return url;}
-  if(id===173){beaconIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
-  if(id===ANVIL){anvilIcon(x,damage);const url=c.toDataURL();icons.set(key,url);return url;}
-  function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const [sx,sy]=tileOrigin(index);x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
-  // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
-  // painted back to front in the inventory projection (z across, x into the picture).
-  if(id===FENCE||isNetherFence(id)){fenceIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
-  // RenderBlocks.renderBlockAsItem for the fence gate (render type 21, GATE_ITEM_BOXES): three planks boxes in the anvil/stair projection.
-  if(id===1167||id===167){gateIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
-  if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
- if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);{const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]]);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,...tileOrigin(i),16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab *//* native cube: GL pixel-centre rasterisation of the executed-matrix faces (icon-cube.js), always from exact tile bytes */{const F=cubeFaces(4,drop),L=[[blockTile(id,1,false,damage),F.west,.2,drop],[blockTile(id,4,false,damage),F.south,.08,drop],[blockTile(id,2,false,damage),F.top,0,0]];const url=softIcon(L,true);if(url){icons.set(key,url);return url;}c.height=64;face(L[0][0],F.west,.2,drop);face(L[1][0],F.south,.08,drop);face(L[2][0],F.top,0,0);}}
+function softIcon(layers,gl=false,H=gl?64:70){const tiles=[];for(const[i]of layers){const l=exactLevels(false,TILES[i],0);if(!l)return null;tiles.push(l[0]);}if(!gl&&!tiles.some(hasTranslucent))return null;return pngDataUrl(encodePngStored(64,H,rasterIcon(64,H,layers.map(([,matrix,shade,drop],k)=>({tile:tiles[k],matrix,shade,drop,gl}))))); }
+function iconRaw(id,damage=0){syncCanvases();/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */if(blockForItem(id))damage=blockForItem(id)===DISPENSER||blockForItem(id)===DROPPER?3:1;id=itemBlockId(id);const chest=chestIconTexture(id),key=id+':'+damage+(chest?':'+chest:'');if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+  // Chest family (render type 22): the executed ModelChest quads under the same matrix and GL edges (chest-item-model.js, chest-item-reference.json); drawChestIcon is the fallback before the PNG decodes.
+  if(chest){const img=exact.get(chest);let url;if(img)url=pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,chestIconQuads({data:img.data,w:img.width,h:img.height}),4)));else{drawChestIcon(x,images.get(chest));url=c.toDataURL();}icons.set(key,url);chestUrls.add(url);return url;}
+  // RenderBlocks.renderBlockAsItem boxes (stairs, fence, gate, beacon, anvil, slabs, plates, buttons, carpet, trapdoor, the dragon egg, ... and the unit cube): the executed
+  // item boxes under renderItemIntoGUI's matrix, rasterised with the GL's pixel-centre edges (icon-quads.js, item-render-reference.json). Sprite-like blocks follow below.
+  if(!flatIcon(id)){const url=boxIcon(id,damage);if(url){icons.set(key,url);return url;}}
+ if(flatIcon(id)){const i=blockTile(id,id===141?0:2,false,damage);{/* RenderItem.renderIcon: one textured quad, so GL pixel-centre edges like the box icons (no 4x4 anti-aliasing), in the sprite icons' 64x70 layout */const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]],true,70);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,...tileOrigin(i),16,16,3,5,58,58);}
   const url=c.toDataURL();icons.set(key,url);return url;
- }
- // RenderBlocks.renderBlockAsItem (type 34): the inner boxes first, then the glass shell over them.
- function beaconIcon(ctx){
-  const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y];
-  for(const [m,[x0,y0,z0,x1,y1,z1]] of BEACON_ITEM_BOXES.map((box,i)=>[[1,2,0][i],box])){ // executed boxes: the base starts at y 0 (item-render-reference.json)
-   const paint=(face,points,shade=0)=>{const t=blockTile(173,face,false,m),[sx,sy]=tileOrigin(t),[a,b,c,d]=points;
-    ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
-    if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};
-   paint(0,[p(x1,y0,z0),p(x1,y0,z1),p(x1,y1,z1),p(x1,y1,z0)],.2);
-   paint(4,[p(x0,y0,z1),p(x1,y0,z1),p(x1,y1,z1),p(x0,y1,z1)],.08);
-   paint(2,[p(x0,y1,z0),p(x1,y1,z0),p(x1,y1,z1),p(x0,y1,z1)]);
-  }
- }
- function anvilIcon(ctx,damage){
-  const meta=(damage&3)<<2;
-  const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y],
-    paint=(face,points,shade=0)=>{const t=blockTile(ANVIL,face,false,meta),[sx,sy]=tileOrigin(t),[a,b,c,d]=points;
-      ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
-      if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};
-  for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta)){
-    paint(0,[p(x1,y0,z0),p(x1,y0,z1),p(x1,y1,z1),p(x1,y1,z0)],.2);
-    paint(4,[p(x0,y0,z1),p(x1,y0,z1),p(x1,y1,z1),p(x0,y1,z1)],.08);
-    paint(2,[p(x0,y1,z0),p(x1,y1,z0),p(x1,y1,z1),p(x0,y1,z1)]);
-  }
- }
- // RenderBlocks.renderBlockAsItem for render type 10: the back half (z 0-0.5, full height) then the front half
- // (z 0.5-1, half height) in the same isometric projection as the anvil icon.
- function gateIcon(ctx){stairIcon(ctx,1167,GATE_ITEM_BOXES);}
- function stairIcon(ctx,id,boxes=STAIR_ITEM_BOXES){
-  const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y],
-   paint=(face,points,shade=0)=>{const t=blockTile(id,face),[sx,sy]=tileOrigin(t),[a,b,c,d]=points;
-    ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
-    if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};
-  for(const [x0,y0,z0,x1,y1,z1] of boxes){
-   paint(0,[p(x1,y0,z0),p(x1,y0,z1),p(x1,y1,z1),p(x1,y1,z0)],.2);
-   paint(4,[p(x0,y0,z1),p(x1,y0,z1),p(x1,y1,z1),p(x0,y1,z1)],.08);
-   paint(2,[p(x0,y1,z0),p(x1,y1,z0),p(x1,y1,z1),p(x0,y1,z1)]);
-  }
- }
- // Item projection P(a,b,h) = (32 + 1.75(a-b), 2 + a + b + 2(16-h)) in pixels, a = 16z, b = 16x.
- function fenceIcon(x,id=FENCE){const t=blockTile(id,0),[sx,sy]=tileOrigin(t);
-  const shaded=(shade)=>{const s=document.createElement('canvas');s.width=s.height=16;const g=s.getContext('2d');g.drawImage(canvas,sx,sy,16,16,0,0,16,16);if(shade){g.globalCompositeOperation='source-atop';g.fillStyle=`rgba(0,0,0,${shade})`;g.fillRect(0,0,16,16);}return s;};
-  const tiles=[shaded(.2),shaded(.08),shaded(0)],wrap=(u)=>((u%16)+16)%16;
-  const quad=(src,matrix,u0,v0,u1,v1)=>{if(u1<=u0||v1<=v0)return;x.save();x.setTransform(...matrix);const su=wrap(u0),sv=wrap(v0);x.drawImage(src,su,sv,u1-u0,v1-v0,u0,v0,u1-u0,v1-v0);x.restore();};
-  const [p1,p2,top,bottom]=FENCE_ITEM_BOXES,bars=(z0,z1)=>[bottom,top].map(b=>[b[0],b[1],z0,b[3],b[4],z1]);
-  for(const [x0,y0,z0,x1,y1,z1] of [...bars(-.125,0),p1,...bars(.25,.75),p2,...bars(1,1.125)]){
-   const a0=z0*16,a1=z1*16,b0=x0*16,b1=x1*16,h0=y0*16,h1=y1*16;
-   quad(tiles[0],[1.75,1,0,2,32-1.75*b1,2+b1],a0,16-h1,a1,16-h0);
-   quad(tiles[1],[1.75,-1,0,2,32+1.75*(a1-16),18+a1],16-b1,16-h1,16-b0,16-h0);
-   quad(tiles[2],[1.75,1,-1.75,1,32,2+2*(16-h1)],a0,b0,a1,b1);
-  }
  }
  setIconResolver(icon);
  const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),...CHEST_ICON_TEXTURES,'blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')].map(async n=>{images.set(n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n));const e=await exactPng(n);if(e)exact.set(n,e);else exact.delete(n);})).then(()=>{redraw();return loadAnimations();});
