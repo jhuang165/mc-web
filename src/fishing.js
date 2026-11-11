@@ -96,7 +96,7 @@ function boxInWater(world, [x0, y0, z0, x1, y1, z1]) {
       }
   return false;
 }
-const setBox = (e) => {
+export const setBox = (e) => {
   const h = f(WIDTH / 2);
   e.bb = [e.x - h, e.y, e.z - h, e.x + h, e.y + WIDTH, e.z + h];
 };
@@ -153,8 +153,9 @@ export class FishHook {
     this.prevYaw = this.yaw;
     if (this.y < -64) { this.dead = true; return false; }
     const dx = this.x - p.x, dy = this.y - p.y, dz = this.z - p.z;
-    if (!p.valid || dx * dx + dy * dy + dz * dz > LOST_DISTANCE_SQ) { this.dead = true; return false; }
-    if (this.hooked !== null) {
+    // the angler check, the hooked entity, the entity search and the fish timers are all under !isRemote (env.remote: a client's copy)
+    if (!env.remote && (!p.valid || dx * dx + dy * dy + dz * dz > LOST_DISTANCE_SQ)) { this.dead = true; return false; }
+    if (this.hooked !== null && !env.remote) {
       const s = env.entityState?.(this.hooked);
       if (s) {
         this.x = s.x;
@@ -186,7 +187,7 @@ export class FishHook {
     ];
     let target = null, d0 = 0;
     const grow = f(0.3);
-    for (const e of env.entities?.(area) ?? []) {
+    for (const e of (env.remote ? [] : env.entities?.(area) ?? [])) {
       if (e.angler && this.ticksInAir < 5) continue;
       const b = e.box, r = intercept([b[0] - grow, b[1] - grow, b[2] - grow, b[3] + grow, b[4] + grow, b[5] + grow], start, end);
       if (!r) continue;
@@ -221,7 +222,7 @@ export class FishHook {
       const lo = bb[1] + ((bb[4] - bb[1]) * k) / 5 - 0.125 + 0.125, hi = bb[1] + ((bb[4] - bb[1]) * (k + 1)) / 5 - 0.125 + 0.125;
       if (boxInWater(world, [bb[0], lo, bb[2], bb[3], hi, bb[5]])) wet += 1 / 5;
     }
-    if (wet > 0) {
+    if (wet > 0 && !env.remote) {
       const cx = Math.floor(this.x), cy = Math.floor(this.y), cz = Math.floor(this.z);
       let l = 1;
       if (rand.nextFloat() < f(0.25) && env.canLightningStrike(cx, cy + 1, cz)) l = 2;

@@ -37,7 +37,7 @@ function host(kind, r, id) {
   if (kind === "item") return { x, y: posY - OBJECT_KINDS.item.yOff, z, mx: vx, my: vy, mz: vz, rotationYaw: yaw, stack: { id: 1, count: 1 } };
   if (kind === "orb") return { x, posY, z, vx, vy, vz, y: posY - 0.25, value: id === 8 ? 3 : 5, id };
   if (kind === "arrow" || kind === "snowball") return { x, y: posY, z, mx: vx, my: vy, mz: vz, yaw, pitch, id };
-  return { x, y: posY - OBJECT_KINDS[kind].yOff, z, vx, vy, vz, block: 12, meta: 0, id }; // falling, tnt
+  return { x, y: posY - OBJECT_KINDS[kind].yOff, z, vx, vy, vz, block: 6, meta: 0, id }; // falling (browser sand 6 = native 12), tnt
 }
 const set = (h, kind, r) => { const n = host(kind, r, h.id); for (const k of Object.keys(n)) h[k] = n[k]; };
 
