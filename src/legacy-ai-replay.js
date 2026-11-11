@@ -88,7 +88,7 @@ function replayUncapped(r, hooks) {
   ew.ai.player.unticked = true;
   ew.ai.budget.perTick = Infinity;
   // The probe never ticks the spawned fireballs (World.d only adds slimes to the entity list), so flight and impact are not native evidence here: the replay compares launches only.
-  ew.fireballs.tick = () => {};
+  ew.fireballs.tick = () => {}; ew.fireballs.tickOne = () => {}; // the probe never ticks the balls its mobs launch (EntityWorld walks them through tickOne)
   const vel = [0, 0], script = r.script.map((s) => s.split(" ")), hits = [], states = [];
   let taken = 0;
   for (let t = 0; t < r.ticks; t++) {

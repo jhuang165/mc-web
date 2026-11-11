@@ -43,7 +43,7 @@ export function blazeUpdate(m, e, t) {
   if (wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });
   // The crackle is EntityBlaze.onLivingUpdate's client half (isRemote: worldObj.playSound(posX + 0.5, posY + 0.5, posZ + 0.5, "fire.fire", ...)): a client-only sound at the blaze (entity-tracker.js), the draws stay.
-  if (rand.nextInt(24) === 0) (m.clientSounds ??= []).push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: e, clientOnly: true });
+  if (rand.nextInt(24) === 0) (m.clientSounds ??= []).push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: e, clientOnly: true, offset: 0.5 });
   for (let i = 0; i < 2; i++) { // the six nextDouble draws happen with or without a particle system
     const x = e.x + (rand.nextDouble() - 0.5) * t.width, y = e.y + rand.nextDouble() * t.height, z = e.z + (rand.nextDouble() - 0.5) * t.width;
     m.fx?.spawn("largesmoke", x, y, z, 0, 0, 0);

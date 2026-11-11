@@ -6,7 +6,7 @@ import { ringEntityActive } from './streaming-ticks.js';
 // 1.5 blocks/tick with gaussian inaccuracy, drag 0.99 (0.8 in water), gravity
 // 0.03, a World.rayTraceBlocks (ahb.a) sweep each tick and an entity sweep
 // (expand 0.3) that skips the thrower for the first five ticks. A hit deals
-// 0 damage (3 for blazes, which this build lacks), spawns eight snowballpoof
+// 0 damage (3 for blazes), spawns eight snowballpoof
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { explosionImpact } from "./explosion.js";
@@ -285,14 +285,17 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
 // and is knocked away from the thrower (not along the ball's path) through
 // EntityWorld.damage. EntityAnimal.attackEntityFrom sets fleeingTick 60 and
 // cancels love first, even for a rejected hit. Health never changes.
-export function thrownHit(mobs, e, from) {
+export function thrownHit(mobs, e, from, ball = from) {
   if (!mobs.entities.includes(e)) return false;
   if (e.type !== "zombie" && e.type !== "skeleton") {
     e.flee = 60;
     e.love = 0;
     e.mateTicks = 0;
   }
-  return mobs.damage(e, 0, from.x, from.z, true, null, { projectile: true });
+  // EntitySnowball.onImpact (zj.a, bytecode-read): 3 damage to an EntityBlaze, 0 to anything else; the source is causeThrownDamage(ball, thrower), so a mob thrower
+  // (the snow golem: `from` is its owner, not the ball) is the source entity a blaze then targets.
+  const thrower = ball !== from && from !== e && from?.type ? from : null, amount = e.type === "blaze" && ball?.kind === "snowball" ? 3 : 0;
+  return mobs.damage(e, amount, from.x, from.z, !thrower, null, thrower ? { projectile: true, shooter: thrower } : { projectile: true });
 }
 
 export class Projectiles {
