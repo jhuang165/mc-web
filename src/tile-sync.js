@@ -14,6 +14,9 @@
 // Chests, furnaces, dispensers, hoppers, brewing stands, note blocks, jukeboxes, enchanting tables, comparators, daylight sensors and the rest send
 // nothing (their m() is null), so a resend leaves the client's own copy of them alone.
 //
+// Batch 43 (tileedits): the single-cell and 2 to 63 cell branches send the same descriptions (`describeCell`, riding in the tick's `tiles`), and so
+// does a tile edit (sign text, skull placement, beacon picks, spawner mob; DedicatedSimulation.tileChanged).
+//
 // Here the port's wire form is `chunks[i].tiles`: [{ kind, x, y, z, ... }] built by describeTiles from the server's stores and applied on the
 // replica by applyTiles. There is no command block in this port, so that description is not produced.
 import { SIGN_POST, WALL_SIGN, isSign, SIGN_LINES, MAX_LINE } from "./signs.js";
@@ -27,22 +30,56 @@ export { SIGN_POST, WALL_SIGN };
 const cellIn = (t, cx, cz, mask) => (t.x >> 4) === cx && (t.z >> 4) === cz && (mask >> (t.y >> 4) & 1) === 1;
 const line = (s) => String(s ?? "").slice(0, MAX_LINE);
 
+// The S35 action ids of the executed probe (public/research/tile-description-reference.json); the sign has its own S33 packet and no action.
+export const TILE_ACTION = Object.freeze({ spawner: 1, command: 2, beacon: 3, skull: 4, pot: 5 });
+
+const signOf = (t) => ({ kind: "sign", x: t.x, y: t.y, z: t.z, text: Array.from({ length: SIGN_LINES }, (_, i) => line(t.text?.[i])) });
+const skullOf = (t) => ({ kind: "skull", action: TILE_ACTION.skull, x: t.x, y: t.y, z: t.z, type: t.type & 7, rot: t.rot & 15, owner: t.owner || "" });
+const spawnerOf = (s) => ({ kind: "spawner", action: TILE_ACTION.spawner, x: s.x, y: s.y, z: s.z, nbt: spawnerJSON(s) });
+const beaconOf = (t) => ({ kind: "beacon", action: TILE_ACTION.beacon, x: t.x, y: t.y, z: t.z, primary: t.primary, secondary: t.secondary, levels: t.levels });
+// Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
+const potOf = (world, x, y, z) => { const c = potContents(world, x, y, z); return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0 }; };
+
+// The description of the one tile entity at a cell (PlayerInstance.sendChunkUpdate's changed-cell branch: getDescriptionPacket when the block has
+// a tile entity), or null when the block there has none, sends none, or has no record. Batch 43 (tileedits).
+export function describeCell(stores, x, y, z) {
+  const { world } = stores, block = world.get(x, y, z);
+  if (isSign(block)) { const t = stores.signs?.tile(x, y, z); return t ? signOf(t) : null; }
+  if (block === SKULL) { const t = stores.skulls?.tile(x, y, z); return t ? skullOf(t) : null; }
+  if (block === MOB_SPAWNER) { const t = stores.spawners?.get(x, y, z); return t ? spawnerOf(t) : null; }
+  if (block === BEACON) { const t = stores.beacons?.get(x, y, z); return t ? beaconOf(t) : null; }
+  if (block === FLOWER_POT) return potOf(world, x, y, z);
+  return null;
+}
+
+// The pot cells of the masked sections of a chunk. One native pass over the column's block array (`indexOf` per hit) instead of a read per cell
+// (batch 42 scanned about 65,000 cells for a full mask); a world without the plain column falls back to cell reads.
+function potCells(world, cx, cz, mask) {
+  const col = world.chunks?.get?.(`${cx},${cz}`), out = [];
+  if (col?.blocks && col.blocks.length % 256 === 0) {
+    const height = col.blocks.length / 256;
+    for (let i = col.blocks.indexOf(FLOWER_POT); i >= 0; i = col.blocks.indexOf(FLOWER_POT, i + 1)) {
+      const y = i % height, column = (i - y) / height;
+      if (mask >> (y >> 4) & 1) out.push([cx * 16 + (column >> 4), y, cz * 16 + (column & 15)]);
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
+  }
+  for (let x = cx * 16; x < cx * 16 + 16; x++) for (let z = cz * 16; z < cz * 16 + 16; z++) for (let sy = 0; sy < 16; sy++) {
+    if (!(mask >> sy & 1)) continue;
+    for (let y = sy * 16; y < sy * 16 + 16; y++) if (world.get(x, y, z) === FLOWER_POT) out.push([x, y, z]);
+  }
+  return out;
+}
+
 // `stores`: { world, signs?, skulls?, beacons?, spawners? } (Signs, Skulls, Beacons, MobSpawners). A tile counts only where its block is still there
 // (a tile entity goes with its block). Order follows each store, signs first, as the packets of a section would.
 export function describeTiles(stores, cx, cz, mask) {
   const { world } = stores, out = [];
-  for (const t of stores.signs?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && isSign(world.get(t.x, t.y, t.z))) out.push({ kind: "sign", x: t.x, y: t.y, z: t.z, text: Array.from({ length: SIGN_LINES }, (_, i) => line(t.text?.[i])) });
-  for (const t of stores.skulls?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === SKULL) out.push({ kind: "skull", x: t.x, y: t.y, z: t.z, type: t.type & 7, rot: t.rot & 15, owner: t.owner || "" });
-  for (const s of stores.spawners?.values() ?? []) if (cellIn(s, cx, cz, mask) && world.get(s.x, s.y, s.z) === MOB_SPAWNER) out.push({ kind: "spawner", x: s.x, y: s.y, z: s.z, nbt: spawnerJSON(s) });
-  for (const t of stores.beacons?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === BEACON) out.push({ kind: "beacon", x: t.x, y: t.y, z: t.z, primary: t.primary, secondary: t.secondary, levels: t.levels });
-  // Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
-  for (let x = cx * 16; x < cx * 16 + 16; x++) for (let z = cz * 16; z < cz * 16 + 16; z++) for (let sy = 0; sy < 16; sy++) {
-    if (!(mask >> sy & 1)) continue;
-    for (let y = sy * 16; y < sy * 16 + 16; y++) if (world.get(x, y, z) === FLOWER_POT) {
-      const c = potContents(world, x, y, z);
-      out.push({ kind: "pot", x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0 });
-    }
-  }
+  for (const t of stores.signs?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && isSign(world.get(t.x, t.y, t.z))) out.push(signOf(t));
+  for (const t of stores.skulls?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === SKULL) out.push(skullOf(t));
+  for (const s of stores.spawners?.values() ?? []) if (cellIn(s, cx, cz, mask) && world.get(s.x, s.y, s.z) === MOB_SPAWNER) out.push(spawnerOf(s));
+  for (const t of stores.beacons?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === BEACON) out.push(beaconOf(t));
+  for (const [x, y, z] of potCells(world, cx, cz, mask)) out.push(potOf(world, x, y, z));
   return out;
 }
 

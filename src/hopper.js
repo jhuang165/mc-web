@@ -7,7 +7,7 @@ import { HOPPER_BOUNDS, HOPPER_BOXES, HOPPER_UNION } from "./hopper-shape.js";
 import { ringBlockTickActive } from "./streaming-ticks.js";
 import { Container, Slot, StackArray, copyStack } from "./inventory.js";
 import {
-  containerAt, isInventoryFull, arrayAdapter, pushOne, suckFromInventory, pickUpEntity, insertStack, touch, newHopperTile,
+  containerAt, containerPending, isInventoryFull, arrayAdapter, pushOne, suckFromInventory, pickUpEntity, insertStack, touch, newHopperTile,
   HOPPER_SLOTS, TRANSFER_COOLDOWN, BLOCK_HOPPER,
 } from "./inventory-transfer.js";
 
@@ -83,6 +83,9 @@ export class HopperContainer extends Container {
 export function updateHopper(host, tile, x, y, z, meta) {
   if (!hopperEnabled(meta) || tile.cooldown > 0) return false;
   const maxStack = host.maxStack, key = `${x},${y},${z}`;
+  // A neighbour whose saved containers are still loading: wait (no transfer, no pickup, no cooldown); natively that chunk is loaded.
+  const [fx, fy, fz] = FACING_OFFSETS[hopperFacing(meta)];
+  if (containerPending(host, x + fx, y + fy, z + fz) || containerPending(host, x, y + 1, z)) return false;
   const self = arrayAdapter(key, tile.items, { hopper: tile, received: () => { tile.cooldown = TRANSFER_COOLDOWN; } });
   let moved = false, target = null, above = null;
   if (tile.items.some(Boolean)) {

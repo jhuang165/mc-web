@@ -15,8 +15,8 @@ export function restoreReplica(snapshot) {
 }
 
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onBlocks, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -53,24 +53,31 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
-    if (message.type === 'chat' || message.type === 'blocks') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
-    const merged = this.pending ??= { cells: new Map() };
+    const merged = this.pending ??= { cells: new Map(), tiles: new Map() };
     for (const change of message.changes) merged.cells.set(`${change[0]},${change[1]},${change[2]}`, change);
+    // a tile description (S33 / S35) of a merged tick still applies: the newest one per cell and kind wins
+    for (const t of message.tiles ?? []) merged.tiles.set(`${t.kind},${t.x},${t.y},${t.z}`, t);
     merged.last = message;
   }
   start() {
     this.ready = true;
     const merged = this.pending; this.pending = null;
-    if (merged) this.apply({ ...merged.last, changes: [...merged.cells.values()] });
+    if (merged) this.apply({ ...merged.last, changes: [...merged.cells.values()], tiles: [...merged.tiles.values()] });
     for (const message of this.messages.splice(0)) this.apply(message);
   }
   apply(message) {
     if (message.type === 'blocks') this.onBlocks(message);
+    if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
+  // C12 update sign: the four lines of a sign this player placed (the server checks it is the editor).
+  updateSign(x, y, z, text) { this.send({ type: 'sign', x, y, z, text }); }
+  // MC|Beacon: the chosen primary and secondary effect ids.
+  chooseBeacon(x, y, z, primary, secondary) { this.send({ type: 'beacon', x, y, z, primary, secondary }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }
 }

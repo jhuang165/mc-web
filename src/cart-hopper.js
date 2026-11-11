@@ -2,7 +2,7 @@
 // entity in the box above) and the cart's own fallback over its box grown 0.25. Transfers use the shared hopper helpers
 // (inventory-transfer.js); `host.transfer` is the Hoppers transfer host ({ world, items(), maxStack, chests(), ..., changed }).
 // Verified in public/research/carts-reference.json (tools/probes/CartsProbe.java).
-import { arrayAdapter, containerAt, suckFromInventory, pickUpEntity, touch } from "./inventory-transfer.js";
+import { arrayAdapter, containerAt, containerPending, suckFromInventory, pickUpEntity, touch } from "./inventory-transfer.js";
 import { HopperContainer } from "./hopper.js";
 
 // EntityItem box: 0.25 wide and high (`y` is the bottom).
@@ -21,6 +21,7 @@ export function hopperSuck(cart, host) {
   if (ring && transfer.world.ringReads && !ring.writable(cart.x, cart.z)) return false;
   const maxStack = transfer.maxStack, inv = arrayAdapter("", cart.slots, { keys: [], cart });
   const x = Math.floor(cart.x), y = Math.floor(cart.posY) + 1, z = Math.floor(cart.z);
+  if (containerPending(transfer, x, y, z)) return false; // the saved containers above are still loading: wait, do not fall back to items
   const above = containerAt(transfer, x, y, z);
   let got = false;
   if (above) { got = suckFromInventory(inv, above, maxStack); if (got) touch(transfer, inv, above); }

@@ -105,6 +105,6 @@ export function chunkPacketCells(packet) {
 // descriptions of the resent chunks come out as `tiles` (the S33/S35 packets that followed the chunk), after the cells.
 export function expandChunks(message) {
   if (!message.chunks?.length) return message;
-  const tiles = message.chunks.flatMap(c => c.tiles ?? []);
+  const tiles = [...(message.tiles ?? []), ...message.chunks.flatMap(c => c.tiles ?? [])];
   return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined, ...(tiles.length ? { tiles } : {}) };
 }
