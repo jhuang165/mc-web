@@ -2,7 +2,7 @@
 // pixel-centre coverage with the top-left rule, GL_NEAREST texels, a depth buffer): boxes from RenderBlocks.renderBlockAsItem (executed in batch 42, item-render-reference.json)
 // and the chest model (batch 43, chest-item-reference.json). A quad is { pos: 4 x [x, y, z] in the model's block frame, uv: 4 x [s, t] texture fractions (t from the top),
 // tex: { data, w, h } straight-alpha RGBA, shade }. Every quad is a parallelogram under the affine projection, so the texture coordinate is affine in screen space.
-import { BOX_FACE_CORNERS, itemBoxUv } from "./render-shapes.js";
+import { BOX_FACE_CORNERS, itemBoxUv, CACTUS_ITEM_QUADS } from "./render-shapes.js";
 import { glFace } from "./atlas-texels.js";
 import { gl, transformPoint, cubeModelView } from "./icon-cube.js";
 import { CHEST_ITEM_PREFIX, CHEST_ITEM_PARTS, modelBoxQuads } from "./chest-item-model.js";
@@ -22,6 +22,12 @@ export function boxQuads(boxes, tileOf, uvOf = itemBoxUv) {
     }
   });
   return out;
+}
+
+// The cactus item (render type 13, renderBlockAsItem executed in item-render-reference.json): full top and bottom, the four sides inset 1/16, drawn without the 90 degree turn
+// (boxModelView(false)). tileOf(fi) gives the texture of a face in the port's order +x, -x, +y, -y, +z, -z.
+export function cactusIconQuads(tileOf) {
+  return CACTUS_ITEM_QUADS.map(([fi, q]) => ({ pos: q.map((v) => v.slice(0, 3)), uv: q.map((v) => v.slice(3)), tex: tileOf(fi), shade: FACE_SHADE[fi >> 1] }));
 }
 
 // The matrix of a recorded T / S / R event list, composed in float32 in call order.
