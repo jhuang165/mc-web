@@ -14,7 +14,7 @@
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs } from "./experience.js";
 import { primeTnt, TNT_Y_OFFSET } from "./explosion.js";
-import { tickPrimedTnt } from "./entity-simulation.js";
+import { entityWalkers, watchJoin } from "./entity-simulation.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
@@ -27,7 +27,7 @@ import { Arrows, arrowTargets } from "./bow.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { FireworkRockets } from "./fireworks-live.js";
 import { Hanging, hangingArrowTargets } from "./hanging.js";
-import { drainMobEvents } from "./living-simulation.js";
+import { drainMobEvents, explodeEvent } from "./living-simulation.js";
 import { isWet, canSeeSky } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
@@ -135,6 +135,28 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   mobs.ignite = (x, y, z) => fire.ignite(x, y, z);
   mobs.potions = new WitchPotions(mobs, random);
   mobs.potions.load(potionSplit.inside);
+  // Batch 45: World.updateEntities walks ONE loadedEntityList. The run now ticks items, orbs, TNT, thrown entities, arrows, falling blocks, witch potions, snow golem balls,
+  // wither skulls and leash knots in the mobs' own walk (EntityWorld.tickMobs, the entityWalkers of entity-simulation.js the live game uses), in join order, instead of one
+  // system after another. Carts, boats, hanging entities and rockets still run after the walk (their pushes on the player need a player; see the note). Each walked
+  // entity keeps the 32-block rule (`entityTicks`), read at its place in the list. Spawns during the pass join the end of the list through `joined` stamps, as in main.js.
+  const walkState = { world, items, primed, projectiles, arrows, mobs, xpOrbs: xp, survival: mobSv, position: null, get falling() { return self.falling; } };
+  const walkHooks = {
+    maxStack, explodeTnt: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }),
+    arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
+      igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } }),
+    projectileTargets: () => mobTargets(mobs.entities, null), projectileHit: (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), projectilePearlImpact: (hit) => pearlLands(hit),
+    mobExplosion: (ev) => explodeEvent(ev, (...a) => self.explode(...a)),
+  };
+  const walks = entityWalkers(() => ({ state: walkState, hooks: walkHooks }));
+  for (const k of ["cart", "boat", "hanging"]) walks.delete(k);
+  for (const [kind, w] of walks) {
+    if (kind === "knot") continue; // a knot's own column check is in knotTickOne (horse-gear-live.js)
+    const tick = w.tick;
+    w.tick = (en) => { if (num(en?.x) && num(en?.z) && !entityTicks(en.x, en.z)) { stats.held++; return; } tick(en); };
+  }
+  mobs.walks = walks;
+  items.joined = (en) => mobs.joined(en, "item"); xp.joined = (en) => mobs.joined(en, "orb"); projectiles.joined = (en) => mobs.joined(en, "thrown"); arrows.joined = (en) => mobs.joined(en, "arrow");
+  watchJoin(primed, (en) => mobs.joined(en, "tnt"));
   if (fireList.some(fireIn)) { const mine = fireList.filter(fireIn); mobs.fireballs.load(mine, 0); mobs.skulls.load(mine, 0); }
   if (e.villages) mobs.villages.loadJSON(e.villages);
   // EntityEnderPearl.onImpact (zm.a, bytecode-read): an entity hit takes thrown damage 0 from the thrower, 32 portal particles, and the teleport needs a
@@ -187,22 +209,18 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     // arrows, hanging, carts, boats.
     tick() {
       mobSv.time = clock;
-      if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length) { mobs.lootItems = items; park(mobs.potions.projectiles, "balls", () => mobs.tick(player, mobSv, 0)); }
-      park(xp, "orbs", () => xp.tick(world, null));
+      // The one list walk: mobs, orbs, items, TNT, thrown entities, arrows, potions, balls and skulls in the order they joined (EntityWorld.tickMobs with `walks`).
+      if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length || items.items.length || xp.orbs.length || primed.length || projectiles.balls.length || arrows.list.length || self.falling?.entities.length) {
+        mobs.lootItems = items;
+        mobs.tick(player, mobSv, 0);
+      }
+      // After the walk (finishEntitySimulation without the player's part): mob events, thrown entities' events and their hatchlings, arrows' drains.
+      drainMob();
+      projectiles.tickEffects?.(world);
+      for (const h of projectiles.drain()) if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
+      arrows.drain();
       drainMob();
       park(rockets, "rockets", () => rockets.tick(world, {}));
-      park(items, "items", () => items.tick(world, maxStack));
-      park(primedList, "list", () => tickPrimedTnt(world, primed, { explode: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }) }));
-      if (projectiles.balls.length) {
-        park(projectiles, "balls", () => projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), pearlLands));
-        for (const h of projectiles.drain()) if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
-      }
-      drainMob();
-      if (arrows.list.length) {
-        park(arrows, "list", () => arrows.tick(world, { targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
-          igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } }));
-        arrows.drain();
-      }
       if (minecarts.carts.length) {
         park(minecarts, "carts", () => minecarts.tick(world, { entities: [], host: cartHost }));
         for (const d of minecarts.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
