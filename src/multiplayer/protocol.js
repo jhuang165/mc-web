@@ -64,7 +64,9 @@ export function apiBase(value) {
 // `changes` and S21 is a `chunks` entry `{ x, z, mask, runs }` (chunk coordinates, section mask, the column's run-length cells).
 export const CHUNK_RESEND = 64;
 // `changes` are distinct final cells [x, y, z, id, meta]; `columnOf(cx, cz)` returns the authoritative column for a whole-chunk resend.
-export function splitChanges(changes, columnOf) {
+// `tilesOf(cx, cz, mask)` (optional, tile-sync.js describeTiles) lists the tile entity descriptions of the masked sections: PlayerInstance sends
+// them (S33/S35) right after the chunk packet, so they ride in the chunk entry as `tiles` (omitted when empty).
+export function splitChanges(changes, columnOf, tilesOf = null) {
   const byChunk = new Map();
   for (const change of changes) {
     const key = `${change[0] >> 4},${change[2] >> 4}`;
@@ -77,7 +79,8 @@ export function splitChanges(changes, columnOf) {
   const cells = [], chunks = [];
   for (const group of byChunk.values()) {
     if (group.list.length < CHUNK_RESEND) { cells.push(...group.list); continue; }
-    chunks.push({ x: group.x, z: group.z, mask: group.mask, runs: encodeColumn(columnOf(group.x, group.z)).runs });
+    const tiles = tilesOf?.(group.x, group.z, group.mask) ?? [];
+    chunks.push({ x: group.x, z: group.z, mask: group.mask, runs: encodeColumn(columnOf(group.x, group.z)).runs, ...(tiles.length ? { tiles } : {}) });
   }
   return { changes: cells, chunks };
 }
@@ -98,8 +101,10 @@ export function chunkPacketCells(packet) {
   }
   return cells;
 }
-// A tick with `chunks` back to plain cells (for a client that did not ask for chunk resends, and inside the client that did).
+// A tick with `chunks` back to plain cells (for a client that did not ask for chunk resends, and inside the client that did). The tile entity
+// descriptions of the resent chunks come out as `tiles` (the S33/S35 packets that followed the chunk), after the cells.
 export function expandChunks(message) {
   if (!message.chunks?.length) return message;
-  return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined };
+  const tiles = message.chunks.flatMap(c => c.tiles ?? []);
+  return { ...message, changes: [...message.changes, ...message.chunks.flatMap(chunkPacketCells)], chunks: undefined, ...(tiles.length ? { tiles } : {}) };
 }

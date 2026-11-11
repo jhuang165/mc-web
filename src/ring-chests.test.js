@@ -48,3 +48,32 @@ test("a hopper-style read of a never-resident generated chest sees its loot once
   assert.equal(chests[key].items.filter(Boolean).length, 0, "an emptied chest is not refilled");
   assert.equal(restoreChests([c], world, { chests }), 0, "the hand-over at residency leaves the tile alone");
 });
+
+test("with a cell request hook the first lookup does not build the population cell on the calling thread (batch 42 tilesync)", { timeout: 300000 }, () => {
+  const world = new World("17", "javaStreamed");
+  const c = findChest(world);
+  assert.ok(c);
+  const ring = new HeadlessColumns(world, { pull: 200 });
+  ring.update(c.x >> 4, c.z >> 4);
+  attachRing(world, ring);
+  world.ringReads = true;
+  const pop = world.population, lcx = c.x >> 4, lcz = c.z >> 4, cellX = lcx >> 3, cellZ = lcz >> 3;
+  assert.equal(pop.unclaimedRecord(lcx, lcz)?.chests?.length > 0, true, "without a hook it builds (or reads the cached cell)");
+  const record = pop.cells.map.get(`${cellX},${cellZ}`);
+  pop.cells.map.clear(); // the cell fell out of the cache
+  const asked = [];
+  pop.requestCell = (x, z) => { asked.push([x, z]); return true; };
+  const t0 = performance.now();
+  assert.equal(pop.unclaimedRecord(lcx, lcz), undefined);
+  assert.ok(performance.now() - t0 < 50, "no build");
+  assert.deepEqual(asked, [[cellX, cellZ]]);
+  const chests = {};
+  assert.equal(seedRingChest(world, chests, c.x, c.y, c.z), false, "the hopper waits");
+  assert.equal(Object.keys(chests).length, 0, "no empty tile");
+  assert.equal(pop.adopt(record), true, "the worker's cell arrives");
+  assert.ok(seedRingChest(world, chests, c.x, c.y, c.z) >= 1);
+  assert.ok(contents({ size: 27, get: (i) => chests[`${c.x},${c.y},${c.z}`].items[i] }).length > 0);
+  pop.requestCell = () => false;
+  pop.cells.map.clear();
+  assert.ok(pop.unclaimedRecord(lcx, lcz) !== undefined, "a refused request builds as before");
+});

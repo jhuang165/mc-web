@@ -275,6 +275,7 @@ import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRid
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing } from "./headless-columns.js";
 import { seedRingChest } from "./ring-chests.js";
+import { applyTiles } from "./tile-sync.js";
 import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.js";
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
@@ -450,7 +451,8 @@ let redstoneRuntime = null, tickTree = null;
 const hopperTiles = new Hoppers({
   get world() { return world; },
   chests: () => survival.chests,
-  seedChest: (x, y, z) => seedRingChest(world, survival.chests, x, y, z),
+  seedChest: (x, y, z) => seedRingChest(world, survival.chests, x, y, z, containerResidency),
+  containerReady: (x, z) => containerResidency?.reach(x, z) ?? true,
   furnaces: () => survival.furnaces,
   dispensers: () => (survival.dispensers ??= {}),
   hoppers: () => (survival.hoppers ??= {}),
@@ -586,6 +588,7 @@ function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
   applyMultiplayerCells(message.changes);
+  if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners }); // the S33/S35 descriptions that follow a chunk resend
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
@@ -3145,6 +3148,8 @@ function startPrefetch() {
   try {
     const spawn = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" });
     streamPrefetch = new StreamPrefetch(world, spawn(), { ringSpawn: spawn, ringMax: Math.max(0, Math.min(3, (navigator.hardwareConcurrency ?? 4) - 3)) }); // the ring fills from extra workers made on demand and ended once it is full (a Nether/End column 40-60 ms, an Overworld cell 1-2 s each); none up to 3 cores
+    // A ring hopper reaching a never-resident chest waits for the worker to build its population cell instead of building it here (ring-chests.js).
+    if (world.population) world.population.requestCell = (cx, cz) => { if (!streamPrefetch || streamPrefetch.failed) return false; streamPrefetch.whenHas([[cx, cz]]); return true; };
   } catch (e) {
     console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
   }

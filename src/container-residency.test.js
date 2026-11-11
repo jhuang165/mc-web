@@ -114,3 +114,27 @@ test('eviction also releases the last autosave copy without expanding its owners
  assert.ok(record.containerScope.every(c=>oldScope.includes(c.join(','))));
  assert.equal(record.player.chests['1,70,1'],undefined);
 });
+
+test('a ring hopper reaching a chest of a visited and evicted column waits for its saved contents and then sees them (batch 42 tilesync)',async()=>{
+ const {containerAt}=await import('./inventory-transfer.js'),{seedRingChest}=await import('./ring-chests.js');
+ const w=world(),s=new Survival(),disk=new Map();
+ disk.set('40,40',{world:'w',x:40,z:40,state:{chests:{'641,70,641':chest()},furnaces:{'642,70,641':{items:[{id:6,count:2,damage:0},null,null],burn:0,burnTotal:0,cook:0}}}});
+ const manager=new ContainerResidency(w,'w',s,{read:reader(disk)});
+ const blockAt={'641,70,641':41,'642,70,641':14,'801,70,801':41},fake={get:(x,y,z)=>blockAt[`${x},${y},${z}`]??0,chunks:w.chunks,population:null};
+ const host={world:fake,chests:()=>s.chests,furnaces:()=>s.furnaces,seedChest:(x,y,z)=>seedRingChest(fake,s.chests,x,y,z,manager),containerReady:(x,z)=>manager.reach(x,z)};
+ assert.equal(containerAt(host,641,70,641),null,'first read starts the load, the hopper waits');
+ assert.equal(s.chests['641,70,641'],undefined,'no empty tile is made over the saved one');
+ await manager.ensure([[40,40]]);
+ const inv=containerAt(host,641,70,641);
+ assert.equal(inv.get(0).count,7,'the saved chest contents');
+ assert.ok(manager.live.has('40,40'));
+ manager.update(64,64);assert.ok(manager.live.has('40,40'),'kept until a save makes it durable');
+ commit(manager,disk);assert.equal(disk.get('40,40').state.chests['641,70,641'].items[0].count,7,'the save keeps the contents');
+ const furnaceHost=host;
+ assert.equal(manager.live.has('40,40'),false,'the saved column was evicted again');
+ assert.equal(containerAt(furnaceHost,642,70,641),null);await manager.ensure([[40,40]]);
+ assert.equal(containerAt(furnaceHost,642,70,641).get(0).count,2,'a furnace of the same column is loaded with it');
+ // a chest of a column never saved (empty record) is simply empty once the read returns
+ const cold=containerAt(host,801,70,801);assert.equal(cold,null);
+ await manager.ensure([[50,50]]);assert.equal(containerAt(host,801,70,801).get(0),null);
+});

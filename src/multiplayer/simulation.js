@@ -20,6 +20,11 @@ import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
 import { serverClick } from '../server-handlers.js';
+import { Signs } from '../signs.js';
+import { Skulls } from '../skull.js';
+import { Beacons } from '../pyramid.js';
+import { MobSpawners } from '../mob-spawner.js';
+import { describeTiles } from '../tile-sync.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -54,6 +59,10 @@ export class DedicatedSimulation {
     this.changes = new Map();
     this.actions = [];
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
+    // The tile entities a chunk resend describes to the clients (tile-sync.js); flower pots live on the world. Filled from the save only: no
+    // dedicated message places or edits a sign, skull, spawner or beacon yet.
+    const te = saved.tileEntities ?? {};
+    this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners) };
     this.weather = new Weather().restore(saved.weather).restoreSimulation(saved.worldRandom);
     this.farming = new Farming(this.world, saved.farms);
     this.fluids = new Fluids(this.world, { random: this.weather.random });
@@ -183,7 +192,7 @@ export class DedicatedSimulation {
     const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
     // PlayerInstance.sendChunkUpdate: under 64 changed cells in a chunk go as cells, 64 resend the chunk (protocol.js splitChanges).
-    const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`));
+    const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`), (cx, cz, mask) => describeTiles(this.tileEntities, cx, cz, mask));
     return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
@@ -196,6 +205,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), players: [...this.savedPlayers] };
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(),
+      tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
