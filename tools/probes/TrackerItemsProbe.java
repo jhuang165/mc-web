@@ -60,6 +60,8 @@ public class TrackerItemsProbe {
       case 2: { xk it = new xk(client, x, y, z); e = it; break; }
       case 60: e = new zc(client, x, y, z); break;
       case 61: e = new zj(client, x, y, z); break;
+      case 62: e = new zl(client, x, y, z); break; // batch 44: egg and ender pearl
+      case 65: e = new zm(client, x, y, z); break;
       case 50: e = new xw(client, x, y, z, null); break;
       case 70: e = new xj(client, x, y, z, aji.e(s.m() & 65535), s.m() >> 16); break;
       case 72: e = new zd(client, x, y, z); break; // batch 43: eye of ender, firework rocket, potion, fishing hook (bjb.a(fw))
@@ -73,6 +75,7 @@ public class TrackerItemsProbe {
   static sa handle(sa c, Object p) throws Exception {
     if (p instanceof fw || p instanceof fx) {
       c = spawn(p);
+      if (clientSpawned != null) clientSpawned.accept(c);
       c.d(p instanceof fw ? ((fw) p).c() : ((fx) p).c()); // Entity.setEntityId: the client entity has the server's id (the orb's homing check uses id % 100)
       MobMoveProbe.field(sa.class, "bZ").setInt(c, p instanceof fw ? ((fw) p).d() : ((fx) p).d());
       MobMoveProbe.field(sa.class, "ca").setInt(c, p instanceof fw ? ((fw) p).e() : ((fx) p).e());
@@ -103,6 +106,8 @@ public class TrackerItemsProbe {
     } else if (p instanceof hy) {
       hy s = (hy) p;
       c.i(s.d() / 8000.0, s.e() / 8000.0, s.f() / 8000.0);
+    } else if (p instanceof gt) {
+      c.a(MobMoveProbe.field(gt.class, "b").getByte(p)); // bjb.a(gt): Entity.handleHealthUpdate (batch 44)
     } else if (p instanceof hw) {
       c.z().a(((hw) p).c()); // bjb.a(hw): DataWatcher.updateWatchedObjectsFromList
     }
@@ -134,6 +139,7 @@ public class TrackerItemsProbe {
     if (p instanceof hh) { hf s = (hf) p; return "[\"S17\"," + s.c() + "," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + "]"; }
     if (p instanceof hi) { hf s = (hf) p; return "[\"S16\"," + s.f() + "," + s.g() + "]"; }
     if (p instanceof ik) { ik s = (ik) p; return "[\"S18\"," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + "," + s.h() + "]"; }
+    if (p instanceof gt) { try { return "[\"S1A\"," + MobMoveProbe.field(gt.class, "a").getInt(p) + "," + MobMoveProbe.field(gt.class, "b").getByte(p) + "]"; } catch (Exception ex) { throw new RuntimeException(ex); } }
     if (p instanceof ht) return "[\"S19\"," + ((ht) p).c() + "]";
     if (p instanceof hw) { try { hw s = (hw) p; StringBuilder b = new StringBuilder("[\"S1C\"," + s.d() + ",["); for (Object o : s.c()) { tf w = (tf) o; b.append(b.charAt(b.length() - 1) == '[' ? "" : ",").append("[" + w.c() + "," + w.a() + "," + watchValue(w.b()) + "]"); } return b + "]]"; } catch (Exception ex) { throw new RuntimeException(ex); } }
     return "[\"" + p.getClass().getName() + "\"]";
@@ -142,7 +148,8 @@ public class TrackerItemsProbe {
   // One scenario. `serverTicks` rows are produced by the real server entity's onUpdate; the player stands at (px, 0, pz).
   static String run(String name, Maker maker, double[] start, int range, int freq, boolean vel, int n, double px, double pz, boolean pull, int dieAt) throws Exception {
     server = (ChickenProbe.World) world(serverWorldClass, false);
-    client = (ChickenProbe.World) world(CW2.class, true);
+    client = (ChickenProbe.World) world(clientWorldClass, true);
+    tickLog.clear();
     TrackerProbe.chunkLoaded = true;
     TrackerProbe.clientWorld = client;
     TrackerProbe.NH net = (TrackerProbe.NH) U.allocateInstance(TrackerProbe.NH.class);
@@ -170,6 +177,7 @@ public class TrackerItemsProbe {
     List players = new ArrayList(); players.add(p);
     sa e = maker.make(server, start);
     my me = new my(e, range, freq, vel);
+    entry = me;
     me.b(players); // EntityTracker.addEntityToTracker -> updatePlayerList: the spawn packets
     StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\",\"id\":" + e.y() + ",\"range\":" + range + ",\"freq\":" + freq + ",\"vel\":" + vel + ",\"width\":" + num(fl(e, "M")) + ",\"height\":" + num(fl(e, "N")) + ",\"player\":[" + num(px) + "," + num(pz) + "],\"pull\":" + pull + ",\"rows\":[");
     StringBuilder inputs = new StringBuilder(), clientRows = new StringBuilder();
@@ -199,13 +207,19 @@ public class TrackerItemsProbe {
         TrackerProbe.set(c, "S", d(c, "s")); TrackerProbe.set(c, "T", d(c, "t")); TrackerProbe.set(c, "U", d(c, "u"));
         c.h();
       }
+      if (tickHook != null) tickLog.add(tickHook.get());
       clientRows.append(t > 0 ? "," : "").append(c == null ? "[0]" : "[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + num(d(c, "S")) + "," + num(d(c, "T")) + "," + num(d(c, "U")) + "," + (b(c, "D") ? 1 : 0) + "," + num(fl(c, "y")) + "," + num(fl(c, "z")) + (clientExtra != null ? "," + clientExtra.apply(c) : "") + "]");
       if (pk.length() > 0) out.append(out.charAt(out.length() - 1) == '[' ? "" : ",").append("[" + t + ",[" + pk + "]]");
     }
-    out.append("],\"inputs\":[" + inputs + "],\"client\":[" + clientRows + "]}");
+    out.append("],\"inputs\":[" + inputs + "],\"client\":[" + clientRows + "]" + (tickHook != null ? ",\"log\":[" + String.join(",", tickLog) + "]" : "") + "}");
     return out.toString();
   }
   static boolean pendingDestroy;
+  static Class<?> clientWorldClass = CW2.class; // batch 44: a client world double that records spawnParticle and makeFireworks
+  static java.util.function.Consumer<sa> clientSpawned; // batch 44: runs right after the client entity is built (reseeds Entity.rand)
+  static java.util.function.Supplier<String> tickHook; // batch 44: one entry per client tick (the particles of the tick)
+  static List<String> tickLog = new ArrayList<>();
+  static my entry; // batch 44: the tracker entry of the scenario (a server world double sends S1A through it)
 
   public static void main(String[] args) throws Exception {
     aji.p();
