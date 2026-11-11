@@ -29,6 +29,7 @@ import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
+import { carpetNeighbourChange } from '../colored-blocks.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn } from './protocol.js';
 import { ServerColumns, ServerLight } from './server-world.js';
 
@@ -78,16 +79,26 @@ export class DedicatedSimulation {
     this.fire.watch();
     this.fire.sharedRandomTicks = true;
     this.fire.load(saved.fireTicks);
-    this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: noop,
+    // Block.dropBlockAsItem for what the world systems break by themselves, as main.js does: decayed leaves (saplings, apples),
+    // sugar cane and cactus, rails, torches, carpets, doors and beds that lost their support, the portal's nether wart. A block a
+    // player breaks is already air when these run, so only the blocks that depended on it drop here.
+    const dropBlock = (stacks, x, y, z) => { this.play?.items.dropBlock(stacks.map(d => makeStack(d.id, d.count, d.damage || 0)), x, y, z); };
+    this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: dropBlock,
       light: (x, y, z) => this.light.level(x, y, z, this.darkness) }).watch();
-    this.plants = new Plants(this.world, { drop: noop, broken: noop, apply: noop }).watch();
-    this.falling = new FallingBlocks(this.world, { drop: noop, apply: noop }, saved.falling).watch();
+    this.plants = new Plants(this.world, { drop: dropBlock, broken: noop, apply: noop }).watch();
+    // Entity.entityDropItem(stack, 0): a falling block that cannot land drops itself where it is, pickup delay 10.
+    this.falling = new FallingBlocks(this.world, { apply: noop,
+      drop: (stack, x, posY, z) => { this.play?.items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }); } }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
-    for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: noop, apply: noop }).watch();
+    new Rails(this.world, { drop: dropBlock, apply: noop }).watch();
+    new Torches(this.world, { drop: dropBlock, apply: noop }).watch();
+    // BlockCarpet.onNeighborBlockChange: a carpet whose support below is gone drops itself.
+    { const next = this.world.onChange; this.world.onChange = (x, y, z, old, now) => { next?.(x, y, z, old, now); for (const dy of [1, 0]) { const d = carpetNeighbourChange(this.world, x, y + dy, z); if (d) dropBlock([d], x, y + dy, z); } }; }
+    new Doors(this.world, { drop: dropBlock, apply: noop }).watch();
+    new Beds(this.world, { drop: dropBlock, apply: noop }).watch();
     // Nether portals (BlockFire.onBlockAdded lights a complete obsidian frame, a broken frame takes its portal down), the portal's
     // pig zombies (BlockPortal.updateTick, Overworld only) and nether wart (nether-portal-live.js).
-    this.netherLive = new NetherLive(this.world, { random: this.weather.random, apply: noop,
-      drop: (stacks, x, y, z) => { this.play?.items.dropBlock(stacks.map(d => makeStack(d.id, d.count, d.damage || 0)), x, y, z); },
+    this.netherLive = new NetherLive(this.world, { random: this.weather.random, apply: noop, drop: dropBlock,
       pigman: at => { this.mobs?.ew.spawnPortalPigman(at, this.weather.random); },
       difficulty: () => this.config?.difficulty ?? 2, mobSpawning: () => gameRule('doMobSpawning'),
       solidTop: (x, y, z) => solidTopSurface(this.world, x, y, z), normalCube }).watch();

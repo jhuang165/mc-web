@@ -15,7 +15,7 @@ await installGunRules();
 const STREAMED = { seed: 'ledoge0', biome: STREAMED_BIOME, generationVersion: STREAMED_GENERATION };
 const seeded = (seed = 1) => () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
 const options = () => ({ config: { spawnMonsters: false, spawnAnimals: false, spawnProtection: 0 }, random: seeded(7) });
-const STONE = 1, TORCH = 20, PISTON = 117, PISTON_HEAD = 118, REDSTONE_BLOCK = 123, MOVING = 130;
+const STONE = 1, TORCH = 20, STICKY_PISTON = 116, PISTON = 117, PISTON_HEAD = 118, REDSTONE_BLOCK = 123, MOVING = 130;
 const ORIGINAL_HEAD = 34, EAST = 5; // BlockPistonBase facing 5: +x
 const IDLE = { forward: 0, strafe: 0, jump: false, sneak: false, sprint: false };
 
@@ -118,6 +118,20 @@ test('a piston breaking a torch drops it once (the redstone drop hook)', () => {
   fire(); run(sim, 4);
   assert.deepEqual(row(sim), [PISTON, PISTON_HEAD, 0]);
   assert.deepEqual(sim.play.items.items.slice(before).map(i => [i.stack.id, i.stack.count]), [[TORCH, 1]]);
+});
+
+test('a sticky piston that loses power pulls its block back (BlockPistonBase retraction), the tab seeing it move', () => {
+  const { sim, x0, y, z0, fire, row } = arena();
+  sim.world.set(x0, y, z0, STICKY_PISTON, true, EAST);
+  run(sim, 2);
+  fire(); run(sim, 4);
+  assert.deepEqual(row(sim), [STICKY_PISTON, PISTON_HEAD, STONE]);
+  sim.world.set(x0 - 1, y, z0, 0, true, 0);
+  const pull = sim.tick();
+  assert.ok(pull.redstone.pistons?.some(r => r[0] === x0 + 1 && r[6] === 0), 'the stone moves back into x0 + 1 (retracting)');
+  run(sim, 4);
+  assert.deepEqual(row(sim), [STICKY_PISTON, STONE, 0]);
+  assert.equal(sim.pistons.tiles().length, 0);
 });
 
 test("one world's moving blocks collide only while that world ticks: the Nether never sees the Overworld's", () => {
