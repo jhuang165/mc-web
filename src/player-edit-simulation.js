@@ -575,7 +575,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       position: { x: burning[0] + 0.5, y: burning[1] + 0.5, z: burning[2] + 0.5 } });
     hook('updateBlocks', state.fire.drain());
     hook('markUnsaved');
-    if (state.survival.creative) { state.mineCooldown = 5; return act('extinguish-fire-creative'); }
+    if (state.survival.creative) {
+      // Bytecode-read: PlayerControllerMP.clickBlockCreative extinguishes on the client world with the player (its own fizz), then the
+      // server's ItemInWorldManager.onBlockClicked repeats World.extinguishFire(null, ...) and its aux 1004 packet reaches the
+      // client too: Creative hears two fizzes (own random draws), Survival only the server's one (the client never extinguishes there).
+      hook('playSound', 'random.fizz', { volume: 0.5, pitch: 2.6 + (random() - random()) * 0.8,
+        position: { x: burning[0] + 0.5, y: burning[1] + 0.5, z: burning[2] + 0.5 } });
+      state.mineCooldown = 5; return act('extinguish-fire-creative');
+    }
   }
   if (block === 11 && !state.survival.creative) return act('bedrock-unbreakable');
   if (state.survival.creative) {

@@ -182,7 +182,7 @@ export class ItemEntities {
       wet,
       fizz: () => {
         const r = this.random;
-        this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+        this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y + W, z: e.z });
       },
     });
   }
@@ -274,7 +274,7 @@ export class ItemEntities {
         e.my = 0.20000000298023224;
         e.mx = f(f(r() - r()) * 0.2);
         e.mz = f(f(r() - r()) * 0.2);
-        this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+        this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y + W, z: e.z });
       }
       const [a, b, c, d, g, h] = this.box(e);
       for (const o of this.remote ? [] : this.items) {
