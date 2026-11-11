@@ -2,10 +2,11 @@ import * as THREE from "three";
 import { firstPersonMatrix } from "./first-person-pose.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
-import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
-import { itemSpec, isGateItem } from './item-boxes.js';
+import { isPistonBase, DISPENSER, DROPPER } from "./dispenser-piston.js";
+import { CACTUS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
+import { itemSpec, isGateItem, itemBlockId } from './item-boxes.js';
 import { STAIR_ITEM_BOXES } from './stairs.js';
-import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS } from './render-shapes.js';
+import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
@@ -30,8 +31,37 @@ export function itemModelBoxes(id){const m=itemSpec(id,0,blockTile);return m&&m.
 // The geometry a block item takes in a hand, a dropped item (`scale` .25) or an inventory model, or null when it is a plain cube. The anvil and the beacon use their own
 // face textures (item-boxes.js itemSpec).
 export function blockItemGeometry(id,damage=0,scale=1){
+ if(itemBlockId(id)===CACTUS)return cactusItemGeometry(scale);
  const m=itemSpec(id,damage,blockTile);
  return m?boxItemGeometry(m.boxes,m.tileOf,scale,m.uvOf):null;
+}
+// The yaw a block item takes in a hand or a drop: renderBlockAsItem turns types 0, 16, 22, 26, 31, 39 by 90 degrees about y; stairs, fences, the gate, the beacon, the anvil, the wall,
+// the dragon egg and the cactus are not turned (itemSpec.turned). Everything else (cubes, the chest family) is.
+export function blockItemTurn(id,damage=0){
+ if(itemBlockId(id)===CACTUS)return 0;
+ const m=itemSpec(id,damage,blockTile);
+ return m&&!m.turned?0:Math.PI/2;
+}
+// The unit cube of a block item (renderBlockAsItem's single box), each face on its own tile, at `scale` of a block.
+export function blockCubeGeometry(id,damage=0,scale=1){
+ // renderBlockAsItem draws the dispenser and the dropper as metadata 3 (front side) and a piston as metadata 1, whatever the stack's damage (executed, item-render-reference.json).
+ const b=itemBlockId(id);if(b===DISPENSER||b===DROPPER)damage=3;else if(isPistonBase(b))damage=1;
+ id=b>0&&b<256?b:id;
+ const g=new THREE.BoxGeometry(scale,scale,scale),uv=g.attributes.uv;
+ for(let f=0;f<6;f++){const r=tileRect(blockTile(id,f,false,damage));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);}
+ // renderFaceYNeg runs the bottom texture's v along +z (the executed record), the opposite of BoxGeometry's -y face.
+ for(const i of[12,13]){const a=uv.getY(i),b=uv.getY(i+2);uv.setY(i,b);uv.setY(i+2,a);}
+ return g;
+}
+// The cactus item (CACTUS_ITEM_QUADS: full top and bottom, sides inset 1/16), at `scale` of a block.
+export function cactusItemGeometry(scale=1){
+ const positions=[],uvs=[],indices=[];
+ for(const [fi,quad] of CACTUS_ITEM_QUADS){
+  const r=tileRect(blockTile(CACTUS,fi)),base=positions.length/3;
+  for(const [x,y,z,s,t] of quad){positions.push((x-.5)*scale,(y-.5)*scale,(z-.5)*scale);uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}
+  indices.push(base,base+1,base+2,base,base+2,base+3);
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }
 // RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
 export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
@@ -264,7 +294,7 @@ export class FirstPerson {
       mesh.rotation.y = Math.PI / 2;
     } else if(blockItemGeometry(id,meta)){
       mesh=new THREE.Mesh(blockItemGeometry(id,meta),this.material({map:this.atlas,alphaTest:.1}));
-      mesh.rotation.y=Math.PI/2;
+      mesh.rotation.y=blockItemTurn(id,meta);
     } else if (url) {
       mesh = new THREE.Mesh(
         spriteGeometry(),
@@ -288,16 +318,8 @@ export class FirstPerson {
       }
 
     } else {
-      const g = new THREE.BoxGeometry(1, 1, 1),
-        uv = g.attributes.uv;
-      for (let f = 0; f < 6; f++) {
-        const r=tileRect(blockTile(id,f,false,meta));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);
-      }
-      mesh = new THREE.Mesh(
-        g,
-        this.material({ map: this.atlas,alphaTest:.1 }),
-      );
-      mesh.rotation.y = Math.PI / 2;
+      mesh = new THREE.Mesh(blockCubeGeometry(id, meta), this.material({ map: this.atlas,alphaTest:.1 }));
+      mesh.rotation.y = blockItemTurn(id, meta);
     }
     this.sprite = !!url;
     if (glint && mesh.geometry) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));

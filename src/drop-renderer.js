@@ -4,7 +4,7 @@
 // one to five copies by stack size.
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
-import { itemTexture, pixelTexture, glintMesh, blockItemGeometry } from "./first-person.js";
+import { itemTexture, pixelTexture, glintMesh, blockItemGeometry, blockItemTurn, blockCubeGeometry } from "./first-person.js";
 import { itemFrameTag } from "./item-animation.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEMS } from "./survival.js";
@@ -15,7 +15,10 @@ import { leatherItemLayers } from "./leather-dye.js";
 import { flatItemSprites } from "./render-settings.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 
-const copies = (n) => (n > 40 ? 5 : n > 20 ? 4 : n > 5 ? 3 : n > 1 ? 2 : 1);
+import { blockCopyCount, spriteCopyCount, fancySpriteZ, flatSpriteOffsets } from "./drop-sprite.js";
+
+// RenderItem (executed, drop-sprite.js): a block or the chest draws the block rule's copies, a fancy sprite item its own 1 to 4, a fast sprite the block rule's count.
+const copies = (n, sprite = false, flat = false) => (sprite && !flat ? spriteCopyCount(n) : blockCopyCount(n));
 
 export class DropRenderer {
   constructor(scene, view) {
@@ -32,14 +35,7 @@ export class DropRenderer {
     const key = id + ":" + damage;
     if (!this.cubes.has(key)) { const boxes = blockItemGeometry(id, damage, 0.25); if (boxes) this.cubes.set(key, boxes); } // renderBlockAsItem boxes (stairs, gate, anvil, slabs, plates, ...)
     if (!this.cubes.has(key)) {
-      const g = new THREE.BoxGeometry(0.25, 0.25, 0.25), uv = g.attributes.uv;
-      for (let f = 0; f < 6; f++) {
-        const r = tileRect(blockTile(id, f, false, damage));
-        uv.setXY(f * 4, r.u0, r.v1);
-        uv.setXY(f * 4 + 1, r.u1, r.v1);
-        uv.setXY(f * 4 + 2, r.u0, r.v0);
-        uv.setXY(f * 4 + 3, r.u1, r.v0);
-      }
+      const g = blockCubeGeometry(id, damage, 0.25);
       this.cubes.set(key, g);
     }
     return this.cubes.get(key);
@@ -59,15 +55,31 @@ export class DropRenderer {
       overlayMaterial.polygonOffset = true;
       overlayMaterial.polygonOffsetFactor = -1;
     }
-    const flat = flatItemSprites();
-    for (let i = 0, n = copies(stack.count); i < n; i++) {
+    const flat = flatItemSprites(), n0 = copies(stack.count, !!url, flat), spinners = [], zs = url && !flat ? fancySpriteZ(n0) : null, offsets = url && flat ? flatSpriteOffsets(n0, random) : null;
+    for (let i = 0, n = n0; i < n; i++) {
       let mesh;
       if (url) {
         mesh = new THREE.Mesh(flat ? this.flatSprite : this.sprite, material);
         mesh.scale.setScalar(0.5);
-        mesh.position.set(-0.25, -0.125, (i - (n - 1) / 2) * 0.042);
-        // Copies after the first shift by (rand * 2 - 1) * 0.3 on each axis (about 0.15 once scaled; approximated).
-        if (flat) mesh.position.set(-0.25, -0.125, 0).add(i ? new THREE.Vector3((random.nextFloat() * 2 - 1) * 0.15, (random.nextFloat() * 2 - 1) * 0.15, (random.nextFloat() * 2 - 1) * 0.15) : new THREE.Vector3());
+        // Fancy: the copies stack along z by 0.0625 + 0.021875 each, first at -(step * n / 2) + step (drop-sprite.js, in the half-scale space, so half of it here).
+        mesh.position.set(-0.25, -0.125, zs ? zs[i] * 0.5 : 0);
+        if (flat) {
+          // Fast: the copy's random offset (also halved by the scale) is applied before the turn to the view, so it sits on a holder outside the turning group.
+          const holder = new THREE.Group(), spinner = new THREE.Group();
+          holder.position.set(...offsets[i].map((v) => v * 0.5));
+          spinner.add(mesh);
+          holder.add(spinner);
+          group.add(holder);
+          spinners.push(spinner);
+          if (glint) mesh.add(glintMesh(mesh.geometry, pixelTexture(url)));
+          if (overlayMaterial) {
+            const overlay = new THREE.Mesh(this.sprite, overlayMaterial);
+            overlay.scale.copy(mesh.scale); overlay.position.copy(mesh.position); overlay.renderOrder = 1;
+            if (glint) overlay.add(glintMesh(overlay.geometry, pixelTexture(overlayUrl)));
+            spinner.add(overlay);
+          }
+          continue;
+        }
         if (glint) mesh.add(glintMesh(mesh.geometry, pixelTexture(url)));
         if (overlayMaterial) {
           const overlay = new THREE.Mesh(this.sprite, overlayMaterial);
@@ -78,6 +90,7 @@ export class DropRenderer {
         }
       } else {
         mesh = chestUrl ? chestItemModel(material, 0.25) : new THREE.Mesh(this.cube(stack.id, stack.damage || 0), material);
+        mesh.rotation.y = blockItemTurn(stack.id, stack.damage || 0); // renderBlockAsItem's own turn, inside the spin (types 0, 16, 22, 26, 31, 39)
         // Extra copies scatter by (rand * 2 - 1) * 0.2 blocks on each axis.
         if (i) mesh.position.set((random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2);
       }
@@ -87,7 +100,7 @@ export class DropRenderer {
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, overlayMaterial, flat: !!url && flat, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + itemFrameTag(url) + ":" + (glint ? 1 : 0) + ":" + color + ":" + (flat ? "f" : "d"), hover };
+    return { group, spin: spinners[0] ?? spin, spinners, material, overlayMaterial, flat: !!url && flat, key: stack.id + ":" + (stack.damage || 0) + ":" + n0 + ":" + itemFrameTag(url) + ":" + (glint ? 1 : 0) + ":" + color + ":" + (flat ? "f" : "d"), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
@@ -104,7 +117,7 @@ export class DropRenderer {
     if (pile.flat) {
       // glRotatef(180 - playerViewY): the quad stays parallel to the view plane.
       const d = this.view.camera.getWorldDirection(new THREE.Vector3());
-      pile.spin.rotation.y = Math.atan2(-d.x, -d.z);
+      for (const spinner of pile.spinners) spinner.rotation.y = Math.atan2(-d.x, -d.z);
     } else pile.spin.rotation.y = age / 20 + pile.hover;
     const brightness = this.view.brightness(x, y + 0.17, z);
     pile.material.setLight(brightness);
@@ -127,7 +140,7 @@ export class DropRenderer {
       seen.add(e);
       let pile = this.piles.get(e);
       const leather = leatherItemLayers(stack.id, stack.color),
-        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + itemFrameTag(itemTexture(stack.id, stack.damage)) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
+        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count, !!itemTexture(stack.id, stack.damage), flatItemSprites()) + ":" + itemFrameTag(itemTexture(stack.id, stack.damage)) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);
