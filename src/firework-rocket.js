@@ -38,6 +38,7 @@ export function tickRocket(r, world, rand, { remote = false, server = true } = {
   if (server && r.life > r.lifetime) {
     out.explode = { x: r.x, y: r.y, z: r.z, vx: r.mx, vy: r.my, vz: r.mz, fireworks: r.stack?.fireworks ?? null };
     r.dead = true;
+    r.exploded = true; // World.setEntityState(rocket, 17): the tracker sends the S1A before the destroy (object-tracker.js)
   }
   return out;
 }

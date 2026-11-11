@@ -380,10 +380,13 @@ function updateParticleOptions() {
   const setting = particleSetting(options.particles);
   scene.particles.setting = scene.explosionParticles.setting = scene.fx.setting = setting;
   projectiles.particleSetting = weather.particleSetting = setting;
+  objectTracker.sims.balls.particleSetting = setting;
   // RenderGlobal uses one client World.rand; keep it separate from server simulation.
   scene.particles.worldRandom = projectiles.particleRandom = scene.fx.worldRandom = scene.explosionParticles.worldRandom;
+  objectTracker.sims.balls.particleRandom = scene.explosionParticles.worldRandom;
   const viewer = [position.x, position.y + PHYSICS.eye, position.z];
   scene.explosionParticles.viewer = projectiles.particleViewer = scene.fx.viewer = viewer;
+  objectTracker.sims.balls.particleViewer = viewer;
 }
 function updateGuiScale(){document.documentElement.style.setProperty('--gui-scale',guiScale(innerWidth,innerHeight,Number(options.guiScale)||0));}
 window.addEventListener('resize',updateGuiScale);updateGuiScale();
@@ -425,6 +428,12 @@ const joinedAs = (kind) => (e) => mobs?.joined(e, kind); // World.spawnEntityInW
 watchJoin(primed, joinedAs("tnt"));
 let entityTick = null; // this tick's { state, hooks } for tickEntitySimulation, which the walk in EntityWorld.tickMobs reads
 let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
+// Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
+function bindObjectTracker() {
+  objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
+  const balls = objectTracker.sims.balls;
+  if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; }
+}
 const THROWN_KINDS = ["snowball", "egg", "enderPearl", "potion", "expBottle"];
 const thrownOf = (kind) => [...projectiles.balls, ...(mobs?.potions?.balls ?? [])].filter((b) => b.kind === kind); // the witch's potions are tracked like the player's
 const viewBalls = (balls) => balls.map((b) => THROWN_KINDS.includes(b.kind) ? objectViews(objectTracker, [b], b.kind)[0] : b);
@@ -1575,6 +1584,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     rockets.load(record.rockets);
     fishing.load(record.fishing);
     objectTracker = new ObjectTracker(); // a fresh client world: nothing is tracked yet
+    bindObjectTracker();
     primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz })), joinedAs("tnt"));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
@@ -2702,7 +2712,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
-  rockets.tick(world, { ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
+  rockets.tick(world, { ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), clientCopies: true }); // the client rocket copies draw the trail and the explosion (object-tracker.js)
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
@@ -2737,7 +2747,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
           name:'thrown',player:!!source.thrower,attacker:'projectile',
           ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
         }),
-        particle:p=>scene.fx.spawn('portal',p.x,p.y,p.z,p.mx,p.my,p.mz),
+        particle:()=>{}, // the client's copy of the pearl portals on impact (object-tracker.js, Projectiles.clientImpact)
         teleport:({from,to})=>{
           // Count the physical movement preceding the teleport, not its displacement.
           oldPosition.x+=to.x-from.x;oldPosition.y+=to.y-from.y;oldPosition.z+=to.z-from.z;
@@ -2766,6 +2776,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
     objectTracker.update(lists, position, world);
+    for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
   }
   };
@@ -4079,7 +4090,9 @@ async function boot(){try {
   scene.weather = weather;
   projectiles.useEffects(scene.effectRenderer);
   projectiles.spawner = scene.fx;
-  arrows.fx = scene.fx;
+  projectiles.clientParticles = true; // impacts are the client copies' (object-tracker.js)
+  arrows.fx = null; // the crit trail, bubbles and splash of an arrow are drawn by its client copy
+  bindObjectTracker();
   await scene.textures.ready;
   xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(
