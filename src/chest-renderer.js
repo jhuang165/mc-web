@@ -21,10 +21,7 @@ export function chestModel(material, double = false) {
     model = new THREE.Group(),
     lid = new THREE.Group(),
     box = (parent, bw, bh, bd, u, v, x, y, z) => {
-      const geometry = skinBox(bw, bh, bd, u, v, tw, 64), uv = geometry.attributes.uv;
-      // ModelBox's bottom face (the -y quad of the model turned over by S 1, -1, -1 is the one facing down on screen) reads its texture rows the other way round from skinBox's
-      // bottom face: the executed chest quads (chest-item-reference.json, src/hand-models.test.js) have v running the opposite way there; the top face agrees.
-      for (let k = 0; k < 2; k++) { const i = 12 + k, j = i + 2, a = [uv.getX(i), uv.getY(i)], b = [uv.getX(j), uv.getY(j)]; uv.setXY(i, ...b); uv.setXY(j, ...a); }
+      const geometry = skinBox(bw, bh, bd, u, v, tw, 64); // its bottom face uvs are the executed ModelBox ones (model-faces.test.js)
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(x / 16, y / 16, z / 16);
       parent.add(mesh);

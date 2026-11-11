@@ -178,6 +178,10 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
     uv.setXY(face * 4 + 2, a, e);
     uv.setXY(face * 4 + 3, b, e);
   });
+  // ModelBox's bottom quad (y2, the one facing down on screen) is the only face whose texture rows run the other way round from
+  // BoxGeometry's -y face in the model frame (x, -y, -z): the executed quads (model-faces-reference.json) read v from z1 to z2
+  // where the BoxGeometry face reads z2 to z1. The other five faces agree.
+  for (let k = 0; k < 2; k++) { const i = 12 + k, j = i + 2, ay = uv.getY(i), by = uv.getY(j); uv.setY(i, by); uv.setY(j, ay); }
   return g;
 }
 // `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
