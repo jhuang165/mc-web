@@ -19,15 +19,23 @@
 // (my: motion change over 0.02 squared, or a motion of exactly zero after a change, sent before the position packet; Entity.velocityChanged
 // at the end; the spawn packet carries the motion), the client's motion (setVelocity = packet / 8000, spawn (float) / 8000f), and
 // EntityLivingBase.onLivingUpdate on the client: interpolation, else 0.98 drag, the 0.005 cut, then moveEntityWithHeading(0, 0).
-// Not modelled: the chunk send queue (chunks are watched at once), mounted entities (the client position is the live one), every entity
+// Batch 43 (tracker-mounts-reference.json; tools/probes/TrackerMountsProbe.java executes the real client classes): S1B attach (EntityTrackerEntry sends
+// attach(0) when ridingEntity differs from the last one sent (null at the start) or every 60th tick while riding, in tryStartWachingThis for a rider, and
+// attach(1) for a leashed EntityLiving at the start and whenever the leash changes), the client's mountEntity / updateRidden / updateRiderPosition (the mount
+// updates first, then its rider, then the seat snaps the rider's position), the client's rotation (S0F/S14/S16/S17/S18 angles, the interpolation, the head packet)
+// and the body yaw of an AI mob (EntityBodyHelper) that the chicken's seat reads, and the client's own water flags.
+// Not modelled: the chunk send queue (chunks are watched at once), a mount the player rides (it keeps its live position for the camera), every entity
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
 import { trackingRange } from "./ring-events.js";
+import { mountEntity, seatPosition } from "./mob-riding.js";
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
 export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
 // Mobs whose client class moves by its own code (EntityFlying, EntitySquid, EntityBat, the dragon, the wither, the blaze's onLivingUpdate): the
 // client entity follows the position packets only.
+// mobs that are not an EntityCreature (td): the mounts a skeleton does not copy the body yaw of
+const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon"]);
 export const CLIENT_PHYSICS_OFF = new Set(["ghast", "squid", "bat", "ender_dragon", "wither", "blaze"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)
 const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
@@ -54,6 +62,11 @@ export function encodeAxis(size, v) {
 export const encodeY = (v) => floor(v * 32);
 const byte = (v) => (v << 24) >> 24; // the position packets' rotation fields are bytes (the entry compares the ints)
 const angle = (deg) => floorFloat(f(f(f(deg) * 256) / 360));
+const unangle = (b) => f(f(byte(b) * 360) / 256); // (float)(packet byte * 360) / 256.0F
+const wrap180 = (d) => { d %= 360; return d >= 180 ? d - 360 : d < -180 ? d + 360 : d; }; // MathHelper.wrapAngleTo180_double
+// The leash holder of a live mob as the S1B(1) packet names it, or null: the player, another mob (by uuid) or a knot's block.
+const holderOf = (l) => l?.holder === "player" ? { kind: "player" } : l?.holder === "mob" && l.holderUuid ? { kind: "mob", uuid: l.holderUuid } : l?.knot ? { kind: "knot", x: l.knot.x, y: l.knot.y, z: l.knot.z } : null;
+const leashKey = (e) => { const h = holderOf(e.leash); return h ? `${h.kind}:${h.uuid ?? ""}${h.x ?? ""},${h.y ?? ""},${h.z ?? ""}` : ""; };
 
 // The tracker entry for one mob and one player. `view` is { player, watches(cx, cz) }.
 export class TrackerEntry {
@@ -76,6 +89,8 @@ export class TrackerEntry {
     this.tracked = false; // trackingPlayers contains the player
     this.lastVX = this.lastVY = this.lastVZ = 0; // j, k, l: the motion last sent
     this.packets = []; // what the client will process, oldest first
+    this.lastRiding = null; // EntityTrackerEntry.w: the vehicle last sent in S1B(0)
+    this.lastLeash = ""; // the leash holder last sent in S1B(1) (a key of leashKey)
   }
   emit(packet) { this.packets.push(packet); this.view.log?.(packet); } // to the client's queue (and a test log)
   send(packet) { if (this.tracked) this.emit(packet); }
@@ -83,12 +98,20 @@ export class TrackerEntry {
   sendLocation(airBorne = false, dataChanged = false) {
     const e = this.e;
     this.updated = false;
+    // S1B(1): EntityLiving.setLeashedToEntity / clearLeashed tell everyone tracking at once (bytecode-read), so before this tick's packets
+    const key = leashKey(e);
+    if (key !== this.lastLeash) { this.lastLeash = key; this.send({ type: "attach", mode: 1, entity: e, holder: holderOf(e.leash) }); }
     const dx0 = e.x - this.refX, dy0 = e.y - this.refY, dz0 = e.z - this.refZ;
     if (!this.initialised || dx0 * dx0 + dy0 * dy0 + dz0 * dz0 > 16) {
       this.refX = e.x; this.refY = e.y; this.refZ = e.z;
       this.initialised = true;
       this.updated = true;
       this.updatePlayerList();
+    }
+    // S1B(0): the vehicle changed, or every 60th tick while riding (my.a(List), before the position packets)
+    if (this.lastRiding !== (e.ridingEntity ?? null) || (e.ridingEntity && this.ticks % 60 === 0)) {
+      this.lastRiding = e.ridingEntity ?? null;
+      this.send({ type: "attach", mode: 0, entity: e, vehicle: this.lastRiding });
     }
     if (this.ticks % this.frequency === 0 || airBorne || dataChanged) {
       const yaw = angle(e.rotationYaw ?? 0), pitch = angle(e.rotationPitch ?? 0);
@@ -130,7 +153,7 @@ export class TrackerEntry {
         this.ridden = true;
       }
       const head = angle(e.rotationYawHead ?? 0);
-      if (Math.abs(head - this.lastHead) >= 4) { this.send({ type: "head", head }); this.lastHead = head; }
+      if (Math.abs(head - this.lastHead) >= 4) { this.send({ type: "head", head: byte(head) }); this.lastHead = head; }
     }
     // Entity.velocityChanged (knockback): the motion goes out at once, to everyone tracking
     if (e.velocityChanged) { this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) }); e.velocityChanged = false; }
@@ -152,7 +175,11 @@ export class TrackerEntry {
           const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
           this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
-        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(angle(e.rotationYaw ?? 0)), pitch: byte(angle(e.rotationPitch ?? 0)), head: byte(angle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        // after the spawn: S1B(0) for a rider and S1B(1) for a leashed mob (the periodic one in sendLocation still goes out at the entry's first tick)
+        if (e.ridingEntity) this.emit({ type: "attach", mode: 0, entity: e, vehicle: e.ridingEntity });
+        const held = holderOf(e.leash);
+        if (held) { this.lastLeash = leashKey(e); this.emit({ type: "attach", mode: 1, entity: e, holder: held }); }
       }
     } else if (this.tracked) {
       this.tracked = false;
@@ -163,40 +190,67 @@ export class TrackerEntry {
   remove() { if (this.tracked) { this.tracked = false; this.emit({ type: "destroy" }); } }
 }
 
-// The client's entity (NetHandlerPlayClient S0F/S14/S18/S12/S13 handlers, EntityLivingBase.onLivingUpdate). It is also the `e` that
+// The client's entity (NetHandlerPlayClient S0F/S14/S18/S12/S13/S1B handlers, EntityLivingBase.onLivingUpdate). It is also the `e` that
 // moveEntityWithHeading moves (x y z vx vy vz onGround ...), and carries the previous tick's position for RenderManager's partial tick.
+// `ctx` (the MobTracker) resolves what an attach packet names: ctx.clientOf(liveMob) and ctx.holderOf(descriptor).
 export class ClientEntity {
   constructor(type = "") {
     this.type = type; this.present = false;
     this.x = this.y = this.z = 0; this.px = this.py = this.pz = 0; this.tx = this.ty = this.tz = 0;
     this.vx = this.vy = this.vz = 0; this.onGround = false; this.increments = 0; this.sx = this.sy = this.sz = 0; this.pendingDestroy = 0;
+    this.rotationYaw = this.prevRotationYaw = this.rotationPitch = this.prevRotationPitch = this.tyaw = this.tpitch = 0;
+    this.rotationYawHead = this.prevRotationYawHead = this.renderYawOffset = this.prevRenderYawOffset = 0;
+    this.bodyTicks = 0; this.bodyHeadYaw = 0; // EntityBodyHelper's counters
+    this.height = 0; // the client class's own size, kept by the tracker
+    this.leash = null; // EntityLiving.leashedToEntity: { player: true }, a ClientEntity, or { knot: true, x, y, z }
   }
-  apply(p) {
+  apply(p, ctx = null) {
     if (p.type === "spawn") {
       this.present = true; this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.x = this.tx = this.px = p.x / 32; this.y = this.ty = this.py = p.y / 32; this.z = this.tz = this.pz = p.z / 32; this.increments = 0;
       this.onGround = false;
+      // setLocationAndAngles (a new client entity has no previous angle), then the head from the packet; renderYawOffset starts at 0
+      this.rotationYaw = this.prevRotationYaw = this.tyaw = unangle(p.yaw ?? 0);
+      this.rotationPitch = this.prevRotationPitch = this.tpitch = unangle(p.pitch ?? 0);
+      this.rotationYawHead = this.prevRotationYawHead = unangle(p.head ?? 0);
+      this.renderYawOffset = this.prevRenderYawOffset = 0; this.bodyTicks = 0; this.bodyHeadYaw = 0;
       const f = Math.fround; // (float) packet / 8000.0F
       this.vx = f(f(p.vx ?? 0) / 8000); this.vy = f(f(p.vy ?? 0) / 8000); this.vz = f(f(p.vz ?? 0) / 8000);
     } else if (!this.present) return;
-    else if (p.type === "move" || p.type === "moveLook") {
-      this.sx += p.dx; this.sy += p.dy; this.sz += p.dz;
+    else if (p.type === "move" || p.type === "moveLook" || p.type === "look") {
+      // S14: serverPos moves by the delta; a look-only packet also re-aims at serverPos / 32; without a look the current angles are kept
+      this.sx += p.dx ?? 0; this.sy += p.dy ?? 0; this.sz += p.dz ?? 0;
       this.tx = this.sx / 32; this.ty = this.sy / 32; this.tz = this.sz / 32; this.increments = CLIENT_INTERPOLATION;
+      if (p.type !== "move") { this.tyaw = unangle(p.yaw); this.tpitch = unangle(p.pitch); } else { this.tyaw = this.rotationYaw; this.tpitch = this.rotationPitch; }
     } else if (p.type === "teleport") {
       this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.tx = this.sx / 32; this.ty = this.sy / 32 + 0.015625; this.tz = this.sz / 32; this.increments = CLIENT_INTERPOLATION;
-    } else if (p.type === "velocity") { this.vx = p.vx / 8000; this.vy = p.vy / 8000; this.vz = p.vz / 8000; }
-    else if (p.type === "destroy") this.present = false;
+      this.tyaw = unangle(p.yaw); this.tpitch = unangle(p.pitch);
+    } else if (p.type === "head") this.rotationYawHead = unangle(p.head);
+    else if (p.type === "velocity") { this.vx = p.vx / 8000; this.vy = p.vy / 8000; this.vz = p.vz / 8000; }
+    else if (p.type === "attach") {
+      // NetHandlerPlayClient.handleEntityAttach (bytecode-read): the vehicle or holder is looked up now, and a missing one clears the link
+      if (p.mode === 0) mountEntity(this, p.vehicle ? ctx?.clientOf(p.vehicle) ?? null : null, (c) => c.height);
+      else this.leash = (p.holder && ctx?.holderOf(p.holder)) || null;
+    } else if (p.type === "destroy") this.present = false;
   }
-  // Entity.onUpdate (previous position), then EntityLivingBase.onLivingUpdate. `move(client)` is moveEntityWithHeading(0, 0) on the
-  // client's world (null for mobs whose client class moves by its own code, which are interpolated only).
-  step(move = null) {
+  // Entity.onUpdate (previous position and angles), then EntityLivingBase.onLivingUpdate. `move(client)` is moveEntityWithHeading(0, 0) on the
+  // client's world (null for mobs whose client class moves by its own code, which are interpolated only); `turn(client)` is the body turn
+  // that EntityLivingBase.onUpdate runs after it; `pre(client)` is Entity.onEntityUpdate's water and lava check, before the motion.
+  step(move = null, turn = null, pre = null) {
     if (!this.present) return;
     this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.prevRotationYaw = this.rotationYaw; this.prevRotationPitch = this.rotationPitch;
+    this.prevRenderYawOffset = this.renderYawOffset; this.prevRotationYawHead = this.rotationYawHead;
+    if (move && pre) pre(this);
     if (this.increments > 0) {
-      this.x += (this.tx - this.x) / this.increments;
-      this.y += (this.ty - this.y) / this.increments;
-      this.z += (this.tz - this.z) / this.increments;
+      const n = this.increments, f = Math.fround;
+      this.x += (this.tx - this.x) / n;
+      this.y += (this.ty - this.y) / n;
+      this.z += (this.tz - this.z) / n;
+      // setRotation: yaw + wrapAngleTo180(target - yaw) / n and pitch + (target - pitch) / n as floats, then % 360
+      this.rotationYaw = f(f(this.rotationYaw + wrap180(this.tyaw - this.rotationYaw) / n) % 360);
+      this.rotationPitch = f(f(this.rotationPitch + (this.tpitch - this.rotationPitch) / n) % 360);
       this.increments--;
     } else if (move) { this.vx *= 0.98; this.vy *= 0.98; this.vz *= 0.98; } // !isClientWorld(): the remote entity's drag
     if (!move) return;
@@ -205,6 +259,22 @@ export class ClientEntity {
     if (Math.abs(this.vz) < 0.005) this.vz = 0;
     move(this);
     if (this.type === "chicken" && !this.onGround && this.vy < 0) this.vy *= 0.6; // EntityChicken.onLivingUpdate's slow fall runs on both sides
+    turn?.(this);
+  }
+  // Entity.updateRidden (sa.ab) for the rider, called after its mount's update: the mount's own death frees it, the motion is zeroed, the
+  // rider updates, then the mount's updateRiderPosition seats it. The executed record shows no turn of the rider with its mount's yaw (the
+  // server-side copy in mob-riding.js endRidden does turn), so there is none here.
+  stepRider(move, turn, pre) {
+    const mount = this.ridingEntity;
+    if (!mount?.present) { if (mount) mount.riddenBy = null; this.ridingEntity = null; return; }
+    this.vx = this.vy = this.vz = 0;
+    this.step(move, turn, pre);
+    if (this.ridingEntity !== mount) return;
+    const seat = seatPosition(mount, this, mount.height);
+    this.x = seat.x; this.y = seat.y; this.z = seat.z;
+    if (seat.renderYaw !== undefined) this.renderYawOffset = seat.renderYaw; // EntityChicken.updateRiderPosition
+    // EntitySkeleton.updateRidden (yl.ab, executed): after the seat, a skeleton on an EntityCreature takes its renderYawOffset
+    if ((this.type === "skeleton" || this.type === "wither_skeleton") && !NOT_CREATURES.has(mount.type)) this.renderYawOffset = mount.renderYawOffset;
   }
 }
 
@@ -230,6 +300,7 @@ export class MobTracker {
   constructor(viewChunks = 10) {
     this.watch = new PlayerWatch(viewChunks);
     this.view = { player: null, watches: (cx, cz) => this.watch.watches(cx, cz), log: null };
+    this.ctx = { clientOf: (live) => this.clientIfTracked(live), holderOf: (d) => this.holderClient(d) };
     this.entries = new Map();
     this.player = { initialised: false, x: 0, y: 0, z: 0 };
     this.tick = 0;
@@ -237,10 +308,18 @@ export class MobTracker {
   // a player the tracker has not seen tick yet (a client sound drained before the first update)
   attach(player) { if (!this.view.player) { this.view.player = player; this.watch.update(player); } }
   set viewChunks(n) { this.watch.radius = n; }
-  entryOf(e, size) {
+  // What an S1B(1) holder descriptor is on the client: the player, a tracked mob's client entity, or a knot's block (null when unknown)
+  holderClient(d) {
+    if (d.kind === "player") return { player: true };
+    if (d.kind === "knot") return { knot: true, x: d.x, y: d.y, z: d.z };
+    for (const [e, en] of this.entries) if (e.uuid === d.uuid) return en.client.present ? en.client : null;
+    return null;
+  }
+  entryOf(e, size, height) {
     let en = this.entries.get(e);
     if (!en) {
       en = this.create(e, size);
+      if (height !== undefined) en.client.height = height;
       this.entries.set(e, en);
       if (this.view.player) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once
     }
@@ -262,7 +341,7 @@ export class MobTracker {
     let blocked = false;
     for (const p of en.entry.packets) {
       if (!blocked && p.type === "destroy") { p.after ??= this.tick + 1; if (p.after > this.tick) blocked = true; }
-      if (blocked) keep.push(p); else en.client.apply(p);
+      if (blocked) keep.push(p); else en.client.apply(p, this.ctx);
     }
     en.entry.packets = keep;
   }
@@ -278,8 +357,13 @@ export class MobTracker {
     const alive = new Set(mobs);
     for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); en.client.present = false; }
     // 1. every entry sends its location
+    // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
+    // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
+    for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
     for (const e of mobs) {
-      const en = this.entryOf(e, size(e)[0]);
+      const height = size(e)[1];
+      const en = this.entries.get(e);
+      en.client.height = height;
       const { airBorne, changed } = this.observe(e, en);
       en.entry.sendLocation(airBorne, changed);
       this.settle(e, en);
@@ -295,12 +379,31 @@ export class MobTracker {
   }
   // the client tick: packets in order, then the interpolation step
   // `physics(client, mob)` moves a client entity like moveEntityWithHeading(0, 0) on the client's world (entities.js supplies it)
+  // `physics` may carry `.turn(client, mob)` (the body turn) and `.pre(client, mob)` (the water check) next to the move itself.
+  // World.updateEntities on the client: every entity in list order except a rider whose mount carries it, which is updated right after
+  // its mount (a rider whose mount is gone or no longer carries it is let go and updates on its own).
   clientTick(physics = null) {
+    for (const en of this.entries.values()) this.flush(en);
+    const hooks = (e) => physics && !CLIENT_PHYSICS_OFF.has(e.type)
+      ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))] : [null, null, null];
     for (const [e, en] of this.entries) {
-      this.flush(en);
-      en.client.step(physics && !CLIENT_PHYSICS_OFF.has(e.type) ? (c) => physics(c, e) : null);
+      const c = en.client;
+      if (!c.present) continue;
+      const mount = c.ridingEntity;
+      if (mount) {
+        if (mount.present && mount.riddenBy === c) continue;
+        if (mount.riddenBy === c) mount.riddenBy = null;
+        c.ridingEntity = null;
+      }
+      c.step(...hooks(e));
+      const rider = c.riddenBy;
+      if (rider?.present) {
+        if (rider.ridingEntity !== c) c.riddenBy = null;
+        else rider.stepRider(...hooks(this.liveOf(rider)));
+      }
     }
   }
+  liveOf(client) { for (const [e, en] of this.entries) if (en.client === client) return e; return null; }
   // the client entity of a mob that is already tracked, without creating an entry (rendering)
   clientIfTracked(e) { const en = this.entries.get(e); return en?.client.present ? en.client : null; }
   // the client's entity for a mob, if the player has one
