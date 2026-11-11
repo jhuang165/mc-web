@@ -107,7 +107,17 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   const cmd = { health: 0, food: 0, saturation: 0, exhaustion: 0 }, owned = new Set(), removed = new Set();
   let shadowT = 0, prevVit = traceSamples[0]?.[5] ?? null, prevT = traceSamples[0]?.[0] ?? 0;
   const vitals = () => [shadowSv.health, shadowSv.food, shadowSv.saturation, shadowSv.exhaustion];
-  const tracked = (fn) => { const b = vitals(); try { return fn(); } finally { const a = vitals(); cmd.health += a[0] - b[0]; cmd.food += a[1] - b[1]; cmd.saturation += a[2] - b[2]; cmd.exhaustion += a[3] - b[3]; } };
+  // Batch 43: the first time a command's effect (instant damage, a ticking wither) takes the shadow to 0 health, the death is recorded where and when it happened: the tick, the traced
+  // dimension and position, the shadow's inventory and experience at that moment and the damage reason. Natively the player dies there, in his own dimension, at that tick (the
+  // run executes at the return, so the main thread places the drops in that dimension's saved record and kills the live player; away-death.js).
+  let death = null;
+  const noteDeath = (tick) => {
+    if (death || shadowSv.health > 0 || shadowSv.creative) return;
+    const s = traceSamples[sampleAt], dim = s ? s[1] : null;
+    death = { tick, dimension: dim, x: s ? s[2] : spawn[0], y: s ? s[3] : spawn[1], z: s ? s[4] : spawn[2], cause: shadowSv.lastDamage || "magic",
+      stacks: JSON.parse(JSON.stringify(new Survival(shadowSv.serialize(), modeName(shadowSv.mode === "creative" ? 1 : 0)).inventory.takeAll())), experience: shadowXp.serialize() };
+  };
+  const tracked = (fn) => { const b = vitals(); try { return fn(); } finally { const a = vitals(); cmd.health += a[0] - b[0]; cmd.food += a[1] - b[1]; cmd.saturation += a[2] - b[2]; cmd.exhaustion += a[3] - b[3]; if (b[0] > 0) noteDeath(state.ran); } };
   // Counts the shadow's effects down by the ticks since the last call; the owned ones also run their per-tick effect.
   function ageTo(t) {
     const n = Math.min(Math.floor(t), plan.ticks) - shadowT;
@@ -118,7 +128,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     for (const [id, e] of [...active]) {
       if (owned.has(id)) {
         const scratch = new Effects(); scratch.active.set(id, e);
-        tracked(() => { for (let i = 0; i < n && e.duration > 0 && shadowSv.health > 0; i++) { shadowSv.hurtTicks = Math.max(0, (shadowSv.hurtTicks | 0) - 1); scratch.tick(shadowSv); } });
+        tracked(() => { for (let i = 0; i < n && e.duration > 0 && shadowSv.health > 0; i++) { shadowSv.hurtTicks = Math.max(0, (shadowSv.hurtTicks | 0) - 1); scratch.tick(shadowSv); if (shadowSv.health <= 0) noteDeath(shadowT - n + i + 1); } });
         if (e.duration <= 0) { active.delete(id); owned.delete(id); }
       } else { e.duration -= n; if (e.duration <= 0) shadowSv.effects.remove(id); }
     }
@@ -234,7 +244,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   // The command on the shadow player now: SuccessCount and LastOutput at fire time. false when the shadow cannot run it.
   const onShadow = (tile, position, before) => {
     try {
-      const shadowSender = commandBlockSender(shadowHost, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * 50) } : undefined);
+      const shadowSender = commandBlockSender(shadowHost, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * (plan.wallStep ?? 50)) } : undefined);
       tile.successCount = createCommandRunner(shadowSender).run(tile.command) ? 1 : 0;
       stats.shadow = (stats.shadow ?? 0) + 1;
       return true;
@@ -253,7 +263,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
       if (queue.length >= QUEUE_CAP) return reason("the player-command queue is full");
       // Fire-time effect on the shadow player: SuccessCount and LastOutput now, and the state a later command sees. The replay at return redoes it on the live player.
       const ran = onShadow(tile, position, before);
-      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), xpd: ran && canon === "xp", eff: ran && canon === "effect", tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * 50 : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
+      queue.push({ shadowRan: ran, ok: ran ? tile.successCount : 0, inv: ran && (canon === "give" || canon === "clear"), xpd: ran && canon === "xp", eff: ran && canon === "effect", tick: state.ran, wall: Number.isFinite(plan.wall) ? plan.wall + state.ran * (plan.wallStep ?? 50) : null, command: String(tile.command), position: { ...position }, name: tile.customName, trackOutput: tile.trackOutput !== false, block: cartId === undefined ? [position.x, position.y, position.z] : null, cartId: cartId ?? null });
       stats.queued++;
       return ran ? tile.successCount : before.successCount; // the replay rewrites SuccessCount and LastOutput with the same values
     };
@@ -279,7 +289,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
       } else if (parts[at].toLowerCase() === PLAYER_NAME.toLowerCase() && canon === "spawnpoint") return spawnOnPlayer();
       else if (DEFER.has(canon) && parts[at].toLowerCase() === PLAYER_NAME.toLowerCase()) return enqueue(); // a literal name finds the player in any dimension
     }
-    const sender = commandBlockSender(host, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * 50) } : undefined); // LastOutput carries the clock time of the firing
+    const sender = commandBlockSender(host, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * (plan.wallStep ?? 50)) } : undefined); // LastOutput carries the clock time of the firing
     const ok = createCommandRunner(sender).run(tile.command);
     if (host.skipped) return reason(host.skipped);
     tile.successCount = ok ? 1 : 0;
@@ -302,7 +312,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     cartRun: (cart) => { if (cart.command?.command) execute(cart.command, cartCommandPosition(cart), cart.id); else if (cart.command) cart.command.successCount = 0; },
     result() {
       syncShadow(Infinity);
-      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), ...(queue.some((q) => q.xpd) ? { xpOps } : {}), commandBlocks: rt.commandBlocks.save(), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
+      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), ...(queue.some((q) => q.xpd) ? { xpOps } : {}), commandBlocks: rt.commandBlocks.save(), ...(death ? { playerDeath: death } : {}), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
       if (JSON.stringify(weather.save()) !== initialWeather) out.weather = { ...weather.save(), rain: weather.rain, thunder: weather.thunder };
       if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}), ...(active.playerSpawn ? { playerSpawn: active.playerSpawn } : {}) };
       if (state.difficulty !== undefined) out.difficulty = state.difficulty;
@@ -331,24 +341,26 @@ export function applyPlayerDelta(survival, d) {
   survival.exhaustion = clamp(Math.fround(survival.exhaustion + d.exhaustion), 0, 40);
 }
 
-export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null, playerDelta = null, survival = null, xpOps = null }) {
+export function replayPlayerCommands(queue, { host, records = [], carts = [], giveStack = null, chatCap = 100, delta = null, inventory = null, playerDelta = null, survival = null, xpOps = null, death = false }) {
   const out = { applied: 0, succeeded: 0, failed: 0, muted: 0, byDelta: 0 };
   // Batch 36: give and clear the run's shadow ran at their firing (`inv`) take effect as one net inventory change (see inventoryDelta), not as re-runs on the return state.
-  const byDelta = Array.isArray(delta) && !!inventory;
+  const byDelta = !death && Array.isArray(delta) && !!inventory;
   if (byDelta && delta.length) {
     for (const d of delta) if (d.count < 0) { let loss = -d.count; for (let i = 0; i < 36 && loss > 0; i++) { const st = inventory.getStack(i); if (st && keyOf(st) === keyOf(d.stack) && st.count > 0) { const take = Math.min(loss, st.count); st.count -= take; loss -= take; if (st.count === 0) inventory.setStack(i, null); } } }
     for (const d of delta) if (d.count > 0) { const st = { ...d.stack, count: d.count }; if (giveStack) giveStack(st); else inventory.add(st); }
   }
-  const byPlayer = !!playerDelta && !!survival;
+  // Batch 43: when the shadow died, the death replaces the inventory, experience and body changes (away-death.js): those entries are counted and do nothing.
+  const byPlayer = !death && !!playerDelta && !!survival;
   if (byPlayer) applyPlayerDelta(survival, playerDelta);
   // Batch 42: the /xp commands the shadow ran at their firing (`xpd`) arrive as the shadow's recorded calls, applied in order to the live experience.
-  const byXp = Array.isArray(xpOps);
+  const byXp = !death && Array.isArray(xpOps);
   if (byXp) for (const [kind, n] of xpOps) { if (kind === "levels") host.addLevels(n); else host.addExperience(n); }
   let lines = 0;
   const replay = Object.create(host);
   replay.print = (text) => { if (lines++ < chatCap) host.print(text); else out.muted++; };
   if (giveStack) replay.giveDrop = (stack) => giveStack(stack);
   for (const e of queue ?? []) {
+    if (death && (e.eff || e.xpd || e.inv)) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; }
     if (e.eff && byPlayer) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // applyPlayerDelta carries its effect
     if (e.xpd && byXp) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // the xpOps above carry its effect
     if (e.inv && byDelta) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; } // the delta above carries its effect

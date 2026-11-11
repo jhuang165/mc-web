@@ -109,7 +109,7 @@ test("dispensers on a clock create arrows, snowballs, eggs, potions, fire charge
   }
 });
 
-test("a cow leashed to a knot on a fence ticks (its lead holds past the 100-tick fence check); a lead held by the player stays frozen", async () => {
+test("a cow leashed to a knot on a fence ticks (its lead holds past the 100-tick fence check); a lead held by the player stays on while the mob runs (batch 43)", async () => {
   const fence = (chunks) => { setBlock(chunks, 7, 11, 5, FENCE); };
   const root = { ...base, entities: [
     mob("cow", 5.5, 11, 5.5, { id: "mob-1", leash: { knot: { x: 7, y: 11, z: 5 } } }),
@@ -119,9 +119,9 @@ test("a cow leashed to a knot on a fence ticks (its lead holds past the 100-tick
   const [tied] = r.entities.mobs.filter((m) => m.id === "mob-1"), [held] = r.entities.mobs.filter((m) => m.id === "mob-2");
   assert.ok(tied.age >= 100, `the tied cow aged (${tied.age})`);
   assert.deepEqual(tied.leash, { knot: { x: 7, y: 11, z: 5 } });
-  assert.equal(held.age ?? 0, 0, "the player-held lead is not ticked");
+  assert.equal(held.age, 400, "the mob on the player-held lead runs");
   assert.deepEqual(held.leash, { holder: "player" });
-  assert.equal(r.stats.entities.mobs, 1);
+  assert.equal(r.stats.entities.mobs, 2);
 });
 
 test("a zombie standing in torch light reads block light: the lead path of lightAt is exercised through the run's light volume", async () => {

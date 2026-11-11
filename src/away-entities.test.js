@@ -60,14 +60,14 @@ test("a primed TNT burns its fuse, explodes through the shared explosion code an
   assert.equal(late.entities.tnt[0].fuse, 3000 - AWAY_ENTITY_TICKS);
 });
 
-test("a minecart rolls along rails and a boat settles; saved carts with a rider stay put", async () => {
+test("a minecart rolls along rails and a boat settles; a cart saved with the player aboard rolls too (batch 43: his seat is empty natively)", async () => {
   const rails = (chunks) => { for (let x = 0; x < 30; x++) setBlock(chunks, x, 11, 5, RAIL, 1); };
   const cart = (id, extra = {}) => ({ id, type: 0, x: 3.5, y: 11.05, z: 5.5, motion: [0.3, 0, 0], rotation: [0, 0], fallDistance: 0, fire: 0, onGround: true, items: [], ...extra });
   const root = { ...base, minecarts: { version: 1, carts: [cart(1), cart(2, { rider: true, z: 5.5 })] } };
   const r = await run(root, 60, rails);
   const moved = r.entities.minecarts.carts.find((c) => c.id === 1), held = r.entities.minecarts.carts.find((c) => c.id === 2);
   assert.ok(moved.x > 3.6, `the cart rolled (x ${moved.x})`);
-  assert.equal(held.x, 3.5);
+  assert.ok(held.x > 3.6, `the cart the player rode when he left rolled too (x ${held.x})`);
 });
 
 test("a powered dropper spills an item entity that falls and merges; an arrow dispenser shoots a live arrow", async () => {
