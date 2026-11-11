@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { boxQuads, chestIconQuads, eventsMatrix, rasterQuads, FACE_SHADE } from "./icon-quads.js";
+import { boxQuads, cactusIconQuads, chestIconQuads, eventsMatrix, rasterQuads, FACE_SHADE } from "./icon-quads.js";
 import { guiBase, boxModelView, cubeFaces, gl, transformPoint } from "./icon-cube.js";
 import { rasterIcon } from "./atlas-texels.js";
 import { ITEM_BOXES, GATE_ITEM_BOXES, BEACON_ITEM_BOXES, anvilUv } from "./render-shapes.js";
@@ -68,7 +68,8 @@ test("the chest icon raster equals the raster of the recorded draws, pixel for p
 test("every executed box item draws the same icon as its port table (stairs, fences, gate, beacon, anvil, egg, slabs, plates, ... and cubes)", () => {
   let n = 0, nonCube = 0;
   for (const it of ref.items) {
-    if (it.type === 13 || it.type === 16) continue; // cactus and the piston bases keep the cube icon (their item models are not box tables yet)
+    if (it.type === 16) continue; // the piston bases keep the cube icon (their item model is not a box table yet)
+    if (it.type === 13) { const nat = rasterQuads(64, 64, nativeQuads(it.events, tile, true)), port = rasterQuads(64, 64, cactusIconQuads(() => tile), 4, boxModelView(false)); assert.equal(differing(port, nat), 0, `cactus icon: ${differing(port, nat)} pixels differ`); assert.ok(differing(port, rasterQuads(64, 64, boxQuads([[0, 0, 0, 1, 1, 1]], () => tile), 4, boxModelView(true))) > 50, "not the cube"); n++; continue; }
     const boxes = it.type === 34 ? BEACON_ITEM_BOXES : it.type === 10 ? STAIR_ITEM_BOXES : it.type === 11 ? FENCE_ITEM_BOXES : it.type === 21 ? GATE_ITEM_BOXES : it.type === 35 ? anvilModelBoxes(0) : ITEM_BOXES[it.id] ?? [[0, 0, 0, 1, 1, 1]];
     const turned = it.events.some((e) => e[0] === "R"), uvOf = it.type === 35 ? (fi, p, box) => anvilUv(0, fi, p, box) : undefined;
     const nat = rasterQuads(64, 64, nativeQuads(it.events, tile, true)), port = rasterQuads(64, 64, boxQuads(boxes, () => tile, uvOf), 4, boxModelView(turned));

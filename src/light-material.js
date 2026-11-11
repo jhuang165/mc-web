@@ -42,6 +42,12 @@ export function createLighting() {
   return lighting;
 }
 
+// The uv window of an item atlas sprite texture (item-atlas.js sets userData.st), identity for every other texture; written into `out` (a Vector4: scale u, v, offset u, v).
+export function applySpriteTransform(texture, out) {
+  const st = texture?.userData?.st;
+  return st ? out.copy(st) : out.set(1, 1, 0, 0);
+}
+
 export const FOG_PARS = `uniform vec3 fogColor;uniform float fogNear,fogFar,fogDensity;varying float vFogDistance;
 vec3 applyFog(vec3 c){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDistance-fogNear)/(fogFar-fogNear),0.,1.);return mix(c,fogColor,f);}`;
 
@@ -79,6 +85,7 @@ export function entityMaterial(lighting, { map = null, color = null, alphaTest =
     lightmap: lighting.uniforms.lightmap,
     ...(fog ? lighting.uniforms : { fogColor: { value: new THREE.Vector3() }, fogNear: { value: 1e6 }, fogFar: { value: 2e6 }, fogDensity: { value: 0 } }),
     map: { value: map },
+    mapST: { value: applySpriteTransform(map, new THREE.Vector4()) },
     tint: { value: new THREE.Vector3(...(color ?? [1, 1, 1])) },
     overlay: { value: new THREE.Vector4(0, 0, 0, 0) },
     lightCoord: { value: new THREE.Vector2(0, 240) },
@@ -89,8 +96,8 @@ export function entityMaterial(lighting, { map = null, color = null, alphaTest =
   const material = new THREE.ShaderMaterial({
     uniforms,
     defines: map ? { USE_TEXTURE: "" } : {},
-    vertexShader: `uniform vec3 light0,light1;centroid varying vec2 vUv;varying float vDiffuse;varying float vFogDistance;
-void main(){vUv=uv;vec3 n=normalize(mat3(modelMatrix)*normal);vDiffuse=min(1.,.4+.6*(max(0.,dot(n,light0))+max(0.,dot(n,light1))));vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
+    vertexShader: `uniform vec3 light0,light1;uniform vec4 mapST;centroid varying vec2 vUv;varying float vDiffuse;varying float vFogDistance;
+void main(){vUv=uv*mapST.xy+mapST.zw;vec3 n=normalize(mat3(modelMatrix)*normal);vDiffuse=min(1.,.4+.6*(max(0.,dot(n,light0))+max(0.,dot(n,light1))));vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
     fragmentShader: `uniform sampler2D map,lightmap;uniform vec3 tint;uniform vec4 overlay;uniform vec2 lightCoord;uniform float alphaTest;centroid varying vec2 vUv;varying float vDiffuse;${FOG_PARS}
 void main(){vec4 t=vec4(1.);
 #ifdef USE_TEXTURE
@@ -100,6 +107,9 @@ if(t.a<=alphaTest)discard;vec3 c=t.rgb*tint*vDiffuse*texture2D(lightmap,(lightCo
     transparent,
     side,
   });
+  // Item sprites are cells of the item atlas (item-atlas.js): whoever assigns uniforms.map.value (an item frame swapping its content) moves the uv window with it.
+  let current = map;
+  Object.defineProperty(uniforms.map, "value", { get: () => current, set: (v) => { current = v; applySpriteTransform(v, uniforms.mapST.value); }, enumerable: true, configurable: true });
   material.setLight = (packed) => material.uniforms.lightCoord.value.set(packed & 0xffff, (packed >> 16) & 0xffff);
   return material;
 }

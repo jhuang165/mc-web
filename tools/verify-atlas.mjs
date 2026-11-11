@@ -1,5 +1,5 @@
 // Runs the unchanged TextureUtil.generateMipmapData (bqi.a(int,int,int[][])) and TextureUtil.anaglyphColor (bqi.a(int[])) of the 1.7.10
-// client over every block texture of the original jar (first frame, read like TextureMap: ImageIO.read + getRGB) at mipmap settings
+// client over every block and item texture of the original jar (the two TextureMap atlases share TextureUtil) (first frame, read like TextureMap: ImageIO.read + getRGB) at mipmap settings
 // 0, 1 and 4 and writes public/research/atlas-reference.json: per texture the SHA-1 of every level's ARGB ints and of every level after
 // anaglyphColor. src/atlas-texels.test.js rebuilds the same levels from the shipped PNGs with the port's exact decoder and compares hashes.
 // Needs a JDK, the pinned client JAR (tools/research or MC_RESEARCH) and libs-1.7.10 (or MC_PROBE_LIBS).
@@ -30,12 +30,12 @@ await exec("javac", ["-nowarn", "-d", lwjgl, path.join(root, "probes/stubs/org/l
 const cp = [probe, classes, lwjgl, lib("log4j-api-2.0-beta9"), lib("guava-15.0"), lib("commons-lang3-3.1"), lib("commons-io-2.4"), lib("gson-2.2.4")].join(path.delimiter);
 await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/AtlasProbe.java")]);
 const { stdout: list } = await exec("unzip", ["-Z1", jar], { maxBuffer: 1 << 24 });
-const names = list.split("\n").filter((n) => /^assets\/minecraft\/textures\/blocks\/[^/]+\.png$/.test(n)).map((n) => n.slice("assets/minecraft/textures/".length)).sort();
+const names = list.split("\n").filter((n) => /^assets\/minecraft\/textures\/(blocks|items)\/[^/]+\.png$/.test(n)).map((n) => n.slice("assets/minecraft/textures/".length)).sort();
 const { stdout } = await exec("java", [`-Djar=${jar}`, "-cp", cp, "AtlasProbe", ...names], { maxBuffer: 1 << 26 });
 const textures = stdout.trim().split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
 assert.equal(textures.length, names.length);
 await writeFile(path.join(root, "../public/research/atlas-reference.json"), JSON.stringify({
-  source: "tools/verify-atlas.mjs: unchanged bqi.a(int,int,int[][]) (generateMipmapData) and bqi.a(int[]) (anaglyphColor) over jar block textures read with ImageIO.getRGB",
+  source: "tools/verify-atlas.mjs: unchanged bqi.a(int,int,int[][]) (generateMipmapData) and bqi.a(int[]) (anaglyphColor) over jar block and item textures read with ImageIO.getRGB",
   clientSha1, textures: textures.map(({ name, w, translucent, levels }) => ({ name, w, translucent, levels })),
 }) + "\n");
 console.log(`${textures.length} textures, ${textures.filter((t) => t.translucent).length} with translucent pixels`);

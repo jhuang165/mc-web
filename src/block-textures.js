@@ -19,7 +19,7 @@ import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DRO
 import {CHEST_ICON_TEXTURES,chestIconTexture,drawChestIcon} from './chest-icon.js';
 import {anaglyphRgba,anaglyphMultiplier,meshAnaglyph} from './anaglyph.js';
 import {boxModelView} from './icon-cube.js';
-import {boxQuads,rasterQuads,chestIconQuads} from './icon-quads.js';
+import {boxQuads,rasterQuads,chestIconQuads,cactusIconQuads} from './icon-quads.js';
 import {itemSpec,itemBlockId} from './item-boxes.js';
 import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile,rasterIcon,encodePngStored,pngDataUrl,hasTranslucent} from './atlas-texels.js';
 import {decodePng} from './png-codec.js';
@@ -311,6 +311,8 @@ const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB
 function boxIcon(id,damage){
  const spec=itemSpec(id,damage,blockTile),texOf=new Map();let missing=false;
  const tex=i=>{if(!texOf.has(i)){const l=exactLevels(false,TILES[i],0);texOf.set(i,l&&{data:l[0],w:16,h:16});}const t=texOf.get(i);if(!t)missing=true;return t;};
+ /* renderBlockAsItem type 13 (the cactus): full top and bottom, sides inset 1/16, not turned (item-render-reference.json) */
+ if(id===CACTUS){const cq=cactusIconQuads(fi=>tex(blockTile(id,fi,false,damage)));return missing?null:pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,cq,4,boxModelView(false))));}
  const quads=boxQuads(spec?spec.boxes:[[0,0,0,1,1,1]],(fi,k)=>tex(spec?spec.tileOf(fi,k):blockTile(id,fi,false,damage)),spec?.uvOf);
  return missing?null:pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,quads,4,boxModelView(spec?spec.turned:true))));
 }
