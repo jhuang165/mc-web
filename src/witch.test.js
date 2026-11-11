@@ -76,12 +76,13 @@ test("drinking: the first roll of seeded witches matches the recorded think rows
   }
 });
 
-test("drinking: the countdown runs 32 ticks, then the held potion is handed over", () => {
+test("drinking: the countdown tests the timer before lowering it (33 updates from 32), then the held potion is handed over", () => {
   const w = { drinking: true, timer: 32, held: { id: ITEM_POTION, damage: 16341, count: 1 } };
   const rand = new JavaRandom(5), noRoll = { rand, inWater: false, burning: false, health: 26, maxHealth: 26, target: null, hasEffect: () => false };
   let ticks = 0, done = null;
   while (!done) { done = witchDrink(w, noRoll).finished; ticks++; }
-  assert.equal(ticks, 32);
+  assert.equal(ticks, 33);
+  assert.equal(w.timer, -1);
   assert.equal(done.damage, 16341);
   assert.equal(w.held, null);
   assert.equal(w.drinking, false);

@@ -131,7 +131,7 @@ export function applyExplosion(state, request, hooks = {}) {
   if (survival.health > 0) {
     playerHit = explosionImpact(
       world, x, y, z, size,
-      position.x, position.y, position.z, position.y + PHYSICS.eye,
+      position.x, position.y, position.z, position.y + Math.fround(PHYSICS.eye), // EntityPlayerMP.getEyeHeight is the float 1.62F (eye-height-reference.json); creeperwitch-b45 push records
       entityBox(position, PHYSICS.width, PHYSICS.height),
     );
     if (playerHit) {

@@ -66,8 +66,16 @@ export const swellState = (distSq, canSee) => (distSq === null || distSq > 49 ||
 export const creeperSafeTries = (hasTarget, health) => (hasTarget ? 3 + Math.trunc(f(health - 1)) : 3);
 
 // EntityLiving.dropFewItems with getDropItem = gunpowder: rand.nextInt(3) items, killed by
-// a player or not (the music disc for a skeleton's arrow is not ported).
+// a player or not (the music disc for a skeleton's arrow is combat.js mobDrops).
 export const creeperDrops = (nextInt) => nextInt(3);
+
+// EntityCreeper.interact (xz.a(yz)) with flint and steel: fire.ignite at the creeper (+0.5 each way) with pitch nextFloat() * 0.4 + 0.8 drawn on the
+// creeper's own Entity.rand, then func_146079_cb sets datawatcher 18 (ignited). The caller wears the tool out. Returns the sound.
+export function creeperIgnite(e, rand) {
+  const pitch = f(f(rand.nextFloat() * f(0.4)) + f(0.8));
+  e.ignited = true;
+  return { name: "fire.ignite", volume: 1, pitch, position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } };
+}
 
 // EntityCreeper.onStruckByLightning: datawatcher 17 = 1 (after Entity's 5 fire damage).
 export function powerCreeper(e) {

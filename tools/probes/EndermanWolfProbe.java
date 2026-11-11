@@ -23,6 +23,22 @@ public class EndermanWolfProbe {
     // Batch 44: World.spawnEntityInWorld adds an entity to the chunk lists at once, so a baby an EntityAIMate spawns is pushed by (and pushes) its parents in the same tick; it is dropped from the list after
     // that tick (it is never ticked here, and the replay does not tick it either).
     public boolean d(sa entity) { boolean ok = super.d(entity); if (ok && B44 && entity instanceof wf && !VillagerProbe.World.entities.contains(entity)) VillagerProbe.World.entities.add(entity); return ok; }
+    // Batch 45 (creeperwitch): WorldServer.newExplosion: doExplosionA, doExplosionB(false) (no client particles, so no extra world.rand draws), the affected list cleared after when not smoking;
+    // each explosion is recorded with the knockback map entry of the probe player ([x, y, z, size, flaming, smoking, push x, y, z or null]).
+    static List<String> booms = new ArrayList<>();
+    static yz boomPlayer;
+    public agw a(sa exploder, double x, double y, double z, float size, boolean flaming, boolean smoking) {
+      agw ex = new agw(this, exploder, x, y, z, size);
+      ex.a = flaming; ex.b = smoking;
+      ex.a();
+      ex.a(false);
+      if (!smoking) ex.h.clear();
+      Object push = ex.b().get(boomPlayer);
+      String p = "null";
+      if (push != null) { azw v = (azw) push; p = "[" + VillageFightProbe.num(v.a) + "," + VillageFightProbe.num(v.b) + "," + VillageFightProbe.num(v.c) + "]"; }
+      booms.add("[" + VillageFightProbe.num(x) + "," + VillageFightProbe.num(y) + "," + VillageFightProbe.num(z) + "," + VillageFightProbe.num(size) + "," + (flaming ? 1 : 0) + "," + (smoking ? 1 : 0) + "," + p + "]");
+      return ex;
+    }
     // Batch 45 (mobfixes): EntityAIOcelotSit.func_151486_a reads TileEntityChest.numPlayersUsing (aow.o) of a chest cell; a chest tile entity here is an allocated aow (users 0, nobody has it open).
     public aor o(int x, int y, int z) {
       int[] c = VillagerProbe.World.cells.get(VillagerProbe.key(x, y, z));
@@ -39,7 +55,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45;
+  static boolean B44, B45, BCW;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -56,6 +72,30 @@ public class EndermanWolfProbe {
 
   static String q(String s) { return "\"" + s + "\""; }
   static int index(Object[] ents, Object e) { for (int k = 0; k < ents.length; k++) if (ents[k] == e) return k; return -1; }
+
+  // Batch 45: what a tick spawned and changed. Items: [id, damage, count, x, y, z] (the item's motion comes from Math.random, not recorded); orbs: [value, x, y, z, vx, vy, vz]; potions: [damage, x, y, z, vx, vy, vz, seed].
+  static String extras(int seen, java.util.Map<String, String> before, yz player, Object[] ents) throws Exception {
+    StringBuilder sp = new StringBuilder();
+    for (int k = seen; k < VillagerProbe.World.spawned.size(); k++) {
+      Object o = VillagerProbe.World.spawned.get(k);
+      if (sp.length() > 0) sp.append(",");
+      sa e = (sa) o;
+      if (o instanceof xk) { add st = ((xk) o).f(); sp.append("[\"item\",").append(adb.b(st.b())).append(",").append(st.k()).append(",").append(st.b).append(",").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append("]"); }
+      else if (o instanceof sq) sp.append("[\"xp\",").append(((sq) o).e()).append(",").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append("]"); // no velocity: EntityXPOrb draws it from Math.random, so it differs between runs
+      else if (o instanceof zo) sp.append("[\"potion\",").append(((zo) o).k()).append(",").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append(",").append(VillageFightProbe.num(e.v)).append(",").append(VillageFightProbe.num(e.w)).append(",").append(VillageFightProbe.num(e.x)).append(",").append(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(e)).seed).append("]");
+      else sp.append("[\"other\",\"").append(o.getClass().getSimpleName()).append("\"]");
+    }
+    java.util.TreeSet<String> keys = new java.util.TreeSet<>(before.keySet());
+    keys.addAll(VillagerProbe.World.cells.keySet());
+    StringBuilder ch = new StringBuilder();
+    for (String key : keys) {
+      int[] now = VillagerProbe.World.cells.get(key);
+      String was = before.get(key), is = now == null ? "0,0" : now[0] + "," + now[1];
+      if (was == null) was = "0,0";
+      if (!was.equals(is)) { if (ch.length() > 0) ch.append(","); ch.append("[").append(key).append(",").append(is).append("]"); }
+    }
+    return "[[" + String.join(",", EW.booms) + "],[" + sp + "],[" + ch + "],[" + VillageFightProbe.num(player.v) + "," + VillageFightProbe.num(player.w) + "," + VillageFightProbe.num(player.x) + "]]";
+  }
 
   static void scenario(String name, long seed, int ticks, String types, double[][] pos, String[] script, int[][] roofs, int[][] blocks, boolean water, int bright) throws Exception {
     int n = types.length();
@@ -136,6 +176,15 @@ public class EndermanWolfProbe {
     VillagerProbe.World.immediateMobs = false;
     player.bE.a = false; player.bE.d = false;
     SeedMath.reset(seed * 7 + 5);
+    int spawnedSeen = 0;
+    java.util.Map<String, String> cellsBefore = new java.util.HashMap<>();
+    if (BCW) {
+      SeedRandom.next = 7000000L + seed * 1000; // entities built mid-run (items, orbs, potions, the skeleton and arrow of arrowkill) count their Entity.rand seeds up from here
+      EW.booms.clear(); EW.boomPlayer = player;
+      MobMoveProbe.set(w, "s", new Random(seed)); // World.rand (explosion rays, drop scatter, the sound pitch) restarts per record so the replay can seed it the same way
+      w.O().a("mobGriefing", "true");
+      VillagerProbe.World.spawned.clear();
+    }
     double[][] vel = new double[ents.length][2];
     StringBuilder rs = new StringBuilder();
     for (int t = 0; t < ticks; t++) {
@@ -156,6 +205,18 @@ public class EndermanWolfProbe {
           case "hold": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2]))); break; } // batch 43: the held item of the player (beg tasks)
           case "holdn": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2])), Integer.parseInt(p[3])); break; } // batch 44: a stack of p[3]
           case "use": player.q((sa) ents[Integer.parseInt(p[2])]); break; // batch 44: the player's real interaction (EntityPlayer.interactWith: feeding, taming, breeding)
+          case "effect": ((sv) ents[Integer.parseInt(p[2])]).c(new rw(Integer.parseInt(p[3]), Integer.parseInt(p[4]), 0)); break; // addPotionEffect(id, ticks, amplifier 0)
+          case "difficulty": MobMoveProbe.set(w, "r", rd.values()[Integer.parseInt(p[2])]); break; // batch 45
+          case "grief": w.O().a("mobGriefing", p[2].equals("on") ? "true" : "false"); break;
+          case "power": ((sa) ents[Integer.parseInt(p[2])]).af.b(17, Byte.valueOf((byte) 1)); break; // a charged creeper (datawatcher 17)
+          case "bolt": ((sa) ents[Integer.parseInt(p[2])]).a((xh) null); break; // Entity.onStruckByLightning (the bolt argument is unused by Entity and EntityCreeper)
+          case "fire": ((sa) ents[Integer.parseInt(p[2])]).e(Integer.parseInt(p[3])); break; // Entity.setFire(seconds) is sa.e (ArmorEnchantmentProbe)
+          case "arrowkill": { // a skeleton's arrow kills a mob: DamageSource.causeArrowDamage(arrow, skeleton)
+            sv victim = (sv) ents[Integer.parseInt(p[2])];
+            yl skel = new yl(w); zc arrow = new zc(w);
+            victim.a(ro.a(arrow, skel), Float.parseFloat(p[3]));
+            break;
+          }
           case "health": ((sv) ents[Integer.parseInt(p[2])]).g(Float.parseFloat(p[3])); break;
           case "angry": ((wv) ents[Integer.parseInt(p[2])]).l(true); break;
           case "sit": ((wv) ents[Integer.parseInt(p[2])]).cc().a(p[3].equals("on")); break;
@@ -171,6 +232,7 @@ public class EndermanWolfProbe {
           default: throw new RuntimeException(op);
         }
       }
+      if (BCW) { cellsBefore.clear(); for (java.util.Map.Entry<String, int[]> en : VillagerProbe.World.cells.entrySet()) cellsBefore.put(en.getKey(), en.getValue()[0] + "," + en.getValue()[1]); EW.booms.clear(); }
       for (int i = 0; i < ents.length; i++) if (vel[i][0] != 0 || vel[i][1] != 0) { sa e = (sa) ents[i]; VillageFightProbe.at(e, e.s + vel[i][0], e.t, e.u + vel[i][1]); }
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
@@ -194,6 +256,8 @@ public class EndermanWolfProbe {
         sv rv = (sv) MobMoveProbe.field(sv.class, "i").get(e);
         String flags = "[]";
         if (e instanceof ya) { ya en = (ya) e; flags = "[" + (en.cd() ? 1 : 0) + "," + (MobMoveProbe.b(en, "bv") ? 1 : 0) + "," + MobMoveProbe.field(ya.class, "bt").getInt(en) + "," + MobMoveProbe.field(ya.class, "bs").getInt(en) + "," + aji.b(en.cb()) + "]"; }
+        if (BCW && e instanceof yp) { yp wi = (yp) e; add held = ((sv) e).be(); flags = "[" + (wi.bZ() ? 1 : 0) + "," + MobMoveProbe.field(yp.class, "bs").getInt(wi) + "," + (held == null ? -1 : held.k()) + "," + VillageFightProbe.num(((sv) e).a(yj.d).e()) + "]"; }
+        else if (BCW && e instanceof xz) { xz cr = (xz) e; flags = "[" + cr.cb() + "," + MobMoveProbe.field(xz.class, "bq").getInt(cr) + "," + MobMoveProbe.field(xz.class, "bp").getInt(cr) + "," + (cr.bZ() ? 1 : 0) + "," + (cr.cc() ? 1 : 0) + "]"; } // state, timeSinceIgnited, lastActiveTime, powered, ignited
         if (e instanceof wv) { wv wf = (wv) e; flags = "[" + (wf.ci() ? 1 : 0) + "," + (wf.ca() ? 1 : 0) + "," + (wf.bZ() ? 1 : 0) + "," + (MobMoveProbe.b(wf.cc(), "b") ? 1 : 0) + "," + (e.L() ? 1 : 0) + (B44 ? "," + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() : "") + "]"; }
         else if (B45 && e instanceof wi) flags = horseFlags((wi) e);
         else if (B44 && e instanceof wf) flags = "[" + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() + "]"; // love, growing age
@@ -203,7 +267,11 @@ public class EndermanWolfProbe {
       }
       row.append("],[");
       for (int k = 0; k < VillagerProbe.World.sounds.size(); k++) row.append(k > 0 ? "," : "").append(q(VillagerProbe.World.sounds.get(k)));
-      row.append("],").append(VillageFightProbe.num(1000.0 - player.aS())).append(",").append(index(ents, MobMoveProbe.field(sv.class, "i").get(player))).append(",").append(player.aa).append(B45 ? ",[" + kids + "]" : "").append("]");
+      row.append("],").append(VillageFightProbe.num(1000.0 - player.aS())).append(",").append(index(ents, MobMoveProbe.field(sv.class, "i").get(player))).append(",").append(player.aa);
+      if (B45) row.append(",[" + kids + "]");
+      if (BCW) row.append(",").append(extras(spawnedSeen, cellsBefore, player, ents)); // creeperwitch: [explosions, spawned entities, changed cells, player motion]
+      if (BCW) spawnedSeen = VillagerProbe.World.spawned.size();
+      row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
       player.g(1000.0f);
@@ -238,7 +306,8 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B45 = args.length > 0 && args[0].equals("b45");
-    B44 = B45 || args.length > 0 && args[0].equals("b44");
-    if (B45) EndermanWolfScenarios.run45(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    BCW = args.length > 0 && args[0].equals("b45cw");
+    B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
+    if (B45) EndermanWolfScenarios.run45(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

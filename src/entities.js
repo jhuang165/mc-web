@@ -2163,8 +2163,12 @@ export class EntityWorld {
         if (out.sound) this.events.push({ sound: out.sound.name, volume: out.sound.volume, pitch: out.sound.pitch, position: { x: e.x, y: e.y, z: e.z } });
         if (out.explode) {
           this.events.push({ explode: { ...out.explode, source: e, smoking: gameRule("mobGriefing") } });
+          e.removedHealth = e.health; // setDead keeps the health the creeper had (creeperwitch-b45 records); the corpse state below is the port's removal
           e.health = 0;
           e.death = 20;
+          // EntityCreeper.func_146077_cc calls World.createExplosion inside the creeper's own update: the blast hurts and pushes the mobs listed after it before they move
+          // in this same pass (creeperwitch-b45 bystander records). The host queues it otherwise, and the drain runs it after the pass.
+          if (this.explodeInline) for (const ev of this.takeExplosions()) this.explodeInline(ev);
           continue;
         }
       }
@@ -2279,6 +2283,7 @@ export class EntityWorld {
     if (e.recentlyHit > 0) e.recentlyHit--;
     e.jumping = false;
     if (e.type === "blaze") blazeUpdate(this, e, t, true); // EntityBlaze.onLivingUpdate runs for a corpse too (its hover push, the 0.6 fall damping and its draws), before EntityLivingBase's blocked movement
+    if (e.type === "witch") this.witchUpdate(e, t); // EntityWitch.onLivingUpdate (yp.e) runs for a corpse too: the drink roll draws and can still start a drink (creeperwitch-b45 records)
     e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
     if (slime) e.moveForward = 0;
     this.walk(e, t, 0);

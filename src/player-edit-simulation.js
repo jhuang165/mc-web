@@ -12,7 +12,8 @@ import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, eggOf } from './spawn-eggs.js';
-import { isAgeable } from './entities.js';
+import { isAgeable, entityRandom } from './entities.js';
+import { creeperIgnite } from './creeper.js';
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BEACON } from './pyramid.js';
@@ -178,9 +179,9 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // Flint-and-steel interaction with a live creeper precedes the general entity branch.
   if (place && aimedEntity?.entity?.type === 'creeper' && aimedEntity.entity.health > 0 && item?.kind === 'flint_and_steel') {
     const e = aimedEntity.entity;
-    hook('playSound', 'fire.ignite', { volume: 1, pitch: random() * 0.4 + 0.8,
-      position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
-    e.ignited = true;
+    // EntityCreeper.interact: the pitch is the creeper's own Entity.rand nextFloat (creeper.js creeperIgnite; creeperwitch-b45 records).
+    const ignite = creeperIgnite(e, entityRandom(e));
+    hook('playSound', ignite.name, { volume: ignite.volume, pitch: ignite.pitch, position: ignite.position });
     if (!state.survival.creative) state.survival.wear(id);
     hook('reportBrokenTool');
     hook('renderHotbar');

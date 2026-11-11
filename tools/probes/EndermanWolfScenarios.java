@@ -139,6 +139,77 @@ public class EndermanWolfScenarios {
     sc("b44pd-creeper-watch-6354", 6354, 300, "X", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
   }
 
+  // Batch 45 (creeperwitch): creeper swell, ignition, lightning, explosion and death drops, and the witch's potion throws, drinking and drops, with a survival player (health scaled by difficulty), on the real
+  // EntityPlayerMP. Rows carry [explosions, spawned entities, changed cells, player motion] after the b44 row elements (EW_SET=b45cw). Ops added: difficulty n | grief on|off | power idx | bolt idx | fire idx seconds |
+  // arrowkill idx dmg (a skeleton's arrow) | effect idx potionId ticks. Items: 259 flint and steel, 268 wooden sword. X creeper, K witch, Z zombie, C cow, P pig.
+  static void runCW() throws Exception {
+    double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
+    sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");
+    sc("b45cw-swell-approach-7002", 7002, 160, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0");
+    EndermanWolfProbe.scenario("b45cw-swell-wall-7003", 7003, 120, "X", six, new String[] {"0 look 90 0"}, new int[0][0], new int[][] {{67, 0, 58, 67, 3, 70, 1, 0}}, false, 15);
+    sc("b45cw-swell-release-7004", 7004, 120, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "10 walk 1 -0.2 0", "30 walk 1 0 0");
+    sc("b45cw-swell-reapproach-7005", 7005, 200, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "6 walk 1 -0.25 0", "16 walk 1 0 0", "40 walk 1 0.25 0", "50 walk 1 0 0");
+    sc("b45cw-difficulty-peaceful-7006", 7006, 60, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 0");
+    sc("b45cw-difficulty-easy-7007", 7007, 160, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 1");
+    sc("b45cw-difficulty-hard-7008", 7008, 160, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 3");
+    sc("b45cw-creative-7009", 7009, 160, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 creative 1 on");
+    sc("b45cw-ignite-7010", 7010, 90, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "3 use 0");
+    sc("b45cw-ignite-near-7011", 7011, 90, "X", new double[][] {{66.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "3 use 0");
+    sc("b45cw-ignite-creative-7012", 7012, 90, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 creative 1 on", "0 hold 259", "3 use 0");
+    sc("b45cw-ignite-twice-7013", 7013, 90, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "3 use 0", "8 use 0");
+    sc("b45cw-bolt-7014", 7014, 120, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "5 bolt 0");
+    sc("b45cw-bolt-near-7015", 7015, 120, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "5 bolt 0");
+    sc("b45cw-powered-ignite-7016", 7016, 90, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 power 0", "0 hold 259", "3 use 0");
+    sc("b45cw-powered-near-7017", 7017, 160, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 power 0");
+    // blasts into terrain: stone, dirt, gravel, glass, bookshelf, chest, furnace, TNT, ores, leaves, wool, plank rows at y 0 beside the creeper; an ignited creeper in the open and one in a room
+    int[][] row = {{71, 0, 62, 71, 1, 62, 1, 0}, {72, 0, 62, 72, 1, 62, 3, 0}, {73, 0, 62, 73, 1, 62, 13, 0}, {74, 0, 62, 74, 1, 62, 20, 0}, {75, 0, 62, 75, 1, 62, 47, 0}, {76, 0, 62, 76, 1, 62, 54, 2},
+      {77, 0, 62, 77, 1, 62, 61, 2}, {71, 0, 66, 71, 1, 66, 46, 0}, {72, 0, 66, 72, 1, 66, 16, 0}, {73, 0, 66, 73, 1, 66, 15, 0}, {74, 0, 66, 74, 1, 66, 18, 0}, {75, 0, 66, 75, 1, 66, 35, 14}, {76, 0, 66, 76, 1, 66, 5, 0}, {77, 0, 66, 77, 1, 66, 4, 0}};
+    EndermanWolfProbe.scenario("b45cw-blocks-ignite-7018", 7018, 60, "X", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 hold 259", "2 use 0", "2 walk 1 -0.2 0"}, new int[0][0], row, false, 15);
+    EndermanWolfProbe.scenario("b45cw-blocks-powered-7019", 7019, 60, "X", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 hold 259", "0 power 0", "2 use 0", "2 walk 1 -0.2 0"}, new int[0][0], row, false, 15);
+    EndermanWolfProbe.scenario("b45cw-blocks-nogrief-7020", 7020, 60, "X", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 hold 259", "0 grief off", "2 use 0", "2 walk 1 -0.2 0"}, new int[0][0], row, false, 15);
+    EndermanWolfProbe.scenario("b45cw-blocks-nogrief-powered-7021", 7021, 60, "X", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 hold 259", "0 grief off", "0 power 0", "2 use 0", "2 walk 1 -0.2 0"}, new int[0][0], row, false, 15);
+    EndermanWolfProbe.scenario("b45cw-blocks-seed-7022", 7022, 60, "X", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 hold 259", "2 use 0", "2 walk 1 -0.2 0"}, new int[0][0], row, false, 15);
+    // bystanders: the blast hurts and pushes other mobs (zombie, cow, pig, a second creeper) and the player
+    sc("b45cw-bystanders-7023", 7023, 60, "XZCP", new double[][] {{74.5, 64.5}, {76.5, 64.5}, {72.5, 62.5}, {74.5, 67.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "2 use 0", "2 walk 4 -0.2 0");
+    sc("b45cw-bystanders-powered-7024", 7024, 60, "XZCP", new double[][] {{74.5, 64.5}, {76.5, 64.5}, {72.5, 62.5}, {74.5, 67.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "0 power 0", "2 use 0", "2 walk 4 -0.2 0");
+    sc("b45cw-bystanders-creepers-7025", 7025, 60, "XXX", new double[][] {{74.5, 64.5}, {76.5, 64.5}, {72.5, 62.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "2 use 0", "2 walk 3 -0.2 0");
+    sc("b45cw-player-adjacent-7026", 7026, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 hold 259", "2 use 0");
+    sc("b45cw-player-adjacent-hard-7027", 7027, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 3", "0 hold 259", "2 use 0");
+    sc("b45cw-player-adjacent-easy-7028", 7028, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 1", "0 hold 259", "2 use 0");
+    sc("b45cw-player-adjacent-powered-7029", 7029, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 power 0", "0 hold 259", "2 use 0");
+    // death drops: the player's sword (a player kill: gunpowder, then the record roll is skeleton-only), a skeleton's arrow (record), fire, a charged creeper
+    for (int k = 0; k < 6; k++) sc("b45cw-kill-player-" + (7030 + k), 7030 + k, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "1 health 0 1", "2 melee 0");
+    for (int k = 0; k < 8; k++) sc("b45cw-kill-arrow-" + (7040 + k), 7040 + k, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "1 arrowkill 0 100");
+    sc("b45cw-kill-fire-7050", 7050, 120, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "1 fire 0 30", "2 health 0 1");
+    sc("b45cw-kill-powered-7051", 7051, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 power 0", "0 hold 268", "1 health 0 1", "2 melee 0");
+    sc("b45cw-kill-hit-7052", 7052, 40, "XZ", new double[][] {{76.5, 64.5}, {70.5, 76.5}, {64.5, 64.5}}, "0 look 270 0", "1 hit 0 1 100");
+    // witch: ranged potion choice by distance and the target's effects, the throw's draws and aim, drinking (heal, fire resistance, water breathing, swiftness) and drops
+    sc("b45cw-witch-far-7101", 7101, 400, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    sc("b45cw-witch-far-7102", 7102, 400, "K", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "100 effect 1 2 6000");
+    sc("b45cw-witch-poison-7103", 7103, 400, "K", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 effect 1 2 6000");
+    sc("b45cw-witch-harm-7104", 7104, 400, "K", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 effect 1 2 6000", "0 effect 1 19 6000");
+    EndermanWolfProbe.scenario("b45cw-witch-near-weakness-7105", 7105, 500, "K", new double[][] {{67.2, 65.9}, {64.5, 64.5}}, new String[] {"0 look 270 0", "0 effect 1 2 6000", "0 effect 1 19 6000"}, new int[0][0], new int[][] {{67, 0, 65, 67, 1, 65, 30, 0}}, false, 15); // the witch stands in a cobweb so no mob-player push (the port never moves the player from a mob update) reaches the lead
+    EndermanWolfProbe.scenario("b45cw-witch-near-weakness-7106", 7106, 125, "K", new double[][] {{66.9, 62.6}, {64.5, 64.5}}, new String[] {"0 look 270 0", "0 effect 1 2 6000", "0 effect 1 19 6000", "0 effect 1 18 6000"}, new int[0][0], new int[][] {{66, 0, 62, 66, 1, 62, 30, 0}}, false, 15); // the witch stands in a cobweb so no mob-player push (the port never moves the player from a mob update) reaches the lead
+    sc("b45cw-witch-lead-7107", 7107, 400, "K", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "20 walk 1 0 0.1", "120 walk 1 0 0", "200 walk 1 0.1 0", "260 walk 1 0 0");
+    sc("b45cw-witch-lead-7108", 7108, 400, "K", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 effect 1 2 6000", "20 walk 1 -0.1 0.05", "100 walk 1 0 0");
+    sc("b45cw-witch-high-7109", 7109, 300, "K", new double[][] {{74.5, 64.5, 5}, {64.5, 64.5}}, "0 look 270 0");
+    EndermanWolfProbe.scenario("b45cw-witch-wall-7110", 7110, 300, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 270 0"}, new int[0][0], new int[][] {{69, 0, 58, 69, 3, 70, 1, 0}}, false, 15);
+    sc("b45cw-witch-creative-7111", 7111, 300, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
+    sc("b45cw-witch-hurt-7112", 7112, 800, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 health 0 10");
+    sc("b45cw-witch-hurt-7113", 7113, 800, "K", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 health 0 10", "0 fire 0 60");
+    sc("b45cw-witch-hurt-7114", 7114, 800, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 health 0 5");
+    sc("b45cw-witch-burning-7115", 7115, 800, "K", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 fire 0 100");
+    sc("b45cw-witch-burning-7116", 7116, 800, "K", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 fire 0 100");
+    sc("b45cw-witch-far-swift-7117", 7117, 800, "K", new double[][] {{84.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    sc("b45cw-witch-far-swift-7118", 7118, 800, "K", new double[][] {{88.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    EndermanWolfProbe.scenario("b45cw-witch-water-7119", 7119, 800, "K", new double[][] {{84.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 270 0"}, new int[0][0], new int[][] {{82, 0, 62, 87, 2, 67, 9, 0}}, true, 15);
+    EndermanWolfProbe.scenario("b45cw-witch-water-7120", 7120, 800, "K", new double[][] {{84.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 270 0"}, new int[0][0], new int[][] {{82, 0, 62, 87, 2, 67, 9, 0}}, true, 15);
+    sc("b45cw-witch-peaceful-7121", 7121, 60, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 difficulty 0");
+    for (int k = 0; k < 8; k++) sc("b45cw-witch-kill-" + (7130 + k), 7130 + k, 30, "K", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "1 health 0 1", "2 melee 0");
+    sc("b45cw-witch-kill-arrow-7140", 7140, 30, "K", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "1 arrowkill 0 100");
+    sc("b45cw-witch-drink-kill-7141", 7141, 900, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 health 0 10", "0 hold 268");
+  }
+
   // Batch 45 (horses): EntityHorse records through the real EntityPlayer.interactWith and EntityAIMate. Q, q tame horses (variants 258 and 773, max health 24 and 18, speed 0.25 and 0.3, jump 0.55 and 0.65), D a tame donkey,
   // R a wild horse, F a wild foal, Y a tame foal (all max health 20 or fixed as in EndermanWolfProbe.b45Horse), V a horse built by onSpawnWithEgg (its draws are in the record's `init`; a following V
   // passes the GroupData on). Items: 353 sugar, 296 wheat, 260 apple, 297 bread, 170 hay block, 396 golden carrot, 322 golden apple.

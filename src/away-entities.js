@@ -114,6 +114,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
   const mobs = new EntityWorld(world, mobSplit.inside, random, ids);
   mobs.ai.player.absent = true;
+  mobs.explodeInline = (ev) => explodeEvent(ev, (x, y, z, size, opts) => self.explode(x, y, z, size, opts)); // a creeper explodes inside its own update (entities.js)
   linkVehicleRiders(mobs.entities, boats.carts, minecarts.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart (main.js does the same on load)
   if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
   let clock = Number.isFinite(plan.time) ? plan.time : 0;
