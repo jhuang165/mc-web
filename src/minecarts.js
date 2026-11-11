@@ -139,6 +139,7 @@ export class Minecarts {
     cart.px = cart.x; cart.py = cart.posY; cart.pz = cart.z;
     for (const it of record.items ?? []) this.put(cart, it.slot, it);
     this.carts.push(cart);
+    this.joined?.(cart); // entity-simulation.js (entityWalkers): the cart's place in World.loadedEntityList
     return cart;
   }
   // Furnace, TNT, hopper and command block carts (cart-variants.js): the same constructor path with the native type number.
@@ -469,10 +470,17 @@ export class Minecarts {
   // `host` (optional): { explode(cart, x, y, z, power), particle(name, x, y, z, mx, my, mz), sound(name, cart), transfer, changed }.
   tick(world, { entities = [], host = null } = {}) {
     this.host = host;
-    // World.updateEntityWithOptionalForce: +-32 blocks loaded (the window, or the ring's 5 x 5 chunk test).
-    for (const cart of [...this.carts]) if (!cart.dead && ringEntityActive(world,cart)) this.tickCart(world, cart, entities);
-    this.carts = this.carts.filter((c) => !c.dead);
+    for (const cart of [...this.carts]) this.tickOne(world, cart, entities, host);
+    this.reap();
   }
+  // One cart's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers). World.updateEntityWithOptionalForce: +-32 blocks loaded
+  // (the window, or the ring's 5 x 5 chunk test).
+  tickOne(world, cart, entities = [], host = this.host) {
+    this.host = host;
+    if (!cart.dead && ringEntityActive(world, cart)) this.tickCart(world, cart, entities);
+  }
+  // World.updateEntities drops the setDead entities after the pass.
+  reap() { this.carts = this.carts.filter((c) => !c.dead); }
   // EntityMinecart.applyEntityCollision(other) on `cart`. Another cart trades motion along the
   // track; any other entity (the player, a mob: EntityLivingBase.collideWithNearbyEntities calls
   // this for each pushable entity within 0.2) is pushed: returns the velocity [x, z] to add to it.

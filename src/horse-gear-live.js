@@ -84,10 +84,10 @@ export function installHorseGear(EntityWorld) {
   // su.b(world, x, y, z): the knot at a block, if any.
   proto.knotAt = function (x, y, z) { return knotsOf(this).find((k) => !k.dead && k.x === x && k.y === y && k.z === z) ?? null; };
   // su.a(world, x, y, z): a knot is made without looking at the block (the fence check comes with its first 100 ticks).
-  proto.knotCreate = function (x, y, z) { const k = { x, y, z, age: 0, dead: false }; knotsOf(this).push(k); return k; };
+  proto.knotCreate = function (x, y, z) { const k = { x, y, z, age: 0, dead: false }; knotsOf(this).push(k); this.joined?.(k, "knot"); return k; };
   // /summon LeashKnot (EntityList.createEntityFromNBT: su(world), whose readEntityFromNBT is empty, so TileX/Y/Z stay 0, 0, 0; then
   // CommandSummon.setLocationAndAngles). It looks for a fence at tile 0, 0, 0 on its 101st update, so it normally dies there.
-  proto.knotSummon = function (px, py, pz) { const k = { x: 0, y: 0, z: 0, age: 0, dead: false, summoned: true, px, py, pz, id: ++knotSeq }; knotsOf(this).push(k); return k; };
+  proto.knotSummon = function (px, py, pz) { const k = { x: 0, y: 0, z: 0, age: 0, dead: false, summoned: true, px, py, pz, id: ++knotSeq }; knotsOf(this).push(k); this.joined?.(k, "knot"); return k; };
   // Entity.setDead on a knot: nothing drops (su.b(Entity) is empty) and the mobs it held lose the lead on their next tick.
   proto.knotKill = function (k) {
     k.dead = true;
@@ -129,11 +129,14 @@ export function installHorseGear(EntityWorld) {
   proto.knotTick = function () {
     const list = this.knotList;
     if (!list?.length) return;
-    for (const k of list.slice()) {
-      const out = G.knotAge(k.age, isFence(this.world.get(k.x, k.y, k.z)));
-      k.age = out.age;
-      if (out.kill) this.knotKill(k);
-    }
+    for (const k of list.slice()) this.knotTickOne(k);
+  };
+  // One knot's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers).
+  proto.knotTickOne = function (k) {
+    if (k.dead) return;
+    const out = G.knotAge(k.age, isFence(this.world.get(k.x, k.y, k.z)));
+    k.age = out.age;
+    if (out.kill) this.knotKill(k);
   };
   // EntityHanging.attackEntityFrom: any hit kills a knot without a drop. (Left click is not routed to knots in the browser.)
   proto.knotAttack = function (k) { if (k.dead) return false; this.knotKill(k); return true; };

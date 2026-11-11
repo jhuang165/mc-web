@@ -66,29 +66,62 @@ export const playerBox = ({ x, y, z }, width, height) => mobBox(x, y, z, width, 
  * Returns the drops of this tick.
  */
 export function tickMinecartSimulation(state, hooks = {}) {
-  const { world, minecarts, mobs, position, velocity, width, height, alive = true, rider = null } = state;
+  const { world, minecarts } = state;
   if (!minecarts?.carts.length) return [];
+  const { blockers } = vehicleBlockers(state);
+  minecarts.tick(world, { entities: blockers, host: hooks.cartHost ?? null });
+  return pushAndDrain(state, hooks, minecarts);
+}
+
+// The solid boxes a vehicle's move meets, at the positions the entities have now: the player (a rider's stand-in keeps its identity, so its own cart
+// excludes it) and every living mob. `sized` boxes a mob.
+function vehicleBlockers(state) {
+  const { mobs, position, width, height, alive = true, rider = null } = state;
   const living = (mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
   const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
-  // Keep rider identity: its own cart excludes it from collision boxes and pushes.
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
-  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))];
-  minecarts.tick(world, { entities: blockers, host: hooks.cartHost ?? null });
+  return { living, sized, pBox, player, blockers: [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))] };
+}
+
+// The player's and each mob's share of the push of the vehicles they stand against, then the passenger links and the drops.
+function pushAndDrain(state, hooks, system) {
+  const { velocity, alive = true } = state;
+  const { living, sized, pBox, player } = vehicleBlockers(state);
   if (alive) {
-    const [vx, vz] = minecarts.pushEntity(player, pBox);
+    const [vx, vz] = system.pushEntity(player, pBox);
     velocity.x += vx;
     velocity.z += vz;
   }
   for (const e of living) {
-    const [vx, vz] = minecarts.pushEntity(e, sized(e));
+    const [vx, vz] = system.pushEntity(e, sized(e));
     e.vx += vx;
     e.vz += vz;
   }
-  syncVehiclePassengers(minecarts.carts);
-  const drops = minecarts.drain();
+  syncVehiclePassengers(system.carts);
+  const drops = system.drain();
   for (const d of drops) hooks.drop?.(d);
   return drops;
+}
+
+// The other vehicle list as blocking boxes: World.getCollidingBoundingBoxes adds getBoundingBox / getCollisionBox of every entity beside the mover, so a boat and a cart stop each other.
+const solidVehicles = (system) => (system?.carts ?? []).filter((v) => !v.dead).map((v) => ({ bb: v.bb, ref: v }));
+
+/**
+ * One minecart's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers): EntityMinecart.onUpdate among the entities
+ * that have already moved this tick, with its drops handed out at once (they join the list). The pushes of the player and the mobs follow the walk
+ * (`finishMinecartSimulation`).
+ */
+export function tickMinecartOne(state, hooks, cart) {
+  const { world, minecarts } = state;
+  if (!minecarts || cart.dead) return;
+  minecarts.tickOne(world, cart, [...vehicleBlockers(state).blockers, ...solidVehicles(state.boats)], hooks.cartHost ?? null);
+  for (const d of minecarts.drain()) hooks.drop?.(d);
+}
+/** The part of tickMinecartSimulation that follows the walk: the cart's pushes on the player and the mobs, the passenger links, the leftover drops. */
+export function finishMinecartSimulation(state, hooks = {}) {
+  if (!state.minecarts?.carts.length) return [];
+  return pushAndDrain(state, hooks, state.minecarts);
 }
 
 /**
@@ -245,26 +278,20 @@ export function useBoat(state, { place, boat }, hooks = {}) {
 
 // Boats: the same blockers and pushes as tickMinecartSimulation; `hooks` carries clear/splash/particle.
 export function tickBoatSimulation(state, hooks = {}) {
-  const { world, boats, mobs, position, velocity, width, height, alive = true, rider = null } = state;
+  const { world, boats } = state;
   if (!boats?.carts.length) return [];
-  const living = (mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
-  const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
-  const pBox = playerBox(position, width, height);
-  const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
-  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))];
+  const { blockers } = vehicleBlockers(state);
   boats.tick(world, { entities: blockers, hooks });
-  if (alive) {
-    const [vx, vz] = boats.pushEntity(player, pBox);
-    velocity.x += vx;
-    velocity.z += vz;
-  }
-  for (const e of living) {
-    const [vx, vz] = boats.pushEntity(e, sized(e));
-    e.vx += vx;
-    e.vz += vz;
-  }
-  syncVehiclePassengers(boats.carts);
-  const drops = boats.drain();
-  for (const d of drops) hooks.drop?.(d);
-  return drops;
+  return pushAndDrain(state, hooks, boats);
+}
+/** One boat's update where the loaded-entity walk reaches it (see tickMinecartOne). */
+export function tickBoatOne(state, hooks, boat) {
+  const { world, boats } = state;
+  if (!boats || boat.dead) return;
+  boats.tickOne(world, boat, [...vehicleBlockers(state).blockers, ...solidVehicles(state.minecarts)], hooks);
+  for (const d of boats.drain()) hooks.drop?.(d);
+}
+export function finishBoatSimulation(state, hooks = {}) {
+  if (!state.boats?.carts.length) return [];
+  return pushAndDrain(state, hooks, state.boats);
 }
