@@ -14,6 +14,37 @@ import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
 
+// An EntityMinecart or EntityBoat in the blast: Entity.getEyeHeight is 0, so the eye is posY; attackEntityFrom(explosion source, damage) wobbles it and breaks it
+// above 40 (a creative player's own explosion breaks it outright), then the knockback is added to its motion (vehicles are not EntityLivingBase: no Blast Protection).
+function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop) {
+  for (const v of [...(system?.carts ?? [])]) {
+    if (v.dead || v === exploder) continue;
+    const hit = explosionImpact(world, x, y, z, size, v.x, v.posY, v.z, v.posY, v.bb);
+    if (!hit) continue;
+    system.attack(v, hit.damage, { source: "explosion", creative });
+    v.vx += hit.push[0]; v.vy += hit.push[1]; v.vz += hit.push[2];
+  }
+  // A broken vehicle's drops join the entity list at once (Entity.entityDropItem), so an item dropped mid-pass still updates in this pass.
+  if (drop && system?.drain) for (const d of system.drain()) drop(d);
+}
+/**
+ * The non-living entity lists of Explosion.doExplosionA, in main.js order: items, orbs, arrows, thrown entities, the witch and dispenser potions and the snow golem's
+ * snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, and the minecarts and boats (attackEntityFrom with the explosion
+ * source, then the motion; EntityListProbe). Primed TNT, mobs and the player stay with applyExplosion.
+ */
+export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null) {
+  const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
+  items.explode(world, x, y, z, size, exploder);
+  xpOrbs.explode(world, x, y, z, size, exploder);
+  arrows.explode(world, x, y, z, size, exploder);
+  projectiles.explode(world, x, y, z, size, exploder);
+  mobs?.potions?.projectiles?.explode(world, x, y, z, size, exploder);
+  mobs?._golemBalls?.projectiles?.explode(world, x, y, z, size, exploder);
+  explodeVehicles(state.minecarts, world, x, y, z, size, exploder, creative, vehicleDrop);
+  explodeVehicles(state.boats, world, x, y, z, size, exploder, creative, vehicleDrop);
+  falling?.explode(x, y, z, size, exploder);
+  state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
+}
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
  * drop data are prepared from the current world first. Entity hits and
@@ -49,7 +80,7 @@ export function applyExplosion(state, request, hooks = {}) {
     syncChests = () => {},
     renderVitals = () => {},
     markDirty = () => {},
-  } = hooks;
+  } = hooks; // `hooks.vehicleDrop(drop)`: a broken cart's or boat's item (Minecarts / Boats drain record), spawned at once
 
   const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite, resistance: blue ? blueSkullResistance : undefined }); // blue: a charged wither skull caps resistance (wither-boss.js)
   const mobHits = [];
@@ -88,12 +119,7 @@ export function applyExplosion(state, request, hooks = {}) {
     mobHits.push({ entity, ...hit });
   }
 
-  items.explode(world, x, y, z, size, exploder);
-  xpOrbs.explode(world, x, y, z, size, exploder);
-  arrows.explode(world, x, y, z, size, exploder);
-  projectiles.explode(world, x, y, z, size, exploder);
-  falling?.explode(x, y, z, size, exploder);
-  state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
+  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop);
   const tntProcessed = [];
   for (const entity of primed) {
     if (entity === exploder) continue;

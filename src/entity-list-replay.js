@@ -13,6 +13,7 @@ import { Hanging } from "./hanging.js";
 import { WitchPotions } from "./witch-potions.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { explodeEvent } from "./living-simulation.js";
+import { explodeNonLiving } from "./explosion-simulation.js";
 import { JavaRandom } from "./java-random.js";
 import { setEntityRandom } from "./entities.js";
 
@@ -24,7 +25,8 @@ import { setEntityRandom } from "./entities.js";
 export const entityListReference = JSON.parse(readFileSync(new URL("../public/research/entity-list-reference.json", import.meta.url))).cases;
 const STONE = 3, PORT_ID = { 1: 3 }, YOFF = { item: 0.125, tnt: TNT_Y_OFFSET };
 
-export function replayEntityList(c, onBoom = null) {
+// `without`: leave one batch 45 behaviour out to show a record needs it: "blast" (a blast reaches only items, as before), "mobPush" (the vehicles do not push mobs in the walk).
+export function replayEntityList(c, onBoom = null, without = null) {
   const ew = new EntityWorld(plain([]), [], () => 0.5);
   ew.brightnessLevel = () => 15; // the probe world's light
   ew.isDaytime = () => false;
@@ -36,7 +38,7 @@ export function replayEntityList(c, onBoom = null) {
   ew.potions = new WitchPotions(ew, rand);
   const hasOrb = c.specs.some((q) => q[0] === "orb"), survival = new Survival({}, "survival"), player = { x: hasOrb ? 0.5 : 1e5, y: 0, z: 0.5, health: 20, alive: true, width: 0.6, height: 1.8, isPlayer: true };
   let xp = 0, inPass = false;
-  const explode = (x, y, z, power, who) => { booms.push([x, y, z, power]); items.explode(world, x, y, z, power, who?.exploder ?? who); onBoom?.(items); };
+  const explode = (x, y, z, power, who) => { booms.push([x, y, z, power]); if (without === "blast") items.explode(world, x, y, z, power, who?.exploder ?? who); else explodeNonLiving(state, x, y, z, power, who?.exploder ?? who, false, drop); onBoom?.(items); };
   // Entity.entityDropItem(stack, 0) and a broken cart's drops: an item that joins the end of the list in the pass (the probe's World.spawnEntityInWorld fixes its sideways motion).
   const drop = (d) => items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: [0, 0.2, 0] });
   const hooks = {
@@ -44,10 +46,11 @@ export function replayEntityList(c, onBoom = null) {
     maxStack: () => 64, carts: { drop }, boats: { drop }, hangingActive: () => true, hangingDrop: drop,
     mobExplosion: (ev) => explodeEvent(ev, (x, y, z, size, options) => explode(x, y, z, size, options)),
   };
-  const state = { world, items, arrows, primed, xpOrbs, projectiles: { balls: [], drain: () => [], reap() {}, tickEffects() {} }, mobs: ew, survival, position: player,
+  const state = { world, items, arrows, primed, xpOrbs, projectiles: { balls: [], drain: () => [], reap() {}, tickEffects() {}, explode() {} }, mobs: ew, survival, position: player,
     minecarts, boats, hanging, velocity: { x: 0, z: 0 }, alive: false };
   const ctx = { state, hooks };
   ew.walks = entityWalkers(() => ctx);
+  if (without === "mobPush") for (const w of ew.walks.values()) delete w.pushMob;
   items.joined = (e) => { ew.joined(e, "item"); if (inPass) extras.push({ at: { kind: "item" }, entity: e }); };
   arrows.joined = (e) => ew.joined(e, "arrow"); xpOrbs.joined = (e) => ew.joined(e, "orb");
   minecarts.joined = (e) => ew.joined(e, "cart"); boats.joined = (e) => ew.joined(e, "boat"); hanging.joined = (e) => ew.joined(e, "hanging");

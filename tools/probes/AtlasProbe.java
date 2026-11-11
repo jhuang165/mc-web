@@ -5,7 +5,7 @@ import java.security.MessageDigest;
 import javax.imageio.ImageIO;
 
 // Runs the unchanged TextureUtil.generateMipmapData (bqi.a(int, int, int[][])) and TextureUtil.anaglyphColor (bqi.a(int[])) over block
-// textures from the original jar, read as TextureMap/TextureUtil.func_110986_a do (ImageIO.read, BufferedImage.getRGB, ARGB ints; the
+// and item textures from the original jar (both TextureMaps upload through the same TextureUtil path), read as TextureMap/TextureUtil.func_110986_a do (ImageIO.read, BufferedImage.getRGB, ARGB ints; the
 // first frame of an animation strip). Per texture and mip setting (levels 0, 1, 4) it prints the SHA-1 of each level's ARGB ints and of
 // each level after anaglyphColor (what the upload funnel sends to GL when 3D Anaglyph is on), as one JSON line.
 // Arguments: texture names relative to assets/minecraft/textures/. -Djar=<client jar>.

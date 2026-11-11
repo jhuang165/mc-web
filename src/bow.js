@@ -219,6 +219,7 @@ export class Arrows {
     return events;
   }
   sound(a, name, volume, pitch) {
+    if (this.soundSink) return this.soundSink(name, a.x, a.y, a.z, volume, pitch); // a client copy: played at once, in call order with its particles
     this.events.push({ sound: name, volume, pitch, position: { x: a.x, y: a.y, z: a.z } });
   }
   // Explosion.doExplosionA pushes arrows even though Entity.attackEntityFrom returns false.
@@ -253,8 +254,7 @@ export class Arrows {
     a.water = wet.wet;
     // Entity.handleWaterMovement: entering water after the first update splashes.
     if (a.water && wasWater === false) {
-      const s = enterWater(this.fx, { x: a.x, z: a.z, minY: a.y, width: WIDTH, mx: a.mx, my: a.my, mz: a.mz }, a.rand);
-      this.sound(a, "game.neutral.swim.splash", s.volume, s.pitch);
+      enterWater(this.fx, { x: a.x, z: a.z, minY: a.y, width: WIDTH, mx: a.mx, my: a.my, mz: a.mz }, a.rand, (volume, pitch) => this.sound(a, "game.neutral.swim.splash", volume, pitch));
     }
     a.mx += wet.push[0];
     a.my += wet.push[1];
@@ -325,7 +325,9 @@ export class Arrows {
         let dmg = ceil(speed * a.damage);
         if (a.crit) dmg += a.rand.nextInt(Math.trunc(dmg / 2) + 2);
         aimPart(hit.entity); // an arrow into one of the dragon's parts
-        if (this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
+        // A client world's copy (ctx.remote): World.isRemote makes every attackEntityFrom return false, so the damage is drawn
+        // (the crit's nextInt included) and handed to `ctx.attack` for the log, then the arrow ricochets whatever it hit.
+        if (ctx.remote ? (ctx.attack?.(hit.entity.ref, dmg), false) : this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
           // Knockback (the Knockback enchantment only): addVelocity(m * k * 0.6 / h, 0.1, ...).
           const h = sqrtF(a.mx * a.mx + a.mz * a.mz);
           if (a.knockback > 0 && h > 0 && hit.entity.ref !== "player")

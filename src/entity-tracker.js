@@ -28,7 +28,7 @@
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
 import { trackingRange } from "./ring-events.js";
 import { mountEntity, seatPosition } from "./mob-riding.js";
-import { wrapFloat, wrapDouble } from "./dragon.js";
+import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox } from "./dragon.js";
 import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
 
@@ -97,6 +97,8 @@ export class TrackerEntry {
     this.packets = []; // what the client will process, oldest first
     this.lastRiding = null; // EntityTrackerEntry.w: the vehicle last sent in S1B(0)
     this.lastHang = !!e.batHanging; // the bat's hanging flag in the data watcher the client last got
+    this.lastHealth = e.health; // the dragon's health (data watcher index 6) the client last got
+    this.lastAir = e.air ?? 300; // the squid's air (data watcher index 1) the client last got
     this.lastLeash = ""; // the leash holder last sent in S1B(1) (a key of leashKey)
   }
   emit(packet) { this.packets.push(packet); this.view.log?.(packet); } // to the client's queue (and a test log)
@@ -164,9 +166,23 @@ export class TrackerEntry {
     }
     // sendMetadataToAllAssociatedPlayers: the bat's hanging flag (data watcher index 16) is the one watched object that moves a client entity
     if (e.type === "bat" && !!e.batHanging !== this.lastHang) { this.lastHang = !!e.batHanging; this.send({ type: "meta", batHanging: this.lastHang }); }
+    // The same S1C also carries the dragon's health (the boss bar and the client's death branch read it) and the squid's air (EntityWaterMob.onEntityUpdate
+    // changes it every tick out of the water, so the watched object is dirty and the entry sends its location every tick: observe)
+    if ((e.type === "ender_dragon" && e.health !== this.lastHealth) || (e.type === "squid" && (e.air ?? 300) !== this.lastAir)) {
+      const meta = { type: "meta" };
+      if (e.type === "ender_dragon") meta.health = this.lastHealth = e.health; else meta.air = this.lastAir = e.air ?? 300;
+      this.send(meta);
+    }
     // Entity.velocityChanged (knockback): the motion goes out at once, to everyone tracking
     if (e.velocityChanged) { this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) }); e.velocityChanged = false; }
     this.ticks++;
+  }
+  // The data watcher values the S0F spawn packet carries for the mobs whose client copy reads one (S0F's metadata list, applied after the constructor)
+  watched() {
+    const e = this.e;
+    if (e.type === "ender_dragon") return { health: this.lastHealth = e.health };
+    if (e.type === "squid") return { air: this.lastAir = e.air ?? 300 };
+    return {};
   }
   updatePlayerList() { this.tryStart(); }
   // EntityTrackerEntry.tryStartWachingThis: the square test on lastScaledPosition / 32 with integer division
@@ -184,7 +200,7 @@ export class TrackerEntry {
           const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
           this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
-        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ), ...this.watched() });
         if (e.type === "bat") { this.lastHang = !!e.batHanging; this.emit({ type: "meta", batHanging: this.lastHang }); } // the spawn's S1C
         // after the spawn: S1B(0) for a rider and S1B(1) for a leashed mob (the periodic one in sendLocation still goes out at the entry's first tick)
         if (e.ridingEntity) this.emit({ type: "attach", mode: 0, entity: e, vehicle: e.ridingEntity });
@@ -216,17 +232,29 @@ export class ClientEntity {
     // Entity.rand of the client copy (unseeded in Java; the replay seeds it): the squid's rotation speed re-roll reads it
     this.rand = type === "squid" || type === "ender_dragon" ? ClientEntity.makeRandom() : null;
     this.squid = null; // EntitySquid's client fields (squidPitch ... tentacleAngle), set at spawn
-    this.dragon = null; // EntityDragon's client fields: ringBuffer, ringBufferIndex, prevAnimTime, animTime
+    this.dragon = null; // EntityDragon's client fields: ringBuffer, ringBufferIndex, prevAnimTime, animTime, deathTicks, the box and the seven parts
+    // The data watcher values the client holds for the mobs that read one: the dragon's health (index 6, from the spawn packet and S1C; null = the
+    // live health stands in) and the squid's air (index 1, from the same packets, then the client's own EntityWaterMob.onEntityUpdate).
+    this.health = null; this.air = 300;
+    this.fx = []; // what the client copy does that the live entity cannot: { sound | particle, ... }, taken by MobTracker.takeFx
     this.leash = null; // EntityLiving.leashedToEntity: { player: true }, a ClientEntity, or { knot: true, x, y, z }
   }
   static makeRandom() { return new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))); }
   apply(p, ctx = null) {
     if (p.type === "spawn") {
       if (this.type === "squid") this.squid = squidState(this.rand); // the constructor rolls rotationVelocity from Entity.rand
-      if (this.type === "ender_dragon") this.dragon = { ring: new Float64Array(64 * 3), ri: -1, prevAnim: 0, anim: 0 };
+      if (this.type === "ender_dragon") {
+        // EntityDragon's constructor on the client: setHealth(max) (200), the seven parts, then the spawn packet's data watcher list sets the health
+        this.dragon = { ring: new Float64Array(64 * 3), ri: -1, prevAnim: 0, anim: 0, deathTicks: 0, ryv: 0, talk: 0, bb: null,
+          parts: PART_SIZES.map(([w, h]) => ({ width: w, height: h, box: partBox(0, 0, 0, w, h) })) };
+        this.health = 200;
+      }
+      if (p.health !== undefined) this.health = p.health;
+      if (p.air !== undefined) this.air = p.air;
       this.present = true; this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.x = this.tx = this.px = p.x / 32; this.y = this.ty = this.py = p.y / 32; this.z = this.tz = this.pz = p.z / 32; this.increments = 0;
       this.onGround = false;
+      if (this.dragon) setDragonPosition(this, this.x, this.y, this.z); // setLocationAndAngles -> setPosition: the dragon's 16 x 8 box
       // setLocationAndAngles (a new client entity has no previous angle), then the head from the packet; renderYawOffset starts at 0
       this.rotationYaw = this.prevRotationYaw = this.tyaw = unangle(p.yaw ?? 0);
       this.rotationPitch = this.prevRotationPitch = this.tpitch = unangle(p.pitch ?? 0);
@@ -245,7 +273,11 @@ export class ClientEntity {
       this.tx = this.sx / 32; this.ty = this.sy / 32 + 0.015625; this.tz = this.sz / 32; this.increments = CLIENT_INTERPOLATION;
       this.tyaw = unangle(p.yaw); this.tpitch = unangle(p.pitch);
     } else if (p.type === "head") this.rotationYawHead = unangle(p.head);
-    else if (p.type === "meta") this.batHanging = !!p.batHanging;
+    else if (p.type === "meta") { // S1C: the watched objects that changed
+      if (p.batHanging !== undefined) this.batHanging = !!p.batHanging;
+      if (p.health !== undefined) this.health = p.health;
+      if (p.air !== undefined) this.air = p.air;
+    }
     else if (p.type === "velocity") { this.vx = p.vx / 8000; this.vy = p.vy / 8000; this.vz = p.vz / 8000; }
     else if (p.type === "attach") {
       // NetHandlerPlayClient.handleEntityAttach (bytecode-read): the vehicle or holder is looked up now, and a missing one clears the link
@@ -281,14 +313,33 @@ export class ClientEntity {
     if (this.type === "chicken" && !this.onGround && this.vy < 0) this.vy *= 0.6; // EntityChicken.onLivingUpdate's slow fall runs on both sides
     turn?.(this);
   }
-  // EntityDragon.onLivingUpdate (xa.e) on the client (executed, tools/probes/TrackerMountsProbe.java flyDragon): the wing animation from the client
-  // motion, the ring buffer of the previous 64 yaw / y samples (written before the move), then the interpolation toward the packet's position and
-  // angles with the dragon's own arithmetic (the yaw and pitch steps are doubles cast to float, no % 360 on the way), and no moveEntity at all.
-  // `alive` is the client's health above 0 (the data watcher; the live health stands in for it).
+  // The client copy's onUpdate for the dragon (xa, executed: tools/probes/TrackerMountsProbe.java flyDragon and dragonDeath). Order: EntityLivingBase.
+  // onEntityUpdate's onDeathUpdate (health <= 0), EntityLiving.onEntityUpdate's living sound roll (alive), then EntityDragon.onLivingUpdate's client
+  // branch: the wing flap sound, prevAnimTime, the death puff (health <= 0: three draws, then it returns), the crystal search roll, the wing clock, the
+  // ring buffer of the previous 64 yaw / y samples (written before the move), the interpolation toward the packet's position and angles with the dragon's
+  // own arithmetic (the yaw and pitch steps are doubles cast to float, no % 360 on the way, setPosition for the box), the body yaw, and the seven
+  // parts (sizes, then placement; the wing sweep, the head attack and the block breaking are the server's). There is no moveEntity at all.
+  // The health is the client's data watcher value (spawn packet and S1C). Not modelled: the crystal search (client copies of crystals are not
+  // tracked here: only its rand.nextInt(10) draw), the client playing the living sound (its roll and pitch draws are made).
   dragonUpdate() {
-    const d = this.dragon, fr = Math.fround;
+    const d = this.dragon, fr = Math.fround, rand = this.rand;
+    if (this.health <= 0) this.dragonDeathUpdate();
+    else {
+      const time = d.talk; d.talk = time + 1;
+      if (rand.nextInt(1000) < time) { // playLivingSound: getSoundPitch is (rand - rand) * 0.2 + 1 (not a child)
+        d.talk = -80;
+        this.fx.push({ sound: "mob.enderdragon.growl", volume: 5, pitch: fr(fr(fr(rand.nextFloat() - rand.nextFloat()) * 0.2) + 1), silent: true, x: this.x, y: this.y, z: this.z });
+      }
+    }
+    const flap = wingFlapPitch(d.prevAnim, d.anim, rand);
+    if (flap !== null) this.fx.push({ sound: "mob.enderdragon.wings", volume: 5, pitch: flap, x: this.x, y: this.y, z: this.z });
     d.prevAnim = d.anim;
-    if (this.dead) return;
+    if (this.health <= 0) {
+      const a = fr(fr(rand.nextFloat() - 0.5) * 8), b = fr(fr(rand.nextFloat() - 0.5) * 4), c = fr(fr(rand.nextFloat() - 0.5) * 8);
+      this.fx.push({ particle: "largeexplode", x: this.x + a, y: this.y + 2 + b, z: this.z + c });
+      return;
+    }
+    rand.nextInt(10); // updateDragonEnderCrystal: the roll that searches for a crystal within 32 blocks
     const g = fr(fr(0.2) / fr(fr(fr(Math.sqrt(this.vx * this.vx + this.vz * this.vz)) * 10) + 1));
     d.anim = fr(d.anim + fr(g * fr(Math.pow(2, this.vy))));
     this.rotationYaw = wrapFloat(this.rotationYaw);
@@ -297,16 +348,39 @@ export class ClientEntity {
     d.ring[d.ri * 3] = this.rotationYaw; d.ring[d.ri * 3 + 1] = this.y; d.ring[d.ri * 3 + 2] = 0;
     if (this.increments > 0) {
       const n = this.increments;
-      this.x += (this.tx - this.x) / n; this.y += (this.ty - this.y) / n; this.z += (this.tz - this.z) / n;
+      const x = this.x + (this.tx - this.x) / n, y = this.y + (this.ty - this.y) / n, z = this.z + (this.tz - this.z) / n;
       const yaw = fr(this.rotationYaw + wrapDouble(this.tyaw - this.rotationYaw) / n), pitch = fr(this.rotationPitch + (this.tpitch - this.rotationPitch) / n);
       this.increments--;
+      setDragonPosition(this, x, y, z);
       this.rotationYaw = fr(yaw % 360); this.rotationPitch = fr(pitch % 360); // setRotation
     }
     this.renderYawOffset = this.rotationYaw;
+    updateParts(this, null);
   }
-  // A mount the local player rides is driven by the client: EntityClientPlayerMP's input moves it, so its client position is the player's movement
-  // and the server only corrects it with S18 on a desync (none can happen with one process: the live mob is what the player's physics moved). The
-  // packets still arrive and update the entry's bookkeeping; the target they set is dropped. The previous values are the ones step() just saved.
+  // EntityDragon.onDeathUpdate (xa.aF) on the client: the counter, the hugeexplosion puff at 180..200 (three draws), moveEntity(0, 0.1, 0) with no
+  // clip, and the spin of 20 degrees a tick (renderYawOffset follows). The xp orbs, the end sound and setDead are the server's (!isRemote).
+  dragonDeathUpdate() {
+    const d = this.dragon, fr = Math.fround, rand = this.rand;
+    d.deathTicks++;
+    if (d.deathTicks >= 180 && d.deathTicks <= 200) {
+      const a = fr(fr(rand.nextFloat() - 0.5) * 8), b = fr(fr(rand.nextFloat() - 0.5) * 4), c = fr(fr(rand.nextFloat() - 0.5) * 8);
+      this.fx.push({ particle: "hugeexplosion", x: this.x + a, y: this.y + 2 + b, z: this.z + c });
+    }
+    moveNoClip(this, 0, 0.10000000149011612, 0);
+    this.rotationYaw = fr(this.rotationYaw + 20);
+    this.renderYawOffset = this.rotationYaw;
+  }
+  // EntityWaterMob.onEntityUpdate on the client squid (wu.C, bytecode-read; executed in flySquid / swimSquid): the air read before the base update drops
+  // by one out of the water and is set to 0 at -20 (the drowning attackEntityFrom returns false on a client world); in the water, or dead, it is 300.
+  // The S1C the server sends every tick out of the water sets it again before this runs.
+  clientAir(wet) {
+    if (!this.dead && !wet) { this.air--; if (this.air === -20) this.air = 0; } else this.air = 300;
+  }
+  // A horse the local player rides: EntityHorse.moveEntityWithHeading (wi.e(FF), bytecode-read) is not guarded by isRemote around its steering, so the
+  // client copy takes the rider's yaw and half its pitch and jumps on its own. That is NOT ported: this copy just follows the live horse. A ridden pig
+  // is different: no EntityPig / EntityAnimal / EntityCreature / EntityLiving / EntityLivingBase client code reads riddenByEntity (the field is read
+  // only by the server paths: interact, fall, canBeSteered), and EntityLivingBase.isClientWorld is true only for EntityPlayerSP (blk.br), so the client
+  // pig is moved by the packets alone, as the executed ridePig record shows; natively the rider's seat follows that copy. The port's camera and seat still use the live pig, so serverTick keeps the copy on it (not native).
   followLive(e) {
     this.x = e.x; this.y = e.y; this.z = e.z; this.vx = e.vx ?? 0; this.vy = e.vy ?? 0; this.vz = e.vz ?? 0; this.onGround = !!e.onGround;
     this.tx = this.x; this.ty = this.y; this.tz = this.z; this.increments = 0;
@@ -379,14 +453,14 @@ export class MobTracker {
   }
   // The entry and the client entity of a new tracked entity (object-tracker.js overrides this for items, orbs and projectiles)
   create(e, size) {
-    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, hang: !!e.batHanging, wasGround: !!e.onGround };
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) {
     const jumped = en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0;
-    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) };
+    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) };
   }
-  settle(e, en) { en.health = e.health; en.hang = !!e.batHanging; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
+  settle(e, en) { en.health = e.health; en.air = e.air ?? 300; en.hang = !!e.batHanging; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
   // The client takes the queue in order; a destroy (EntityPlayerMP.func_152339_d) is flushed by the player's next update, one tick later.
   flush(en) {
     const keep = [];
@@ -412,6 +486,8 @@ export class MobTracker {
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
     for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
+    // Bytecode-read, not executed (Batch 45): native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id), i.e. bucket order, not
+    // this list order; the port has no shared entity-id counter, so the relative order of different entities' packets within a tick is the live list's (each entity's own stream is unchanged).
     for (const e of mobs) {
       const height = size(e)[1];
       const en = this.entries.get(e);
@@ -450,13 +526,19 @@ export class MobTracker {
       }
       c.dead = e.health <= 0;
       c.step(...hooks(e));
-      if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`)
+      if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`). Natively a ridden pig is packet-driven (see followLive), but the port's camera and seat still follow the live pig, so its copy follows it too until the seat moves to the client copy (lead, batch 45: otherwise the drawn pig trails its rider)
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;
         else rider.stepRider(...hooks(this.liveOf(rider)));
       }
     }
+  }
+  // What the client copies did this tick that needs the world's effects: [{ entity (live), sound | particle, ... }], oldest first
+  takeFx() {
+    const out = [];
+    for (const [e, en] of this.entries) if (en.client.fx.length) { for (const x of en.client.fx) out.push({ entity: e, ...x }); en.client.fx.length = 0; }
+    return out;
   }
   liveOf(client) { for (const [e, en] of this.entries) if (en.client === client) return e; return null; }
   // the client entity of a mob that is already tracked, without creating an entry (rendering)

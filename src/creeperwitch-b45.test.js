@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { replayEndermanWolf, reference45 as reference, firstDivergence } from "./enderman-wolf-replay.js";
+import { replayEndermanWolf, referenceCW as reference, firstDivergence } from "./enderman-wolf-replay.js";
 
-// enderman-wolf-b45-reference.json: the EndermanWolfProbe with the b45cw- scenarios (tools/verify-endermanwolf.mjs, EW_SET=b45), run on the unchanged
+// enderman-wolf-b45cw-reference.json: the EndermanWolfProbe with the b45cw- scenarios (tools/verify-endermanwolf.mjs, EW_SET=b45cw), run on the unchanged
 // obfuscated classes: creepers (swell, fuse 30, flint and steel, charged by lightning, power 3 and 6, mobGriefing off, difficulty, damage and knockback to
 // the player and mobs, blocks and drops, a skeleton arrow kill) and witches (potion choice, throws on the potion's own random, self-drinking and its
 // timers, speed modifier, drops). Every tick is compared with every Entity.rand draw, the explosions, spawned items, orbs and potions, and changed cells.

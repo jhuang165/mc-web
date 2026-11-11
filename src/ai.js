@@ -335,8 +335,11 @@ class Mate extends Task {
   }
   findPartner() {
     let best = null, dist = Number.MAX_VALUE;
+    // EntityHorse.canMateWith (wi.a(wf)) overrides the animals' rule: it never looks at love (horse-live.js horseCanMate: both tame, adult, unridden, full health, horse with horse or donkey), and the task
+    // keeps going only while the partner is in love (continueExecuting), so a horse walks towards a partner that is not in love yet (b45 records).
+    const horse = this.m.e.type === "horse" && this.m.ai.deps.horseCanMate;
     for (const b of this.m.nearby(8, 8, 8, (o) => o.e.type === this.m.e.type))
-      if (this.inLove(this.m) && this.inLove(b) && this.m.distSq(b) < dist) {
+      if (this.inLove(this.m) && (horse ? horse(this.m.e, b.e) : this.inLove(b)) && this.m.distSq(b) < dist) {
         dist = this.m.distSq(b);
         best = b;
       }

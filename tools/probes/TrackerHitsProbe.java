@@ -9,10 +9,21 @@ import java.util.*;
 public class TrackerHitsProbe {
   static boolean water, serverWater; // the server hook casts its world to WorldServer in water, so the hook scenario keeps the server dry
   static aji waterAt(int x, int y, int z, boolean on) { return on && x >= 0 && x < 24 && z >= 3 && z < 24 && y >= 0 && y <= 1 ? aji.e(9) : null; }
+  // Batch 45: the client world's entity list. World.getEntitiesWithinAABBExcludingEntity returns the client's mob copies and its player (the double has no chunks:
+  // every listed entity whose box intersects the query counts, which is what the chunk lookup does for loaded chunks).
+  static List<sa> listed = new ArrayList<>();
+  static List<sa> within(sa self, azt box) { List out = new ArrayList(); for (sa o : listed) if (o != self && !o.K && o.C.b(box)) out.add(o); return out; }
+  // A mob copy whose attackEntityFrom (sv.a(ro, float)) is logged with its result: the client's call, which must answer false
+  static class LoggedCow extends wh { LoggedCow(ahb w) { super(w); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:cow\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
+  static class LoggedEnder extends ya { LoggedEnder(ahb w) { super(w); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:enderman\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
   public static class CW3 extends TrackerItemsProbe.CW2 {
     static List<String> log = new ArrayList<>();
     public aji a(int x, int y, int z) { aji w = waterAt(x, y, z, water); return w != null ? w : super.a(x, y, z); }
+    public List b(sa entity, azt box) { return within(entity, box); }
+    public List a(sa entity, azt box, sj selector) { return within(entity, box); }
     public void a(String name, double x, double y, double z, double vx, double vy, double vz) { log.add("[\"" + name + "\"," + x + "," + y + "," + z + "," + vx + "," + vy + "," + vz + "]"); }
+    // Entity.playSound -> World.playSoundAtEntity (batch 45): the client's own copy of a sound, at (posX, posY - yOffset, posZ); volume and pitch in the vx and vy slots
+    public void a(sa e, String name, float v, float p) { log.add("[\"sound:" + name + "\"," + e.s + "," + (e.t - e.L) + "," + e.u + "," + v + "," + p + ",0]"); }
     public void a(double x, double y, double z, double vx, double vy, double vz, dh tag) { log.add("[\"makeFireworks\"," + x + "," + y + "," + z + "," + vx + "," + vy + "," + vz + "," + (tag == null ? "null" : "\"" + tag.toString().replace("\"", "'") + "\"") + "]"); }
   }
   public static class SW2 extends TrackerItemsProbe.SW {
@@ -24,6 +35,7 @@ public class TrackerHitsProbe {
     TrackerItemsProbe.clientWorldClass = CW3.class; TrackerItemsProbe.serverWorldClass = SW2.class;
     TrackerItemsProbe.clientSpawned = (c) -> { try { MobMoveProbe.field(sa.class, "Z").set(c, new Random(12345L)); } catch (Exception ex) { throw new RuntimeException(ex); } };
     TrackerItemsProbe.tickHook = () -> { String s = "[" + String.join(",", CW3.log) + "]"; CW3.log.clear(); return s; };
+    listed.clear(); TrackerItemsProbe.serverHook = null;
     water = false; serverWater = false; MobMoveProbe.ProbeWorld.water = false;
   }
   static String arrowState(sa c) { try { zc a = (zc) c; return MobMoveProbe.field(zc.class, "i").getBoolean(a) + "," + a.b; } catch (Exception ex) { throw new RuntimeException(ex); } }
@@ -70,6 +82,47 @@ public class TrackerHitsProbe {
       } catch (Exception ex) { throw new RuntimeException(ex); } };
       System.out.println(TrackerItemsProbe.run(wet ? "hookWater" : "hookFloor", (w, s) -> new xe(w, TrackerItemsProbe.serverPlayer), new double[]{0.5, 1.0, 0.5}, 64, 5, true, 100, 0.5, 0.5, false, -1));
     }
+    // Batch 45: the client copies against the client's own mob copies (the server world has none, so only the client's reaction shows). The cow and the enderman
+    // are real classes with attackEntityFrom logged; the client world's entity list is `listed`.
+    // An arrow flying +x into a cow: the arrow searches for entities on the client too, attackEntityFrom answers false there, so it ricochets
+    for (String kind : new String[]{"cow", "cowCrit", "enderman"}) {
+      reset();
+      TrackerItemsProbe.clientExtra = TrackerHitsProbe::arrowState;
+      final boolean crit = kind.equals("cowCrit"), ender = kind.equals("enderman");
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0) listMob(ender, 6.5, 0.0, 2.5); } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run("arrow_" + kind, (w, s) -> { zc e = new zc(w, s[0], s[1], s[2]); e.c(1.0, 0.04, 0.0, 1.6f, 0.0f); if (crit) e.a(true); return e; }, new double[]{2.5, 1.2, 2.5}, 64, 20, false, 40, 0.5, 0.5, false, -1));
+    }
+    // an arrow flying -x at the client's player (no shooter known to the client): hit, then the same with disableDamage (the hit is dropped)
+    for (boolean creative : new boolean[]{false, true}) {
+      reset();
+      TrackerItemsProbe.clientExtra = TrackerHitsProbe::arrowState;
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0) { yw cap = new yw(); cap.a = creative; MobMoveProbe.field(yz.class, "bE").set(TrackerItemsProbe.clientPlayer, cap); listed.add(TrackerItemsProbe.clientPlayer); } } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run(creative ? "arrow_playerCreative" : "arrow_player", (w, s) -> { zc e = new zc(w, s[0], s[1], s[2]); e.c(-1.0, 0.0, 0.0, 1.0f, 0.0f); return e; }, new double[]{6.5, 1.0, 0.5}, 64, 20, false, 30, 0.5, 0.5, false, -1));
+    }
+    // a snowball, an egg and a pearl flying into a cow: EntityThrowable.onUpdate searches for entities only when !isRemote, so the client copy flies through
+    for (String kind : new String[]{"snowball", "pearl"}) {
+      reset();
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0) listMob(false, 6.5, 0.0, 2.5); } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run(kind + "Mob", (w, s) -> { sa e = kind.equals("pearl") ? new zm(w, s[0], s[1], s[2]) : new zj(w, s[0], s[1], s[2]); TrackerItemsProbe.motion(e, 0.9, 0.04, 0.0); return e; }, new double[]{2.5, 1.2, 2.5}, 64, 10, true, 20, 0.5, 0.5, false, -1));
+    }
+    // a fishing hook (the angler on the client is the client's player, the server has no mobs): its entity search is not under !isRemote either; a cow in its way
+    for (boolean cow : new boolean[]{false, true}) {
+      reset();
+      TrackerItemsProbe.playerSetup = (p) -> { try {
+        yx inv = new yx(p);
+        inv.a[0] = new add(adb.d(346), 1);
+        MobMoveProbe.field(yz.class, "bm").set(p, inv);
+        p.z().a(6, Float.valueOf(20.0f));
+      } catch (Exception ex) { throw new RuntimeException(ex); } };
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0 && cow) listMob(false, 0.375, 0.0, 4.0); } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run(cow ? "hookCow" : "hookNoCow", (w, s) -> new xe(w, TrackerItemsProbe.serverPlayer), new double[]{0.5, 1.0, 0.5}, 64, 5, true, 40, 0.5, 0.5, false, -1));
+    }
     reset();
+  }
+  static void listMob(boolean ender, double x, double y, double z) throws Exception {
+    ahb w = TrackerItemsProbe.client;
+    sa m = ender ? new LoggedEnder(w) : new LoggedCow(w);
+    MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(m, x, y, z);
+    listed.add(m);
   }
 }

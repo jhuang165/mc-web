@@ -145,3 +145,13 @@ test("batch 39: an item and an orb pushed sideways through a portal of the run t
   const r = await run(root, 40, portal);
   assert.deepEqual(r.entities.portalTravel.map((x) => x.kind).sort(), ["item", "orb"]);
 });
+
+// Batch 45 awayedge: the run's items, orbs, TNT, arrows and thrown entities tick in the mobs' one list walk (World.updateEntities). An item that an explosion spawns during
+// the pass joins the end of the list and updates in that same pass; the old one-system-after-another order (items before TNT) left it for the next tick.
+test("debris of a TNT explosion ticks in the pass that made it", async () => {
+  const cols = []; for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) cols.push([x, z]);
+  const root = { ...base, tnt: [{ x: 8.5, y: 11, z: 8.5, vx: 0, vy: 0, vz: 0, fuse: 1 }] };
+  const r = await runAway({ ...awayPlan(root, cols, 20), chunks: floorChunks(cols), records: [] });
+  assert.ok(r.entities.drops.length > 0);
+  assert.equal(Math.max(...r.entities.drops.map((d) => d.age)), 19, "the first debris updated in the pass of the explosion (the earlier order gave 18 at most)"); // a few drops come from later spills, so only the maximum is fixed
+});

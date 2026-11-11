@@ -431,6 +431,21 @@ let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, 
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
+  // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
+  // Their sounds are logged (object-tracker.js `sound`) but not played: the client world's playSoundAtEntity reaches only RenderGlobal.playSound
+  // (bma.a(String,DDDFF)), whose body is a bare return in 1.7.10 (lead, javap), so the client copies are silent and only the server's sound packet is heard.
+  objectTracker.hooks.clientTargets = () => {
+    const out = [];
+    for (const [live, en] of mobs?.tracker?.entries ?? []) {
+      const c = en.client;
+      if (!c.present || !(live.health > 0)) continue;
+      const [w, h] = mobs.size(live);
+      out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
+    }
+    out.push({ ref: "player", box: [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2], immune: survival.creative });
+    return out;
+  };
+  objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;
   if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; }
 }
@@ -2779,15 +2794,16 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       scene.drops.pickup(item, position);
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
-    projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
-    projectileHit: (e, ball) => e !== "player" && thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
+    // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
+    projectileTargets: () => [...mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), ...hangingArrowTargets(hanging)],
+    projectileHit: (e, ball) => e === "player" ? false : hanging.entities.includes(e) ? thrownAtHanging(e) : thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
-        hit:(e,source)=>e!=="player"&&mobs?.attackEntityFrom(e,source.amount,{
+        hit:(e,source)=>e!=="player"&&(hanging.entities.includes(e)?thrownAtHanging(e):mobs?.attackEntityFrom(e,source.amount,{
           name:'thrown',player:!!source.thrower,attacker:'projectile',
           ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
-        }),
+        })),
         particle:()=>{}, // the client's copy of the pearl portals on impact (object-tracker.js, Projectiles.clientImpact)
         teleport:({from,to})=>{
           // Count the physical movement preceding the teleport, not its displacement.
@@ -3128,11 +3144,14 @@ const cartHost = {
   changed: () => { saved = false; },
   runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
+// EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a painting or item frame: attackEntityFrom(thrown by the player, 0) breaks it (a frame with an item loses the item).
+function thrownAtHanging(e) { hanging.attack(e, { player: true, creative: survival.creative }); spawnHangingDrops(); saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
-  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
+  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
     survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, {
     ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
+    vehicleDrop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),
     updateBlocks: changes => scene.updateBlocks(changes),

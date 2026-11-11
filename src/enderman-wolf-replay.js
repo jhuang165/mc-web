@@ -23,6 +23,7 @@ import { liveAttribute } from "./mob-attributes.js";
 // game mode, sneaking, invisibility). Per tick a state is [mob rows, sounds, player health lost, player revenge index].
 export const reference42 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b42-reference.json", import.meta.url)));
 export const reference44 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b44-reference.json", import.meta.url)));
+export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45cw-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
@@ -34,8 +35,11 @@ class LogRandom extends JavaRandom {
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
-  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom" }; // b44: the other EntityAITasks mobs (lower case: a baby)
+  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
+  Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
+// b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
+const HORSES45 = { R: [0, 0, false, 0, 20, Math.fround(0.2), 0.7], Q: [0, 258, true, 0, 24, 0.25, 0.55], q: [0, 773, true, 0, 18, 0.3, 0.65], D: [1, 0, true, 0, 22, 0.175, 0.5], F: [0, 258, false, -24000, 20, 0.2, 0.7], Y: [0, 258, true, -24000, 20, 0.2, 0.7] };
 const ITEM_OF = { 352: 311, 319: 202 };
 const key = (x, y, z) => `${x},${y},${z}`;
 const PORT_ID = { 1: 3, 9: WATER, 20: 9 };
@@ -59,6 +63,9 @@ function run(r) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = 2;
+  // Original block 62 (lit furnace) is the port's furnace with a fire; EntityAIOcelotSit reads the furnace's lit id, which the plain cell map cannot hold.
+  const lit = (x, y, z) => (r.blocks ?? []).some(([x0, y0, z0, x1, y1, z1, id]) => id === 62 && x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1);
+  ew.ocelotBlocks = { chestUsers: () => 0, furnaceLit: lit };
   ew.worldRandom = new JavaRandom(r.seed);
   let day = false, rain = false, bright = r.bright, held = 0;
   ew.isDaytime = () => day;
@@ -67,7 +74,7 @@ function run(r) {
   ew.lightAt = () => r.bright;
   const roofed = (x, z) => r.roofs.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
   ew.ai.deps.canSeeSky = (x, y, z) => !roofed(x, z);
-  const ents = [], logs = [];
+  const ents = [], logs = [], init = [], spawnOpts = {};
   [...types].forEach((ch, i) => {
     const [x, z, y0 = 0] = r.pos[i], e = ew.create(TYPE_OF[ch], x, y0, z);
     ew.entities.push(e);
@@ -79,18 +86,25 @@ function run(r) {
     if (ch === "A") e.angry = true;
     if (ch === "U") { e.owner = "player"; e.health = 10; }
     if (ch === "R") { e.horse.maxHealth = e.health = 20; e.horse.speed = f32(0.2); } // fixed in the probe too (the rolled health and speed are not task draws)
+    if (r.init && HORSES45[ch]) {
+      const [type, variant, tame, age, maxHealth, speed, jump] = HORSES45[ch];
+      Object.assign(e.horse, { type, variant, tame, maxHealth, speed, jump });
+      e.growingAge = age; e.health = maxHealth;
+    }
     const lr = new LogRandom(BigInt(r.seed * 10 + i)); logs.push(lr); setEntityRandom(e, lr);
+    if (ch === "V") ew.onSpawnWithEgg(e, spawnOpts); // the herd's GroupData passes on to the next V
+    init.push(lr.log.slice()); lr.log.length = 0;
     ents.push(e);
   });
   const survival = new Survival({}, "survival");
   survival.difficulty = 2; survival.protection = 0; survival.health = 1000;
   // Batch 45 (creepers and witches): rows carry a fifth element [explosions, spawned entities, changed cells, player motion]; the arena also needs the
   // item, orb and explosion machinery, the witch's potion list (seeded per throw from the record) and the gamerule mobGriefing.
-  const x45 = r.rows[0][5] !== undefined;
+  const xcw = r.rows[0][5] !== undefined && !r.init; // the horse set (b45, record.init) also has a sixth row element
   const items = new ItemEntities(() => 0.5), orbs = new ExperienceOrbs([], () => 0.5), pv = { x: 0, y: 0, z: 0 };
   const potionSeeds = [];
   let grief = true;
-  if (x45) {
+  if (xcw) {
     setGameRuleSource((name) => (name === "mobGriefing" ? grief : ruleOn(null, name)));
     ew.potions = new WitchPotions(ew, () => potionSeeds.shift() / 2 ** 48);
     ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; // the probe never flies a potion it spawned: the record keeps the launch
@@ -111,7 +125,7 @@ function run(r) {
     for (const c of out.changes) if (c[1] >= 0) cells.push([c[0], c[1], c[2], 0, 0]); // the probe's world tracks no cell of its implicit floor (y < 0)
     if (src) { ew.entities = ew.entities.filter((m) => m !== src); gone.add(ents.indexOf(src)); } // EntityCreeper.func_146077_cc: setDead
   };
-  if (x45) ew.explodeInline = (ev) => boom(ev); // a creeper explodes inside its own update, before the mobs after it in the list move
+  if (xcw) ew.explodeInline = (ev) => boom(ev); // a creeper explodes inside its own update, before the mobs after it in the list move
   const script = r.script.map((s) => s.split(" ")), vel = new Array(n + 1).fill(null).map(() => [0, 0]), states = [];
   const idxOf = (b) => (!b ? -1 : b.isPlayer ? n : ents.indexOf(b.e ?? b));
   for (let t = 0; t < r.ticks; t++) {
@@ -137,10 +151,11 @@ function run(r) {
         if (e.type === "creeper") creeperIgnite(e, entityRandom(e)); // EntityCreeper.interact (flint and steel); its sound is cleared with the tick's ops
         else if (e.type === "wolf") ew.wolfInteract(e, survival);
         else if (e.type === "ocelot") ew.ocelotInteract(e, survival);
+        else if (e.type === "horse") ew.horseInteract(e, survival, { sneak: false });
         else ew.feed(e, survival.inventory.held?.id ?? 0, survival);
         held = survival.inventory.held?.id ?? 0;
       }
-      else if (op === "hold" && x45) { const m = p[2] === "0" ? null : itemFromOriginal(Number(p[2]), 0); survival.inventory.main[0] = m ? makeStack(m.id, 1, 0) : null; survival.inventory.current = 0; held = m ? m.id : 0; }
+      else if (op === "hold" && xcw) { const m = p[2] === "0" ? null : itemFromOriginal(Number(p[2]), 0); survival.inventory.main[0] = m ? makeStack(m.id, 1, 0) : null; survival.inventory.current = 0; held = m ? m.id : 0; }
       else if (op === "hold") held = ITEM_OF[p[2]] ?? Number(p[2]); // original item id -> the project's (bone 352 -> 311, raw porkchop 319 -> 202); the player's held item id (the beg tasks)
       else if (op === "sneak") ew.ai.player.sneaking = p[3] === "on";
       else if (op === "angry") ents[Number(p[2])].angry = true;
@@ -169,15 +184,16 @@ function run(r) {
     ew.ai.beginTick(player, survival, held);
     for (const l of logs) l.log.length = 0;
     booms.length = cells.length = 0;
-    const pending = x45 ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
+    const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
     ew.events.length = 0;
-    if (x45) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
+    if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
     ew.tick(player, survival, held);
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
     // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
+    const kids = ew.entities.filter((x) => !ents.includes(x) && x.type === "horse").map(horseFlags);
     ew.entities = ew.entities.filter((x) => ents.includes(x));
     let sounds = ew.events.filter((e) => e.sound).map((e) => [e.sound, e.volume, e.pitch]);
-    if (x45) {
+    if (xcw) {
       // The events main.js drains (living-simulation.js drainMobEvents): sound, xp orbs, explosion, item drops, in queue order. An explosion queues its hurt sounds while it
       // damages the mobs and its random.explode last, as Explosion.doExplosionA runs before doExplosionB plays it.
       sounds = [];
@@ -195,29 +211,32 @@ function run(r) {
     survival.health = 1000;
     const rows = ents.map((e, i) => {
       const b = ew.ai.brain(e);
-      const flags = x45 && e.type === "witch" ? [e.drinking ? 1 : 0, e.drinkTimer ?? 0, e.held ? e.held.damage : -1, liveAttribute(e, "generic.movementSpeed", ENTITY_TYPES.witch.movement, [...(e.drinking ? [[-0.25, 0]] : []), ...speedModifiers(e)])]
-        : x45 && e.type === "creeper" ? [e.creeperState, e.fuseTime, e.lastActive, e.powered ? 1 : 0, e.ignited ? 1 : 0]
+      const flags = xcw && e.type === "witch" ? [e.drinking ? 1 : 0, e.drinkTimer ?? 0, e.held ? e.held.damage : -1, liveAttribute(e, "generic.movementSpeed", ENTITY_TYPES.witch.movement, [...(e.drinking ? [[-0.25, 0]] : []), ...speedModifiers(e)])]
+        : xcw && e.type === "creeper" ? [e.creeperState, e.fuseTime, e.lastActive, e.powered ? 1 : 0, e.ignited ? 1 : 0]
         : e.type === "enderman" ? [e.screaming ? 1 : 0, e.aggressive ? 1 : 0, e.stareCount ?? 0, e.chaseTimer ?? 0, e.carried ?? 0]
         : e.type === "wolf" ? [e.angry ? 1 : 0, e.sitting ? 1 : 0, e.owner ? 1 : 0, e.sitWish ? 1 : 0, e.inWater ? 1 : 0, ...(r.ext ? [e.love ?? 0, e.growingAge] : [])]
+        : r.init && e.type === "horse" ? horseFlags(e)
         : r.ext && ANIMALS.has(e.type) ? [e.love ?? 0, e.growingAge] : [];
       return [e.x, e.y, e.z, e.removedHealth ?? e.health, idxOf(b.attackTarget), e.revenge ? (revengeOf(e) === "player" ? n : idxOf(revengeOf(e))) : -1, flags, logs[i].log.slice(), [e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.jumping ? 1 : 0, e.moveForward ?? 0, e.moveStrafing ?? 0]];
     });
-    const state = [rows, sounds, damage, idxOf(ew.ai.player.hurtBy)];
-    if (x45) {
+    const state = [rows, sounds, damage, idxOf(ew.ai.player.hurtBy), r.init ? kids : null];
+    if (xcw) {
       // Spawned entities, in the record's order of kinds; the count of an item stack is summed per spot (dropFewItems makes one EntityItem of n, the port one of 1 each).
       const spawned = [];
       for (const it of items.items.splice(0)) spawned.push(["item-port", it.stack.id, it.stack.damage ?? 0, it.stack.count, it.x, it.y + 0.125, it.z]);
       for (const o of orbs.orbs.splice(0)) spawned.push(["xp", o.value, o.x, o.posY, o.z]);
       for (const _ of primed.splice(0)) spawned.push(["other", "xw"]); // EntityTNTPrimed (xw) a blast chained
       for (const b of ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]);
-      state.push(t + 1, [booms.slice(), spawned, cells.slice(), [pv.x, pv.y, pv.z]]);
+      state.push([booms.slice(), spawned, cells.slice(), [pv.x, pv.y, pv.z]]);
       state.gone = [...gone];
     }
     states.push(state);
   }
-  return { states };
+  return { states, init };
 }
 const f32 = Math.fround;
+// b45: [love, growing age, type, variant, tame, temper, max health, speed, jump, health] as EndermanWolfProbe.horseFlags
+const horseFlags = (e) => [e.love ?? 0, e.growingAge, e.horse.type, e.horse.variant, e.horse.tame ? 1 : 0, e.horse.temper, e.horse.maxHealth, e.horse.speed, e.horse.jump, e.health];
 
 // First tick, mob and field where a replay differs from the record (null when none). Everything is compared for every tick of every record: position, health, target, revenge, flags and every Entity.rand draw
 // of every mob, the sounds (name, volume, pitch, in order) and the player's damage and revenge target.
@@ -226,6 +245,7 @@ const same = (a, b) => (typeof a === "number" && typeof b === "number" ? Object.
 function soundOf(s) { const [name, vol, pitch] = s.replace(/@$/, "").split("|"); return [name, Math.fround(Number(vol)), Math.fround(Number(pitch))]; }
 export function firstDivergence(r, got) {
   const n = r.types.length;
+  if (r.init && JSON.stringify(r.init) !== JSON.stringify(got.init)) return ["init", r.init, got.init];
   let exploded = false;
   for (let t = 0; t < r.ticks; t++) {
     const want = r.rows[t], have = got.states[t];
@@ -250,6 +270,7 @@ export function firstDivergence(r, got) {
       const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded ? bad("player motion", wm, gm) : null); // outside an explosion the original's server-side player motion is a mob-collision push (Entity.applyEntityCollision moves both); the port never pushes the player from a mob's update, so it is compared only after a blast
       if (d) return d;
     }
+    if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
   }
   return null;
 }

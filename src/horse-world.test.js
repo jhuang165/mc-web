@@ -22,7 +22,7 @@ const rider = () => ({ player: true, x: 0, y: 0, z: 0, yaw: 0, moveForward: 0, m
 
 test("a horse is 1.4 x 1.6 and a new record carries rolled attributes and full health", () => {
   const t = ENTITY_TYPES.horse;
-  assert.deepEqual([t.width, t.height], [1.4, 1.6]);
+  assert.deepEqual([t.width, t.height], [Math.fround(1.4), Math.fround(1.6)]); // Entity.setSize takes floats (b45 foal growth records)
   const w = new EntityWorld(grass, [], () => 0.5);
   const e = w.create("horse", 64, 0, 64);
   assert.ok(e.horse.maxHealth >= 15 && e.horse.maxHealth <= 30);

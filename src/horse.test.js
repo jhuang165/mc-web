@@ -101,7 +101,8 @@ test("foal breeding: type, variant parent mix and averaged attributes", () => {
     const r = H.newRandom(row.seed * 31 + 7);
     const c = H.childOf(row.a, row.b, r);
     assert.equal(c.type, row.child.type);
-    assert.equal(c.maxHealth, row.child.maxHealth === undefined ? c.maxHealth : Math.fround(row.child.maxHealth));
+    assert.equal(c.maxHealth, row.child.maxHealth); // a double: the b45 records showed the old Math.fround here hid a float rounding in the port
+    assert.equal(c.health, row.child.health);
     assert.ok(Math.abs(c.jump - row.child.jump) < 1e-12);
     assert.ok(Math.abs(c.speed - row.child.speed) < 1e-12);
     assert.equal(c.variant, row.child.variant);

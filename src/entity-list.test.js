@@ -6,7 +6,10 @@ import { entityListReference, replayEntityList, entityListDivergence } from "./e
 // EntityMinecartEmpty, EntityBoat, EntityPainting, EntityPotion, EntitySnowball and EntityWitherSkull (and a cow riding a cart) walked in
 // World.loadedEntityList order (index loop, a rider updated right after its mount, spawned-in-pass joins the end, dead removed after), each scenario in both
 // list orders.
-const NOT_REPLAYED = /^arrow-cow/; // needs a cow whose AI task list is off (the probe's Cow); the record shows the order effect, the port has no such double
+// arrow-cow: needs a cow whose AI task list is off (the probe's Cow); the record shows the order effect, the port has no such double.
+// cart-cow-mount-ba: the cow listed before the cart is taken aboard in its own update and then, natively, updated a second time in the same pass right after its
+// mount (World.updateEntities updates a rider after its vehicle); the port fixes the walk order before the pass, so it has no second update.
+const NOT_REPLAYED = /^(arrow-cow|cart-cow-mount-ba$)/;
 for (const c of entityListReference.filter((r) => !NOT_REPLAYED.test(r.name))) {
   test(`native entity list ${c.name}`, () => {
     assert.equal(entityListDivergence(c, replayEntityList(c)), null);
@@ -21,7 +24,7 @@ const row = (r, t, kind, x) => r.rows[t][0][entityIndex(r, kind, x)];
 const differs = (a, b, kind, x) => a.rows.some((_, t) => JSON.stringify(row(a, t, kind, x)) !== JSON.stringify(row(b, t, kind, x)));
 
 test("the records show the list order: the same entities end differently when listed the other way round", () => {
-  assert.equal(entityListReference.length, 29);
+  assert.equal(entityListReference.length, 49);
   // two equal stacks: the first to update merges into the other, so the list order picks the survivor
   const dead = (r) => last(r).map((e) => e[6]);
   assert.deepEqual(dead(by("items-equal-ab")), [1, 0]);
@@ -108,4 +111,38 @@ test("dead entities leave the lists after the pass", () => {
   replayEntityList({ ...c, ticks: 2 }, null);
   // the merged stack: one survivor in the record, and the replay's lists hold only live entities (the divergence check compares the dead one's frozen state)
   assert.equal(last(c).filter((e) => !e[6]).length, 1);
+});
+
+// Batch 45
+test("a blast pushes and damages carts and boats, and pushes potions and snowballs in flight (Explosion.doExplosionA takes every entity)", () => {
+  // a cart or boat 2 blocks from a power 4 TNT takes 53 damage (10 per point, above 40) and breaks, with the knockback still added to its motion; its drop joins the list
+  for (const n of ["boom-cart-near-ab", "boom-cart-near-ba", "boom-boat-near-ab", "boom-boat-near-ba"]) {
+    const r = by(n);
+    assert.equal(last(r)[n.includes("-ab") ? 1 : 0][6], 1, n + " breaks");
+    assert.ok(Math.abs(row(r, 0, n.includes("cart") ? "cart" : "boat", 2.5)[3]) > 0.5, n + " is pushed");
+    assert.ok(r.rows[0][3].length >= 1, n + " drops its item");
+  }
+  // 7.8 blocks away the damage is 4 (40 is not above 40): it only wobbles and is pushed
+  assert.equal(by("boom-cart-far-ab").rows[0][0][1][6], 0);
+  assert.ok(by("boom-boat-far-ab").rows[0][0][1][8] > 0);
+  // a ball in flight is pushed whichever way round it and the TNT are listed; listed after, its own update already moved it this tick
+  for (const k of ["potion", "snowball"]) assert.ok(differs(by(`boom-${k}-ab`), by(`boom-${k}-ba`), k, 3.5));
+  for (const n of ["boom-cart-near-ab", "boom-boat-near-ab", "boom-potion-ab", "boom-snowball-ab"]) {
+    assert.notEqual(entityListDivergence(by(n), replayEntityList(by(n), null, "blast")), null, n + " needs the blast to reach the entity");
+  }
+});
+
+test("a snowball breaks a painting, a potion shatters on it and leaves it standing (EntityThrowable's ray takes every collidable entity)", () => {
+  const sb = by("snowball-painting"), po = by("potion-painting");
+  assert.equal(last(sb)[0][6], 1, "the painting is dead"); assert.equal(last(sb)[1][6], 1, "the snowball is dead");
+  assert.equal(last(po)[0][6], 0, "the painting stands"); assert.equal(last(po)[1][6], 1, "the potion is dead");
+  assert.equal(sb.rows[5][3].length, 1, "the painting item joins the end of the list on the hit tick");
+  assert.equal(po.rows[7][3].length, 0);
+});
+
+test("a cart or boat pushes a mob inside the mob's own update, so the list order changes what the mob and the vehicle do", () => {
+  for (const [a, b, kind, x] of [["cart-cow-ab", "cart-cow-ba", "cart", 0.55], ["boat-cow-ab", "boat-cow-ba", "boat", 0.55], ["cart-rider-push-ab", "cart-rider-push-ba", "cow", 0.5]]) {
+    assert.ok(differs(by(a), by(b), kind, x), a);
+    assert.notEqual(entityListDivergence(by(a), replayEntityList(by(a), null, "mobPush")), null, a + " needs the push in the walk");
+  }
 });

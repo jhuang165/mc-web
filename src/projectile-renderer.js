@@ -8,7 +8,7 @@
 // (particleQuad, replayed against the original Tessellator output), lit only by
 // the lightmap at getBrightnessForRender's cell, as GL lighting is off for particles.
 import * as THREE from "three";
-import { entityMaterial, worldMaterial } from "./light-material.js";
+import { entityMaterial, worldMaterial, applySpriteTransform } from "./light-material.js";
 import { itemTexture, pixelTexture, skinBox } from "./first-person.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
 
@@ -106,7 +106,7 @@ export class ProjectileRenderer {
         geometry.setAttribute("lightCoord", new THREE.BufferAttribute(new Float32Array(8), 2));
         geometry.setIndex([0, 1, 2, 0, 2, 3]);
         // EffectRenderer layer 2: snowballpoof and iconcrack show their item's icon.
-        const material = worldMaterial(this.view.lighting, { map: pixelTexture(itemTexture(p.item ?? SNOWBALL, p.meta ?? 0)), alphaTest: 0.003921569, side: THREE.DoubleSide }),
+        const map = pixelTexture(itemTexture(p.item ?? SNOWBALL, p.meta ?? 0)), material = worldMaterial(this.view.lighting, { map, uvTransform: applySpriteTransform(map, new THREE.Vector4()), alphaTest: 0.003921569, side: THREE.DoubleSide }),
           mesh = new THREE.Mesh(geometry, material);
         mesh.frustumCulled = false;
         this.scene.add(mesh);

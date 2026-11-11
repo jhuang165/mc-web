@@ -266,6 +266,25 @@ test('left-click extinguisher runs before mining-start and preserves sound/rando
   assert.deepEqual(f.state.mining, { block: [...POS], type: 3, progress: 0, tool: 0, auto: false });
 });
 
+test('Creative punch-out plays the client fizz and the server packet fizz (two draws); Survival one', () => {
+  const run = (mode) => {
+    const target = { block: [...POS], adjacent: [POS[0] + 1, POS[1], POS[2]] }, f = fixture({ mode, tool: 0, block: 3, target }), pitches = [];
+    f.state.world.set(...target.adjacent, FIRE, false, 0);
+    f.state.fire = { extinguish: (...p) => f.state.world.set(...p, 0), drain: () => [] };
+    let n = 0;
+    const result = applyPlayerEdit(f.state, { ...f.request, place: false }, {
+      swing() {}, random: () => [0.1, 0.9, 0.5, 0.5][n++], playSound: (name, o) => pitches.push([name, o.volume, o.pitch]),
+      updateBlocks() {}, markUnsaved() {}, clientEyeInWater: () => false,
+    });
+    return { result, pitches };
+  };
+  const c = run('creative');
+  assert.equal(c.result.branch, 'extinguish-fire-creative');
+  assert.equal(c.pitches.length, 2);
+  assert.equal(c.pitches[1][2], 2.6);
+  assert.equal(run('survival').pitches.length, 1);
+});
+
 test('Creative left click delegates break and cooldown; sword still stops before breaking', () => {
   const target = { block: [...POS] }, f = fixture({ mode: 'creative', tool: 103, block: 3, target }), calls = [];
   let result = applyPlayerEdit(f.state, { ...f.request, place: false }, {
