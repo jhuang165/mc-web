@@ -76,10 +76,25 @@ export function watchServerStats(sim) {
     }
     return landed;
   };
-  // EntityAnimal.procreate credits the player who fed the animal; this port does not keep that player, so the nearest one is credited.
+  // EntityAnimal.func_146082_f (wf.f): putting an animal in love also keeps the player who fed it (field br). Nothing clears it
+  // and it is not saved, so a WeakMap stands in for it; the four feeding paths (EntityAnimal, EntityWolf, EntityOcelot and
+  // EntityHorse interact) report the feeder by its survival state.
+  const lovers = new WeakMap();
+  for (const [name, at] of [['feed', 2], ['wolfInteract', 1], ['ocelotInteract', 1], ['horseInteract', 1]]) {
+    const call = ew[name];
+    if (typeof call !== 'function') continue;
+    ew[name] = function (e, ...args) {
+      const before = e?.love ?? 0, result = call.call(this, e, ...args);
+      if (e && before <= 0 && e.love > 0) { const p = bySurvival(args[at - 1]); if (p) lovers.set(e, p); }
+      return result;
+    };
+  }
+  const online = p => { const root = sim.root ?? sim; return [...(root.everyone?.() ?? [...sim.players.values()].map(q => [q]))].some(([q]) => q === p); };
+  // EntityAIMate.spawnBaby (ua.g): the animal's feeder, else its mate's, gets the animalsBred stat, and Repopulation when the
+  // animal is a cow (EntityCow, mooshrooms too). Nobody is credited when neither was fed by a player still on the server.
   ew.spawnBaby = function (a, b) {
-    const born = baby.call(this, a, b), p = born ? mobs.current : null;
-    if (p?.stats) { p.stats.increment(STAT.animalsBred); if (COWS.has(a.type)) trigger(p, 'breedCow'); }
+    const born = baby.call(this, a, b), p = born ? lovers.get(a) ?? lovers.get(b) ?? null : null;
+    if (p?.stats && online(p)) { p.stats.increment(STAT.animalsBred); if (COWS.has(a.type)) trigger(p, 'breedCow'); }
     return born;
   };
   // EntityPig.fall: more than five blocks with a player riding.

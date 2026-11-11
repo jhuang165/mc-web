@@ -33,7 +33,8 @@ from the `beh` / `bei` / `pq` / `aax` / `aak` bytecode). Regenerate with
 - No Statistics screen and no stats file: general statistics are not recorded, and the "Downloading statistics" loading state is
   skipped. The region export (`region-*.js`) does not write `stats/<uuid>.json`; it is owned by other work and was left alone.
 - Event approximations: onARail counts the rider's position each tick instead of `addMovementStat` increments; ghast does not
-  distinguish small and large fireballs; killWither fires on a player-sourced death; breedCow does not check who fed the animals;
+  distinguish small and large fireballs; killWither fires on a player-sourced death; breedCow in singleplayer does not check who fed the animals (the gun server credits the feeder kept by
+  EntityAnimal.func_146082_f, else the mate's, as EntityAIMate.spawnBaby does);
   snipeSkeleton uses the player's position at the skeleton's death, not at the arrow's launch; mobs killed by the player count
   by this build's type names (IMOB list).
 - The biome set depends on this build's Java biome generator naming the 36 biomes like 1.7.10; a world that cannot produce all of

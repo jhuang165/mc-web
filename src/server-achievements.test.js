@@ -138,3 +138,41 @@ test('a diamond Alice drops with Q gives her Diamonds to you! when Bob picks it 
   run(sim, 60);
   assert.ok(!c.achievements.has('diamondsToYou'));
 });
+
+test('breeding credits the player who fed the animals (EntityAnimal.func_146082_f), not the nearest one', async () => {
+  const { STAT } = await import('./stats.js');
+  const { sim, players: [a, b, c], x0, z0, y } = sky('breedCow');
+  const ew = sim.mobs.ew, WHEAT = 305;
+  const cow = dx => { const e = ew.create('cow', x0 + dx + 0.5, y, z0 - 2.5); ew.entities.push(e); return e; };
+  const [m, f] = [cow(0), cow(1)];
+  sim.teleport(a, { x: x0 - 4.5, y, z: z0 + 4.5 });
+  sim.teleport(b, { x: x0 + 1, y, z: z0 - 1 }); // Bob right beside the cows
+  const bred = p => p.stats.get(STAT.animalsBred);
+  a.survival.inventory.current = 0; a.survival.inventory.main[0] = makeStack(WHEAT, 2, 0);
+  // Alice's right-clicks (the server edit, EntityAnimal.interact through the server's aim), two blocks south of each cow.
+  for (const e of [m, f]) {
+    sim.teleport(a, { x: e.x, y, z: e.z + 2 });
+    a.yaw = 0; a.pitch = Math.atan2(-(1.62 - 0.65), 2);
+    assert.equal(sim.edit(a, true), true);
+    assert.equal(e.love, 600, 'in love');
+  }
+  sim.teleport(a, { x: x0 - 4.5, y, z: z0 + 4.5 });
+  const born = () => ew.entities.filter(e => e.type === 'cow' && e.growingAge < 0).length;
+  for (let i = 0; i < 400 && !born(); i++) sim.tick();
+  assert.equal(born(), 1, 'a calf');
+  assert.equal(bred(a), 1, "Alice's animalsBred");
+  assert.ok(a.achievements.has('breedCow'), 'Alice, the feeder');
+  assert.ok(!b.achievements.has('breedCow') && !bred(b), 'not Bob, the nearest');
+  // Two new cows: one fed by Carol, the other put in love without a player (no feeder kept): Carol is credited, through the
+  // mate's feeder when the unfed cow is the one whose AI spawns the calf. (The first pair keep Alice: the field is never cleared.)
+  for (const e of [m, f]) { ew.entities.splice(ew.entities.indexOf(e), 1); }
+  const [m2, f2] = [cow(3), cow(4)];
+  c.survival.inventory.current = 0; c.survival.inventory.main[0] = makeStack(WHEAT, 1, 0);
+  assert.equal(ew.feed(f2, WHEAT, c.survival), true);
+  m2.love = 600;
+  for (let i = 0; i < 400 && born() < 2; i++) sim.tick();
+  assert.equal(born(), 2, 'a second calf');
+  assert.equal(bred(c), 1, "Carol, a parent's feeder");
+  assert.ok(c.achievements.has('breedCow'));
+  assert.equal(bred(a), 1, 'Alice not again');
+});
