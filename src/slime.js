@@ -4,6 +4,7 @@
 // slime.test.js. Anything the probe did not record is marked "bytecode-derived".
 import { JavaRandom } from "./java-random.js";
 import { MOON_FACTORS, moonPhase, PEACEFUL } from "./difficulty.js";
+import { growthScale } from "./horse.js";
 
 const f = Math.fround;
 export const SLIMEBALL = 341;
@@ -154,7 +155,8 @@ export const SLIME_MODEL = Object.freeze({
 // Magma cubes (nether-melee.js) are slimes with their own numbers; type "magma_cube" shares every slime code path.
 export const isSlimeLike = (e) => e?.type === "slime" || e?.type === "magma_cube";
 // Live-mob helpers (entities.js). The collision box scale: a slime is size times 0.6 x 0.6, an adult 1, a child 0.5.
-export const mobScale = (e) => (isSlimeLike(e) ? e.size : e.growingAge < 0 ? 0.5 : 1);
+// EntityHorse (wi.a(boolean) -> ci()) overrides setScaleForAge: a foal's scale grows from 0.5 to 1 with its age (horse.js growthScale), not a flat 0.5.
+export const mobScale = (e) => (isSlimeLike(e) ? e.size : e.type === "horse" ? growthScale(e.growingAge ?? 0) : e.growingAge < 0 ? 0.5 : 1);
 // The fields of one live slime. `size` null rolls the constructor's 1 << nextInt(3); the first jump delay is nextInt(20) + 10.
 // Health is size * size (setSlimeSize heals to full), restore() clamps a saved value afterwards.
 export function slimeFields(size, random) {

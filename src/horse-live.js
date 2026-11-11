@@ -8,13 +8,13 @@ import { originalOfLive } from "./item-names.js";
 import { burst } from "./fx.js";
 import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
-import { entityRandom, aiMoveSpeed } from "./entities.js";
+import { entityRandom, aiMoveSpeed, resizeBox } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
 import { mountedYOffset, maxHealthOf, mountEntity } from "./mob-riding.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
-  health: H.HORSE_BASE_HEALTH, width: H.HORSE_WIDTH, height: H.HORSE_HEIGHT, movement: H.HORSE_BASE_SPEED,
+  health: H.HORSE_BASE_HEALTH, width: f(H.HORSE_WIDTH), height: f(H.HORSE_HEIGHT), // setSize(1.4F, 1.6F): float sizes, so a foal's f(width * scale) matches the native float product movement: H.HORSE_BASE_SPEED,
   ai: { wander: 0.7, panic: 1.2, mate: 1, follow: 1 }, damage: 0, drop: 0,
 };
 const KEEP = ["items", "type", "variant", "temper", "tame", "saddled", "chested", "armor", "owner", "bred", "reproduced", "speed", "jump", "maxHealth"];
@@ -25,11 +25,18 @@ const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 // `maxHealth` stays the base (createChild averages bases); `liveMaxHealth` is getMaxHealth with saved modifiers (feeding, breeding readiness).
 export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0, liveMaxHealth: maxHealthOf(e, e.horse?.maxHealth) });
 function apply(e, h) {
+  const was = e.growingAge ?? 0;
   for (const k of KEEP) e.horse[k] = h[k];
   if (Array.isArray(e.horse.items)) ensureItems(e.horse); // a chest just attached grows the stack list
   e.growingAge = h.age;
   e.health = h.health;
   if (h.inLove && !(e.love > 0)) e.love = 600;
+  if (h.loveFed) e.love = 600; // wf.f(yz) (setInLove) runs for every golden apple or carrot a tame adult is given, in love or not
+  if (h.age !== was) growSize(e, was); // EntityAgeable.addGrowth / setGrowingAge resizes the box at once
+}
+function growSize(e, was) {
+  const k0 = H.growthScale(was), k1 = H.growthScale(e.growingAge);
+  if (k1 !== k0) resizeBox(e, f(H.HORSE_WIDTH) * k0, f(H.HORSE_HEIGHT) * k0, f(H.HORSE_WIDTH) * k1, f(H.HORSE_HEIGHT) * k1);
 }
 
 // EntityHorse.onSpawnWithEgg with no group data (wi.a(sy)); `group` is an {type, variant} from a herd.
@@ -64,6 +71,10 @@ export function horseFieldsFrom(e, fresh) {
   if (items) { horse.items = items; ensureItems(horse); syncGear(horse); } // horse-gear.js: the stacks are the truth, the flags follow
   return { horse, speedAttr: horse.speed };
 }
+
+// wi.a(wf) canMateWith for two live horse records (a rider or a mount on either side blocks, wi.cT: l == null && m == null).
+const busy = (e) => !!(e.rider || e.riddenBy || e.ridingEntity);
+export const horseCanMate = (a, b) => b.type === "horse" && H.canMateWith(view(a), view(b), busy(a), busy(b));
 
 // wi.a(rx) createChild: attributes and variant come from the parents; the foal starts at -24000.
 export function horseChildFields(a, b, rand) {
@@ -175,6 +186,9 @@ export function installHorse(EntityWorld) {
     e.jumpHeld = j.held;
     if (j.rearing) this.horseRear(e);
   };
+  // rx.e -> setGrowingAge -> wi.a(boolean) -> setSize(1.4 * ci(), 1.6 * ci()) each tick of a foal's growth (bytecode-read; b45 records). Entity.setSize keeps the box minimum and, when the width grows
+  // outside the first update, calls moveEntity(oldWidth - width, 0, oldWidth - width) (entities.js resizeBox).
+  proto.horseGrowSize = growSize;
   proto.horseRear = function (e, sound = false) {
     e.rearing = true;
     e.rearTicks = 1; // makeHorseRear starts the counter at 1
@@ -182,7 +196,9 @@ export function installHorse(EntityWorld) {
   };
   proto.horseAngry = function (e) {
     const sound = H.angrySound(e.horse.type);
-    if (sound) this.events.push({ sound, volume: H.SOUND_VOLUME, pitch: f(1 + f(f(this.random() - this.random()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
+    // wi.cJ: playSound(cv(), bf(), bg()); bg() draws the horse's own rand twice (a foal adds 0.5), as the talk sound does (b45 feed-wild-170: three rears shift the stream).
+    const rand = entityRandom(e);
+    if (sound) this.events.push({ sound, volume: H.SOUND_VOLUME, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1)), position: { x: e.x, y: e.y, z: e.z } });
   };
   // Per tick (EntityHorse.onUpdate / onLivingUpdate): the rearing timer, regeneration, taming while ridden and the land sound.
   proto.horseTick = function (e) {
