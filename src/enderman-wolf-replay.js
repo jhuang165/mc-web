@@ -14,6 +14,7 @@ import { itemFromOriginal } from "./region-import.js";
 // game mode, sneaking, invisibility). Per tick a state is [mob rows, sounds, player health lost, player revenge index].
 export const reference42 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b42-reference.json", import.meta.url)));
 export const reference44 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b44-reference.json", import.meta.url)));
+export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
@@ -24,8 +25,11 @@ class LogRandom extends JavaRandom {
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
-  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom" }; // b44: the other EntityAITasks mobs (lower case: a baby)
+  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
+  Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
+// b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
+const HORSES45 = { R: [0, 0, false, 0, 20, Math.fround(0.2), 0.7], Q: [0, 258, true, 0, 24, 0.25, 0.55], q: [0, 773, true, 0, 18, 0.3, 0.65], D: [1, 0, true, 0, 22, 0.175, 0.5], F: [0, 258, false, -24000, 20, 0.2, 0.7], Y: [0, 258, true, -24000, 20, 0.2, 0.7] };
 const ITEM_OF = { 352: 311, 319: 202 };
 const key = (x, y, z) => `${x},${y},${z}`;
 const PORT_ID = { 1: 3, 9: WATER, 20: 9 };
@@ -57,7 +61,7 @@ function run(r) {
   ew.lightAt = () => r.bright;
   const roofed = (x, z) => r.roofs.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
   ew.ai.deps.canSeeSky = (x, y, z) => !roofed(x, z);
-  const ents = [], logs = [];
+  const ents = [], logs = [], init = [], spawnOpts = {};
   [...types].forEach((ch, i) => {
     const [x, z, y0 = 0] = r.pos[i], e = ew.create(TYPE_OF[ch], x, y0, z);
     ew.entities.push(e);
@@ -69,7 +73,14 @@ function run(r) {
     if (ch === "A") e.angry = true;
     if (ch === "U") { e.owner = "player"; e.health = 10; }
     if (ch === "R") { e.horse.maxHealth = e.health = 20; e.horse.speed = f32(0.2); } // fixed in the probe too (the rolled health and speed are not task draws)
+    if (r.init && HORSES45[ch]) {
+      const [type, variant, tame, age, maxHealth, speed, jump] = HORSES45[ch];
+      Object.assign(e.horse, { type, variant, tame, maxHealth, speed, jump });
+      e.growingAge = age; e.health = maxHealth;
+    }
     const lr = new LogRandom(BigInt(r.seed * 10 + i)); logs.push(lr); setEntityRandom(e, lr);
+    if (ch === "V") ew.onSpawnWithEgg(e, spawnOpts); // the herd's GroupData passes on to the next V
+    init.push(lr.log.slice()); lr.log.length = 0;
     ents.push(e);
   });
   const survival = new Survival({}, "survival");
@@ -103,6 +114,7 @@ function run(r) {
         const e = ents[Number(p[2])];
         if (e.type === "wolf") ew.wolfInteract(e, survival);
         else if (e.type === "ocelot") ew.ocelotInteract(e, survival);
+        else if (e.type === "horse") ew.horseInteract(e, survival, { sneak: false });
         else ew.feed(e, survival.inventory.held?.id ?? 0, survival);
         held = survival.inventory.held?.id ?? 0;
       }
@@ -126,6 +138,7 @@ function run(r) {
     ew.tick(player, survival, held);
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
     // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
+    const kids = ew.entities.filter((x) => !ents.includes(x) && x.type === "horse").map(horseFlags);
     ew.entities = ew.entities.filter((x) => ents.includes(x));
     const sounds = ew.events.filter((e) => e.sound).map((e) => [e.sound, e.volume, e.pitch]);
     const damage = 1000 - survival.health;
@@ -134,14 +147,17 @@ function run(r) {
       const b = ew.ai.brain(e);
       const flags = e.type === "enderman" ? [e.screaming ? 1 : 0, e.aggressive ? 1 : 0, e.stareCount ?? 0, e.chaseTimer ?? 0, e.carried ?? 0]
         : e.type === "wolf" ? [e.angry ? 1 : 0, e.sitting ? 1 : 0, e.owner ? 1 : 0, e.sitWish ? 1 : 0, e.inWater ? 1 : 0, ...(r.ext ? [e.love ?? 0, e.growingAge] : [])]
+        : r.init && e.type === "horse" ? horseFlags(e)
         : r.ext && ANIMALS.has(e.type) ? [e.love ?? 0, e.growingAge] : [];
       return [e.x, e.y, e.z, e.removedHealth ?? e.health, idxOf(b.attackTarget), e.revenge ? (revengeOf(e) === "player" ? n : idxOf(revengeOf(e))) : -1, flags, logs[i].log.slice(), [e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.jumping ? 1 : 0, e.moveForward ?? 0, e.moveStrafing ?? 0]];
     });
-    states.push([rows, sounds, damage, idxOf(ew.ai.player.hurtBy)]);
+    states.push([rows, sounds, damage, idxOf(ew.ai.player.hurtBy), r.init ? kids : null]);
   }
-  return { states };
+  return { states, init };
 }
 const f32 = Math.fround;
+// b45: [love, growing age, type, variant, tame, temper, max health, speed, jump, health] as EndermanWolfProbe.horseFlags
+const horseFlags = (e) => [e.love ?? 0, e.growingAge, e.horse.type, e.horse.variant, e.horse.tame ? 1 : 0, e.horse.temper, e.horse.maxHealth, e.horse.speed, e.horse.jump, e.health];
 
 // First tick, mob and field where a replay differs from the record (null when none). Everything is compared for every tick of every record: position, health, target, revenge, flags and every Entity.rand draw
 // of every mob, the sounds (name, volume, pitch, in order) and the player's damage and revenge target.
@@ -150,6 +166,7 @@ const same = (a, b) => (typeof a === "number" && typeof b === "number" ? Object.
 function soundOf(s) { const [name, vol, pitch] = s.replace(/@$/, "").split("|"); return [name, Math.fround(Number(vol)), Math.fround(Number(pitch))]; }
 export function firstDivergence(r, got) {
   const n = r.types.length;
+  if (r.init && JSON.stringify(r.init) !== JSON.stringify(got.init)) return ["init", r.init, got.init];
   for (let t = 0; t < r.ticks; t++) {
     const want = r.rows[t], have = got.states[t];
     for (let i = 0; i < n; i++) {
@@ -163,6 +180,7 @@ export function firstDivergence(r, got) {
     if (JSON.stringify(ws) !== JSON.stringify(gs)) return [t, "sounds", ws, gs];
     if (Math.abs(want[2] - have[2]) > 1e-9) return [t, "player damage", want[2], have[2]];
     if (want[3] !== have[3]) return [t, "player revenge", want[3], have[3]];
+    if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
   }
   return null;
 }
