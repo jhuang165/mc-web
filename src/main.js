@@ -432,7 +432,8 @@ let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, 
 function bindObjectTracker() {
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
   // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
-  objectTracker.hooks.sound = (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } });
+  // Their sounds are logged (object-tracker.js `sound`) but not played: the client world's playSoundAtEntity reaches only RenderGlobal.playSound
+  // (bma.a(String,DDDFF)), whose body is a bare return in 1.7.10 (lead, javap), so the client copies are silent and only the server's sound packet is heard.
   objectTracker.hooks.clientTargets = () => {
     const out = [];
     for (const [live, en] of mobs?.tracker?.entries ?? []) {

@@ -250,7 +250,7 @@ export class ObjectClient extends ClientEntity {
       const h = f(ITEM_W / 2);
       Object.assign(s, { x: this.x, y: this.y, z: this.z, mx: this.vx, my: this.vy, mz: this.vz, yaw: this.yaw, pitch: this.pitch, box: [this.x - h, this.y, this.z - h, this.x + h, this.y + ITEM_W, this.z + h], onGround: this.onGround });
       const out = tickRocket(s, world, s.rand, { remote: true, server: false });
-      if (out.launch) t.sound("fireworks.launch", s.x, s.y, s.z, 3, 1); // playSoundAtEntity, not under !isRemote: the client copy plays it too
+      if (out.launch) t.sound("fireworks.launch", s.x, s.y, s.z, 3, 1); // playSoundAtEntity, not under !isRemote: the client copy calls it too (silent: RenderGlobal.playSound is empty)
       if (out.spark) t.particle("fireworksSpark", ...out.spark); // EntityFireworkRocket.onUpdate: the client's trail, from the client's own rand
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch; this.onGround = s.onGround;
     } else if (spec.hook) {
@@ -290,7 +290,8 @@ export class ObjectTracker extends MobTracker {
     if (name === "snowballpoof") this.sims.balls.poof(x, y, z);
     else this.hooks.particle?.(name, x, y, z, vx, vy, vz);
   }
-  // The client world's playSoundAtEntity (RenderGlobal.playSound): every call is logged like the particles and handed to `hooks.sound(name, x, y, z, volume, pitch)`.
+  // The client world's playSoundAtEntity: every call is logged like the particles and handed to `hooks.sound(name, x, y, z, volume, pitch)`. It ends in RenderGlobal.playSound,
+  // which is empty in 1.7.10 (bma.a(String,DDDFF) is a bare return), so main.js binds no sound hook: the log is evidence of the call order, not audio.
   sound(name, x, y, z, volume, pitch) {
     this.log?.push(["sound:" + name, x, y, z, volume, pitch, 0]);
     this.hooks.sound?.(name, x, y, z, volume, pitch);
