@@ -2,6 +2,68 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 44
+
+Batch 44 covered these areas:
+- **Passive mobs on their own random.** Cows, mooshrooms, pigs, horses, ocelots, both golems, witches and creepers draw every AI task on `Entity.rand`, with the 1.7.10 task lists (bytecode-read constructors). 52 executed records replay exactly: idle, panic, tempt, breeding with wheat or carrots, wolf taming, feeding and mating, ocelot taming, avoid and sit, golems, witch and creeper. They forced these fixes:
+  - A parent's age is 5999 after the mating tick.
+  - A rearing or eating horse does not move.
+  - The ocelot's sprint boost, its sphere avoid check and its degree tempt check.
+  - Landing sounds before the step sound ([wolf.md](wolf.md)).
+- **The rest of the entities in the one list.** Minecarts, boats, paintings, item frames, leash knots, witch potions, snow golem snowballs and wither skulls run in the `World.updateEntities` walk:
+  - A rider updates through its mount, and hanging entities do their surface check in place.
+  - Thrown balls and skulls move once after impact.
+  - Potions and snowballs hit carts and boats, and carts and boats block each other.
+  - 28 of 29 executed records replay exactly.
+- **Multiplayer screens.** The client opens the sign editor after placing a sign and sends the lines. Beacons open a real server window (`ContainerBeacon`) with the payment slot. The held-item stand-in is gone ([multiplayer.md](multiplayer.md)).
+- **Dedicated world.**
+  - Beacons apply their effects every 80 ticks through the singleplayer `tickBeacons`, and grants go out as an S1D effect message.
+  - The beacon sky check uses `canSeeSky`, so glass no longer blocks it.
+  - A hopper waiting on a loading container gives up after 600 updates. Natively the chunk loads on demand (bytecode-read).
+  - The rim piston event was found to be needed, and is now tested.
+- **Held and dropped items.**
+  - Flat items: they are extruded vertex for vertex like `renderItemIn2D`. Dropped sprites draw 1 to 4 copies in fancy graphics (`item-sprite-reference.json`, executed).
+  - Hand models: the cactus is its inset quads in the hand, and only the native render types turn 90 degrees there.
+  - Fixed faces: the chest bottom face uvs (world chests too) and the cube bottom faces. Pistons, dispensers and droppers show their item facing.
+- **Client copies, continued.**
+  - Arrows, snowballs, eggs, pearls, rockets and hooks emit their own client particles: impact puffs, the pearl trail, crit trails, water splashes and bubbles, rocket sparks, and the firework burst at the client rocket.
+  - The fishing hook counts as in water; an old probe stub had hidden this.
+  - The Ender Dragon's 64-step ring buffer and wings, and the squid's body and tentacles, are computed on the client copy.
+  - Drawn mob yaw and the rod end of the fishing line come from the client copies.
+  - Negative spawn angles truncate as natively (`tracker-hits-reference.json`, `tracker-mounts-reference.json`).
+- **Away run.** The batch 43 lost delivery is explained. The portal sat in a column the away run had not copied, so those entities never ticked and the returning player collected them. The run now copies ring columns beyond the streamed window, raises the cap to 160 columns with work columns first, and logs entities left as saved (`outside`). Six of six trips after the fix delivered through the away run ([dimensions.md](dimensions.md)).
+
+Still open from batch 44:
+- Tracker and client:
+  - Client-side hits (arrows, thrown entities and hooks against client mobs) are not modelled.
+  - Client impact, splash and step sounds are not played.
+  - The dragon's client parts, its death branch and its S1C health are not modelled, and neither is squid air.
+  - The angler end of the line has no native replay.
+  - The tracker set order needs a bytecode check.
+  - A player-ridden mount's client copy only follows the live mount.
+  - The squid render has no visible browser check.
+- Mobs:
+  - Horse breeding, foals and spawn rolls, creeper explosions, witch throws and ocelots sitting on chests have no records.
+  - Piston pushes still emit the step sound before the landing sound.
+  - Two golem layouts differ by about 1e-7 at one tick.
+- Entity list:
+  - Explosions do not push carts, boats, potions or golem balls.
+  - Thrown balls do not hit hanging entities.
+  - Vehicle pushes on mobs run after the walk.
+  - The away run keeps its own order.
+- Rendering:
+  - The cactus inventory icon is a full cube.
+  - The item atlas is not stitched.
+  - Other entity models' bottom faces are unchecked.
+  - Third-person held sprite poses are not re-verified.
+- Multiplayer:
+  - Nothing applies the S1D effect on the client, and dedicated players' effects do not tick.
+  - There are no other server windows, and beacon payment is client-reported.
+  - Saves imported at 16/17 keep the quiet neighbour callbacks.
+- Away:
+  - The death screen after a shadow kill still shows on return.
+  - Columns more than 10 chunks away, or beyond the cap, are not copied, and a mob that walks off the copied set meets air.
+
 ## Done in batch 43
 
 Batch 43 covered these areas:
@@ -38,33 +100,7 @@ Batch 43 covered these areas:
   - Messages: the server has messages and native checks for editing a sign and choosing beacon effects. Placing a sign or skull makes its tile.
   - Hoppers: a hopper or hopper cart beside a column whose saved containers are still loading waits instead of picking up items ([streaming.md](streaming.md), [multiplayer.md](multiplayer.md)).
 
-Still open from batch 43:
-- Tracker:
-  - Client-side arrow and thrown hits, and the snowball and egg impact particles, are not modelled.
-  - The rocket spark trail starts at the server rocket.
-  - A hooked entity's pull and the hook after it lands are approximate.
-  - The angler end of the line and the drawn yaw of mobs come from the live entities.
-  - The Ender Dragon's position ring buffer and the squid's tentacle fields are not on the client copy.
-  - A player-ridden mount keeps its live position.
-  - The tracker's id-ordered set is not modelled.
-- Mobs:
-  - Cows, pigs and other passive mobs still draw on the world random.
-  - The enderman records cover only flat ground and water, and the wolf records have no mating, feeding or taming.
-  - Two golem layouts differ by about 1e-7 at one tick.
-  - Minecarts, boats, hanging entities, mob potions, golem snowballs and wither skulls still tick outside the one list, and so does the away run.
-- Rendering:
-  - The chest hand and drop model uvs, and the cactus and piston hand models, are not compared against native.
-  - The held 3D sprite items are unchanged, and the item atlas is unused.
-- Away:
-  - The death screen after a shadow kill shows on return, not at the tick.
-  - An entity whose column was not copied at departure cannot tick.
-  - In one smoke trip of three an item and an orb were not delivered. Two reruns, here and in the track, delivered everything, so the cause is not known.
-- Ring and multiplayer:
-  - The client has no sign editor or beacon screen for the new messages.
-  - Beacon effects are not applied in the dedicated world.
-  - A waiting hopper has no timeout.
-  - Saves imported at 16/17 keep the quiet neighbour callbacks.
-  - A rim piston queues a no-op event where native refuses.
+Still open from batch 43: carried into the batch 44 list above, except the items batch 44 closed.
 
 ## Done in batch 42
 

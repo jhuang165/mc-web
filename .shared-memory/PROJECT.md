@@ -113,6 +113,20 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 44 (2026-11-11, eight Sonnet tracks in `../wt44-<name>` on `batch44-<name>`, cut from e131af9d6, merged --no-ff on `batch44-lead`; lead note `b44-lead-track.md`; the gun side runs separately):
+- 0.73.0, by track:
+  - passivedraws: every remaining `EntityAITasks` mob on `Entity.rand`; 52 `b44pd-*` records in `enderman-wolf-b44-reference.json` (`EndermanWolfProbe`).
+  - entitylist2: minecarts, boats, hanging entities, witch potions, golem snowballs and wither skulls in the `entityWalkers` walk; `EntityListProbe` has 29 scenarios.
+  - clientscreens: client sign editor and the server `ContainerBeacon` window (`beaconWindow`, `beaconPayment`, `closeWindow`).
+  - beaconring: `tickBeacons` in `DedicatedSimulation`, S1D `effect` message, `canSeeSky` for the beacon, `PENDING_LIMIT` 600 in `containerPending`.
+  - handmodels: `renderItemIn2D` geometry (`ItemSpriteProbe`, `DroppedSpriteProbe`), `drop-sprite.js`, `blockItemTurn`, `blockCubeGeometry`, `CACTUS_ITEM_QUADS`, chest bottom uvs.
+  - trackerhits: client particles for thrown entities, arrows, rockets and hooks (`TrackerHitsProbe`); the `FishingProbe` water stub removed.
+  - bosstracker: dragon ring buffer and wings, squid fields, mob yaw and the angler end from client copies; S0F angles truncate.
+  - awaydeath2: away columns from the headless ring (`fullColumn`), `MAX_COLUMNS` 160 with work columns first, `entities.outside` count.
+- Merge conflicts: clientscreens and beaconring both changed the server's connection code, the multiplayer client and the dedicated simulation (both message sets were kept). entitylist2 and trackerhits both changed the thrown-ball impact in `projectiles.js`; the merge moves the ball once after impact and the poof is skipped when the client draws its own particles.
+- The local-owned wolf's `Entity.rand` is now seeded in the attributes3 follow test, a flake that predated this batch.
+- Verification: see `b44-lead-track.md`. Pushed to github main by the lead.
+
 Batch 22 (2026-11-07, claude-b22-lead, five Sonnet tracks merged into main):
 - Container UI (`container-screens.md`, `container-screens.js`): every container screen and the book open in a native GuiContainer shell (default background gradient, guiLeft/guiTop origin math, glyph labels at bytecode-read positions); `modal()` is gone. Horse and villager screens were not opened live; book width (320) assumed.
 - Debug keys (`debug-screen.md`, `debug-keys.js`): F3+B entity hitboxes, F3+S/T refresh, F3+C simulated crash dialog, F-keys on every screen, F3 overlay drawn under open GUIs. F3+C does not exit; hitbox line width and a few entity sizes assumed.
