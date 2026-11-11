@@ -18,10 +18,10 @@ globalThis.document = { createElement: () => Object.assign(new globalThis.HTMLCa
 globalThis.fetch = async (url) => (mcmeta[url] ? { ok: true, text: async () => mcmeta[url] } : { ok: false });
 
 test("a block tile with a pack mcmeta animates in the atlas, redrawing only changed frames", async () => {
-  const { createBlockAtlas, tileByName } = await import("./block-textures.js");
+  const { createBlockAtlas, tileByName, tileOrigin } = await import("./block-textures.js");
   const atlas = createBlockAtlas();
   await atlas.ready;
-  const stone = tileByName("stone"), at = [stone % 16 * 16, Math.floor(stone / 16) * 16];
+  const stone = tileByName("stone"), at = tileOrigin(stone);
   const last = () => draws.filter((d) => d.tile[0] === at[0] && d.tile[1] === at[1]).at(-1).srcY / 16;
   assert.equal(last(), 2, "list starts at frame index 2");
   draws.length = 0;
