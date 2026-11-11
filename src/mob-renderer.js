@@ -48,6 +48,16 @@ void main(){vec4 t=texture2D(map,fract(vUv+vec2(scroll,-scroll)));if(t.a<=.1)dis
 // translate(0, -24 * 0.0625 - 0.0078125, 0): RenderCreeper's swell scale is taken about the
 // point 1.5078125 above the feet, so the swollen feet sink a little.
 const MODEL_ORIGIN = 24 / 16 + 1 / 128;
+// The live mob with the angles of its client copy (mobPose reads them through the prototype chain)
+const clientAnglesOf = new WeakMap();
+export function clientAngles(e, c) {
+  let v = clientAnglesOf.get(e);
+  if (!v) { v = Object.create(e); clientAnglesOf.set(e, v); }
+  v.prevRenderYawOffset = c.prevRenderYawOffset; v.renderYawOffset = c.renderYawOffset;
+  v.prevRotationYawHead = c.prevRotationYawHead; v.rotationYawHead = c.rotationYawHead;
+  v.prevRotationPitch = c.prevRotationPitch; v.rotationPitch = c.rotationPitch;
+  return v;
+}
 export class MobRenderer {
   // `view` supplies the lightmap and world brightness (VoxelScene).
   constructor(scene, view) {
@@ -463,9 +473,10 @@ export class MobRenderer {
         r = this.create(e);
         this.rigs.set(e.id, r);
       }
-      const pose = mobPose(e, partial);
-      // RenderManager.renderEntityStatic: lastTickPos + (pos - lastTickPos) * partialTicks, of the client's entity.
+      // RenderManager.renderEntityStatic: lastTickPos + (pos - lastTickPos) * partialTicks, of the client's entity. The drawn yaws and pitch are the
+      // client copy's too (RendererLivingEntity.doRender reads its prevRenderYawOffset, renderYawOffset, rotationYawHead and rotationPitch).
       const client = clientOf?.(e);
+      const pose = mobPose(client ? clientAngles(e, client) : e, partial);
       if (client) {
         const p = Math.fround(partial);
         pose.x = client.px + (client.x - client.px) * p; pose.y = client.py + (client.y - client.py) * p; pose.z = client.pz + (client.z - client.pz) * p;
@@ -539,7 +550,7 @@ export class MobRenderer {
       if (r.snow) animateSnowGolem(r, pose);
       if (r.wolf) animateWolf(r, e, pose);
       if (r.enderman) animateEnderman(r, e, pose, this);
-      if (r.custom) r.custom(r, e, pose, partial);
+      if (r.custom) r.custom(r, e, pose, partial, client);
       syncMobEquipment(this, r, e); // worn armour and the held item (mob-equipment-renderer.js)
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }

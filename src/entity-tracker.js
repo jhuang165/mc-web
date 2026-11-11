@@ -28,6 +28,9 @@
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
 import { trackingRange } from "./ring-events.js";
 import { mountEntity, seatPosition } from "./mob-riding.js";
+import { wrapFloat, wrapDouble } from "./dragon.js";
+import { squidState } from "./squid-bat.js";
+import { JavaRandom } from "./java-random.js";
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -36,6 +39,7 @@ export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
 // ghast (EntityFlying), squid, bat, wither and blaze run their own client onUpdate (entities.js moveClient, clientEnvironment and
 // clientAfterMove), as the executed flyGhast / flySquid / flyBat / flyWither / flyBlaze records show.
 export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon", "bat"]);
+// The dragon's client onLivingUpdate is its own (ClientEntity.dragonUpdate); it has no moveEntityWithHeading call, so only the body turn runs after it.
 const CLIENT_PHYSICS_OFF = new Set(["ender_dragon"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)
 const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
@@ -62,6 +66,8 @@ export function encodeAxis(size, v) {
 export const encodeY = (v) => floor(v * 32);
 const byte = (v) => (v << 24) >> 24; // the position packets' rotation fields are bytes (the entry compares the ints)
 const angle = (deg) => floorFloat(f(f(f(deg) * 256) / 360));
+// S0FPacketSpawnMob's constructor casts (byte)(int)(angle * 256 / 360): truncation, unlike the tracker entry's floor_float for its look packets
+const spawnAngle = (deg) => Math.trunc(f(f(f(deg) * 256) / 360));
 const unangle = (b) => f(f(byte(b) * 360) / 256); // (float)(packet byte * 360) / 256.0F
 const wrap180 = (d) => { d %= 360; return d >= 180 ? d - 360 : d < -180 ? d + 360 : d; }; // MathHelper.wrapAngleTo180_double
 // The leash holder of a live mob as the S1B(1) packet names it, or null: the player, another mob (by uuid) or a knot's block.
@@ -178,7 +184,7 @@ export class TrackerEntry {
           const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
           this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
-        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(angle(e.rotationYaw ?? 0)), pitch: byte(angle(e.rotationPitch ?? 0)), head: byte(angle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
         if (e.type === "bat") { this.lastHang = !!e.batHanging; this.emit({ type: "meta", batHanging: this.lastHang }); } // the spawn's S1C
         // after the spawn: S1B(0) for a rider and S1B(1) for a leashed mob (the periodic one in sendLocation still goes out at the entry's first tick)
         if (e.ridingEntity) this.emit({ type: "attach", mode: 0, entity: e, vehicle: e.ridingEntity });
@@ -207,10 +213,17 @@ export class ClientEntity {
     this.bodyTicks = 0; this.bodyHeadYaw = 0; // EntityBodyHelper's counters
     this.batHanging = false; // EntityBat's data watcher flag, from S1C
     this.height = 0; // the client class's own size, kept by the tracker
+    // Entity.rand of the client copy (unseeded in Java; the replay seeds it): the squid's rotation speed re-roll reads it
+    this.rand = type === "squid" || type === "ender_dragon" ? ClientEntity.makeRandom() : null;
+    this.squid = null; // EntitySquid's client fields (squidPitch ... tentacleAngle), set at spawn
+    this.dragon = null; // EntityDragon's client fields: ringBuffer, ringBufferIndex, prevAnimTime, animTime
     this.leash = null; // EntityLiving.leashedToEntity: { player: true }, a ClientEntity, or { knot: true, x, y, z }
   }
+  static makeRandom() { return new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))); }
   apply(p, ctx = null) {
     if (p.type === "spawn") {
+      if (this.type === "squid") this.squid = squidState(this.rand); // the constructor rolls rotationVelocity from Entity.rand
+      if (this.type === "ender_dragon") this.dragon = { ring: new Float64Array(64 * 3), ri: -1, prevAnim: 0, anim: 0 };
       this.present = true; this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.x = this.tx = this.px = p.x / 32; this.y = this.ty = this.py = p.y / 32; this.z = this.tz = this.pz = p.z / 32; this.increments = 0;
       this.onGround = false;
@@ -248,6 +261,7 @@ export class ClientEntity {
     this.px = this.x; this.py = this.y; this.pz = this.z;
     this.prevRotationYaw = this.rotationYaw; this.prevRotationPitch = this.rotationPitch;
     this.prevRenderYawOffset = this.renderYawOffset; this.prevRotationYawHead = this.rotationYawHead;
+    if (this.type === "ender_dragon" && this.dragon) { this.dragonUpdate(); turn?.(this); return; }
     if (move && pre) pre(this);
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
@@ -266,6 +280,38 @@ export class ClientEntity {
     move(this);
     if (this.type === "chicken" && !this.onGround && this.vy < 0) this.vy *= 0.6; // EntityChicken.onLivingUpdate's slow fall runs on both sides
     turn?.(this);
+  }
+  // EntityDragon.onLivingUpdate (xa.e) on the client (executed, tools/probes/TrackerMountsProbe.java flyDragon): the wing animation from the client
+  // motion, the ring buffer of the previous 64 yaw / y samples (written before the move), then the interpolation toward the packet's position and
+  // angles with the dragon's own arithmetic (the yaw and pitch steps are doubles cast to float, no % 360 on the way), and no moveEntity at all.
+  // `alive` is the client's health above 0 (the data watcher; the live health stands in for it).
+  dragonUpdate() {
+    const d = this.dragon, fr = Math.fround;
+    d.prevAnim = d.anim;
+    if (this.dead) return;
+    const g = fr(fr(0.2) / fr(fr(fr(Math.sqrt(this.vx * this.vx + this.vz * this.vz)) * 10) + 1));
+    d.anim = fr(d.anim + fr(g * fr(Math.pow(2, this.vy))));
+    this.rotationYaw = wrapFloat(this.rotationYaw);
+    if (d.ri < 0) for (let i = 0; i < 64; i++) { d.ring[i * 3] = this.rotationYaw; d.ring[i * 3 + 1] = this.y; }
+    if (++d.ri === 64) d.ri = 0;
+    d.ring[d.ri * 3] = this.rotationYaw; d.ring[d.ri * 3 + 1] = this.y; d.ring[d.ri * 3 + 2] = 0;
+    if (this.increments > 0) {
+      const n = this.increments;
+      this.x += (this.tx - this.x) / n; this.y += (this.ty - this.y) / n; this.z += (this.tz - this.z) / n;
+      const yaw = fr(this.rotationYaw + wrapDouble(this.tyaw - this.rotationYaw) / n), pitch = fr(this.rotationPitch + (this.tpitch - this.rotationPitch) / n);
+      this.increments--;
+      this.rotationYaw = fr(yaw % 360); this.rotationPitch = fr(pitch % 360); // setRotation
+    }
+    this.renderYawOffset = this.rotationYaw;
+  }
+  // A mount the local player rides is driven by the client: EntityClientPlayerMP's input moves it, so its client position is the player's movement
+  // and the server only corrects it with S18 on a desync (none can happen with one process: the live mob is what the player's physics moved). The
+  // packets still arrive and update the entry's bookkeeping; the target they set is dropped. The previous values are the ones step() just saved.
+  followLive(e) {
+    this.x = e.x; this.y = e.y; this.z = e.z; this.vx = e.vx ?? 0; this.vy = e.vy ?? 0; this.vz = e.vz ?? 0; this.onGround = !!e.onGround;
+    this.tx = this.x; this.ty = this.y; this.tz = this.z; this.increments = 0;
+    this.rotationYaw = this.tyaw = e.rotationYaw ?? this.rotationYaw; this.rotationPitch = this.tpitch = e.rotationPitch ?? this.rotationPitch;
+    this.renderYawOffset = e.renderYawOffset ?? this.renderYawOffset; this.rotationYawHead = e.rotationYawHead ?? this.rotationYawHead;
   }
   // Entity.updateRidden (sa.ab) for the rider, called after its mount's update: the mount's own death frees it, the motion is zeroed, the
   // rider updates, then the mount's updateRiderPosition seats it. The executed record shows no turn of the rider with its mount's yaw (the
@@ -391,7 +437,8 @@ export class MobTracker {
   clientTick(physics = null) {
     for (const en of this.entries.values()) this.flush(en);
     const hooks = (e) => physics && !CLIENT_PHYSICS_OFF.has(e.type)
-      ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))] : [null, null, null];
+      ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))]
+      : [null, physics?.turn && ((c) => physics.turn(c, e)), null];
     for (const [e, en] of this.entries) {
       const c = en.client;
       if (!c.present) continue;
@@ -401,7 +448,9 @@ export class MobTracker {
         if (mount.riddenBy === c) mount.riddenBy = null;
         c.ridingEntity = null;
       }
+      c.dead = e.health <= 0;
       c.step(...hooks(e));
+      if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`)
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;

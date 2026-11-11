@@ -8,11 +8,13 @@ import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { MobTracker, TrackerEntry, ClientEntity } from "./entity-tracker.js";
 import { mountEntity } from "./mob-riding.js";
+import { movementOffsets } from "./dragon.js";
+import { WATER } from "./world.js";
 import { EntityWorld } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/tracker-mounts-reference.json", import.meta.url), "utf8"));
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0 };
-const SIZES = { pig: [0.9, 0.9], chicken: [0.3, 0.7], spider: [1.4, 0.9], zombie: [0.6, 1.8], skeleton: [0.6, 1.8], ghast: [4, 4], blaze: [0.6, 1.8], wither: [0.9, 4], bat: [0.5, 0.9], squid: [0.95, 0.95] };
+const SIZES = { pig: [0.9, 0.9], chicken: [0.3, 0.7], spider: [1.4, 0.9], zombie: [0.6, 1.8], skeleton: [0.6, 1.8], ghast: [4, 4], blaze: [0.6, 1.8], wither: [0.9, 4], bat: [0.5, 0.9], squid: [0.95, 0.95], ender_dragon: [16, 8] };
 const CASES = {
   ridePig: { mount: "pig", rider: "zombie" },
   rideChicken: { mount: "chicken", rider: "zombie" },
@@ -25,7 +27,12 @@ const CASES = {
   flyWither: { mount: "wither", rider: "zombie", velocity: false },
   flyBat: { mount: "bat", rider: "zombie", velocity: false },
   flySquid: { mount: "squid", rider: "zombie" },
+  // batch 44: a squid through a still water slab (the client's own rotation, tentacles and flow push) and the Ender Dragon's client branch
+  swimSquid: { mount: "squid", rider: "zombie", water: true },
+  flyDragon: { mount: "ender_dragon", rider: "zombie" },
 };
+// the probe's water slab for swimSquid (MW.slab): x >= 11, y 0..9, still water (metadata 0)
+const slab = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : x >= 11 && y < 10 ? WATER : 0), getMeta: () => 0, surface: () => 0 };
 const KINDS = { hg: "move", hh: "moveLook", hi: "look", ik: "teleport", ht: "head", fz: "spawn", hy: "velocity" };
 // the probe's packet of a tick as [index, kind, ...fields]; the metadata and property packets (hw, il) are not modelled
 function expected(packets) {
@@ -44,6 +51,25 @@ function expected(packets) {
   return out;
 }
 
+// The boss and squid fields of the client copy (TrackerMountsProbe.extraOf): squid bp..bC; dragon prevAnimTime, animTime, ring index and the
+// getMovementOffsets samples
+function checkExtra(name, t, c, want) {
+  if (!want?.length) return;
+  assert.ok(c, `${name} tick ${t}: client mount`);
+  const near = (got, exp, what) => got.forEach((v, k) => assert.ok(Math.abs(v - exp[k]) <= 1e-9, `${name} tick ${t} ${what}[${k}]: got ${v} want ${exp[k]}`));
+  if (c.squid) {
+    const s = c.squid;
+    near([s.pitch, s.prevPitch, s.yaw, s.prevYaw, s.rotation, s.prevRotation, s.tentacle, s.prevTentacle, s.motionSpeed, s.rotationVelocity, s.rotateSpeed, s.vecX, s.vecY, s.vecZ], want, "squid");
+  } else if (c.dragon) {
+    const d = c.dragon, health = { health: 200, dragon: d };
+    near([d.prevAnim, d.anim, d.ri], want.slice(0, 3), "dragon");
+    const got = [];
+    for (let n = 0; n <= 24; n++) got.push(...movementOffsets(health, n, 1));
+    for (const n of [0, 6, 13]) got.push(...movementOffsets(health, n, Math.fround(0.37)));
+    if (want.length > got.length + 3) for (let n = 0; n < 64; n++) got.push(...movementOffsets(health, n, 1));
+    near(got, want.slice(3), "offsets");
+  }
+}
 function replay(name) {
   const record = ref.cases[name], spec = CASES[name];
   const live = [spec.mount, spec.rider].map((type, i) => ({ type, uuid: `u${i}`, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rotationYaw: 0, rotationPitch: 0, rotationYawHead: 0, renderYawOffset: 0, health: 10, onGround: true }));
@@ -63,7 +89,8 @@ function replay(name) {
   const player = { x: 0.5, y: 0, z: 0.5 };
   const size = (e) => SIZES[e.type];
   // EntityWorld's own client hooks on the probe's flat world
-  const host = { world: grass, size: (m) => SIZES[m.type] }, P = EntityWorld.prototype;
+  const host = { world: spec.water ? slab : grass, size: (m) => SIZES[m.type] }, P = EntityWorld.prototype;
+  host.clientSquidWet = P.clientSquidWet;
   const physics = Object.assign((c, e) => P.moveClient.call(host, c, e), { turn: (c, e) => P.clientAfterMove.call(host, c, e), pre: (c, e) => P.clientEnvironment.call(host, c, e) });
   let bad = 0, worst = 0;
   try {
@@ -79,7 +106,12 @@ function replay(name) {
       tracker.serverTick(order, player, size);
       const want = events.has(t) ? expected(events.get(t)) : [];
       assert.deepEqual(log, want, `${name} packets at tick ${t}`);
+      // the probe seeds the client's Entity.rand after the constructor rolled rotationVelocity: the same two values here
+      const cm = tracker.clientIfTracked(mount);
+      if (cm?.squid && !cm.seeded) { cm.seeded = true; cm.squid.rotationVelocity = record.squidInit; cm.rand = new JavaRandom(77); }
+      if (cm?.dragon && !cm.seeded) { cm.seeded = true; cm.rand = new JavaRandom(77); }
       tracker.clientTick(physics);
+      checkExtra(name, t, cm, record.extra[t]);
       const row = record.client[t];
       row.forEach((w, i) => {
         const c = tracker.clientIfTracked(live[i]);
@@ -152,11 +184,21 @@ test("a mob riding a mob is drawn where the client's updateRiderPosition put it,
   assert.equal(zombie.x, pig.x, "the live rider stays on the live mount");
 });
 
-test("a mount the player rides keeps its live position (the camera follows it)", () => {
+test("a mount the player rides is a client entity that follows the player's movement; the camera still reads the live mount", () => {
   const { mobs, pig, tick } = pair();
   tick();
   pig.rider = { vehicle: { entity: pig } };
-  assert.equal(mobs.clientPosition(pig), null);
+  for (let t = 0; t < 10; t++) { pig.x += 0.2; pig.z -= 0.1; pig.rotationYaw = 10 * t; pig.renderYawOffset = 10 * t; tick(); }
+  const c = mobs.clientPosition(pig);
+  assert.ok(c, "drawn from the client entity");
+  assert.deepEqual([c.x, c.y, c.z, c.rotationYaw, c.renderYawOffset], [pig.x, pig.y, pig.z, pig.rotationYaw, pig.renderYawOffset]);
+  assert.ok(Math.abs((c.x - c.px) - 0.2) < 1e-9, "the previous client position is last tick's");
+  // the player gets off: the client entity goes back to the packets and carries on from where it stood
+  pig.rider = null;
+  const before = c.x;
+  tick();
+  assert.ok(Math.abs(c.x - before) < 0.25, "no snap on dismount");
+  assert.ok(Math.abs(pig.x - 102.5) < 1e-9, "the live mount is untouched by the client entity");
 });
 
 test("the lead rope runs between client positions: a holder mob is drawn at its client entity", () => {
@@ -179,4 +221,17 @@ test("the client entity's water check runs before its motion and uses the client
   const c = new ClientEntity("pig"); c.present = true; c.x = 5; c.vy = 0.1;
   c.step((cl) => order.push(["move", cl.inWater]), null, (cl) => { cl.inWater = true; order.push(["pre"]); });
   assert.deepEqual(order, [["pre"], ["move", true]]);
+});
+
+import { clientAngles } from "./mob-renderer.js";
+import { mobPose } from "./entities.js";
+
+test("the drawn body yaw, head yaw and pitch are the client copy's, the rest of the pose stays live", () => {
+  const live = { type: "pig", px: 1, py: 2, pz: 3, x: 1, y: 2, z: 3, prevRenderYawOffset: 10, renderYawOffset: 20, prevRotationYawHead: 10, rotationYawHead: 20, prevRotationPitch: 0, rotationPitch: 0, limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0, age: 7, health: 10 };
+  const c = { prevRenderYawOffset: 40, renderYawOffset: 50, prevRotationYawHead: 60, rotationYawHead: 80, prevRotationPitch: 4, rotationPitch: 8 };
+  const pose = mobPose(clientAngles(live, c), 0.5);
+  assert.equal(pose.bodyYaw, 45); assert.equal(pose.headYaw, 70 - 45); assert.equal(pose.headPitch, 6);
+  assert.equal(pose.age, 7.5);
+  assert.equal(live.renderYawOffset, 20, "the live mob is not modified");
+  assert.equal(mobPose(live, 0.5).bodyYaw, 15);
 });
