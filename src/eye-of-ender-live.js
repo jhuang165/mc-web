@@ -18,6 +18,7 @@ export function findStronghold(world, x, y, z) {
   return hit ? [hit[0] - ox, hit[1], hit[2] - oz] : null;
 }
 
+const ROWS = new WeakMap(); // one renderer row per entity (or view)
 export class EyesOfEnder {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
     this.random = random;
@@ -41,7 +42,9 @@ export class EyesOfEnder {
     this.eyes = this.eyes.filter((e) => !e.dead);
   }
   // Renderer rows ({kind, x, y, z, px, py, pz}) shared with the snowball billboards.
-  get balls() { return this.eyes.map((e) => (e.ball ??= { kind: "eyeOfEnder" }, Object.assign(e.ball, { x: e.x, y: e.y, z: e.z, px: e.px, py: e.py, pz: e.pz }))); }
+  get balls() { return this.rows(this.eyes); }
+  // The rows of eyes or of their client views (object-tracker.js objectView: the client entity's position)
+  rows(list) { return list.map((e) => { const row = ROWS.get(e) ?? ROWS.set(e, { kind: "eyeOfEnder" }).get(e); return Object.assign(row, { x: e.x, y: e.y, z: e.z, px: e.px, py: e.py, pz: e.pz }); }); }
   serialize() { return { random: this.random.save(), eyes: this.eyes.map(({ ball, ...e }) => e) }; }
   load(record) {
     this.eyes = [];

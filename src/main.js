@@ -423,7 +423,7 @@ const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn 
 let primed = [], genPrimed = null;
 let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
 const THROWN_KINDS = ["snowball", "egg", "enderPearl", "potion", "expBottle"];
-const thrownOf = (kind) => projectiles.balls.filter((b) => b.kind === kind);
+const thrownOf = (kind) => [...projectiles.balls, ...(mobs?.potions?.balls ?? [])].filter((b) => b.kind === kind); // the witch's potions are tracked like the player's
 const viewBalls = (balls) => balls.map((b) => THROWN_KINDS.includes(b.kind) ? objectViews(objectTracker, [b], b.kind)[0] : b);
 let populationBlocks, netherLive;
 let sounds,
@@ -2750,7 +2750,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     flushArrows,
   });
   if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
-    const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed };
+    const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
     objectTracker.update(lists, position, world);
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
@@ -2781,9 +2781,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
-  scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
+  scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(objectViews(objectTracker, items.items, "item"));
-  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : viewBalls(projectiles.balls), projectiles.particles);
+  scene.setProjectiles(eyes.eyes.length || rockets.rockets.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...viewBalls(projectiles.balls), ...eyes.rows(objectViews(objectTracker, eyes.eyes, "eyeOfEnder")), ...rockets.rows(objectViews(objectTracker, rockets.rockets, "firework")), ...viewBalls(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : viewBalls(projectiles.balls), projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -4108,7 +4108,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
+    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, eyes, rockets, get objectTracker() { return objectTracker; }, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).

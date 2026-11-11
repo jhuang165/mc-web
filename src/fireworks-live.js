@@ -6,6 +6,7 @@ import { createRocket, tickRocket } from './firework-rocket.js';
 import { ITEM_FIREWORK_ROCKET, normalizeFireworks } from './fireworks.js';
 const f = Math.fround;
 
+const ROWS = new WeakMap(); // one renderer row per entity (or view)
 export class FireworkRockets {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
     this.random = random;
@@ -32,7 +33,9 @@ export class FireworkRockets {
     this.rockets = this.rockets.filter((r) => !r.dead);
   }
   // Renderer rows ({kind, x, y, z, px, py, pz}) shared with the snowball billboards (RenderSnowball(Items.fireworks)).
-  get balls() { return this.rockets.map((r) => (r.ball ??= { kind: 'firework' }, Object.assign(r.ball, { x: r.x, y: r.y, z: r.z, px: r.px, py: r.py, pz: r.pz }))); }
+  get balls() { return this.rows(this.rockets); }
+  // The rows of rockets or of their client views (object-tracker.js objectView)
+  rows(list) { return list.map((r) => { const row = ROWS.get(r) ?? ROWS.set(r, { kind: 'firework' }).get(r); return Object.assign(row, { x: r.x, y: r.y, z: r.z, px: r.px, py: r.py, pz: r.pz }); }); }
   serialize() { return { random: this.random.save(), rockets: this.rockets.map(({ ball, box, ...r }) => r) }; }
   load(record) {
     this.rockets = [];
