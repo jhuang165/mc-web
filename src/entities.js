@@ -2111,7 +2111,9 @@ export class EntityWorld {
     this.deathUpdate(e, t);
     if (e.recentlyHit > 0) e.recentlyHit--;
     e.jumping = false;
-    if (slime) e.moveForward = e.moveStrafing = 0;
+    if (e.type === "blaze") blazeUpdate(this, e, t, true); // EntityBlaze.onLivingUpdate runs for a corpse too (its hover push, the 0.6 fall damping and its draws), before EntityLivingBase's blocked movement
+    e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
+    if (slime) e.moveForward = 0;
     this.walk(e, t, 0);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
     this.push(e, t);
@@ -2489,7 +2491,10 @@ export class EntityWorld {
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
     st.summonCooldown = e.summonCooldown ?? 0; st.jumping = !!e.jumping; st.speed = aiMoveSpeed(e, 1); // isJumping (bc) is not reset here: td.bq clears it only on its path-following branch (legacyThink)
+    st.moveForward = f(f(st.moveForward || 0) * f(0.98)); // EntityLivingBase.moveForward is one field: the previous tick's x 0.98 decay carries over when the action state leaves it unset (a path with no waypoint beyond width x 2; legacy-creature.js, giantThink)
+    st.entityAge = e.idle || 0; // the port's idle counter is EntityLiving.entityAge (a hit resets it)
     if (st.attackTime > 0) st.attackTime--;
+    if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2; // EntityMob.onLivingUpdate: bright light ages it (EntityAIWander's and the wander roll's entityAge < 100 gate)
     m.senseCache.clear();
     const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
     const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
@@ -2529,6 +2534,7 @@ export class EntityWorld {
     };
     silverfishActionState(st, env);
     st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
+    e.idle = st.entityAge;
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
     e.moveForward = st.moveForward; e.jumping = st.jumping; e.summonCooldown = st.summonCooldown;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;

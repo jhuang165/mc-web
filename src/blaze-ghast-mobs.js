@@ -36,11 +36,11 @@ const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 // EntityBlaze.onLivingUpdate (xx.e), before the walk: the wet damage, the hover countdown and push (toward entityToAttack, the target of
 // the previous action state), the client's crackle (one in 24) and the 0.6 fall damping, then the two largesmoke puffs. In that draw order.
 // The action state itself (target, path, the volley) is blazeThink.
-export function blazeUpdate(m, e, t) {
+export function blazeUpdate(m, e, t, corpse = false) {
   const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
   if (st.target && (st.target === p ? !(p?.alive && !m.ai.survival.creative) : st.target.alive === false)) st.target = null; // the player, or a mob that hurt it (EntityMob.attackEntityFrom)
   const target = st.target;
-  if (wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
+  if (!corpse && wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });
   // The crackle is EntityBlaze.onLivingUpdate's client half (isRemote: worldObj.playSound(posX + 0.5, posY + 0.5, posZ + 0.5, "fire.fire", ...)): a client-only sound at the blaze (entity-tracker.js), the draws stay.
   if (rand.nextInt(24) === 0) (m.clientSounds ??= []).push({ sound: BLAZE.crackleSound, volume: f(1 + rand.nextFloat()), pitch: f(f(rand.nextFloat() * f(0.7)) + f(0.3)), position: e, clientOnly: true, offset: 0.5 });
