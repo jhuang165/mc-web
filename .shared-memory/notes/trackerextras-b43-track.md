@@ -1,0 +1,21 @@
+# Batch 43 track: trackerextras
+
+## Summary
+- `src/object-tracker.js`: new kinds `eyeOfEnder` (S0E 72, range 64, every 4 ticks), `firework` (76, every 10), `fishHook` (90, every 5); the potion kind now also covers witch potions. `ObjectEntry` (a subclass of `TrackerEntry`; `entity-tracker.js` untouched) sends the S1C of all watched objects after the spawn packet, the changed S1C at the end of the update block (before the velocityChanged S12) and gates the block on `Watcher.hasChanges()`. `Watcher` models DataWatcher (HashMap order, "watched" flags, getChanged). Data carried: item stack (idx 10), arrow crit flag (16), firework item (8, null without a tag), entity flags and air.
+- Client entities: eye = `flyEye` only (homing and end are server side); rocket = `tickRocket(remote)` with the S12 heading (`setVelocity` sets rotation); hook = 3 tick interpolation to the last position packet with the S12 motion restored (`fishPosRotationIncrements`, `clientMotion`), then `FishHook.tick` with `env.remote` (no angler check, hit search or fish timers). TNT client fuse counts from 80 and is not synchronised. Spawn motion of types 70/73/75/90 is not read (bjb.a zeroes the data).
+- `objectView` now returns the client's copy of the stack, crit flag, TNT fuse and falling block (native id and meta -> browser block via `fromOriginal`). Falling data in S0E is the native block id | meta << 16 (it used the browser id, right only by coincidence for sand = 12).
+- `item-entities.js`, `experience.js`, `explosion.js`, `falling.js`: hurt or explosion-pushed items, orbs, TNT and falling blocks set `velocityChanged` (Entity.setBeenAttacked). `falling.js`: step height 0 (Java Entity.stepHeight 0; was the 0.5 default), server and client.
+- `main.js`: tracker lists for eyes, rockets, hook and witch potions; renderers draw views (`eyes.rows`, `rockets.rows`, hook view in `setFishing`); `__mc` exposes `eyes`, `rockets`, `objectTracker` for checks.
+- Evidence: `tools/probes/TrackerExtrasProbe.java` (+ extended `TrackerItemsProbe.java`), `tools/verify-tracker-extras.mjs`, `public/research/tracker-extras-reference.json` (9 executed scenarios with class hashes: eyeFlight, fireworkRocket, potionThrow, fishHook, itemMeta, arrowCrit, fallingMeta, tntFuse, fallingStep). The unchanged EntityTrackerEntry tracked real server entities; the client entity is the real class made from packets. Type table, spawn rules and client handlers are bytecode-read.
+
+## Verification
+- `node --test src/object-tracker-extras.test.js` 15/15 (every packet including S1C and each client tick per scenario, type table, native falling data, two mutation checks, step height 0 against a slab world with the old 0.5 shown to climb, velocityChanged). `src/object-tracker.test.js` 13/13 (its falling host now uses the browser sand id). Also `fishing`, `eye-of-ender`, `fireworks`, `witch`, `falling`, `item-entities`, `experience`, `explosion` tests pass. The full `npm test` and `npm run build` were left to the lead.
+- Muted headless Chrome (port 5432, load average 40 at the time): a rocket and an eye got client entities, meta present, drawn positions near the server's. Only console error: one 404 (resource not identified; not investigated). Script: `artifacts/b43-trackerextras/browser.mjs`.
+- fishHook replay is exact up to tick 13; after the hook lands the client's unseeded Entity.rand (vx, vy times rand * 0.2) makes the record random, so ticks 14+ are checked only to 0.5 blocks.
+
+## Follow-ups (proposed gap lines)
+- Client-side hits of arrows and thrown objects against client mobs, and snowball/egg impact particles (S19 status 3 handling): not executed or ported in this batch.
+- A rocket's spark trail still comes from the live server rocket's position (the client copy's `tickRocket` spark is discarded); the explosion and launch sound are unchanged.
+- The hook's line and bobber draw at the client hook but the angler end is the live player; hooked-entity pulls and the client's rand after landing are not replayed exactly.
+- Item stack change is detected by value (count/damage/id); Java compares ItemStack identity, so a same-valued `setEntityItemStack` would send an S1C in Java and not here.
+- Entity flag bit 0 (fire) is carried from `e.fire` but not executed.

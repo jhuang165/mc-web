@@ -170,7 +170,7 @@ export class FallingBlocks {
       const posY = e.y + FALLING_Y_OFFSET;
       const hit = explosionImpact(this.world, x, y, z, size, e.x, posY, e.z, posY,
         [e.x - half, e.y, e.z - half, e.x + half, e.y + f(FALLING_SIZE), e.z + half]);
-      if (hit) { e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
+      if (hit) { e.velocityChanged = true; /* Entity.attackEntityFrom: setBeenAttacked */ e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
     }
   }
   // EntityFallingBlock.onUpdate (xj.h).
@@ -185,7 +185,7 @@ export class FallingBlocks {
     e.pz = e.z;
     e.ticks++;
     e.vy -= 0.03999999910593033;
-    const landedDistance=moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz);
+    const landedDistance=moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz, 0); // Entity.stepHeight 0 (tracker-extras-reference.json fallingStep)
     e.vx *= 0.9800000190734863;
     e.vy *= 0.9800000190734863;
     e.vz *= 0.9800000190734863;

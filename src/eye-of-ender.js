@@ -43,6 +43,13 @@ export function moveTowards(eye, x, y, z, random) {
 // the rounded position). The base Entity.onEntityUpdate call (water flag, fire) is not modelled; `inWater` selects
 // the 4 bubble particles (bytecode-derived).
 export function tickEye(eye, random, { inWater = false } = {}) {
+  const speed = flyEye(eye);
+  return endEye(eye, random, speed, inWater);
+}
+// The part of EntityEnderEye.onUpdate both sides run: the previous position and rotation, the motion applied to the position and the
+// smoothed rotation. Returns the horizontal speed. A client copy (the entity the tracker made from S0E and S12) stops here: the homing and
+// the 80 tick end are under !isRemote (public/research/tracker-extras-reference.json eyeFlight).
+export function flyEye(eye) {
   eye.px = eye.x; eye.py = eye.y; eye.pz = eye.z;
   // Entity.onEntityUpdate (sa.h) also stores the previous rotation.
   eye.prevPitch = eye.pitch; eye.prevYaw = eye.yaw;
@@ -56,6 +63,9 @@ export function tickEye(eye, random, { inWater = false } = {}) {
   while (f(eye.yaw - eye.prevYaw) >= 180) eye.prevYaw = f(eye.prevYaw + 360);
   eye.pitch = f(eye.prevPitch + f(f(eye.pitch - eye.prevPitch) * f(0.2)));
   eye.yaw = f(eye.prevYaw + f(f(eye.yaw - eye.prevYaw) * f(0.2)));
+  return speed;
+}
+function endEye(eye, random, speed, inWater) {
   const dx = eye.tx - eye.x, dz = eye.tz - eye.z, dist = f(Math.sqrt(dx * dx + dz * dz)), angle = f(Math.atan2(dz, dx));
   let d8 = speed + f(dist - speed) * 0.0025;
   if (dist < 1) { d8 *= 0.8; eye.vy *= 0.8; }

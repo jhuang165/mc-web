@@ -15,6 +15,11 @@
 // client's own entity hits (arrows and thrown entities against client mobs), the thrown entity's client impact particles, fireworks,
 // eyes of ender, fishing hooks, the chunk send queue, and a client world's lava hop random draws.
 import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-tracker.js";
+import { toOriginal, fromOriginal } from "./block-registry.js";
+import { originalOfLive } from "./item-names.js";
+import { flyEye } from "./eye-of-ender.js";
+import { createRocket, tickRocket } from "./firework-rocket.js";
+import { FishHook, setBox as setHookBox } from "./fishing.js";
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs } from "./experience.js";
 import { Arrows } from "./bow.js";
@@ -39,10 +44,79 @@ export const OBJECT_KINDS = {
   enderPearl: { range: 64, frequency: 10, velocity: true, type: 65, data: () => 0, width: ITEM_W, height: ITEM_W, yOff: 0, thrown: true },
   potion: { range: 64, frequency: 10, velocity: true, type: 73, data: (e) => e.damage | 0, width: ITEM_W, height: ITEM_W, yOff: 0, thrown: true },
   expBottle: { range: 64, frequency: 10, velocity: true, type: 75, data: () => 0, width: ITEM_W, height: ITEM_W, yOff: 0, thrown: true },
+  eyeOfEnder: { range: 64, frequency: 4, velocity: true, type: 72, data: () => 0, width: ITEM_W, height: ITEM_W, yOff: 0, eye: true },
+  firework: { range: 64, frequency: 10, velocity: true, type: 76, data: () => 0, width: ITEM_W, height: ITEM_W, yOff: 0, rocket: true },
+  fishHook: { range: 64, frequency: 5, velocity: true, type: 90, data: (e) => e.anglerId ?? 0, width: ITEM_W, height: ITEM_W, yOff: 0, hook: true },
   tnt: { range: 160, frequency: 10, velocity: true, type: 50, data: () => 0, width: BLOCK_W, height: BLOCK_W, yOff: f(BLOCK_W / 2) },
-  falling: { range: 160, frequency: 20, velocity: true, type: 70, data: (e) => ((e.block & 65535) || 1) | ((e.meta | 0) << 16), width: BLOCK_W, height: BLOCK_W, yOff: f(BLOCK_W / 2) },
+  falling: { range: 160, frequency: 20, velocity: true, type: 70, data: (e) => fallingData(e), width: BLOCK_W, height: BLOCK_W, yOff: f(BLOCK_W / 2) },
 };
+const NO_SPAWN_MOTION = new Set([70, 73, 75, 90]);
 const angleByte = (b) => f(f(b * 360) / 256); // (float)(b * 360) / 256.0F
+
+// EntityFallingBlock's S0E data: Block.getIdFromBlock | metadata << 16, the native id (the browser's block ids are its own).
+const fallingNative = (e) => toOriginal(e.block, e.meta | 0) ?? [e.block & 65535, e.meta | 0];
+export const fallingData = (e) => { const [id, meta] = fallingNative(e); return ((id & 65535) || 1) | ((meta | 0) << 16); };
+// The browser block of a received falling block data word
+const fromFallingData = (data) => { const hit = fromOriginal(data & 65535, data >> 16); return hit ? { block: hit.id, meta: hit.meta } : { block: 1, meta: 0 }; };
+// An ItemStack as the native game holds it ({ id, count, damage } with the native item id), or null for a browser-only item.
+export function nativeStack(stack) {
+  if (!stack) return null;
+  const o = originalOfLive(stack.id);
+  return o ? { id: o.id, count: stack.count, damage: o.damage ?? stack.damage ?? 0 } : null;
+}
+const copyStack = (st) => (st ? { ...st, ...(st.fireworks ? { fireworks: JSON.parse(JSON.stringify(st.fireworks)) } : {}) } : null);
+const sameStack = (a, b) => (a === b) || (a && b && a.id === b.id && a.count === b.count && (a.damage | 0) === (b.damage | 0) && JSON.stringify(a.fireworks ?? null) === JSON.stringify(b.fireworks ?? null));
+// DataWatcher (te): the objects as [type, index, value], iterated like Java's HashMap (index & 15, then insertion order). Every object is
+// "watched" from its creation; updateObject marks the watcher changed, getChanged returns the watched objects once and clears both flags.
+// Types: 0 byte, 1 short, 5 ItemStack. Executed: tracker-extras-reference.json (the S1C packets of every kind).
+export class Watcher {
+  constructor(values, dirty = false) {
+    this.objs = values.map(([type, idx, value]) => ({ type, idx, value, watched: true }));
+    this.objs.sort((a, b) => (a.idx & 15) - (b.idx & 15));
+    this.dirty = dirty;
+  }
+  update(values) {
+    for (const [, idx, value] of values) {
+      const o = this.objs.find((x) => x.idx === idx);
+      if (o && !sameStack(o.value, value) && o.value !== value) { o.value = value; o.watched = true; this.dirty = true; }
+    }
+  }
+  all() { return this.objs.map((o) => [o.type, o.idx, o.value]); }
+  hasChanges() { return this.dirty; }
+  changed() {
+    if (!this.dirty) return null;
+    this.dirty = false;
+    const out = [];
+    for (const o of this.objs) if (o.watched) { o.watched = false; out.push([o.type, o.idx, o.value]); }
+    return out;
+  }
+}
+// The data watcher objects of a kind from the entity (the stand-in `p` the tracker reads): the Entity flags and air, then the kind's own.
+export function metaValues(kind, p) {
+  const out = [[0, 0, p.fire > 0 ? 1 : 0], [1, 1, 300]];
+  if (kind === "item") out.push([5, 10, copyStack(p.stack)]);
+  else if (kind === "arrow") out.push([0, 16, p.crit ? 1 : 0]);
+  else if (kind === "firework") out.push([5, 8, p.stack?.fireworks ? copyStack(p.stack) : null]);
+  return out;
+}
+const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0;
+
+// EntityTrackerEntry for these kinds: the S1C after the spawn packet and the changed-metadata S1C at the end of the update block, before the
+// velocityChanged S12 (executed order, tracker-extras-reference.json).
+export class ObjectEntry extends TrackerEntry {
+  constructor(p, options, view, watcher) { super(p, options, view); this.watcher = watcher; }
+  emit(packet) {
+    super.emit(packet);
+    if (packet.type === "spawn") super.emit({ type: "meta", id: packet.id, list: this.watcher.all() });
+  }
+  sendLocation(airBorne = false, dataChanged = false) {
+    const e = this.e, vc = e.velocityChanged, block = this.ticks % this.frequency === 0 || airBorne || dataChanged;
+    e.velocityChanged = false;
+    super.sendLocation(airBorne, dataChanged);
+    if (block) { const list = this.watcher.changed(); if (list) this.send({ type: "meta", id: e.id, list }); }
+    if (vc) this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) });
+  }
+}
 
 // A client entity of one of the kinds above. Its fields are Java's: y is posY (the box bottom is y - yOff), vx/vy/vz the motion.
 export class ObjectClient extends ClientEntity {
@@ -50,10 +124,16 @@ export class ObjectClient extends ClientEntity {
     super(kind);
     this.kind = kind; this.spec = OBJECT_KINDS[kind]; this.tracker = tracker; this.world = null;
     this.yaw = 0; this.pitch = 0; this.sim = null; this.id = 0;
+    this.meta = new Map(); this.fish = null; this.cv = [0, 0, 0]; // the S1C objects by index; the hook's interpolation target; its last S12 motion
   }
   // Entity.setPositionAndRotation2 for a non-living entity: position and rotation at once, then the box (shrunk 1/32 at the sides) is lifted
   // onto the highest block box it overlaps (EntityArrow's override sets position and rotation only).
   place(x, y, z, yaw, pitch) {
+    if (this.spec.hook) { // EntityFishHook.setPositionAndRotation2: a target for the next 3 ticks, and the motion goes back to the last S12's
+      this.fish = { x, y, z, yaw: yaw ?? this.yaw, pitch: pitch ?? this.pitch, inc: 3 };
+      [this.vx, this.vy, this.vz] = this.cv;
+      return;
+    }
     this.x = x; this.y = y; this.z = z;
     if (yaw !== undefined) { this.yaw = yaw; this.pitch = pitch; }
     if (this.spec.arrow || !this.world) return;
@@ -67,7 +147,8 @@ export class ObjectClient extends ClientEntity {
   // EntityArrow.setVelocity and EntityThrowable.setVelocity: an entity that was never rotated takes its heading from the motion.
   setVelocity(vx, vy, vz) {
     this.vx = vx; this.vy = vy; this.vz = vz;
-    if ((this.spec.arrow || this.spec.thrown) && this.sim.prevYaw === 0 && this.sim.prevPitch === 0) {
+    if (this.spec.hook) this.cv = [vx, vy, vz]; // EntityFishHook.setVelocity: clientMotionX/Y/Z
+    if ((this.spec.arrow || this.spec.thrown || this.spec.rocket) && this.sim.prevYaw === 0 && this.sim.prevPitch === 0) {
       const flat = sqrtF(vx * vx + vz * vz);
       this.yaw = this.sim.prevYaw = f((Math.atan2(vx, vz) * 180) / PI_D);
       this.pitch = this.sim.prevPitch = f((Math.atan2(vy, flat) * 180) / PI_D);
@@ -85,8 +166,11 @@ export class ObjectClient extends ClientEntity {
       }
       this.px = this.x; this.py = this.y; this.pz = this.z;
       this.vx = this.vy = this.vz = 0; this.onGround = false;
+      this.meta.clear(); this.fish = null;
       this.sim = this.tracker.newSim(this);
-      if (!p.orb && p.data > 0) this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
+      if (this.kind === "falling") Object.assign(this.sim, fromFallingData(p.data));
+      // bjb.a(fw) zeroes the data of types 70, 73, 75 and 90, so their spawn packet's motion is not read (the S12 after it sets it)
+      if (!p.orb && p.data > 0 && !NO_SPAWN_MOTION.has(this.spec.type)) this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
     } else if (!this.present) return;
     else if (p.type === "move" || p.type === "moveLook" || p.type === "look") {
       if (p.type !== "look") { this.sx += p.dx; this.sy += p.dy; this.sz += p.dz; }
@@ -95,8 +179,28 @@ export class ObjectClient extends ClientEntity {
     } else if (p.type === "teleport") {
       this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.place(this.sx / 32, this.sy / 32 + 0.015625, this.sz / 32, angleByte(p.yaw), angleByte(p.pitch));
-    } else if (p.type === "velocity") this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
+    } else if (p.type === "meta") { for (const [, idx, value] of p.list) this.meta.set(idx, value); }
+    else if (p.type === "velocity") this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
     else if (p.type === "destroy") this.present = false;
+  }
+  // EntityFishHook.onUpdate on the client: the 3 tick interpolation towards the last position packet, else the flight with the S12 motion
+  stepHook(world) {
+    const s = this.sim, fish = this.fish;
+    s.prevYaw = this.yaw; s.prevPitch = this.pitch;
+    if (fish && fish.inc > 0) {
+      const wrap = (d) => { d %= 360; if (d >= 180) d -= 360; if (d < -180) d += 360; return d; };
+      this.x += (fish.x - this.x) / fish.inc; this.y += (fish.y - this.y) / fish.inc; this.z += (fish.z - this.z) / fish.inc;
+      this.yaw = f(this.yaw + wrap(fish.yaw - this.yaw) / fish.inc);
+      this.pitch = f(this.pitch + (fish.pitch - this.pitch) / fish.inc);
+      fish.inc--;
+      this.yaw %= 360; this.pitch %= 360;
+      return;
+    }
+    Object.assign(s, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, yaw: this.yaw, pitch: this.pitch, onGround: this.onGround, dead: false });
+    setHookBox(s);
+    s.tick(this.tracker.hookEnv(world));
+    this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.vx; this.vy = s.vy; this.vz = s.vz; this.yaw = s.yaw; this.pitch = s.pitch; this.onGround = s.onGround;
+    this.prevYaw = s.prevYaw; this.prevPitch = s.prevPitch;
   }
   // World.updateEntityWithOptionalForce -> Entity.onUpdate of the client's entity: lastTickPos, then the kind's own tick.
   step(ctx) {
@@ -126,6 +230,18 @@ export class ObjectClient extends ClientEntity {
       t.sims.balls.step(world, s, [], () => {}); t.sims.balls.events.length = 0;
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch;
       if (s.dead) this.present = false;
+    } else if (spec.eye) {
+      // EntityEnderEye.onUpdate on the client: the flight only (the homing and the end are under !isRemote)
+      Object.assign(s, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, yaw: this.yaw, pitch: this.pitch });
+      flyEye(s);
+      this.x = s.x; this.y = s.y; this.z = s.z; this.yaw = s.yaw; this.pitch = s.pitch;
+    } else if (spec.rocket) {
+      const h = f(ITEM_W / 2);
+      Object.assign(s, { x: this.x, y: this.y, z: this.z, mx: this.vx, my: this.vy, mz: this.vz, yaw: this.yaw, pitch: this.pitch, box: [this.x - h, this.y, this.z - h, this.x + h, this.y + ITEM_W, this.z + h], onGround: this.onGround });
+      tickRocket(s, world, s.rand, { remote: true, server: false });
+      this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch; this.onGround = s.onGround;
+    } else if (spec.hook) {
+      this.stepHook(world);
     } else if (this.kind === "falling") {
       // EntityFallingBlock.onUpdate: gravity, moveEntity, drag; the landing (and the block's removal) is under !isRemote
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.vx = this.vx; s.vy = this.vy - 0.03999999910593033; s.vz = this.vz; s.onGround = this.onGround;
@@ -150,7 +266,10 @@ export class ObjectTracker extends MobTracker {
     items.remote = true; balls.remote = true;
     this.sims = { items, orbs, arrows, balls };
     this.ctx = { world: null, player: null };
+    this.hookRand = balls.rng();
   }
+  // the env of a client fish hook: no angler, no entities, no fish timers (FishHook.tick's remote branch)
+  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, canSeeSky: () => false, sound() {}, particle() {}, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
   // the simulator state a client entity starts with
   newSim(c) {
     const k = c.kind, s = this.sims;
@@ -158,6 +277,9 @@ export class ObjectTracker extends MobTracker {
     if (k === "orb") return { x: 0, y: 0, posY: 0, z: 0, vx: 0, vy: 0, vz: 0, value: 1, age: 0, health: 5, fire: 0, bb: [0, 0, 0, 0, 0, 0], px: 0, py: 0, pz: 0, color: 0, retarget: 0, target: false, id: c.id, fallDistance: 0, onGround: false };
     if (c.spec.arrow) return s.arrows.make({ x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0 }, s.arrows.rng(), {});
     if (c.spec.thrown) { const rand = s.balls.rng(); return { kind: k, x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0, px: 0, py: 0, pz: 0, prevYaw: 0, prevPitch: 0, ticks: 0, rand, random: rand, dead: false }; }
+    if (c.spec.eye) return { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false };
+    if (c.spec.rocket) { const r = createRocket(c.x, c.y, c.z, null, s.balls.rng()); r.rand = s.balls.rng(); return r; } // the client's constructor draws its own random motion, the S12 replaces it
+    if (c.spec.hook) return new FishHook(this.hookRand);
     return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, fuse: 80, px: 0, py: 0, pz: 0 };
   }
   // Copies the live entity into the stand-in the tracker entry reads (Java's posY and field names).
@@ -166,6 +288,7 @@ export class ObjectTracker extends MobTracker {
     p.type = kind;
     p.id ??= e.entityId ?? e.id ?? this.nextId++;
     p.x = e.x; p.z = e.z; p.airBorne = e.airBorne; p.velocityChanged = !!e.velocityChanged;
+    p.fire = e.fire ?? 0; p.stack = e.stack; p.crit = !!e.crit; p.anglerId = e.anglerId;
     if (kind === "item") {
       p.y = e.y + spec.yOff; p.vx = e.mx; p.vy = e.my; p.vz = e.mz; p.rotationYaw = e.rotationYaw ??= f(Math.random() * 360); p.rotationPitch = 0; p.health = e.stack?.count ?? 1;
     } else if (kind === "orb") {
@@ -173,7 +296,9 @@ export class ObjectTracker extends MobTracker {
     } else if (kind === "tnt" || kind === "falling") {
       p.y = e.y + spec.yOff; p.vx = e.vx; p.vy = e.vy; p.vz = e.vz; p.rotationYaw = 0; p.rotationPitch = 0; p.health = 0;
       p.block = e.block; p.meta = e.meta;
-    } else { // arrows and thrown entities: posY is the box bottom, the motion is mx/my/mz, the rotation degrees
+    } else if (spec.eye || spec.hook) { // vx/vy/vz and the rotation in degrees, posY the box bottom
+      p.y = e.y; p.vx = e.vx; p.vy = e.vy; p.vz = e.vz; p.rotationYaw = e.yaw ?? 0; p.rotationPitch = e.pitch ?? 0; p.health = 0;
+    } else { // arrows and thrown entities, rockets: posY is the box bottom, the motion is mx/my/mz, the rotation degrees
       p.y = e.y; p.vx = e.mx; p.vy = e.my; p.vz = e.mz; p.rotationYaw = e.yaw ?? 0; p.rotationPitch = e.pitch ?? 0; p.health = 0;
       p.shooterId = e.shooterId; p.damage = e.damage;
     }
@@ -183,12 +308,14 @@ export class ObjectTracker extends MobTracker {
     const kind = this.kinds.get(e), spec = OBJECT_KINDS[kind];
     const p = this.read(kind, e, {});
     const object = spec.orb ? { orb: true, value: e.value } : { kind, data: spec.data(p), objectType: spec.type };
-    const entry = new TrackerEntry(p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object }, this.view);
+    const dirty = kind === "item" || (kind === "arrow" && p.crit) || (kind === "firework" && !!p.stack?.fireworks); // updateObject calls in the entity's constructor
+    const entry = new ObjectEntry(p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object }, this.view, new Watcher(metaValues(kind, p), dirty));
     return { entry, client: new ObjectClient(kind, this), health: p.health, wasGround: false };
   }
   observe(e, en) {
     const p = this.read(this.kinds.get(e), e, en.entry.e);
-    return { airBorne: p.airBorne === true, changed: p.health !== en.health };
+    en.entry.watcher.update(metaValues(this.kinds.get(e), p));
+    return { airBorne: p.airBorne === true, changed: en.entry.watcher.hasChanges() };
   }
   settle(e, en) {
     en.health = en.entry.e.health;
@@ -230,7 +357,13 @@ export function objectView(tracker, e, kind) {
   let v = VIEWS.get(e);
   if (!v) VIEWS.set(e, (v = Object.create(e)));
   v.x = c.x; v.y = c.y - off; v.z = c.z; v.px = c.px; v.py = c.py - off; v.pz = c.pz;
-  if (c.sim && (kind === "arrow" || OBJECT_KINDS[kind].thrown)) { v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.sim.prevYaw ?? c.yaw; v.prevPitch = c.sim.prevPitch ?? c.pitch; }
+  const spec = OBJECT_KINDS[kind];
+  if (c.sim && (spec.arrow || spec.thrown || spec.eye || spec.rocket || spec.hook)) { v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.sim.prevYaw ?? c.yaw; v.prevPitch = c.sim.prevPitch ?? c.pitch; }
+  // what the S1C and the spawn packet gave the client entity: the renderers read these, not the live entity's fields
+  if (kind === "item") { const st = c.meta?.get(10); if (st) v.stack = st; }
+  else if (kind === "arrow") v.crit = ((c.meta?.get(16) ?? 0) & 1) === 1;
+  else if (kind === "tnt") if (c.sim) v.fuse = c.sim.fuse; // the fuse is not synchronised: the client's own countdown from 80
+  else if (kind === "falling" && c.sim?.block !== undefined) { v.block = c.sim.block; v.meta = c.sim.meta; }
   return v;
 }
 export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));
