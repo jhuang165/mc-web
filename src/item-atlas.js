@@ -77,7 +77,7 @@ function request(a, e, gen) {
 // The sprite texture of an item url that the Stitcher laid out, or null (not in the layout, or no DOM: tests).
 export function itemAtlasTexture(url) {
   const name = itemSpriteName(url);
-  if (!name || typeof document === "undefined") return null;
+  if (!name || typeof globalThis.document?.createElement !== "function") return null; // tests may stub a partial document
   const a = getAtlas();
   let e = a.entries.get(name);
   if (!e) {
