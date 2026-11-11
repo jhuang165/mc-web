@@ -477,9 +477,19 @@ public class FireballProbe {
     // An iron golem (index 0) next to a blaze (index 1; EntityIronGolem's EntityAINearestAttackableTarget takes any IMob within 16), the player third.
     // {seed, blaze dx, dz, dy, player x, player z}
     double[][] golem = {{4413, 1.5, 0, 0, 60.5, 105.5}, {4469, 1.5, 0, 0, 60.5, 66.5}, {4525, 1.5, 0, 0, 54.5, 60.5}, {4461, 1.5, 0, 3, 60.5, 105.5}, {4419, 4, 0, 0, 60.5, 105.5},
-      {4516, 1.5, 0, 5, 54.5, 60.5}, {4521, 6, 0, 1, 54.5, 60.5}, {4411, 2.5, 0, 0, 60.5, 105.5}, {4426, 6, 0, 0, 60.5, 105.5}, {4486, 12, 0, 1, 60.5, 105.5}};
+      {4516, 1.5, 0, 5, 54.5, 60.5}, {4521, 6, 0, 1, 54.5, 60.5}, {4411, 2.5, 0, 0, 60.5, 105.5}, {4426, 6, 0, 0, 60.5, 105.5}, {4486, 12, 0, 1, 60.5, 105.5},
+      {4517, 1.5, 0, 3, 54.5, 60.5}}; // 4517: the blaze strafes at the golem for 40 ticks (batch 45: its strafe yaw used Math.PI, one float step off at tick 30)
     for (double[] g : golem)
       scenario("fb43-golem-blaze-" + (long) g[0], (long) g[0], 40, "ib", sz(2), new double[][] {{60.5, 60.5, 0}, {60.5 + g[1], 60.5 + g[2], g[3]}, {g[4], g[5], 0}}, new String[] {});
+    // Development sweep (FB_SWEEP=seed,seed: every golem and blaze layout of those seeds: 3 player spots x 7 distances x 4 heights x 2 angles); not recorded.
+    if (System.getenv("FB_SWEEP") != null) for (String sd : System.getenv("FB_SWEEP").split(",")) {
+      long seed = Long.parseLong(sd);
+      double[][] spots = {{60.5, 105.5}, {60.5, 66.5}, {54.5, 60.5}};
+      double[] dists = System.getenv("FB_DISTS") != null ? java.util.Arrays.stream(System.getenv("FB_DISTS").split(",")).mapToDouble(Double::parseDouble).toArray() : new double[] {1.5, 2.5, 4, 6, 8, 10, 12};
+      double[] hs = {0, 1, 3, 5};
+      for (int sp = 0; sp < 3; sp++) for (int d = 0; d < dists.length; d++) for (int h = 0; h < 4; h++) for (int a = 0; a < 2; a++)
+        scenario("fb43-sweep-" + seed + "-" + sp + "-" + d + "-" + h + "-" + a, seed, 40, "ib", sz(2), new double[][] {{60.5, 60.5, 0}, {60.5 + (a == 0 ? dists[d] : 0), 60.5 + (a == 1 ? dists[d] : 0), hs[h]}, spots[sp]}, new String[] {});
+    }
     unified = false; tickMobs = false; drawLog = false;
   }
   // One hurt op per victim 0 to 4 at tick `t` (kind and amount as the op names them).

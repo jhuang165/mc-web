@@ -129,6 +129,9 @@ public class EndermanWolfScenarios {
     sc("b44pd-creeper-avoid-6341", 6341, 400, "XL", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {94.5, 64.5}}, "0 look 90 0", "0 creative 1 on");
     sc("b44pd-ocelot-avoid-6342", 6342, 400, "L", new double[][] {{70.5, 64.5}, {58.5, 64.5}}, "0 look 90 0");
     EndermanWolfProbe.scenario("b44pd-ocelot-sit-bed-6343", 6343, 1500, "U", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 creative 1 on"}, new int[0][0], new int[][] {{72, 0, 64, 72, 0, 64, 26, 0}}, false, 15);
+    // Batch 45 (mobfixes): the same sit task onto a free chest (EntityAIOcelotSit reads TileEntityChest.numPlayersUsing) and a lit furnace (block 62, no tile entity needed)
+    EndermanWolfProbe.scenario("b45mf-ocelot-sit-chest-6361", 6361, 1500, "U", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 creative 1 on"}, new int[0][0], new int[][] {{72, 0, 64, 72, 0, 64, 54, 2}}, false, 15);
+    EndermanWolfProbe.scenario("b45mf-ocelot-sit-furnace-6362", 6362, 1500, "U", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 90 0", "0 creative 1 on"}, new int[0][0], new int[][] {{72, 0, 64, 72, 0, 64, 62, 2}}, false, 15);
     // iron golem against a zombie, a snow golem throwing at a zombie, a witch throwing at the player, a creeper with a survival player left at range
     sc("b44pd-golem-zombie-6351", 6351, 400, "GZ", new double[][] {{70.5, 64.5}, {76.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
     sc("b44pd-snow-zombie-6352", 6352, 400, "NZ", new double[][] {{70.5, 64.5}, {78.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");

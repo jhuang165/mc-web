@@ -49,6 +49,9 @@ function run(r) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = 2;
+  // Original block 62 (lit furnace) is the port's furnace with a fire; EntityAIOcelotSit reads the furnace's lit id, which the plain cell map cannot hold.
+  const lit = (x, y, z) => (r.blocks ?? []).some(([x0, y0, z0, x1, y1, z1, id]) => id === 62 && x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1);
+  ew.ocelotBlocks = { chestUsers: () => 0, furnaceLit: lit };
   ew.worldRandom = new JavaRandom(r.seed);
   let day = false, rain = false, bright = r.bright, held = 0;
   ew.isDaytime = () => day;

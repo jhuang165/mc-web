@@ -23,6 +23,12 @@ public class EndermanWolfProbe {
     // Batch 44: World.spawnEntityInWorld adds an entity to the chunk lists at once, so a baby an EntityAIMate spawns is pushed by (and pushes) its parents in the same tick; it is dropped from the list after
     // that tick (it is never ticked here, and the replay does not tick it either).
     public boolean d(sa entity) { boolean ok = super.d(entity); if (ok && B44 && entity instanceof wf && !VillagerProbe.World.entities.contains(entity)) VillagerProbe.World.entities.add(entity); return ok; }
+    // Batch 45 (mobfixes): EntityAIOcelotSit.func_151486_a reads TileEntityChest.numPlayersUsing (aow.o) of a chest cell; a chest tile entity here is an allocated aow (users 0, nobody has it open).
+    public aor o(int x, int y, int z) {
+      int[] c = VillagerProbe.World.cells.get(VillagerProbe.key(x, y, z));
+      if (c == null || c[0] != 54) return null;
+      try { return (aor) MobMoveProbe.unsafe().allocateInstance(aow.class); } catch (Exception ex) { throw new RuntimeException(ex); }
+    }
     public boolean y(int x, int y, int z) { return VillageLiveProbe.W.rain && i(x, y, z); } // World.canLightningStrikeAt in a flat plains world: raining, open sky
   }
 

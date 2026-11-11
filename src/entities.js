@@ -2369,8 +2369,9 @@ export class EntityWorld {
     if (!base) return 0;
     const s = mobScale(e), t = { ...base, width: base.width * s, height: base.height * s }, from = { x: e.x, y: e.y, z: e.z };
     const landed = moveEntity(this.world, e, t.width, t.height, dx, dy, dz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, this.moveHooks(e, t));
-    this.moveSteps(e, from);
+    // Entity.moveEntity (sa.d) is one method for the piston's push and a mob's own walk: updateFallState's landing comes before the step sound (the executed walking records of enderman-wolf-b44).
     this.moveLanding(e, landed);
+    this.moveSteps(e, from);
     return landed;
   }
   // EntityLivingBase.moveEntityWithHeading(strafe, forward) with this engine's tails; walk() runs it once a tick and
