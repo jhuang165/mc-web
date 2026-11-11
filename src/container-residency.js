@@ -22,7 +22,7 @@ export class ContainerResidency {
     Object.assign(this,{world,id,survival,read,onError});
     this.live=new Set([...world.chunks.keys(),...scope.map(c=>c.join(',')),...inventories(survival).keys()]);
     this.cache=new Map();this.pending=new Map();this.saving=new Map();this.durable=new Map();
-    this.wanted=new Set(world.chunks.keys());this.disposed=false;this.failed=null;this.bounds=null;
+    this.ring=new Set();this.wanted=new Set(world.chunks.keys());this.disposed=false;this.failed=null;this.bounds=null;
   }
   columns(x,z,margin=0) {
     const {minX,minZ}=this.world.windowAt(x,z),out=[];
@@ -44,13 +44,28 @@ export class ContainerResidency {
     await Promise.all([...new Set(columns.map(c=>this.pending.get(c.join(','))).filter(Boolean))]);
   }
   ready(x,z) {return this.columns(x,z).every(c=>this.live.has(c.join(','))||this.cache.has(c.join(',')));}
+  hydrate(k) {
+    const restored=new Survival(this.cache.get(k));
+    Object.assign(this.survival.chests,restored.chests);Object.assign(this.survival.furnaces,restored.furnaces);Object.assign(this.survival.dispensers,restored.dispensers);Object.assign(this.survival.hoppers,restored.hoppers);Object.assign(this.survival.brewing??={},restored.brewing??{});
+    this.cache.delete(k);this.ring.delete(k);this.live.add(k);
+  }
   admit() {
     for(const k of this.world.chunks.keys())if(!this.live.has(k)) {
       if(!this.cache.has(k))throw new Error('Saved containers are not ready');
-      const restored=new Survival(this.cache.get(k));
-      Object.assign(this.survival.chests,restored.chests);Object.assign(this.survival.furnaces,restored.furnaces);Object.assign(this.survival.dispensers,restored.dispensers);Object.assign(this.survival.hoppers,restored.hoppers);Object.assign(this.survival.brewing??={},restored.brewing??{});
-      this.cache.delete(k);this.live.add(k);
+      this.hydrate(k);
     }
+  }
+  // A ring hopper, dropper or hopper cart reaching a container outside the window (batch 42 tilesync). Natively the server loads the chunk with its
+  // tile entities, so the container holds what was saved. A column that was visited and evicted has its saved containers read here and
+  // hydrated (marked live, so the next save keeps them); true once they are in the live stores. Until then false and the caller waits:
+  // making an empty tile would be saved over the stored one (beginSave adds any column with a tile to the scope).
+  reach(x,z) {
+    const k=columnKey(x,z);
+    if(this.disposed||this.failed||this.live.has(k)||this.world.chunks.has(k))return true;
+    if(this.cache.has(k)){this.hydrate(k);return true;}
+    this.ring.add(k);
+    this.ensure([coords(k)]).catch(()=>{});
+    return false;
   }
   update(x,z) {
     if(this.disposed)return [];
@@ -58,7 +73,8 @@ export class ContainerResidency {
     const bounds=`${this.world.minX},${this.world.minZ}`,changed=bounds!==this.bounds;
     this.bounds=bounds;
     const evicted=changed?this.trim():[];
-    for(const k of this.cache.keys())if(!this.wanted.has(k)&&!this.world.chunks.has(k))this.cache.delete(k);
+    for(const k of this.cache.keys())if(!this.wanted.has(k)&&!this.ring.has(k)&&!this.world.chunks.has(k))this.cache.delete(k);
+    for(const k of this.ring)if(!this.cache.has(k)&&!this.pending.has(k))this.ring.delete(k);
     if(!this.failed)this.ensure(columns).catch(()=>{});
     return evicted;
   }
@@ -95,5 +111,5 @@ export class ContainerResidency {
     for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const position of Object.keys(record.player?.[name]??{}))if(!this.live.has(owner(position)))delete record.player[name][position];
   }
   scope(token) {return token.scope.map(coords);}
-  dispose() {this.disposed=true;this.cache.clear();this.durable.clear();}
+  dispose() {this.disposed=true;this.cache.clear();this.ring.clear();this.durable.clear();}
 }

@@ -204,9 +204,14 @@ export class StreamingPopulation {
   }
   // The generation record of the chunk at local chunk coordinates when it has never been handed over (claimed), else null. Builds the cell when it is
   // no longer cached (generation is deterministic): used by ring-chests.js for a container reached before its chunk was ever resident.
+  // `requestCell(cellX, cellZ)` (optional, set by main.js to the generation worker's whenHas): when it is set, accepts the request and returns true, and the
+  // cell is not cached, the record is `undefined` ("not yet", the caller waits) instead of a build of about a second on the calling thread; the
+  // worker's cell is adopted when it arrives and the next call finds it (batch 42 tilesync).
   unclaimedRecord(lcx, lcz) {
     if (this.isMaterialized(lcx, lcz)) return null;
-    return this.cell(lcx >> 3, lcz >> 3).records.get(key(lcx, lcz)) ?? null;
+    const cellX = lcx >> 3, cellZ = lcz >> 3;
+    if (this.requestCell && !this.cells.map.has(key(cellX, cellZ)) && this.requestCell(cellX, cellZ) === true) return undefined;
+    return this.cell(cellX, cellZ).records.get(key(lcx, lcz)) ?? null;
   }
   saveMaterialized() {
     return { version: 1, cells: Object.fromEntries([...this.materialized].map(([k, mask]) => [k, mask.toString(16)])) };

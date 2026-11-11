@@ -10,16 +10,32 @@ import { isChestBlock } from "./chest-blocks.js";
 
 const SIDES = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]; // the chest and the cells it can pair with
 // Fills the loot tiles of the chest at (x, y, z) and of its pairing neighbours when they have none. Returns the number filled.
-export function seedRingChest(world, chests, x, y, z) {
+// `residency` (ContainerResidency, optional): a chest in a visited and evicted column first gets its saved containers loaded back (ringReach);
+// while that read is pending the result is false and the caller treats the container as not there yet.
+export function seedRingChest(world, chests, x, y, z, residency = null) {
   const pop = world.population;
-  if (!pop || !isChestBlock(world.get(x, y, z))) return 0;
-  let filled = 0;
+  if (!isChestBlock(world.get(x, y, z))) return 0;
+  if (residency && !ringReach(world, residency, x, y, z)) return false;
+  if (!pop) return 0;
+  let filled = 0, pending = false;
   for (const [dx, dz] of SIDES) {
     const cx = x + dx, cz = z + dz;
     if (chests[`${cx},${y},${cz}`] || !isChestBlock(world.get(cx, y, cz))) continue;
     const record = pop.unclaimedRecord(cx >> 4, cz >> 4);
+    if (record === undefined) { pending = true; continue; } // the generation worker is building the population cell: the hopper waits
     const mine = record?.chests?.filter((c) => c.x === cx && c.y === y && c.z === cz);
     if (mine?.length) filled += restoreChests(mine, world, { chests });
   }
-  return filled;
+  return pending ? false : filled;
+}
+
+// True when the saved containers of the columns of a container (and of the chests it can pair with) are in the live stores.
+export function ringReach(world, residency, x, y, z) {
+  let ready = true;
+  for (const [dx, dz] of SIDES) {
+    const cx = x + dx, cz = z + dz;
+    if ((dx || dz) && !isChestBlock(world.get(cx, y, cz))) continue;
+    if (!residency.reach(cx, cz)) ready = false;
+  }
+  return ready;
 }

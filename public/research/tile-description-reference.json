@@ -1,0 +1,99 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "probe": "tools/probes/TileDescriptionProbe.java",
+ "method": "executed: each tile entity class of the unchanged jar constructed at (1,2,3), getDescriptionPacket (aor.m()) called",
+ "packets": {
+  "ii": "S33PacketUpdateSign",
+  "gf": "S35PacketUpdateTileEntity"
+ },
+ "describing": [
+  {
+   "class": "aoq",
+   "packet": "gf",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "3",
+    "e": "{Secondary:0,Primary:0,x:1,y:2,Levels:-1,z:3,id:\"Beacon\",}"
+   },
+   "name": "TileEntityBeacon"
+  },
+  {
+   "class": "aox",
+   "packet": "gf",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "2",
+    "e": "{CustomName:\"@\",Command:\"\",x:1,y:2,z:3,id:\"Control\",SuccessCount:0,TrackOutput:1b,}"
+   },
+   "name": "TileEntityCommandBlock"
+  },
+  {
+   "class": "apf",
+   "packet": "gf",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "5",
+    "e": "{Item:0,x:1,y:2,z:3,Data:0,id:\"FlowerPot\",}"
+   },
+   "name": "TileEntityFlowerPot"
+  },
+  {
+   "class": "apj",
+   "packet": "gf",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "1",
+    "e": "{EntityId:\"Pig\",MaxNearbyEntities:6s,RequiredPlayerRange:16s,SpawnCount:4s,x:1,y:2,z:3,id:\"MobSpawner\",MaxSpawnDelay:800s,SpawnRange:4s,Delay:20s,MinSpawnDelay:200s,}"
+   },
+   "name": "TileEntityMobSpawner"
+  },
+  {
+   "class": "apm",
+   "packet": "ii",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "[, , , ]"
+   },
+   "name": "TileEntitySign"
+  },
+  {
+   "class": "apn",
+   "packet": "gf",
+   "fields": {
+    "a": "1",
+    "b": "2",
+    "c": "3",
+    "d": "4",
+    "e": "{Rot:0b,x:1,y:2,z:3,id:\"Skull\",SkullType:0b,}"
+   },
+   "name": "TileEntitySkull"
+  }
+ ],
+ "silent": [
+  "alr",
+  "aov",
+  "aow",
+  "aoz",
+  "apa",
+  "apb",
+  "apc",
+  "apd",
+  "ape",
+  "apg",
+  "api",
+  "apl",
+  "apo",
+  "aps"
+ ],
+ "nonDescribingCount": 14
+}
