@@ -25,6 +25,13 @@ public class TrackerMountsProbe {
     boolean wet(int x, int y, int z) { return slab && x >= 11 && y >= 0 && y < 10; }
     public aji a(int x, int y, int z) { return wet(x, y, z) ? aji.e(9) : super.a(x, y, z); }
     public int e(int x, int y, int z) { return 0; }
+    // batch 45 (dragonclient): what the client copy asks its world for, in call order (the wing flap, the living sound, the puffs); the server world is not an MW
+    static final List<String> log = new ArrayList<>();
+    static boolean logOn = false;
+    public void a(sa e, String name, float vol, float pitch) { if (logOn && clientSide && e instanceof xa) log.add("[\"at\",\"" + name + "\"," + e.s + "," + e.t + "," + e.u + "," + vol + "," + pitch + "]"); }
+    public void a(double x, double y, double z, String name, float vol, float pitch, boolean delay) { if (logOn && clientSide && name.startsWith("mob.enderdragon")) log.add("[\"snd\",\"" + name + "\"," + x + "," + y + "," + z + "," + vol + "," + pitch + "]"); }
+    public void a(String name, double x, double y, double z, double vx, double vy, double vz) { if (logOn && clientSide && (name.equals("largeexplode") || name.equals("hugeexplosion"))) log.add("[\"fx\",\"" + name + "\"," + x + "," + y + "," + z + "]"); }
+    boolean clientSide = false;
   }
   static boolean dragonRange = false; // EntityTracker.trackEntity: the dragon is tracked at 160 blocks
   static int cidx(sa c) { for (Map.Entry<Integer, sa> en : clientById.entrySet()) if (en.getValue() == c) return idx(en.getKey()); return -2; }
@@ -34,6 +41,9 @@ public class TrackerMountsProbe {
   static int id(sa e) { return e.y(); }
   static int idx(int entityId) { return entityId < 0 ? -1 : indexOf.getOrDefault(entityId, -2); }
 
+  static final List<Integer> dragonPartIds = new ArrayList<>();
+  static boolean serverSquidTick = false; // the squid case ticks the server entity's onEntityUpdate (EntityWaterMob's air, so S1C goes out every tick out of the water)
+  static boolean serverMW = false; // the server world sees the same water slab
   static String squidInit = "0"; // EntitySquid.rotationVelocity as the constructor rolled it (the client's Entity.rand is not seeded)
   static boolean sendVel = true; // EntityTracker.trackEntity: the bat and the wither do not send velocity
   interface Make { sa make(ChickenProbe.World w) throws Exception; }
@@ -63,8 +73,14 @@ public class TrackerMountsProbe {
       c.b(s.f() / 32.0, s.g() / 32.0, s.h() / 32.0, (float) (s.l() * 360) / 256.0f, (float) (s.m() * 360) / 256.0f);
       MobMoveProbe.field(sv.class, "aO").setFloat(c, (float) (s.n() * 360) / 256.0f); // rotationYawHead
       if (c instanceof ws || c instanceof xa) { MobMoveProbe.set(c, "Z", new Random(77)); if (c instanceof ws) squidInit = num(MobMoveProbe.fl(c, "by")); }
+      if (c instanceof xa) { // NetHandlerPlayClient.handleSpawnMob (bytecode-read): each part's id moves by (packet id - the dragon's own id)
+        sa[] parts = ((xa) c).at(); int delta = eid - c.y();
+        for (sa part : parts) part.d(part.y() + delta);
+        dragonPartIds.clear(); for (sa part : parts) dragonPartIds.add(part.y());
+      }
       TrackerProbe.set(c, "v", (double) ((float) s.i() / 8000.0f)); TrackerProbe.set(c, "w", (double) ((float) s.j() / 8000.0f)); TrackerProbe.set(c, "x", (double) ((float) s.k() / 8000.0f));
       clientById.put(eid, c);
+      if (s.c() != null) { Object dw = MobMoveProbe.field(sa.class, "af").get(c); dw.getClass().getMethod("a", List.class).invoke(dw, s.c()); } // the spawn packet's data watcher list
       clientOrder.removeIf(o -> o == clientById.get(eid));
       clientOrder.add(c);
       return;
@@ -72,7 +88,7 @@ public class TrackerMountsProbe {
     if (p instanceof hw) {
       // S1C (bjb.a(hw)): the watched objects update the client's data watcher; only the bat's hanging flag is read back here
       hw s = (hw) p; sa c = clientById.get((Integer) MobMoveProbe.field(hw.class, "a").get(p));
-      if (c instanceof we) { Object dw = MobMoveProbe.field(sa.class, "af").get(c); dw.getClass().getMethod("a", List.class).invoke(dw, s.c()); }
+      if (c != null) { Object dw = MobMoveProbe.field(sa.class, "af").get(c); dw.getClass().getMethod("a", List.class).invoke(dw, s.c()); }
       return;
     }
     if (p instanceof hx) {
@@ -113,6 +129,7 @@ public class TrackerMountsProbe {
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == List.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(clientWorld, new ArrayList()); }
     MobMoveProbe.set(clientWorld, "t", U.allocateInstance(aqq.class));
     MobMoveProbe.field(ahb.class, "E").setBoolean(clientWorld, true);
+    ((MW) clientWorld).clientSide = true; MW.logOn = true; MW.log.clear();
     clientById.clear(); clientOrder.clear(); indexOf.clear();
     TrackerProbe.chunkLoaded = true;
 
@@ -145,7 +162,7 @@ public class TrackerMountsProbe {
     entries[1] = new my(rider, 80, 3, true);
     int[] order = riderFirst ? new int[]{1, 0} : new int[]{0, 1};
     List<String> events = new ArrayList<>();
-    StringBuilder inputs = new StringBuilder(), client = new StringBuilder(), extra = new StringBuilder();
+    StringBuilder inputs = new StringBuilder(), client = new StringBuilder(), extra = new StringBuilder(), more = new StringBuilder(), fx = new StringBuilder();
     for (int i : order) entries[i].b(players); // updatePlayerList at once: spawn (and attach) packets
     int lastLeash = 0;
     for (int t = 0; t < n; t++) {
@@ -158,6 +175,8 @@ public class TrackerMountsProbe {
         else { ((sw) mount).a(false, false); TrackerProbe.queue.add(new hx(1, mount, null)); }
         lastLeash = leashNow ? 1 : 0;
       }
+      if (mount instanceof xa && r.length > 14) ((xa) mount).g((float) r[14]); // the server's health (data watcher 6 -> S1C)
+      if (serverSquidTick && mount instanceof ws) { mount.C(); }
       for (int i : order) entries[i].a(players);
       pe.a(players);
       boolean flagged = pe.n;
@@ -188,8 +207,10 @@ public class TrackerMountsProbe {
       }
       client.append("]");
       extra.append(t > 0 ? "," : "").append(extraOf(clientById.get(id(mount)), t == n - 1));
+      more.append(t > 0 ? "," : "").append(moreOf(clientById.get(id(mount))));
+      if (!MW.log.isEmpty()) { fx.append(fx.length() > 0 ? "," : "").append("[" + t + ",[" + String.join(",", MW.log) + "]]"); MW.log.clear(); }
     }
-    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"squidInit\":" + squidInit + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "],\"extra\":[" + extra + "]}";
+    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"squidInit\":" + squidInit + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "],\"extra\":[" + extra + "],\"more\":[" + more + "],\"fx\":[" + fx + "],\"partIds\":" + dragonPartIds + "}";
   }
   // batch 44: the boss and squid fields of the client entity. Squid: squidPitch, prevSquidPitch, squidYaw, prevSquidYaw, squidRotation,
   // prevSquidRotation, tentacleAngle, lastTentacleAngle (bp..bw), then the six private fields (bx..bC). Dragon: prevAnimTime (bx), animTime (by),
@@ -209,6 +230,16 @@ public class TrackerMountsProbe {
       if (last) for (int n = 0; n < 64; n++) for (double v : d.b(n, 1.0f)) b.append(",").append(num(v));
       return b.append("]").toString();
     }
+    return "[]";
+  }
+  // batch 45: the client copy's own health (EntityLivingBase.getHealth), the dragon's deathTicks (bB), its seven parts (position and box) and the squid's air
+  static String moreOf(sa c) throws Exception {
+    if (c instanceof xa) {
+      xa d = (xa) c; StringBuilder b = new StringBuilder("[" + num(((sv) c).aS()) + "," + MobMoveProbe.field(xa.class, "bB").getInt(c));
+      for (sa part : d.at()) b.append(",").append(num(part.s)).append(",").append(num(part.t)).append(",").append(num(part.u)).append(",").append(num(part.C.a)).append(",").append(num(part.C.b)).append(",").append(num(part.C.c)).append(",").append(num(part.C.d)).append(",").append(num(part.C.e)).append(",").append(num(part.C.f));
+      return b.append("]").toString();
+    }
+    if (c instanceof ws) return "[" + ((sv) c).ar() + "]";
     return "[]";
   }
   static void tickClient(sa c) throws Exception {
@@ -273,6 +304,16 @@ public class TrackerMountsProbe {
       double yaw = ((t * 3 + 100) % 360) - 180, a = t / 25.0;
       return new double[]{8.5 + 30 * Math.sin(a), 70 + 6 * Math.sin(t / 10.0), 5.5 + 30 * (1 - Math.cos(a)), yaw, 30 * Math.cos(a) / 25.0, 0.6 * Math.cos(t / 10.0) / 10.0, 30 * Math.sin(a) / 25.0, 0, 1, 0, 20, 0, 20};
     }, 180));
+    dragonRange = true;
+    // batch 45 dragonclient: the dragon dies (the server health goes to 0 at tick 60; S1C carries it) and the client copy runs EntityDragon.onDeathUpdate
+    System.out.println(run("dragonDeath", dragon, zombie, false, t -> {
+      double a = t / 25.0;
+      return new double[]{8.5 + 30 * Math.sin(a), 70, 5.5 + 30 * (1 - Math.cos(a)), (t * 3 + 100) % 360 - 180, 30 * Math.cos(a) / 25.0, 0, 30 * Math.sin(a) / 25.0, 0, 1, 0, 20, 0, 20, 0, t < 60 ? 200 : 0};
+    }, 300));
     dragonRange = false;
+    // the squid's air: out of the water the server ticks its air down (EntityWaterMob.onEntityUpdate: a dirtied data watcher, S1C every tick), the client counts its own
+    serverSquidTick = true;
+    System.out.println(run("squidAir", squid, zombie, false, t -> new double[]{8.5 + 0.02 * t, 12, 5.5, t, 0.02, 0, 0, 0, 1, 0, 20, 0, 20}, 340));
+    serverSquidTick = false;
   }
 }
