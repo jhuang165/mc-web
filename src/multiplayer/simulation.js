@@ -22,6 +22,7 @@ import { gameRule } from '../game-rules.js';
 import { providerOf } from '../dimensions.js';
 import { LiveRedstone } from '../redstone-live.js';
 import { installDispensers } from '../dispense.js';
+import { installServerPistons, during } from './server-pistons.js';
 import { dispenseFirework } from '../fireworks-live.js';
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
 import { tickWorldSystems } from '../world-tick.js';
@@ -92,6 +93,10 @@ export class DedicatedSimulation {
       solidTop: (x, y, z) => solidTopSurface(this.world, x, y, z), normalCube }).watch();
     this.redstone = new LiveRedstone(this.world, {
       primeTnt: (x, y, z) => { this.mobs?.prime(x, y, z); }, // BlockTNT.onNeighborBlockChange when powered (the engine removes the block)
+      // World.playSoundEffect / playAuxSFX 1003 (pistons, levers, buttons, plates, redstone doors) for the players in earshot.
+      sound: (sound, x, y, z, volume, pitch) => { this.mobs?.sound({ sound, position: { x, y, z }, volume, pitch }); },
+      // Block.dropBlockAsItem for what the engine breaks (a piston pushing a torch, a wire losing its support).
+      drop: (x, y, z, d) => { this.play?.items.spawn(makeStack(d.id, d.count, d.damage || 0), x, y, z, { delay: 10 }); },
       entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: this.world.hasNoSky ? 0 : 15, skylightSubtracted: this.darkness, celestialAngle: this.celestialAngle * Math.PI * 2, noSky: !!this.world.hasNoSky }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
@@ -102,6 +107,7 @@ export class DedicatedSimulation {
     this.redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
     this.installDispensers();
     this.redstone.restore(saved.redstone);
+    this.pistons = installServerPistons(this); // entity pushes, moving-block collision, the tabs' moving tiles (server-pistons.js)
     // TileEntityHopper.updateEntity for every hopper in a ticking column (hopper.js), over the shared tile maps; a move tells the
     // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems); its
     // chest and hopper minecarts are inventories a hopper fills and empties.
@@ -249,7 +255,8 @@ export class DedicatedSimulation {
       }),
     }).placed;
   }
-  tick() {
+  tick() { return during(this, () => this.tickOnce()); } // this world's moving blocks collide while it ticks (server-pistons.js)
+  tickOnce() {
     const beforeLit = new Set(this.redstone.lit);
     this.ticks++; this.time++;
     this.updateViews();
@@ -312,6 +319,7 @@ export class DedicatedSimulation {
     this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, hoppers: this.hoppers, redstone: this.redstone },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
+    this.pistons.tick(); // after the tile loop's pushes (piston-live.js contract)
     for (const key of new Set([...beforeLit, ...this.redstone.lit])) if (beforeLit.has(key) !== this.redstone.lit.has(key)) {
       const [x, y, z] = key.split(',').map(Number);
       this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
@@ -319,8 +327,10 @@ export class DedicatedSimulation {
     for (const [x, y, z] of this.changes.values()) this.light.update(x, y, z);
     const changes = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, players: this.presence(), weather: this.weatherState(), redstone: { lit: [...this.redstone.lit] } };
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, players: this.presence(), weather: this.weatherState(), redstone: this.redstoneState() };
   }
+  // The lit cells and the moving piston tiles a tab draws (main.js applyMultiplayerTick, redstone-runtime.js showPistons).
+  redstoneState() { const pistons = this.pistons.rows(); return { lit: [...this.redstone.lit], ...(pistons.length ? { pistons } : {}) }; }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin })); }
@@ -328,7 +338,7 @@ export class DedicatedSimulation {
   snapshot(view = null) {
     const w = this.world, columns = view ? [...this.columns.keys(view)].map(([cx, cz]) => w.chunkAt(cx, cz)) : [...w.chunks.values()];
     return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion, ...(w.dimension ? { dimension: w.dimension } : {}), ...(view ? { window: view, originX: w.originX, originZ: w.originZ, nativeSpawn: w.nativeSpawn ?? null } : {}),
-      time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weatherState(), redstone: { lit: [...this.redstone.lit] } };
+      time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weatherState(), redstone: this.redstoneState() };
   }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));

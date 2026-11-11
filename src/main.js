@@ -851,6 +851,7 @@ function applyMultiplayerTick(message) {
     world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
   }
   if (cells.length) { scene.updateBlocks(cells); remoteChestCells(cells); }
+  redstoneRuntime?.showPistons(message.redstone?.pistons); // the server's moving piston blocks (server-pistons.js), drawn each frame
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);

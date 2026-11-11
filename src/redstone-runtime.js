@@ -24,7 +24,7 @@ import { installNoteBlocks } from "./note-blocks.js";
 import { installJukeboxes, JUKEBOX_ID } from "./jukebox.js";
 import { isDisc } from "./note-jukebox-content.js";
 import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
-import { blockProperties } from "./redstone.js";
+import { blockProperties, pistonTile } from "./redstone.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
 import { pistonPushExtras } from "./piston-push.js";
@@ -32,7 +32,7 @@ import { setMovingBoxes } from "./entities.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
 import { pushBox, ENTITY_TYPES } from "./entities.js";
 import { LEVER, STONE_BUTTON, REPEATER } from "./redstone-blocks.js";
-import { WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED } from "./world.js";
+import { WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, PISTON_MOVING } from "./world.js";
 import { CHEST } from "./chest.js";
 import { TRAPPED_CHEST, trappedPower, trappedStrongPower } from "./chest-blocks.js";
 import { hopperBehaviour } from "./hopper.js";
@@ -199,6 +199,22 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   // BlockPistonMoving's collision box joins World.getCollidingBoundingBoxes (entities.js collisionBoxes): entities stand on and bump into moving blocks.
   setMovingBoxes((box) => pistons.collisionBoxes(box));
 
+  // A gun server's moving tiles (multiplayer/server-pistons.js rows: x, y, z, ORIGINAL block and metadata, facing, extending,
+  // renderHead, progress, lastProgress) in place of this tab's own: frame() draws them between the server's last two ticks.
+  // Only cells that hold the moving block here are taken (a column this tab has not got is skipped).
+  function showPistons(rows) {
+    for (const t of redstone.pistonTiles()) redstone.removeTileEntity(t.x, t.y, t.z);
+    for (const r of Array.isArray(rows) ? rows.slice(0, 256) : []) {
+      if (!Array.isArray(r) || r.length < 10 || !r.every(Number.isFinite)) continue;
+      const [x, y, z, block, meta, facing, extending, renderHead, progress, lastProgress] = r;
+      if (facing < 0 || facing > 5 || world.get(x, y, z) !== PISTON_MOVING) continue;
+      const te = pistonTile(block, meta, facing, !!extending, !!renderHead);
+      te.progress = Math.max(0, Math.min(1, progress));
+      te.lastProgress = Math.max(0, Math.min(1, lastProgress));
+      redstone.setTileEntity(x, y, z, te);
+    }
+  }
+
   // One 20 TPS game tick: scheduled block updates, block events and the tile-entity loop (pistons), then the pistons'
   // entity pushes. main.js calls this right after the fluid and fire scheduled ticks (see public/research/redstone-live.md).
   // A cart over a detector rail (Entity.func_145775_I -> BlockRailDetector.onEntityCollidedWithBlock), wired lazily because
@@ -293,6 +309,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     music,
     tick,
     frame: (partial) => pistons.frame(partial),
+    showPistons,
     flush,
     use,
     applyEdit,
