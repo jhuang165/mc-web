@@ -218,6 +218,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation } from "./entity-simulation.js";
+import { ObjectTracker, objectViews } from "./object-tracker.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
@@ -420,6 +421,10 @@ const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn 
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
 let primed = [], genPrimed = null;
+let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
+const THROWN_KINDS = ["snowball", "egg", "enderPearl", "potion", "expBottle"];
+const thrownOf = (kind) => projectiles.balls.filter((b) => b.kind === kind);
+const viewBalls = (balls) => balls.map((b) => THROWN_KINDS.includes(b.kind) ? objectViews(objectTracker, [b], b.kind)[0] : b);
 let populationBlocks, netherLive;
 let sounds,
   firstPerson,
@@ -1561,11 +1566,12 @@ async function launch(record, prepared, { slice = false } = {}) {
     maps.load(record.maps);
     rockets.load(record.rockets);
     fishing.load(record.fishing);
+    objectTracker = new ObjectTracker(); // a fresh client world: nothing is tracked yet
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
-    scene.setArrows(arrows.list);
+    scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
     velocity.set(0, 0, 0);
     flying = record.flying === true && survival.creative; // level.dat abilities.flying (import)
     grounded = false;
@@ -2660,7 +2666,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     foreignTicks?.tick(mobs?.saveTotalTime());
     falling.tick();
     world.redstoneBlocks?.tick();
-    scene.setFalling?.(falling.entities);
+    scene.setFalling?.(objectViews(objectTracker, falling.entities, "falling"));
   }
   // WorldClient.doVoidFogParticles: Block.randomDisplayTick around the viewer (torch and
   // furnace flames, fire smoke and crackle, water and lava particles, sounds and drips).
@@ -2743,6 +2749,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     arrowsCollected: () => { renderHotbar(); saved = false; },
     flushArrows,
   });
+  if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
+    const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed };
+    for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
+    objectTracker.update(lists, position, world);
+    scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
+  }
   fishing.tick(fishingHost());
   statsLive.fishing(fishing);
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
@@ -2770,8 +2782,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
-  scene.setDrops(items.items);
-  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : projectiles.balls, projectiles.particles);
+  scene.setDrops(objectViews(objectTracker, items.items, "item"));
+  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : viewBalls(projectiles.balls), projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2796,7 +2808,7 @@ function fishingHost() {
 function flushArrows() {
   for (const e of arrows.drain())
     sounds.play(e.sound, e.position ? { volume: e.volume, pitch: e.pitch, position: e.position } : { volume: e.volume, pitch: e.pitch });
-  scene.setArrows(arrows.list);
+  scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
 }
 // ItemBow.onPlayerStoppedUsing: the right button was let go after `eating.ticks` ticks of
 // draw. The captured release dispatches immediately to player-throw-simulation.js.
@@ -3938,7 +3950,7 @@ function animate(now) {
   enchantBookRenderer?.update(screen === "home" ? [] : [...enchantBooks.tiles.values()], world, position, partial);
   enchantExtras?.frame(partial);
   beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
-  tntRenderer?.update(screen === "home" ? [] : primed, partial);
+  tntRenderer?.update(screen === "home" ? [] : objectViews(objectTracker, primed, "tnt"), partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
@@ -3965,7 +3977,7 @@ function animate(now) {
   if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
   endPortalRenderer?.update(world, position, performance.now() / 1000);
-  if(xpRenderer)xpRenderer.update(residentOnly(world,xpOrbs.orbs),partial); // ring orbs are not drawn (headless-env.js)
+  if(xpRenderer)xpRenderer.update(objectViews(objectTracker, residentOnly(world,xpOrbs.orbs), "orb"),partial); // ring orbs are not drawn (headless-env.js)
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.
@@ -4017,11 +4029,11 @@ function animate(now) {
 // renderers, with `pos` the tick position for the shadow's distance test.
 function shadowCasters(partial) {
   const list = [], lerp = (a, b) => a + (b - a) * partial;
-  for (const e of items.items)
+  for (const e of objectViews(objectTracker, items.items, "item"))
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   // RenderTNTPrimed: shadowSize 0.5 under the box (posY is its centre).
-  for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
-  for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
+  for (const e of objectViews(objectTracker, primed, "tnt")) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
+  for (const o of objectViews(objectTracker, xpOrbs.orbs, "orb")) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   // A sleeper is rendered in first person too (RenderGlobal), so its shadow draws at the bed position in every view.
   if (bedSleep.sleeping && !survival.effects.has(INVISIBILITY)) list.push(sleeperShadowCaster(bedSleep.pos, SHADOWS.player));

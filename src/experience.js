@@ -103,8 +103,8 @@ export class ExperienceOrbs {
   return 0;
  }
  // EntityXPOrb.onUpdate [sq.h] for every orb; `player` is the server player's feet (EntityPlayerMP,
- // getEyeHeight 1.62F) or null.
- tick(world,player){
+ // getEyeHeight 1.62F) or null. A client world's orbs (object-tracker.js) pass the client player's eye height, 0.12F.
+ tick(world,player,eye=EYE){
   for(const o of this.orbs){
    if(!ringEntityActive(world,o))continue;
    o.px=o.x;o.py=o.y;o.pz=o.z;
@@ -134,7 +134,7 @@ export class ExperienceOrbs {
     o.retarget=o.color;
    }
    if(o.target&&player){
-    const dx=(player.x-o.x)/8,dy=(player.y+EYE-o.posY)/8,dz=(player.z-o.z)/8,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    const dx=(player.x-o.x)/8,dy=(player.y+eye-o.posY)/8,dz=(player.z-o.z)/8,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
     let pull=1-d;
     if(pull>0){pull*=pull;o.vx+=dx/d*pull*0.1;o.vy+=dy/d*pull*0.1;o.vz+=dz/d*pull*0.1;}
    }

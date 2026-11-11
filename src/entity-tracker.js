@@ -30,7 +30,7 @@ export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
 // client entity follows the position packets only.
 export const CLIENT_PHYSICS_OFF = new Set(["ghast", "squid", "bat", "ender_dragon", "wither", "blaze"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)
-const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000);
+const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
 
 const floor = Math.floor;
 const f = Math.fround;
@@ -52,12 +52,14 @@ export function encodeAxis(size, v) {
   return (size === 1 || size === 4) === low ? ceilInt(s) : floor(s);
 }
 export const encodeY = (v) => floor(v * 32);
+const byte = (v) => (v << 24) >> 24; // the position packets' rotation fields are bytes (the entry compares the ints)
 const angle = (deg) => floorFloat(f(f(f(deg) * 256) / 360));
 
 // The tracker entry for one mob and one player. `view` is { player, watches(cx, cz) }.
 export class TrackerEntry {
-  constructor(e, { range, frequency = MOB_UPDATE_FREQUENCY, velocity = true, size = 2, arrow = false }, view) {
+  constructor(e, { range, frequency = MOB_UPDATE_FREQUENCY, velocity = true, size = 2, arrow = false, object = null }, view) {
     this.e = e;
+    this.object = object; // not a mob: { kind, data } of the S0E spawn packet, or { orb: true } for S11 (object-tracker.js)
     this.range = Math.min(range, TRACKER_LIMIT);
     this.frequency = frequency;
     this.velocity = velocity;
@@ -100,12 +102,12 @@ export class TrackerEntry {
         if (this.ticks > 0 || this.arrow) {
           const small = dx >= -128 && dx < 128 && dy >= -128 && dy < 128 && dz >= -128 && dz < 128;
           if (small && this.sinceTeleport <= 400 && !this.ridden) {
-            if (move && look) pos = { type: "moveLook", dx, dy, dz, yaw, pitch };
+            if (move && look) pos = { type: "moveLook", dx, dy, dz, yaw: byte(yaw), pitch: byte(pitch) };
             else if (move) pos = { type: "move", dx, dy, dz };
-            else if (look) pos = { type: "look", yaw, pitch };
+            else if (look) pos = { type: "look", yaw: byte(yaw), pitch: byte(pitch) };
           } else {
             this.sinceTeleport = 0;
-            pos = { type: "teleport", x: i, y: j, z: k, yaw, pitch };
+            pos = { type: "teleport", x: i, y: j, z: k, yaw: byte(yaw), pitch: byte(pitch) };
           }
         }
         // sendVelocityUpdates: the motion moved by more than 0.02 (squared sum), or any at all while the entity stands at zero motion
@@ -123,7 +125,7 @@ export class TrackerEntry {
         this.ridden = false;
       } else {
         // a rider only turns; the entry keeps its encoded position (the client moves the rider with its mount)
-        if (Math.abs(yaw - this.lastYaw) >= 4 || Math.abs(pitch - this.lastPitch) >= 4) { this.send({ type: "look", yaw, pitch }); this.lastYaw = yaw; this.lastPitch = pitch; }
+        if (Math.abs(yaw - this.lastYaw) >= 4 || Math.abs(pitch - this.lastPitch) >= 4) { this.send({ type: "look", yaw: byte(yaw), pitch: byte(pitch) }); this.lastYaw = yaw; this.lastPitch = pitch; }
         this.lastX = encodeAxis(this.size, e.x); this.lastY = encodeY(e.y); this.lastZ = encodeAxis(this.size, e.z);
         this.ridden = true;
       }
@@ -144,7 +146,13 @@ export class TrackerEntry {
       if (!this.tracked && this.view.watches(floor(e.x / 16), floor(e.z / 16))) {
         this.tracked = true;
         this.lastVX = e.vx ?? 0; this.lastVY = e.vy ?? 0; this.lastVZ = e.vz ?? 0;
-        this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
+        if (this.object) {
+          // EntityTrackerEntry.func_151260_c: S0E / S11 at floor(pos * 32) (not the size class rounding), the motion in S0E only when its data
+          // is above 0, and a following S12 for every entry that sends velocity (a non-S0F spawn is followed by sendVelocityUpdates' packet).
+          const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
+          this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
+          if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
+        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ) });
       }
     } else if (this.tracked) {
       this.tracked = false;
@@ -232,12 +240,22 @@ export class MobTracker {
   entryOf(e, size) {
     let en = this.entries.get(e);
     if (!en) {
-      en = { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, wasGround: !!e.onGround };
+      en = this.create(e, size);
       this.entries.set(e, en);
       if (this.view.player) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once
     }
     return en;
   }
+  // The entry and the client entity of a new tracked entity (object-tracker.js overrides this for items, orbs and projectiles)
+  create(e, size) {
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, wasGround: !!e.onGround };
+  }
+  // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
+  observe(e, en) {
+    const jumped = en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0;
+    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health };
+  }
+  settle(e, en) { en.health = e.health; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
   // The client takes the queue in order; a destroy (EntityPlayerMP.func_152339_d) is flushed by the player's next update, one tick later.
   flush(en) {
     const keep = [];
@@ -262,10 +280,9 @@ export class MobTracker {
     // 1. every entry sends its location
     for (const e of mobs) {
       const en = this.entryOf(e, size(e)[0]);
-      const jumped = en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0;
-      const airBorne = e.airBorne === true || jumped;
-      en.entry.sendLocation(airBorne, e.health !== en.health);
-      en.health = e.health; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false;
+      const { airBorne, changed } = this.observe(e, en);
+      en.entry.sendLocation(airBorne, changed);
+      this.settle(e, en);
     }
     // 2. the player's own entry (range 512, every 2 ticks) flags itself when it moved more than 4 blocks
     const p = this.player;

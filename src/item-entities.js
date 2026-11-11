@@ -22,6 +22,8 @@ export class ItemEntities {
   constructor(random = Math.random) {
     this.random = random;
     this.items = [];
+    // A client world's items (object-tracker.js): EntityItem.onUpdate without the !isRemote parts, the merge search and the lifetime.
+    this.remote = false;
     // Sounds items made this tick ({ name, volume, pitch, x, y, z }); the caller drains them.
     this.sounds = [];
   }
@@ -268,7 +270,7 @@ export class ItemEntities {
           this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z });
         }
         const [a, b, c, d, g, h] = this.box(e);
-        for (const o of this.items) {
+        for (const o of this.remote ? [] : this.items) {
           if (o === e || o.dead) continue;
           // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
           if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
@@ -284,7 +286,7 @@ export class ItemEntities {
       e.mz *= drag;
       if (e.onGround) e.my *= -0.5;
       e.age++;
-      if (e.age >= LIFETIME || e.y + W < -64) e.dead = true;
+      if ((!this.remote && e.age >= LIFETIME) || e.y + W < -64) e.dead = true;
     }
     this.items = this.items.filter((e) => !e.dead);
   }

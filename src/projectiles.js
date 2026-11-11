@@ -305,6 +305,8 @@ export class Projectiles {
     this.particleRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
     this.particleViewer = null;
     this.balls = [];
+    // A client world's projectiles (object-tracker.js): EntityThrowable.onImpact does its work under !isRemote, so the entity flies on.
+    this.remote = false;
     this.events = [];
     // The client Fx (main.js) for the bubbles and water-entry splash.
     this.spawner = null;
@@ -425,7 +427,7 @@ export class Projectiles {
         d0 = d1;
       }
     }
-    if (hit || block) {
+    if ((hit || block) && !this.remote) {
       if (b.kind === "enderPearl") {
         if (typeof onPearlImpact !== "function") throw new Error("Ender pearl impact requires a synchronous adapter hook");
         aimPart(hit);
