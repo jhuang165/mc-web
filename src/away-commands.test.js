@@ -296,3 +296,24 @@ test("the return applies give and clear as one net inventory change from the tra
   replayPlayerCommands(keep.playerCommands, { host: live2.host, records: keep.commandBlocks, delta: keep.inventoryDelta, inventory: live2.survival.inventory, giveStack: (s) => live2.survival.inventory.add(s) });
   assert.equal(live2.survival.count(DIAMOND), 6, "a give adds to what he found");
 });
+
+test("batch 42: /xp from a command block acts on the shadow at its firing and goes back as net xpOps, not as a re-run on the live player", async () => {
+  const trace = { samples: [[0, -1, 0, 64, 0]], states: [[0, snapshot(0)]] };
+  const r = await runTimed([["xp 7 @p", 30], ["xp 2L @p", 60]], trace);
+  assert.deepEqual([3, 4].map((x) => at(r, x).successCount), [1, 1], "fire-time SuccessCount from the shadow");
+  assert.deepEqual(r.xpOps, [["points", 7], ["levels", 2]]);
+  const live = liveHost(); live.experience.add(10); // what he picked up in the Nether meanwhile
+  const out = replayPlayerCommands(r.playerCommands, { host: live.host, records: r.commandBlocks, xpOps: r.xpOps });
+  assert.deepEqual([out.applied, out.succeeded, out.byDelta], [2, 2, 2]);
+  assert.equal(live.experience.total, 17, "his 10 plus the 7 points, applied once");
+  assert.equal(live.experience.level, 2 + 1, "level 1 at 17 points, then two levels");
+  assert.equal(at(r, 3).successCount, 1);
+});
+
+test("batch 42: the clock a command block sees at run tick n is T0 + n + 1 (WorldServer.tick adds the total time before tickUpdates), so the last tick sees the saved time", async () => {
+  const a = await runTimed([["time set 5000", 30]], null, 100), b = await runTimed([["give @p minecraft:diamond 1", 30]], null, 100);
+  const n = b.playerCommands[0].tick; // the same block at the same scheduled time fires in the same tick
+  const T0 = (base.player?.time ?? 0) - 100;
+  assert.ok(n >= 29 && n <= 31, `fired near tick 30, index ${n}`);
+  assert.equal(a.timeShift, 5000 - (T0 + n + 1), "time set measured against T0 + n + 1");
+});

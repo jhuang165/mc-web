@@ -287,6 +287,7 @@ import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
 import { loadFontResources, onFontChange, font, setFontAnaglyph } from "./font-renderer.js";
+import { EntityIds } from "./entity-ids.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { trackedWithin, ROCKET_TRACKING } from "./ring-events.js";
@@ -412,7 +413,8 @@ let screen = "home",
 const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
 const useHold = new UseHold(); // Minecraft.rightClickDelayTimer: a held use button repeats eating every 4 ticks
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
-let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
+const entityIds = new EntityIds(); // Entity.nextEntityID: one counter for every world and entity list (entity-ids.js)
+let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(undefined,undefined,entityIds),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling, foreignTicks;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
@@ -433,11 +435,11 @@ let sounds,
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 // Boats (boats.js): their own system and renderer next to the minecarts.
-let boats = new Boats(), boatRenderer = null;
+let boats = new Boats({ ids: entityIds }), boatRenderer = null;
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
 setEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } }));
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
-let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
+let hanging = new Hanging({ ids: entityIds }), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
 let signs = new Signs(), signRenderer = null, skullRenderer = null;
 // TileEntityEnchantmentTable books (enchanting-book-live.js), their renderer, and the open screen's book and galactic names.
@@ -1315,7 +1317,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
     fire.load(record.fireTicks);
-    experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);playerTicks=0;
+    experience=new Experience(record.experience);entityIds.reserveRecord(record);xpOrbs=new ExperienceOrbs(record.xpOrbs,undefined,entityIds);playerTicks=0;
     // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
     xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
     // BlockRailBase and BlockTorch.onNeighborBlockChange: unsupported rails and torches drop.
@@ -1411,21 +1413,21 @@ async function launch(record, prepared, { slice = false } = {}) {
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
     // saved live state afterwards. A broken spawner block removes its tile entity.
     ({ spawners, minecarts } = (() => {
-      const restored = restoreStructureEntities(record, world);
+      const restored = restoreStructureEntities(record, world, { minecartOptions: { ids: entityIds } });
       for (const t of restored.pendingTicks) fluids.schedule(t.x, t.y, t.z, t.delay);
       return restored;
     })());
     watchSpawnerBlocks(world, spawners);
-    boats = Boats.fromJSON(record.boats);
+    boats = Boats.fromJSON(record.boats, { ids: entityIds });
     if (boatRenderer) { boatRenderer.clear(); boatRenderer.boats = boats; }
     aimedCart = null;
-    hanging = Hanging.fromJSON(record.hanging); aimedHanging = null; hangingRenderer?.clear();
+    hanging = Hanging.fromJSON(record.hanging, { ids: entityIds }); aimedHanging = null; hangingRenderer?.clear();
     signs = Signs.fromJSON(record.signs); signRenderer?.clear();
     SKULLS.tiles = Skulls.fromJSON(record.skulls).tiles; skullRenderer?.clear();
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
     for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
-    mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities);
+    mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
@@ -2587,13 +2589,14 @@ const dims = new DimensionLive({
   totalTime: () => mobs?.saveTotalTime(), // WorldInfo.getWorldTotalTime, the Teleporter cache clock (dimension-live.js clock)
   difficulty: () => worldDifficulty(active, options.difficulty),
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
+  entityIds, // the shared Entity.nextEntityID: finishAway hands the away run its start (plan.idBase)
   advanceTicks: (n) => advanceWorldClock({ mobs, weather, survival, scene }, n), // WorldInfo total time too: the server ticks through loading screens (dimension-live.js clock)
   // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.
   // The player as he returns: the away run's shadow player starts from it (the queued commands then advance it in firing order).
   awayPlayer: () => { const sp = JSON.parse(JSON.stringify(survival.serialize())); for (const k of TILE_KEYS) delete sp[k]; return { state: sp, experience: experience.serialize(), mode: survival.mode === "creative" ? 1 : survival.mode === "adventure" ? 2 : 0, level: experience.level }; },
   awayResult: (r, root) => { if (r.difficulty !== undefined) commandHost.setDifficulty(r.difficulty); if (r.timeShift && !survival.timeFrozen) survival.time += r.timeShift; if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l);
     // Batch 34: the commands that act on the player, queued by the run in firing order, through the live command host (/give goes straight into the inventory).
-    if (r.playerCommands?.length) r.stats.commands.replayed = replayPlayerCommands(r.playerCommands, { host: commandHost, records: root?.commandBlocks, carts: root?.minecarts?.carts, delta: r.inventoryDelta, inventory: survival.inventory, playerDelta: r.playerDelta, survival, giveStack: (s) => { survival.inventory.add(s); if (s.count > 0) items.dropPlayer(s, position, yaw, pitch); renderHotbar(); renderVitals(); saved = false; } });
+    if (r.playerCommands?.length) r.stats.commands.replayed = replayPlayerCommands(r.playerCommands, { host: commandHost, records: root?.commandBlocks, carts: root?.minecarts?.carts, delta: r.inventoryDelta, inventory: survival.inventory, playerDelta: r.playerDelta, xpOps: r.xpOps, survival, giveStack: (s) => { survival.inventory.add(s); if (s.count > 0) items.dropPlayer(s, position, yaw, pitch); renderHotbar(); renderVitals(); saved = false; } });
     // The return builds the Overworld record from `root`, whose player state is the departure's: carry what the replay changed (the tile maps in root.player are the Overworld's own).
     if (r.stats.commands.replayed?.applied) { const sp = survival.serialize(); root.player = { ...(root.player ?? {}) }; for (const k of Object.keys(sp)) if (!TILE_KEYS.includes(k)) root.player[k] = sp[k]; root.experience = experience.serialize(); root.mode = survival.mode; root.achievements = achievements.save(); root.stats = stats.save(); } },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),

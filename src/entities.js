@@ -1,3 +1,4 @@
+import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
 import { findChunksForSpawning, eligibleChunkOrder, ELIGIBLE_CHUNKS } from "./spawner-animals.js";
@@ -723,15 +724,16 @@ function clearSpentStack(survival) {
   if (held && held.count <= 0) inv.main[inv.current] = null;
 }
 export class EntityWorld {
-  constructor(world, saved, random = Math.random) {
+  // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
+  constructor(world, saved, random = Math.random, ids = new EntityIds()) {
     this.world = world;
+    this.ids = ids;
     this.random = random;
     // The client Fx (main.js) the death puffs, splashes and feeding hearts spawn into.
     this.fx = null;
     this.events = [];
     this.clientSounds = [];
     this.entities = [];
-    this.nextId = 1;
     // EnumDifficulty id (difficulty.js); main.js sets it from the settings. `worldRandom` is
     // World.rand and `localDifficulty(x, y, z)` World.func_147462_b, both hooked in by main.js.
     this.difficulty = NORMAL;
@@ -744,15 +746,15 @@ export class EntityWorld {
     if (Array.isArray(saved)) {
       // Entity.nextEntityID is one counter that never repeats: a record without an id (a mob that travelled here through a portal, dimension-live deliver) gets
       // one above every saved id, not the next free number counted from 1 (that repeated a saved id when the saved list had gaps).
-      this.nextId = Math.max(1, ...saved.slice(0, 256).map((e) => (/^mob-\d+$/.test(e?.id) ? Number(e.id.slice(4)) + 1 : 1)));
+      this.nextId = Math.max(this.nextId, ...saved.slice(0, 256).map((e) => (/^mob-\d+$/.test(e?.id) ? Number(e.id.slice(4)) + 1 : 1)));
       const used = new Set();
       for (const e of saved.slice(0, 256)) {
         const m = this.restore(e);
         if (!m) continue;
-        if (used.has(m.id)) m.id = "mob-" + this.nextId;
+        if (used.has(m.id)) m.id = "mob-" + this.ids.take();
         used.add(m.id);
         this.entities.push(m);
-        this.nextId++;
+        this.ids.reserve(m.id); // a record without an id took the next number (restore); a shared counter does not burn one per mob
       }
       linkRiders(this.entities, (m) => this.size(m)[1]); // mob-riding.js: `riding` ids back to mounts
       this.nextId = Math.max(
@@ -763,6 +765,8 @@ export class EntityWorld {
       );
     } else if (!world.dimension) this.seedAnimals();
   }
+  get nextId() { return this.ids.next; }
+  set nextId(v) { this.ids.next = v; }
   // A saved mob record (a browser save, java-mobs.js import or /summon's data tag) back to a live mob, or null when it
   // is unusable. The caller adds it and advances nextId.
   restore(e, { summoned = false } = {}) {
