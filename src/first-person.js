@@ -8,7 +8,7 @@ import { itemSpec, isGateItem, itemBlockId } from './item-boxes.js';
 import { STAIR_ITEM_BOXES } from './stairs.js';
 import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
 import { blockTile,tileRect } from "./block-textures.js";
-import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
+import { entityMaterial, ITEM_LIGHTS, applySpriteTransform } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { ITEM_SKULL, skullIconUrl } from "./skull.js";
@@ -22,6 +22,7 @@ import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
 import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
+import { itemAtlasTexture } from "./item-atlas.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=BOX_FACE_CORNERS.map((v)=>({v}));
@@ -91,11 +92,11 @@ export function glintMesh(geometry, map) {
     glintTexture.wrapS = glintTexture.wrapT = THREE.RepeatWrapping;
   }
   const material = new THREE.ShaderMaterial({
-    uniforms: { item: { value: map }, glint: { value: glintTexture }, time: { value: 0 } },
+    uniforms: { item: { value: map }, glint: { value: glintTexture }, time: { value: 0 }, st: { value: applySpriteTransform(map, new THREE.Vector4()) } },
     vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
-    fragmentShader: `uniform sampler2D item,glint;uniform float time;varying vec2 vUv;
+    fragmentShader: `uniform sampler2D item,glint;uniform float time;uniform vec4 st;varying vec2 vUv;
 vec2 turn(vec2 p,float degrees){float a=radians(degrees),c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
-void main(){if(texture2D(item,vUv).a<=0.1)discard;
+void main(){if(texture2D(item,vUv*st.xy+st.zw).a<=0.1)discard;
 vec3 a=texture2D(glint,turn(vUv*.5,-50.)+vec2(mod(time*1000.,3000.)/3000.,0.)).rgb,b=texture2D(glint,turn(vUv*.5,10.)+vec2(-mod(time*1000.,4873.)/4873.,0.)).rgb;
 gl_FragColor=vec4((a+b)*vec3(.5,.25,.8),1.);}`,
     transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.SrcColorFactor, blendDst: THREE.OneFactor,
@@ -148,6 +149,8 @@ export function pixelTexture(url) {
     return compassTexture;
   }
   if (!cache.has(url)) {
+    const atlased = itemAtlasTexture(url); // a sprite of the Stitcher-laid-out item atlas (item-atlas.js)
+    if (atlased) { cache.set(url, atlased); return atlased; }
     const t = loader.load(url);
     t.magFilter = t.minFilter = THREE.NearestFilter;
     cache.set(url, t);
