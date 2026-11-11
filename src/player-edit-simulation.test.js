@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { World, FIRE, RED_FLOWER, TNT, YELLOW_FLOWER } from './world.js';
 import { CHEST } from './chest.js';
 import { Survival } from './survival.js';
+import { setEntityRandom } from './entities.js';
 import { Farming } from './farming.js';
 import { Trees } from './trees.js';
 import { JavaRandom } from './java-random.js';
@@ -155,6 +156,7 @@ test('right entity interaction tries shearing before feeding/dyeing and then foo
 test('flint and steel creeper ignition wins before general right-entity interactions', () => {
   const entity = { type: 'creeper', health: 10, x: 2, y: 3, z: 4 },
     f = fixture({ tool: 126, aimedEntity: { entity }, place: true }), calls = [];
+  setEntityRandom(entity, { nextFloat: () => 0.25 }); // EntityCreeper.interact: the pitch is rand.nextFloat() * 0.4 + 0.8 on the creeper's own Entity.rand (b45 creeperwitch records)
   f.state.mobs.shear = () => { throw new Error('creeper special case precedes generic entity interaction'); };
   const result = applyPlayerEdit(f.state, f.request, {
     random: () => 0.5,
@@ -164,7 +166,7 @@ test('flint and steel creeper ignition wins before general right-entity interact
   });
   assert.equal(result.branch, 'ignite-creeper');
   assert.equal(entity.ignited, true);
-  assert.deepEqual(calls, ['swing', ['fire.ignite', 1], 'broken', 'hotbar', 'dirty']);
+  assert.deepEqual(calls, ['swing', ['fire.ignite', Math.fround(Math.fround(0.25 * Math.fround(0.4)) + Math.fround(0.8))], 'broken', 'hotbar', 'dirty']);
 });
 
 test('food with no block target begins eating locally; full hunger is refused silently', () => {
