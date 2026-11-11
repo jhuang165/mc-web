@@ -8,7 +8,7 @@ import { shouldAttackEntity } from "./wolf.js";
 import { javaMobFromNbt } from "./java-mobs.js";
 import { JavaRandom } from "./java-random.js";
 import { Survival } from "./survival.js";
-import { EntityWorld, aiMoveSpeed, knockBack, mobHitAmount } from "./entities.js";
+import { EntityWorld, aiMoveSpeed, knockBack, mobHitAmount, setEntityRandom } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/attributes3-reference.json", import.meta.url)));
 const by = (c) => ref.records.filter((r) => r.case === c);
@@ -145,6 +145,7 @@ test("port foreign owner: a wolf with a foreign OwnerUUID sits unasked and never
   assert.equal(f.sitting, true);
   assert.ok(Math.hypot(f.x - 64, f.z - 64) < 0.01, "stays where it is");
   const local = tamedWorld("wolf", { z: 64 }), l = local.entities[0];
+  setEntityRandom(l, new JavaRandom(4401)); // Entity.rand is seeded at random; about 4% of seeds wander for 100 ticks before following (batch 44 lead)
   for (let i = 0; i < 100; i++) local.tick(player(64, 76), s);
   assert.equal(l.sitting, false);
   assert.ok(Math.hypot(l.x - 64, l.z - 76) < 8);
