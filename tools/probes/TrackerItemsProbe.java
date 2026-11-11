@@ -62,6 +62,10 @@ public class TrackerItemsProbe {
       case 61: e = new zj(client, x, y, z); break;
       case 50: e = new xw(client, x, y, z, null); break;
       case 70: e = new xj(client, x, y, z, aji.e(s.m() & 65535), s.m() >> 16); break;
+      case 72: e = new zd(client, x, y, z); break; // batch 43: eye of ender, firework rocket, potion, fishing hook (bjb.a(fw))
+      case 76: e = new zf(client, x, y, z, null); break;
+      case 73: e = new zo(client, x, y, z, s.m()); break;
+      case 90: e = new xe(client, x, y, z, clientPlayer); break;
       default: throw new IllegalStateException("type " + s.l());
     }
     return e;
@@ -77,8 +81,9 @@ public class TrackerItemsProbe {
         fw s = (fw) p;
         MobMoveProbe.field(sa.class, "z").setFloat(c, (float) (s.j() * 360) / 256.0f);
         MobMoveProbe.field(sa.class, "y").setFloat(c, (float) (s.k() * 360) / 256.0f);
-        if (s.m() > 0) c.i(s.g() / 8000.0, s.h() / 8000.0, s.i() / 8000.0); // sa.i = setVelocity; also zc.c: the arrow's shooter is not needed here
-        if (c instanceof xk) ((xk) c).a(stack());
+        int t = s.l(); // bjb.a(fw) calls fw.g(0) after building a falling block, potion, experience bottle and fishing hook: no velocity from the packet
+        if (s.m() > 0 && t != 70 && t != 73 && t != 75 && t != 90) c.i(s.g() / 8000.0, s.h() / 8000.0, s.i() / 8000.0); // sa.i = setVelocity; also zc.c: the arrow's shooter is not needed here
+        if (c instanceof xk && !metaMode) ((xk) c).a(stack());
       } else {
         MobMoveProbe.field(sa.class, "y").setFloat(c, 0f);
         MobMoveProbe.field(sa.class, "z").setFloat(c, 0f);
@@ -98,9 +103,27 @@ public class TrackerItemsProbe {
     } else if (p instanceof hy) {
       hy s = (hy) p;
       c.i(s.d() / 8000.0, s.e() / 8000.0, s.f() / 8000.0);
+    } else if (p instanceof hw) {
+      c.z().a(((hw) p).c()); // bjb.a(hw): DataWatcher.updateWatchedObjectsFromList
     }
     return c;
   }
+  static yz serverPlayer; // the tracked player of the scenario (batch 43: the fishing hook's angler)
+  static java.util.function.Consumer<yz> playerSetup;
+  static Class<?> serverWorldClass = SW.class;
+  static boolean metaMode; // batch 43: the client's item stack comes only from S1C
+  static String watchValue(Object v) throws Exception {
+    if (v instanceof add) { add a = (add) v; return "\"I:" + adb.b(a.b()) + ":" + a.b + ":" + a.k() + (a.d != null ? ":tag" : "") + "\""; }
+    return v == null ? "null" : v instanceof String ? "\"" + v + "\"" : String.valueOf(v);
+  }
+  static String metaOf(sa e) throws Exception { // the entity's whole DataWatcher: [index, type, value]
+    StringBuilder b = new StringBuilder("[");
+    List l = e.z().c();
+    for (Object o : l) { tf w = (tf) o; b.append(b.length() > 1 ? "," : "").append("[" + w.c() + "," + w.a() + "," + watchValue(w.b()) + "]"); }
+    return b + "]";
+  }
+  static java.util.function.Function<sa, String> serverExtra, clientExtra; // per-tick extras of a scenario (entity state beyond the common fields)
+  static java.util.function.BiConsumer<sa, Integer> serverHook; // runs before the server entity's update of tick t
   static add stack() { return new add(ade.G, 1); } // a feather: the stack only has to exist (EntityItem.onUpdate kills an item without one)
 
   static String fmt(Object p) {
@@ -112,12 +135,13 @@ public class TrackerItemsProbe {
     if (p instanceof hi) { hf s = (hf) p; return "[\"S16\"," + s.f() + "," + s.g() + "]"; }
     if (p instanceof ik) { ik s = (ik) p; return "[\"S18\"," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + "," + s.h() + "]"; }
     if (p instanceof ht) return "[\"S19\"," + ((ht) p).c() + "]";
+    if (p instanceof hw) { try { hw s = (hw) p; StringBuilder b = new StringBuilder("[\"S1C\"," + s.d() + ",["); for (Object o : s.c()) { tf w = (tf) o; b.append(b.charAt(b.length() - 1) == '[' ? "" : ",").append("[" + w.c() + "," + w.a() + "," + watchValue(w.b()) + "]"); } return b + "]]"; } catch (Exception ex) { throw new RuntimeException(ex); } }
     return "[\"" + p.getClass().getName() + "\"]";
   }
 
   // One scenario. `serverTicks` rows are produced by the real server entity's onUpdate; the player stands at (px, 0, pz).
   static String run(String name, Maker maker, double[] start, int range, int freq, boolean vel, int n, double px, double pz, boolean pull, int dieAt) throws Exception {
-    server = (ChickenProbe.World) world(SW.class, false);
+    server = (ChickenProbe.World) world(serverWorldClass, false);
     client = (ChickenProbe.World) world(CW2.class, true);
     TrackerProbe.chunkLoaded = true;
     TrackerProbe.clientWorld = client;
@@ -137,6 +161,8 @@ public class TrackerItemsProbe {
     MobMoveProbe.field(sa.class, "C").set(p, azt.a(px - 0.3, 0, pz - 0.3, px + 0.3, 1.8, pz + 0.3));
     MobMoveProbe.field(sa.class, "o").set(p, server);
     MobMoveProbe.field(sa.class, "o").set(clientPlayer, client);
+    serverPlayer = p;
+    if (playerSetup != null) playerSetup.accept(p);
     if (pull) { ((List) MobMoveProbe.field(ahb.class, "h").get(server)).add(p); ((List) MobMoveProbe.field(ahb.class, "h").get(client)).add(clientPlayer); }
     my pe = new my(p, 512, 2, false);
     TrackerProbe.watchX = 0; TrackerProbe.watchZ = 0; TrackerProbe.watchRadius = 10; TrackerProbe.watching = true;
@@ -150,10 +176,11 @@ public class TrackerItemsProbe {
     sa c = null;
     boolean dead = false;
     for (int t = 0; t < n; t++) {
+      if (serverHook != null) serverHook.accept(e, t);
       if (t > 0 && !dead) { e.h(); }
       if (t == dieAt) { e.B(); } // setDead: Entity.func_70106_y is B() (checked below through K)
       boolean gone = b(e, "K");
-      inputs.append(t > 0 ? "," : "").append("[" + num(d(e, "s")) + "," + num(d(e, "t")) + "," + num(d(e, "u")) + "," + num(d(e, "v")) + "," + num(d(e, "w")) + "," + num(d(e, "x")) + "," + num(fl(e, "y")) + "," + num(fl(e, "z")) + "," + (b(e, "D") ? 1 : 0) + "," + (b(e, "H") ? 1 : 0) + "," + (gone ? 1 : 0) + "]");
+      inputs.append(t > 0 ? "," : "").append("[" + num(d(e, "s")) + "," + num(d(e, "t")) + "," + num(d(e, "u")) + "," + num(d(e, "v")) + "," + num(d(e, "w")) + "," + num(d(e, "x")) + "," + num(fl(e, "y")) + "," + num(fl(e, "z")) + "," + (b(e, "D") ? 1 : 0) + "," + (b(e, "H") ? 1 : 0) + "," + (gone ? 1 : 0) + (serverExtra != null ? "," + serverExtra.apply(e) : "") + "]");
       // EntityTracker.updateTrackedEntities
       if (gone && !dead) { dead = true; me.a(p); } // removeEntityFromAllTrackingPlayers: the destroy packet
       if (!dead) me.a(players);
@@ -172,7 +199,7 @@ public class TrackerItemsProbe {
         TrackerProbe.set(c, "S", d(c, "s")); TrackerProbe.set(c, "T", d(c, "t")); TrackerProbe.set(c, "U", d(c, "u"));
         c.h();
       }
-      clientRows.append(t > 0 ? "," : "").append(c == null ? "[0]" : "[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + num(d(c, "S")) + "," + num(d(c, "T")) + "," + num(d(c, "U")) + "," + (b(c, "D") ? 1 : 0) + "," + num(fl(c, "y")) + "," + num(fl(c, "z")) + "]");
+      clientRows.append(t > 0 ? "," : "").append(c == null ? "[0]" : "[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + num(d(c, "S")) + "," + num(d(c, "T")) + "," + num(d(c, "U")) + "," + (b(c, "D") ? 1 : 0) + "," + num(fl(c, "y")) + "," + num(fl(c, "z")) + (clientExtra != null ? "," + clientExtra.apply(c) : "") + "]");
       if (pk.length() > 0) out.append(out.charAt(out.length() - 1) == '[' ? "" : ",").append("[" + t + ",[" + pk + "]]");
     }
     out.append("],\"inputs\":[" + inputs + "],\"client\":[" + clientRows + "]}");
