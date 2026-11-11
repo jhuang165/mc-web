@@ -42,7 +42,7 @@ import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
 import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigStrike } from "./nether-melee-live.js";
 import { isLegacyCreature, legacyThink } from "./legacy-creature.js";
-import { SQUID, BAT, squidCanSpawn, batCanSpawn } from "./squid-bat.js";
+import { SQUID, BAT, squidCanSpawn, batCanSpawn, legacyBodyTurn } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
@@ -532,6 +532,39 @@ export function moveFlying(e, strafe, forward, friction) {
   const yaw = f(f(e.rotationYaw * f(Math.PI)) / 180), sin = mhSin(yaw), cos = mhCos(yaw);
   e.vx += f(f(strafe * cos) - f(forward * sin));
   e.vz += f(f(forward * cos) + f(strafe * sin));
+}
+// EntityBodyHelper.func_75664_a (tr.a) and the angle wraps at the end of EntityLivingBase.onUpdate, on any entity with x, z, px, pz and the
+// yaw fields: the live mob (turnBody) and the client's copy (clientBodyTurn).
+export function bodyTurn(e) {
+  const dx = e.x - e.px, dz = e.z - e.pz;
+  if (dx * dx + dz * dz > 2.500000277905201e-7) {
+    e.renderYawOffset = e.rotationYaw;
+    e.rotationYawHead = clampYaw(e.renderYawOffset, e.rotationYawHead, 75);
+    e.bodyHeadYaw = e.rotationYawHead;
+    e.bodyTicks = 0;
+  } else {
+    let limit = 75;
+    if (Math.abs(f(e.rotationYawHead - e.bodyHeadYaw)) > 15) {
+      e.bodyTicks = 0;
+      e.bodyHeadYaw = e.rotationYawHead;
+    } else if (++e.bodyTicks > 10) limit = f(Math.max(f(1 - f(f(e.bodyTicks - 10) / 10)), 0) * 75);
+    e.renderYawOffset = clampYaw(e.rotationYawHead, e.renderYawOffset, limit);
+  }
+  e.prevRotationYaw = nearAngle(e.prevRotationYaw, e.rotationYaw);
+  e.prevRenderYawOffset = nearAngle(e.prevRenderYawOffset, e.renderYawOffset);
+  e.prevRotationPitch = nearAngle(e.prevRotationPitch, e.rotationPitch);
+  e.prevRotationYawHead = nearAngle(e.prevRotationYawHead, e.rotationYawHead);
+}
+// The client entity's body turn: EntityLiving.func_110146_f is the body helper for an AI-enabled mob (LEGACY_MOVE lists the others, which use the
+// walking-direction turn of EntityLivingBase.func_110146_f), then the same prev-angle wraps.
+const CLIENT_LEGACY_TURN = new Set(["ghast", "squid"]);
+export function clientBodyTurn(c) {
+  if (!LEGACY_MOVE.has(c.type) && !CLIENT_LEGACY_TURN.has(c.type)) return bodyTurn(c);
+  legacyBodyTurn(c, c.x - c.px, c.z - c.pz);
+  c.prevRotationYaw = nearAngle(c.prevRotationYaw, c.rotationYaw);
+  c.prevRenderYawOffset = nearAngle(c.prevRenderYawOffset, c.renderYawOffset);
+  c.prevRotationPitch = nearAngle(c.prevRotationPitch, c.rotationPitch);
+  c.prevRotationYawHead = nearAngle(c.prevRotationYawHead, c.rotationYawHead);
 }
 // Entity.handleWaterMovement (sa.N) through World.handleMaterialAcceleration: the
 // box shrunk 0.4 vertically and 0.001 all round is wet below each cell's liquid
@@ -1886,18 +1919,43 @@ export class EntityWorld {
     for (let i = from; i < this.events.length; i++) { const ev = this.events[i]; if (!ev.sound || ev.position) this.events[n++] = ev; }
     this.events.length = n;
   }
-  // The client entity's EntityLivingBase.moveEntityWithHeading(0, 0) (entity-tracker.js): the same movement code on the same world. Water and
-  // lava come from the live mob (the client recomputes them from the same blocks); a chunk the streaming world has not loaded hovers.
+  // The client entity's EntityLivingBase.moveEntityWithHeading(0, 0) (entity-tracker.js): the same movement code on the same world. The water
+  // and lava flags are the client entity's own (clientEnvironment); a chunk the streaming world has not loaded hovers.
   moveClient(c, m) {
     const [w, h] = this.size(m);
-    c.inWater = m.inWater; c.inLava = m.inLava; c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
+    c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
-    moveEntityWithHeading(this.world, c, w, h, 0);
+    // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's
+    // override is moveEntity alone: its gravity and swimming are the server's (isRemote guards them), so the client squid only coasts on packets
+    if (m.type === "squid") moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+    else if (m.type === "ghast") {
+      moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+      const friction = c.inWater ? 0.8 : c.onGround ? f(f(0.6) * f(0.91)) : f(0.91);
+      c.vx *= friction; c.vy *= friction; c.vz *= friction;
+    } else moveEntityWithHeading(this.world, c, w, h, 0);
+  }
+  // Entity.onEntityUpdate on the client entity: handleWaterMovement (which pushes a living entity along the flow) and handleLavaMovement at the
+  // client entity's own box. EntityMagmaCube.handleLavaMovement is false.
+  clientEnvironment(c, m) {
+    const [w, h] = this.size(m), r = w / 2;
+    c.inWater = inWater(this.world, c, w, h);
+    c.inLava = m.type === "magma_cube" ? false : inLava(this.world, [c.x - r, c.y, c.z - r, c.x + r, c.y + h, c.z + r]);
+    // the start of onLivingUpdate that runs on both sides: EntityBlaze (airborne and falling) and EntityWither damp the vertical motion by 0.6
+    if (m.type === "blaze" && !c.onGround && c.vy < 0) c.vy *= 0.6;
+    else if (m.type === "wither") c.vy *= 0.6000000238418579;
+  }
+  // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
+  // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
+  clientAfterMove(c, m) {
+    clientBodyTurn(c);
+    if (m.type !== "bat") return;
+    if (c.batHanging) { c.vx = c.vy = c.vz = 0; c.y = Math.floor(c.y) + 1 - f(c.height); } else c.vy *= 0.6000000238418579;
   }
   /** The client entity's position for drawing: previous and current client positions (RenderManager's partial tick), or null when the
-   *  client has no entity for it or it is mounted (the rider moves with its mount's live position). */
+   *  client has no entity for it or the player rides it (the camera follows the live mount). A mob that rides another is drawn where its
+   *  mount's updateRiderPosition put the client rider. */
   clientPosition(e) {
-    if (e.ridingEntity || e.riddenBy || e.riddenByEntity || e.rider) return null;
+    if (e.rider) return null;
     return this.tracker?.clientIfTracked(e) ?? null;
   }
   /** The mob list the leash and nameplate renderer reads (horse-gear-renderer.js uses e.x, e.y, e.z): a mob with a leash or a name is
@@ -1905,13 +1963,17 @@ export class EntityWorld {
    *  so renderers may key maps on them. */
   gearViews() {
     this.views ??= new WeakMap();
+    // a mob that holds a leash is drawn at its client position too: the rope runs between client positions
+    const holders = new Set();
+    for (const e of this.entities) if (e.leash?.holder === "mob" && e.leash.holderUuid) holders.add(e.leash.holderUuid);
     return this.entities.map((e) => {
-      if (!e.leash && !e.customName) return e;
+      if (!e.leash && !e.customName && !holders.has(e.uuid)) return e;
       const c = this.clientPosition(e);
       if (!c) return e;
       let v = this.views.get(e);
       if (!v) { v = Object.create(e); this.views.set(e, v); }
       v.x = c.x; v.y = c.y; v.z = c.z;
+      v.leash = !e.leash || c.leash || e.leash.lost ? e.leash : undefined; // the rope shows once the client has the holder (S1B(1) resolved)
       return v;
     });
   }
@@ -1965,7 +2027,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
-    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= (c, m) => this.moveClient(c, m));
+    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }));
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
@@ -2703,33 +2765,19 @@ export class EntityWorld {
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
   // rotationYaw is set by EntityMoveHelper and the head by EntityLookHelper (ai.js).
   turnBody(e) {
-    const dx = e.x - e.px, dz = e.z - e.pz;
-    if (LEGACY_BODY.has(e.type)) {
-      // EntityLivingBase.onUpdate's tail with EntityLivingBase.func_110146_f (sv.f(FF), bytecode-read): a mob that is not isAIEnabled (sw.f only delegates to the body helper when bk()) eases
-      // renderYawOffset 0.3 of the way to the movement direction (while it moved more than 0.0025 squared), then holds it within 75 degrees of rotationYaw; the head follows rotationYaw (legacy-creature.js).
-      const sq = f(dx * dx + dz * dz);
-      let want = e.renderYawOffset;
-      if (sq > f(0.0025000002)) want = f(f(f(f(Math.atan2(dz, dx)) * f(180)) / f(Math.PI)) - 90);
-      e.renderYawOffset = f(e.renderYawOffset + f(wrapDegrees(f(want - e.renderYawOffset)) * f(0.3)));
-      let d = wrapDegrees(f(e.rotationYaw - e.renderYawOffset));
-      if (d < -75) d = -75;
-      if (d >= 75) d = 75;
-      e.renderYawOffset = f(e.rotationYaw - d);
-      if (d * d > 2500) e.renderYawOffset = f(e.renderYawOffset + f(d * f(0.2)));
-      e.bodyHeadYaw = e.rotationYawHead; e.bodyTicks = 0;
-    } else if (dx * dx + dz * dz > 2.500000277905201e-7) {
-      e.renderYawOffset = e.rotationYaw;
-      e.rotationYawHead = clampYaw(e.renderYawOffset, e.rotationYawHead, 75);
-      e.bodyHeadYaw = e.rotationYawHead;
-      e.bodyTicks = 0;
-    } else {
-      let limit = 75;
-      if (Math.abs(f(e.rotationYawHead - e.bodyHeadYaw)) > 15) {
-        e.bodyTicks = 0;
-        e.bodyHeadYaw = e.rotationYawHead;
-      } else if (++e.bodyTicks > 10) limit = f(Math.max(f(1 - f(f(e.bodyTicks - 10) / 10)), 0) * 75);
-      e.renderYawOffset = clampYaw(e.rotationYawHead, e.renderYawOffset, limit);
-    }
+    if (!LEGACY_BODY.has(e.type)) return bodyTurn(e); // the body helper (shared with the client copy, clientBodyTurn)
+    // EntityLivingBase.onUpdate's tail with EntityLivingBase.func_110146_f (sv.f(FF), bytecode-read): a mob that is not isAIEnabled (sw.f only delegates to the body helper when bk()) eases
+    // renderYawOffset 0.3 of the way to the movement direction (while it moved more than 0.0025 squared), then holds it within 75 degrees of rotationYaw; the head follows rotationYaw (legacy-creature.js).
+    const dx = e.x - e.px, dz = e.z - e.pz, sq = f(dx * dx + dz * dz);
+    let want = e.renderYawOffset;
+    if (sq > f(0.0025000002)) want = f(f(f(f(Math.atan2(dz, dx)) * f(180)) / f(Math.PI)) - 90);
+    e.renderYawOffset = f(e.renderYawOffset + f(wrapDegrees(f(want - e.renderYawOffset)) * f(0.3)));
+    let d = wrapDegrees(f(e.rotationYaw - e.renderYawOffset));
+    if (d < -75) d = -75;
+    if (d >= 75) d = 75;
+    e.renderYawOffset = f(e.rotationYaw - d);
+    if (d * d > 2500) e.renderYawOffset = f(e.renderYawOffset + f(d * f(0.2)));
+    e.bodyHeadYaw = e.rotationYawHead; e.bodyTicks = 0;
     e.prevRotationYaw = nearAngle(e.prevRotationYaw, e.rotationYaw);
     e.prevRenderYawOffset = nearAngle(e.prevRenderYawOffset, e.renderYawOffset);
     e.prevRotationPitch = nearAngle(e.prevRotationPitch, e.rotationPitch);
@@ -2773,7 +2821,7 @@ export class EntityWorld {
     for (const s of sounds) {
       const m = s.position;
       if (!m?.type) { out.push(s); continue; }
-      const en = tracker.entryOf(m, this.size(m)[0]); // a mob that spawned this tick enters the tracker now (addEntityToTracker)
+      const en = tracker.entryOf(m, this.size(m)[0], this.size(m)[1]); // a mob that spawned this tick enters the tracker now (addEntityToTracker)
       if ( !en.client.present || (!s.clientOnly && !en.entry.tracked)) continue;
       const o = s.offset ?? 0; // EntityBlaze.onLivingUpdate plays its crackle at posX + 0.5, posY + 0.5, posZ + 0.5 of the client entity (bytecode-read)
       out.push({ ...s, position: { x: en.client.x + o, y: en.client.y + o, z: en.client.z + o } });
