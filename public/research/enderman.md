@@ -33,3 +33,14 @@ Original classes: `ya` EntityEnderman (over `yg` EntityMob, `td` EntityCreature,
 - Renderer: pose maths and held-block transform not replayed against the original; leg pivot (-5) leaves the model 1 px under the floor line as in the bytecode numbers I read. Not checked in a browser (task rules forbid starting one).
 - Thrown ender pearls and snowballs count as projectiles only where `bow.js` / `projectiles.js` route through `mobs.damage`; explosions do not.
 - Endermite spawn on pearl teleport, End dimension, enderman-specific `Endermen` achievements: not present.
+
+## Batch 42: executed targeting records (enderman-wolf-b42-reference.json)
+
+`EndermanWolfProbe` runs the unchanged `ya` EntityEnderman beside a real `EntityPlayerMP` (gaze at several yaw and pitch offsets, pumpkin, creative, adventure, invisible, sneaking, range 63/65, walls, glass, roofs, day, dusk, rain, water, melee, a mob hit, two endermen). `src/enderman-wolf-replay.js` replays every record on the port; `src/enderman-wolf-b42.test.js` asserts target, revenge, flags (screaming, aggressive, stare count), health, player damage, player revenge and non-ambient sounds up to the first window end (see below).
+
+Fixed from these records:
+- `ya.e()` tests `sa.f(sa) < 16.0D` (getDistanceSqToEntity, bytecode-read at offset 782), so a staring target teleports the enderman only within 4 blocks; the port used 16 blocks and retried a teleport every chase tick.
+- A mob that hits an enderman becomes its target (EntityMob.attackEntityFrom, reached through `ya.a` for every direct hit); the port only took the player.
+- A creative player that hits an enderman is its target for that tick only; `td.bq` drops a creative target after the tick's work.
+
+Not replayed (open): the native legacy action state wanders on Entity.rand (i180, i120, f, f) and starts the chase a tick before the port's navigator does, so places drift and an arrival lands a tick apart. The replay compares everything until a mob is 0.5 block from its recorded place or the first damage no scripted hit explains (2843 of 11270 ticks), burns the recorded wander draws so later rolls (daylight, rain, carry) stay aligned, and skips ambient sounds (idle, scream, step). Wolf wandering and the wolf draws are likewise not replayed. Moving the enderman onto the legacy action state (`creatureActionState`, as the spider and pigman use) would close this.

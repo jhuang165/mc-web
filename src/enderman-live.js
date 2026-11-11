@@ -74,8 +74,9 @@ export function endermanTick(mobs, e, rng) {
     if (E.findPlayerToAttack(e, view, w)) m.attackTarget = p;
   }
   const t = m.attackTarget;
-  const target = t && t.alive !== false ? { id: "player", x: view?.x ?? t.x, y: view?.y ?? t.y, z: view?.z ?? t.z, player: view, eye: E.PLAYER_EYE_OFFSET } : null;
+  const target = t && t.alive !== false ? (t === p ? { id: "player", x: view?.x ?? t.x, y: view?.y ?? t.y, z: view?.z ?? t.z, player: view, eye: E.PLAYER_EYE_OFFSET } : { id: "mob", x: t.x, y: t.y, z: t.z, player: null, eye: t.eyeHeight ?? 0 }) : null; // a mob target is not a yz: no stare test
   if (t && !target) m.attackTarget = null;
+  const creativeTarget = t === p && p?.creative; // td.bq's last test on entityToAttack: a creative player is dropped after the tick's work (a hit by one still sets the target for that tick)
   const bx = Math.floor(e.x), bz = Math.floor(e.z);
   const wet = !!e.inWater || (!!mobs.isRaining?.() && (ai.deps.canSeeSky(bx, Math.floor(e.y), bz) || ai.deps.canSeeSky(bx, Math.floor(e.y + E.ENDERMAN_HEIGHT), bz)));
   E.tick(e, w, {
@@ -84,6 +85,7 @@ export function endermanTick(mobs, e, rng) {
     hurt: () => mobs.attackEntityFrom(e, 1, { name: "drown" }),
     distanceSq: (q) => (e.x - q.x) ** 2 + (e.y - q.y) ** 2 + (e.z - q.z) ** 2,
   });
+  if (creativeTarget) { m.attackTarget = null; m.navigator.clearPathEntity?.(); }
 }
 
 // EntityEnderman.attackEntityFrom: returns true when the normal damage should proceed.
@@ -91,7 +93,9 @@ export function endermanHurt(mobs, e, source, rng) {
   const m = mobs.ai.brain(e);
   const src = { name: source.name, projectile: !!source.projectile, direct: !!source.player && !source.projectile, player: !!source.player };
   const r = E.attackEntityFrom(e, src, environment(mobs, e), rng);
+  // EntityMob.attackEntityFrom (yg.a, reached through ya.a for every direct hit): entityToAttack becomes whoever hit it, a mob as well as the player.
   if (r.proceed && source.player && mobs.ai.player?.alive) m.attackTarget = mobs.ai.player;
+  else if (r.proceed && !source.player && source.attacker && source.attacker !== e && source.attacker.type) m.attackTarget = mobs.ai.brain(source.attacker);
   return r;
 }
 

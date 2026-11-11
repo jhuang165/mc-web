@@ -212,7 +212,7 @@ export function tick(e, w, ctx) {
   if (e.screaming && !e.aggressive && rng.nextInt(100) === 0) e.screaming = false;
   if (tgt) {
     if (tgt.player && staresAt(e, tgt.player, w)) {
-      if (ctx.distanceSq(tgt) < 16 * 16) teleportRandomly(e, w, rng);
+      if (ctx.distanceSq(tgt) < 16) teleportRandomly(e, w, rng); // ya.e(): sa.f(sa) is getDistanceSqToEntity, `< 16.0D` = 4 blocks (bytecode-read)
       e.chaseTimer = 0;
     } else if (ctx.distanceSq(tgt) > 256 && ++e.chaseTimer >= 30 && teleportToEntity(e, tgt, w, rng)) e.chaseTimer = 0;
   } else {
