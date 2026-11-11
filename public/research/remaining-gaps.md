@@ -2,6 +2,54 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 42
+
+Batch 42 covered these areas:
+- **Dropped items, orbs and projectiles drawn where the client sees them.** Items, XP orbs, arrows, snowballs, eggs, ender pearls, potions, bottles o' enchanting, falling blocks and primed TNT now go through the native `EntityTrackerEntry` with their per-type range, delay and velocity flag. They spawn on the client with the object spawn and orb spawn packets and move there as the client entity does. Renderers and shadows draw them at that position; pickups, merges and impacts stay on the server entity (executed client scenarios, [natural-spawning.md](natural-spawning.md)).
+- **Enderman and wolf targets.** 58 executed records against a real server player:
+  - Enderman: an enderman being stared at teleports only when its target is within 4 blocks, not 16. A mob that hits an enderman becomes its target. A creative player who hits one stays its target for that tick only.
+  - Wolf: wild and tamed wolves, angry wolves, owner defence and sheep hunting matched inside the compared windows ([enderman.md](enderman.md), [wolf.md](wolf.md)).
+- **Zombie wander.** The seed 4109 turn difference was the replay world's light, not the AI: the probe world is fully lit, and a wander try under the floor weighed differently in the port. Eighteen executed wander records (flat, slope, pool, sunlight, fire) replay exactly ([pathfinding.md](pathfinding.md)).
+- **One entity id counter.** Mobs, minecarts, boats, paintings and item frames, and XP orbs in every dimension and in the away run share one `Entity.nextEntityID`, as natively (executed). Saved ids are kept and never repeated. While the player is away, `/xp` from a command block acts on the shadow player, and away tick n sees total time T0 + n + 1 ([dimensions.md](dimensions.md)).
+- **Entity update order.** Fireballs update in one insertion-ordered walk with the mobs, as `World.updateEntities` walks `loadedEntityList`. Ghast fireballs hitting mobs are recorded. A snowball now does 3 damage to a blaze, where it did 0. The blaze crackle plays at the +0.5 offset (17 executed records, [blaze-ghast.md](blaze-ghast.md)).
+- **Item shapes and block shapes, round 5.**
+  - Items: the executed `renderBlockAsItem` covers 397 items. Slabs, plates, buttons, carpet, trapdoors, cake, walls and the other non-cube items draw with their native boxes and face crops in the hand and on the ground. The beacon base and the anvil item are fixed.
+  - Blocks: the second render-type set matches at 320 more positions, including negative coordinates and y 0 and 255. Slabs and stairs at the bottom and top of the world now take the right light ([post-shaders.md](post-shaders.md)).
+- **Atlas and cube icons.** The block atlas uses the layout of the executed 1.7.10 `Stitcher` (512x256, 349 sprites, 0.01 px uv inset) instead of a 16-column grid. Inventory cube icons are drawn with GL pixel-centre edges ([atlas-stitcher.md](atlas-stitcher.md)).
+- **Ring chests and chunk resends.**
+  - Chests: a ring hopper reaching a chest in a visited and evicted column waits for that column's saved containers instead of making an empty chest. The first loot lookup in an unbuilt area is built by the generation worker.
+  - Resends: a resent chunk carries the sign, skull, spawner, beacon and flower pot descriptions that `PlayerInstance` sends after it (executed `getDescriptionPacket`, [streaming.md](streaming.md)).
+
+Still open from batch 42:
+- Tracker:
+  - The metadata of tracked objects (stack, crit flag, fuse) is read from the live entity.
+  - Client-side arrow and thrown hits are not modelled.
+  - Fireworks, eyes of ender, fishing hooks and mob-thrown potions, plus mounts, riders and leash holders, are drawn at live positions.
+  - Items and orbs send no velocity update when knocked.
+  - Falling blocks move with step height 0.5 where Java uses 0.
+  - The tracker's id-ordered set is not modelled.
+- Mobs:
+  - The enderman and wolf wander draws on `Entity.rand` are not made by the port, so the replays compare about a quarter of the recorded ticks.
+  - Idle spiders, pigmen and blazes wander differently on some seeds.
+  - A silverfish dies at tick 0 on four seeds.
+  - An iron golem beside a blaze does not attack it on tick 9 as natively.
+  - Arrows, items, orbs, TNT and falling blocks still tick in their own lists. Path searches beyond 250000 points are truncated.
+- Rendering:
+  - Inventory icons of thin blocks (wood slab, plates, buttons, carpet, trapdoor, farmland) are full cubes, and the dragon egg icon is flat.
+  - Item ids that map to blocks draw cubes in the hand.
+  - The item atlas is recorded but unused, and flat icons keep 4x4 edge coverage.
+  - The chest-family items and the anvil block uv table are not executed.
+  - Flying, swimming and boss mobs are interpolated without client physics.
+- Travel and away:
+  - A loss that would kill the shadow player kills the live player on return.
+  - Ridden mobs and entities outside the 32-block rule do not travel while away.
+  - The away delivery check is a unit chain plus one smoke trip.
+- Ring:
+  - Cell resends of fewer than 64 cells carry no tile descriptions, and there are no sign, skull, spawner or beacon edit messages.
+  - A hopper above an evicted column that is still loading picks up items for that tick.
+  - Saves imported at 16/17 keep the quiet neighbour callbacks.
+  - A rim piston queues a no-op event where native refuses.
+
 ## Done in batch 41
 
 Batch 41 covered these areas:
@@ -11,11 +59,7 @@ Batch 41 covered these areas:
 - **Mob targets against a real server player.** An executed `EntityPlayerMP` probe records zombies, skeletons and spiders against survival, creative, adventure, invisible and sneaking players, at range, and spiders reaching players on pillars; the port matched every record. Stuck fireballs, blaze volleys at a mob attacker and the blaze's float distance now match executed records ([blaze-ghast.md](blaze-ghast.md)).
 - **Ring chests and pistons.** A hopper or dropper reaching a chest in a never-visited chunk finds its generated loot instead of making an empty chest. An executed probe shows a piston at the edge of the loaded area makes the server load the next chunk; the port's waiting event reaches the same end state.
 
-Still open from batch 41:
-- Rendering: the gate item boxes and the anvil uv table are not executed; the render-types-2 blocks are exact only at their earlier positions; items, orbs, arrows, particles, mounts, riders and leash holders are drawn at live positions; flying, swimming and boss mobs are interpolated without client physics. Cube icon edges use 4x4 coverage; the atlas keeps a 16-column layout.
-- Mobs: enderman and wolf targets are not recorded; an idle wandering zombie in one record (seed 4109) turns differently from tick 19; fireballs tick after all mobs rather than in entity-list order; ghast fireballs at mobs are not recorded; the blaze crackle +0.5 offset is not applied. Path searches beyond 250000 points are truncated.
-- Travel and away: mob ids are one counter per world, not one global counter; the away delivery check is a unit chain, not a browser trip; one smoke away run covered 127 instead of about 620 ticks and was not reproduced; entities outside the 32-block rule and ridden mobs do not travel while away; the run tick to total time offset can be off by one; a loss that would kill the shadow kills the live player on return; `/xp` replays on the live player.
-- Ring: a chest in a visited and evicted column can still be made empty by a ring hopper; the first loot lookup in an uncached population cell can take about a second on the main thread; a rim piston queues a no-op event where native refuses. Saves imported at 16/17 keep the quiet neighbour callbacks; the chunk resend carries no tile entity data. Tracker mounted and non-mob entities are not modelled.
+Still open from batch 41: carried into the batch 42 list above, except the items batch 42 closed.
 
 ## Done in batch 40
 

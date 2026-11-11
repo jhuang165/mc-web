@@ -87,6 +87,19 @@ Batch 41 (2026-11-10, five Sonnet tracks in `../wt41-<name>` on `batch41-<name>`
 - Never use `git stash` in tracks: the stack is shared by every worktree (batch 41 awaytrip swapped files with gateitem for a moment).
 - Verification: see `b41-lead-track.md`. Pushed to github main by the lead.
 
+Batch 42 (2026-11-10, eight Sonnet tracks in `../wt42-<name>` on `batch42-<name>`, cut from a41fdcff3, merged --no-ff on `batch42-lead`; lead note `b42-lead-track.md`; the gun side runs separately):
+- 0.71.0, by track:
+  - trackeritems: `object-tracker.js` puts items, orbs, arrows, thrown entities, falling blocks and TNT through the tracker; renderers use `objectViews`. Evidence: `TrackerItemsProbe`.
+  - endermanwolf: `EndermanWolfProbe`, `enderman-wolf-b42-reference.json`; stare teleport within 4 blocks, mob attackers.
+  - zombiewander: `ZombieWanderProbe`; the replay world sets `brightnessLevel` 15.
+  - tilesync: `ContainerResidency.reach`, `tile-sync.js`, `StreamingPopulation.requestCell`.
+  - globalids: `entity-ids.js` is one counter across worlds and the away run; `/xp` runs on the shadow player; away clock is T0 + n + 1.
+  - entityorder: `withBalls` insertion order, `fireballs-b42-reference.json`, snowball damage to blazes.
+  - renderexec: `ItemRenderProbe` with stub GL11, `ITEM_BOXES`, `RenderTypes2PosProbe`; `cellPacked` y clamp.
+  - iconedges: `StitcherProbe`, `atlas-layout.js`, `icon-cube.js`.
+- Atlas uvs must go through `tileOrigin`/`tileRect`/`tileAtUv`. `ATLAS_COLUMNS` is 32 and there is no grid maths.
+- Verification: see `b42-lead-track.md`. Pushed to github main by the lead.
+
 Batch 22 (2026-11-07, claude-b22-lead, five Sonnet tracks merged into main):
 - Container UI (`container-screens.md`, `container-screens.js`): every container screen and the book open in a native GuiContainer shell (default background gradient, guiLeft/guiTop origin math, glyph labels at bytecode-read positions); `modal()` is gone. Horse and villager screens were not opened live; book width (320) assumed.
 - Debug keys (`debug-screen.md`, `debug-keys.js`): F3+B entity hitboxes, F3+S/T refresh, F3+C simulated crash dialog, F-keys on every screen, F3 overlay drawn under open GUIs. F3+C does not exit; hitbox line width and a few entity sizes assumed.
