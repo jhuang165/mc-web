@@ -7,7 +7,7 @@ import { entityMaterial } from "./light-material.js";
 import { pixelTexture } from "./first-person.js";
 import { mcAngles } from "./fishing.js";
 
-const SEGMENTS = 16, RAD = Math.PI / 180;
+const SEGMENTS = 16, RAD = Math.PI / 180, EYE_HEIGHT = 1.62; // EntityPlayer.getEyeHeight
 export class FishingRenderer {
   constructor(scene, view) {
     this.scene = scene;
@@ -51,10 +51,14 @@ export class FishingRenderer {
       [x, z] = [x * cw + z * sw, z * cw - x * sw];
       tx = eye.x + x; ty = eye.y + y; tz = eye.z + z;
     } else {
-      const b = a.yaw * RAD, s = Math.sin(b), c = Math.cos(b);
-      tx = eye.x - c * 0.35 - s * 0.85;
-      ty = eye.y - 0.45 - (view.sneaking ? 0.1875 : 0);
-      tz = eye.z - s * 0.35 + c * 0.85;
+      // RenderFish's other-view branch reads the angler's client entity: its interpolated position and prevRenderYawOffset / renderYawOffset
+      // (the local player's PlayerBody here), not the camera, which stands behind the player in third person.
+      const an = view.angler;
+      const b = (an ? an.prevRenderYawOffset + (an.renderYawOffset - an.prevRenderYawOffset) * partial : a.yaw) * RAD, s = Math.sin(b), c = Math.cos(b);
+      const ex = an ? an.px + (an.x - an.px) * partial : eye.x, ey = an ? an.py + (an.y - an.py) * partial + EYE_HEIGHT : eye.y, ez = an ? an.pz + (an.z - an.pz) * partial : eye.z;
+      tx = ex - c * 0.35 - s * 0.85;
+      ty = ey - 0.45 - (view.sneaking ? 0.1875 : 0);
+      tz = ez - s * 0.35 + c * 0.85;
     }
     const dx = hx - tx, dy = hy + 0.25 - ty, dz = hz - tz, pos = this.line.geometry.attributes.position;
     for (let i = 0; i <= SEGMENTS; i++) {

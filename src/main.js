@@ -2820,7 +2820,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
-  scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
+  scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking, angler: multiplayer ? null : playerBody } : null);
   scene.setDrops(objectViews(objectTracker, items.items, "item"));
   scene.setProjectiles(eyes.eyes.length || rockets.rockets.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...viewBalls(projectiles.balls), ...eyes.rows(objectViews(objectTracker, eyes.eyes, "eyeOfEnder")), ...rockets.rows(objectViews(objectTracker, rockets.rockets, "firework")), ...viewBalls(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : viewBalls(projectiles.balls), projectiles.particles);
   scene.setTime(survival.time);

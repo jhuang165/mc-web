@@ -18,7 +18,15 @@ public class TrackerMountsProbe {
   static final Map<Integer, Integer> indexOf = new HashMap<>();
 
   // World.getLightBrightness is read by EntityMob.onLivingUpdate (getBrightness)
-  public static class MW extends TrackerProbe.CW { public float n(int x, int y, int z) { return 0.5f; } }
+  public static class MW extends TrackerProbe.CW {
+    public float n(int x, int y, int z) { return 0.5f; }
+    // batch 44 (bosstracker): the squid case swims through a slab of still water (x >= 11, y 0..9) so the wet branch of EntitySquid.onLivingUpdate runs
+    static boolean slab = false;
+    boolean wet(int x, int y, int z) { return slab && x >= 11 && y >= 0 && y < 10; }
+    public aji a(int x, int y, int z) { return wet(x, y, z) ? aji.e(9) : super.a(x, y, z); }
+    public int e(int x, int y, int z) { return 0; }
+  }
+  static boolean dragonRange = false; // EntityTracker.trackEntity: the dragon is tracked at 160 blocks
   static int cidx(sa c) { for (Map.Entry<Integer, sa> en : clientById.entrySet()) if (en.getValue() == c) return idx(en.getKey()); return -2; }
   static String num(double d) { return Double.toString(d); }
   static Object get(Object o, String n) throws Exception { return MobMoveProbe.field(o.getClass(), n).get(o); }
@@ -26,6 +34,7 @@ public class TrackerMountsProbe {
   static int id(sa e) { return e.y(); }
   static int idx(int entityId) { return entityId < 0 ? -1 : indexOf.getOrDefault(entityId, -2); }
 
+  static String squidInit = "0"; // EntitySquid.rotationVelocity as the constructor rolled it (the client's Entity.rand is not seeded)
   static boolean sendVel = true; // EntityTracker.trackEntity: the bat and the wither do not send velocity
   interface Make { sa make(ChickenProbe.World w) throws Exception; }
   static Make of(Class<?> c) { return w -> { Constructor<?> k = c.getConstructor(ahb.class); return (sa) k.newInstance(w); }; }
@@ -53,6 +62,7 @@ public class TrackerMountsProbe {
       TrackerProbe.setI(c, "bZ", s.f()); TrackerProbe.setI(c, "ca", s.g()); TrackerProbe.setI(c, "cb", s.h());
       c.b(s.f() / 32.0, s.g() / 32.0, s.h() / 32.0, (float) (s.l() * 360) / 256.0f, (float) (s.m() * 360) / 256.0f);
       MobMoveProbe.field(sv.class, "aO").setFloat(c, (float) (s.n() * 360) / 256.0f); // rotationYawHead
+      if (c instanceof ws || c instanceof xa) { MobMoveProbe.set(c, "Z", new Random(77)); if (c instanceof ws) squidInit = num(MobMoveProbe.fl(c, "by")); }
       TrackerProbe.set(c, "v", (double) ((float) s.i() / 8000.0f)); TrackerProbe.set(c, "w", (double) ((float) s.j() / 8000.0f)); TrackerProbe.set(c, "x", (double) ((float) s.k() / 8000.0f));
       clientById.put(eid, c);
       clientOrder.removeIf(o -> o == clientById.get(eid));
@@ -131,11 +141,11 @@ public class TrackerMountsProbe {
 
     place(mount, rider, r0);
     my[] entries = new my[2];
-    entries[0] = new my(mount, 80, 3, sendVel);
+    entries[0] = new my(mount, dragonRange ? 160 : 80, 3, sendVel);
     entries[1] = new my(rider, 80, 3, true);
     int[] order = riderFirst ? new int[]{1, 0} : new int[]{0, 1};
     List<String> events = new ArrayList<>();
-    StringBuilder inputs = new StringBuilder(), client = new StringBuilder();
+    StringBuilder inputs = new StringBuilder(), client = new StringBuilder(), extra = new StringBuilder();
     for (int i : order) entries[i].b(players); // updatePlayerList at once: spawn (and attach) packets
     int lastLeash = 0;
     for (int t = 0; t < n; t++) {
@@ -177,8 +187,29 @@ public class TrackerMountsProbe {
         else client.append("[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "p")) + "," + num(d(c, "q")) + "," + num(d(c, "r")) + "," + (c.m == null ? -1 : cidx(c.m)) + "," + MobMoveProbe.b(c, "D") + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + (c instanceof sw && ((sw) c).bO() != null ? cidx(((sw) c).bO()) : -1) + "," + num(MobMoveProbe.fl(c, "y")) + "," + num(MobMoveProbe.fl(c, "z")) + "," + num(MobMoveProbe.fl(c, "aM")) + "," + num(MobMoveProbe.fl(c, "aO")) + "," + (c instanceof we && ((we) c).bP() ? 1 : 0) + "]");
       }
       client.append("]");
+      extra.append(t > 0 ? "," : "").append(extraOf(clientById.get(id(mount)), t == n - 1));
     }
-    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "]}";
+    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"squidInit\":" + squidInit + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "],\"extra\":[" + extra + "]}";
+  }
+  // batch 44: the boss and squid fields of the client entity. Squid: squidPitch, prevSquidPitch, squidYaw, prevSquidYaw, squidRotation,
+  // prevSquidRotation, tentacleAngle, lastTentacleAngle (bp..bw), then the six private fields (bx..bC). Dragon: prevAnimTime (bx), animTime (by),
+  // ringBufferIndex (bo), getMovementOffsets(n, 1) for n 0..24 and (n, 0.37) for n 0, 6, 13 as [yaw, y, z], and on the last tick the whole ring (n 0..63).
+  static String extraOf(sa c, boolean last) throws Exception {
+    if (c instanceof ws) {
+      StringBuilder b = new StringBuilder("[");
+      String[] names = {"bp", "bq", "br", "bs", "bt", "bu", "bv", "bw", "bx", "by", "bz", "bA", "bB", "bC"};
+      for (int i = 0; i < names.length; i++) b.append(i > 0 ? "," : "").append(num(MobMoveProbe.fl(c, names[i])));
+      return b.append("]").toString();
+    }
+    if (c instanceof xa) {
+      xa d = (xa) c;
+      StringBuilder b = new StringBuilder("[" + num(MobMoveProbe.fl(c, "bx")) + "," + num(MobMoveProbe.fl(c, "by")) + "," + d.bo);
+      for (int n = 0; n <= 24; n++) for (double v : d.b(n, 1.0f)) b.append(",").append(num(v));
+      for (int n : new int[]{0, 6, 13}) for (double v : d.b(n, 0.37f)) b.append(",").append(num(v));
+      if (last) for (int n = 0; n < 64; n++) for (double v : d.b(n, 1.0f)) b.append(",").append(num(v));
+      return b.append("]").toString();
+    }
+    return "[]";
   }
   static void tickClient(sa c) throws Exception {
     if (c.m != null) c.ab(); else c.h(); // World.updateEntityWithOptionalForce: updateRidden for a rider, else onUpdate
@@ -231,5 +262,17 @@ public class TrackerMountsProbe {
     System.out.println(run("flyBat", bat, zombie, false, t -> new double[]{8.5 + (t < 40 ? 0.1 * t : t < 100 ? 4 : 4 + 0.1 * (t - 100)), 9.3 + (t < 40 ? 0.03 * t : t < 100 ? 0 : 0.02 * (t - 100)), 5.5, t * 4, t < 40 ? 0.1 : t < 100 ? 0 : 0.1, t < 40 ? 0.03 : t < 100 ? 0 : 0.02, 0, 0, 1, 0, 20, 0, 20, (t >= 40 && t < 100) ? 1 : 0}, 140));
     sendVel = true;
     System.out.println(run("flySquid", squid, zombie, false, t -> new double[]{8.5 + 0.05 * t, 12 - 0.04 * t, 5.5, t * 2.5, 0.05, -0.04, 0, 0, 1, 0, 20, 0, 20}, 140));
+    // batch 44 bosstracker: a squid that dips into a still water slab (wet branch, flow push) and leaves it again, the client's own rotation and tentacle fields
+    MW.slab = true; MobMoveProbe.ProbeWorld.water = true;
+    System.out.println(run("swimSquid", squid, zombie, false, t -> new double[]{8.5 + 0.06 * t, 12 - 0.05 * t + (t > 100 ? 0.12 * (t - 100) : 0), 5.5, t * 2, 0.06, -0.05 + (t > 100 ? 0.12 : 0), 0, 0, 1, 0, 20, 0, 20}, 160));
+    MW.slab = false; MobMoveProbe.ProbeWorld.water = false;
+    // the Ender Dragon (EntityDragon.onLivingUpdate's client branch: wing animation, the ring buffer, the interpolation): it flies on a wide loop, its yaw wraps past 180
+    Make dragon = of(xa.class);
+    dragonRange = true;
+    System.out.println(run("flyDragon", dragon, zombie, false, t -> {
+      double yaw = ((t * 3 + 100) % 360) - 180, a = t / 25.0;
+      return new double[]{8.5 + 30 * Math.sin(a), 70 + 6 * Math.sin(t / 10.0), 5.5 + 30 * (1 - Math.cos(a)), yaw, 30 * Math.cos(a) / 25.0, 0.6 * Math.cos(t / 10.0) / 10.0, 30 * Math.sin(a) / 25.0, 0, 1, 0, 20, 0, 20};
+    }, 180));
+    dragonRange = false;
   }
 }

@@ -52,8 +52,8 @@ export function createSquidRig(renderer) {
 }
 // RenderSquid.rotateCorpse: translate(0, 0.5, 0), Y 180 - bodyYaw, X pitch, Y yaw, translate(0, -1.2, 0); the corpse does not roll. The
 // frame mapping's half turn about Y is undone by the last group.
-export function animateSquid(r, e, pose, partial) {
-  const s = squidStateOf(e) ?? { pitch: 0, prevPitch: 0, yaw: 0, prevYaw: 0, tentacle: 0, prevTentacle: 0 }, p = f(partial),
+export function animateSquid(r, e, pose, partial, client = null) {
+  const s = client?.squid ?? squidStateOf(e) ?? { pitch: 0, prevPitch: 0, yaw: 0, prevYaw: 0, tentacle: 0, prevTentacle: 0 }, p = f(partial),
     { a, b, c, d, tentacles } = r.squid, pitch = s.prevPitch + (s.pitch - s.prevPitch) * p, yaw = s.prevYaw + (s.yaw - s.prevYaw) * p,
     tentacle = s.prevTentacle + (s.tentacle - s.prevTentacle) * p;
   r.root.rotation.set(0, 0, 0);

@@ -247,12 +247,14 @@ export function poseModel(p, pose) {
 }
 
 // RenderDragon.doRender for the pose at `partial`. `e.dragon` is the state of dragon.js.
-export function animateDragon(r, e, pose, partial) {
+export function animateDragon(r, e, pose, partial, client = null) {
   const s = e.dragon, st = r.dragonRig;
   if (!s) return;
+  // the ring buffer of past positions and the wing clock are the client copy's (entity-tracker.js dragonUpdate); the death and crystal state stays live
+  const cd = client?.dragon, clientRing = cd ? { health: e.health, dragon: cd } : e;
   // RenderDragon.doRender: BossStatus.setBossStatus(dragon, ...) every drawn frame (boss-bar.js keeps it 100 frames).
   setBossStatus({ health: e.health, maxHealth: DRAGON_MAX_HEALTH }, dragonBossStatus(e).name, false);
-  const t = s.prevAnim + (s.anim - s.prevAnim) * partial, p = dragonPose((n) => movementOffsets(e, n, partial), t);
+  const wing = cd ?? s, t = wing.prevAnim + (wing.anim - wing.prevAnim) * partial, p = dragonPose((n) => movementOffsets(clientRing, n, partial), t);
   // rotateCorpse: rotatef(-f3, y), rotatef(pitch * 10, x), translatef(0, 0, 1); the 180 turn the other living rigs get from
   // RendererLivingEntity is part of this frame's convention, so the three rotations are conjugated by it.
   r.root.rotation.set(0, 0, 0);

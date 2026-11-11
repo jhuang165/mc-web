@@ -42,7 +42,7 @@ import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
 import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigStrike } from "./nether-melee-live.js";
 import { isLegacyCreature, legacyThink } from "./legacy-creature.js";
-import { SQUID, BAT, squidCanSpawn, batCanSpawn, legacyBodyTurn } from "./squid-bat.js";
+import { SQUID, BAT, squidCanSpawn, batCanSpawn, legacyBodyTurn, squidWet, squidLivingUpdate } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
@@ -557,7 +557,7 @@ export function bodyTurn(e) {
 }
 // The client entity's body turn: EntityLiving.func_110146_f is the body helper for an AI-enabled mob (LEGACY_MOVE lists the others, which use the
 // walking-direction turn of EntityLivingBase.func_110146_f), then the same prev-angle wraps.
-const CLIENT_LEGACY_TURN = new Set(["ghast", "squid"]);
+const CLIENT_LEGACY_TURN = new Set(["ghast", "squid", "ender_dragon"]);
 export function clientBodyTurn(c) {
   if (!LEGACY_MOVE.has(c.type) && !CLIENT_LEGACY_TURN.has(c.type)) return bodyTurn(c);
   legacyBodyTurn(c, c.x - c.px, c.z - c.pz);
@@ -1927,7 +1927,11 @@ export class EntityWorld {
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
     // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's
     // override is moveEntity alone: its gravity and swimming are the server's (isRemote guards them), so the client squid only coasts on packets
-    if (m.type === "squid") moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+    if (m.type === "squid") {
+      moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
+      // updateFallState inside moveEntity asks handleWaterMovement again for the box it moved to: a squid sinking into water splashes there
+      if (c.inWater === false && inWater(this.world, c, w, h)) { c.inWater = true; enterWater(null, { x: c.x, z: c.z, minY: c.y, width: w, mx: c.vx, my: c.vy, mz: c.vz }, c.rand); }
+    }
     else if (m.type === "ghast") {
       moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
       const friction = c.inWater ? 0.8 : c.onGround ? f(f(0.6) * f(0.91)) : f(0.91);
@@ -1938,24 +1942,39 @@ export class EntityWorld {
   // client entity's own box. EntityMagmaCube.handleLavaMovement is false.
   clientEnvironment(c, m) {
     const [w, h] = this.size(m), r = w / 2;
+    const wasInWater = c.inWater;
     c.inWater = inWater(this.world, c, w, h);
     c.inLava = m.type === "magma_cube" ? false : inLava(this.world, [c.x - r, c.y, c.z - r, c.x + r, c.y + h, c.z + r]);
     // the start of onLivingUpdate that runs on both sides: EntityBlaze (airborne and falling) and EntityWither damp the vertical motion by 0.6
     if (m.type === "blaze" && !c.onGround && c.vy < 0) c.vy *= 0.6;
     else if (m.type === "wither") c.vy *= 0.6000000238418579;
+    else if (m.type === "squid") {
+      // Entity.rand of the client copy is drawn by the splash (not on the entity's first update) and EntityLiving.onEntityUpdate's living-sound roll
+      // each tick, before the rotation re-roll reads it; then EntityWaterMob.onEntityUpdate's ws.M() call (its flow push)
+      if (c.inWater && wasInWater === false) enterWater(null, { x: c.x, z: c.z, minY: c.y, width: w, mx: c.vx, my: c.vy, mz: c.vz }, c.rand);
+      livingSoundRoll(c, c.rand, SQUID.talkInterval);
+      this.clientSquidWet(c);
+    }
+  }
+  // ws.M() on the client entity: the water in its shrunk box pushes it along the flow (swimSquid record). Returns whether it is wet.
+  clientSquidWet(c) {
+    const r = squidWet(this.world, c);
+    c.vx += r.push[0]; c.vy += r.push[1]; c.vz += r.push[2];
+    return r.wet;
   }
   // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
   clientAfterMove(c, m) {
+    // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
+    if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
     clientBodyTurn(c);
     if (m.type !== "bat") return;
     if (c.batHanging) { c.vx = c.vy = c.vz = 0; c.y = Math.floor(c.y) + 1 - f(c.height); } else c.vy *= 0.6000000238418579;
   }
   /** The client entity's position for drawing: previous and current client positions (RenderManager's partial tick), or null when the
-   *  client has no entity for it or the player rides it (the camera follows the live mount). A mob that rides another is drawn where its
+   *  client has no entity for it (a mount the player rides is driven by the client: its client position is the live one, entity-tracker.js followLive). A mob that rides another is drawn where its
    *  mount's updateRiderPosition put the client rider. */
   clientPosition(e) {
-    if (e.rider) return null;
     return this.tracker?.clientIfTracked(e) ?? null;
   }
   /** The mob list the leash and nameplate renderer reads (horse-gear-renderer.js uses e.x, e.y, e.z): a mob with a leash or a name is
