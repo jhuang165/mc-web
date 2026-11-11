@@ -1502,6 +1502,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.explodeInline = (ev) => explodeEvent(ev, explodeAt); // a creeper explodes inside its own update (entities.js)
     mobs.walks = entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }); // arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
     mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);

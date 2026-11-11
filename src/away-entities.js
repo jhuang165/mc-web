@@ -27,7 +27,7 @@ import { Arrows, arrowTargets } from "./bow.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { FireworkRockets } from "./fireworks-live.js";
 import { Hanging, hangingArrowTargets } from "./hanging.js";
-import { drainMobEvents } from "./living-simulation.js";
+import { drainMobEvents, explodeEvent } from "./living-simulation.js";
 import { isWet, canSeeSky } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
@@ -114,6 +114,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
   const mobs = new EntityWorld(world, mobSplit.inside, random, ids);
   mobs.ai.player.absent = true;
+  mobs.explodeInline = (ev) => explodeEvent(ev, (x, y, z, size, opts) => self.explode(x, y, z, size, opts)); // a creeper explodes inside its own update (entities.js)
   linkVehicleRiders(mobs.entities, boats.carts, minecarts.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart (main.js does the same on load)
   if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
   let clock = Number.isFinite(plan.time) ? plan.time : 0;
