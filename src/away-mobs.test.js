@@ -39,7 +39,13 @@ test("a cow in the air falls, takes fall damage and lives on; it never despawns 
 test("a zombie in a roofed pit stays put, keeps counting its age for the 1200 gate and freezes afterwards", async () => {
   const roof = (chunks) => { for (let x = 3; x <= 8; x++) for (let z = 3; z <= 8; z++) setBlock(chunks, x, 14, z, STONE); };
   const root = { ...base, player: { time: 15000 }, entities: [mob("zombie", 5.5, 11, 5.5, { id: "mob-1" })] };
-  const a = await run(root, 1500, roof), b = await run(root, 5000, roof);
+  // Entity.rand is seeded from Math.random (entities.js entityRandom); about 2 to 4% of seeds wander more than 10 blocks in the 1200 ticks, so the
+  // runs take a fixed Math.random stream (lead, batch 45: the flake predates the batch, 2/100 on 0.73.0).
+  const real = Math.random;
+  let s = 4501;
+  Math.random = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+  let a, b;
+  try { a = await run(root, 1500, roof); b = await run(root, 5000, roof); } finally { Math.random = real; }
   const [za] = a.entities.mobs, [zb] = b.entities.mobs;
   assert.equal(za.health, 20, "no player to hunt, no hazard");
   assert.equal(za.age, AWAY_ENTITY_TICKS, "aged for exactly the gate");

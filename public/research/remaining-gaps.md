@@ -2,6 +2,68 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 45
+
+Batch 45 covered these areas:
+- **Client copies hitting client mobs.** A client arrow searches the client world's entities, and `attackEntityFrom` returns false there, so it ricochets at a tenth of its speed. A crit arrow still makes its extra damage roll, and a creative client player is skipped. A client hook calls the hit with 0 damage and never attaches. Thrown entities do no entity search on the client and fly through. Executed in `TrackerHitsProbe`, 19 scenarios. The client copies' own impact, splash, step and launch sounds are logged in call order but stay silent, because `RenderGlobal.playSound` is empty in 1.7.10 (javap). Only the server's sound is heard.
+- **The dragon and squid on the client.**
+  - Dragon: the client copy has its own seven parts (ids +1 to +7), its health from the spawn packet and S1C, and its death branch with the executed puff offsets. The boss bar and death rays read it. Its wing sound, living-sound roll and puffs draw on the client copy's own random.
+  - Squid: the client counts its own air, and the server sends the air in S1C every tick.
+  - Executed in `TrackerMountsProbe`.
+- **Horses.** 88 executed records replay exactly (`enderman-wolf-b45-reference.json`): spawn rolls and herds, seven foods on tame, wild and foal horses, and horse, donkey and mule breeding in both orders. Also a hurt parent, a wild partner, a second breed after the cooldown, and foal growth. Fixes:
+  - Golden food sets love at age 0.
+  - A wild horse rears at food it does not use, and the stack is kept.
+  - The foal's max health is the plain mean of both parents and the roll.
+  - Mating checks that the partner is in love.
+  - Foals grow a little every tick, and the horse box is the float 1.4 x 1.6.
+  - The rear sound draws on the horse's own random.
+- **Creepers and witches.** 77 executed records replay exactly (`enderman-wolf-b45cw-reference.json`): fuses, flint and steel, lightning, power 3 and 6, mobGriefing, difficulty, damage and knockback, drops, a skeleton-arrow kill, potion choice and throws, self drinking and witch drops. Fixes:
+  - A creeper's explosion runs inside its own update.
+  - The player's blast push uses the 1.62F eye height.
+  - The ignite pitch draws on the creeper's random.
+  - The witch's drink timer ends one update later.
+  - A thrown witch potion makes the constructor's three gaussians before the aim. Every throw velocity was wrong without them.
+  - A dead witch still rolls its drinks.
+- **Small mob fixes.** Ocelots sitting on a chest and on a lit furnace are recorded, and the port already matched. A piston-pushed mob lands before its step sound; this follows the same `Entity.moveEntity` order as the executed walking records, and no piston push itself is recorded. The blaze strafe yaw uses the float pi, which removes the golem layout drift, and layout 4517 is recorded.
+- **More of the entity list.** Explosions attack and push minecarts and boats (they break above 40 damage, and the drop joins the list at once), and push witch potions and golem snowballs. Thrown balls hit paintings and item frames. Cart and boat pushes on a mob run inside the mob's own update. `Boats.collide` takes a float square root. 20 new executed `EntityListProbe` scenarios, 49 in total.
+- **Item atlas and cactus icon.** Item sprites are cells of one atlas laid out by the executed Stitcher (256x256, 212 sprites, 0.01 px inset) in the hand, on the ground, in frames, on mobs, under the glint and on projectiles. The cactus inventory icon uses the executed render type 13 quads.
+- **Model faces and held poses.** The bottom face of every model box had its texture rows reversed. It is fixed in `skinBox` for every model, from the executed ModelBox quads (`model-faces-reference.json`). Third-person held items follow the executed renderers (`held-pose-reference.json`): fishing rods and carrots on a stick get their extra turn, and a cast rod is a stick in the third-person hand.
+- **Away run edges and order.** An entity next to a natively loaded column that the run has no copy of is held, so it does not walk into air. This uses an 8-block bound chosen for the port. Items, orbs, TNT, thrown entities, arrows, falling blocks, potions, golem balls, skulls and knots tick in one join-ordered walk with the mobs, as in the live world.
+- **Fire effects re-audit.** Punching out fire in Creative plays two fizzes, the client's own and the server packet's, and Survival plays one (javap of `ItemInWorldManager.onBlockClicked`). An item's lava fizz plays at posY. Re-read and matching: the water, in-wall and fire overlays, flint and steel, the orb fizz and fire on burning entities ([fire-fx.md](fire-fx.md)).
+
+Still open from batch 45:
+- Tracker and client:
+  - Boats, minecarts, hanging entities and dragon parts are not client hit targets. A burning arrow's setFire on a client mob copy is not modelled.
+  - The tracker walks the live list. Native walks a HashSet in entity id order.
+  - The dragon's client crystal search and its living-sound emission are not modelled.
+  - A ridden pig's client copy follows the live pig. Natively it is packet-driven and the rider sits on it, so the seat and camera would have to move to the client copy too. A ridden horse's client steering is not ported, and boat and cart rider copies are not examined.
+  - The angler end of the line has no native replay.
+- Mobs:
+  - Mob collisions do not push the player, and the witch aims with target motion 0.
+  - Player-thrown potions and bottles may lack the constructor's three gaussians.
+  - Spawned items, orbs and potions are not recorded in flight.
+  - Horses: run-around with a rider, skeleton and zombie horse spawn rolls, eat and angry sounds, and the growth nudge against walls have no records.
+  - No record pushes a mob with a piston or opens a chest under a sitting cat.
+- Entity list:
+  - A mob taken aboard by a cart listed later is not updated a second time (`cart-cow-mount-ba`).
+  - Player-thrown balls do not target carts or boats.
+  - The egg and pearl hit on a painting is not executed.
+- Rendering:
+  - Item sprites have no mip chain.
+  - An HD pack scales the 16 px cells.
+  - Animated items, skulls, eggs, leather, potions and block-atlas items are not atlas cells, and the piston icon is a cube.
+  - Sword blocking, the witch's held item and baby mobs' held items are not drawn natively.
+  - The first-person arm was not re-checked after the bottom-face fix.
+  - The water overlay tint is not pixel-compared.
+- Away:
+  - Carts, boats, hanging entities and rockets still tick after the walk.
+  - The 8-block edge hold is a port bound.
+  - The death screen after a shadow kill shows on return.
+- Multiplayer (unchanged from batch 44):
+  - Nothing applies the S1D effect on the client.
+  - There are no other server windows.
+  - Saves imported at 16/17 keep the quiet neighbour callbacks.
+
 ## Done in batch 44
 
 Batch 44 covered these areas:
@@ -33,36 +95,7 @@ Batch 44 covered these areas:
   - Negative spawn angles truncate as natively (`tracker-hits-reference.json`, `tracker-mounts-reference.json`).
 - **Away run.** The batch 43 lost delivery is explained. The portal sat in a column the away run had not copied, so those entities never ticked and the returning player collected them. The run now copies ring columns beyond the streamed window, raises the cap to 160 columns with work columns first, and logs entities left as saved (`outside`). Six of six trips after the fix delivered through the away run ([dimensions.md](dimensions.md)).
 
-Still open from batch 44:
-- Tracker and client:
-  - Client-side hits (arrows, thrown entities and hooks against client mobs) are not modelled.
-  - Client impact, splash and step sounds are not played.
-  - The dragon's client parts, its death branch and its S1C health are not modelled, and neither is squid air.
-  - The angler end of the line has no native replay.
-  - The tracker set order needs a bytecode check.
-  - A player-ridden mount's client copy only follows the live mount.
-  - The squid render has no visible browser check.
-- Mobs:
-  - Horse breeding, foals and spawn rolls, creeper explosions, witch throws and ocelots sitting on chests have no records.
-  - Piston pushes still emit the step sound before the landing sound.
-  - Two golem layouts differ by about 1e-7 at one tick.
-- Entity list:
-  - Explosions do not push carts, boats, potions or golem balls.
-  - Thrown balls do not hit hanging entities.
-  - Vehicle pushes on mobs run after the walk.
-  - The away run keeps its own order.
-- Rendering:
-  - The cactus inventory icon is a full cube.
-  - The item atlas is not stitched.
-  - Other entity models' bottom faces are unchecked.
-  - Third-person held sprite poses are not re-verified.
-- Multiplayer:
-  - Nothing applies the S1D effect on the client, and dedicated players' effects do not tick.
-  - There are no other server windows, and beacon payment is client-reported.
-  - Saves imported at 16/17 keep the quiet neighbour callbacks.
-- Away:
-  - The death screen after a shadow kill still shows on return.
-  - Columns more than 10 chunks away, or beyond the cap, are not copied, and a mob that walks off the copied set meets air.
+Still open from batch 44: carried into the batch 45 list above, except the items batch 45 closed.
 
 ## Done in batch 43
 
