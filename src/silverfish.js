@@ -196,7 +196,7 @@ export function creatureActionState(e, env) {
     e.rotationYaw = f(e.rotationYaw + step);
     if (e.hasAttacked && e.target) { // td.bq: strafe around the target while attacking
       const old = e.rotationYaw;
-      e.rotationYaw = f(f(Math.atan2(e.target.z - e.z, e.target.x - e.x) * 180 / Math.PI) - 90);
+      e.rotationYaw = f(f((Math.atan2(e.target.z - e.z, e.target.x - e.x) * 180) / DEG) - 90); // td.bq: (float)(atan2 * 180.0D / 3.1415927410125732D) - 90.0F, the float pi of every yaw here (Math.PI differed by one float step at two blaze strafe ticks)
       const a = f(f(f(f(old - e.rotationYaw) + 90) * f(Math.PI)) / 180);
       e.moveStrafing = f(-mhSin(a) * e.moveForward);
       e.moveForward = f(mhCos(a) * e.moveForward);

@@ -45,7 +45,7 @@ if(stderr.trim())console.error(stderr.trim().split('\n').slice(0,5).join('\n'));
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.FB_DUMP){await writeFile(process.env.FB_DUMP,JSON.stringify(records)+'\n');process.exit(0);} // development aid (with FB_ONLY): the records of this run, nothing else written
 const b41=records.filter(r=>r.name.startsWith('fb41-')),b42=records.filter(r=>r.name.startsWith('fb42-')),b43=records.filter(r=>r.name.startsWith('fb43-')),old=records.filter(r=>!/^fb4[123]-/.test(r.name));
-assert.ok(process.env.FB_PREFIX==='fb43-'?b43.length>=25:process.env.FB_PREFIX==='fb42-'?b42.length>=15:process.env.FB_PREFIX?b41.length>=8:old.length>=20,'fireball records');
+assert.ok(process.env.FB_PREFIX==="fb43-"?b43.length>=28:process.env.FB_PREFIX==='fb42-'?b42.length>=15:process.env.FB_PREFIX?b41.length>=8:old.length>=20,'fireball records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={ym:'EntitySlime',yf:'EntityMagmaCube',yd:'EntityGhast',xx:'EntityBlaze',sr:'EntityFlying',td:'EntityCreature',yg:'EntityMob',sw:'EntityLiving',sv:'EntityLivingBase',sa:'Entity',zg:'EntityLargeFireball',zi:'EntitySmallFireball',ze:'EntityFireball'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
