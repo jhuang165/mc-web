@@ -112,6 +112,8 @@ export const entityRandom = (e) => {
   return r;
 };
 // Seeds Entity.rand (the combat replay in combat.test.js).
+// The client copy's particle draws (feeding hearts); the server stream stays untouched.
+const FX_RANDOM = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 export const setEntityRandom = (e, rand) => RANDOMS.set(e, rand);
 const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "moveMotion", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "anchorBox", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
@@ -286,8 +288,10 @@ export function aiMoveSpeed(e, multiplier) {
   const boost = e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : e.type === "pigman" && e.pigTarget ? [[PIGMAN.boost, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
+  // EntityOcelot.updateAITick (wn.bp) calls setSprinting(true) at move speed 1.33; EntityLivingBase.setSprinting adds "Sprinting speed boost" 0.3, operation 2.
+  const sprint = e.type === "ocelot" && e.sprinting ? [[0.3, 2]] : [];
   // Saved movementSpeed base and modifiers (an imported Attributes list) apply as well (liveAttribute).
-  return f(multiplier * liveAttribute(e, "generic.movementSpeed", e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...baby, ...boost, ...speedModifiers(e)]));
+  return f(multiplier * liveAttribute(e, "generic.movementSpeed", e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...baby, ...boost, ...sprint, ...speedModifiers(e)]));
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
@@ -609,9 +613,15 @@ export function livingSoundRoll(e, rand, interval) {
   e.livingSoundTime = -interval;
   return true;
 }
-// EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost, no sprint).
+// MathHelper.sin / cos (qh.a / qh.b): the 65536-entry float table, indexed by (int)(f * 10430.378F) (cos: + 16384F) & 65535.
+let SIN_TABLE;
+const sinTable = () => SIN_TABLE ??= Float32Array.from({ length: 65536 }, (_, i) => Math.sin((i * Math.PI * 2) / 65536));
+const mathHelperSin = (r) => sinTable()[Math.trunc(f(r * f(10430.378))) & 65535];
+const mathHelperCos = (r) => sinTable()[Math.trunc(f(f(r * f(10430.378)) + 16384)) & 65535];
+// EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost); a sprinting mob (only the ocelot at move speed 1.33) also gets 0.2 along its yaw.
 export function jump(e) {
   e.vy = e.type === "magma_cube" ? magmaJumpMotion(e.size) : 0.41999998688697815; // yf.bj: 0.42 + size * 0.1
+  if (e.sprinting && e.rotationYaw !== undefined) { const r = f(f(e.rotationYaw) * f(0.017453292)); e.vx -= f(mathHelperSin(r) * f(0.2)); e.vz += f(mathHelperCos(r) * f(0.2)); }
 }
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)), without strafe. AI mobs
 // accelerate at 0.04 in water (legacy spiders 0.02); drag is 0.8. Lava uses
@@ -1059,7 +1069,10 @@ export class EntityWorld {
       if (fresh) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) });
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
-    } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
+    } else if (fresh) {
+      if (e.type === "horse" && rand.nextInt(3) === 0) this.horseRear(e); // EntityHorse.getHurtSound (wi.aT, bytecode-read): nextInt(3) first, 0 makes it rear (no sound of its own)
+      this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
+    }
     if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
     // EntityMob.attackEntityFrom (yg.a), every legacy-action-state EntityMob (spider, pigman, silverfish, blaze, giant; fireballs-replay.js, fireballs-reference.json
     // "fb-hurt-mobs"): any living attacker that is not this mob, its rider or its mount becomes entityToAttack. A source without an entity (a rider/mount null
@@ -1642,7 +1655,8 @@ export class EntityWorld {
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
     if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
-    if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},entityRandom(e),0.5);}
+    // The client's handleHealthUpdate(18) draws these on its own copy's Entity.rand, never on the server's: a separate stream here.
+    if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},FX_RANDOM,0.5);}
     return true;
   }
   // EntityAIMate.spawnBaby (ua.g): the child of two animals in love (growingAge -24000,
@@ -1655,7 +1669,9 @@ export class EntityWorld {
     const baby=this.makeBaby(a,b);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
     // The breeding experience needs gamerule doMobLoot.
-    if(gameRule("doMobLoot"))this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    // EntityAIMate.spawnBaby draws on the mother's Entity.rand: 7 "heart" spawnParticle argument sets (a server no-op, arguments still evaluated), then the orb's nextInt(7) + 1.
+    const rand=entityRandom(a);burst(null,'heart',7,{x:a.x,y:a.y,z:a.z,width:ENTITY_TYPES[a.type].width,height:ENTITY_TYPES[a.type].height},rand,0.5);
+    if(gameRule("doMobLoot"))this.events.push({xp:1+rand.nextInt(7),position:{x:a.x,y:a.y,z:a.z}});
     return true;
   }
   // The createChild half of the above (EntityAgeable.createChild of `a` with partner `b`): the unspawned baby.
@@ -2120,14 +2136,13 @@ export class EntityWorld {
       // EntityZombie.onUpdate (yq.h): a converting zombie counts its timer down before EntityLivingBase.onUpdate.
       if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
       e.age++;
-      if(e.growingAge<0&&e.type!=='zombie')e.growingAge++;else if(e.growingAge>0)e.growingAge--;
-      e.love=Math.max(0,e.love-1);
-      // The inLove countdown's hearts (every 10 ticks) run on the server's copy only: the
-      // client never learns inLove, so 1.7.10 singleplayer shows none.
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
       if (e.revenge && (e.age + 1 - e.revenge > 100 || (revengeOf(e) !== "player" && !(revengeOf(e)?.health > 0 && this.entities.includes(revengeOf(e)))))) e.revenge = 0;
+      // Entity.onEntityUpdate (sa.C, bytecode-read): a sprinting mob out of water spawns the block-crack sprint particle over a non-air block below; the server's spawnParticle
+      // is a no-op but its two nextFloat offsets (x, z) are drawn on Entity.rand first. Only the ocelot sprints (move speed 1.33).
+      if (e.sprinting && !e.inWater && this.world.get(Math.floor(e.x), Math.floor(e.y - 0.2), Math.floor(e.z)) !== 0) { const r = entityRandom(e); r.nextFloat(); r.nextFloat(); }
       const wasInWater = e.inWater;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       // Entity.handleWaterMovement: entering water (not on the entity's first update, when
@@ -2169,14 +2184,22 @@ export class EntityWorld {
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
+      if (e.type === "horse") entityRandom(e).nextInt(200); // EntityHorse.onLivingUpdate (wi.e): the tail roll comes before EntityAnimal.onLivingUpdate (the AI)
       if (e.ridingEntity) this.walk(e, t, 0, () => this.ridden(e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
+      // EntityAgeable.onLivingUpdate (rx.e) ages after EntityLiving's (AI, move, push, loot), then EntityAnimal.onLivingUpdate (wf.e, bytecode-read): a mob that is not an adult loses its love,
+      // otherwise inLove counts down and every 10th tick draws the heart particle's arguments on Entity.rand (3 gaussians, then 3 floats; the server's spawnParticle is a no-op).
+      if (e.growingAge < 0 && e.type !== 'zombie') e.growingAge++; else if (e.growingAge > 0) e.growingAge--;
+      if (ANIMALS.has(e.type)) {
+        if (e.growingAge !== 0) e.love = 0;
+        if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);
+      }
       if (isSpider(e.type)) {
         e.climbing = e.collidedH;
       }
@@ -2334,6 +2357,8 @@ export class EntityWorld {
     const from = { x: e.x, y: e.y, z: e.z };
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
     this.waterAfterMove(e, t);
+    // Entity.moveEntity (sa.d, bytecode-read): updateFallState (the landing's hurt-fall and step sounds) runs before the step sound at the end.
+    this.moveLanding(e, landed);
     this.moveSteps(e, from);
     e.moveMotion = null;
     // The finite world's edge stops a mob like a wall.
@@ -2345,7 +2370,6 @@ export class EntityWorld {
     };
     edge("x", "vx");
     edge("z", "vz");
-    this.moveLanding(e, landed);
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.
@@ -2735,14 +2759,14 @@ export class EntityWorld {
     if (out.heal > 0 || out.status > 0) clearSpentStack(survival); // meat that heals, a bone that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
-    if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.status) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the meat is used up; a puppy grows by a tenth
       // of its remaining time instead.
       if (e.growingAge === 0 && e.love <= 0) {
         e.love = 600;
         take(1);
-        if (this.fx) burst(this.fx, "heart", 7, box, rand, 0.5);
+        if (this.fx) burst(this.fx, "heart", 7, box, FX_RANDOM, 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
       } else if (e.growingAge < 0) {
         take(1);
         e.growingAge = Math.min(0, e.growingAge + Math.trunc(f(f(-e.growingAge / 20) * f(0.1))) * 20);
@@ -2764,13 +2788,13 @@ export class EntityWorld {
     if (out.status > 0) clearSpentStack(survival); // a fish that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
-    if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.status) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the fish is used up; a kitten gets nothing.
       if (e.growingAge === 0 && e.love <= 0) {
         e.love = 600;
         take(1);
-        if (this.fx) burst(this.fx, "heart", 7, box, rand, 0.5);
+        if (this.fx) burst(this.fx, "heart", 7, box, FX_RANDOM, 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
       } else out.handled = false;
     }
     return out.handled || out.sitToggle;

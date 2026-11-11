@@ -18,6 +18,7 @@ export const HORSE_ENTITY = {
   ai: { wander: 0.7, panic: 1.2, mate: 1, follow: 1 }, damage: 0, drop: 0,
 };
 const KEEP = ["items", "type", "variant", "temper", "tame", "saddled", "chested", "armor", "owner", "bred", "reproduced", "speed", "jump", "maxHealth"];
+const GRASS = 1; // the project's grass block id (ai.js)
 const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 
 // The view horse.js works on: record fields merged with the shared record's age, health and love.
@@ -176,7 +177,7 @@ export function installHorse(EntityWorld) {
   };
   proto.horseRear = function (e, sound = false) {
     e.rearing = true;
-    e.rearTicks = 0;
+    e.rearTicks = 1; // makeHorseRear starts the counter at 1
     if (sound) this.horseAngry(e);
   };
   proto.horseAngry = function (e) {
@@ -187,11 +188,15 @@ export function installHorse(EntityWorld) {
   proto.horseTick = function (e) {
     const rand = entityRandom(e);
     if (!e.rider) { e.stepHeight = e.jumpFactor = undefined; e.moveStrafing = 0; } // wi.e(): no rider restores 0.5 and 0.02
-    if (e.rearing && ++e.rearTicks > 20) { e.rearing = false; e.rearTicks = 0; } // wi.bP counter, recalled (not probed)
+    if (e.rearing && ++e.rearTicks > 20) { e.rearing = false; e.rearTicks = 0; } // the rear counter starts at 1 and ends above 20 (b44pd records: AI resumes 20 ticks after the rear)
     e.rearAmount = e.rearing ? Math.min(1, (e.rearAmount ?? 0) + 0.1) : Math.max(0, (e.rearAmount ?? 0) - 0.1);
     if (e.onGround) { e.jumpingHorse = false; if (!e.rider) e.jumpPower = 0; }
     const max = maxHealthOf(e, e.horse.maxHealth);
-    if (e.health < max && rand.nextInt(900) === 0) e.health = Math.min(max, e.health + 1); // wi.e(): heal(1)
+    // wi.e (bytecode-read): nextInt(200) moves the tail before wf.e (EntityWorld, ahead of the AI); after it (server side) nextInt(900) with a live horse heals 1 (the draw is not gated on health),
+    // then a horse not eating and with no rider draws nextInt(300) and starts eating when the block below is grass; eating stops after 50 ticks.
+    if (rand.nextInt(900) === 0 && e.health > 0) e.health = Math.min(max, e.health + 1);
+    if (!e.horse.eating && !e.rider && rand.nextInt(300) === 0 && this.world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z)) === GRASS) e.horse.eating = true;
+    if (e.horse.eating && (e.eatTicks = (e.eatTicks ?? 0) + 1) > 50) { e.eatTicks = 0; e.horse.eating = false; }
     const rider = e.rider;
     // EntityAIRunAroundLikeCrazy with a mob rider (a pig, /summon Riding): the same nextInt(50) roll, then the rider is thrown off and the horse
     // rears (status 6) with no taming and no temper (leads2-reference.json horseTame, leads3-reference.json horseTameMob).
@@ -227,7 +232,7 @@ export function installHorse(EntityWorld) {
     if (!livingSoundRoll(e, rand, H.TALK_INTERVAL)) return;
     const out = H.livingSound(e.horse.type, rand);
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: out.sound, volume: H.SOUND_VOLUME, pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: out.sound, volume: f(H.SOUND_VOLUME), pitch, position: { x: e.x, y: e.y, z: e.z } });
     if (out.rearing) this.horseRear(e);
   };
   proto.horseLand = function (e, distance) {

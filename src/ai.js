@@ -879,7 +879,8 @@ export class Brain {
   constructor(e, ai) {
     this.e = e;
     this.ai = ai;
-    this.rand = ai.rand;
+    // Every EntityAI* of every mob draws on Entity.rand (getRNG), the entity's own java.util.Random; the world rand only where a host gives no entityRandom.
+    this.rand = ai.deps.entityRandom ? ai.deps.entityRandom(e) : ai.rand;
     this.attackTarget = null;
     this.senseCache = new Map();
     this.verticalFaceSpeed = 40;
@@ -1024,6 +1025,18 @@ export class Brain {
         this.tasks.add(4, new Tempt(this, A.tempt, CARROT_ON_A_STICK));
         if (wheat) this.tasks.add(4, new Tempt(this, A.tempt, wheat));
         this.tasks.add(5, new FollowParent(this, A.follow));
+        this.tasks.add(6, new Wander(this, A.wander));
+        this.tasks.add(7, new WatchClosest(this, 6));
+        this.tasks.add(8, new LookIdle(this));
+        return;
+      }
+      if (e.type === "horse") {
+        // EntityHorse (wi): swim 0, panic 1 (1.2), run around like crazy 1 (1.2, horse-live.js rolls it with a rider), mate 2 (1.0), follow parent 4 (1.0), wander 6 (0.7),
+        // watch the player 7 (6 blocks), look idle 8 (bytecode-read). No tempt task.
+        this.tasks.add(0, new Swim(this));
+        this.tasks.add(1, new Panic(this, A.panic));
+        this.tasks.add(2, new Mate(this, A.mate));
+        this.tasks.add(4, new FollowParent(this, A.follow));
         this.tasks.add(6, new Wander(this, A.wander));
         this.tasks.add(7, new WatchClosest(this, 6));
         this.tasks.add(8, new LookIdle(this));
@@ -1196,7 +1209,7 @@ export class Brain {
     this.senseCache.clear();
     this.beforeAI?.();
     if (this.combatTask !== undefined) this.syncCombatTask();
-    this.targets.tickCount = this.tasks.tickCount = Math.trunc(e.age) - 1;
+    this.targets.tickCount = this.tasks.tickCount = Math.trunc(e.age) - 1 - (e.aiSkipped || 0); // a blocked tick (horse rearing/eating) does not advance EntityAITasks.tickCount
     this.targets.tick();
     this.tasks.tick();
     this.navigator.onUpdateNavigation();

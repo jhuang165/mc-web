@@ -37,6 +37,7 @@ export function findRandomTargetAway(mob, xz, yz, threat) {
 // EntityAIAvoidEntity (tw, class, range, far speed, near speed), mutex 1. The threat is the first living creature of the class
 // in the box grown by (range, 3, range) that the mob can see; a tamed ocelot never avoids the player. The path leads to a spot
 // no nearer to the threat than the mob is; it runs while a path remains, at the near speed within 7 blocks.
+const DEG = 180 / Math.PI;
 export function makeAvoid(m, Task, kind, range, farSpeed, nearSpeed) {
   class Avoid extends Task {
     constructor() {
@@ -48,7 +49,8 @@ export function makeAvoid(m, Task, kind, range, farSpeed, nearSpeed) {
     candidates() {
       if (kind === "player") {
         const p = m.ai.player;
-        return p.alive && m.ai.overlaps(m, p, range, 3, range) && m.canSee(p) ? [p] : [];
+        // EntityAIAvoidEntity (tw.a, bytecode-read): for the player class it is World.getClosestPlayerToEntity(entity, range), a sphere (squared distance below range squared), not the grown box.
+        return p.alive && m.distSq(p) < range * range && m.canSee(p) ? [p] : [];
       }
       return m.nearby(range, 3, range, (b) => b.e.type === kind).filter((b) => b.alive && m.canSee(b));
     }
@@ -114,7 +116,9 @@ export function buildOcelotTasks(m, K) {
       return !!this.player && isRawFish(this.player.held);
     }
     continueExecuting() {
-      const p = this.player, look = m.ai.ew.playerLook?.() ?? { yaw: this.yaw, pitch: this.pitch };
+      // vk.f (bytecode-read): startExecuting stores only the player's position; pitch and yaw start at 0 and are stored here (degrees, EntityPlayer.rotationPitch/Yaw).
+      // playerLook gives radians in the port's convention (main.js playerEye): rotationYaw = 180 - yaw, rotationPitch = -pitch.
+      const p = this.player, v = m.ai.ew.playerLook?.(), look = v ? { yaw: 180 - v.yaw * DEG, pitch: -v.pitch * DEG } : { yaw: this.yaw, pitch: this.pitch };
       if (m.distSq(p) < 36) {
         if ((p.x - this.px) ** 2 + (p.y - this.py) ** 2 + (p.z - this.pz) ** 2 > 0.01) return false;
         if (Math.abs(look.pitch - this.pitch) > 5 || Math.abs(look.yaw - this.yaw) > 5) return false;

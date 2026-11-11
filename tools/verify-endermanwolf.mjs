@@ -17,7 +17,7 @@ async function library(prefix){
 }
 const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-','netty-buffer-','netty-common-','netty-codec-','netty-transport-4','netty-handler-4','netty-resolver-4','gson-','commons-io-','commons-codec-'].map(library));
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
-await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
+await exec('unzip',['-q','-o',jar,'*.class','assets/minecraft/lang/en_US.lang','-d',classes],{maxBuffer:1<<24});
 // Batch 32: Entity (sa) builds its Entity.rand with `new Random()` (clock seeded). Add a constant-pool Class entry SeedRandom (probes/SeedRandom.java extends
 // Random and counts seeds up from a value the probe sets) and point the one `new Random; dup; invokespecial <init>` of sa.class at it: no instruction of
 // Entity changes except those two operands, every other use of Random in sa keeps the java/util/Random entry.
@@ -58,17 +58,17 @@ await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','SeedMath','ServerPlayerProbe','VillageFightProbe','EndermanWolfProbe','EndermanWolfScenarios'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
-const set=process.env.EW_SET==='b43'?'b43':'b42'; // EW_SET=b43 records the batch 43 scenarios (b43wd- prefix) into enderman-wolf-b43-reference.json
-const {stdout,stderr}=await exec('java',['-cp',cp,'EndermanWolfProbe',...(set==='b43'?['b43']:[])],{maxBuffer:1<<29});
+const set=process.env.EW_SET==='b44'?'b44':process.env.EW_SET==='b43'?'b43':'b42'; // EW_SET=b43 records the batch 43 scenarios (b43wd- prefix) into enderman-wolf-b43-reference.json
+const {stdout,stderr}=await exec('java',['-cp',cp,'EndermanWolfProbe',...(set==='b42'?[]:[set])],{maxBuffer:1<<29});
 if(process.env.EW_ERR)await writeFile(process.env.EW_ERR,stderr);
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 if(process.env.EW_DUMP){await writeFile(process.env.EW_DUMP,JSON.stringify(records)+'\n');process.exit(0);}
-assert.ok(records.length>=(set==='b43'?17:55),'records');
+assert.ok(records.length>=(set==="b44"?52:set==='b43'?17:55),'records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
-const names={ya:'EntityEnderman',wv:'EntityWolf',tg:'EntityTameable',vr:'EntityAITargetNonTamed',vs:'EntityAIOwnerHurtByTarget',vt:'EntityAIOwnerHurtTarget',vn:'EntityAIHurtByTarget',vu:'EntityAITarget',mw:'EntityPlayerMP',ahb:'World'};
+const names={ya:'EntityEnderman',wv:'EntityWolf',tg:'EntityTameable',vr:'EntityAITargetNonTamed',vs:'EntityAIOwnerHurtByTarget',vt:'EntityAIOwnerHurtTarget',vn:'EntityAIHurtByTarget',vu:'EntityAITarget',mw:'EntityPlayerMP',ahb:'World',...(set==='b44'?{wf:'EntityAnimal',rx:'EntityAgeable',wh:'EntityCow',wm:'EntityMooshroom',wo:'EntityPig',wi:'EntityHorse',wn:'EntityOcelot',wt:'EntityIronGolem',wr:'EntitySnowman',yp:'EntityWitch',xz:'EntityCreeper',ua:'EntityAIMate',vk:'EntityAITempt',uh:'EntityAIFollowParent',vc:'EntityAIWander',un:'EntityAIWatchClosest',vb:'EntityAILookIdle',ud:'EntityAIEatGrass',tw:'EntityAIAvoidEntity',vg:'EntityAIRunAroundLikeCrazy',uw:'EntityAIOcelotSit',uz:'EntityAIPanic'}:{})};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:classes_,
- method:(set==='b43'?'Batch 43 (wanderdraws): the batch 42 harness (Entity.rand logs now include nextDouble as d, row element 8 = [motion x y z, yaw, pitch, head yaw, body yaw, onGround, jumping, moveForward, moveStrafing]); long idle wanders, carried blocks, begging and following wolves. ':'Batch 42. ')+'Unchanged classes on the VillageLiveProbe double (no village), the player a real EntityPlayerMP (ServerPlayerProbe), every mob ticked by Entity.onUpdate. Per tick: [mob rows [x,y,z,health,target index,revenge index,flags,draws], sounds, player health lost, player revenge index, player ticks]; the player has index types.length. See EndermanWolfProbe.java for types and script ops.',
+ method:(set==='b44'?'Batch 44 (passivedraws): the batch 43 harness extended (row element 6 of animals and wolves also carries [inLove, growingAge]); cows, mooshrooms, pigs, a horse (health, max health and speed fixed to 20, 20, 0.2), wild and tamed ocelots, iron and snow golems, witches and creepers on Entity.rand, with players holding wheat, carrots, raw fish or bones (script ops holdn, use, health), wolf taming, feeding and breeding, cow, pig and ocelot breeding, and the replayed babies a mating task spawns (visible to the parents push for that tick only). ':set==='b43'?'Batch 43 (wanderdraws): the batch 42 harness (Entity.rand logs now include nextDouble as d, row element 8 = [motion x y z, yaw, pitch, head yaw, body yaw, onGround, jumping, moveForward, moveStrafing]); long idle wanders, carried blocks, begging and following wolves. ':'Batch 42. ')+'Unchanged classes on the VillageLiveProbe double (no village), the player a real EntityPlayerMP (ServerPlayerProbe), every mob ticked by Entity.onUpdate. Per tick: [mob rows [x,y,z,health,target index,revenge index,flags,draws], sounds, player health lost, player revenge index, player ticks]; the player has index types.length. See EndermanWolfProbe.java for types and script ops.',
  records};
 await writeFile(path.join(root,'../public/research/enderman-wolf-'+set+'-reference.json'),JSON.stringify(reference)+'\n');
 console.log('records',records.length);

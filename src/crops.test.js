@@ -74,7 +74,7 @@ test('pigs accept only the original breeding item and produce a persistent pigle
   const w=new EntityWorld(flat,[]),p=new Survival({slots:[makeStack(CARROT,3)]});const a=w.create('pig',64,0,64),b=w.create('pig',65,0,64);w.entities.push(a,b);
   assert.ok(w.feed(a,CARROT,p)&&w.feed(b,CARROT,p));assert.equal(p.count(CARROT),1);
   for(let i=0;i<60;i++)w.tick({x:64,y:0,z:70},p,CARROT);
-  assert.equal(w.entities.length,3);const baby=w.entities.find(e=>e.growingAge<0);assert.equal(baby.type,'pig');assert.equal(baby.growingAge,-24000);assert.equal(a.growingAge,6000);
+  assert.equal(w.entities.length,3);const baby=w.entities.find(e=>e.growingAge<0);assert.equal(baby.type,'pig');assert.equal(baby.growingAge,-24000);assert.equal(a.growingAge,5999); // the parent ages in the tick of mating (enderman-wolf-b44-reference.json)
   assert.equal(w.feed(baby,CARROT,p),false);assert.equal(w.feed(a,CARROT,p),false);
   const loaded=new EntityWorld(flat,w.serialize());assert.equal(loaded.entities.find(e=>e.id===baby.id).growingAge,-24000);
 });

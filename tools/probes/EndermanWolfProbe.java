@@ -20,6 +20,9 @@ public class EndermanWolfProbe {
     // hack), so setBlockToAir is not used here: the pick calls b(IIILaji)Z, which reaches this d.
     public boolean d(int x, int y, int z, aji b, int meta, int flags) { VillagerProbe.World.cells.put(VillagerProbe.key(x, y, z), new int[] {aji.b(b), meta}); return true; }
     public void a(double x, double y, double z, String sound, float volume, float pitch) { VillagerProbe.World.sounds.add(sound + "|" + volume + "|" + pitch + "@"); }
+    // Batch 44: World.spawnEntityInWorld adds an entity to the chunk lists at once, so a baby an EntityAIMate spawns is pushed by (and pushes) its parents in the same tick; it is dropped from the list after
+    // that tick (it is never ticked here, and the replay does not tick it either).
+    public boolean d(sa entity) { boolean ok = super.d(entity); if (ok && B44 && entity instanceof wf && !VillagerProbe.World.entities.contains(entity)) VillagerProbe.World.entities.add(entity); return ok; }
     public boolean y(int x, int y, int z) { return VillageLiveProbe.W.rain && i(x, y, z); } // World.canLightningStrikeAt in a flat plains world: raining, open sky
   }
 
@@ -30,6 +33,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
+  static boolean B44;
   static float flv(Class<?> c, Object o, String n) throws Exception { return MobMoveProbe.field(c, n).getFloat(o); }
 
   static String q(String s) { return "\"" + s + "\""; }
@@ -63,6 +67,20 @@ public class EndermanWolfProbe {
         case 'O': { wv wolf = new wv(w); wolf.j(true); wolf.b(other); wolf.g(20f); ents[i] = wolf; break; }
         case 'H': ents[i] = new wp(w); break;
         case 'Z': ents[i] = new yq(w); break;
+        // batch 44 (passivedraws): the other EntityAITasks mobs on Entity.rand
+        case 'C': ents[i] = new wh(w); break;
+        case 'M': ents[i] = new wm(w); break;
+        case 'P': ents[i] = new wo(w); break;
+        case 'R': { wi horse = new wi(w); horse.a(yj.a).a(20.0); horse.a(yj.d).a(0.2f); horse.g(20f); ents[i] = horse; break; } // the horse's rolled health and speed (onSpawnWithEgg) are not AI draws: fixed
+        case 'L': ents[i] = new wn(w); break;
+        case 'G': ents[i] = new wt(w); break;
+        case 'N': ents[i] = new wr(w); break;
+        case 'K': ents[i] = new yp(w); break;
+        case 'X': ents[i] = new xz(w); break;
+        case 'U': { wn cat = new wn(w); cat.j(true); cat.b(owner); cat.g(10f); ents[i] = cat; break; }
+        case 'c': { wh calf = new wh(w); calf.c(-24000); ents[i] = calf; break; }
+        case 'p': { wo piglet = new wo(w); piglet.c(-24000); ents[i] = piglet; break; }
+        case 'm': { wm calf = new wm(w); calf.c(-24000); ents[i] = calf; break; }
         default: throw new RuntimeException(types);
       }
     }
@@ -103,6 +121,9 @@ public class EndermanWolfProbe {
           case "invisible": player.d(p[3].equals("on")); break;
           case "sneak": player.b(p[3].equals("on")); break;
           case "hold": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2]))); break; } // batch 43: the held item of the player (beg tasks)
+          case "holdn": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2])), Integer.parseInt(p[3])); break; } // batch 44: a stack of p[3]
+          case "use": player.q((sa) ents[Integer.parseInt(p[2])]); break; // batch 44: the player's real interaction (EntityPlayer.interactWith: feeding, taming, breeding)
+          case "health": ((sv) ents[Integer.parseInt(p[2])]).g(Float.parseFloat(p[3])); break;
           case "angry": ((wv) ents[Integer.parseInt(p[2])]).l(true); break;
           case "sit": ((wv) ents[Integer.parseInt(p[2])]).cc().a(p[3].equals("on")); break;
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
@@ -129,6 +150,7 @@ public class EndermanWolfProbe {
         e.aa++;
         VillageFightProbe.update(e);
       }
+      VillagerProbe.World.entities.removeIf(o -> o instanceof wf && !java.util.Arrays.asList(ents).contains(o));
       StringBuilder row = new StringBuilder("[[");
       for (int i = 0; i < n; i++) {
         sa e = (sa) ents[i];
@@ -137,7 +159,8 @@ public class EndermanWolfProbe {
         sv rv = (sv) MobMoveProbe.field(sv.class, "i").get(e);
         String flags = "[]";
         if (e instanceof ya) { ya en = (ya) e; flags = "[" + (en.cd() ? 1 : 0) + "," + (MobMoveProbe.b(en, "bv") ? 1 : 0) + "," + MobMoveProbe.field(ya.class, "bt").getInt(en) + "," + MobMoveProbe.field(ya.class, "bs").getInt(en) + "," + aji.b(en.cb()) + "]"; }
-        if (e instanceof wv) { wv wf = (wv) e; flags = "[" + (wf.ci() ? 1 : 0) + "," + (wf.ca() ? 1 : 0) + "," + (wf.bZ() ? 1 : 0) + "," + (MobMoveProbe.b(wf.cc(), "b") ? 1 : 0) + "," + (e.L() ? 1 : 0) + "]"; }
+        if (e instanceof wv) { wv wf = (wv) e; flags = "[" + (wf.ci() ? 1 : 0) + "," + (wf.ca() ? 1 : 0) + "," + (wf.bZ() ? 1 : 0) + "," + (MobMoveProbe.b(wf.cc(), "b") ? 1 : 0) + "," + (e.L() ? 1 : 0) + (B44 ? "," + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() : "") + "]"; }
+        else if (B44 && e instanceof wf) flags = "[" + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() + "]"; // love, growing age
         row.append("[").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append(",").append(VillageFightProbe.num(((sv) e).aS()))
           .append(",").append(index(ents, tgt)).append(",").append(index(ents, rv)).append(",").append(flags).append(",[").append(VillageFightProbe.draws(logs[i].log)).append("],[").append(VillageFightProbe.num(e.v)).append(",").append(VillageFightProbe.num(e.w)).append(",").append(VillageFightProbe.num(e.x)).append(",")
           .append(VillageFightProbe.num(e.y)).append(",").append(VillageFightProbe.num(e.z)).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aO"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aM"))).append(",").append(e.D ? 1 : 0).append(",").append(MobMoveProbe.b(e, "bc") ? 1 : 0).append(",").append(VillageFightProbe.num(flv(sv.class, e, "be"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "bd"))).append("]]");
@@ -151,7 +174,7 @@ public class EndermanWolfProbe {
     }
     StringBuilder sc = new StringBuilder();
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
-    System.out.println("{\"case\":\"endermanwolf\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"ticks\":" + ticks + ",\"types\":" + q(types) + ",\"bright\":" + bright + (water ? ",\"water\":true" : "")
+    System.out.println("{\"case\":\"endermanwolf\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"ticks\":" + ticks + ",\"types\":" + q(types) + ",\"bright\":" + bright + (B44 ? ",\"ext\":1" : "") + (water ? ",\"water\":true" : "")
       + ",\"roofs\":" + Arrays.deepToString(roofs) + ",\"blocks\":" + Arrays.deepToString(blocks) + ",\"pos\":" + Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"rows\":[" + rs + "]}");
     VillagerProbe.World.entities.clear();
   }
@@ -178,6 +201,7 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "x", info);
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
-    if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    B44 = args.length > 0 && args[0].equals("b44");
+    if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }
