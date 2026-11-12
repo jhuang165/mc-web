@@ -2217,13 +2217,13 @@ export class EntityWorld {
       seat();
       sections();
       if (e.lateHook) { e.lateHook(); continue; }
-      prevEntity = e;
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       const walk = this.walkOf?.get(e);
       // A rider that sat down during this pass (a cow taken aboard by a cart's push): World.updateEntities skips an entity riding a live mount at its own place; the rider's
       // update follows the mount's (below). One already seated at the start of the pass was put right after its mount by seatRiders.
       const mount = e.ridingEntity;
       if (mount && !walk && order[oi - 1] !== mount && !mount.dead && mount.passenger === e && this.walkOf?.has(mount)) continue;
+      prevEntity = e; // a rider skipped at its own place gets no check here (updateEntities `continue`s before updateEntity); its check follows its update after the mount's
       if (walk) { // an arrow, item, orb, thrown entity, TNT or falling block (entity-simulation.js)
         walk.tick(e);
         // updateEntityWithOptionalForce updates the rider of the mount it just ticked: one that sat down in this pass (before or after the mount's place in the list) goes now
