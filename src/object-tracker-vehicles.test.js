@@ -34,7 +34,7 @@ function live(name, kind, r, t, h) {
   if (kind === "boat") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false, ...flags });
   if (kind === "minecart") {
     // the furnace cart is lit by its fuel from tick 3 to 11; the command cart's command is set at tick 3 and its last output at 6 and 9 (the probe's hooks)
-    const extra = name === "cartFurnace" ? { type: 2, lit: t >= 3 && t < 12 } : name === "cartCommand" ? { type: 6, command: { command: t >= 3 ? "say hi" : "", lastOutput: t >= 9 ? 'a "q" b' : t >= 6 ? "done" : null } } : { type: Number(name.slice(4, 5)) || 0 };
+    const extra = name === "cartFurnace" ? { type: 2, lit: t >= 3 && t < 12 } : name === "cartCommand" ? { type: 6, command: { command: t >= 3 ? "say hi" : "", watch24: t >= 9 ? JSON.stringify('a "q" b') : t >= 6 ? JSON.stringify("done") : t >= 3 ? "null" : "" } } : { type: Number(name.slice(4, 5)) || 0 };
     return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, rolling: 0, rollingDir: 1, damage: 0, dead: false, ...flags }, extra);
   }
   const [[tx, ty, tz], dir] = TILE(name);

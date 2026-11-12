@@ -507,6 +507,20 @@ export class Minecarts {
         b = normalize(mhCos(r), 0, mhSin(r));
       if (Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) < 0.800000011920929) return [0, 0];
       const sx = other.vx + cart.vx, sz = other.vz + cart.vz;
+      // Exactly one furnace cart (type 2): the plain cart is damped to 0.2 and takes the furnace cart's motion minus/plus the push,
+      // the furnace cart keeps 0.95 and no addVelocity (xl.g(sa), bytecode-read). Both or neither furnace fall through to the general trade.
+      if (other.type === 2 && cart.type !== 2) {
+        cart.vx *= 0.20000000298023224; cart.vz *= 0.20000000298023224;
+        cart.vx += other.vx - dx; cart.vy += 0; cart.vz += other.vz - dz; cart.airBorne = true;
+        other.vx *= 0.949999988079071; other.vz *= 0.949999988079071;
+        return [0, 0];
+      }
+      if (other.type !== 2 && cart.type === 2) {
+        other.vx *= 0.20000000298023224; other.vz *= 0.20000000298023224;
+        other.vx += cart.vx + dx; other.vy += 0; other.vz += cart.vz + dz; other.airBorne = true;
+        cart.vx *= 0.949999988079071; cart.vz *= 0.949999988079071;
+        return [0, 0];
+      }
       cart.vx *= 0.20000000298023224; cart.vz *= 0.20000000298023224;
       // Entity.addVelocity adds 0 to motionY too (so -0 becomes 0).
       cart.vx += sx / 2 - dx; cart.vy += 0; cart.vz += sz / 2 - dz; cart.airBorne = true; // addVelocity sets isAirBorne on both carts (bytecode-read: xl.g(sa) calls g(DDD) on this and the other)

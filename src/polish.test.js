@@ -218,14 +218,14 @@ test("command cart NBT, summon tags and save/load", () => {
   summonCart(m, 6, 1.5, 64, 2.5, C({ Command: T(NBT.STRING, "say hi"), SuccessCount: T(NBT.INT, 1), CustomName: T(NBT.STRING, "Rail"), TrackOutput: T(NBT.BYTE, 0) }));
   const cart = m.carts[0], ref = rec("commandCartNbt").find((r) => r.name === "command");
   assert.equal(cart.type, ref.type);
-  assert.deepEqual({ ...cart.command }, { command: "say hi", successCount: 1, customName: "Rail", trackOutput: false, lastOutput: null });
+  assert.deepEqual({ ...cart.command }, { command: "say hi", successCount: 1, customName: "Rail", trackOutput: false, lastOutput: null, watch24: "null" }); // /summon runs readEntityFromNBT: watcher 24 = fk.a(null) (furnace-cart-reference.json)
   const nbt = V.variantNBT(cart);
   assert.deepEqual([nbt.Command[1], nbt.SuccessCount[1], nbt.CustomName[1], nbt.TrackOutput[1]], [ref.out.Command, ref.out.SuccessCount, ref.out.CustomName, ref.out.TrackOutput]);
   const bare = rec("commandCartNbt").find((r) => r.name === "bare");
   const fresh = new Minecarts({}).spawnCart(6, { x: 0, y: 0, z: 0, items: [] });
   assert.deepEqual([V.variantNBT(fresh).Command[1], V.variantNBT(fresh).CustomName[1], V.variantNBT(fresh).TrackOutput[1]], [bare.out.Command, bare.out.CustomName, bare.out.TrackOutput]);
   const back = Minecarts.fromJSON(JSON.parse(JSON.stringify(m.toJSON())), {});
-  assert.deepEqual(back.carts[0].command, cart.command);
+  assert.deepEqual(back.carts[0].command, { ...cart.command, watch24: "null" }); // readEntityFromNBT writes watcher 24: fk.a(null) (furnace-cart-reference.json)
   assert.equal(back.carts[0].type, 6);
   // untrusted save data is sanitised
   const hostile = Minecarts.fromJSON({ version: 1, carts: [{ type: 6, x: 0, y: 0, z: 0, command: { command: 5, successCount: "x", customName: {}, trackOutput: 0 } }] }, {});

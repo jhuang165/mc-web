@@ -2017,7 +2017,7 @@ function openCommandBlock(x, y, z, cartTile = null) {
   document.exitPointerLock?.();
   gui.show(commandBlockScreen({
     command: tile.command, lastOutput: tile.trackOutput ? tile.lastOutput : null,
-    done: (command) => { tile.command = command; saved = false; resume(); },
+    done: (command) => { tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
     cancel: resume,
   }));
 }
