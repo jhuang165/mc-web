@@ -9,7 +9,7 @@
 // `riding`: the mount's id on the rider, which loading turns back into the references (linkRiders).
 import { mhSin, mhCos } from "./lighting.js";
 import { isVehicle, vehicleSeat } from "./vehicle-seat.js";
-import { liveAttribute } from "./mob-attributes.js";
+import { liveAttribute, healthBoostExtra } from "./mob-attributes.js";
 
 const f = Math.fround;
 
@@ -164,8 +164,14 @@ export const ownMaxHealthBase = (e, fallback) => e.type === "wolf" ? (e.owner ? 
   : (Number.isInteger(e.size) && e.size >= 1 ? e.size * e.size : 1);
 // setTamed and setSlimeSize overwrite any saved base; a wild wolf or a horse keeps it (`attributeBases`).
 const baseIsReset = (e) => (e.type === "wolf" && !!e.owner) || e.type === "slime" || e.type === "magma_cube";
-export const maxHealthOf = (e, base) => OWN_MAX_HEALTH.has(e.type) ? liveAttribute(baseIsReset(e) ? { modifiers: e.modifiers } : e, "generic.maxHealth", ownMaxHealthBase(e, base))
-  : (Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : base);
+export function maxHealthOf(e, base) {
+  const extra = healthBoostExtra(e);
+  if (OWN_MAX_HEALTH.has(e.type)) return liveAttribute(baseIsReset(e) ? { modifiers: e.modifiers } : e, "generic.maxHealth", ownMaxHealthBase(e, base), extra);
+  const own = Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : base;
+  if (!extra.length) return own;
+  // a stored modifier or base decides the value (the potion modifier joins its operation 0 sum); a bare imported maximum just gains the amount
+  return e.modifiers?.some((m) => m.attribute === "generic.maxHealth") || Number.isFinite(e.attributeBases?.["generic.maxHealth"]) ? liveAttribute(e, "generic.maxHealth", base, extra) : liveAttribute({}, "generic.maxHealth", own, extra);
+}
 
 // EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5.
 export function freeChickenNear(zombie, entities, size) {

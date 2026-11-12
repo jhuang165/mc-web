@@ -139,13 +139,13 @@ test("haste, mining fatigue, jump boost, blindness, night vision, hunger, health
   }
 });
 
-test("these effects do nothing else to a mob: health is untouched, and they are only added by an import, never by Health Boost's missing attribute", () => {
+test("these effects do nothing else to a mob: health is untouched (health boost only raises the maximum, b54)", () => {
   const e = { effects: [], health: 10 };
   for (const id of [3, 4, 8, 15, 16, 17, 23]) assert.ok(addMobEffect(e, id, 100, 0), String(id));
-  assert.equal(addMobEffect(e, 21, 100, 0), false);
+  assert.equal(addMobEffect(e, 21, 100, 0), true);
   tickMobEffects(e, { width: 0.6, height: 1.8 }, 20, rng(), undefined, undefined);
   assert.equal(e.health, 10);
-  assert.equal(e.effects.length, 7);
+  assert.equal(e.effects.length, 8);
   assert.ok(e.effects.every((x) => x.duration === 99));
 });
 
@@ -165,7 +165,7 @@ test("an imported mob keeps the effects and saves them back (NBT round trip)", (
   const rec = javaMobFromNbt(tag, { shiftX: 0, shiftZ: 0 });
   assert.deepEqual(rec.effects.map((x) => x.id).sort((a, b) => a - b), [3, 4, 8, 15, 16, 17, 21, 23]);
   const world = new EntityWorld(flat, [{ ...rec, x: 8, y: 0, z: 8 }], () => 0.5);
-  assert.deepEqual(world.entities[0].effects.map((x) => x.id), [3, 4, 8, 15, 16, 17, 21, 23]);
+  assert.deepEqual(world.entities[0].effects.map((x) => x.id).sort((a, b) => a - b), [3, 4, 8, 15, 16, 17, 21, 23]); // kept in the file's (bucket) order
 });
 
 // Lead fix (bytecode-read, zc.h offsets 898-918): a burning arrow's setFire(5) skips an EntityEnderman (instanceof ya), on the server as on the client.

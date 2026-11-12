@@ -1,0 +1,21 @@
+# effects2 batch 54 track (branch batch54-effects2, from 20bbab13b)
+
+## Summary
+- **Instant health (6) and instant damage (7) are kept on import and fire.** `ru` (PotionHealth).isReady is `duration >= 1`, so every update performs them: heal `max(4 << amp, 0)` (living) or `attackEntityFrom(magic, 6 << amp)` (the undead get the reverse), then the duration counts down. Damage goes through the hurt window (a second tick inside it does nothing). `MOB_EFFECTS` is now ids 1..23, the whole native set (ids outside it, and 0 and below, are dropped by `readCustomPotionEffectFromNBT`).
+- **Health boost (21) applies its maxHealth modifier when added** (`rt`: `4 * (amp + 1)`, operation 0, signed byte amplifier; the task text's UUID `5D4EBCAD...` was wrong: the executed class has `5D6F0BA2-1186-46AC-B896-C61C5CEE99CC`). It is a transient modifier: not saved, absent after a load that only put the effect in the map. The port marks the effect `boost` (dropped by `readMobEffects`, as a reload drops it) and `maxHealthOf` adds it. Ending the effect, or re-adding it (`onChangedPotionEffect(effect, true)` removes then re-applies), clamps health to the smaller maximum (`rt.a`: health above max is cut), so a re-add with a higher level also cuts health to the unboosted maximum first.
+- **Map order.** Effects are kept in insertion order and exported in `HashMap` order: bucket `id & 15`, `id & 31` after the table grew (13th entry; never shrinks, `effectsWide`), insertion order inside a bucket. A load keeps list order and a repeated id replaces the earlier entry in place (last value wins; the old reader kept the first). A duration of 0 or below is kept by a load (first update removes it). `updatePotionEffects` now walks the map order and removes an effect the moment it ends.
+- **Jump boost record.** `sv.bj` and `sv.b(float)` executed on 14 kinds x 7 amplifiers: replayed exactly. Side fix found by it: a negative amplifier (signed byte, e.g. -3) lengthens a fall; `fallPoints` ignored it. Natively chicken, bat, ocelot, blaze and snow golem take no fall damage (the port's landing call already skips chicken, bat, ocelot, snow golem; executed now).
+
+## Evidence
+- Executed (`tools/probes/MobEffects2Probe.java`, driven by `tools/verify-mob-effects.mjs` -> `public/research/mob-effects-reference.json`; JDK 19 HashMap, so Java 8+ tail insertion and order-preserving resize; a Java 6/7 HashMap orders buckets differently): 52 `b54order` (random put/add/tick sequences, 12 reach the 32 table), 21 `b54import` (3 kinds x 7 hand-built lists), 144 `b54inst` (6 kinds x 2 ids x 3 amps x 2 durations x 2 starting healths x 4 ticks), 63 `b54hb` (7 kinds x add/put/re-add x amp 0/2/-1, full tick-to-end walks), 91 `b54jump` (13 kinds x 7 amplifiers plus 5 fall distances each). The earlier 196 `b52me` rows and 28 `b53ft` ticks are unchanged.
+- Bytecode-read: `rv.a(sv, int)` performEffect branches (heal/harm by `isEntityUndead`), `sv.aO`, `sv.a(rw)` / `sv.a(rw, boolean)` / `sv.b(rw)`, `rv.a/b(sv, tl, int)`. The port's undead set is zombie, skeleton, wither skeleton, pigman, wither and the undead horses (the witch module still has its own narrower list for splash potions).
+
+## Verification
+- `node --test src/mob-effects-b54.test.js` 6 pass. Targeted (mob-*, entit*, region-*, level-dat, java-mobs, witch*, wither*, zombie*, damage-fx, pig-saddle, player-*, vehicle-*, status-effects, potion*, command*, difficulty*, fire*, villager*, horse*, wolf*): 1252 pass, 0 fail. `npm run build` ok. No full `npm test`.
+- Updated expectations: fire-times-b53 (health boost addable, 8 inert effects kept), mob-effects-b52 (restore compared as a set), difficulty (a spent effect is kept by a load).
+
+## Follow-ups (proposed gap lines)
+- The HashMap order is the Java 8+ one (probe JDK 19); 1.7.10 ran on Java 6/7 for many players, whose buckets differ.
+- Witch splash potions use a narrower undead set (zombie, skeleton) than `isEntityUndead`; `isPotionApplicable` (undead refuse regeneration and poison) is applied only for splash victims, not `addMobEffect`.
+- PotionEffect.combine's ambient rule is not modelled for mobs.
+- Chicken, bat, ocelot, snow golem and blaze fall immunity is replayed from the record but the walk's landing call is the guard (blaze never lands).

@@ -64,7 +64,7 @@ import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
 import { mountEntity, releaseDead, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
-import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage, mobEffect, RESISTANCE } from "./mob-effects.js";
+import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage, mobEffect, RESISTANCE, setMaxHealthHook } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
@@ -808,6 +808,7 @@ export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
   constructor(world, saved, random = Math.random, ids = new EntityIds()) {
     this.world = world;
+    setMaxHealthHook((e) => maxHealthOf(e, ENTITY_TYPES[e.type]?.health)); // a health boost changing on a mob clamps its health to the live maximum
     this.ids = ids;
     this.random = random;
     // The client Fx (main.js) the death puffs, splashes and feeding hearts spawn into.
@@ -2308,7 +2309,7 @@ export class EntityWorld {
       }
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
-      tickMobEffects(e, t, maxHealthOf(e, base.health), entityRandom(e), this.fx, (m, n) => this.attackEntityFrom(m, n, { name: "wither" })); // Potion.wither: DamageSource.wither (bypasses armour)
+      tickMobEffects(e, t, () => maxHealthOf(e, base.health), entityRandom(e), this.fx, (m, n, name) => this.attackEntityFrom(m, n, { name })); // Potion.wither / instant damage: DamageSource.wither / magic (both bypass armour)
       this.talk(e);
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
