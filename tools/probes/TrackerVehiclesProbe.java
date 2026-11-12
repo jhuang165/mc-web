@@ -78,6 +78,24 @@ public class TrackerVehiclesProbe {
     TrackerItemsProbe.clientExtra = (c) -> { try { return boxAndMeta(c); } catch (Exception ex) { throw new RuntimeException(ex); } };
     TrackerItemsProbe.serverHook = (e, t) -> { if (t == 3) { st fr = (st) e; fr.a(new add(ade.G, 1)); fr.c(3); } };
     System.out.println(TrackerItemsProbe.run("frameItem", (w, s) -> new st(w, (int) s[0], (int) s[1], (int) s[2], 1), new double[]{4, 2, 6}, 160, 2147483647, false, 8, 0.5, 0.5, false, -1));
+    // the client dragon's part hit: EntityDragon.attackEntityFromPart retargets the dragon with three draws of its own Entity.rand (x, y, z order) from its yaw and position;
+    // two hits in a row for each yaw (the second one continues the rand stream). Row: [yaw, hit, targetX, targetY, targetZ]
+    {
+      StringBuilder out = new StringBuilder();
+      for (float yaw : new float[]{0f, 90f, 33.5f, -120f}) {
+        xa d = new xa(TrackerItemsProbe.client);
+        moveTo(d, 6.5, 0.5, 2.5);
+        MobMoveProbe.field(sa.class, "y").setFloat(d, yaw);
+        MobMoveProbe.field(sa.class, "Z").set(d, new java.util.Random(12345L));
+        TrackerHitsProbe.LoggedPart part = new TrackerHitsProbe.LoggedPart(d);
+        for (int hit = 0; hit < 2; hit++) {
+          TrackerHitsProbe.CW3.log.clear();
+          part.a(ro.a, 4.0f);
+          out.append(out.length() > 0 ? "," : "").append("[" + yaw + "," + hit + "," + MobMoveProbe.d(d, "h") + "," + MobMoveProbe.d(d, "i") + "," + MobMoveProbe.d(d, "bm") + "]");
+        }
+      }
+      System.out.println("{\"case\":\"dragonPartHit\",\"rows\":[" + out + "]}");
+    }
     reset();
   }
   static double d(Object o, String n) throws Exception { return MobMoveProbe.d(o, n); }
