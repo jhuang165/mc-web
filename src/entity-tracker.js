@@ -499,7 +499,26 @@ export class MobTracker {
   joinPlayer(id) {
     if (this.playerKey) this.order.remove(this.playerKey);
     this.playerId = id;
-    if (!this.pendingJoin) this.addPlayerKey(); // a later join: the entry goes in at once
+    if (!this.pendingJoin) { this.addPlayerKey(); this.resendPending = true; } // a later join: the entry goes in at once, and the new client is sent every entry at the next update
+  }
+  // Batch 54 (bytecode-read): a respawn is a new EntityPlayerMP in a client world that has no entities (Minecraft.setDimensionAndSpawnPlayer clears it). EntityTracker.addEntityToTracker for the
+  // new player walks trackedEntities in HashSet order and every entry in range sends it its spawn (tryStartWachingThis), the entries having lost the old player at removePlayerFromTrackers.
+  // The client copies are the port's own objects (renderers key on them), so they are reset in place and spawn again; `others` are the trackers whose entries share this set.
+  resendWorld(others = []) {
+    this.resendPending = false;
+    const ts = [this, ...others];
+    for (const t of ts) t.dropClients();
+    for (const e of this.order.keys()) {
+      const t = ts.find((x) => x.entries.has(e));
+      if (!t) continue;
+      const en = t.entries.get(e);
+      en.entry.updatePlayerList(); t.flush(en);
+    }
+  }
+  // The client world is new: no copies, nothing queued, no attachments; the entries forget the old player (removePlayerFromTracker without a packet)
+  dropClients() {
+    for (const en of this.queued()) { en.entry.tracked = false; en.entry.packets = []; en.client.present = false; en.client.ridingEntity = null; en.client.riddenBy = null; if ("leash" in en.client) en.client.leash = null; }
+    this.clientList.clear(); this.dying = [];
   }
   addPlayerKey() { this.playerKey ??= { player: true }; this.order.add(this.playerKey, this.playerId); }
   forget(e) { this.order.remove(e); }
@@ -589,6 +608,7 @@ export class MobTracker {
     const all = o.allOf(o.withExtra(joint.lists)), none = () => [0];
     this.beginTick(mobs, player, size, false);
     o.beginTick(all, player, none, false);
+    if (this.resendPending) this.resendWorld([o]); // a respawn: the new client gets every entry again, in HashSet order, before this tick's new entities
     // The player's own update (EntityPlayerMP.onUpdate, the S13 flush) runs inside the world's entity loop, before the entities that spawn at its end are tracked: the destroys that are due
     // reach the client before this tick's spawn packets (executed order: tracker-joint-reference.json, a destroy and a spawn in one tick).
     if (this.dying.length || o.dying.length) this.applyParts([[this, this.dying], [o, o.dying]]);
@@ -635,6 +655,15 @@ export class MobTracker {
     const alive = new Set(mobs);
     // removeEntityFromAllTrackingPlayers: the destroy is queued now and the client copy lives until it is flushed, one tick later (it stays a crystal for the dragon's search)
     for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); this.forget(e); this.dying.push(en); }
+    if (add && this.resendPending) this.resendWorld(); // a respawn (serverTick path): the new client gets every entry again, in HashSet order
+    // Batch 54: at the player's join the mobs the world already held are sent to it in the HashSet's order, as in `jointUpdate` (the later spawns enter one by one, in creation order)
+    if (add && this.pendingJoin && this.playerId !== undefined && this.beforePlayer) {
+      const early = mobs.filter((e) => !this.entries.has(e) && this.beforePlayer(e));
+      for (const e of early) { const [width, height] = size(e); this.entryOf(e, width, height, true); }
+      this.pendingJoin = false; this.addPlayerKey();
+      const held = new Set(early);
+      if (held.size) for (const e of this.order.keys()) if (held.has(e)) { const en = this.entries.get(e); en.entry.updatePlayerList(); this.flush(en); }
+    }
     // 1. every entry sends its location
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)

@@ -16,7 +16,7 @@ const player = { x: 0.5, y: 0, z: 0.5 };
 const grass = { numericSeed: 1, floorBelow: true, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), getMeta: () => 0, surface: () => 0 };
 const KINDS = new Set(["spawn", "move", "moveLook", "look", "teleport", "velocity", "head", "destroy"]);
 // the port's list name of each probe kind
-const LIST = { item: "item", arrow: "arrow", snowball: "snowball", orb: "orb", boat: "boat", cart0: "minecart", cart1: "minecart", painting: "painting", frame: "itemFrame", eye: "eyeOfEnder", hook: "fishHook" };
+const LIST = { item: "item", arrow: "arrow", snowball: "snowball", orb: "orb", boat: "boat", cart0: "minecart", cart1: "minecart", painting: "painting", frame: "itemFrame", eye: "eyeOfEnder", hook: "fishHook", knot: "leashKnot", firework: "firework", falling: "falling", tnt: "tnt", potion: "potion" };
 
 function host(spec, id, row, before) {
   const [x, y, z, vx, vy, vz, yaw, pitch] = row;
@@ -26,6 +26,9 @@ function host(spec, id, row, before) {
     case "orb": return { id, x, posY: y, z, vx, vy, vz, y: y - 0.25, value: 5, beforeP: before };
     case "boat": case "cart0": case "cart1": return { entityId: id, x, posY: y, z, vx, vy, vz, yaw, pitch, type: spec.kind === "cart1" ? 1 : 0, beforeP: before };
     case "painting": case "frame": return { entityId: id, x: x + 0.5, y, z: z + 0.5, tx: x, ty: y, tz: z, dir: spec.dir, yaw: 0, art: 0, beforeP: before };
+    case "knot": return { entityId: id, x: x + 0.5, y: y + 0.5, z: z + 0.5, tx: x, ty: y, tz: z, dir: 0, yaw: 0, beforeP: before };
+    case "falling": return { entityId: id, x, y: y - OBJECT_KINDS.falling.yOff, z, mx: vx, my: vy, mz: vz, block: 3, meta: 0, beforeP: before };
+    case "firework": case "tnt": case "potion": return { entityId: id, x, y: y - OBJECT_KINDS[spec.kind].yOff, z, mx: vx, my: vy, mz: vz, vx, vy, vz, damage: 16388, beforeP: before };
     case "eye": case "hook": return { entityId: id, x, y, z, vx, vy, vz, yaw, pitch, beforeP: before };
     default: return { id, x, y, z, mx: vx, my: vy, mz: vz, yaw, pitch, beforeP: before };
   }
@@ -66,7 +69,7 @@ function replay(name, tweak = null) {
   return bad;
 }
 
-for (const name of ["vehicles", "vehiclesLast", "mix", "playerFirst", "playerLast"]) test(`${name}: the joint walk sends and flushes in the order of the real EntityTracker`, () => {
+for (const name of ["extras", "extrasLast", "vehicles", "vehiclesLast", "mix", "playerFirst", "playerLast"]) test(`${name}: the joint walk sends and flushes in the order of the real EntityTracker`, () => {
   assert.deepEqual(replay(name).slice(0, 3), []);
 });
 
@@ -135,4 +138,17 @@ test("a tracker rejoin after the first update puts the new id in the set at once
   m.joinPlayer(9);
   assert.equal(m.order.keys().filter((k) => k === m.playerKey).length, 1);
   assert.equal(m.order.keys_.get(m.playerKey).hash, m.order.hash(9));
+});
+
+test("the b54rt record holds knots, rockets, falling blocks, TNT and potions, destroyed before and after the player", () => {
+  for (const name of ["extras", "extrasLast"]) {
+    const r = ref[name];
+    assert.equal(r.tag, "b54rt");
+    const kinds = new Set(Object.values(r.inputs).map((v) => v.kind));
+    for (const k of ["knot", "firework", "falling", "tnt", "potion"]) assert.ok(kinds.has(k), name + " " + k);
+    const ev = [...r.setup.flat(), ...r.ticks.flatMap(([, e]) => e)];
+    const spawned = new Set(ev.filter((p) => p[0] === "spawn").map((p) => p[1]));
+    for (const id of Object.values(r.ids2)) if (id !== r.ids.player) assert.ok(spawned.has(id), name + " spawn " + id);
+    assert.ok(ev.filter((p) => p[0] === "destroy").length >= 8);
+  }
 });
