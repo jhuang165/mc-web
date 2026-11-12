@@ -1544,16 +1544,16 @@ export class EntityWorld {
     // EntityIronGolem.onDeath (wt.a(ro)): a village golem (not player-created) killed while a player is its attackingPlayer costs that player 5.
     else if (e.type === "iron_golem" && !e.playerCreated && e.recentlyHit > 0) this.ai.brain(e).village?.changeReputation(source.playerName ?? PLAYER_NAME, -5);
     this.gearDeath(e); // horse-gear-live.js: the horse inventory (the lead stays on the corpse)
-    // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
+    // EntityLivingBase.onDeath (sv.a(ro), bytecode-read): Entity.onKillEntity of the attacker (a zombie's villager rule) runs BEFORE dropFewItems, so the converted zombie joins the list ahead of the loot.
+    if (e.type === "villager" && source.attacker?.type === "zombie") this.zombieKilledVillager(source.attacker, e);
+    // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike); each item joins the list now (emitLoot).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
       for (const [drop, damage, enchantments] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0, toLive: toLiveStack }, entityRandom(e)))
-        this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), ...(enchantments ? { enchantments } : {}), position: at });
+        this.emitLoot({ drop, count: 1, ...(damage ? { damage } : {}), ...(enchantments ? { enchantments } : {}), position: at });
     }
     e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
-    // EntityLivingBase.onDeath: Entity.onKillEntity of the attacker, a zombie's villager rule.
-    if (e.type === "villager" && source.attacker?.type === "zombie") this.zombieKilledVillager(source.attacker, e);
   }
   // The player's kill (main.js /kill, tests): a generic death with the player as attacker.
   kill(e) {
@@ -1573,7 +1573,7 @@ export class EntityWorld {
     const rand = entityRandom(e);
     if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
-      this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
+      this.emitLoot({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } }); // onDeathUpdate spawns the orbs before setDead splits a slime
     }
     if (isSlimeLike(e)) this.splitSlime(e, rand);
     burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand); // draws g g g f f f x 20 on Entity.rand even without a client (onDeathUpdate's spawnParticle arguments)
@@ -1703,7 +1703,7 @@ export class EntityWorld {
     // The breeding experience needs gamerule doMobLoot.
     // EntityAIMate.spawnBaby draws on the mother's Entity.rand: 7 "heart" spawnParticle argument sets (a server no-op, arguments still evaluated), then the orb's nextInt(7) + 1.
     const rand=entityRandom(a);burst(null,'heart',7,{x:a.x,y:a.y,z:a.z,width:ENTITY_TYPES[a.type].width,height:ENTITY_TYPES[a.type].height},rand,0.5);
-    if(gameRule("doMobLoot"))this.events.push({xp:1+rand.nextInt(7),position:{x:a.x,y:a.y,z:a.z}});
+    if(gameRule("doMobLoot"))this.emitLoot({xp:1+rand.nextInt(7),position:{x:a.x,y:a.y,z:a.z}});
     return true;
   }
   // The createChild half of the above (EntityAgeable.createChild of `a` with partner `b`): the unspawned baby.
@@ -1891,7 +1891,7 @@ export class EntityWorld {
     if(!survival.creative&&!survival.count(id))return false;
     const r=this.random,n=1+Math.floor(r()*3);e.sheared=true;
     for(let i=0;i<n;i++){const my=f(r()*f(0.05)),mx=f(f(r()-r())*f(0.1)),mz=f(f(r()-r())*f(0.1));
-      this.events.push({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
+      this.emitLoot({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
     this.events.push({sound:'mob.sheep.shear',volume:1,position:{x:e.x,y:e.y,z:e.z}});
     if(!survival.creative)survival.wear(id,1);
     return true;
@@ -1973,6 +1973,13 @@ export class EntityWorld {
     ev.length = n;
     this.lootScan = n;
     if (out) spawn(out);
+  }
+  // Batch 49: a drop or orb is spawned where the native call spawns it, not at the end of the entry's step. EntityLivingBase.onDeath -> dropFewItems/dropEquipment -> entityDropItem
+  // runs inside the hurt call (bytecode-read), so the item joins loadedEntityList then, ahead of whatever the same call or step spawns next and for a hurt outside the walk
+  // (a player's hit, /kill, a blast) at that moment, not after the tick. A host without `spawnLoot` keeps the event queued for drain().
+  emitLoot(ev) {
+    if (this.spawnLoot) this.spawnLoot([ev]);
+    else this.events.push(ev);
   }
   // Events of a mob that ticked outside the resident ticking window are kept (natural-spawning.md "Round 6"): its drops and
   // experience become item entities and orbs that tick in the ring (streaming-ticks.js ringEntityActive), its explosions and block
@@ -2861,7 +2868,7 @@ export class EntityWorld {
     if (e.growingAge >= 0 && !e.chickenJockey && --e.eggTimer <= 0) {
       const rand = entityRandom(e), pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1); // EntityChicken draws on its own Entity.rand: two floats for the pitch, then nextInt(6000)
       this.events.push({ sound: "mob.chicken.plop", volume: 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
-      this.events.push({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
+      this.emitLoot({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
       e.eggTimer = rand.nextInt(6000) + 6000;
     }
   }

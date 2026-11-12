@@ -4,6 +4,7 @@ import { moveEntity, entityPushOut } from './entities.js';
 import { LAVA, slipperiness } from './world.js';
 import { explosionImpact } from './explosion.js';
 import {mhSin} from "./lighting.js";
+import {freshEntityRandom} from "./java-random.js";
 import { FISHING_SMELT_EXPERIENCE } from "./fishing-content.js";
 import { NETHER_SMELT_EXPERIENCE } from "./nether-blocks.js";
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
@@ -56,13 +57,16 @@ export class ExperienceOrbs {
  // `random` is the orbs' Entity.rand (lava and pickup sounds, push-out speed); `wet(orb)` is
  // Entity.isWet (rain; EntityXPOrb.handleWaterMovement never sets inWater).
  constructor(saved=[],random=Math.random,ids=null){
-  this.random=random;this.ids=ids;this.sounds=[];this.cooldown=0; // ids: entity-ids.js, the shared Entity.nextEntityID when the caller has one
+  this.random=random;this.ids=ids;
+  // Entity.rand: each native orb owns one (pickup sound, lava fizz, push-out); the default Math.random host gives each orb its own, an injected `random` stays shared. The constructor's motion draws (newOrb) are Math.random.
+  this.entityRandom=random===Math.random?freshEntityRandom:null;this.rands=new WeakMap();this.sounds=[];this.cooldown=0; // ids: entity-ids.js, the shared Entity.nextEntityID when the caller has one
   this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value].every(Number.isFinite)&&o.value>0&&o.value<=2477).map(o=>{
    // Saves before 0.21.4 stored the remaining lifetime (`life`) instead of xpOrbAge.
    const age=Number.isFinite(o.age)?o.age:Number.isFinite(o.life)?LIFETIME-o.life:0,n=k=>Number.isFinite(o[k])?o[k]:0;
    return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.max(0,Math.trunc(age)),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})},undefined,ids);
   }).filter(o=>o.age<LIFETIME&&o.health>0):[];
  }
+ rng(o){if(!this.entityRandom)return this.random;let r=this.rands.get(o);if(!r)this.rands.set(o,r=this.entityRandom());return r;}
  // `p` is the spawn point (posY): EntityXPOrb.getXPSplit pieces, one orb each.
  spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128)){const o=newOrb(n,p.x,p.y,p.z,Math.random,this.ids);this.orbs.push(o);this.joined?.(o);}} // joined: entity-simulation.js (entityWalkers), the orb's place in World.loadedEntityList
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
@@ -95,7 +99,7 @@ export class ExperienceOrbs {
    const b=o.bb;
    if(!(b[3]>a[0]&&b[0]<a[3]&&b[4]>a[1]&&b[1]<a[4]&&b[5]>a[2]&&b[2]<a[5]))continue;
    this.cooldown=2;
-   const r1=this.random(),r2=this.random();
+   const rr=this.rng(o),r1=rr(),r2=rr();
    this.sounds.push({name:'random.orb',volume:f(0.1),pitch:f(f(0.5)*f(f(f(f(r1)-f(r2))*f(0.7))+f(1.8))),x:feet.x,y:feet.y,z:feet.z});
    o.dead=true;this.orbs=this.orbs.filter(x=>x!==o);
    return o.value;
@@ -123,12 +127,12 @@ export class ExperienceOrbs {
   o.vy-=0.029999999329447746;
   // The orb's cell is lava: thrown up and sideways with a fizz (0.4, 2 + r * 0.4).
   if(world.get(Math.floor(o.x),Math.floor(o.posY),Math.floor(o.z))===LAVA){
-   const r=this.random;
+   const r=this.rng(o);
    o.vy=0.20000000298023224;o.vx=f(f(f(r())-f(r()))*f(0.2));o.vz=f(f(f(r())-f(r()))*f(0.2));
    this.sounds.push({name:'random.fizz',volume:f(0.4),pitch:f(2+f(f(r())*f(0.4))),x:o.x,y:o.posY,z:o.z});
   }
   // func_145771_j at the box centre; unlike EntityItem the result does not set noClip.
-  const push=entityPushOut(world,o.x,(o.bb[1]+o.bb[4])/2,o.z,o.bb,this.random);
+  const push=entityPushOut(world,o.x,(o.bb[1]+o.bb[4])/2,o.z,o.bb,this.rng(o));
   if(push)o[['vx','vy','vz'][push[0]]]=push[1];
   // Every 20 - entityId % 100 ticks of xpColor (every tick once that is below 1) an orb with no
   // target, or one farther than 8 blocks, looks for the closest player within 8 (distance
@@ -154,9 +158,9 @@ export class ExperienceOrbs {
  // fire counter (fireResistance 1), with a rain fizz when wet. The orb's tick moves by its motion;
  // a piston push (TileEntityPiston, piston-push.js) by the push delta.
  move(world,o,dx,dy,dz){
-  const self=this;
+  const self=this,rng=this.rng(o);
   moveEntity(world,o,SIZE,SIZE,dx,dy,dz,0,{hurt:(source,n)=>this.hurt(o,source,n),get wet(){return !!self.wet?.(o);},
-   fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(this.random())-f(this.random()))*f(0.4))),x:o.x,y:o.posY,z:o.z})});
+   fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(rng())-f(rng()))*f(0.4))),x:o.x,y:o.posY,z:o.z})});
   o.posY=o.bb[1]+HALF;
  }
  serialize(){return this.orbs.map(strip);}

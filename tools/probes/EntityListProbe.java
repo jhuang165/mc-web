@@ -73,6 +73,8 @@ public class EntityListProbe {
   static class Ej extends ej { Ej() { super(false); } public boolean d() { return true; } }
   static class Nh extends nh { Ej ej; Nh() { super(null, null, null); } public ej b() { return ej; } public void a(ft packet) {} } // sendPacket: nothing to send to
   static class Sp extends mw { double dmg; Sp() { super(null, null, null, null); } public boolean a(ro src, float amount) { dmg += amount; return true; } }
+  // Batch 49 (b49hd): the attacker of a scheduled hurt call, a player shell with no held item (EnchantmentHelper.getLootingModifier asks it)
+  static class Hr extends XpOrbProbe.Target { Hr() { super(); } public add be() { return null; } public void b(sa e, int n) {} public boolean Z() { return true; } } // addToPlayerScore reads a data watcher the shell lacks
   static boolean detail = false; // the pthrow scenarios append the cart's and boat's damage to their state (older records keep their bytes)
   static String num(double v) { return Double.toString(v); }
   static String q(String s) { return "\"" + s + "\""; }
@@ -138,6 +140,15 @@ public class EntityListProbe {
       if (e.l.K || e.l.m != e) { e.l.m = null; e.l = null; } else update(e.l);
     }
   }
+  // Batch 49: a hurt call from outside the walk (the player's melee, /kill's outOfWorld): spec = hit, 0 0 0 0 0 0, target index, source (0 player, 1 outOfWorld), tick, phase, amount, then (1: another entity spawns right after the call)
+  static void hurt(EW w, List<sa> all, String[] h) throws Exception {
+    sv target = (sv) all.get(Integer.parseInt(h[7]));
+    ro src;
+    if (h[8].equals("0")) { Hr p = (Hr) PlantProbe.unsafe.allocateInstance(Hr.class); p.o = w; p.s = -1.5; p.t = 0.0; p.u = 0.5; PlayerStepProbe.field(sa.class, "C").set(p, azt.a(-1.8, 0.0, 0.2, -1.2, 1.8, 0.8)); yw cap = new yw(); p.bE = cap; src = ro.a((yz) p); }
+    else src = ro.i;
+    target.a(src, Float.parseFloat(h[11]));
+    if (h[12].equals("1")) { xk it = new xk(w, 3.5, 0.3, 0.5, new add(aji.e(1), 4, 0)); PlayerStepProbe.field(sa.class, "Z").set(it, new Random(7)); w.d(it); }
+  }
   static EW newWorld() throws Exception {
     EW w = (EW) PlantProbe.unsafe.allocateInstance(EW.class);
     MobMoveProbe.set(w, "t", PlantProbe.unsafe.allocateInstance(aqq.class));
@@ -161,10 +172,11 @@ public class EntityListProbe {
     if (System.getenv("EL_ONLY") != null && !name.contains(System.getenv("EL_ONLY"))) return;
     detail = name.startsWith("pthrow");
     EW w = newWorld();
-    List<String[]> ents = new ArrayList<>(), sets = new ArrayList<>();
+    List<String[]> ents = new ArrayList<>(), sets = new ArrayList<>(), hits = new ArrayList<>();
     for (String[] sp : specs) {
       if (sp[0].equals("wall")) for (int[] c : HangingProbe.plane(Integer.parseInt(sp[7]), Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]))) w.put(c[0], c[1], c[2], c[3], c[4]);
       else if (sp[0].equals("set") && Integer.parseInt(sp[9]) < 0) w.put(Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]), Integer.parseInt(sp[7]), 0); // before the entities exist
+      else if (sp[0].equals("hit")) hits.add(sp); // batch 49: a hurt call at tick `join`, before (phase 0) or after (phase 1) the walk
       else if (sp[0].equals("set")) sets.add(sp); // a block change at the start of tick `join`
       else ents.add(sp);
     }
@@ -179,6 +191,7 @@ public class EntityListProbe {
       for (String[] st : sets) if (Integer.parseInt(st[9]) == t) w.put(Integer.parseInt(st[1]), Integer.parseInt(st[2]), Integer.parseInt(st[3]), Integer.parseInt(st[7]), 0);
       for (int i = 0; i < all.size(); i++) if (join[i] == t) w.entities.add(all.get(i));
       booms.clear();
+      for (String[] h : hits) if (Integer.parseInt(h[9]) == t && h[10].equals("0")) hurt(w, all, h);
       for (int i = 0; i < w.entities.size(); i++) { // the list is walked by index: an entity spawned in the pass joins the end and updates in it
         sa e = w.entities.get(i);
         if (e.m != null) { // World.updateEntities: a rider is updated right after its mount; a dead or released mount frees it
@@ -188,6 +201,7 @@ public class EntityListProbe {
         if (!e.K) update(e);
       }
       w.entities.removeIf(e -> e.K);
+      for (String[] h : hits) if (Integer.parseInt(h[9]) == t && h[10].equals("1")) hurt(w, all, h);
       if (player != null) { // the network tick after the world's entities: EntityPlayer.onUpdate counts xpCooldown down, onLivingUpdate collides with the entities around (list order)
         if (player.bt > 0) player.bt--;
         for (Object o : w.b(player, player.C.b(1.0, 0.5, 1.0))) if (!((sa) o).K) ((sa) o).b_(player);
@@ -207,6 +221,7 @@ public class EntityListProbe {
   // kind x y z vx vy vz a b join [block]
   static String[] item(double x, double y, double z, double vx, int count, int age, int join) { return new String[] {"item", "" + x, "" + y, "" + z, "" + vx, "0", "0", "" + count, "" + age, "" + join, "1"}; }
   static String[] dcow(double x, double y, double z, int health, int recentlyHit, int join) { return new String[] {"dcow", "" + x, "" + y, "" + z, "0", "0", "0", "" + health, "" + recentlyHit, "" + join}; }
+  static String[] hit(int target, int source, int tick, int phase, float amount, int then) { return new String[] {"hit", "0", "0", "0", "0", "0", "0", "" + target, "" + source, "" + tick, "" + phase, "" + amount, "" + then}; }
   static String[] cow(double x, double y, double z, double vx, int join) { return new String[] {"cow", "" + x, "" + y, "" + z, "" + vx, "0", "0", "0", "0", "" + join}; }
   static String[] arrow(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"arrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   static String[] orb(double x, double y, double z, int value, int join) { return new String[] {"orb", "" + x, "" + y, "" + z, "0", "0", "0", "" + value, "0", "" + join}; }
@@ -380,6 +395,17 @@ public class EntityListProbe {
     scenario("death-fall-cow-hit", 40, dcow(0.5, 6.0, 0.5, 1, 100, 0));
     scenario("death-fall-cow-nohit", 40, dcow(0.5, 6.0, 0.5, 1, 0, 0));
     scenario("death-fall-cow-item-after", 40, dcow(0.5, 6.0, 0.5, 1, 100, 0), item(3.5, 0.3, 0.5, 0.0, 4, 0, 0));
+    // Batch 49 (b49hd): where a death's items join the list. A hurt call outside the walk, a kill in the walk (an arrow, a blast of two cows), and another spawn right after the call.
+    scenario("b49hd-player-hit-pre", 40, dcow(0.5, 0.0, 0.5, 1, 0, 0), hit(0, 0, 2, 0, 4.0f, 0));
+    scenario("b49hd-player-hit-post", 40, dcow(0.5, 0.0, 0.5, 1, 0, 0), hit(0, 0, 2, 1, 4.0f, 0));
+    scenario("b49hd-kill-pre", 12, dcow(0.5, 0.0, 0.5, 10, 0, 0), hit(0, 1, 2, 0, 1000.0f, 0));
+    scenario("b49hd-kill-post", 12, dcow(0.5, 0.0, 0.5, 10, 0, 0), hit(0, 1, 2, 1, 1000.0f, 0));
+    scenario("b49hd-arrow-kill", 8, dcow(1.0, 0.0, 0.5, 1, 0, 0), arrow(-2.0, 1.0, 0.5, 0.9, 0.0, 0.0, 0));
+    scenario("b49hd-arrow-kill-first", 8, arrow(-2.0, 1.0, 0.5, 0.9, 0.0, 0.0, 0), dcow(1.0, 0.0, 0.5, 1, 0, 0));
+    scenario("b49hd-blast-two-cows", 6, tnt(0.5, 0.5, 0.5, 0, 0), dcow(2.0, 0.0, 0.5, 1, 0, 0), dcow(-1.0, 0.0, 0.5, 1, 0, 0));
+    scenario("b49hd-blast-two-cows-first", 6, dcow(2.0, 0.0, 0.5, 1, 0, 0), dcow(-1.0, 0.0, 0.5, 1, 0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
+    scenario("b49hd-kill-then-spawn", 6, dcow(0.5, 0.0, 0.5, 1, 100, 0), hit(0, 0, 2, 0, 4.0f, 1));
+    scenario("b49hd-kill-then-spawn-post", 6, dcow(0.5, 0.0, 0.5, 1, 100, 0), hit(0, 0, 2, 1, 4.0f, 1));
     scenario("death-fall-cow-item-before", 40, item(3.5, 0.3, 0.5, 0.0, 4, 0, 0), dcow(0.5, 6.0, 0.5, 1, 100, 0));
     // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
     float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};
