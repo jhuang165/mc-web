@@ -62,7 +62,7 @@ import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
 import { mountEntity, releaseDead, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
-import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
+import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage, mobEffect, RESISTANCE } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
@@ -74,7 +74,7 @@ import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
 import { MobTracker } from "./entity-tracker.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
-import { enchantedDamage } from "./armor-enchantments.js";
+import { enchantedDamage, isAbsolute } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
@@ -1114,13 +1114,18 @@ export class EntityWorld {
     else if (TARGETS_ATTACKER.has(e.type) && !by && source.entity) this.silverfishState(e).target = { alive: false, x: source.entity.x, y: source.entity.y, z: source.entity.z, height: 0, eyeHeight: 0 };
     return true;
   }
-  // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
+  // EntityLivingBase.damageEntity (sv.d): armour (damageArmor, sv.h, is empty for a mob: its gear never wears down), then applyPotionDamageCalculations
+  // (sv.c: an absolute source returns first, Resistance 20 % per level for every source but outOfWorld, nothing left returns 0, then the enchantments of the worn
+  // gear), then the absorption amount (sv.bs / sv.m), then setHealth (a float, clamped at 0). Executed: mob-resist-reference.json (b50mr).
   damageEntity(e, amount, name, source = null) {
     amount = armorReduced(e.type, amount, name, e.size, e.equipment);
+    const resistance = mobEffect(e, RESISTANCE);
+    if (resistance && name !== "outOfWorld" && !isAbsolute(name)) amount = f(f(amount * (25 - (resistance.amplifier + 1) * 5)) / 25);
     // EnchantmentHelper.getEnchantmentModifierDamage over the worn stacks (the generic protection code of the player's armour).
     if (e.equipment) amount = enchantedDamage(e.equipment, name, amount);
     // EntityWitch.applyPotionDamageCalculations: its own damage is ignored, magic damage is cut to 15 %.
     if (e.type === "witch") amount = witchDamage(amount, { isMagic: name === "magic" || name === "indirectMagic", byWitch: source?.attacker === e });
+    if (e.absorption > 0) { const left = Math.max(f(amount - e.absorption), 0); e.absorption = f(e.absorption - f(amount - left)); amount = left; }
     if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
   }
   // EntityZombie.attackEntityFrom (yq.a(ro, F)) once the hit counts, even a killing one. The
