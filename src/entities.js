@@ -663,7 +663,7 @@ export function jump(e) {
 // isAIEnabled false (probed attributes2 `aiEnabled`): getAIMoveSpeed is 0.1 and the water acceleration 0.02; EntityCreature.updateEntityActionState
 // puts the movementSpeed attribute in moveForward. The ghast, squid and dragon move by their own code.
 // Mobs whose body yaw follows EntityLivingBase.func_110146_f instead of EntityBodyHelper (not isAIEnabled in 1.7.10): only the enderman so far, the one with native yaw records.
-const LEGACY_BODY = new Set(["enderman", "spider", "cave_spider", "slime", "magma_cube"]); // EntityLiving.isAIEnabled (sw.bk) is false unless overridden; yn, ym and yf do not (bytecode-read); b49po records executed spider and slime body yaw
+export const LEGACY_BODY = new Set(["enderman", "spider", "cave_spider", "slime", "magma_cube", "silverfish", "giant", "pigman", "blaze", "ghast"]); // EntityLiving.isAIEnabled (sw.bk) is false unless overridden. Bytecode-read over every class extending sw: the overrides that return true are bat, chicken, cow, horse, ocelot, pig, sheep, snow golem, iron golem, wolf, wither, creeper, skeleton, witch, zombie and villager; PigZombie (yh) overrides it back to false, and enderman, spider, slime, silverfish, giant, blaze, ghast, squid and the dragon never override. The squid has its own legacyBodyTurn and the dragon sets its own yaws. b49po (spider, slime) and b50lb (silverfish, giant, pigman, blaze, ghast; witch and creeper as controls) executed
 export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "giant", "pigman", "enderman", "slime", "magma_cube", "blaze"]);
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
@@ -2197,6 +2197,7 @@ export class EntityWorld {
       e.py = e.y;
       e.pz = e.z;
       e.prevRotationYaw = e.rotationYaw;
+      if (e.type === "silverfish") e.renderYawOffset = e.rotationYaw; // EntitySilverfish.onUpdate (yk.h): renderYawOffset = rotationYaw before the living update (b50lb executed)
       e.prevRenderYawOffset = e.renderYawOffset;
       e.prevRotationYawHead = e.rotationYawHead;
       e.prevRotationPitch = e.rotationPitch;
@@ -2802,6 +2803,7 @@ export class EntityWorld {
     st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
     e.idle = st.entityAge;
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+    e.rotationYawHead = e.rotationYaw; // EntityLiving.onLivingUpdate without AI (sw.e): rotationYawHead = rotationYaw after the action state (b50lb executed)
     e.moveForward = st.moveForward; e.jumping = st.jumping; e.summonCooldown = st.summonCooldown;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
   }
@@ -2844,6 +2846,7 @@ export class EntityWorld {
     creatureActionState(st, env);
     st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+    e.rotationYawHead = e.rotationYaw; // as the silverfish (sw.e)
     e.moveForward = st.moveForward; e.jumping = st.jumping;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
   }

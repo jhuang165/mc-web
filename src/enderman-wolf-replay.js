@@ -31,6 +31,7 @@ export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
 export const reference47sp = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47sp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
+export const reference50 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b50lb-reference.json", import.meta.url)));
 export const reference49 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b49po-reference.json", import.meta.url)));
 export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
@@ -44,7 +45,7 @@ class LogRandom extends JavaRandom {
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
-  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", B: "spider", I: "slime", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
+  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", B: "spider", I: "slime", f: "silverfish", g: "giant", z: "pigman", a: "blaze", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
   Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse", 3: "horse", 4: "horse", 5: "horse", 6: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
 // b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
@@ -122,7 +123,7 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x48 = /^b4[89](pp|po)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
+  const x48 = /^b(4[89](pp|po)|50lb)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp") || r.name.startsWith("b46mp"), x46 = x47, b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
   if (x48) ew.ai.player.onGround = true; // the probe's copy starts as a grounded player (EndermanWolfProbe B46: onGround true)
   if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
@@ -229,7 +230,6 @@ function run(r) {
     const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
     if (!b47) ew.events.length = 0; // b47h: the sounds a script op made (feed, rear) are in the tick's row
     if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
-    if (x46 && !x47 && ew.ai.player.hurtBy) ew.ai.player.hurtByTime = ew.ai.clock + 1; // b46mp: the probe's ticksExisted stayed 0 (mw.i does not count it), so its revenge target never aged; b47sp counts it
     if (!x47) ew.ai.player.sent = null; // every harness but b47sp sets the probe player (the server copy itself) where the script puts it, so every tick is a position packet (b46mp: put back at the client's place, y included; b47h: a thrown or seated rider)
     if (x46 && !(x48 && (r.rows[t][9].length || r.rows[t][5][2].length))) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it (b48pp: on a tick with a push row 6 is read after the tile loop moved the copy, so the copy's own flag, kept from its last update, is the input then)
     ew.tick(player, survival, held);
@@ -309,7 +309,8 @@ export function firstDivergence(r, got) {
       if (JSON.stringify(w[7]) !== JSON.stringify(g[7])) return [t, i, "draws", w[7], g[7]];
       for (let k = 0; k < 11; k++) if (!same(w[8][k], g[8][k])) return [t, i, ["vx", "vy", "vz", "yaw", "pitch", "headYaw", "bodyYaw", "onGround", "jumping", "moveForward", "moveStrafing"][k], w[8][k], g[8][k]];
     }
-    const ws = want[1].map(soundOf).filter(([name]) => name !== "" && name !== "none"), gs = have[1].map((s) => [s[0], s[1], s[2]]);
+    // fire.fire: the blaze crackle is EntityBlaze.onLivingUpdate's isRemote half; the probe world double records it, the port plays it on the client copy.
+    const ws = want[1].map(soundOf).filter(([name]) => name !== "" && name !== "none" && name !== "fire.fire"), gs = have[1].map((s) => [s[0], s[1], s[2]]);
     if (JSON.stringify(ws) !== JSON.stringify(gs)) return [t, "sounds", ws, gs];
     if (Math.abs(want[2] - have[2]) > 1e-9) return [t, "player damage", want[2], have[2]];
     if (want[3] !== have[3]) return [t, "player revenge", want[3], have[3]];
@@ -317,8 +318,8 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !/^b4[89](pp|po)/.test(r.name) ? bad("player motion", wm, gm) : null);
-      const d2 = /^b4[89](pp|po)/.test(r.name) ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !/^b(4[89](pp|po)|50lb)/.test(r.name) ? bad("player motion", wm, gm) : null);
+      const d2 = /^b(4[89](pp|po)|50lb)/.test(r.name) ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b47sp") || r.name.startsWith("b46mp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp and b46mp (regenerated in batch 50 under the b47 harness): all three motion axes and the copy's resting position (row element 8)
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
