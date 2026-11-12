@@ -1960,12 +1960,27 @@ export class EntityWorld {
   // EntityLiving updates when its surroundings are loaded (World.updateEntityWithOptionalForce, ahb.a(sa, boolean)): the resident ticking
   // window, or any entity whose chunk and the two chunks around it are resident or held by the ring.
   isActive(e) { return entityActive(this.world, e) || !!this.ring?.active(e.x, e.z); }
+  // Batch 48: World.spawnEntityInWorld runs inside the hurt call (EntityLivingBase.onDeath drops the loot, bytecode-read) and inside the dying mob's own onDeathUpdate (the orbs at
+  // deathTime 20), appending to loadedEntityList while World.updateEntities walks it by index: the item or orb is first ticked later in the same pass. `spawnLoot` (a host hook: main.js
+  // and the away run) turns the queued `drop` and `xp` events into entities at once, between two entries of the walk; without it they stay queued for the usual drain.
+  // A bottle's orbs (`bottle`) are spawned by the potion walker. Scans only what was queued since the last call.
+  flushLoot() {
+    const spawn = this.spawnLoot, ev = this.events;
+    if (!spawn) return;
+    const from = Math.min(this.lootScan ?? 0, ev.length);
+    let n = from, out = null;
+    for (let i = from; i < ev.length; i++) { const x = ev[i]; if ((x.drop || x.xp) && !x.bottle) (out ??= []).push(x); else ev[n++] = x; }
+    ev.length = n;
+    this.lootScan = n;
+    if (out) spawn(out);
+  }
   // Events of a mob that ticked outside the resident ticking window are kept (natural-spawning.md "Round 6"): its drops and
   // experience become item entities and orbs that tick in the ring (streaming-ticks.js ringEntityActive), its explosions and block
   // edits apply there, and its positioned sounds go through the S29 range filter (sound-origin.js) like any other. A sound without a
   // position would play at the listener, so one of those is dropped.
   dropFarEvents(from) {
     let n = from;
+    if (this.lootScan > from) this.lootScan = from;
     for (let i = from; i < this.events.length; i++) { const ev = this.events[i]; if (!ev.sound || ev.position) this.events[n++] = ev; }
     this.events.length = n;
   }
@@ -2106,6 +2121,7 @@ export class EntityWorld {
   takeExplosions() {
     const taken = [];
     for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i].explode) taken.unshift(...this.events.splice(i, 1));
+    this.lootScan = 0;
     return taken;
   }
   tickMobs(player, survival, heldItem=0) {
@@ -2146,7 +2162,8 @@ export class EntityWorld {
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
-    for (let oi = 0; oi < order.length; oi++) {
+    // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
+    for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       const e = order[oi];
       seat();
       if (e.lateHook) { e.lateHook(); continue; }
@@ -2985,6 +3002,7 @@ export class EntityWorld {
   drain() {
     const events = this.events;
     this.events = [];
+    this.lootScan = 0;
     return events;
   }
 }

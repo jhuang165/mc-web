@@ -7,6 +7,14 @@ export function explodeEvent(event, explode) {
   explode(e.x, e.y, e.z, e.size, { exploder: e.source, attacker: e.source, smoking: e.smoking ?? true, flaming: e.flaming ?? false, blue: !!e.blue }, event);
 }
 
+/** The drops and experience a mob's death queued, spawned at once (EntityWorld.flushLoot): the same two lines drainMobEvents runs, for a walk in progress. */
+export function spawnLoot({ xpOrbs, items }, events) {
+  for (const event of events) {
+    if (event.xp) xpOrbs.spawn(event.xp, event.position);
+    if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
+  }
+}
+
 /**
  * Route queued mob events in their live order. Each event is consumed in the
  * order sound, death XP spawn, explosion, item drop, then eat-grass observer.

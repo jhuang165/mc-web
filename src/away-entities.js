@@ -27,7 +27,7 @@ import { Arrows, arrowTargets } from "./bow.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { FireworkRockets } from "./fireworks-live.js";
 import { Hanging, hangingArrowTargets } from "./hanging.js";
-import { drainMobEvents, explodeEvent } from "./living-simulation.js";
+import { drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
 import { isWet, canSeeSky } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
@@ -167,6 +167,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     w.tick = (en) => { if (num(en?.x) && num(en?.z) && !entityTicks(en.x, en.z)) { stats.held++; return; } tick(en); };
   }
   mobs.walks = walks;
+  mobs.spawnLoot = (evs) => spawnLoot({ xpOrbs: xp, items }, evs); // batch 48: a death's drops and orbs join the list in the dying entity's own turn (entities.js flushLoot)
   minecarts.joined = (en) => mobs.joined(en, "cart"); boats.joined = (en) => mobs.joined(en, "boat"); hanging.joined = (en) => mobs.joined(en, "hanging"); rockets.joined = (en) => mobs.joined(en, "rocket");
   items.joined = (en) => mobs.joined(en, "item"); xp.joined = (en) => mobs.joined(en, "orb"); projectiles.joined = (en) => mobs.joined(en, "thrown"); arrows.joined = (en) => mobs.joined(en, "arrow");
   watchJoin(primed, (en) => mobs.joined(en, "tnt"));
