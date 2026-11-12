@@ -14,6 +14,7 @@ import { LAVA } from "./world.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { entityPushOut } from "./entities.js";
+import { freshEntityRandom } from "./java-random.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -21,6 +22,10 @@ const f = Math.fround;
 export class ItemEntities {
   constructor(random = Math.random) {
     this.random = random;
+    // Entity.rand (push-out speed, lava and fire fizz): each native item owns one. The live game (the default Math.random) gives each item its own; a host that injects a fixed or seeded
+    // `random` (replays, away runs) keeps one shared stream. The spawn motion draws are the constructor's Math.random and stay on `random`.
+    this.entityRandom = random === Math.random ? freshEntityRandom : null;
+    this.rands = new WeakMap();
     this.items = [];
     // A client world's items (object-tracker.js): EntityItem.onUpdate without the !isRemote parts, the merge search and the lifetime.
     this.remote = false;
@@ -46,6 +51,12 @@ export class ItemEntities {
     this.items.push(item);
     this.joined?.(item); // entity-simulation.js (entityWalkers): the entity's place in World.loadedEntityList
     return item;
+  }
+  rng(e) {
+    if (!this.entityRandom) return this.random;
+    let r = this.rands.get(e);
+    if (!r) this.rands.set(e, r = this.entityRandom());
+    return r;
   }
   // Block.dropBlockAsItem (func_149642_a): 0.7-wide random spread inside the
   // block; Block.dropBlockAsItemWithChance makes each dropped item its own
@@ -121,7 +132,7 @@ export class ItemEntities {
   }
   // Entity.func_145771_j at the item's centre (entities.js entityPushOut).
   pushOut(world, e) {
-    const p = entityPushOut(world, e.x, e.y + W, e.z, this.box(e), this.random);
+    const p = entityPushOut(world, e.x, e.y + W, e.z, this.box(e), this.rng(e));
     if (!p) return false;
     e[["mx", "my", "mz"][p[0]]] = p[1];
     return true;
@@ -185,7 +196,7 @@ export class ItemEntities {
       hurt: (source, amount) => this.hurt(e, amount),
       wet,
       fizz: () => {
-        const r = this.random;
+        const r = this.rng(e);
         this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y + W, z: e.z });
       },
     });
@@ -274,7 +285,7 @@ export class ItemEntities {
       // EntityItem.onUpdate: an item whose cell is lava is thrown up and
       // sideways with a fizz (volume 0.4, pitch 2 + 0.4 * random).
       if (world.get(Math.floor(e.x), Math.floor(e.y + W), Math.floor(e.z)) === LAVA) {
-        const r = this.random;
+        const r = this.rng(e);
         e.my = 0.20000000298023224;
         e.mx = f(f(r() - r()) * 0.2);
         e.mz = f(f(r() - r()) * 0.2);

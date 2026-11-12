@@ -15,9 +15,11 @@ import { Projectiles, GaussianRandom } from "./projectiles.js";
 import { impactPlayerPearl } from "./pearl-player.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { explodeEvent, spawnLoot } from "./living-simulation.js";
-import { explodeNonLiving } from "./explosion-simulation.js";
+import { explodeNonLiving, explodeMobs } from "./explosion-simulation.js";
 import { JavaRandom } from "./java-random.js";
 import { setEntityRandom } from "./entities.js";
+import { arrowTargets } from "./bow.js";
+import { mobTargets } from "./projectiles.js";
 
 // Replays one EntityListProbe record (public/research/entity-list-reference.json, tools/probes/EntityListProbe.java): the unchanged EntityItem, EntityXPOrb,
 // EntityTNTPrimed and EntityArrow walked in World.loadedEntityList order, against the walk in EntityWorld.tickMobs (`mobs.walks`, entity-simulation.js
@@ -43,10 +45,11 @@ export function replayEntityList(c, onBoom = null, without = null) {
   projectiles.clientParticles = true; projectiles.tickEffects = () => {};
   const hasOrb = c.specs.some((q) => q[0] === "orb"), survival = new Survival({}, "survival"), hasMp = c.specs.some((q) => q[0] === "pthrow" && q[8] === 2), player = { x: hasOrb ? 0.5 : hasMp ? 0 : 1e5, y: 0, z: hasMp ? 0 : 0.5, health: 20, alive: true, width: 0.6, height: 1.8, isPlayer: true };
   let xp = 0, inPass = false;
-  const explode = (x, y, z, power, who) => { booms.push([x, y, z, power]); if (without === "blast") items.explode(world, x, y, z, power, who?.exploder ?? who); else explodeNonLiving(state, x, y, z, power, who?.exploder ?? who, false, drop); onBoom?.(items); };
+  const explode = (x, y, z, power, who) => { booms.push([x, y, z, power]); if (without === "blast") items.explode(world, x, y, z, power, who?.exploder ?? who); else { const before = items.items.length; explodeMobs(state, { x, y, z, size: power, exploder: who?.exploder ?? who }); explodeNonLiving(state, x, y, z, power, who?.exploder ?? who, false, drop, before); } onBoom?.(items); };
   // Entity.entityDropItem(stack, 0) and a broken cart's drops: an item that joins the end of the list in the pass (the probe's World.spawnEntityInWorld fixes its sideways motion).
   const drop = (d) => items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: [0, 0.2, 0] });
   const hooks = {
+    arrowOptions: () => ({ targets: arrowTargets(mobTargets(ew.entities, null), true), mobs: ew, survival: state.survival, player: null }), // main.js arrowOptions: the mobs are the arrow's targets
     explodeTnt: (x, y, z, power, who) => { explode(x, y, z, power, who); explodeTntAll(world, primed, who.exploder, x, y, z, power); },
     maxStack: () => 64, carts: { drop }, boats: { drop }, hangingActive: () => true, hangingDrop: drop,
     mobExplosion: (ev) => explodeEvent(ev, (x, y, z, size, options) => explode(x, y, z, size, options)),
@@ -64,6 +67,7 @@ export function replayEntityList(c, onBoom = null, without = null) {
   for (const host of [items, xpOrbs]) { const tick = host.tickOne.bind(host), shared = host.random; host.tickOne = (...a) => { const r = (a[1].ownRand ??= new JavaRandom(7)); host.random = () => r.nextFloat(); try { return tick(...a); } finally { host.random = shared; } }; }
   // Batch 48 (EntityWorld.flushLoot): a death's drops and orbs join the list in the dying cow's own turn; the probe's World.spawnEntityInWorld fixes their sideways motion. World.rand is Random(2) there.
   ew.worldRandom = new JavaRandom(2);
+  if (without === "hurtCall") ew.emitLoot = (ev) => ew.events.push(ev); // batch 48's timing: the loot waits for the end of the entry's step (flushLoot) or the drain after the tick
   if (without !== "lootInTurn") ew.spawnLoot = (evs) => { const n = items.items.length; spawnLoot({ xpOrbs, items }, evs); for (const it of items.items.slice(n)) [it.mx, it.my, it.mz] = [0, 0.2, 0]; };
   ew.walks = entityWalkers(() => ctx);
   if (without === "mobPush") for (const w of ew.walks.values()) delete w.pushMob;
@@ -72,7 +76,8 @@ export function replayEntityList(c, onBoom = null, without = null) {
   minecarts.joined = (e) => ew.joined(e, "cart"); boats.joined = (e) => ew.joined(e, "boat"); hanging.joined = (e) => ew.joined(e, "hanging");
   const sets = c.specs.filter((s) => s[0] === "set").map((s) => ({ x: s[1], y: s[2], z: s[3], id: PORT_ID[s[7]] ?? s[7], tick: s[9] }));
   for (const st of sets) if (st.tick < 0) world.put(st.x, st.y, st.z, st.id, 0);
-  const made = c.specs.filter((s) => s[0] !== "set" && s[0] !== "wall").map((s) => {
+  const hits = c.specs.filter((s) => s[0] === "hit").map((s) => ({ target: s[7], source: s[8], tick: s[9], phase: s[10], amount: s[11], then: s[12] })); // batch 49: hurt calls outside the walk
+  const made = c.specs.filter((s) => s[0] !== "set" && s[0] !== "wall" && s[0] !== "hit").map((s) => {
     const [kind, x, y, z, vx, vy, vz, a, b, join, seed] = s, at = { kind, x, y, z, vx, vy, vz, a, b, join, seed };
     return { at, entity: null };
   });
@@ -118,17 +123,28 @@ export function replayEntityList(c, onBoom = null, without = null) {
     const v = made[m.at.b - 1].entity;
     if (!mountMobOnVehicle(v, m.entity, () => 0)) throw new Error("mount refused");
   }
+  // The probe's Hr shell stands at (-1.5, 0, 0.5); /kill is attackEntityFrom(outOfWorld, 1000) with no attacker. `then` spawns a 4-stone item right after the call (the probe's world.spawnEntityInWorld fixes its motion).
+  const hurt = (h) => {
+    const cow = made[h.target].entity;
+    inPass = true;
+    if (h.source === 0) ew.damage(cow, h.amount, -1.5, 0.5); else ew.attackEntityFrom(cow, h.amount, { name: "outOfWorld" });
+    if (h.then) items.spawn({ id: STONE, count: 4, damage: 0 }, 3.5, 0.3, 0.5, { motion: [0, 0.2, 0] });
+    inPass = false;
+  };
   const rows = [], detail = c.name.startsWith("pthrow"); // the pthrow records carry the cart's and boat's damage and rolling
   for (let t = 0; t < c.ticks; t++) {
     for (const st of sets) if (st.tick === t) world.put(st.x, st.y, st.z, st.id, 0);
     for (const m of made) if (m.at.join === t) m.add();
     booms.length = 0;
+    for (const h of hits) if (h.tick === t && h.phase === 0) hurt(h);
     inPass = true;
     ew.tickMobs(player, survival);
     finishEntitySimulation(state, hooks);
     if (without === "lootInTurn") { const n = items.items.length; spawnLoot({ xpOrbs, items }, ew.drain()); for (const it of items.items.slice(n)) [it.mx, it.my, it.mz] = [0, 0.2, 0]; } // the drain after the walk, as before batch 48
     inPass = false;
     if (hasOrb) { xp += xpOrbs.collect({ x: 0.5, y: 0, z: 0.5 }); }
+    for (const h of hits) if (h.tick === t && h.phase === 1) hurt(h);
+    if (without === "hurtCall") { inPass = true; ew.spawnLoot(ew.drain()); inPass = false; } // the drain after the tick (loot of a hurt outside the walk waited for it)
     rows.push([made.map((m) => view(m, primed, detail, player, survival)), booms.map((b) => [...b]), hasOrb ? [xp, xpOrbs.cooldown] : [], extras.map((m) => view(m, primed, detail, player, survival))]);
   }
   return rows;

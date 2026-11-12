@@ -117,3 +117,12 @@ export function strictLog(x) {
   if (k === 0) return f - s * (f - R);
   return dk * ln2Hi - ((s * (f - R) - dk * ln2Lo) - f);
 }
+
+/**
+ * A fresh Entity.rand: every native entity constructs its own java.util.Random, seeded from the system clock. Returns the `() => float` the item and orb code draws from.
+ * (The constructors' own motion draws are Math.random, a different generator; entity-spawn sites keep using the host's `random` for those.)
+ */
+export function freshEntityRandom() {
+  const r = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+  return () => r.nextFloat();
+}

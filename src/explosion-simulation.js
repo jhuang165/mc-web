@@ -32,8 +32,10 @@ function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop)
  * snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, and the minecarts and boats (attackEntityFrom with the explosion
  * source, then the motion; EntityListProbe). Primed TNT, mobs and the player stay with applyExplosion.
  */
-export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null) {
+export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null) {
   const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
+  // `itemsBefore`: the item count when the blast collected its entity list; the items after it (a mob the blast just killed dropped them) wait out the blast.
+  const born = itemsBefore === null || !items.items ? [] : items.items.splice(itemsBefore);
   items.explode(world, x, y, z, size, exploder);
   xpOrbs.explode(world, x, y, z, size, exploder);
   arrows.explode(world, x, y, z, size, exploder);
@@ -44,6 +46,7 @@ export function explodeNonLiving(state, x, y, z, size, exploder = null, creative
   explodeVehicles(state.boats, world, x, y, z, size, exploder, creative, vehicleDrop);
   falling?.explode(x, y, z, size, exploder);
   state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
+  if (born.length) items.items.splice(itemsBefore, 0, ...born);
 }
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
@@ -62,31 +65,17 @@ export function explodeNonLiving(state, x, y, z, size, exploder = null, creative
  */
 // EntityWitherSkull.func_145772_a on a blue skull: resistance capped at 0.8 except bedrock, end portal, its frame and command blocks.
 const blueSkullResistance = (id) => skullResistance(true, WITHER_PROOF_INTERNAL.includes(id), explosionResistance(id));
-export function applyExplosion(state, request, hooks = {}) {
-  const {
-    world, weather, random = weather?.random, mobs, items, xpOrbs, arrows,
-    projectiles, falling, primed, survival, position, velocity, farming,
-  } = state;
-  // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
-  // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
-  const { x, y, z, size, exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = request;
-  const {
-    opaque = opaqueCube,
-    ignite = null,
-    brokenTool = () => {},
-    burst = () => {},
-    sound = () => {},
-    updateBlocks = () => {},
-    syncChests = () => {},
-    renderVitals = () => {},
-    markDirty = () => {},
-  } = hooks; // `hooks.vehicleDrop(drop)`: a broken cart's or boat's item (Minecarts / Boats drain record), spawned at once
-
-  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite, resistance: blue ? blueSkullResistance : undefined }); // blue: a charged wither skull caps resistance (wither-boss.js)
+/**
+ * The living-entity half of Explosion.doExplosionA (mobs only; no player): each mob in reach takes the impact damage through attackEntityFrom (a kill drops its loot at once,
+ * EntityLivingBase.onDeath) and then the push. Returns the hits. `request`: `{x, y, z, size, exploder, attacker}`.
+ */
+export function explodeMobs(state, request) {
+  const { world, mobs, position } = state;
+  const { x, y, z, size, exploder = null, attacker = null } = request;
   const mobHits = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
-  for (const entity of mobs?.entities ?? []) {
+  for (const entity of [...(mobs?.entities ?? [])]) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
     if (entity === exploder) continue;
     const type = ENTITY_TYPES[entity.type];
     if (!type) continue;
@@ -118,8 +107,34 @@ export function applyExplosion(state, request, hooks = {}) {
     entity.vx += hit.push[0]; entity.vy += hit.push[1]; entity.vz += hit.push[2];
     mobHits.push({ entity, ...hit });
   }
+  return mobHits;
+}
+export function applyExplosion(state, request, hooks = {}) {
+  const {
+    world, weather, random = weather?.random, mobs, items, xpOrbs, arrows,
+    projectiles, falling, primed, survival, position, velocity, farming,
+  } = state;
+  // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
+  // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
+  const { x, y, z, size, exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = request;
+  const {
+    opaque = opaqueCube,
+    ignite = null,
+    brokenTool = () => {},
+    burst = () => {},
+    sound = () => {},
+    updateBlocks = () => {},
+    syncChests = () => {},
+    renderVitals = () => {},
+    markDirty = () => {},
+  } = hooks; // `hooks.vehicleDrop(drop)`: a broken cart's or boat's item (Minecarts / Boats drain record), spawned at once
 
-  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop);
+  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite, resistance: blue ? blueSkullResistance : undefined }); // blue: a charged wither skull caps resistance (wither-boss.js)
+  // Batch 49: a mob this blast kills drops its loot at its hurt call (EntityLivingBase.onDeath), after Explosion.doExplosionA collected its entity list: those items are not in it.
+  const itemsBefore = items.items?.length ?? null;
+  const mobHits = explodeMobs(state, { x, y, z, size, exploder, attacker });
+
+  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore);
   const tntProcessed = [];
   for (const entity of primed) {
     if (entity === exploder) continue;

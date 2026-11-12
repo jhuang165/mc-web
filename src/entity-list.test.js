@@ -24,7 +24,7 @@ const row = (r, t, kind, x) => r.rows[t][0][entityIndex(r, kind, x)];
 const differs = (a, b, kind, x) => a.rows.some((_, t) => JSON.stringify(row(a, t, kind, x)) !== JSON.stringify(row(b, t, kind, x)));
 
 test("the records show the list order: the same entities end differently when listed the other way round", () => {
-  assert.equal(entityListReference.length, 78);
+  assert.equal(entityListReference.length, 88);
   // two equal stacks: the first to update merges into the other, so the list order picks the survivor
   const dead = (r) => last(r).map((e) => e[6]);
   assert.deepEqual(dead(by("items-equal-ab")), [1, 0]);
