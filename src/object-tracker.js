@@ -362,9 +362,12 @@ export class ObjectClient extends ClientEntity {
 
 // The tracker of the non-mob entities of an EntityWorld. `update(lists, player, world)`: lists maps a kind to the live entities of that kind.
 export class ObjectTracker extends MobTracker {
-  constructor(viewChunks = 10, random = Math.random) {
+  // `ids`: the EntityIds counter of the world (entity-ids.js). Natively one counter numbers mobs and objects alike; with it an item, arrow or other object that has no id of
+  // its own takes the next number of that counter when the tracker first sees it (spawn tick), else it counts on from 1 << 24 as before.
+  constructor(viewChunks = 10, random = Math.random, ids = null) {
     super(viewChunks);
-    this.kinds = new Map(); this.nextId = 1 << 24; this.dying = []; // entries whose entity left the world: their destroy packet is still queued
+    this.ids = ids;
+    this.kinds = new Map(); this.nextId = 1 << 24; // `dying` (entity-tracker.js): entries whose entity left the world, their destroy packet is still queued
     const items = new ItemEntities(random), orbs = new ExperienceOrbs([], random), arrows = new Arrows(random), balls = new Projectiles(random);
     items.remote = true; balls.remote = true;
     this.sims = { items, orbs, arrows, balls };
@@ -411,9 +414,10 @@ export class ObjectTracker extends MobTracker {
   // live entity only for the boat or cart the client player rides, whose client copy runs full physics the port does not model). `rides(live)` tells the ridden one.
   vehicleTargets(rides = () => false) {
     const out = [];
-    for (const [live, en] of this.entries) {
+    // a removed boat or cart's copy stays hittable until its destroy packet is flushed (the client list still holds it)
+    for (const [live, en] of [...this.entries, ...this.dying.map((d) => [d.live, d])]) {
       const c = en.client, spec = c.spec;
-      if (!c.present || !(spec.vehicle || spec.hanging) || live.dead) continue;
+      if (!c.present || !(spec.vehicle || spec.hanging) || (live.dead && this.entries.get(live) === en)) continue;
       const ridden = spec.vehicle && rides(live) && live.bb;
       out.push({ ref: c, kind: c.kind, box: ridden ? live.bb : c.box(), answers: true });
     }
@@ -453,7 +457,7 @@ export class ObjectTracker extends MobTracker {
   read(kind, e, p) {
     const spec = OBJECT_KINDS[kind];
     p.type = kind;
-    p.id ??= e.entityId ?? e.id ?? this.nextId++;
+    p.id ??= e.entityId ?? e.id ?? (this.ids ? this.ids.take() : this.nextId++);
     p.x = e.x; p.z = e.z; p.airBorne = e.airBorne; p.velocityChanged = !!e.velocityChanged;
     p.fire = e.fire ?? 0; p.stack = e.stack; p.crit = !!e.crit; p.anglerId = e.anglerId;
     if (kind === "item") {
@@ -516,9 +520,11 @@ export class ObjectTracker extends MobTracker {
   }
   clientTick() {
     const ctx = this.ctx;
-    for (const en of this.entries.values()) { en.client.world = ctx.world; this.flush(en); en.client.step(ctx); }
-    for (const en of this.dying) { en.client.world = ctx.world; this.flush(en); en.client.step(ctx); }
-    this.dying = this.dying.filter((en) => en.client.present && en.entry.packets.length);
+    for (const en of this.queued()) en.client.world = ctx.world;
+    this.applyQueue(this.queued());
+    // the client world updates its entities in the order their spawn packets arrived (entity-tracker.js clientList)
+    for (const en of [...this.clientList]) { if (!en.client.present) { this.clientList.delete(en); continue; } en.client.step(ctx); }
+    this.pruneDying();
   }
   update(lists, player, world) {
     this.ctx.world = world; this.ctx.player = player;

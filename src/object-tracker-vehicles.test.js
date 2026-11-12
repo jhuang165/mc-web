@@ -122,6 +122,8 @@ test("targets: only copies the client spawned are hit targets; the ridden live b
   assert.deepEqual(tracker.vehicleTargets((l) => l === boat)[0].box, boat.bb);
   const far = { ...boat, id: 2, x: 400.5, bb: [399, 0, 4.75, 402, 0.6, 6.25] };
   tracker.serverTick({ boat: [far] }, { x: 0.5, y: 0, z: 0.5 }); tracker.clientTick();
+  assert.equal(tracker.vehicleTargets().length, 1); // batch 50: the first boat left the world, but its S13 is flushed one tick later, so its copy is still hittable
+  tracker.serverTick({ boat: [far] }, { x: 0.5, y: 0, z: 0.5 }); tracker.clientTick();
   assert.equal(tracker.vehicleTargets().length, 0);
 });
 

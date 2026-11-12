@@ -215,6 +215,7 @@ public class TrackerMountsProbe {
     for (int i : order) entries[i].b(players); // updatePlayerList at once: spawn (and attach) packets
     for (my ce : cEntries) ce.b(players);
     int lastLeash = 0;
+    List<Object> pendingDestroy = new ArrayList<>();
     for (int t = 0; t < n; t++) {
       double[] r = script.at(t);
       boolean leashNow = r.length > 9 && r[9] != 0;
@@ -241,7 +242,14 @@ public class TrackerMountsProbe {
       inputs.append("," + num(d(rider, "s")) + "," + num(d(rider, "t")) + "," + num(d(rider, "u")) + "]");
       // the client: packets in order, then the world's update of every client entity (a rider is skipped and updated after its mount)
       List<Object> q = new ArrayList<>(TrackerProbe.queue); TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
-      for (Object o : q) handle(o, servers, makes);
+      // batch 50 (trackerids): an S13 is not sent at once. EntityTrackerEntry.a() (setDead -> untrackEntity -> removeFromWatchingList) adds the id to EntityPlayerMP.destroyedItemsNetCache
+      // (mw.bN) and the player's own update (mw.h, which runs in World.updateEntities before EntityTracker.updateTrackedEntities, bytecode-read: MinecraftServer.v calls
+      // WorldServer.tick, updateEntities, then mn.a) sends it at the start of the NEXT tick. So a destroy queued at tick t reaches the client ahead of tick t+1's other packets.
+      List<Object> destroyNow = new ArrayList<>(), keep = new ArrayList<>();
+      for (Object o : q) (o instanceof Integer ? destroyNow : keep).add(o);
+      for (Object o : pendingDestroy) handle(o, servers, makes);
+      pendingDestroy.clear(); pendingDestroy.addAll(destroyNow);
+      for (Object o : keep) handle(o, servers, makes);
       for (sa c : new ArrayList<>(clientOrder)) {
         if (c.m != null) continue;
         tickClient(c);
