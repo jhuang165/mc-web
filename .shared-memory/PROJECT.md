@@ -113,6 +113,16 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 46 (2026-11-11, five Sonnet tracks in `../wt46-<name>` on `batch46-<name>`, cut from a1ba8548c, merged --no-ff on `batch46-lead`; lead note `b46-lead-track.md`; the gun side runs separately):
+- 0.75.0, by track:
+  - clienttargets: client arrows and hooks hit boats, carts, paintings, item frames, leash knots and the dragon's parts (true on a client world: the arrow ends, the hook attaches); a burning client arrow sets the copy on fire for one update; a burning server arrow resyncs its velocity every 20th tick. `TrackerHitsProbe` +11 scenarios.
+  - playerthrows: player potions and exp bottles use MathHelper's sine table in `launch`; player balls hit carts and boats (Creative breaks them) and eggs and pearls break paintings; a pearl moves once after impact. `EntityListProbe` 63 scenarios, 25 launch records.
+  - mobpush: mobs push the client player after its move (`client-push.js`, bytecode-read); the server copy of the player keeps its own motion (mob pushes, knockback, blasts, friction) and the witch leads its aim by it. 19 `b46mp` records (`enderman-wolf-b46mp-reference.json`).
+  - itematlas2: spawn eggs and potions draw two passes from atlas cells (`item-passes.js`); clock and compass are animated atlas cells. Items have no mipmaps natively and the piston item is a cube (no change).
+  - awayvehicles: away carts, boats, hanging entities and rockets tick at their join place in the one walk.
+- Lead fix: first person passes the held egg's and potion's damage (they drew as an untinted egg and a water bottle). Found in the muted smoke.
+- Verification: see `b46-lead-track.md`. Pushed to github main by the lead.
+
 Batch 45 (2026-11-11, ten Sonnet tracks in `../wt45-<name>` on `batch45-<name>`, cut from 82874be6b, merged --no-ff on `batch45-lead`; lead note `b45-lead-track.md`; the gun side runs separately):
 - 0.74.0, by track:
   - clienthits: client arrows, hooks and thrown entities hit client copies (`TrackerHitsProbe`, 19 scenarios). Client copies' sounds are logged but silent, because `RenderGlobal.playSound` is empty in 1.7.10.
