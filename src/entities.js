@@ -2003,7 +2003,7 @@ export class EntityWorld {
   // edits apply there, and its positioned sounds go through the S29 range filter (sound-origin.js) like any other. A sound without a
   // position would play at the listener, so one of those is dropped.
   dropFarEvents(from) {
-    let n = from;
+    let n = Math.min(from, this.events.length); // never extend the list with holes
     if (this.lootScan > from) this.lootScan = from;
     for (let i = from; i < this.events.length; i++) { const ev = this.events[i]; if (!ev.sound || ev.position) this.events[n++] = ev; }
     this.events.length = n;
@@ -2233,7 +2233,8 @@ export class EntityWorld {
       }
       if (e.type === "fireball") { this._fireballs.tickOne(e); continue; } // a ball (fireballs.js) updates where it stands in the list
       if (e.removedNow || !this.isActive(e)) continue;
-      if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
+      // Loot queued before this entry (a kill outside the tick: a horse's saddle at onDeath) is flushed first, so the far mob's flushLoot cannot shrink the list below the mark (holes in events)
+      if (this.ring && !this.world.isTicking(e.x, e.z)) { this.flushLoot(); farMark = this.events.length; }
       if (e.ridingEntity) { rider = e; beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
