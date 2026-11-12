@@ -8,10 +8,10 @@ import { modelBox, BIPED, armorLayer, heldKind, heldItemMatrix } from "./player-
 import { pixelTexture, itemTexture } from "./first-person.js";
 import { itemFrameTag } from "./item-animation.js";
 import { entityMaterial } from "./light-material.js";
-import { spriteGeometry } from "./sprite-geometry.js";
 import { headItemMatrix } from "./wearable-heads.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { toLiveStack, GEAR_TYPES } from "./mob-equipment-live.js";
+import { heldSprite } from "./held-sprite.js";
 
 const LIMB = { rightArm: 0, leftArm: 1, rightLeg: 2, leftLeg: 3 };
 
@@ -29,7 +29,25 @@ function pivotOf(r, name) {
   return r.limbs[LIMB[name]];
 }
 
+// RenderBiped.renderEquippedItems for a child (ModelBiped.isChild): before the arm's postRender the item's frame moves down 0.625, tilts 20 degrees about x
+// (glRotatef(-20, -1, 0, 0)) and halves (bytecode-read bnw.a). The native entity frame is not scaled, while the port's rig root carries the child's 0.5 about
+// the feet, so the matrix also undoes that 0.5 (scale 2). It is in rig axes: feet origin, y up, z forward; model space starts 24 pixels up and flips y and z.
+const CHILD_HELD = (() => {
+  const flip = new THREE.Matrix4().makeScale(1, -1, -1), up = new THREE.Matrix4().makeTranslation(0, 1.5, 0), down = new THREE.Matrix4().makeTranslation(0, -1.5, 0);
+  const model = new THREE.Matrix4().makeTranslation(0, 0.625, 0).multiply(new THREE.Matrix4().makeRotationX((20 * Math.PI) / 180)).multiply(new THREE.Matrix4().makeScale(0.5, 0.5, 0.5));
+  return new THREE.Matrix4().makeScale(2, 2, 2).multiply(up).multiply(flip).multiply(model).multiply(flip).multiply(down);
+})();
+
+// Called every frame after the limbs are posed: a child's held item follows its arm through CHILD_HELD.
+export function followChildHeld(r) {
+  const c = r.heldChild;
+  if (!c) return;
+  c.limb.updateMatrix();
+  c.follow.matrix.copy(CHILD_HELD).multiply(c.limb.matrix);
+}
+
 function dispose(r) {
+  r.heldChild = null;
   for (const n of r.gearNodes ?? []) {
     n.parent?.remove(n);
     n.traverse((o) => o.isMesh && o.geometry.dispose());
@@ -47,7 +65,7 @@ export function syncMobEquipment(renderer, r, e) {
   if (!e.equipment || !GEAR_TYPES.has(e.type) || !r.neck || r.villager) return;
   // The held item (slot 0) also carries its animated icon frame (item-animation.js), so a frame change rebuilds the sprite only then.
   const heldStack = e.equipment[0], heldLive = heldStack ? toLiveStack(heldStack) : null;
-  const key = e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}` : "0")).join(",") + (heldLive ? ":" + itemFrameTag(itemTexture(heldLive.id, heldLive.damage)) : "");
+  const baby = e.growingAge < 0, key = (baby ? "b" : "") + e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}` : "0")).join(",") + (heldLive ? ":" + itemFrameTag(itemTexture(heldLive.id, heldLive.damage)) : "");
   if (r.gearKey === key) return;
   r.gearKey = key;
   dispose(r);
@@ -97,16 +115,26 @@ export function syncMobEquipment(renderer, r, e) {
     r.neck.add(flip);
     r.gearNodes.push(flip);
   }
-  // The held item in the right hand.
-  const held = live[0], url = held && itemTexture(held.id, held.damage);
-  if (url) {
-    const mesh = new THREE.Mesh(spriteGeometry(), material({ map: pixelTexture(url) })), group = new THREE.Group(), flip = new THREE.Group();
+  // The held item in the right hand (RenderBiped.renderEquippedItems: both passes of a spawn egg or a potion).
+  const held = live[0], sprite = held && heldSprite(held.id, held.damage, material);
+  if (sprite) {
+    const group = new THREE.Group(), flip = new THREE.Group();
     group.matrixAutoUpdate = false;
     group.matrix.copy(heldItemMatrix(heldKind(held.id, held.damage)));
     flip.scale.set(1, -1, -1);
-    group.add(mesh);
+    group.add(sprite);
     flip.add(group);
-    r.limbs[0].add(flip);
-    r.gearNodes.push(flip);
+    if (baby) {
+      const follow = new THREE.Group();
+      follow.matrixAutoUpdate = false;
+      follow.add(flip);
+      r.limbs[0].parent.add(follow);
+      r.heldChild = { follow, limb: r.limbs[0] };
+      r.gearNodes.push(follow);
+      followChildHeld(r);
+    } else {
+      r.limbs[0].add(flip);
+      r.gearNodes.push(flip);
+    }
   }
 }

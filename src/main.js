@@ -4058,6 +4058,7 @@ function animate(now) {
     heldDamage: survival.held?.damage || 0,
     heldColor: survival.held?.color,
     heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
+    blocking: !!eating?.block,
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
     riding: !!rider.vehicle,
@@ -4097,9 +4098,10 @@ function animate(now) {
       light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
       view: scene.camera,
       time: elapsed,
-      eating: eating && !eating.bow ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
+      eating: eating && !eating.bow && !eating.block ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
       // The bow's icon follows the whole ticks of draw; its pull uses the ticks - 1 + partial.
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
+      blocking: !!eating?.block, // ItemRenderer: a sword in use (EnumAction.block)
       glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       color: survival.held?.color,
       map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
