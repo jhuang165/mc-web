@@ -233,7 +233,7 @@ import { breakPlayerBlock } from "./block-break-simulation.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
-import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
+import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
@@ -1545,6 +1545,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.riderLook = () => ({ yaw: Math.fround(180 - (yaw * 180) / Math.PI), pitch: Math.fround((-pitch * 180) / Math.PI) }); // the local player's look, which the ridden horse's client copy turns to (horse-copy.js)
     mobs.explodeInline = (ev) => explodeEvent(ev, explodeAt); // a creeper explodes inside its own update (entities.js)
     mobs.walks = entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }); // arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
     mobs.spawnLoot = (events) => spawnLoot({ xpOrbs, items }, events); // a death's drops and orbs join the list in the dying entity's own turn (entities.js flushLoot)
@@ -3017,9 +3018,9 @@ function vehicleState() {
 // the player model follow the interpolated cart the renderer draws. The server side (the tick's physics, the dismount) keeps the live seat; this runs at the end of each seating.
 function seatOnCartCopy() {
   const live = rider.vehicle;
-  if (live?.horse && live.entity?.type === "pig") { // Batch 53: a ridden pig is seated from its packet-driven client copy the same way (Entity.updateRiderPosition, height * 0.75)
-    const pc = mobs?.tracker?.clientIfTracked(live.entity);
-    if (pc) { position.x = pc.x; position.y = pc.y + PIG_MOUNTED_OFFSET - 0.5; position.z = pc.z; }
+  if (live?.horse && live.entity) { // Batch 53 (pig), batch 54 (horse): seated from the packet-driven client copy the same way (Entity.updateRiderPosition; horse-copy.js)
+    const seat = copySeat(mobs?.tracker?.clientIfTracked(live.entity), live.entity);
+    if (seat) { position.x = seat.x; position.y = seat.y; position.z = seat.z; }
     return;
   }
   const c = live && !live.boat && !live.horse && rideCopy(objectTracker, live);

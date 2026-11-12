@@ -217,10 +217,10 @@ test("a mob riding a mob is drawn where the client's updateRiderPosition put it,
   assert.equal(zombie.x, pig.x, "the live rider stays on the live mount");
 });
 
-test("a horse the player rides follows the live one; a ridden pig's copy is packet-driven (batch 53), and main.js seats the player on it", () => {
+test("a ridden pig's copy is packet-driven (batch 53), and main.js seats the player on it; a ridden unsaddled horse's copy is too (batch 54)", () => {
   // Bytecode scan (batch 45): no class on the pig's client path reads riddenByEntity, and isClientWorld is true only for EntityPlayerSP, so natively the
   // client pig interpolates S14 / S18 like any mob (the executed ridePig record) and the rider sits on it. Batch 53 stopped copying the live pig, so the copy
-  // trails it and the player is seated from it. The horse steers from its rider (wi.e(FF)); not ported, so its copy still follows the live horse.
+  // trails it and the player is seated from it. Batch 54: the horse's copy trails the same way (horse-copy-b54.test.js covers the saddled one's angles).
   const { mobs, pig, tick } = pair();
   tick();
   pig.rider = { vehicle: { entity: pig } };
@@ -235,8 +235,7 @@ test("a horse the player rides follows the live one; a ridden pig's copy is pack
   horse.rider = { vehicle: { entity: horse } };
   for (let t = 0; t < 10; t++) { horse.x += 0.2; horse.z -= 0.1; horse.rotationYaw = 10 * t; horse.renderYawOffset = 10 * t; tick2(); }
   const h = m2.clientPosition(horse);
-  assert.deepEqual([h.x, h.y, h.z, h.rotationYaw, h.renderYawOffset], [horse.x, horse.y, horse.z, horse.rotationYaw, horse.renderYawOffset]);
-  assert.ok(Math.abs((h.x - h.px) - 0.2) < 1e-9, "the previous client position is last tick's");
+  assert.ok(horse.x - h.x > 0.1, "the ridden horse's copy trails the live horse");
   horse.rider = null;
   const before = h.x;
   tick2();

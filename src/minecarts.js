@@ -113,6 +113,21 @@ const normalize = (x, y, z) => {
   return d < 1.0e-4 ? [0, 0, 0] : [x / d, y / d, z / d];
 };
 
+// EntityLivingBase.dismountEntity (sv.m, executed in VehicleProbe for carts; bytecode-read for other mounts): the rider's feet go to the mount's top, or to the last clear spot of
+// the asymmetric dx -1..1, dz -1..0 search around the rider that has a solid top (or water) under it. `clear(box)` is the block-only collision test (ahb.a(AxisAlignedBB)).
+export function dismountSpot(world, rider, mount, clear) {
+  let x = mount.x, y = mount.minY + mount.height, z = mount.z;
+  const width = rider.width ?? f(0.6), height = rider.height ?? f(1.8), half = width / 2;
+  const free = (dx, dz) => clear([rider.x - half + dx, rider.y + 1, rider.z - half + dz, rider.x + half + dx, rider.y + 1 + height, rider.z + half + dz]);
+  search: for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz < 1; dz++) {
+    if ((!dx && !dz) || !free(dx, dz)) continue;
+    const bx = Math.trunc(rider.x + dx), by = Math.trunc(rider.y), bz = Math.trunc(rider.z + dz);
+    if (solidTop(world, bx, by, bz)) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; break search; }
+    if (solidTop(world, bx, by - 1, bz) || world.get(bx, by - 1, bz) === W.WATER) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; }
+  }
+  return { x, y, z };
+}
+
 export class Minecarts {
   // `rails` maps internal block ids to rail kinds; `random(cart)` returns the cart's Entity.rand
   // (a JavaRandom); `maxStack(stack)` is Item.getItemStackLimit for browser stacks.
@@ -168,19 +183,8 @@ export class Minecarts {
   dismount(world, rider) {
     const cart = rider.vehicle;
     if (!cart) return false;
-    let x = cart.x, y = cart.bb[1] + (cart.height ?? CART_HEIGHT), z = cart.z;
-    const width = rider.width ?? f(0.6), height = rider.height ?? f(1.8), half = width / 2;
-    const clear = (dx, dz) => {
-      const box = [rider.x - half + dx, rider.y + 1, rider.z - half + dz, rider.x + half + dx, rider.y + 1 + height, rider.z + half + dz];
-      return this.boxes(world, cart, box, []).length === 0;
-    };
-    search: for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz < 1; dz++) {
-      if ((!dx && !dz) || !clear(dx, dz)) continue;
-      const bx = Math.trunc(rider.x + dx), by = Math.trunc(rider.y), bz = Math.trunc(rider.z + dz);
-      if (solidTop(world, bx, by, bz)) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; break search; }
-      if (solidTop(world, bx, by - 1, bz) || world.get(bx, by - 1, bz) === W.WATER) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; }
-    }
-    Object.assign(rider, { x, y, z, vehicle: null, fallDistance: 0 });
+    const spot = dismountSpot(world, rider, { x: cart.x, minY: cart.bb[1], height: cart.height ?? CART_HEIGHT, z: cart.z }, (box) => this.boxes(world, cart, box, []).length === 0);
+    Object.assign(rider, { ...spot, vehicle: null, fallDistance: 0 });
     cart.rider = null;
     return true;
   }

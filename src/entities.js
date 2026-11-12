@@ -1,4 +1,5 @@
 import { trackSections } from "./saved-order.js";
+import { steerHorseCopy } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -2010,6 +2011,7 @@ export class EntityWorld {
   // The client entity's EntityLivingBase.moveEntityWithHeading(0, 0) (entity-tracker.js): the same movement code on the same world. The water
   // and lava flags are the client entity's own (clientEnvironment); a chunk the streaming world has not loaded hovers.
   moveClient(c, m) {
+    if (c.steered) { steerHorseCopy(c, this.riderLook?.()); return; } // wi.e(FF), the saddled horse the player rides: only the angles follow the rider; the motion is the server's (horse-copy.js)
     const [w, h] = this.size(m);
     c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;

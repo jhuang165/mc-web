@@ -32,6 +32,7 @@ import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDra
 import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
 import { JavaHashSetOrder } from "./java-hashset-order.js";
+import { copySteered } from "./horse-copy.js";
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -409,11 +410,7 @@ export class ClientEntity {
   clientAir(wet) {
     if (!this.dead && !wet) { this.air--; if (this.air === -20) this.air = 0; } else this.air = 300;
   }
-  // A horse the local player rides: EntityHorse.moveEntityWithHeading (wi.e(FF), bytecode-read) is not guarded by isRemote around its steering, so the
-  // client copy takes the rider's yaw and half its pitch and jumps on its own. That is NOT ported: this copy just follows the live horse. A ridden pig
-  // is different: no EntityPig / EntityAnimal / EntityCreature / EntityLiving / EntityLivingBase client code reads riddenByEntity (the field is read
-  // only by the server paths: interact, fall, canBeSteered), and EntityLivingBase.isClientWorld is true only for EntityPlayerSP (blk.br), so the client
-  // pig is moved by the packets alone, as the executed ridePig record shows; natively the rider's seat follows that copy. The port's camera and seat still use the live pig, so serverTick keeps the copy on it (not native).
+  // No longer used for riders (batch 54: ridden horse and pig copies are both packet-driven, horse-copy.js); kept as the old live-follow stand-in.
   followLive(e) {
     this.x = e.x; this.y = e.y; this.z = e.z; this.vx = e.vx ?? 0; this.vy = e.vy ?? 0; this.vz = e.vz ?? 0; this.onGround = !!e.onGround;
     this.tx = this.x; this.ty = this.y; this.tz = this.z; this.increments = 0;
@@ -690,9 +687,10 @@ export class MobTracker {
       }
       c.dead = e.health <= 0;
       if (c.dragon) c.crystals = crystalCopies;
+      c.steered = copySteered(e); // the saddled horse the player rides: moveClient turns it to the rider's look instead of moving it
       c.fire = 0; // Entity.onEntityUpdate: `if (worldObj.isRemote) fire = 0`
       c.step(...hooks(e));
-      if (e.rider && e.type !== "pig") c.followLive(e); // the player rides it (entities.js sets `rider`). A ridden horse's copy follows the live horse (not ported, see followLive). Batch 53: a ridden pig's copy is packet-driven as natively, and main.js seats the player on it (seatOnCartCopy)
+      // Batch 54: a ridden horse's copy is packet-driven too (wi.e(FF)'s rider branch only turns it to the rider's look, horse-copy.js); main.js seats the player on the copy (seatOnCartCopy)
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;

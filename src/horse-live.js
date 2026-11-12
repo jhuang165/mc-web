@@ -10,6 +10,8 @@ import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom, aiMoveSpeed, resizeBox } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
+import { rearSeat } from "./horse-copy.js";
+import { Minecarts, dismountSpot } from "./minecarts.js";
 import { mountedYOffset, maxHealthOf, mountEntity } from "./mob-riding.js";
 
 const f = Math.fround;
@@ -98,22 +100,26 @@ export function horseSeats(mobs) {
       seats.updateRiderPosition(vehicle);
       return true;
     },
-    dismount(world, rider) {
+    // `landing`: EntityPlayer.mountEntity(null) runs dismountEntity on the server (sv.m, bytecode-read), then S08 puts the client player on that spot, so the drawn dismount
+    // jumps from the copy's seat to the first clear spot beside the mount (or its top). The run-around buck keeps its own executed placement (landing = false).
+    dismount(world, rider, landing = true) {
       const v = rider.vehicle;
       if (!v) return false;
-      if (v.entity) v.entity.rider = null;
-      Object.assign(rider, { vehicle: null, fallDistance: 0, jumpCounter: 0, jumpPower: 0 });
+      const e = v.entity;
+      const spot = landing && e && world ? dismountSpot(world, rider, { x: e.x, minY: e.y, height: f(mobs.size(e)[1]), z: e.z }, (box) => Minecarts.prototype.boxes.call({ railKind: () => null }, world, null, box, []).length === 0) : null;
+      if (e) e.rider = null;
+      Object.assign(rider, { ...spot, vehicle: null, fallDistance: 0, jumpCounter: 0, jumpPower: 0 });
       return true;
     },
     // Entity.updateRiderPosition: feet = posY + mountedOffset (height * 0.75 * scale) - 0.5 (probe: rider eye at y + 1.2 + 1.12).
     updateRiderPosition(v) {
       const e = v.entity, rider = e?.rider;
       if (!rider) return;
-      const lift = e.rearAmount ? f(0.15 * e.rearAmount) : 0;
+      const r = rearSeat(e.rearAmount, e.renderYawOffset ?? 0), lift = r.dy; // wi.ac(): the rider also shifts 0.7 * bM along the body yaw (horse-copy.js)
       // EntityPig keeps Entity.getMountedYOffset (height * 0.75, pig-saddle.js).
       // Any other mob a save seats the player on (level.dat Player.Riding) keeps Entity.getMountedYOffset: height * 0.75 (mob-riding.js).
       const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : e.type === "horse" ? H.mountedOffset(view(e)) : mountedYOffset(mobs.size(e)[1]);
-      Object.assign(rider, { x: e.x, y: e.y + offset - 0.5 + lift, z: e.z });
+      Object.assign(rider, { x: e.x + r.dx, y: e.y + offset - 0.5 + lift, z: e.z + r.dz });
     },
     // EntityPlayerSP's jump key counter: charged while Space is held, sent as (int)(power * 100) on release.
     charge(rider, controls) {
@@ -230,7 +236,7 @@ export function installHorse(EntityWorld) {
         return;
       }
       e.horse.temper = Math.min(H.MAX_TEMPER, e.horse.temper + 5);
-      this.horseSeats.dismount(this.world, rider);
+      this.horseSeats.dismount(this.world, rider, false);
       e.rider = null;
       // Entity.mountEntity(null): setLocationAndAngles(mount x, mount minY + mount height, mount z); the player's feet are posY - yOffset (1.62F) below that, inside the horse, which
       // then pushes it (and is pushed) in its own collideWithNearbyEntities this tick (b47h records: executed).
