@@ -139,6 +139,31 @@ public class EndermanWolfScenarios {
     sc("b44pd-creeper-watch-6354", 6354, 300, "X", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
   }
 
+  // Batch 46 (mobpush): EW_SET=b46mp. The probe player is also ticked by EntityPlayerMP.onUpdateEntity (mw.l) after the mobs each tick (the network tick), so mobs push it and it pushes them natively;
+  // Z zombie, C cow, P pig, K witch.
+  static void run46() throws Exception {
+    double[][] P = {{64.5, 64.5}};
+    sc("b46mp-far-8000", 8000, 12, "C", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-cow-touch-8001", 8001, 60, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-cow-diagonal-8002", 8002, 60, "C", new double[][] {{64.9, 64.9}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-pig-touch-8003", 8003, 60, "P", new double[][] {{64.5, 65.0}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-crowd-8004", 8004, 80, "CPCP", new double[][] {{65.0, 64.5}, {64.0, 64.6}, {64.5, 65.0}, {64.6, 64.1}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-coincident-8005", 8005, 40, "C", new double[][] {{64.5, 64.5}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-near-threshold-8006", 8006, 40, "C", new double[][] {{64.505, 64.505}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-creative-8007", 8007, 60, "CP", new double[][] {{65.0, 64.5}, {64.5, 65.0}, {64.5, 64.5}}, "0 look 90 0", "0 creative 2 on");
+    sc("b46mp-walk-into-cow-8008", 8008, 80, "C", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 walk 1 0.1 0", "20 walk 1 0 0");
+    sc("b46mp-walk-through-herd-8009", 8009, 120, "CCPP", new double[][] {{66.0, 64.4}, {66.8, 64.6}, {67.6, 64.5}, {68.4, 64.7}, {64.5, 64.5}}, "0 look 90 0", "0 walk 4 0.15 0", "40 walk 4 0 0", "60 walk 4 -0.15 0");
+    sc("b46mp-two-touch-8010", 8010, 60, "CP", new double[][] {{65.0, 64.5}, {64.5, 65.0}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-zombie-touch-8011", 8011, 40, "Z", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, "0 look 90 0");
+    sc("b46mp-zombie-hit-8012", 8012, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "3 hit 1 0 4");
+    sc("b46mp-witch-pushed-8013", 8013, 300, "KC", new double[][] {{70.5, 64.5}, {64.9, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    sc("b46mp-witch-walking-8014", 8014, 300, "K", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 walk 1 0 0.1", "100 walk 1 0 -0.1", "200 walk 1 0.1 0");
+    sc("b46mp-witch-cow-8015", 8015, 300, "KC", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "2 hit 0 1 1");
+    sc("b46mp-witch-knocked-8016", 8016, 300, "KC", new double[][] {{70.5, 64.5}, {64.0, 64.2}, {64.5, 64.5}}, "0 look 270 0", "58 hit 2 1 1", "117 hit 2 1 1", "178 hit 2 1 1");
+    sc("b46mp-witch-cow-knocked-8017", 8017, 300, "KC", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "2 hit 0 1 1", "58 hit 1 0 1", "118 hit 1 0 1");
+    sc("b46mp-witch-knocked-poison-8018", 8018, 300, "KC", new double[][] {{76.5, 64.5}, {64.0, 64.2}, {64.5, 64.5}}, "0 look 270 0", "58 hit 2 1 1", "117 hit 2 1 1", "178 hit 2 1 1");
+  }
+
   // Batch 45 (creeperwitch): creeper swell, ignition, lightning, explosion and death drops, and the witch's potion throws, drinking and drops, with a survival player (health scaled by difficulty), on the real
   // EntityPlayerMP. Rows carry [explosions, spawned entities, changed cells, player motion] after the b44 row elements (EW_SET=b45cw). Ops added: difficulty n | grief on|off | power idx | bolt idx | fire idx seconds |
   // arrowkill idx dmg (a skeleton's arrow) | effect idx potionId ticks. Items: 259 flint and steel, 268 wooden sword. X creeper, K witch, Z zombie, C cow, P pig.

@@ -55,7 +55,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45, BCW;
+  static boolean B44, B45, BCW, B46;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -175,6 +175,10 @@ public class EndermanWolfProbe {
     VillagerProbe.World.realPlayers = true;
     VillagerProbe.World.immediateMobs = false;
     player.bE.a = false; player.bE.d = false;
+    if (B46) { player.w = -0.0784000015258789; player.D = true; } // a player standing on the floor: the steady state of a grounded EntityLivingBase (motionY -0.0784, onGround), not its first tick with motionY 0
+    if (B46) { // the statistics file of the ticked player (EntityPlayerMP.onUpdateEntity increments stats and checks achievements every 20 ticks) needs its map
+      for (Field f : mw.class.getDeclaredFields()) if (pq.class.isAssignableFrom(f.getType())) { f.setAccessible(true); Object sf = f.get(player); if (sf == null) { sf = MobMoveProbe.unsafe().allocateInstance(f.getType()); f.set(player, sf); } Field m = pq.class.getDeclaredField("a"); m.setAccessible(true); m.set(sf, new java.util.HashMap()); }
+    }
     SeedMath.reset(seed * 7 + 5);
     int spawnedSeen = 0;
     java.util.Map<String, String> cellsBefore = new java.util.HashMap<>();
@@ -185,6 +189,8 @@ public class EndermanWolfProbe {
       w.O().a("mobGriefing", "true");
       VillagerProbe.World.spawned.clear();
     }
+    double cpx = 0, cpy = 0, cpz = 0;
+    int gBefore = 1;
     double[][] vel = new double[ents.length][2];
     StringBuilder rs = new StringBuilder();
     for (int t = 0; t < ticks; t++) {
@@ -234,17 +240,20 @@ public class EndermanWolfProbe {
       }
       if (BCW) { cellsBefore.clear(); for (java.util.Map.Entry<String, int[]> en : VillagerProbe.World.cells.entrySet()) cellsBefore.put(en.getKey(), en.getValue()[0] + "," + en.getValue()[1]); EW.booms.clear(); }
       for (int i = 0; i < ents.length; i++) if (vel[i][0] != 0 || vel[i][1] != 0) { sa e = (sa) ents[i]; VillageFightProbe.at(e, e.s + vel[i][0], e.t, e.u + vel[i][1]); }
+      if (B46) { cpx = player.s; cpy = player.t; cpz = player.u; } // the client's position for this tick (after the script's walk)
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
       for (VillageFightProbe.Log l : logs) l.log.clear();
       VillagerProbe.World.sounds.clear();
-      player.aa++; // EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
+      if (!B46) player.aa++; // (b46mp: mw.i counts it) EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
       for (int i = 0; i < n; i++) {
         sa e = (sa) ents[i];
         if (e.K) continue;
         e.aa++;
         VillageFightProbe.update(e);
       }
+      // Batch 46 (mobpush): the network tick after the world tick: EntityPlayerMP.onUpdateEntity (mw.i) runs the real EntityPlayer.onUpdate (onLivingUpdate, motion, collideWithNearbyEntities) on the probe player.
+      if (B46) { try { gBefore = player.D ? 1 : 0; player.i(); VillageFightProbe.at(player, cpx, player.t, cpz); /* the client's position packet puts the server copy back at the client's x and z (its y follows its own fall) */ } catch (Throwable ex) { System.err.println("player.i failed at tick " + t + ": " + ex); ex.printStackTrace(); } }
       StringBuilder kids = new StringBuilder();
       if (B45) for (Object o : VillagerProbe.World.entities) if (o instanceof wi && !java.util.Arrays.asList(ents).contains(o)) kids.append(kids.length() > 0 ? "," : "").append(horseFlags((wi) o));
       VillagerProbe.World.entities.removeIf(o -> o instanceof wf && !java.util.Arrays.asList(ents).contains(o));
@@ -271,6 +280,7 @@ public class EndermanWolfProbe {
       if (B45) row.append(",[" + kids + "]");
       if (BCW) row.append(",").append(extras(spawnedSeen, cellsBefore, player, ents)); // creeperwitch: [explosions, spawned entities, changed cells, player motion]
       if (BCW) spawnedSeen = VillagerProbe.World.spawned.size();
+      if (B46) row.append(",").append(gBefore).append(",").append(VillageFightProbe.num(cpy)); // row elements 6 and 7: whether the server copy was onGround when its update began and its y at the start of the tick (the client reports it in the position packet; the replay feeds it as input)
       row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
@@ -306,8 +316,9 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B45 = args.length > 0 && args[0].equals("b45");
-    BCW = args.length > 0 && args[0].equals("b45cw");
+    B46 = args.length > 0 && args[0].equals("b46mp");
+    BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B45) EndermanWolfScenarios.run45(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B45) EndermanWolfScenarios.run45(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }
