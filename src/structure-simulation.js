@@ -92,6 +92,9 @@ function pushAndDrain(state, hooks, system, mobsPushed = false) {
     const [vx, vz] = system.pushEntity(player, pBox);
     velocity.x += vx;
     velocity.z += vz;
+    // The integrated server's copy takes the same applyEntityCollision push (EntityPlayerMP is pushed by the cart/boat in its own world too): ai.player.motion.
+    const copy = state.mobs?.ai?.player?.motion;
+    if (copy) { copy.x += vx; copy.z += vz; }
   }
   if (!mobsPushed) for (const e of living) {
     const [vx, vz] = system.pushEntity(e, sized(e));

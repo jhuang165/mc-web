@@ -55,7 +55,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45, BCW, B46;
+  static boolean B44, B45, BCW, B46, B47;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -191,6 +191,12 @@ public class EndermanWolfProbe {
     }
     double cpx = 0, cpy = 0, cpz = 0;
     int gBefore = 1;
+    // Batch 47 (serverplayer): the client is a separate position (cl) that the script's walk and move op drive; the server copy keeps the last position a C03 packet gave it
+    // (EntityClientPlayerMP.sendMotionUpdates: a position packet when the squared move since the last one is over 9.0E-4 or 20 ticks passed) and NetHandlerPlayServer.processPlayer
+    // puts it back after onUpdateEntity (setPositionAndRotation at the position it had when the packet arrived).
+    double[] cl = {player.s, player.t, player.u}, sent = {0, 0, 0};
+    boolean clGround = true;
+    int sinceSent = 0;
     double[][] vel = new double[ents.length][2];
     StringBuilder rs = new StringBuilder();
     for (int t = 0; t < ticks; t++) {
@@ -208,6 +214,8 @@ public class EndermanWolfProbe {
           case "adventure": ServerPlayerProbe.gameType(player, p[3].equals("on") ? ahk.d : ahk.b); break;
           case "invisible": player.d(p[3].equals("on")); break;
           case "sneak": player.b(p[3].equals("on")); break;
+          case "fly": player.bE.b = p[3].equals("on"); break; // batch 47: capabilities.isFlying of the server copy (the C13 packet sets it)
+          case "ground": clGround = p[3].equals("on"); break; // batch 47: the onGround flag the client reports in every C03 packet
           case "hold": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2]))); break; } // batch 43: the held item of the player (beg tasks)
           case "holdn": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2])), Integer.parseInt(p[3])); break; } // batch 44: a stack of p[3]
           case "use": player.q((sa) ents[Integer.parseInt(p[2])]); break; // batch 44: the player's real interaction (EntityPlayer.interactWith: feeding, taming, breeding)
@@ -227,7 +235,7 @@ public class EndermanWolfProbe {
           case "angry": ((wv) ents[Integer.parseInt(p[2])]).l(true); break;
           case "sit": ((wv) ents[Integer.parseInt(p[2])]).cc().a(p[3].equals("on")); break;
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
-          case "move": VillageFightProbe.at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break;
+          case "move": if (B47 && Integer.parseInt(p[2]) == n) { cl[0] = Double.parseDouble(p[3]); cl[1] = p.length > 5 ? Double.parseDouble(p[5]) : 0; cl[2] = Double.parseDouble(p[4]); } else VillageFightProbe.at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break;
           case "melee": player.r((sa) ents[Integer.parseInt(p[2])]); break; // the real attackTargetEntityWithCurrentItem: damage, then setLastAttacker
           case "hit": {
             sv victim = (sv) ents[Integer.parseInt(p[2])];
@@ -239,13 +247,21 @@ public class EndermanWolfProbe {
         }
       }
       if (BCW) { cellsBefore.clear(); for (java.util.Map.Entry<String, int[]> en : VillagerProbe.World.cells.entrySet()) cellsBefore.put(en.getKey(), en.getValue()[0] + "," + en.getValue()[1]); EW.booms.clear(); }
-      for (int i = 0; i < ents.length; i++) if (vel[i][0] != 0 || vel[i][1] != 0) { sa e = (sa) ents[i]; VillageFightProbe.at(e, e.s + vel[i][0], e.t, e.u + vel[i][1]); }
-      if (B46) { cpx = player.s; cpy = player.t; cpz = player.u; } // the client's position for this tick (after the script's walk)
+      for (int i = 0; i < ents.length; i++) if (vel[i][0] != 0 || vel[i][1] != 0) { sa e = (sa) ents[i]; if (B47 && i == n) { cl[0] += vel[i][0]; cl[2] += vel[i][1]; } else VillageFightProbe.at(e, e.s + vel[i][0], e.t, e.u + vel[i][1]); }
+      if (B47) { // the client's position packet for this tick: a position only when it moved over 0.03 or 20 ticks passed; every packet carries onGround
+        double ddx = cl[0] - sent[0], ddy = cl[1] - sent[1], ddz = cl[2] - sent[2];
+        boolean send = ddx * ddx + ddy * ddy + ddz * ddz > 9.0E-4 || sinceSent >= 20;
+        sinceSent++;
+        if (send) { VillageFightProbe.at(player, cl[0], cl[1], cl[2]); sent = cl.clone(); sinceSent = 0; }
+        player.D = clGround;
+        cpy = cl[1];
+      }
+      else if (B46) { cpx = player.s; cpy = player.t; cpz = player.u; } // the client's position for this tick (after the script's walk)
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
       for (VillageFightProbe.Log l : logs) l.log.clear();
       VillagerProbe.World.sounds.clear();
-      if (!B46) player.aa++; // (b46mp: mw.i counts it) EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
+      if (!B46 || B47) player.aa++; // (b47sp: the world tick's EntityPlayerMP.onUpdate counts it) // (b46mp: mw.i counts it) EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
       for (int i = 0; i < n; i++) {
         sa e = (sa) ents[i];
         if (e.K) continue;
@@ -253,7 +269,7 @@ public class EndermanWolfProbe {
         VillageFightProbe.update(e);
       }
       // Batch 46 (mobpush): the network tick after the world tick: EntityPlayerMP.onUpdateEntity (mw.i) runs the real EntityPlayer.onUpdate (onLivingUpdate, motion, collideWithNearbyEntities) on the probe player.
-      if (B46) { try { gBefore = player.D ? 1 : 0; player.i(); VillageFightProbe.at(player, cpx, player.t, cpz); /* the client's position packet puts the server copy back at the client's x and z (its y follows its own fall) */ } catch (Throwable ex) { System.err.println("player.i failed at tick " + t + ": " + ex); ex.printStackTrace(); } }
+      if (B46) { try { gBefore = player.D ? 1 : 0; double sx = player.s, sy = player.t, sz = player.u; player.i(); if (B47) VillageFightProbe.at(player, sx, sy, sz); else VillageFightProbe.at(player, cpx, player.t, cpz); /* the client's position packet puts the server copy back at the client's x and z (its y follows its own fall) */ } catch (Throwable ex) { System.err.println("player.i failed at tick " + t + ": " + ex); ex.printStackTrace(); } }
       StringBuilder kids = new StringBuilder();
       if (B45) for (Object o : VillagerProbe.World.entities) if (o instanceof wi && !java.util.Arrays.asList(ents).contains(o)) kids.append(kids.length() > 0 ? "," : "").append(horseFlags((wi) o));
       VillagerProbe.World.entities.removeIf(o -> o instanceof wf && !java.util.Arrays.asList(ents).contains(o));
@@ -280,7 +296,8 @@ public class EndermanWolfProbe {
       if (B45) row.append(",[" + kids + "]");
       if (BCW) row.append(",").append(extras(spawnedSeen, cellsBefore, player, ents)); // creeperwitch: [explosions, spawned entities, changed cells, player motion]
       if (BCW) spawnedSeen = VillagerProbe.World.spawned.size();
-      if (B46) row.append(",").append(gBefore).append(",").append(VillageFightProbe.num(cpy)); // row elements 6 and 7: whether the server copy was onGround when its update began and its y at the start of the tick (the client reports it in the position packet; the replay feeds it as input)
+      if (B46) row.append(",").append(gBefore).append(",").append(VillageFightProbe.num(cpy));
+      if (B47) row.append(",[").append(VillageFightProbe.num(player.s)).append(",").append(VillageFightProbe.num(player.t)).append(",").append(VillageFightProbe.num(player.u)).append("]"); // row element 8: the server copy's position after the tick // row elements 6 and 7: whether the server copy was onGround when its update began and its y at the start of the tick (the client reports it in the position packet; the replay feeds it as input)
       row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
@@ -316,9 +333,10 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B45 = args.length > 0 && args[0].equals("b45");
-    B46 = args.length > 0 && args[0].equals("b46mp");
+    B47 = args.length > 0 && args[0].equals("b47sp");
+    B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B45) EndermanWolfScenarios.run45(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B45) EndermanWolfScenarios.run45(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

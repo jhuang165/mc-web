@@ -45,7 +45,12 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     // A silverfish hid in or woke a monster egg: its cells need redrawing (blockBreak: break sound and particles).
     if (event.blockEdit) blockEdit(event.blockEdit, event);
     // EntityDragon.collideWithEntities: the wing sweep's addVelocity on the player (dragon-mobs.js).
-    if (event.dragonPush) push(event.dragonPush, event);
+    if (event.dragonPush) {
+      push(event.dragonPush, event);
+      // The server copy is the entity the dragon's sweep really pushes (EntityDragon.collideWithEntities runs server-side): its motion takes the same addVelocity.
+      const copy = mobs.ai?.player?.motion, v = event.dragonPush;
+      if (copy) { copy.x += v.x; copy.y += v.y; copy.z += v.z; }
+    }
   }
   return events;
 }
@@ -79,7 +84,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   } = hooks;
 
   inhabited.tick(survival.time);
-  if (mobs.ai?.player) { mobs.ai.player.sneaking = !!state.sneaking; if (state.onGround !== undefined) mobs.ai.player.onGround = !!state.onGround; } // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
+  if (mobs.ai?.player) { mobs.ai.player.sneaking = !!state.sneaking; if (state.onGround !== undefined) mobs.ai.player.onGround = !!state.onGround; mobs.ai.player.flying = !!state.flying; mobs.ai.player.riding = !!state.rider?.vehicle; } // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
   mobs.lootItems = items; // equipment mobs with canPickUpLoot pick items up (mob-equipment.md)
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;
