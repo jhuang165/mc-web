@@ -1,4 +1,5 @@
 import { bindIds } from "./entity-ids.js";
+import { LastOutputError } from "./chat-component.js";
 import { ringEntityActive } from './streaming-ticks.js';
 // EntityMinecartChest (xm) with EntityMinecartContainer (xp) and EntityMinecart (xl) from the
 // Minecraft Java 1.7.10 JAR: a 0.98 x 0.7 box with yOffset 0.35, gravity 0.04, the derailed
@@ -685,7 +686,9 @@ export class Minecarts {
         (it.damage === undefined || Number.isInteger(it.damage)) && [it.stored, it.enchantments, it.storedEnchantments].every((list) => list === undefined || (Array.isArray(list) && list.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))) &&
         (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
-      const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+      let cart; try {
+        cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+      } catch (e) { if (e instanceof LastOutputError) continue; throw e; } // xn.a(dh) threw on an invalid LastOutput: the cart does not load
       cart.restorePlayer = c.rider === true;
       if (isUuid(c.uuid)) cart.uuid = c.uuid.toLowerCase(); // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js)
       if (Number.isInteger(c.id) && c.id > 0 && !m.carts.some((o) => o !== cart && o.id === c.id)) cart.id = c.id; // passengers name their cart by id

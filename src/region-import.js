@@ -1,4 +1,5 @@
 import { readCommandBlock } from "./command-block.js";
+import { LastOutputError } from "./chat-component.js";
 import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from './mob-spawner.js';
 import { readNoteTile } from "./note-blocks.js";
 import { readJukeboxTile } from "./jukebox.js";
@@ -539,7 +540,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else if (inside && id === 'EnderChest' && block === ENDER_CHEST) {
         tally(tileConverted, id); // no saved data: the lid state is runtime, the inventory is the player's EnderItems
       } else if (inside && id === 'Control' && block === 139) {
-        commandBlocks.push({ x: lx, y, z: lz, ...readCommandBlock(tile) }); tally(tileConverted, id);
+        try { commandBlocks.push({ x: lx, y, z: lz, ...readCommandBlock(tile) }); tally(tileConverted, id); } catch (e) { if (!(e instanceof LastOutputError)) throw e; /* an invalid LastOutput: the tile does not load */ }
       } else if (inside && id === 'Music' && block === 177) {
         musicTiles.push({ kind: 'note', x: lx, y, z: lz, note: readNoteTile(tile).note }); tally(tileConverted, id);
       } else if (inside && id === 'RecordPlayer' && block === 178) {

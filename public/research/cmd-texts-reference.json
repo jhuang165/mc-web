@@ -1,0 +1,73 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "agp": {
+   "name": "CommandBlockLogic",
+   "sha256": "e87fe5c3beb09b70acd897a77fa8767ca9e801a6c9a35c2eb01246a8addfe46e"
+  },
+  "xn": {
+   "name": "EntityMinecartCommandBlock",
+   "sha256": "b58322492ba8f3a3735575e816ed241c49eaeb80b782a88cd94f2c0c0afd2ccd"
+  },
+  "fk": {
+   "name": "IChatComponent$Serializer",
+   "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
+  },
+  "fq": {
+   "name": "ChatComponentText",
+   "sha256": "1ed0a90e237aeed31434da047e48ebef977d2529e56751d812eb661148ceb5ad"
+  },
+  "fr": {
+   "name": "ChatComponentTranslation",
+   "sha256": "9fd71a929542368197f4dbef5fff3e3f72f5d0e31b3d4531d8a97b042e239c96"
+  },
+  "fn": {
+   "name": "ChatStyle",
+   "sha256": "41a6e1bd60b764afba367441bb51b3d4f779aa18bfb5d2dabbb56df6da72b501"
+  }
+ },
+ "method": "Executed on the unchanged ChatComponentTranslation (fr), ChatComponentText (fq), ChatStyle (fn) and IChatComponent.Serializer (fk). The command classes (CommandHelp, CommandBase, CommandGameRule) are server-only and absent from the client jar, so the component trees are the ones their 1.7.10 source builds (key, arguments, style); rows are [name, fk.a JSON]. No language table is loaded.",
+ "texts": [
+  [
+   "helpHeader1",
+   "{\"color\":\"dark_green\",\"translate\":\"commands.help.header\",\"with\":[\"1\",\"5\"]}"
+  ],
+  [
+   "helpHeader2",
+   "{\"color\":\"dark_green\",\"translate\":\"commands.help.header\",\"with\":[\"2\",\"5\"]}"
+  ],
+  [
+   "helpLine",
+   "{\"translate\":\"commands.achievement.usage\"}"
+  ],
+  [
+   "helpFooter",
+   "{\"color\":\"green\",\"translate\":\"commands.help.footer\"}"
+  ],
+  [
+   "deprecatedItem",
+   "{\"color\":\"gray\",\"translate\":\"commands.generic.deprecatedId\",\"with\":[\"minecraft:stone\"]}"
+  ],
+  [
+   "deprecatedItem2",
+   "{\"color\":\"gray\",\"translate\":\"commands.generic.deprecatedId\",\"with\":[\"minecraft:iron_pickaxe\"]}"
+  ],
+  [
+   "adminGive",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"chat.type.admin\",\"with\":[\"@\",{\"translate\":\"commands.give.success\",\"with\":[\"Stone\",\"5\",\"Player\"]}]}"
+  ],
+  [
+   "adminTp",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"chat.type.admin\",\"with\":[\"Rcon\",{\"translate\":\"commands.tp.success.coordinates\",\"with\":[\"Player\",\"1.5\",\"64.0\",\"-3.0\"]}]}"
+  ],
+  [
+   "gameruleQuery",
+   "\"doFireTick \\u003d true\""
+  ],
+  [
+   "gameruleList",
+   "\"commandBlockOutput, doDaylightCycle, doFireTick, doMobLoot, doMobSpawning, doTileDrops, keepInventory, mobGriefing, naturalRegeneration\""
+  ]
+ ]
+}

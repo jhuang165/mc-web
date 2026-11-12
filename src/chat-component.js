@@ -266,11 +266,15 @@ export function componentFromLegacy(s) {
 }
 // IChatComponent.Serializer on load and save (CommandBlockLogic.readFromNBT agp.b: fk.a(LastOutput); writeToNBT: fk.a(component)): a stored string is
 // parsed and written back in the serializer's shape, so the port's old {"text":"[t] msg"} becomes the bare string native writes (executed, cmd-output-reference.json).
-// "" reads as no output (fk.a returns null). Invalid JSON throws natively and ends the load; the port keeps the string.
+// "" reads as no output (fk.a returns null). Invalid JSON throws a JsonSyntaxException natively (executed, "not json" and a truncated object) and agp.b is
+// outside the try of TileEntity.c / EntityList.a (bytecode-read), so the load fails: the port throws LastOutputError and its loaders skip that block or cart.
+export class LastOutputError extends Error {}
 export function normalizeLastOutput(s) {
   if (typeof s !== 'string') return null;
   if (s === '') return null;
-  try { const { component } = parseChatJson(s); return component ? serializeComponent(component) : s; } catch { return s; }
+  const out = parseChatJson(s);
+  if ('jsonError' in out || 'generic' in out) throw new LastOutputError('Invalid LastOutput JSON: ' + (out.jsonError || out.generic?.message || s));
+  return out.component ? serializeComponent(out.component) : s;
 }
 // The GUI's Previous Output (bfh: func_145749_h().getUnformattedText()): the component's text, translations through the language table; an unparsable string shows as it is.
 export function lastOutputPlainText(s) {

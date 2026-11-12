@@ -85,6 +85,7 @@ test("the cart watcher 24 holds the same JSON", () => {
 
 test("loading LastOutput strings matches the native re-serialization", () => {
   for (const [input, result] of ref.loads) {
+    if (String(result[1]).startsWith("!")) { assert.throws(() => normalizeLastOutput(input), /Invalid LastOutput/, "invalid JSON ends the load, as natively: " + input); continue; }
     const scr = (v) => (typeof v === "string" ? v.replace(/\d\d:\d\d:\d\d/g, "hh:mm:ss") : v);
     const got = scr(normalizeLastOutput(input));
     if (result[1] === null) assert.equal(got, null, input);

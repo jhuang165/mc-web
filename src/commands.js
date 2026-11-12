@@ -141,7 +141,9 @@ const PLAYER_ARG = { gamemode: [1], give: [0], clear: [0], xp: [1], effect: [0],
 
 export function createCommandRunner(host) {
   const name = () => host.name || "Player";
-  const say = (text) => host.print(text);
+  const say = (text, component) => host.print(text, component);
+  // A coloured ChatComponentTranslation (the sender text beside it keeps the legacy colour code).
+  const coloured = (colour, key, ...args) => { const c = translation(key, ...args); c.style.color = colour; return c; };
   const allowed = command => host.canUse ? host.canUse(command) : canUse(command, host.cheats);
   const playerName = () => host.playerName ?? name();
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
@@ -167,7 +169,7 @@ export function createCommandRunner(host) {
     const key = withNamespace(text);
     if (itemByName.has(key)) return itemByName.get(key);
     if (INT_RE.test(text) && itemById.has(Number(text))) {
-      say("§7" + tr("commands.generic.deprecatedId", itemById.get(Number(text))));
+      say("§7" + tr("commands.generic.deprecatedId", itemById.get(Number(text))), coloured("gray", "commands.generic.deprecatedId", itemById.get(Number(text))));
       return Number(text);
     }
     throw numberInvalid("commands.give.notFound", text);
@@ -176,7 +178,7 @@ export function createCommandRunner(host) {
     const key = withNamespace(text);
     if (blockByName.has(key)) return blockByName.get(key);
     if (INT_RE.test(text) && blockById.has(Number(text))) {
-      say("§7" + tr("commands.generic.deprecatedId", blockById.get(Number(text))));
+      say("§7" + tr("commands.generic.deprecatedId", blockById.get(Number(text))), coloured("gray", "commands.generic.deprecatedId", blockById.get(Number(text))));
       return Number(text);
     }
     throw numberInvalid("commands.setblock.notFound", text);
@@ -213,9 +215,9 @@ export function createCommandRunner(host) {
           throw wrongUsage(c.usage);
         }
       }
-      say("§2" + tr("commands.help.header", page + 1, pages + 1));
-      for (let i = page * 7; i < Math.min((page + 1) * 7, list.length); i++) say(tr(list[i].usage));
-      if (page === 0) say("§a" + tr("commands.help.footer"));
+      say("§2" + tr("commands.help.header", page + 1, pages + 1), coloured("dark_green", "commands.help.header", page + 1, pages + 1));
+      for (let i = page * 7; i < Math.min((page + 1) * 7, list.length); i++) say(tr(list[i].usage), translation(list[i].usage));
+      if (page === 0) say("§a" + tr("commands.help.footer"), coloured("green", "commands.help.footer"));
     },
     me(a) {
       if (a.length < 1) usage("commands.me.usage");
@@ -260,8 +262,8 @@ export function createCommandRunner(host) {
         feedback("commands.gamerule.success");
       } else if (a.length === 1) {
         if (!(a[0] in r)) throw new CommandException("commands.gamerule.norule", [a[0]]);
-        say(`${a[0]} = ${r[a[0]]}`);
-      } else if (a.length === 0) say(Object.keys(r).sort().join(", "));
+        { const line = `${a[0]} = ${r[a[0]]}`; say(line, textComponent(line)); } // CommandGameRule: a ChatComponentText (executed, b51ct)
+      } else if (a.length === 0) { const line = Object.keys(r).sort().join(", "); say(line, textComponent(line)); }
       else usage("commands.gamerule.usage");
     },
     give(a) {
