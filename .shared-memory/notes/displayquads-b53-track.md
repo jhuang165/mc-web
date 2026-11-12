@@ -1,0 +1,22 @@
+# displayquads b53 track
+
+Branch `batch53-displayquads` from 5ea7bb4d1.
+
+## Summary
+- The flat display shapes (render types 1 cross, 6 crops, 19 stem, 2 torch) and the cube path of `RenderBlocks.renderBlockAsItem` (`blm.a(aji, int, float)`) are now EXECUTED (tag `b53dq`). The harness runs the unchanged client classes headless: `tools/probes/displayquads/` holds stubs that sit ahead of the real classes on the probe classpath, `org.lwjgl.opengl.GL11` (records glTranslatef/glRotatef/glScalef/glColor4f/glEnable, runs a hook on glDrawArrays), `org.lwjgl.LWJGLException`, `org.lwjgl.opengl.OpenGLException` (names in the verifier signatures; the real LWJGL jar is sealed per package so it cannot sit behind the stub) and Minecraft `bao` / GameSettings `bbj` (only `bao.B()` and `ambientOcclusion = 2`; the bounds setters read it). The real static Tessellator `bmh.a` runs unchanged: at each glDrawArrays the probe reads its raw buffer (stride 32: x y z u v floats, RGBA bytes at 20, signed normal bytes at 24). Icons are stub `rf` objects handed to the real `Block.registerIcons` (`aji.a(rg)`), u and v spanning 2k..2k+1 for the k-th name, so recorded uv minus 2k is the icon fraction (v from the top) and k names the icon. Every block is first registered once at k >= 1000 so borrowed icons (the grass block's dirt bottom) are never null.
+- 96 records (`tools/verify-display-quads.mjs` -> `public/research/display-quads-reference.json`): tall grass metas 0..3, 7, 11, 15, saplings, flowers, mushrooms, dead bush, web, reeds, wheat/carrots/potatoes metas 0..7, nether wart, pumpkin and melon stems metas 0..7, torches (50 metas 0 and 5, 75, 76), grass block, dirt, leaves (18 metas 0..2, 161), stone, logs, glass, slabs, stairs, fence, wall, cactus, enchanting table, hopper, anvil, dragon egg, beacon-type controls, and brightness 0.5 cases.
+- Result: crossed squares (16 vertices), small stems (16) and torches (24) matched the port exactly (vertex order, uv, positions) at 1e-6. The crops (32 vertices) did NOT: the port drew them 1/16 low (the drop belongs to the world path `renderBlockCrops`, not the item path; executed y range is -0.5..0.5, as for the cross), and its plane order/direction differed (native: x = -0.25 pair, x = +0.25 pair running the other way, z = -0.25 pair, z = +0.25 pair). Fixed in `displayQuads("crops")` (`src/cart-display-shape.js`); no change was needed in `minecart-renderer.js`.
+- Colour: the executed first glColor4f equals `displayTint` for every recorded block and meta at brightness 1 (tall grass metas 1..15 grass colour, meta 0 white; leaves 18/161; stems `STEM_TINT`; everything else white); the grass block's top face alone takes i(meta) (`displayTopTint`) and its face order is bottom (dirt), top, four sides, with no overlay face; brightness multiplies every glColor (0.5 cases).
+- Control cube path: stone/glass/slab/log/enchanting table 6 faces, cactus 6, stairs 12, fence 24, wall 12, anvil 24, hopper 17, dragon egg 192 vertices; the cube path rotates 90 degrees about y then translates -0.5 (glRotatef(90,0,1,0), glTranslatef(-0.5,-0.5,-0.5)).
+
+## Evidence
+- Executed: all of the above (`DisplayQuadsProbe`, real blm, bmh, aji, block classes, colormaps fed to ColorizerGrass/Foliage). Not executed / stubbed: LWJGL GL11 (recorded only), Minecraft and GameSettings (stubbed), the port's atlas tile choice (icon names are recorded, the test compares the geometry's uv mapping into the port's tile for the cell but not which tile), chests (use the tile entity renderer and the world, not run).
+- Bytecode-read before, still: none of the above; only the render-type table by block id (`CROSS`/`CROPS`... sets) is checked against the executed render types of the recorded ids, not generated for every id.
+
+## Verification
+- `node tools/verify-display-quads.mjs` -> 96 records. `node --test src/display-quads-b53.test.js src/cart-render2-b50.test.js src/displayfx-b52.test.js` -> 28 pass, 0 fail. `npm run build` once, ok. No browser smoke.
+
+## Follow-ups (proposed gap lines)
+- Every flat vertex carries the item normal (0,-1,0) natively; the port uses computed normals, which only matters if the entity material lights by normal (not checked).
+- The cube path controls are recorded but only counted/iconed, not vertex-compared against `blockItemGeometry` / `blockCubeGeometry` (stairs, fence, wall, anvil, hopper, dragon egg, cactus).
+- Render types of every block id are not swept (only the recorded ids); chests (type 22) and beacon/enchanting-table tile-entity paths are unexecuted.

@@ -4,7 +4,7 @@
 // panes and bars 18, the lily pad 23 (its branch only begins and draws an empty tessellator), cauldrons 24, brewing stands 25, cocoa 28, tripwire 29/30, pots 33, double
 // plants 40, comparators 36, pistons' arms 17. Branches: 0, 31, 39, 16, 26 turned boxes (blockItemGeometry / blockCubeGeometry), 13 cactus, 10 stairs, 11 fences, 21 gates,
 // 27 dragon egg, 32 walls, 34 beacon, 35 anvil, 22 chests, 38 hopper, plus the flat plant shapes built here: 1 crossed squares (scale 1 at -0.5), 6 crops (two pairs of
-// planes, 1/16 low), 19 stems (renderBlockStemSmall, height 0.25 from BlockStem.setBlockBoundsForItemRender) and 2 torches (upright).
+// planes), 19 stems (renderBlockStemSmall, height 0.25 from BlockStem.setBlockBoundsForItemRender) and 2 torches (upright).
 import * as THREE from "three";
 import { blockTile, tileRect } from "./block-textures.js";
 import { crossedSquares, stemSmall } from "./render-vessels.js";
@@ -23,17 +23,21 @@ export function displayShape(id) {
   return "item";
 }
 
+// Executed (b53dq, public/research/display-quads-reference.json, the real blm.a with a stub GL11): the quads below match renderBlockAsItem vertex for vertex, in order.
 // Quads { verts: [[x, y, z] x4], uv: [[fu, fv] x4] } (fu, fv in icon fractions, v from the top) of the flat shapes, centred on the origin as renderBlockAsItem does.
 export function displayQuads(shape) {
   const origin = -0.5;
   if (shape === "cross") return crossedSquares(origin, origin, origin, 1, null, 0);
   if (shape === "stem") return stemSmall(origin, origin, origin, 0.25, null);
-  if (shape === "crops") { // renderBlockCropsImpl at -0.5: the planes at 0.25 and 0.75, one block tall from 1/16 below the origin, each drawn from both sides
-    const out = [], y0 = origin - 1 / 16, y1 = y0 + 1, q = (l) => ({ verts: l.map((v) => [v[0], v[1], v[2]]), uv: l.map((v) => [v[3], v[4]]) });
-    for (const o of [0.25, 0.75]) {
-      const x = origin + o, z = origin + o, xa = origin, xb = origin + 1;
-      out.push(q([[x, y1, xa, 0, 0], [x, y0, xa, 0, 1], [x, y0, xb, 1, 1], [x, y1, xb, 1, 0]]), q([[x, y1, xb, 0, 0], [x, y0, xb, 0, 1], [x, y0, xa, 1, 1], [x, y1, xa, 1, 0]]));
-      out.push(q([[xa, y1, z, 0, 0], [xa, y0, z, 0, 1], [xb, y0, z, 1, 1], [xb, y1, z, 1, 0]]), q([[xb, y1, z, 0, 0], [xb, y0, z, 0, 1], [xa, y0, z, 1, 1], [xa, y1, z, 1, 0]]));
+  if (shape === "crops") { // renderBlockCropsImpl at -0.5 (executed, b53dq): the planes x = -0.25, +0.25 then z = -0.25, +0.25, each one block tall from the origin (the 1/16 drop is the world path's, not the item path's), drawn from both sides; the +0.25 planes run the other way
+    const out = [], y0 = origin, y1 = origin + 1, q = (l) => ({ verts: l.map((v) => [v[0], v[1], v[2]]), uv: l.map((v) => [v[3], v[4]]) }), xa = origin, xb = origin + 1;
+    for (const [o, from, to] of [[0.25, xa, xb], [0.75, xb, xa]]) {
+      const x = origin + o;
+      out.push(q([[x, y1, from, 0, 0], [x, y0, from, 0, 1], [x, y0, to, 1, 1], [x, y1, to, 1, 0]]), q([[x, y1, to, 0, 0], [x, y0, to, 0, 1], [x, y0, from, 1, 1], [x, y1, from, 1, 0]]));
+    }
+    for (const [o, from, to] of [[0.25, xa, xb], [0.75, xb, xa]]) {
+      const z = origin + o;
+      out.push(q([[from, y1, z, 0, 0], [from, y0, z, 0, 1], [to, y0, z, 1, 1], [to, y1, z, 1, 0]]), q([[to, y1, z, 0, 0], [to, y0, z, 0, 1], [from, y0, z, 1, 1], [from, y1, z, 1, 0]]));
     }
     return out;
   }
