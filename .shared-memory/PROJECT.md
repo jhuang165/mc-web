@@ -113,6 +113,19 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 50 (2026-11-12, eight Sonnet tracks in `../wt50-<name>` on `batch50-<name>`, cut from ca6a447bf, merged --no-ff on `batch50-lead`; lead note `b50-lead-track.md`; the gun side runs separately):
+- 0.79.0, by track:
+  - knotsplash: leash knots on the crosshair pick through the copy box (`aimKnotBox`); boat copy splash particles (`ObjectClient.splash`). Bytecode-read.
+  - cartrender2: display blocks in their item form (`cart-display-shape.js`), nothing for render types with no item branch; TNT cart copy smoke; the swell scales the display block only.
+  - cmdoutput: `LastOutput` as the native chat component JSON (`normalizeLastOutput`, Gson escaping); `CmdOutputProbe` executed.
+  - mobresist: mob Resistance, Absorption and the absorption amount in `damageEntity`; 771 executed `b50mr` records with PvP.
+  - trackerids: one id counter and `JavaHashSetOrder` for mobs and objects (`shareOrder`), destroy flushed a tick late (`dying`), client list in spawn-packet order; `TrackerIdsProbe` executed, `b49dc` regenerated.
+  - meleeorder: entity-aimed and entity-spawning clicks queue to `mobs.afterEntities` (`clickEdit`, `runPendingEdits`); `kill` is outOfWorld with no player credit. 5 executed `b50mo` scenarios.
+  - legacybody: `LEGACY_BODY` audited (silverfish, giant, pigman, blaze, ghast added); 23 executed `b50lb` records; `b46mp` regenerated and its replay workarounds removed.
+  - awayorder: away list order matched 8 executed `AwayOrderProbe` scenarios; dispensed throws join the list, exp bottles thrown, fire charge on `world.rand`, away items and orbs own an `Entity.rand`.
+- Lead fix: an aimed leash knot made `serverAcceptsClick` ask the mob AI for a brain (threw); its eye height is now 0 (`Entity.getEyeHeight`).
+- Verification: see `b50-lead-track.md`. Pushed to github main by the lead.
+
 Batch 49 (2026-11-12, eight Sonnet tracks in `../wt49-<name>` on `batch49-<name>`, cut from ac7027870, merged --no-ff on `batch49-lead`; lead note `b49-lead-track.md`; the gun side runs separately):
 - 0.78.0, by track:
   - cartdisplay: carts draw the watched display block (20-22) from the copy, the TNT flash reads the copy's status-10 fuse, carts cast a 0.5 shadow; display NBT and `/summon`. `CartDisplayProbe` executed.

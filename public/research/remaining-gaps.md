@@ -2,6 +2,29 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 50
+
+Batch 50 covered these areas:
+- **Leash knots and boat splash on the client.** The crosshair picks a leash knot, placed or summoned, through its client copy's 0.5 box grown by the 0.1 border (`aimKnotBox`). A right click ties the held mobs to it or removes it, and a left click breaks it. The boat copy spawns "splash" particles above 0.2625 blocks a tick from its own `Entity.rand` (`ObjectClient.splash`, bytecode-read).
+- **Cart display shapes and the TNT cart fuse.** A custom display block is drawn in its item form. Stairs, fences, walls and chests draw in 3D, flowers, saplings, crops, stems and torches draw their flat shapes, and the render types `renderBlockAsItem` has no branch for (fluids, doors, rails and others) draw nothing. The TNT cart copy spawns smoke at y + 0.5 each tick its fuse runs. The swell scales only the display block and the flash, inside the 0.75 frame (bytecode-read).
+- **Command output as a chat component.** The command block's and command cart's `LastOutput`, NBT and watcher 24 hold the native `{"extra":[...],"text":"[hh:mm:ss] "}` JSON, with translations as `translate`/`with`, Gson's HTML escaping, and old saves re-serialized on load. The GUI shows the output whatever `TrackOutput` says. Executed: `CmdOutputProbe` runs the real `CommandBlockLogic` (22 rows).
+- **Mob Resistance and absorption.** The mob damage path runs armour, Resistance (20% per level, not for the void or absolute sources), worn enchantments, then the absorption amount. Mobs can carry Resistance and Absorption. Mob armour never wears. Executed: 771 `b50mr` records, including PvP.
+- **One tracker order, a late destroy.** Mobs and objects share the entity id counter and one `JavaHashSetOrder`. A removed entity's copy stays one tick, until its destroy packet is flushed (still a target and a crystal for the dragon that tick). Client copies step in spawn-packet order. Executed: `TrackerIdsProbe`; the `b49dc` mounts records were regenerated with the late destroy.
+- **The player's entity actions in the network tick.** A click that hits or uses an entity, or throws or places one, waits until after the mob walk (C02/C07/C08 in `NetworkSystem.networkTick`); the swing stays at once. `EntityWorld.kill` is an outOfWorld `Float.MAX_VALUE` hit with no player credit. Executed: 5 `b50mo` `EntityListProbe` scenarios.
+- **Legacy body turn audit.** Every 1.7.10 mob's `isAIEnabled` was read. Silverfish, giants, pigmen, blazes and ghasts join `LEGACY_BODY`, and the silverfish, giant and blaze head and body yaw now match. Executed: 23 `b50lb` records. `b46mp` was regenerated under the batch 47 harness, and its two replay workarounds are gone.
+- **Away list order and dispensers.** The away run's list order matched 8 executed `AwayOrderProbe` scenarios unchanged. Dispensed thrown entities join the list, an exp bottle is thrown as a projectile, the fire charge draws from `world.rand`, and away items and orbs own an `Entity.rand`.
+- **Browser check.** A real click hit a cow after the walk, a summoned knot broke on a click, and display carts and the TNT cart smoke drew. The lead fixed the aimed-knot click, which threw in `serverAcceptsClick`.
+
+Still open from batch 50:
+- **Vehicles.** The ridden boat or cart is drawn from the live entity, and its copy runs no physics, so it never splashes. Splash and the flat display shapes are not executed. The tall grass and fern tint is missing on a display block. Only boats and carts placed by the player start their tracker entry at creation.
+- **Commands.** Help pages, the gray deprecated-id text and the gamerule query are still plain or colour-coded text, not native translations. `chat.type.admin` feedback is a formatted string. Invalid-JSON `LastOutput` is kept instead of aborting the load.
+- **Damage.** A mob's absorption amount is not saved. Skeletons, pigmen and the wither were not executed as victims. Multiplayer has no item-in-use sync, so a remote player never blocks. The first-person blocking pose is bytecode-read only.
+- **Tracker.** The mob and object walks still run at separate places, so their packets are not queued together. An object takes its id at its first tracker tick. A destroy flushed in the removal's own tick is not modelled. The Java 7 order is not executed. The item, extras, hits and vehicles references were not regenerated with the late destroy.
+- **Player actions.** Right clicks on blocks still apply before the walk. `/kill` with a selector cannot be checked: the jar is the client jar.
+- **Mobs.** The ghast's body turn, the squid turn and the dragon's body yaw are bytecode-read only. A silverfish pulled into a retracting block dies earlier than natively.
+- **Away runs and dispensers.** The saved cross-kind list order is not kept. Spawn eggs are not dispensed. The exp bottle dispense and the away item-frame drop are not executed.
+- **Dragon.** Whether the beam's texture scroll uses the dragon's or the crystal's tick count is unverified. The crystal copy places no End fire.
+
 ## Done in batch 49
 
 Batch 49 covered these areas:
@@ -14,15 +37,7 @@ Batch 49 covered these areas:
 - **Death drops at the hurt call.** Drops, death orbs, breeding orbs, shear wool and chicken eggs join the list when they are spawned, including kills outside the walk (a player's hit, the void, a blast). A zombie that converts a villager joins ahead of the loot. A blast takes its entity list before any hurt, so its own drops are not blasted. Live items and orbs each own an `Entity.rand`. Executed: `EntityListProbe`, 88 scenarios (10 new `b49hd`).
 - **The client dragon's crystals.** The client dragon copy searches the crystal copies itself (the `nextInt(10)` roll, the nearest within 32), drops a target whose copy is gone, heals its own health every 10th tick, and the beam is drawn from its target. Crystal copies are tracked at 256 with no velocity and no longer fall. Executed: 3 `b49dc` scenarios of 80 ticks (`TrackerMountsProbe`).
 
-Still open from batch 49:
-- **Vehicles.** The ridden boat or cart is drawn from the live entity, and its copy runs no physics. Leash knots have no crosshair pick. There are no client boat splash particles. A custom display block of a non-cube render type is drawn as a cube. The client fuse spawns no smoke. Only boats and carts placed by the player start their tracker entry at creation.
-- **Command carts.** The port's `LastOutput` text is `{"text":"[hh:mm:ss] msg"}`; native is `{"extra":["msg"],"text":"[hh:mm:ss] "}`.
-- **Damage.** Mobs have no Resistance or absorption. Player-versus-player damage is not in the executed records. Multiplayer has no item-in-use sync, so a remote player never blocks. The first-person blocking pose is bytecode-read only.
-- **Tracker.** Mobs and objects keep separate id spaces and sets, so a mob's and an item's packets are not interleaved by id. Client copies step in entry creation order. The Java 7 order is not executed. A destroy packet is natively flushed one tick late. The item, extras, hits and mounts tracker references (apart from the b49dc cases) were not regenerated with the untrack-aware probe.
-- **Drops.** `EntityWorld.kill` sets `recentlyHit`; native void damage does not. A player's melee hit happens before the mob walk in the live frame; natively the packet runs after the world tick. Client copies and away runs share one item random.
-- **Pistons.** The live mob-then-tile order is checked by source tests only. Silverfish, giants and blazes were not probed for the legacy body turn. The `b46mp` replay workarounds stay until those records are regenerated.
-- **Dragon.** Whether the beam's texture scroll uses the dragon's or the crystal's tick count is unverified. The crystal copy places no End fire.
-- **Not yet in a browser check.** A custom display cart, the cart shadow, the client dragon's beam and aiming at a copy that lags its live entity.
+Still open from batch 49: carried into the batch 50 list above, except the items batch 50 closed.
 
 ## Done in batch 48
 
