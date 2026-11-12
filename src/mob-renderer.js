@@ -7,7 +7,7 @@ import { ENTITY_TYPES, mobPose } from "./entities.js";
 import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
-import { syncMobEquipment } from "./mob-equipment-renderer.js";
+import { syncMobEquipment, followChildHeld } from "./mob-equipment-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { spiderLegs } from "./spider.js";
 import { SILVERFISH_MODEL, silverfishPose } from "./silverfish.js";
@@ -545,7 +545,7 @@ export class MobRenderer {
         sf.segments.forEach((s, i) => { r.silverfish.segments[i].position.x = s.x / 16; r.silverfish.segments[i].rotation.y = -s.yaw; });
         sf.layers.forEach((s, i) => { r.silverfish.layers[i].position.x = s.x / 16; r.silverfish.layers[i].rotation.y = -s.yaw; });
       }
-      if (r.nose) animateWitch(r, e, pose.age);
+      if (r.nose) animateWitch(r, e, pose.age, this);
       if (r.squish) animateSlime(r, e, partial);
       if (r.golem) animateIronGolem(r, e, pose, partial);
       if (r.snow) animateSnowGolem(r, pose);
@@ -565,6 +565,7 @@ export class MobRenderer {
           l.rotation.set(-Math.PI * 2 / 5, i === 2 ? -Math.PI / 10 : Math.PI / 10, 0);
         } else l.rotation.x = angles[i];
       });
+      followChildHeld(r); // a child's held item rides its arm (mob-equipment-renderer.js)
       // Entity.getBrightnessForRender samples 0.66 of the way up the body.
       // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or dying.
       const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * mobScale(e),

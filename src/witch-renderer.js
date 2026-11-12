@@ -1,10 +1,14 @@
 // RenderWitch (bpb) with ModelWitch (bim, 64 x 128 witch.png). The boxes come from WITCH_MODEL (witch.js, recorded by
 // tools/probes/WitchProbe.java). mob-renderer.js calls createWitchRig for a "witch" and animateWitch every frame; the legs use
-// villagerLegAngle (ModelWitch extends ModelVillager). The potion the witch holds is not drawn in 3D (the nose pose changes only).
+// villagerLegAngle (ModelWitch extends ModelVillager). The held potion is drawn as RenderWitch.renderEquippedItems does (bytecode-read bpb.a(yp, float)): the item hangs
+// on the villager nose's postRender, which is the nose's own point and angles only (not the head's turn and not the nose's offsets), then heldItemMatrix's "nose" branch.
+// ModelRenderer offsets are plain glTranslatef values (blocks), added in render() only; animateWitch applies them to the drawn nose, not to the item.
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { WITCH_MODEL as M, noseAngles } from "./witch.js";
+import { heldItemMatrix, heldKind } from "./player-renderer.js";
+import { heldSprite } from "./held-sprite.js";
 const f = Math.fround;
 export const WITCH_SCALE = f(0.9375);
 export const WITCH_TEXTURE = "/media/1.7.10/entity/witch.png";
@@ -42,6 +46,7 @@ export function createWitchRig(renderer, e) {
   neck.rotation.order = "YXZ";
   boxes(neck, M.head.boxes);
   const nose = child(neck, M.nose.point);
+  nose.rotation.order = "ZYX"; // GL order: rotateZ, then Y, then X
   boxes(nose, M.nose.boxes);
   boxes(child(nose, M.mole.point), M.mole.boxes);
   // The hat: four stacked boxes, each a child of the one below (ModelWitch.field_82900_g and its three children).
@@ -60,13 +65,49 @@ export function createWitchRig(renderer, e) {
     boxes(leg, [M.leg], mirror);
     limbs.push(leg);
   }
+  // The postRender frame of the nose for the held item: model origin 24 pixels up, the nose's point, then its angles.
+  const hold = pivot(...M.nose.point);
+  hold.rotation.order = "ZYX";
   renderer.scene.add(root);
-  return { root, neck, limbs, nose, materials: [skin], type: "witch", lift: 1 / 128, scale: WITCH_SCALE };
+  return { root, neck, limbs, nose, hold, noseBase: M.nose.point.map((v) => v / 16), materials: [skin], type: "witch", lift: 1 / 128, scale: WITCH_SCALE };
 }
 
-// ModelWitch.setRotationAngles: the nose sways with the entity id and ticksExisted, and a held item pulls it forward.
-export function animateWitch(rig, e, age) {
-  const [rx, , rz, px, py, pz] = noseAngles(e.id, age, !!e.held), n = rig.nose;
+// ModelWitch.setRotationAngles: the nose sways with the entity id and ticksExisted, and a held item pulls it forward (angle -0.9 and the offsets 0.1875 down, 0.09375 forward).
+export function animateWitch(rig, e, age, renderer = null) {
+  const [rx, , rz, ox, oy, oz] = noseAngles(e.id, age, !!e.held), n = rig.nose, [bx, by, bz] = rig.noseBase;
   n.rotation.set(rx, 0, -rz);
-  n.position.set(px / 16, -py / 16, -pz / 16);
+  n.position.set(bx + ox, -by - oy, -bz - oz); // the point is model pixels / 16; the offsets are blocks, with model y down and z back
+  rig.hold.rotation.set(rx, 0, -rz);
+  if (renderer) syncWitchHeld(renderer, rig, e.held);
+}
+
+// The potion in the witch's hand. EntityWitch.getHeldItem is the drinking potion; the rig keeps the sprite until the stack changes.
+function syncWitchHeld(renderer, rig, held) {
+  const key = held ? `${held.id}:${held.damage | 0}` : "";
+  if (rig.heldKey === key) return;
+  rig.heldKey = key;
+  if (rig.heldNode) {
+    rig.hold.remove(rig.heldNode);
+    rig.heldNode.traverse((o) => o.isMesh && o.geometry.dispose());
+    for (const m of rig.heldMaterials) { rig.materials = rig.materials.filter((x) => x !== m); m.dispose(); }
+    rig.heldNode = null;
+  }
+  rig.heldMaterials = [];
+  if (!held) return;
+  const material = (options) => {
+    const m = entityMaterial(renderer.view.lighting, { ...options, side: THREE.DoubleSide });
+    rig.materials.push(m);
+    rig.heldMaterials.push(m);
+    return m;
+  };
+  const sprite = heldSprite(held.id, held.damage, material);
+  if (!sprite) return;
+  const group = new THREE.Group(), flip = new THREE.Group();
+  group.matrixAutoUpdate = false;
+  group.matrix.copy(heldItemMatrix(heldKind(held.id, held.damage), { origin: "nose" }));
+  flip.scale.set(1, -1, -1);
+  group.add(sprite);
+  flip.add(group);
+  rig.hold.add(flip);
+  rig.heldNode = flip;
 }

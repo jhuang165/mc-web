@@ -170,7 +170,7 @@ export function noseAngles(entityId, ticks, held) {
 export const WITCH_MODEL = Object.freeze({
   texture: [64, 128],
   head: { point: [0, 0, 0], boxes: [[-4, -10, -4, 8, 10, 8, 0, 0, 0]] },
-  nose: { point: [0, 0, 0], boxes: [[-1, -1, -6, 2, 4, 2, 24, 0, 0]] },
+  nose: { point: [0, -2, 0], boxes: [[-1, -1, -6, 2, 4, 2, 24, 0, 0]] }, // bik.f: the executed model record (witch-reference.json) has it 2 above the head's point
   mole: { point: [0, -2, 0], boxes: [[0, 3, -6.75, 1, 1, 1, 0, 0, -0.25]] },
   hat: [
     { point: [-5, -10.03125, -5], angle: [0, 0, 0], boxes: [[0, 0, 0, 10, 2, 10, 0, 64, 0]] },
