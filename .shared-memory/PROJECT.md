@@ -113,6 +113,19 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 49 (2026-11-12, eight Sonnet tracks in `../wt49-<name>` on `batch49-<name>`, cut from ac7027870, merged --no-ff on `batch49-lead`; lead note `b49-lead-track.md`; the gun side runs separately):
+- 0.78.0, by track:
+  - cartdisplay: carts draw the watched display block (20-22) from the copy, the TNT flash reads the copy's status-10 fuse, carts cast a 0.5 shadow; display NBT and `/summon`. `CartDisplayProbe` executed.
+  - aimcopies: the crosshair tests the client copy's box for boats, carts, paintings and frames (`aimBox`); the live entity answers.
+  - furnacecart: the furnace-cart collision branch (1050 executed records); the command cart's watcher 24 is "" until a load, summon or GUI close writes "null" (`command.watch24`).
+  - firearmor: armour by damage source, not the caller's flag; no Resistance on starvation; 0.3 hit exhaustion; mobs' `indirectMagic` bypass. 675 executed `b49fa` records.
+  - pistonorder: live piston tiles after the entity walk (`tickTiles`); spiders and slimes use the legacy body turn. 12 executed `b49po` records.
+  - trackerorder: the tracker walks in Java 8 HashSet order of entity id (`java-hashset-order.js`); 713 executed orders.
+  - hurtdrops: drops and orbs join the list at the hurt call (`emitLoot`), kills outside the walk too; blasts snapshot their mob list; live items and orbs own an `Entity.rand`. `EntityListProbe` 88 scenarios.
+  - dragonclient: the client dragon copy's own crystal search, heal and beam target; crystal copies tracked at 256 with no velocity. 3 executed `b49dc` scenarios.
+- Lead merges: furnacecart and cartdisplay both edited the minecart watcher lines in `object-tracker.js`; the lead kept both (display watchers 20-22 and `watch24`).
+- Verification: see `b49-lead-track.md`. Pushed to github main by the lead.
+
 Batch 48 (2026-11-11, five Sonnet tracks in `../wt48-<name>` on `batch48-<name>`, cut from 61e069a4a, merged --no-ff on `batch48-lead`; lead note `b48-lead-track.md`; the gun side runs separately):
 - 0.77.0, by track:
   - vehiclerender: boats, carts, paintings, item frames and knots draw from their client copies (`vehicleViews`, `hangingViews`, `knotViews`); the ridden vehicle and aiming stay on the live entities.

@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 49
+
+Batch 49 covered these areas:
+- **Cart display blocks, the client fuse and cart shadows.** A cart draws the custom display block of its watchers 20 to 22 at 0.75 scale, raised by the offset, from the client copy; `/summon`, NBT and saves keep `CustomDisplayTile`, `DisplayTile`, `DisplayData` and `DisplayOffset`. The TNT cart's flash reads the copy's fuse, set by entity status 10 and counted down on the copy. Carts cast the RenderMinecart shadow (0.5). Executed: `CartDisplayProbe` (`cart-display-reference.json`).
+- **Aiming at the client copies.** The crosshair tests the client copy's box for boats, carts, paintings and item frames, and the use, attack or ride reaches the live entity (`aimBox` in `object-tracker.js`). An entity the tracker follows with no copy is not aimable; the ridden vehicle and an entity not yet listed keep the live box. Bytecode-read (`EntityRenderer.getMouseOver`).
+- **Furnace-cart collisions and the command cart's last output.** When exactly one cart is a furnace cart, the plain cart is damped to 0.2 and takes the furnace cart's motion with the push, and the furnace cart keeps 0.95 (1050 executed `FurnaceCartProbe` records). The command cart's watcher 24 reads "" when fresh or after a run with no output, and "null" only after a load, `/summon` or closing its GUI (executed).
+- **Damage sources decide armour.** `Survival.damage` applies armour by the damage source (`isUnblockable`), not the caller's flag. Resistance no longer reduces starvation. A hit that gets past absorption adds 0.3 exhaustion, except for the sources that bypass armour. Mobs now treat a thrown harming potion (`indirectMagic`) as bypassing armour. Executed: 675 `b49fa` records (`ArmorSourceProbe`, 21 sources, armour, the five protections, Resistance and absorption).
+- **Pistons after the mobs.** The live piston tile loop runs after the entity walk (`tickTiles`, `deferTiles`), as `World.updateEntities` orders them. Executed: 12 `b49po` records of mobs on a pushed block, a spider, a size 4 slime and an iron golem. They also showed that spiders and slimes turn their body the legacy way (`LEGACY_BODY`; cave spiders and magma cubes by inheritance).
+- **Tracker walk order.** The entity tracker walks its entries in `java.util.HashSet` order of the entity id (Java 8 and later), so packets go out in bucket order, not list order (`java-hashset-order.js`). Executed: `TrackerOrderProbe`, 713 orders over 10 add/remove histories.
+- **Death drops at the hurt call.** Drops, death orbs, breeding orbs, shear wool and chicken eggs join the list when they are spawned, including kills outside the walk (a player's hit, the void, a blast). A zombie that converts a villager joins ahead of the loot. A blast takes its entity list before any hurt, so its own drops are not blasted. Live items and orbs each own an `Entity.rand`. Executed: `EntityListProbe`, 88 scenarios (10 new `b49hd`).
+- **The client dragon's crystals.** The client dragon copy searches the crystal copies itself (the `nextInt(10)` roll, the nearest within 32), drops a target whose copy is gone, heals its own health every 10th tick, and the beam is drawn from its target. Crystal copies are tracked at 256 with no velocity and no longer fall. Executed: 3 `b49dc` scenarios of 80 ticks (`TrackerMountsProbe`).
+
+Still open from batch 49:
+- **Vehicles.** The ridden boat or cart is drawn from the live entity, and its copy runs no physics. Leash knots have no crosshair pick. There are no client boat splash particles. A custom display block of a non-cube render type is drawn as a cube. The client fuse spawns no smoke. Only boats and carts placed by the player start their tracker entry at creation.
+- **Command carts.** The port's `LastOutput` text is `{"text":"[hh:mm:ss] msg"}`; native is `{"extra":["msg"],"text":"[hh:mm:ss] "}`.
+- **Damage.** Mobs have no Resistance or absorption. Player-versus-player damage is not in the executed records. Multiplayer has no item-in-use sync, so a remote player never blocks. The first-person blocking pose is bytecode-read only.
+- **Tracker.** Mobs and objects keep separate id spaces and sets, so a mob's and an item's packets are not interleaved by id. Client copies step in entry creation order. The Java 7 order is not executed. A destroy packet is natively flushed one tick late. The item, extras, hits and mounts tracker references (apart from the b49dc cases) were not regenerated with the untrack-aware probe.
+- **Drops.** `EntityWorld.kill` sets `recentlyHit`; native void damage does not. A player's melee hit happens before the mob walk in the live frame; natively the packet runs after the world tick. Client copies and away runs share one item random.
+- **Pistons.** The live mob-then-tile order is checked by source tests only. Silverfish, giants and blazes were not probed for the legacy body turn. The `b46mp` replay workarounds stay until those records are regenerated.
+- **Dragon.** Whether the beam's texture scroll uses the dragon's or the crystal's tick count is unverified. The crystal copy places no End fire.
+- **Not yet in a browser check.** A custom display cart, the cart shadow, the client dragon's beam and aiming at a copy that lags its live entity.
+
 ## Done in batch 48
 
 Batch 48 covered these areas:
@@ -11,18 +33,7 @@ Batch 48 covered these areas:
 - **Tracker timing for vehicles.** Boats and carts placed by the player start their tracker entry at creation (`tracker-birth.js`). Collisions set `airBorne` and hits set `velocityChanged`, so the entry sends at once. The furnace cart's watcher 16 and the command cart's watchers 23 and 24 are ported. A changed string watcher now sends its S1C. Executed in `TrackerVehiclesProbe`: the far boat is untracked at tick 71, as the port already did; the probe was wrong.
 - **Pistons push the server's copy of the player.** The piston tile loop moves the integrated server's copy of the player with the same move as mobs. The copy keeps its own `onGround` between packets. Executed: 25 `b48pp` records (mobs and the copy, extending and retracting tiles, walls, ceilings, lifts).
 
-Still open from batch 48:
-- **Vehicle copies.**
-  - The crosshair aims at the live carts and hanging entities; natively it aims at the client copies.
-  - The ridden boat or cart is drawn from the live entity, and its copy runs no physics. There are no client boat splash particles.
-  - The cart's custom display tile and offset (watchers 20 to 22) are not drawn. The TNT cart's flash reads the live fuse. Carts have no shadow.
-  - Only boats and carts placed by the player start their entry at creation; other entities start at their first listed tick.
-  - The furnace-cart collision branch is not ported. The command cart's watcher 24 cannot tell "never ran" from "no output".
-  - The item, extras, hits and mounts tracker references were not regenerated with the untrack-aware probe.
-- **Sword blocking.** Multiplayer has no item-in-use sync, so a remote player never blocks. The first-person blocking pose is bytecode-read only. Burning goes through armour in the port.
-- **Death drops.** Loot spawns at the end of the dying mob's step, not at the hurt call; the order against another spawn in that step is not probed. Items and orbs share one random, not their own `Entity.rand`. Drops from kills outside the walk (a player's hit, `/kill`, explosions) still drain after the tick.
-- **Pistons.** Live, the piston tiles run before the mob update; natively they run after it (the replay orders them right). Mobs carried on a moved block and large mobs are not recorded. The `b46mp` replay workarounds stay.
-- **Not yet in a browser check.** The cart copy on screen: both smokes' carts ended out of view, so only the unit tests cover its view. The order in which live placed carts, boats and paintings join is pinned in source only.
+Still open from batch 48: carried into the batch 49 list above, except the items batch 49 closed.
 
 ## Done in batch 47
 
