@@ -83,7 +83,12 @@ function checkMore(name, t, c, want) {
     const got = [];
     for (const part of c.dragon.parts) got.push(part.x, part.y, part.z, ...part.box);
     near(got, want.slice(2), "dragon parts");
-  } else if (c.squid) assert.equal(c.air, want[0], `${name} tick ${t}: squid air`);
+  } else if (c.squid) {
+    assert.equal(c.air, want[0], `${name} tick ${t}: squid air`);
+    // b52dc: EntitySquid.onLivingUpdate's isRemote half on the client copy (executed: pitch, yaw, rotation, tentacles, motion and rotate speed, each with its previous value)
+    const q = c.squid;
+    near([q.pitch, q.prevPitch, q.yaw, q.prevYaw, q.rotation, q.prevRotation, q.tentacle, q.prevTentacle, q.motionSpeed, q.rotateSpeed], want.slice(1), "squid client fields");
+  }
 }
 // the client's sounds and particles of a tick as the probe's MW logs them ([at | snd | fx, name, ...]); the pitch is a float
 function fxOf(list) {
