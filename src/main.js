@@ -3026,23 +3026,34 @@ let pendingEdits = [], runningEdits = false;
 function defersToNetworkTick(place) {
   if (runningEdits || !mobs) return false;
   if (aimedEntity || aimedCart || aimedHanging) return true;
+  if (pendingEdits.length) return true; // packets are handled in arrival order: nothing overtakes a queued action
+  if (place && target) return true; // C08 on a block (placement, doors, containers, item use): the client's own prediction is the swing and the GUI, which waits for the server anyway
   const h = heldId();
   return place && (isThrowable(h) || h === BOAT_ITEM || h === ITEM_EXP_BOTTLE || h === ITEM_SPAWN_EGG);
 }
 function runPendingEdits() {
   if (!pendingEdits.length) return;
   const list = pendingEdits; pendingEdits = [];
-  const was = [aimedEntity, aimedCart, aimedHanging];
+  const was = [aimedEntity, aimedCart, aimedHanging], wasTarget = target;
   runningEdits = true;
   try {
-    for (const q of list) { [aimedEntity, aimedCart, aimedHanging] = q.aimed; edit(q.place); }
-  } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; }
+    for (const q of list) {
+      if (q.fn) { q.fn(); continue; } // a C07 stop-digging / creative break queued by breakBlockPacket
+      [aimedEntity, aimedCart, aimedHanging] = q.aimed; target = q.target; edit(q.place);
+    }
+  } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; target = wasTarget; }
+}
+// C07 (finished digging, creative / instant break): the block goes in the network tick. The progress, sounds and hit particles stay client-side and at once.
+function breakBlockPacket(p, creative = false, accept = null) {
+  if (runningEdits || !mobs || multiplayer) return !accept || accept() ? breakBlock(p, creative) : false;
+  pendingEdits.push({ fn: () => { if (!accept || accept()) breakBlock(p, creative); } });
+  return true;
 }
 // The player's click entry points call this instead of edit: the client's own part (the swing) at once, the packet's part in the network tick.
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
     if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
-    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging] });
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target });
     return;
   }
   edit(place);
@@ -3149,7 +3160,7 @@ function edit(place = false) {
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
     openHorse: (e) => { openHorse(e); syncContainerState(); },
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
-    breakBlock,
+    breakBlock: breakBlockPacket,
     clientEyeInWater,
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
@@ -3265,7 +3276,7 @@ function tickMining() {
       sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
     },
     // C07 status 2 (finished digging): refused past 6 blocks from the eye or at y >= 256; the block is resent unchanged.
-    breakBlock: (p, c) => serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept ? breakBlock(p, c) : scene.updateBlock(p[0], p[2], p[1]),
+    breakBlock: (p, c) => breakBlockPacket(p, c, () => serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept || (scene.updateBlock(p[0], p[2], p[1]), false)),
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
     mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });
