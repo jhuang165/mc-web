@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { entityMaterial, worldMaterial, applySpriteTransform } from "./light-material.js";
 import { itemTexture, pixelTexture, skinBox } from "./first-person.js";
+import { itemPasses, ITEM_POTION } from "./item-passes.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
 
 const SNOWBALL = 312, EGG = 316, ENDER_PEARL = 378;
@@ -61,6 +62,17 @@ export class ProjectileRenderer {
   material(kind) {
     return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });
   }
+  // RenderSnowball.doRender (bod, bytecode-read): an EntityPotion whose icon is the splash bottle first draws the "overlay" icon (potion_overlay)
+  // with glColor3f of PotionHelper's liquid colour for the potion damage, then resets to white and draws the bottle. Same quad both times, so the
+  // tinted overlay is the ball's own mesh and the bottle is a child in front of it (polygon offset, as the leather overlay).
+  potionPasses(b) {
+    const passes = itemPasses(ITEM_POTION, (b.damage | 0) | 16384);
+    const overlay = entityMaterial(this.view.lighting, { map: pixelTexture(passes.base), color: passes.tint, alphaTest: 0.1 });
+    const bottle = entityMaterial(this.view.lighting, { map: pixelTexture(passes.overlay), alphaTest: 0.1 });
+    bottle.polygonOffset = true;
+    bottle.polygonOffsetFactor = -1;
+    return { overlay, bottle };
+  }
   // `partial` is the fraction of the current tick; balls interpolate from
   // lastTickPos (RenderManager), particles from prevPos. `view` is the player's
   // rotation for the particle basis, as the other particle renderers take it.
@@ -70,11 +82,18 @@ export class ProjectileRenderer {
       seen.add(b);
       let m = this.balls.get(b);
       if (!m) {
-        const skull = b.kind === "witherSkull", material = skull ? this.skullMaterial(b) : this.material(b.kind), mesh = skull ? this.skullMesh(material) : new THREE.Mesh(this.sprite, material);
+        const skull = b.kind === "witherSkull", potion = b.kind === "potion" ? this.potionPasses(b) : null,
+          material = skull ? this.skullMaterial(b) : potion ? potion.overlay : this.material(b.kind), mesh = skull ? this.skullMesh(material) : new THREE.Mesh(this.sprite, material);
+        if (potion) {
+          const bottle = new THREE.Mesh(this.sprite, potion.bottle);
+          bottle.renderOrder = 1;
+          bottle.frustumCulled = false;
+          mesh.add(bottle);
+        }
         if (!skull) mesh.scale.setScalar(b.scale ?? 0.5); // RenderFireball scale 2 (large) / 0.5 (small)
         mesh.frustumCulled = false;
         this.scene.add(mesh);
-        this.balls.set(b, (m = { mesh, material }));
+        this.balls.set(b, (m = { mesh, material, extra: potion?.bottle ?? null }));
       }
       const x = lerp(b.px, b.x), y = lerp(b.py, b.y), z = lerp(b.pz, b.z);
       if (b.kind === "witherSkull") {
@@ -86,12 +105,15 @@ export class ProjectileRenderer {
       }
       m.mesh.position.set(x, y + 0.25 * (b.scale ?? 0.5), z);
       m.mesh.quaternion.copy(camera.quaternion);
-      m.material.setLight(b.fullbright ? 15728880 : this.view.brightness(x, y + BALL_LIGHT, z));
+      const packed = b.fullbright ? 15728880 : this.view.brightness(x, y + BALL_LIGHT, z);
+      m.material.setLight(packed);
+      m.extra?.setLight(packed);
     }
     for (const [b, m] of this.balls)
       if (!seen.has(b)) {
         this.scene.remove(m.mesh);
         m.material.dispose();
+        m.extra?.dispose();
         this.balls.delete(b);
       }
     const basis = particleBasis(180 - (yaw * 180) / Math.PI, (-pitch * 180) / Math.PI, mirror), seenFx = new Set();
