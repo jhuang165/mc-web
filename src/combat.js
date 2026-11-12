@@ -32,7 +32,7 @@ const ARMOR = { zombie: 2, wither: 4 }; // EntityWither.getTotalArmorValue (xc.a
 // EntityLivingBase.applyArmorCalculations: amount * (25 - armour) / 25 in floats. `equipment` is the mob's five native stacks.
 export function armorReduced(type, amount, source, size = 1, equipment = null) {
   let armor = type === "magma_cube" ? magmaArmor(size) : type === "pigman" ? PIGMAN.armor : ARMOR[type] || 0; // yf.aV = size * 3
-  if (equipment) armor = type === "zombie" || type === "pigman" ? Math.min(20, armor + totalArmor(equipment)) : armor + totalArmor(equipment);
+  if (equipment && type !== "wither") armor = type === "zombie" || type === "pigman" ? Math.min(20, armor + totalArmor(equipment)) : armor + totalArmor(equipment);
   if (!armor || UNBLOCKABLE.has(source)) return amount;
   return f(f(amount * (25 - armor)) / 25);
 }

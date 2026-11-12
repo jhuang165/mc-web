@@ -85,7 +85,7 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
 function payload(state,ox,oz,report,blockAt) {
  const entities=[],tiles=[],ticks=[],built=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
-  const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
