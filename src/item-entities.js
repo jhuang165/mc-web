@@ -146,8 +146,11 @@ export class ItemEntities {
       dx *= 0.25; dy *= 0.05000000074505806; dz *= 0.25;
       e.mx = e.my = e.mz = 0;
     }
-    const [a, b, c, d, g, h] = this.box(e),
-      list = this.boxes(world, Math.min(a, a + dx), Math.min(b, b + dy), Math.min(c, c + dz), Math.max(d, d + dx), Math.max(g, g + dy), Math.max(h, h + dz)),
+    // Entity.moveEntity offsets the persistent box and then reads posX = (minX + maxX) / 2 (and posZ): the box is kept (`bxz`: minX, maxX, minZ, maxZ) while it still belongs to the position,
+    // so a sideways drift rounds as natively (batch 48, the death-drop records: one unit in the last place).
+    let [a, b, c, d, g, h] = this.box(e);
+    if (e.bxz && (e.bxz[0] + e.bxz[1]) / 2 === e.x && (e.bxz[2] + e.bxz[3]) / 2 === e.z) [a, d, c, h] = e.bxz;
+    const list = this.boxes(world, Math.min(a, a + dx), Math.min(b, b + dy), Math.min(c, c + dz), Math.max(d, d + dx), Math.max(g, g + dy), Math.max(h, h + dz)),
       box = [a, b, c, d, g, h];
     const ody = dy, odx = dx, odz = dz;
     for (const o of list)
@@ -169,9 +172,10 @@ export class ItemEntities {
         if (dz > 0 && o[2] >= box[5]) dz = Math.min(dz, o[2] - box[5]);
         else if (dz < 0 && o[5] <= box[2]) dz = Math.max(dz, o[5] - box[2]);
       }
-    e.x += dx;
+    e.bxz = [box[0], box[3], c + dz, h + dz];
+    e.x = (box[0] + box[3]) / 2;
     e.y += dy;
-    e.z += dz;
+    e.z = (e.bxz[2] + e.bxz[3]) / 2;
     e.onGround = ody !== dy && ody < 0;
     e.collidedH = odx !== dx || odz !== dz; // isCollidedHorizontally
     if (odx !== dx) e.mx = 0;

@@ -222,7 +222,7 @@ import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin,
 import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
-import { tickLivingSimulation, drainMobEvents, explodeEvent } from "./living-simulation.js";
+import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
@@ -1485,9 +1485,11 @@ async function launch(record, prepared, { slice = false } = {}) {
     })());
     watchSpawnerBlocks(world, spawners);
     boats = Boats.fromJSON(record.boats, { ids: entityIds });
+    boats.joined = joinedAs("boat"); // batch 48: a boat or cart the player places joins World.loadedEntityList at its spawn, not at the end of the walk (entity-simulation.js entityWalkers)
+    if (minecarts) minecarts.joined = joinedAs("cart");
     if (boatRenderer) { boatRenderer.clear(); boatRenderer.boats = boats; }
     aimedCart = null;
-    hanging = Hanging.fromJSON(record.hanging, { ids: entityIds }); aimedHanging = null; hangingRenderer?.clear();
+    hanging = Hanging.fromJSON(record.hanging, { ids: entityIds }); hanging.joined = joinedAs("hanging"); aimedHanging = null; hangingRenderer?.clear();
     signs = Signs.fromJSON(record.signs); signRenderer?.clear();
     SKULLS.tiles = Skulls.fromJSON(record.skulls).tiles; skullRenderer?.clear();
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
@@ -1532,6 +1534,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.potions = new WitchPotions(mobs);
     mobs.explodeInline = (ev) => explodeEvent(ev, explodeAt); // a creeper explodes inside its own update (entities.js)
     mobs.walks = entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }); // arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
+    mobs.spawnLoot = (events) => spawnLoot({ xpOrbs, items }, events); // a death's drops and orbs join the list in the dying entity's own turn (entities.js flushLoot)
     mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
     if (Array.isArray(record.fireballs) && record.fireballs.length) { mobs.fireballs.load(record.fireballs, world.dimension ?? 0); mobs.skulls.load(record.fireballs, world.dimension ?? 0); } // blaze/ghast fireballs and wither skulls in flight

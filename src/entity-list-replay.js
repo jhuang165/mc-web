@@ -14,7 +14,7 @@ import { WitchPotions } from "./witch-potions.js";
 import { Projectiles, GaussianRandom } from "./projectiles.js";
 import { impactPlayerPearl } from "./pearl-player.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
-import { explodeEvent } from "./living-simulation.js";
+import { explodeEvent, spawnLoot } from "./living-simulation.js";
 import { explodeNonLiving } from "./explosion-simulation.js";
 import { JavaRandom } from "./java-random.js";
 import { setEntityRandom } from "./entities.js";
@@ -27,7 +27,7 @@ import { setEntityRandom } from "./entities.js";
 export const entityListReference = JSON.parse(readFileSync(new URL("../public/research/entity-list-reference.json", import.meta.url))).cases;
 const STONE = 3, PORT_ID = { 1: 3 }, YOFF = { item: 0.125, tnt: TNT_Y_OFFSET };
 
-// `without`: "throwTargets" (batch 46: the player's balls miss carts and boats); leave one batch 45 behaviour out to show a record needs it: "blast" (a blast reaches only items, as before), "mobPush" (the vehicles do not push mobs in the walk).
+// `without`: "lootInTurn" (batch 48: death loot spawns at the drain after the walk), "throwTargets" (batch 46: the player's balls miss carts and boats); leave one batch 45 behaviour out to show a record needs it: "blast" (a blast reaches only items, as before), "mobPush" (the vehicles do not push mobs in the walk).
 export function replayEntityList(c, onBoom = null, without = null) {
   const ew = new EntityWorld(plain([]), [], () => 0.5);
   ew.brightnessLevel = () => 15; // the probe world's light
@@ -60,6 +60,11 @@ export function replayEntityList(c, onBoom = null, without = null) {
   const state = { world, items, arrows, primed, xpOrbs, projectiles, mobs: ew, survival, position: player,
     minecarts, boats, hanging, velocity: { x: 0, z: 0 }, alive: false };
   const ctx = { state, hooks };
+  // Entity.rand is Random(7) on every item and orb of the probe: their push out of the floor (a drop spawned at a mob's feet sits half in it) draws from their own generator, not a shared one.
+  for (const host of [items, xpOrbs]) { const tick = host.tickOne.bind(host), shared = host.random; host.tickOne = (...a) => { const r = (a[1].ownRand ??= new JavaRandom(7)); host.random = () => r.nextFloat(); try { return tick(...a); } finally { host.random = shared; } }; }
+  // Batch 48 (EntityWorld.flushLoot): a death's drops and orbs join the list in the dying cow's own turn; the probe's World.spawnEntityInWorld fixes their sideways motion. World.rand is Random(2) there.
+  ew.worldRandom = new JavaRandom(2);
+  if (without !== "lootInTurn") ew.spawnLoot = (evs) => { const n = items.items.length; spawnLoot({ xpOrbs, items }, evs); for (const it of items.items.slice(n)) [it.mx, it.my, it.mz] = [0, 0.2, 0]; };
   ew.walks = entityWalkers(() => ctx);
   if (without === "mobPush") for (const w of ew.walks.values()) delete w.pushMob;
   items.joined = (e) => { ew.joined(e, "item"); if (inPass) extras.push({ at: { kind: "item" }, entity: e }); };
@@ -97,6 +102,10 @@ export function replayEntityList(c, onBoom = null, without = null) {
       m.add = () => { list.push(ball); ew.joined(ball, a >= 3 ? "potion" : "thrown"); }; m.entity = ball;
     }
     else if (kind === "skull") { const sk = ew.skulls.launch({ owner: null, x, y, z, exact: [vx, vy, vz] }); ew.skulls.list.pop(); m.add = () => { ew.skulls.list.push(sk); ew.joined(sk, "skull"); }; m.entity = sk; }
+    else if (kind === "dcow") { // batch 48: a cow with `a` health and recentlyHit `b`, falling from where it is listed (dies on landing)
+      const cow = ew.create("cow", x, y, z); cow.growingAge = 0; cow.onGround = false; cow.health = a; cow.recentlyHit = b; setEntityRandom(cow, new JavaRandom(7));
+      m.add = () => { ew.entities.push(cow); }; m.entity = cow;
+    }
     else if (kind === "cow") {
       const cow = ew.create("cow", x, y, z); cow.growingAge = 0; cow.onGround = false; setEntityRandom(cow, new JavaRandom(7));
       m.add = () => { ew.entities.push(cow); }; m.entity = cow;
@@ -117,6 +126,7 @@ export function replayEntityList(c, onBoom = null, without = null) {
     inPass = true;
     ew.tickMobs(player, survival);
     finishEntitySimulation(state, hooks);
+    if (without === "lootInTurn") { const n = items.items.length; spawnLoot({ xpOrbs, items }, ew.drain()); for (const it of items.items.slice(n)) [it.mx, it.my, it.mz] = [0, 0.2, 0]; } // the drain after the walk, as before batch 48
     inPass = false;
     if (hasOrb) { xp += xpOrbs.collect({ x: 0.5, y: 0, z: 0.5 }); }
     rows.push([made.map((m) => view(m, primed, detail, player, survival)), booms.map((b) => [...b]), hasOrb ? [xp, xpOrbs.cooldown] : [], extras.map((m) => view(m, primed, detail, player, survival))]);
@@ -138,7 +148,7 @@ function view(m, primed, detail = false, player = null, survival = null) {
   if (kind === "pthrow" && m.at.b === 2) return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, player.x, player.y, player.z, 20 - survival.health]; // a pearl of a real EntityPlayerMP thrower: where it stands afterwards and the damage it took
   if (kind === "potion" || kind === "snowball" || kind === "pthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
   if (kind === "skull") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.blue ? 1 : 0];
-  if (kind === "cow") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.health];
+  if (kind === "cow" || kind === "dcow") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead || e.death >= 20 ? 1 : 0, e.health]; // setDead at deathTime 20 (the port lets the mob leave in reap)
   return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, e.inGround ? 1 : 0, e.pickup];
 }
 

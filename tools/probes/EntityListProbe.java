@@ -21,6 +21,7 @@ public class EntityListProbe {
       if (e instanceof xk) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityItem's constructor draws the sideways motion from Math.random: fixed here (the replay passes the same motion)
       if (e instanceof sq) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityXPOrb's constructor draws its motion from Math.random: fixed here (the replay passes the same motion)
       if (e instanceof wg) hatchling(e); // an EntityEgg's chick: its own Random seeded like the other entities, no AI task list
+      if (e instanceof xk || e instanceof sq) { try { PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7)); } catch (Exception x) { throw new RuntimeException(x); } } // batch 48: Entity.rand of an item or orb (its push out of the floor draws from it) is Random(7), so the records repeat
       entities.add(e); extras.add(e); return true;
     }
     // World.getCollidingBoundingBoxes: the blocks, then the entity boxes within 0.25 (getBoundingBox for a boat, getCollisionBox for the mover): carts and boats only
@@ -86,6 +87,7 @@ public class EntityListProbe {
       case "arrow": e = new zc(w, x, y, z); break;
       case "orb": e = new sq(w, x, y, z, Integer.parseInt(s[7])); break;
       case "cow": e = new Cow(w); break;
+      case "dcow": { Cow c = new Cow(w); c.g(Float.parseFloat(s[7])); PlayerStepProbe.field(sv.class, "aS").setInt(c, Integer.parseInt(s[8])); e = c; break; } // batch 48: a cow with `a` health and recentlyHit `b` (100: a player hit it; 0: nobody)
       case "cart": e = new xs(w, x, y, z); PlayerStepProbe.field(sa.class, "c").setInt(e, 1); break; // EntityMinecartEmpty (id set as VehicleProbe does)
       case "boat": { xi bt = new xi(w, x, y, z); bt.y = Float.parseFloat(s[7]); bt.A = bt.y; PlayerStepProbe.field(sa.class, "c").setInt(bt, 1); e = bt; break; }
       case "painting": { HangingProbe.seed = 1; HangingProbe.P pt = new HangingProbe.P(w, (int) x, (int) y, (int) z, Integer.parseInt(s[7])); PlayerStepProbe.field(ss.class, "e").setInt(pt, Integer.parseInt(s[8])); e = pt; break; }
@@ -204,6 +206,7 @@ public class EntityListProbe {
   }
   // kind x y z vx vy vz a b join [block]
   static String[] item(double x, double y, double z, double vx, int count, int age, int join) { return new String[] {"item", "" + x, "" + y, "" + z, "" + vx, "0", "0", "" + count, "" + age, "" + join, "1"}; }
+  static String[] dcow(double x, double y, double z, int health, int recentlyHit, int join) { return new String[] {"dcow", "" + x, "" + y, "" + z, "0", "0", "0", "" + health, "" + recentlyHit, "" + join}; }
   static String[] cow(double x, double y, double z, double vx, int join) { return new String[] {"cow", "" + x, "" + y, "" + z, "" + vx, "0", "0", "0", "0", "" + join}; }
   static String[] arrow(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"arrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   static String[] orb(double x, double y, double z, int value, int join) { return new String[] {"orb", "" + x, "" + y, "" + z, "0", "0", "0", "" + value, "0", "" + join}; }
@@ -372,6 +375,12 @@ public class EntityListProbe {
     scenario("pthrow-pearl-mp-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 2, 0));
     scenario("pthrow-pearl-mp-boat", 6, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 2, 0));
     scenario("pthrow-pearl-mp-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 2, 0), setBlock(0, 3, 0, 0, 4));
+    // Batch 48. A cow falls from 6 blocks with 1 health and dies on landing: EntityLivingBase.onDeath drops its loot in the cow's own turn (World.spawnEntityInWorld appends to the list the
+    // pass is walking, so the items update in that pass), and onDeathUpdate spawns the orbs at deathTime 20 (only with recentlyHit > 0) in its own update. Spawned entities are listed after the main states.
+    scenario("death-fall-cow-hit", 40, dcow(0.5, 6.0, 0.5, 1, 100, 0));
+    scenario("death-fall-cow-nohit", 40, dcow(0.5, 6.0, 0.5, 1, 0, 0));
+    scenario("death-fall-cow-item-after", 40, dcow(0.5, 6.0, 0.5, 1, 100, 0), item(3.5, 0.3, 0.5, 0.0, 4, 0, 0));
+    scenario("death-fall-cow-item-before", 40, item(3.5, 0.3, 0.5, 0.0, 4, 0, 0), dcow(0.5, 6.0, 0.5, 1, 100, 0));
     // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
     float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};
     String[] names = {"snowball", "egg", "pearl", "potion", "expbottle"};
