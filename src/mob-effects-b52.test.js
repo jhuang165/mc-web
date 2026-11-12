@@ -39,7 +39,7 @@ test('every native record imports its effects (modelled ids, signed bytes, ambie
     assert.deepEqual(modeled(native), [...rec.effects].sort(byId).filter((e) => MODELED.has(e.id)).map(({ id, amplifier, duration, ambient }) => ({ id, amplifier, duration, ...(ambient ? { ambient: true } : {}) })), `${r.kind} ${r.case} import`);
     const mob = new EntityWorld(flat, [{ ...rec, x: 64.5, y: 1, z: 64.5 }], () => 0.5).entities[0];
     if (!mob) continue; // a wither or dragon outside the flat test world may be refused
-    assert.deepEqual((mob.effects ?? []).map((e) => [e.id, e.amplifier, e.duration, e.ambient ? 1 : 0]), native.filter((e) => MODELED.has(e[0])), `${r.kind} ${r.case} restore`);
+    assert.deepEqual((mob.effects ?? []).map((e) => [e.id, e.amplifier, e.duration, e.ambient ? 1 : 0]).sort((a, b) => a[0] - b[0]), native.filter((e) => MODELED.has(e[0])), `${r.kind} ${r.case} restore`);
   }
 });
 

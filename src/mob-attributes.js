@@ -101,3 +101,7 @@ export function attributeFieldsFromNbt(compound) {
     out.reinforcement = modifiedValue(holder, "zombie.spawnReinforcements", bases["zombie.spawnReinforcements"] ?? 0, 0, 1);
   return out;
 }
+
+// Potion.healthBoost (PotionHealthBoost, rt): while the effect was added at run time (`boost` on the record: a load that only put it in the map has no modifier,
+// and the potion modifier is not saved) generic.maxHealth gains 4 * (amplifier + 1) (operation 0, the signed byte amplifier), as [amount, operation].
+export const healthBoostExtra = (e) => { const b = e.effects?.find((x) => x.id === 21 && x.boost); return b ? [[4 * (b.amplifier + 1), 0]] : []; };

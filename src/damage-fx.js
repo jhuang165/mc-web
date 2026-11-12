@@ -30,9 +30,9 @@ export function hurtCameraRoll({ hurtTime = 0, maxHurtTime = MAX_HURT_TIME, heal
 }
 
 // EntityLivingBase.fall: the jump boost lowers the distance by (amplifier + 1); ceilingFloatInt of the float arithmetic.
-// `amplifier` is the Jump Boost amplifier (0 for level I) or undefined/-1 without the effect.
+// `amplifier` is the Jump Boost amplifier (0 for level I; a signed byte, so -3 lengthens the fall: executed b54jump) or undefined/-1 without the effect.
 export function fallPoints(distance, amplifier = -1) {
-  const boost = amplifier >= 0 ? f(amplifier + 1) : 0, v = f(f(distance - 3) - boost), i = Math.trunc(v);
+  const boost = f(amplifier + 1), v = f(f(distance - 3) - boost), i = Math.trunc(v);
   return (v > i ? i + 1 : i) + 0;
 }
 // EntityLivingBase.func_146067_o (o): the fall sound by damage; EntityPlayer says "player", EntityMob "hostile", the rest "neutral".
