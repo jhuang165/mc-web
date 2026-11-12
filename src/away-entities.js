@@ -181,7 +181,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   if (e.villages) mobs.villages.loadJSON(e.villages);
   // b52so: the saved list order (src/saved-order.js): the run's entities take the places their records were stamped with, so the walk starts in the order a native chunk load gives.
   const savedLists = (inside) => ({ mobs: inside.mobs, drops: inside.drops, xpOrbs: inside.xpOrbs, tnt: inside.tnt, arrows: inside.arrows, projectiles: inside.projectiles, minecarts: { carts: inside.carts }, boats: inside.boats,
-    hanging: inside.hanging, rockets: { rockets: inside.rockets }, potions: inside.potions });
+    hanging: inside.hanging, rockets: { rockets: inside.rockets }, potions: inside.potions, fireballs: inside.fireballs });
   const savedSys = { mobs, items, xpOrbs: xp, primed, arrows, projectiles, minecarts, boats, hanging, rockets };
   // EntityEnderPearl.onImpact (zm.a, bytecode-read): an entity hit takes thrown damage 0 from the thrower, 32 portal particles, and the teleport needs a
   // thrower that is an EntityPlayerMP in the pearl's own world (mw.o == this.o). The thrower is null (an unloaded save looks it up in a world with no
@@ -261,8 +261,9 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     finish() {
       // b52so: the run's entities are stamped with their place in the native save walk, above the records the run left alone
       const run = { mobs: mobs.serialize(), drops: items.serialize(), xpOrbs: xp.serialize(), tnt: primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse })), arrows: arrows.serialize(), projectiles: projectiles.serialize(),
-        carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize() };
-      stampSavedOrder(mobs, orderGroups(savedSys, savedLists({ ...run, rockets: run.rockets.rockets })), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest));
+        carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize(),
+        fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])] }; // b53so: stamped like the other records
+      stampSavedOrder(mobs, orderGroups(savedSys, savedLists({ ...run, rockets: run.rockets.rockets })), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))));
       return {
         drops: [...drops.rest, ...run.drops, ...late], xpOrbs: [...orbs.rest, ...run.xpOrbs],
         tnt: [...tnt.rest, ...run.tnt],
@@ -272,7 +273,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         arrows: [...arrowSplit.rest, ...run.arrows], projectiles: [...ballSplit.rest, ...run.projectiles],
         potions: [...potionSplit.rest, ...run.potions],
         rockets: e.rockets || rockets.rockets.length ? { ...(e.rockets ?? {}), ...run.rockets, rockets: [...rocketSplit.rest, ...run.rockets.rockets] } : null,
-        fireballs: [...fireList.filter((r) => !fireIn(r)), ...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])],
+        fireballs: [...fireList.filter((r) => !fireIn(r)), ...run.fireballs],
         hanging: [...hangSplit.rest, ...run.hanging],
         portalTravel: travellers,
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
@@ -308,6 +309,6 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   let tickNo = 0;
   const portals = new EntityPortals(), travellers = [];
   restoreSavedOrder(mobs, orderGroups(savedSys, savedLists({ mobs: mobSplit.inside, drops: drops.inside, xpOrbs: orbs.inside, tnt: tnt.inside, arrows: arrowSplit.inside, projectiles: ballSplit.inside, carts: carts.inside,
-    boats: boatsSplit.inside, hanging: hangSplit.inside, rockets: rocketSplit.inside, potions: potionSplit.inside })));
+    boats: boatsSplit.inside, hanging: hangSplit.inside, rockets: rocketSplit.inside, potions: potionSplit.inside, fireballs: fireList.filter(fireIn) })));
   return self;
 }
