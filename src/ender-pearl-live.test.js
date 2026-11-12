@@ -27,9 +27,10 @@ test("real pearl throw flies into a block and runs hit/portal/teleport/damage ho
   assert.equal(pearl.kind, "enderPearl");
   assert.equal(pearl.owner, "player");
   assert.equal(pearl.random, pearl.rand);
+  const at = { x: pearl.x, y: pearl.y, z: pearl.z }; // the impact is in the pearl's first update, before it moves (EntityThrowable.onUpdate goes on to move the dead pearl once more)
   projectiles.tick(world, [], () => assert.fail("block impact has no entity hit"), wireImpact(projectiles, trace, owner));
   assert.deepEqual(trace.map(x => x[0]), ["portal", ...Array(31).fill("portal"), "dismount", "teleport", "damage"]);
-  assert.deepEqual(trace.at(-2), ["teleport", pearl.x, pearl.y, pearl.z]);
+  assert.deepEqual(trace.at(-2), ["teleport", at.x, at.y, at.z]);
   assert.deepEqual(trace.at(-1), ["damage", { source: "fall", amount: 5 }]);
   assert.equal(owner.fallDistance, 0);
   assert.equal(projectiles.balls.length, 0);

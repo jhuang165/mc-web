@@ -52,9 +52,9 @@ test('the live entity tick routes a real pearl collision through player damage a
  const state=fixture(),fx=new Fx({random:()=>0.5,entityRandom:()=>new JavaRandom(1)});
  state.world={get:(x,y,z)=>x===5&&y===11&&z===4?3:0,solid(x,y,z){return !!this.get(x,y,z);}};
  Object.assign(state.position,{x:5,y:10,z:6});
- const projectiles=new Projectiles(()=>0.5),pearl=projectiles.throwEnderPearl(state.position,0,0);
+ const projectiles=new Projectiles(()=>0.5),pearl=projectiles.throwEnderPearl(state.position,0,0),at={x:pearl.x,y:pearl.y,z:pearl.z}; // the impact is before the pearl's own last move
  const tick={...state,items:{tick(){},collect(){return[];}},primed:[],projectiles,mobs:null,
-   arrows:{tick(){assert.equal(state.survival.health,15);assert.deepEqual(state.position,{x:pearl.x,y:pearl.y,z:pearl.z});},collect(){return false;}},width:0.6,height:1.8};
+   arrows:{tick(){assert.equal(state.survival.health,15);assert.deepEqual(state.position,at);},collect(){return false;}},width:0.6,height:1.8};
  tickEntitySimulation(tick,{projectilePearlImpact:({pearl,hit})=>impactPlayerPearl(state,pearl,hit,{
    particle:p=>fx.spawn('portal',p.x,p.y,p.z,p.mx,p.my,p.mz),
  })});

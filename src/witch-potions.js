@@ -2,7 +2,7 @@
 // EntityPotion that flies with the throwable flight of projectiles.js (gravity 0.05) and breaks on EntityPotion.onImpact (witch.js
 // splashImpact). Held apart from the player's own Projectiles; serialize()/load() save the potions in the air. main.js
 // creates one per world (`mobs.potions`), EntityWorld.tick calls tick(), the scene draws `balls`. See public/research/witch.md.
-import { Projectiles, heading, mobTargets } from "./projectiles.js";
+import { Projectiles, heading, launch, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { addMobEffect } from "./mob-effects.js";
 import { expBottleOrbs } from "./spawn-eggs.js";
@@ -38,12 +38,8 @@ export class WitchPotions {
   // inaccuracy, and the pitch offset -20 degrees of func_70183_g (so it flies higher than the view). `feet` is the player's position.
   // `kind` and `velocity` let ItemExpBottle's EntityExpBottle (velocity 0.7, spawn-eggs.js) use the same launch.
   throwFromPlayer(feet, yaw, pitch, damage, kind = "potion", velocity = 0.5) {
-    const rng = this.projectiles.rng(), mcYaw = f(180 - (yaw * 180) / Math.PI), mcPitch = f((-pitch * 180) / Math.PI),
-      k = f(f(mcYaw / 180) * f(Math.PI)), p = f(f(mcPitch / 180) * f(Math.PI)), p2 = f(f(f(mcPitch + f(-20)) / 180) * f(Math.PI)),
-      s = Math.sin(k), c = Math.cos(k), power = f(0.4),
-      h = heading(rng, f(f(-s * Math.cos(p)) * power), f(-Math.sin(p2) * power), f(f(c * Math.cos(p)) * power), velocity, 1),
-      at = { x: feet.x - f(c * f(0.16)), y: feet.y + f(1.62) - 0.10000000149011612, z: feet.z - f(s * f(0.16)) },
-      ball = { ...h, ...at, kind, damage, owner: "player", px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
+    const rng = this.projectiles.rng(), h = launch(rng, feet, yaw, pitch, velocity, -20), // MathHelper's sine table, as EntityThrowable's constructor uses (executed: throw-launch records)
+      ball = { ...h, kind, damage, owner: "player", px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
     this.mobs.joined?.(ball, "potion");
     return ball;
