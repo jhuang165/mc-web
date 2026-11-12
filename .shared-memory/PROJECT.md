@@ -113,6 +113,16 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 48 (2026-11-11, five Sonnet tracks in `../wt48-<name>` on `batch48-<name>`, cut from 61e069a4a, merged --no-ff on `batch48-lead`; lead note `b48-lead-track.md`; the gun side runs separately):
+- 0.77.0, by track:
+  - vehiclerender: boats, carts, paintings, item frames and knots draw from their client copies (`vehicleViews`, `hangingViews`, `knotViews`); the ridden vehicle and aiming stay on the live entities.
+  - swordblock: blocking halves blockable damage, `(1 + amount) * 0.5`, before armour; riders are not slowed by item use. 119 executed `sword-block-reference.json` records.
+  - deathdrops: death drops and xp spawn in the dying mob's own step of the walk (`flushLoot`, `mobs.spawnLoot`); live carts, boats and hanging entities report joins; exp bottles draw `World.rand`. `EntityListProbe` 78 scenarios.
+  - trackertiming: placed boats and carts start their tracker entry at creation (`tracker-birth.js`); collisions set `airBorne`, hits `velocityChanged`; furnace and command cart watchers; the boatFar difference was the probe's. `TrackerVehiclesProbe` regenerated.
+  - pistonpush: piston tiles push the server copy of the player; 25 `b48pp` records (flag `B48`).
+- Lead merges: pistonpush wired the copy push only in the replay; the lead added the live `serverPlayer` hook in `redstone-runtime.js` `installPistons` (8a086c83d). A stray `logs/latest.log` from swordblock was removed (f99fc84fb).
+- Verification: see `b48-lead-track.md`. Pushed to github main by the lead.
+
 Batch 47 (2026-11-11, five Sonnet tracks in `../wt47-<name>` on `batch47-<name>`, cut from 3250e20f5, merged --no-ff on `batch47-lead`; lead note `b47-lead-track.md`; the gun side runs separately):
 - 0.76.0, by track:
   - passes2: thrown potions and mob-held eggs and potions draw two passes (`held-sprite.js`); baby bipeds use the child held frame; the witch's held potion is at its nose (pivot [0,-2,0] executed); sword blocking pose in first and third person (pose only).

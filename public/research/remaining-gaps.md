@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 48
+
+Batch 48 covered these areas:
+- **Vehicles drawn from their client copies.** Boats, minecarts, paintings, item frames and leash knots are drawn from their batch 47 client copies, as are the boat shadow and the spawner cart's display mob (`vehicleViews`, `hangingViews`, `knotViews` in `object-tracker.js`). A view keeps the copy's position, rotation and watched values (wobble, damage, the frame item, the painting art) over the live entity. The boat or cart the player rides is still drawn from the live one. Bytecode-read: the boat and cart wobble counts down on the client copy between S1C updates.
+- **Sword blocking takes less damage.** While blocking, blockable damage is halved, `(1 + amount) * 0.5`, before armour. Fire, drowning, starving, falls, the void, magic and wither are not blockable. A rider is no longer slowed by using an item; walking while blocking was already slowed. Executed: 119 `sword-block-reference.json` records (`BlockingProbe`).
+- **Death drops in the walk.** A mob's death drops and xp spawn at its own step in the one walk, so they join the tick order and update in the same pass. Live carts, boats and hanging entities now report their joins. Exp-bottle orbs draw from `World.rand`. Executed: `EntityListProbe`, 78 scenarios: a cow that falls and dies, with and without a player hit.
+- **Tracker timing for vehicles.** Boats and carts placed by the player start their tracker entry at creation (`tracker-birth.js`). Collisions set `airBorne` and hits set `velocityChanged`, so the entry sends at once. The furnace cart's watcher 16 and the command cart's watchers 23 and 24 are ported. A changed string watcher now sends its S1C. Executed in `TrackerVehiclesProbe`: the far boat is untracked at tick 71, as the port already did; the probe was wrong.
+- **Pistons push the server's copy of the player.** The piston tile loop moves the integrated server's copy of the player with the same move as mobs. The copy keeps its own `onGround` between packets. Executed: 25 `b48pp` records (mobs and the copy, extending and retracting tiles, walls, ceilings, lifts).
+
+Still open from batch 48:
+- **Vehicle copies.**
+  - The crosshair aims at the live carts and hanging entities; natively it aims at the client copies.
+  - The ridden boat or cart is drawn from the live entity, and its copy runs no physics. There are no client boat splash particles.
+  - The cart's custom display tile and offset (watchers 20 to 22) are not drawn. The TNT cart's flash reads the live fuse. Carts have no shadow.
+  - Only boats and carts placed by the player start their entry at creation; other entities start at their first listed tick.
+  - The furnace-cart collision branch is not ported. The command cart's watcher 24 cannot tell "never ran" from "no output".
+  - The item, extras, hits and mounts tracker references were not regenerated with the untrack-aware probe.
+- **Sword blocking.** Multiplayer has no item-in-use sync, so a remote player never blocks. The first-person blocking pose is bytecode-read only. Burning goes through armour in the port.
+- **Death drops.** Loot spawns at the end of the dying mob's step, not at the hurt call; the order against another spawn in that step is not probed. Items and orbs share one random, not their own `Entity.rand`. Drops from kills outside the walk (a player's hit, `/kill`, explosions) still drain after the tick.
+- **Pistons.** Live, the piston tiles run before the mob update; natively they run after it (the replay orders them right). Mobs carried on a moved block and large mobs are not recorded. The `b46mp` replay workarounds stay.
+- **Not yet in a browser check.** The cart copy on screen: both smokes' carts ended out of view, so only the unit tests cover its view. The order in which live placed carts, boats and paintings join is pinned in source only.
+
 ## Done in batch 47
 
 Batch 47 covered these areas:
@@ -20,30 +42,10 @@ Batch 47 covered these areas:
   - Executed: 62 `b47h` records.
 
 Still open from batch 47:
-- **Renderers and vehicle copies.**
-  - The boat, cart, painting, item-frame and knot renderers and shadows still draw the live entities, not their client copies.
-  - The client copy of a ridden boat or cart does not run its own physics, and there are no client boat splash particles.
-  - Live boats and carts never set `airBorne`/`velocityChanged`, so pushes don't trigger the immediate tracker update.
-  - Tracker entries start at an entity's first listed tick, not at its creation.
-  - The far-boat untrack differs from the executed entry (`boatFar`).
-  - The furnace and command-block cart watcher objects are not executed.
-- **Sword blocking.** It has no movement slowdown and no halved incoming damage (`EntityPlayer.isBlocking`). There is no executed `HeldPoseProbe` record for the blocking pose or the witch's held potion.
-- **Server copy of the player.**
-  - A piston push of the copy is not routed.
-  - The physics of a riding copy is not modelled, and neither is the velocity of the mob client copies.
-  - The order between the position packet and the mob update is bytecode-read only.
-  - The `b46mp` harness should be regenerated so the replay's `hurtByTime`/`sent` workarounds can go.
-- **Away runs.**
-  - Live `main.js` does not report joins for carts, boats and hanging entities.
-  - Mob death drops and xp drain after the walk.
-  - The away list order and the item-frame and dispenser throws are not probed.
-  - Exp-bottle orbs use a per-ball random, not `World.rand`.
-- **Horses and cats.**
-  - A piston pushing a mob has no executed record.
-  - A chest opened under a sitting cat is bytecode-read only.
-  - Skeleton and zombie horses have no spawn-roll record (`onSpawnWithEgg` never makes types 3 or 4).
-  - The `b47h` reference's `method` text is the generic batch 42 one.
-- **Not yet in a browser check.** Arrows hitting the boat copies: the smoke's shot missed its aim, so only the unit tests cover it. Riding a wild horse.
+- **Server copy of the player.** The physics of a riding copy is not modelled, and neither is the velocity of the mob client copies. The order between the position packet and the mob update is bytecode-read only.
+- **Away runs.** The away list order and the item-frame and dispenser throws are not probed.
+- **Horses and cats.** A chest opened under a sitting cat is bytecode-read only. Skeleton and zombie horses have no spawn-roll record (`onSpawnWithEgg` never makes types 3 or 4). The `b47h` reference's `method` text is the generic batch 42 one.
+- **Not yet in a browser check.** Arrows hitting the boat copies: the batch 47 smoke's shot missed its aim, so only the unit tests cover it. Riding a wild horse.
 
 ## Done in batch 46
 
