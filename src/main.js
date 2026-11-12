@@ -29,6 +29,7 @@ import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEM_SPAWN_EGG, spawnEggIconHtml } from "./spawn-eggs.js";
+import { ITEM_POTION } from "./item-passes.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
 import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-ui.js';
@@ -3927,8 +3928,8 @@ function animate(now) {
       // distanceWalkedModified does not advance while sneaking on the ground.
       freezeWalk: walkFrozen,
     });
-    // The held wool's colour (stack damage) rides along with the displayed item.
-    pose.meta = pose.item === WOOL || pose.item === RED_FLOWER || pose.item === DYE || [2,6,56,58,4,5,7,48,70,71].includes(pose.item) ? survival.held?.damage || 0 : 0;
+    // The held wool's colour (stack damage) rides along with the displayed item, and so do the spawn egg's mob and the potion's effects (their render passes, item-passes.js).
+    pose.meta = pose.item === WOOL || pose.item === RED_FLOWER || pose.item === DYE || pose.item === ITEM_SPAWN_EGG || pose.item === ITEM_POTION || [2,6,56,58,4,5,7,48,70,71].includes(pose.item) ? survival.held?.damage || 0 : 0;
     const b = pose.bob;
     scene.camera.position.x += b.x * Math.cos(yaw);
     scene.camera.position.z -= b.x * Math.sin(yaw);
