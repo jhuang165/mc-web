@@ -2102,6 +2102,7 @@ export class EntityWorld {
     if (ids && (fresh || ids.playerId === undefined)) ids.playerId = ids.take();
     if (ids && this.tracker) this.tracker.joinPlayer(ids.playerId);
   }
+  leaveWorld(others = []) { this.tracker?.leaveWorld(others); } // a dimension change: the player leaves this world's tracker (entity-tracker.js leaveWorld)
   takeId(e) { if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); }
   // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
   orderStamp() {
@@ -2118,6 +2119,7 @@ export class EntityWorld {
     if (!w) return;
     this.orderSeqs ??= new WeakMap();
     this.orderSeqs.set(e, this.orderStamp()); // World.spawnEntityInWorld: appended at the end of loadedEntityList
+    if (this.tickOrder && this.slot && this.beforePlayer(this.slot)) (this.earlySpawns ??= new WeakSet()).add(e); // made in the update of an entity before the player's slot: its spawn packet precedes the flush (entity-tracker.js jointUpdate)
     if (this.tickOrder) { (this.walkOf ??= new WeakMap()).set(e, w); this.tickOrder.push(e); } // spawned in the pass: it updates in this pass
   }
   withBalls(order) {
@@ -2176,6 +2178,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     this.tracker.beforePlayer ??= (e) => this.beforePlayer(e);
+    this.tracker.spawnEarly ??= (e) => !!this.earlySpawns?.has(e);
     if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
@@ -2213,7 +2216,7 @@ export class EntityWorld {
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
     const sections = () => { if (prevEntity) trackSections(this, [prevEntity]); prevEntity = null; };
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
-      const e = order[oi];
+      const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       seat();
       sections();
       if (e.lateHook) { e.lateHook(); continue; }
@@ -2367,7 +2370,7 @@ export class EntityWorld {
     sections(); // b53so / b54so: an entity that changed chunk or section joins the end of its new list right after its own update (saved-order.js)
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
-    this.tickOrder = null;
+    this.tickOrder = null; this.slot = null;
     // EntityPlayerMP.onUpdateEntity (mw.i), in the network tick after the world's entities: EntityLivingBase.onLivingUpdate on the server's copy of the player (its motion
     // is only what mobs, hits and explosions gave it: snapped below 0.005, moved, then slowed by the ground friction) and, at its end, collideWithNearbyEntities: every mob beside
     // the moved box is pushed by (and pushes) the player (b46mp records).
