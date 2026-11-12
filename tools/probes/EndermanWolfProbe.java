@@ -40,7 +40,12 @@ public class EndermanWolfProbe {
       return ex;
     }
     // Batch 45 (mobfixes): EntityAIOcelotSit.func_151486_a reads TileEntityChest.numPlayersUsing (aow.o) of a chest cell; a chest tile entity here is an allocated aow (users 0, nobody has it open).
+    // Batch 48 (pistonpush): a moving piston block (BlockPistonMoving, cell id 36) finds its TileEntityPiston (aps) here; the tile loop of the scenario runs them (World.updateEntities' tile entity pass).
+    static java.util.LinkedHashMap<String, aps> pistons = new java.util.LinkedHashMap<>();
+    public void p(int x, int y, int z) { pistons.remove(VillagerProbe.key(x, y, z)); }
     public aor o(int x, int y, int z) {
+      aps moving = pistons.get(VillagerProbe.key(x, y, z));
+      if (moving != null) return moving;
       int[] c = VillagerProbe.World.cells.get(VillagerProbe.key(x, y, z));
       if (c == null || c[0] != 54) return null;
       try { return (aor) MobMoveProbe.unsafe().allocateInstance(aow.class); } catch (Exception ex) { throw new RuntimeException(ex); }
@@ -55,7 +60,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45, BCW, B46, B47, B47H;
+  static boolean B44, B45, BCW, B46, B47, B47H, B48;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -185,6 +190,7 @@ public class EndermanWolfProbe {
       for (Field f : mw.class.getDeclaredFields()) if (pq.class.isAssignableFrom(f.getType())) { f.setAccessible(true); Object sf = f.get(player); if (sf == null) { sf = MobMoveProbe.unsafe().allocateInstance(f.getType()); f.set(player, sf); } Field m = pq.class.getDeclaredField("a"); m.setAccessible(true); m.set(sf, new java.util.HashMap()); }
     }
     SeedMath.reset(seed * 7 + 5);
+    EW.pistons.clear();
     int spawnedSeen = 0;
     java.util.Map<String, String> cellsBefore = new java.util.HashMap<>();
     if (BCW) {
@@ -220,6 +226,14 @@ public class EndermanWolfProbe {
           case "invisible": player.d(p[3].equals("on")); break;
           case "sneak": player.b(p[3].equals("on")); break;
           case "fly": player.bE.b = p[3].equals("on"); break; // batch 47: capabilities.isFlying of the server copy (the C13 packet sets it)
+          case "piston": { // batch 48: piston idx-less: "t piston x y z facing extending(0|1) storedId storedMeta [renderHead]": the cell becomes BlockPistonMoving (36) with a real TileEntityPiston, as BlockPistonBase.tryExtend / doMove leave it
+            int px = Integer.parseInt(p[2]), py = Integer.parseInt(p[3]), pz = Integer.parseInt(p[4]), face = Integer.parseInt(p[5]);
+            aps tile = new aps(aji.e(Integer.parseInt(p[7])), Integer.parseInt(p[8]), face, p[6].equals("1"), p.length > 9 && p[9].equals("1"));
+            tile.b = w; tile.c = px; tile.d = py; tile.e = pz;
+            VillagerProbe.World.cells.put(VillagerProbe.key(px, py, pz), new int[] {36, face});
+            EW.pistons.put(VillagerProbe.key(px, py, pz), tile);
+            break;
+          }
           case "ground": clGround = p[3].equals("on"); break; // batch 47: the onGround flag the client reports in every C03 packet
           case "hold": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2]))); break; } // batch 43: the held item of the player (beg tasks)
           case "holdn": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2])), Integer.parseInt(p[3])); break; } // batch 44: a stack of p[3]
@@ -277,6 +291,8 @@ public class EndermanWolfProbe {
         VillageFightProbe.update(e);
         if (B47H && e instanceof wi && e.l != null) ((wi) e).ac(); // World.updateEntityWithOptionalForce then updates the rider: Entity.updateRidden -> updateRiderPosition (the probe never ticks its player)
       }
+      // Batch 48 (pistonpush): World.updateEntities' tile entity pass: every moving piston block updates (TileEntityPiston.updateEntity, aps.h) after the entities and before the network tick; it pushes whatever is in its box with Entity.moveEntity.
+      if (B48) for (aps tile : new ArrayList<>(EW.pistons.values())) tile.h();
       // Batch 46 (mobpush): the network tick after the world tick: EntityPlayerMP.onUpdateEntity (mw.i) runs the real EntityPlayer.onUpdate (onLivingUpdate, motion, collideWithNearbyEntities) on the probe player.
       if (B46) { try { gBefore = player.D ? 1 : 0; double sx = player.s, sy = player.t, sz = player.u; player.i(); if (B47) VillageFightProbe.at(player, sx, sy, sz); else VillageFightProbe.at(player, cpx, player.t, cpz); /* the client's position packet puts the server copy back at the client's x and z (its y follows its own fall) */ } catch (Throwable ex) { System.err.println("player.i failed at tick " + t + ": " + ex); ex.printStackTrace(); } }
       StringBuilder kids = new StringBuilder();
@@ -307,6 +323,12 @@ public class EndermanWolfProbe {
       if (BCW) spawnedSeen = VillagerProbe.World.spawned.size();
       if (B46) row.append(",").append(gBefore).append(",").append(VillageFightProbe.num(cpy));
       if (B47) row.append(",[").append(VillageFightProbe.num(player.s)).append(",").append(VillageFightProbe.num(player.t)).append(",").append(VillageFightProbe.num(player.u)).append("]"); // row element 8: the server copy's position after the tick // row elements 6 and 7: whether the server copy was onGround when its update began and its y at the start of the tick (the client reports it in the position packet; the replay feeds it as input)
+      if (B48) { // row element 9: the moving piston blocks left after the tick [x, y, z, progress, lastProgress]
+        row.append(",[");
+        boolean first = true;
+        for (aps tile : EW.pistons.values()) { row.append(first ? "" : ",").append("[").append(tile.c).append(",").append(tile.d).append(",").append(tile.e).append(",").append(VillageFightProbe.num(MobMoveProbe.field(aps.class, "m").getFloat(tile))).append(",").append(VillageFightProbe.num(MobMoveProbe.field(aps.class, "n").getFloat(tile))).append("]"); first = false; }
+        row.append("]");
+      }
       row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
@@ -345,10 +367,11 @@ public class EndermanWolfProbe {
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B47H = args.length > 0 && args[0].equals("b47h");
     B45 = B47H || (args.length > 0 && args[0].equals("b45"));
-    B47 = args.length > 0 && args[0].equals("b47sp");
+    B48 = args.length > 0 && args[0].equals("b48pp");
+    B47 = B48 || (args.length > 0 && args[0].equals("b47sp"));
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

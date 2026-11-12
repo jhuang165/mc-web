@@ -339,4 +339,44 @@ public class EndermanWolfScenarios {
       EndermanWolfProbe.scenario("b47h-foal-wall-" + (8401 + k), 8401 + k, 40, k < 3 ? "F" : "Y", at[k], new String[] {"0 look 90 0", "0 creative 1 on", "2 age 0 -3"}, none, walls[k], false, 15);
     EndermanWolfProbe.scenario("b47h-foal-corner-8405", 8405, 40, "F", new double[][] {{69.8, 63.4}, {64.5, 60.5}}, new String[] {"0 look 90 0", "0 creative 1 on", "2 age 0 -3"}, none, new int[][] {{68, 0, 60, 68, 3, 70, 1, 0}, {60, 0, 62, 80, 3, 62, 1, 0}}, false, 15);
   }
+
+  // Batch 48 (pistonpush): EW_SET=b48pp. The b47sp harness (the probe player is the server copy under the C03 rules) plus real moving piston blocks: op "t piston x y z facing extending storedId storedMeta [renderHead]"
+  // turns the cell into BlockPistonMoving (36) with a real TileEntityPiston (aps) that the probe updates after the mobs each tick (World.updateEntities' tile entity pass; aps.h pushes with Entity.moveEntity). Row
+  // element 9 lists the moving tiles [x, y, z, progress, lastProgress]. Facing 0 down, 1 up, 2 north (-z), 3 south (+z), 4 west (-x), 5 east (+x). C cow, P pig, Z zombie, R horse, c calf; the player is the last index.
+  static void sc48(String name, long seed, int ticks, String types, double[][] pos, int[][] blocks, String... script) throws Exception {
+    EndermanWolfProbe.scenario(name, seed, ticks, types, pos, script, new int[0][0], blocks, false, 15);
+  }
+  static void run48() throws Exception {
+    int[][] none = new int[0][0];
+    int[][] wall = {{72, 0, 60, 72, 3, 68, 1, 0}};
+    double[][] one = {{70.5, 64.5}, {64.5, 64.5}};
+    String east = "0 piston 70 0 64 5 1 1 0", look = "0 look 90 0";
+    sc48("b48pp-cow-east-9500", 9500, 40, "C", one, none, look, east);
+    sc48("b48pp-pig-north-9501", 9501, 40, "P", one, none, look, "0 piston 70 0 64 2 1 1 0");
+    sc48("b48pp-zombie-9502", 9502, 80, "Z", one, none, look, east);
+    sc48("b48pp-horse-9503", 9503, 60, "R", one, none, look, east);
+    sc48("b48pp-cow-wall-9504", 9504, 40, "C", one, wall, look, east);
+    sc48("b48pp-cow-lift-9505", 9505, 40, "C", new double[][] {{70.5, 64.5, 1.0}, {64.5, 64.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+    sc48("b48pp-cow-ceiling-9506", 9506, 40, "C", new double[][] {{70.5, 64.5, 1.0}, {64.5, 64.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}, {70, 3, 64, 70, 3, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+    sc48("b48pp-cow-retract-9507", 9507, 40, "C", one, none, look, "0 piston 70 0 64 5 0 1 0");
+    sc48("b48pp-cow-head-9508", 9508, 40, "C", one, none, look, "0 piston 70 0 64 5 1 34 5");
+    sc48("b48pp-calf-9509", 9509, 40, "c", one, none, look, east);
+    sc48("b48pp-two-9510", 9510, 40, "CP", new double[][] {{70.3, 64.5}, {70.7, 64.5}, {64.5, 64.5}}, none, look, east);
+    sc48("b48pp-cow-edge-9511", 9511, 40, "C", new double[][] {{71.0, 64.5}, {64.5, 64.5}}, none, look, east);
+    sc48("b48pp-cow-two-tiles-9512", 9512, 40, "C", new double[][] {{70.9, 64.5}, {64.5, 64.5}}, none, look, east, "0 piston 71 0 64 5 1 1 0");
+    sc48("b48pp-cow-down-9513", 9513, 40, "C", new double[][] {{70.5, 64.5, 1.0}, {64.5, 64.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}}, look, "0 piston 70 1 64 0 1 1 0");
+    sc48("b48pp-zombie-wall-9514", 9514, 60, "Z", one, wall, look, east, "6 hit 1 0 4");
+    // the server copy: the client stays where it is (no packet), follows the push, is pushed into a wall, thrown first, at a ledge, lifted, flying
+    double[][] far = {{100.5, 100.5}, {70.5, 64.5}};
+    sc48("b48pp-copy-stay-9520", 9520, 50, "C", far, none, look, east);
+    sc48("b48pp-copy-follow-9521", 9521, 50, "C", far, none, look, east, "0 walk 1 0.5625 0", "2 walk 1 0.25 0", "3 walk 1 0 0");
+    sc48("b48pp-copy-wall-9522", 9522, 50, "C", far, new int[][] {{71, 0, 60, 71, 3, 68, 1, 0}}, look, east);
+    sc48("b48pp-copy-thrown-9523", 9523, 50, "Z", new double[][] {{67.5, 64.5}, {70.5, 64.5}}, new int[][] {{71, 0, 60, 71, 3, 68, 1, 0}}, look, "3 hit 1 0 4", "5 piston 70 0 64 5 1 1 0");
+    sc48("b48pp-copy-ledge-9524", 9524, 50, "C", far, new int[][] {{71, -3, 60, 76, -1, 68, 0, 0}}, look, east, "0 sneak 1 on");
+    sc48("b48pp-copy-ledge-walk-9525", 9525, 50, "C", far, new int[][] {{71, -3, 60, 76, -1, 68, 0, 0}}, look, east);
+    sc48("b48pp-copy-lift-9526", 9526, 50, "C", new double[][] {{100.5, 100.5}, {70.5, 64.5, 1.0}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+    sc48("b48pp-copy-fly-9527", 9527, 50, "C", far, none, look, east, "0 creative 1 on", "0 fly 1 on", "0 ground 1 off", "0 move 1 70.5 64.5 3", "0 piston 70 3 64 5 1 1 0");
+    sc48("b48pp-copy-retract-9528", 9528, 50, "C", far, none, look, "0 piston 70 0 64 5 0 1 0");
+    sc48("b48pp-copy-herd-9529", 9529, 80, "CP", new double[][] {{70.3, 64.5}, {70.8, 64.9}, {70.5, 64.5}}, none, look, east);
+  }
 }

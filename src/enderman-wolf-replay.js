@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
-import { EntityWorld, ENTITY_TYPES, setEntityRandom, entityRandom } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, setEntityRandom, entityRandom, setMovingBoxes } from "./entities.js";
 import { growSize } from "./horse-live.js";
 import { Survival } from "./survival.js";
-import { WATER, LAVA, WEB } from "./world.js";
+import { WATER, LAVA, WEB, PISTON_MOVING } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
 import { revengeOf } from "./revenge-target.js";
 import { setPathNodeCap } from "./pathfinding.js";
@@ -18,6 +18,8 @@ import { powerCreeper, creeperIgnite } from "./creeper.js";
 import { struckByLightning } from "./weather.js";
 import { addMobEffect, speedModifiers } from "./mob-effects.js";
 import { liveAttribute } from "./mob-attributes.js";
+import { RedstoneWorld, pistonTile } from "./redstone.js";
+import { installPistons } from "./piston-live.js";
 
 // Replays one EndermanWolfProbe record (public/research/enderman-wolf-b42-reference.json): the same arena, entity Randoms seeded like the probe's (seed * 10 + index) and logging their draws as
 // VillageFightProbe.Log does (nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d"), the player a plain record the host would give the mobs (position, look, helmet,
@@ -28,6 +30,7 @@ export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
 export const reference47sp = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47sp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
+export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
@@ -55,13 +58,13 @@ function plain(blocks = []) {
   }
   return { numericSeed: 1, height: 256, floorBelow: true, minX: -3e7, maxX: 3e7, minZ: -3e7, maxZ: 3e7,
     get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? PORT_ID[1] : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
-    set: (x, y, z, b, _notify, m = 0) => cells.set(key(x, y, z), [b, m]), put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
+    set: (x, y, z, b, _notify, m = 0) => cells.set(key(x, y, z), [b, m]), put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB, PISTON_MOVING].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 const RAD = Math.PI / 180;
 
 export function replayEndermanWolf(r) {
   const was = setPathNodeCap(Infinity);
-  try { return run(r); } finally { setPathNodeCap(was); setGameRuleSource(null); }
+  try { return run(r); } finally { setPathNodeCap(was); setGameRuleSource(null); setMovingBoxes(null); }
 }
 function run(r) {
   const types = r.types, n = types.length;
@@ -116,10 +119,26 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x47 = r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
+  const x48 = r.name.startsWith("b48pp"), x47 = x48 || r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
+  if (x48) ew.ai.player.onGround = true; // the probe's copy starts as a grounded player (EndermanWolfProbe B46: onGround true)
   if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
   ew.ai.budget.perTick = Infinity;
+  // b48pp: real moving piston blocks (redstone.js tiles, piston-live.js pushes) over the arena; the tile loop runs after every entity and before the server copy's update (World.updateEntities, then the network tick).
+  const moving = [], rw = x48 ? new RedstoneWorld({ seed: 1 }) : null;
+  if (x48) {
+    const pistons = installPistons({ redstone: rw, world: ew.world, entities: { mobs: () => ew, serverPlayer: () => ew.ai.player } });
+    setMovingBoxes((box) => pistons.collisionBoxes(box));
+    ew.afterEntities = () => {
+      rw.updateTileEntities();
+      for (const m of moving) if (!m.done && m.tile.invalid) { // TileEntityPiston.updateEntity's last call put the stored block back (the probe's cell map follows)
+        m.done = true;
+        const c = m.tile.block in PORT_ID ? { id: PORT_ID[m.tile.block], meta: m.tile.meta } : fromOriginal(m.tile.block, m.tile.meta); // the tile stores the original's block id
+        ew.world.put(m.tile.x, m.tile.y, m.tile.z, c.id, c.meta);
+        cells.push([m.tile.x, m.tile.y, m.tile.z, 0, 0]);
+      }
+    };
+  }
   ew.look = { yaw: 180 * RAD, pitch: 0 };
   ew.playerLook = () => ew.look; // OcelotTempt's scared check reads the player's view
   const booms = [], cells = [], primed = [], gone = new Set(), none = { explode() {} };
@@ -171,6 +190,11 @@ function run(r) {
       else if (op === "hold") held = ITEM_OF[p[2]] ?? Number(p[2]); // original item id -> the project's (bone 352 -> 311, raw porkchop 319 -> 202); the player's held item id (the beg tasks)
       else if (op === "sneak") ew.ai.player.sneaking = p[3] === "on";
       else if (op === "fly") ew.ai.player.flying = p[3] === "on"; // b47sp: abilities.isFlying of the server copy
+      else if (op === "piston") { // b48pp: BlockPistonMoving with its TileEntityPiston in the cell (original block ids)
+        const [px, py, pz, face, ext, block, meta] = p.slice(2, 9).map(Number), tile = pistonTile(block, meta, face, ext === 1, p[9] === "1");
+        rw.setRaw(px, py, pz, 36, face); ew.world.put(px, py, pz, PISTON_MOVING, face); rw.setTileEntity(px, py, pz, tile); tile.world = true; tile.x = px; tile.y = py; tile.z = pz;
+        moving.push({ tile, done: false });
+      }
       else if (op === "ground") { /* b47sp: the onGround flag of every position packet; the record carries it (row element 6) */ }
       else if (op === "angry") ents[Number(p[2])].angry = true;
       else if (op === "sit") ents[Number(p[2])].sitWish = p[3] === "on";
@@ -204,7 +228,7 @@ function run(r) {
     if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
     if (x46 && !x47 && ew.ai.player.hurtBy) ew.ai.player.hurtByTime = ew.ai.clock + 1; // b46mp: the probe's ticksExisted stayed 0 (mw.i does not count it), so its revenge target never aged; b47sp counts it
     if (!x47) ew.ai.player.sent = null; // every harness but b47sp sets the probe player (the server copy itself) where the script puts it, so every tick is a position packet (b46mp: put back at the client's place, y included; b47h: a thrown or seated rider)
-    if (x46) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it
+    if (x46 && !(x48 && (r.rows[t][9].length || r.rows[t][5][2].length))) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it (b48pp: on a tick with a push row 6 is read after the tile loop moved the copy, so the copy's own flag, kept from its last update, is the input then)
     ew.tick(player, survival, held);
     if (b47 && player.vehicle) ew.horseSeats.updateRiderPosition(player.vehicle); // b47h: the probe's wi.ac() after the horse's update seats the rider
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
@@ -251,6 +275,7 @@ function run(r) {
       state.push([booms.slice(), spawned, cells.slice(), x46 ? [pm.x, pm.y, pm.z] : [pv.x, pv.y, pv.z]]);
       state.gone = [...gone];
       state.pos = [ew.ai.player.x, ew.ai.player.y, ew.ai.player.z]; // b47sp: where the server copy rests
+      if (x48) state.pistons = rw.pistonTiles().map((t) => [t.x, t.y, t.z, t.progress, t.lastProgress]);
     }
     states.push(state);
   }
@@ -289,8 +314,8 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") ? bad("player motion", wm, gm) : null);
-      const d2 = r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !r.name.startsWith("b48pp") ? bad("player motion", wm, gm) : null);
+      const d2 = r.name.startsWith("b48pp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
