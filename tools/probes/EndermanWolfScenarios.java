@@ -139,6 +139,40 @@ public class EndermanWolfScenarios {
     sc("b44pd-creeper-watch-6354", 6354, 300, "X", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 creative 1 on");
   }
 
+  // Batch 47 (serverplayer): EW_SET=b47sp. The probe's player is the server copy, ticked by EntityPlayerMP.onUpdateEntity (mw.i) like b46mp, but its position follows the C03 rules: the client (a separate
+  // position driven by the walk and move ops) sends a position when it moved over 0.03 or after 20 ticks, and the copy is put back to the position it had after each update (processPlayer). Row element 6
+  // is the client's onGround flag (op "ground 1 off|on"), 7 the client's y, 8 the copy's position. Z zombie, C cow, P pig, X creeper.
+  static void sc47(String name, long seed, int ticks, String types, double[][] pos, int[][] blocks, boolean water, String... script) throws Exception {
+    EndermanWolfProbe.scenario(name, seed, ticks, types, pos, script, new int[0][0], blocks, water, 15);
+  }
+  static void run47() throws Exception {
+    int[][] none = new int[0][0];
+    // a knockback into a wall: the zombie's hit throws the copy west into stone one block away (x, then the motion zeroed by the wall)
+    sc47("b47sp-wall-9000", 9000, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{63, 0, 60, 63, 3, 68, 1, 0}}, false, "0 look 90 0", "3 hit 1 0 4");
+    sc47("b47sp-wall-near-9001", 9001, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{63, 0, 60, 63, 3, 68, 1, 0}}, false, "0 look 90 0", "0 move 1 64.25 64.5", "3 hit 1 0 4");
+    sc47("b47sp-cow-wall-9002", 9002, 60, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, new int[][] {{63, 0, 60, 63, 3, 68, 1, 0}}, false, "0 look 90 0");
+    sc47("b47sp-ceiling-9003", 9003, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{60, 2, 60, 70, 2, 70, 1, 0}}, false, "0 look 90 0", "3 hit 1 0 4");
+    sc47("b47sp-air-9004", 9004, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, none, false, "0 look 90 0", "0 ground 1 off", "3 hit 1 0 4", "0 move 1 64.5 64.5 3");
+    // water and lava: the drag, buoyancy and flow of the copy's own motion
+    sc47("b47sp-water-9005", 9005, 60, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, new int[][] {{60, 0, 60, 70, 1, 70, 9, 0}}, true, "0 look 90 0", "0 ground 1 off");
+    sc47("b47sp-water-hit-9006", 9006, 60, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{60, 0, 60, 70, 1, 70, 9, 0}}, true, "0 look 90 0", "0 ground 1 off", "3 hit 1 0 4");
+    sc47("b47sp-lava-9007", 9007, 40, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{60, 0, 60, 70, 1, 70, 11, 0}}, true, "0 look 90 0", "0 ground 1 off", "0 effect 1 12 100000", "3 hit 1 0 4"); // fire resistance: the lava still drags the copy but does not hurt it (its damage is the client player's environment)
+    sc47("b47sp-web-9008", 9008, 50, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{64, 0, 64, 64, 1, 64, 30, 0}}, false, "0 look 90 0", "3 hit 1 0 4");
+    sc47("b47sp-ladder-9009", 9009, 50, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, new int[][] {{63, 0, 60, 63, 3, 68, 1, 0}, {64, 0, 64, 64, 3, 64, 65, 4}}, false, "0 look 90 0", "3 hit 1 0 4");
+    // the sneak edge: a ledge east of the copy, the knockback throws it towards the drop
+    sc47("b47sp-sneak-edge-9010", 9010, 40, "Z", new double[][] {{60.5, 64.5}, {63.9, 64.5}}, new int[][] {{64, -3, 60, 70, -1, 70, 0, 0}}, false, "0 look 90 0", "0 sneak 1 on", "3 hit 1 0 4");
+    sc47("b47sp-ledge-9011", 9011, 40, "Z", new double[][] {{60.5, 64.5}, {63.9, 64.5}}, new int[][] {{64, -3, 60, 70, -1, 70, 0, 0}}, false, "0 look 90 0", "3 hit 1 0 4");
+    // a creeper blast next to the copy, in the open and with obsidian behind it
+    sc47("b47sp-blast-9012", 9012, 120, "X", new double[][] {{66.5, 64.5}, {64.5, 64.5}}, none, false, "0 look 90 0");
+    sc47("b47sp-blast-wall-9013", 9013, 120, "X", new double[][] {{66.5, 64.5}, {64.5, 64.5}}, new int[][] {{62, 0, 60, 62, 4, 68, 49, 0}}, false, "0 look 90 0");
+    // the position packets: a slow client (0.02 a tick), a nudge under the threshold (the copy follows after 20 ticks), a crowd with a moving client, a flying creative player
+    sc47("b47sp-slow-walk-9014", 9014, 60, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, none, false, "0 look 90 0", "0 walk 1 0 0.02", "40 walk 1 0 0");
+    sc47("b47sp-nudge-9015", 9015, 60, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, none, false, "0 look 90 0", "5 move 1 64.52 64.5");
+    sc47("b47sp-walk-herd-9016", 9016, 100, "CPCP", new double[][] {{66.0, 64.4}, {66.8, 64.6}, {67.6, 64.5}, {68.4, 64.7}, {64.5, 64.5}}, none, false, "0 look 90 0", "0 walk 4 0.15 0", "30 walk 4 0.02 0", "60 walk 4 0 0");
+    sc47("b47sp-flying-9017", 9017, 50, "C", new double[][] {{65.0, 64.5}, {64.5, 64.5}}, none, false, "0 look 90 0", "0 creative 1 on", "0 fly 1 on", "0 ground 1 off", "0 move 1 64.5 64.5 3");
+    sc47("b47sp-stand-pushed-9018", 9018, 60, "CP", new double[][] {{65.0, 64.5}, {64.5, 65.0}, {64.5, 64.5}}, none, false, "0 look 90 0");
+  }
+
   // Batch 46 (mobpush): EW_SET=b46mp. The probe player is also ticked by EntityPlayerMP.onUpdateEntity (mw.l) after the mobs each tick (the network tick), so mobs push it and it pushes them natively;
   // Z zombie, C cow, P pig, K witch.
   static void run46() throws Exception {
