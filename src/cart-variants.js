@@ -51,7 +51,9 @@ export function initVariant(cart, record = {}) {
   // EntityMinecartMobSpawner (xt): its MobSpawnerBaseLogic (xu) with the defaults of agq; the position follows the cart (cart-spawner in structure-simulation.js).
   if (t === 4) { cart.spawner = makeSpawner(0, 0, 0); readSpawnerNBT(cart.spawner, record.spawner ?? {}); }
   if (t === 5) Object.assign(cart, { enabled: true, cooldown: Number.isInteger(record.cooldown) ? record.cooldown : -1 });
-  if (t === 6) { const c = record.command ?? {}; cart.command = { command: typeof c.command === 'string' ? c.command : '', successCount: Number.isInteger(c.successCount) ? c.successCount : 0, customName: typeof c.customName === 'string' ? c.customName : '@', trackOutput: c.trackOutput !== false, lastOutput: typeof c.lastOutput === 'string' ? c.lastOutput : null }; cart.lastRun = 0; } // xn.<init>: b = 0
+  if (t === 6) { const c = record.command ?? {}; cart.command = { command: typeof c.command === 'string' ? c.command : '', successCount: Number.isInteger(c.successCount) ? c.successCount : 0, customName: typeof c.customName === 'string' ? c.customName : '@', trackOutput: c.trackOutput !== false, lastOutput: typeof c.lastOutput === 'string' ? c.lastOutput : null }; cart.lastRun = 0;
+    // Watcher 24 (the last output as JSON): "" from EntityMinecartCommandBlock.entityInit; only readEntityFromNBT (xn.a(dh): a record with `command`, a save or /summon), addChatMessage output and the GUI's setCommand + func_145756_e write it, and then fk.a(null) is "null" (executed, furnace-cart-reference.json).
+    cart.command.watch24 = record.command ? (cart.command.lastOutput ?? 'null') : ''; } // xn.<init>: b = 0
 }
 
 // EntityMinecartFurnace.interactFirst: coal or charcoal adds 3600 ticks (one item unless Creative), then the push

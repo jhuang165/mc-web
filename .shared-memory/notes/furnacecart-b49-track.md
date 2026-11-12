@@ -1,0 +1,15 @@
+# furnacecart b49 track
+
+Branch `batch49-furnacecart` from ac7027870 (0.77.0). Evidence: **executed** = the unchanged 1.7.10 classes through `tools/probes/FurnaceCartProbe.java` -> `public/research/furnace-cart-reference.json` (`tools/verify-furnace-cart.mjs`); **bytecode-read** = javap of the jar.
+
+## Summary
+- **Furnace-cart collision (goal 1).** `Minecarts.collide` now has the `xl.g(sa)` branches for exactly one furnace cart (type 2). Furnace `other`, plain `this`: `this` motion x 0.2, then addVelocity(other.motion - push), other motion x 0.95 (other gets no airBorne). Plain `other`, furnace `this`: other x 0.2, addVelocity(this.motion + push), this x 0.95. Both or neither furnace keep the general half-sum trade. The heading test (|dot| < 0.8 returns) comes first, as before. Executed: 1050 rows (types plain/chest/furnace pairs, 5 offsets incl. under the 1e-4 distance, 5 yaws, 6 motion sets), motion x/y/z and isAirBorne of both carts, all matched.
+- **Command cart watcher 24 (goal 2).** Executed: a fresh cart reads ["", ""] (23, 24); a run (`func_145755_a`) writes neither; `writeToNBT` (`xn.b(dh)`) writes neither; output through `addChatMessage` (`agp.a(fj)` -> `e()`) writes 24 with the component JSON; `readEntityFromNBT` (`xn.a(dh)`, also /summon) and the GUI's setCommand + `e()` write ["say hi", "null"] when there is no output (`fk.a(null)`). The b48 note had this reversed (it treated the "null" as the post-run state). The port holds the string: `cart.command.watch24` (new): "" at creation, `initVariant` sets `lastOutput ?? "null"` when the record carries `command` (load, summon, save reload), `commandBlockSender.print` calls `tile.outputChanged` (set by `runCommandCart`), and the right-click GUI done sets `lastOutput ?? "null"` (main.js; the MC|AdvCdm handler `nh` calls `agp.a(String)` then `agp.e()`, bytecode-read). `object-tracker.js` sends `p.cmdOut ?? ""` as-is (no second JSON.stringify: `lastOutput` already is the logic's JSON string). Existing tests adapted: `polish.test.js` (summoned/reloaded cart reads "null"), `object-tracker-vehicles.test.js` (supplies `watch24`).
+
+## Verification
+- `MC_RESEARCH=/Users/programming-xcode/Desktop/mc-web/tools/research node tools/verify-furnace-cart.mjs` -> 1050 collision rows, 7 command rows.
+- `node --test` furnace-cart-b49, minecarts, object-tracker-vehicles, piston-live, polish, redstone-live, redstone, tracker-timing-b48, vehicle-riders, vehicle-simulation, away-vehicles, carts, spawner-cart -> 396 pass (first eleven files) + 98 earlier set, 0 fail. `npm run build` ok. No full `npm test`, no browser run.
+
+## Follow-ups (proposed gap lines)
+- The port's command cart `LastOutput` is `{"text":"[hh:mm:ss] msg"}`; native is the component JSON `{"extra":["msg"],"text":"[hh:mm:ss] "}` (executed, `output` row), so the watcher and saved LastOutput differ in text shape from native; the `[time]` prefix itself is modelled.
+- The other collision branches of `xl.g(sa)` (mob pickup by empty carts, non-cart entities) were already ported; the furnace cart's own `applyEntityCollision` (`xq.h()`, push direction) is not separately probed here.

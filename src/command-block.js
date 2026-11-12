@@ -25,6 +25,7 @@ export function commandBlockSender(host, tile, position, { now = () => new Date(
     if (!tile.trackOutput) return;
     const d = now(), time = [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
     tile.lastOutput = JSON.stringify({ text: `[${time}] ${text}` });
+    tile.outputChanged?.(); // a command cart's CommandBlockLogic.func_145756_e (agp.e) copies the output to watcher 24
   };
   // ServerCommandManager.func_152372_a: the rule suppresses op feedback, never the sender's tracked output.
   sender.feedback = text => {

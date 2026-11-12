@@ -120,9 +120,9 @@ export function metaValues(kind, p) {
   else if (kind === "firework") out.push([5, 8, p.stack?.fireworks ? copyStack(p.stack) : null]);
   // EntityBoat: timeSinceHit (17), forwardDirection (18, 1), damageTaken (19, float); EntityMinecart adds the display tile (20), its offset (21, 6) and its flag (22);
   // EntityMinecartFurnace the powered flag (16, executed: cartFurnace); EntityMinecartCommandBlock the command (23) and the last output as its JSON (24, executed: cartCommand: "" and "" at
-  // creation, then updateCommand writes the command and `null` or the ChatComponentText's JSON string; the port cannot tell whether updateCommand ran, so a cart with a command and no output reads `null`)
+  // creation, then updateCommand writes the command and `null` or the ChatComponentText's JSON string). The port holds the watcher string itself (`command.watch24`, "" until an output or a save writes it, bytecode-read agp.a(fj) / xn.a(dh))
   else if (kind === "boat") out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0]);
-  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); if (p.cartType === 6) out.push([4, 23, p.cmd ?? ""], [4, 24, p.cmdOut == null ? (p.cmd ? "null" : "") : JSON.stringify(p.cmdOut)]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, 0], [2, 21, 6], [0, 22, 0]); }
+  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); if (p.cartType === 6) out.push([4, 23, p.cmd ?? ""], [4, 24, p.cmdOut ?? ""]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, 0], [2, 21, 6], [0, 22, 0]); }
   else if (kind === "itemFrame") out.push([5, 2, copyStack(p.stack)], [0, 3, p.rotation | 0]); // EntityItemFrame: the item (2) and its rotation (3)
   return out;
 }
@@ -464,7 +464,7 @@ export class ObjectTracker extends MobTracker {
       p.block = e.block; p.meta = e.meta;
     } else if (spec.vehicle) { // boats and carts: posY is the native field (the box bottom is `y`), yaw and pitch in degrees
       p.y = e.posY; p.vx = e.vx; p.vy = e.vy; p.vz = e.vz; p.rotationYaw = e.yaw ?? 0; p.rotationPitch = e.pitch ?? 0; p.health = 0;
-      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.lit = e.lit; p.cmd = e.command?.command; p.cmdOut = e.command?.lastOutput;
+      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.lit = e.lit; p.cmd = e.command?.command; p.cmdOut = e.command?.watch24;
     } else if (spec.hanging) { // the entity's own position drives the range test, its tile (not x * 32) the spawn packet
       p.y = e.y; p.vx = p.vy = p.vz = 0; p.rotationYaw = kind === "leashKnot" ? 0 : e.yaw ?? 0; p.rotationPitch = 0; p.health = 0; p.dir = e.dir | 0;
       p.stack = kind === "itemFrame" ? e.item : null; p.rotation = e.rotation | 0;
