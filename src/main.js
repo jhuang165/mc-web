@@ -4143,6 +4143,8 @@ function shadowCasters(partial) {
   else if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   // RenderBoat: shadowSize 0.5; getShadowSize is 0, so `height` 0 keeps the cast at the boat's posY.
   for (const b of vehicleViews(objectTracker, boats.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
+  // RenderMinecart: shadowSize 0.5, EntityMinecart.getShadowSize 0 (the same cast as the boat's, from the copy view).
+  if (minecarts) for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.minecart, x: lerp(c.px, c.x), y: lerp(c.py, c.posY), z: lerp(c.pz, c.z), pos: { x: c.x, y: c.posY, z: c.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.

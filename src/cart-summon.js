@@ -20,6 +20,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
     if (hasNumber(tag, "PushZ")) record.pushZ = nbtGet(tag, "PushZ", NBT.DOUBLE, 0);
     if (hasNumber(tag, "TNTFuse")) record.fuse = nbtGet(tag, "TNTFuse", NBT.INT, -1);
     if (hasNumber(tag, "TransferCooldown")) record.cooldown = nbtGet(tag, "TransferCooldown", NBT.INT, -1);
+    if (nbtGet(tag, "CustomDisplayTile", NBT.BYTE, 0)) Object.assign(record, { customDisplay: true, displayTile: nbtGet(tag, "DisplayTile", NBT.INT, 0), displayData: nbtGet(tag, "DisplayData", NBT.INT, 0), displayOffset: nbtGet(tag, "DisplayOffset", NBT.INT, 0) });
     const name = nbtGet(tag, "CustomName", NBT.STRING, "");
     if (name) record.customName = name;
     if (type === 6) { // CommandBlockLogic.func_145759_b (agp.b(dh)); the CustomName key is shared with the entity name

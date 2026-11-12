@@ -122,7 +122,7 @@ export function metaValues(kind, p) {
   // EntityMinecartFurnace the powered flag (16, executed: cartFurnace); EntityMinecartCommandBlock the command (23) and the last output as its JSON (24, executed: cartCommand: "" and "" at
   // creation, then updateCommand writes the command and `null` or the ChatComponentText's JSON string; the port cannot tell whether updateCommand ran, so a cart with a command and no output reads `null`)
   else if (kind === "boat") out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0]);
-  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); if (p.cartType === 6) out.push([4, 23, p.cmd ?? ""], [4, 24, p.cmdOut == null ? (p.cmd ? "null" : "") : JSON.stringify(p.cmdOut)]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, 0], [2, 21, 6], [0, 22, 0]); }
+  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); if (p.cartType === 6) out.push([4, 23, p.cmd ?? ""], [4, 24, p.cmdOut == null ? (p.cmd ? "null" : "") : JSON.stringify(p.cmdOut)]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, p.dispRaw | 0], [2, 21, p.dispOffset ?? 6], [0, 22, p.dispOn ? 1 : 0]); }
   else if (kind === "itemFrame") out.push([5, 2, copyStack(p.stack)], [0, 3, p.rotation | 0]); // EntityItemFrame: the item (2) and its rotation (3)
   return out;
 }
@@ -204,7 +204,7 @@ export class ObjectClient extends ClientEntity {
         this.yaw = angleByte(p.yaw); this.pitch = angleByte(p.pitch);
       }
       this.px = this.x; this.py = this.y; this.pz = this.z;
-      this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.cartType = this.kind === "minecart" ? p.data | 0 : 0;
+      this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.cartType = this.kind === "minecart" ? p.data | 0 : 0; this.fuse = -1;
       this.vx = this.vy = this.vz = 0; this.onGround = false;
       this.meta.clear(); this.fish = null;
       this.sim = this.tracker.newSim(this);
@@ -275,6 +275,7 @@ export class ObjectClient extends ClientEntity {
   // S1A, Entity.handleHealthUpdate. Only EntityFireworkRocket overrides it (17: World.makeFireworks at the client's position and motion with the
   // Fireworks tag of its data watcher object 8); EntityFishHook does not (the pull of a hooked entity reaches the client as that entity's own packets).
   handleStatus(status) {
+    if (status === 10 && this.kind === "minecart" && this.cartType === 3) this.fuse = 80; // EntityMinecartTNT.handleHealthUpdate(10): ignite() sets the client's fuse (the sound and setEntityState are server side)
     if (status === 17 && this.spec.rocket) this.tracker.events.push({ firework: { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, fireworks: this.meta.get(8)?.fireworks ?? null } });
   }
   // EntityFishHook.onUpdate on the client: the 3 tick interpolation towards the last position packet, else the flight with the S12 motion
@@ -306,7 +307,7 @@ export class ObjectClient extends ClientEntity {
     this.px = this.x; this.py = this.y; this.pz = this.z;
     const t = this.tracker, s = this.sim, spec = this.spec;
     if (spec.hanging) return; // EntityHanging.onUpdate checks its wall only under !isRemote
-    if (spec.vehicle) { this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.stepWobble(); this.stepVehicle(); return; }
+    if (spec.vehicle) { this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.stepWobble(); this.stepVehicle(); if (this.fuse > 0) this.fuse--; return; } // EntityMinecartTNT.h: after super.h, a fuse above 0 counts down (smoke; the explosion at 0 is under !isRemote)
     if (this.kind === "item") {
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.onGround = this.onGround; s.dead = false;
       t.sims.items.items = [s]; t.sims.items.tick(world); t.sims.items.sounds.length = 0;
@@ -464,7 +465,7 @@ export class ObjectTracker extends MobTracker {
       p.block = e.block; p.meta = e.meta;
     } else if (spec.vehicle) { // boats and carts: posY is the native field (the box bottom is `y`), yaw and pitch in degrees
       p.y = e.posY; p.vx = e.vx; p.vy = e.vy; p.vz = e.vz; p.rotationYaw = e.yaw ?? 0; p.rotationPitch = e.pitch ?? 0; p.health = 0;
-      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.lit = e.lit; p.cmd = e.command?.command; p.cmdOut = e.command?.lastOutput;
+      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.dispRaw = e.dispRaw; p.dispOffset = e.dispOffset; p.dispOn = e.dispOn; p.lit = e.lit; p.cmd = e.command?.command; p.cmdOut = e.command?.lastOutput;
     } else if (spec.hanging) { // the entity's own position drives the range test, its tile (not x * 32) the spawn packet
       p.y = e.y; p.vx = p.vy = p.vz = 0; p.rotationYaw = kind === "leashKnot" ? 0 : e.yaw ?? 0; p.rotationPitch = 0; p.health = 0; p.dir = e.dir | 0;
       p.stack = kind === "itemFrame" ? e.item : null; p.rotation = e.rotation | 0;
@@ -493,6 +494,7 @@ export class ObjectTracker extends MobTracker {
   observe(e, en) {
     const p = this.read(this.kinds.get(e), e, en.entry.e);
     en.entry.watcher.update(metaValues(this.kinds.get(e), p));
+    if (e.igniteStatus) { e.igniteStatus = false; en.entry.send({ type: "status", id: en.entry.e.id, status: 10 }); } // EntityMinecartTNT.ignite: World.setEntityState(this, 10)
     return { airBorne: p.airBorne === true, changed: en.entry.watcher.hasChanges() };
   }
   settle(e, en) {
@@ -570,6 +572,14 @@ function laidOver(e) {
   if (!v) SHOWN.set(e, (v = Object.create(e)));
   return v;
 }
+// RenderMinecart's display block from the copy's data watcher: 22 (has a custom display) 1 shows the block of 20 (id | data << 16) at the offset of 21; null leaves the type's own.
+function displayOf(c, out) {
+  if (c.meta.get(22) !== 1) return null;
+  const raw = c.meta.get(20) | 0;
+  out ??= {};
+  out.id = raw & 0xffff; out.data = raw >> 16; out.offset = c.meta.get(21) | 0;
+  return out;
+}
 // A boat or cart view: posY (the native field) is the copy's y, `y` the box bottom, the previous position in posY's convention as the live renderers' lerp reads it.
 export function vehicleView(tracker, e, rides = false) {
   const c = shownOf(tracker, e, rides);
@@ -579,7 +589,7 @@ export function vehicleView(tracker, e, rides = false) {
   v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.prevYaw; v.prevPitch = c.prevPitch;
   const hit = c.meta.get(17) ?? 0, dir = c.meta.get(18) ?? 1, dmg = c.meta.get(19) ?? 0;
   if (c.kind === "boat") { v.timeSinceHit = hit; v.forwardDir = dir; v.damage = dmg; }
-  else { v.rolling = hit; v.rollingDir = dir; v.damage = dmg; v.type = c.cartType; }
+  else { v.rolling = hit; v.rollingDir = dir; v.damage = dmg; v.type = c.cartType; v.fuse = c.fuse; v.display = displayOf(c, v.display); }
   const r = f(c.spec.width) / 2, bb = (Object.hasOwn(v, "bb") ? v.bb : (v.bb = [0, 0, 0, 0, 0, 0]));
   bb[0] = c.x - r; bb[1] = c.y - off; bb[2] = c.z - r; bb[3] = c.x + r; bb[4] = bb[1] + f(c.spec.height); bb[5] = c.z + r;
   return v;

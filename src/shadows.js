@@ -32,6 +32,8 @@ export const SHADOWS = {
   ocelot: { size: f(0.4), opaque: 1 },
   // RenderBoat: this.shadowSize = 0.5F (shadowOpaque stays 1). EntityBoat.getShadowSize (xi.Y) returns 0.0F, so the cast starts at posY.
   boat: { size: f(0.5), opaque: 1 },
+  // RenderMinecart: this.shadowSize = 0.5F (constructor bytecode-read, shadowOpaque stays 1); EntityMinecart.getShadowSize (Entity.Y) is 0.0F, so the cast starts at posY.
+  minecart: { size: f(0.5), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   // RenderEnderman: super(new ModelEnderman(), 0.5F).
   enderman: { size: f(0.5), opaque: 1 },
