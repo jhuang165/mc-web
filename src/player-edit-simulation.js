@@ -610,7 +610,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 }
 
 // ItemSword.onItemRightClick: setItemInUse(72000) with EnumAction.block. Only the use state exists here (the first- and third-person sword pose); the movement slowdown
-// while an item is in use and the halved damage of isBlocking are not ported.
+// while an item is in use (player-physics.js usingItem) and the halved damage of isBlocking (survival.js blocking, main.js movementTick) are ported (swordblock-b48.test.js).
 function beginBlocking(state, id) {
   if (state.survival.usable(id) && !state.eating) state.eating = { id, ticks: 72000, block: true };
 }

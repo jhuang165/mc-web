@@ -3271,6 +3271,7 @@ async function spawnPosition() {
 }
 function movementTick(controls) {
   if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); return; }
+  survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
     if(!containerResidency.ready(position.x,position.z))return;

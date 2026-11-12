@@ -47,6 +47,15 @@ export function damageSourceKey(reason) {
 // DamageSource.isDamageAbsolute (ro.h): only starvation. EntityLivingBase.damageEntity skips the potion
 // and enchantment step for it (and applyArmorCalculations is skipped for every bypass-armour source).
 export const isAbsolute = (key) => key === "starve";
+// DamageSource.isUnblockable (ro.e, field ro.p): set by setDamageBypassesArmor (ro.k). The 1.7.10 static initialiser (bytecode-read, ro.<clinit>) calls it for
+// onFire, inWall, drown, starve, fall, outOfWorld, generic, magic and wither, and for the indirectMagic factory (ro.b(sa, sa)). inFire, lava, cactus, anvil, fallingBlock,
+// explosions, arrows, thrown, thorns (magic flag only) and mob/player attacks are blockable. Keys here are damageSourceKey names.
+const UNBLOCKABLE_SOURCES = new Set(["onFire", "inWall", "drown", "starve", "fall", "outOfWorld", "generic", "magic", "wither", "indirectMagic"]);
+export const isUnblockable = (key) => UNBLOCKABLE_SOURCES.has(key);
+// EntityPlayer.damageEntity (yz.d(ro, float), bytecode-read): `if (!source.isUnblockable() && isBlocking() && amount > 0) amount = (1.0F + amount) * 0.5F`, before armour.
+export function blockedDamage(amount, key, blocking) {
+  return blocking && !isUnblockable(key) && amount > 0 ? f(f(1 + amount) * f(0.5)) : amount;
+}
 
 // --- EntityLivingBase.applyPotionDamageCalculations (sv.c), the enchantment part ---------------
 

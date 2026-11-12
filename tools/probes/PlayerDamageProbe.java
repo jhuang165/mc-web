@@ -98,6 +98,8 @@ public class PlayerDamageProbe {
   }
 
   static Field hr, ht, ld, bu;
+  static int tickOf(sv e) throws Exception { return ticks.getOrDefault(e, 0); }
+  static final Map<sv, Integer> ticks = new IdentityHashMap<>();
   static String state(sv e) throws Exception {
     return "\"health\":" + num(e.aS()) + ",\"resist\":" + hr.getInt(e) + ",\"hurtTime\":" + ht.getInt(e) + ",\"last\":" + num(ld.getFloat(e));
   }
@@ -115,6 +117,7 @@ public class PlayerDamageProbe {
     return e;
   }
   static void tick(sv e) throws Exception {
+    ticks.merge(e, 1, Integer::sum);
     if (e instanceof mw) {
       bu.setInt(e, bu.getInt(e) - 1);
       if (hr.getInt(e) > 0) hr.setInt(e, hr.getInt(e) - 1);

@@ -8,7 +8,7 @@ import {normalCube} from "./world.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import {ENDER_SLOTS,ENDER_CHEST,enderOpenable,newEnderTile} from "./chest-blocks.js";
 import { Effects } from "./status-effects.js";
-import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
+import { damageSourceKey, blockedDamage, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 import { installSkullItems, installSkullMaterials } from './skull.js';
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
@@ -693,6 +693,8 @@ export class Survival {
     // EntityLivingBase.lastDamage (the amount of the hit that opened the window) and the number of
     // fresh hits; EntityPlayerMP.field_147101_bU, the spawn protection main.js sets to 60 on a join.
     this.hurtAmount = 0;
+    // EntityPlayer.isBlocking: a sword in use (EnumAction.block). main.js syncs it from the item-use state every tick.
+    this.blocking = false;
     this.hurtCount = 0;
     this.protection = 0;
     // EntityPlayerSP.hurtTime (the hurt camera tilt and model tint). setPlayerSPHealth [blk.n]
@@ -842,6 +844,9 @@ export class Survival {
       fresh = false;
     }
     let dealt = fresh ? n : Math.fround(n - this.hurtAmount);
+    // EntityPlayer.damageEntity: the halving of a blocking sword comes before applyArmorCalculations and applies to the amount that gets through
+    // the hurt-resistance window (amount - lastDamage), not to the stored lastDamage (`hurtAmount` stays the raw hit).
+    dealt = blockedDamage(dealt, damageSourceKey(source ?? (reason === "an accident" ? "generic" : reason)), this.blocking); // the default reason is DamageSource.generic, not a mob
     if (blockable) dealt = this.applyArmor(dealt);
     // EntityLivingBase.applyPotionDamageCalculations: the enchantment step comes after armour, also for the
     // sources that bypass armour (fall, drowning, magic ...), and is skipped only for starvation.
