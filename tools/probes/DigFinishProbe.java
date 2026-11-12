@@ -111,7 +111,7 @@ public class DigFinishProbe {
     for (int b : blocks) for (int t : tools) for (int g : new int[] { 1, 0 }) {
       for (int k : new int[] { 0, 1, 2, 3, 4, 5, 8, 12, 17, 20, 25, 30, 40, 60, 100, 160 }) {
         // run on until the delayed destroy breaks (up to 400 ticks), or stop at once if it broke on the finish
-        run("finish-k" + k, b, t, 1, cat(cat(seq("s:10:5:10", k, "ground:" + g, "f:10:5:10"), ticks(400)))); 
+        run("finish-k" + k, b, t, 1, cat(cat(seq("s:10:5:10", k, "ground:" + g, "f:10:5:10"), ticks(400))));
       }
     }
     // Block swapped under the dig: started on A, B at the cell when the finish arrives.
