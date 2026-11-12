@@ -53,6 +53,24 @@ public class TrackerVehiclesProbe {
     TrackerItemsProbe.clientExtra = TrackerVehiclesProbe::box;
     TrackerItemsProbe.serverHook = (e, t) -> { try { drive(e, 0.0, 0.0); if (t == 10) moveTo(e, d(e, "s"), d(e, "t"), d(e, "u") - 9.0); } catch (Exception ex) { throw new RuntimeException(ex); } };
     System.out.println(TrackerItemsProbe.run("cartTeleport", (w, s) -> xl.a(w, s[0], s[1], s[2], 0), new double[]{5.5, 0.35, 12.5}, 80, 3, true, 50, 0.5, 0.5, false, -1));
+    // Batch 48: pushes. Entity.addVelocity (sa.g(DDD), what applyEntityCollision calls) sets isAirBorne (al): the entry sends the location and the S12 at once, off its 3 tick beat (tick 4);
+    // setBeenAttacked (sa.Q(), which EntityBoat/EntityMinecart.attackEntityFrom call) sets velocityChanged (H): the S12 goes out at once (tick 8)
+    for (String what : new String[]{"boat", "cart"}) {
+      reset();
+      TrackerItemsProbe.clientExtra = TrackerVehiclesProbe::box;
+      TrackerItemsProbe.serverHook = (e, t) -> { try { drive(e, 0.0, 0.0); if (t == 4) e.g(0.12, 0.0, 0.05); if (t == 8) { MobMoveProbe.method(sa.class, "Q").invoke(e); } } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run(what + "Push", (w, s) -> what.equals("boat") ? new xi(w, s[0], s[1], s[2]) : xl.a(w, s[0], s[1], s[2], 0), new double[]{5.5, what.equals("boat") ? 0.0 : 0.35, 5.5}, 80, 3, true, 14, 0.5, 0.5, false, -1));
+    }
+    // Batch 48: the furnace cart's powered flag (data watcher 16, a byte) follows its fuel through onUpdate's setMinecartPowered(fuel > 0): lit at tick 3, out at tick 12
+    reset();
+    TrackerItemsProbe.clientExtra = (c) -> { try { return boxAndMeta(c); } catch (Exception ex) { throw new RuntimeException(ex); } };
+    TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 3) MobMoveProbe.field(xq.class, "c").setInt(e, 100); if (t == 12) MobMoveProbe.field(xq.class, "c").setInt(e, 0); } catch (Exception ex) { throw new RuntimeException(ex); } };
+    System.out.println(TrackerItemsProbe.run("cartFurnace", (w, s) -> new xq(w, s[0], s[1], s[2]), new double[]{5.5, 0.35, 5.5}, 80, 3, true, 20, 0.5, 0.5, false, -1));
+    // the command block cart's watcher objects 23 (command) and 24 (last output as its JSON) are written by CommandBlockLogic.func_145756_e (updateCommand)
+    reset();
+    TrackerItemsProbe.clientExtra = (c) -> { try { return boxAndMeta(c); } catch (Exception ex) { throw new RuntimeException(ex); } };
+    TrackerItemsProbe.serverHook = (e, t) -> { try { xn x = (xn) e; if (t == 3) { x.e().a("say hi"); x.e().e(); } if (t == 6) { x.e().b(new fq("done")); x.e().e(); } if (t == 9) { x.e().b(new fq("a \"q\" b")); x.e().e(); } } catch (Exception ex) { throw new RuntimeException(ex); } };
+    System.out.println(TrackerItemsProbe.run("cartCommand", (w, s) -> new xn(w, s[0], s[1], s[2]), new double[]{5.5, 0.35, 5.5}, 80, 3, true, 14, 0.5, 0.5, false, -1));
     // hanging entities: S10 for a painting (title, direction), S0E 71 for an item frame, S0E 77 for a knot; nothing moves them afterwards (frequency 2147483647)
     for (int dir = 0; dir < 4; dir++) {
       final int d = dir;

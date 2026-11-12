@@ -126,7 +126,7 @@ public class TrackerItemsProbe {
   static boolean metaMode; // batch 43: the client's item stack comes only from S1C
   static String watchValue(Object v) throws Exception {
     if (v instanceof add) { add a = (add) v; return "\"I:" + adb.b(a.b()) + ":" + a.b + ":" + a.k() + (a.d != null ? ":tag" : "") + "\""; }
-    return v == null ? "null" : v instanceof String ? "\"" + v + "\"" : String.valueOf(v);
+    return v == null ? "null" : v instanceof String ? "\"" + ((String) v).replace("\\", "\\\\").replace("\"", "\\\"") + "\"" : String.valueOf(v);
   }
   static String metaOf(sa e) throws Exception { // the entity's whole DataWatcher: [index, type, value]
     StringBuilder b = new StringBuilder("[");
@@ -199,9 +199,13 @@ public class TrackerItemsProbe {
       inputs.append(t > 0 ? "," : "").append("[" + num(d(e, "s")) + "," + num(d(e, "t")) + "," + num(d(e, "u")) + "," + num(d(e, "v")) + "," + num(d(e, "w")) + "," + num(d(e, "x")) + "," + num(fl(e, "y")) + "," + num(fl(e, "z")) + "," + (b(e, "D") ? 1 : 0) + "," + (b(e, "H") ? 1 : 0) + "," + (gone ? 1 : 0) + (serverExtra != null ? "," + serverExtra.apply(e) : "") + "]");
       // EntityTracker.updateTrackedEntities
       if (gone && !dead) { dead = true; me.a(p); } // removeEntityFromAllTrackingPlayers: the destroy packet
+      boolean wasTracked = ((java.util.Set) MobMoveProbe.field(my.class, "o").get(me)).contains(p);
       if (!dead) me.a(players);
       pe.a(players);
       if (pe.n && !dead) me.b(p);
+      // Batch 48: an entry that left the player's range (EntityTrackerEntry.updatePlayerEntity -> EntityPlayerMP.func_152339_d) queues the destroy like a dead entity does: the client
+      // entity goes one tick later. PMP.d only logs it, so before this the boatFar scenario kept a client boat the executed entry had already untracked.
+      boolean untracked = wasTracked && !dead && !((java.util.Set) MobMoveProbe.field(my.class, "o").get(me)).contains(p);
       List<Object> q = new ArrayList<>(TrackerProbe.queue);
       TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
       StringBuilder pk = new StringBuilder();
@@ -210,7 +214,7 @@ public class TrackerItemsProbe {
       // the client tick: packets in order (a destroy, queued by func_152339_d, takes effect with the player's next update, one tick later)
       for (Object o : q) c = handle(c, o);
       if (c != null && pendingDestroy) { c = null; pendingDestroy = false; }
-      if (dead && c != null) pendingDestroy = true;
+      if ((dead || untracked) && c != null) pendingDestroy = true;
       if (c != null) {
         TrackerProbe.set(c, "S", d(c, "s")); TrackerProbe.set(c, "T", d(c, "t")); TrackerProbe.set(c, "U", d(c, "u"));
         c.h();

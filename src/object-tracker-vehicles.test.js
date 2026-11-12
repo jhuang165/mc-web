@@ -9,10 +9,11 @@ import { ObjectTracker, OBJECT_KINDS, nativeStack } from "./object-tracker.js";
 import { itemFromOriginal } from "./region-import.js";
 import { ARTS } from "./hanging.js";
 import { JavaRandom } from "./java-random.js";
+import { recordBirth } from "./tracker-birth.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/tracker-vehicles-reference.json", import.meta.url), "utf8"));
 const f = Math.fround;
-const KIND = { boatGlide: "boat", boatSplash: "boat", boatTeleport: "boat", boatFar: "boat", cart0: "minecart", cart1: "minecart", cart3: "minecart", cartTeleport: "minecart", paintingBig: "painting", frameNegative: "itemFrame", knot: "leashKnot", frameItem: "itemFrame" };
+const KIND = { boatGlide: "boat", boatSplash: "boat", boatTeleport: "boat", boatFar: "boat", cart0: "minecart", cart1: "minecart", cart3: "minecart", cartTeleport: "minecart", boatPush: "boat", cartPush: "minecart", cartFurnace: "minecart", cartCommand: "minecart", paintingBig: "painting", frameNegative: "itemFrame", knot: "leashKnot", frameItem: "itemFrame" };
 for (let d = 0; d < 4; d++) { KIND["painting" + d] = "painting"; KIND["frame" + d] = "itemFrame"; }
 // the scenario's wall tile and facing (the probe's constructors)
 const TILE = (name) => name === "frameNegative" ? [[-3, 2, -5], 2] : name === "paintingBig" ? [[4, 2, 6], 1] : name === "frameItem" ? [[4, 2, 6], 1] : [[4, 2, 6], Number(name.slice(-1)) || 0];
@@ -28,8 +29,14 @@ const FEATHER = itemFromOriginal(288, 0);
 // The live entity the port would list for this tick of the scenario
 function live(name, kind, r, t, h) {
   const [x, y, z, vx, vy, vz, yaw, pitch] = r;
-  if (kind === "boat") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false });
-  if (kind === "minecart") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, rolling: 0, rollingDir: 1, damage: 0, type: Number(name.slice(4, 5)) || 0, dead: false });
+  // the push scenarios: Entity.addVelocity at tick 4 sets isAirBorne, setBeenAttacked at tick 8 sets velocityChanged (the probe's column 9)
+  const flags = { airBorne: name.endsWith("Push") && t === 4, velocityChanged: r[9] === 1 };
+  if (kind === "boat") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false, ...flags });
+  if (kind === "minecart") {
+    // the furnace cart is lit by its fuel from tick 3 to 11; the command cart's command is set at tick 3 and its last output at 6 and 9 (the probe's hooks)
+    const extra = name === "cartFurnace" ? { type: 2, lit: t >= 3 && t < 12 } : name === "cartCommand" ? { type: 6, command: { command: t >= 3 ? "say hi" : "", lastOutput: t >= 9 ? 'a "q" b' : t >= 6 ? "done" : null } } : { type: Number(name.slice(4, 5)) || 0 };
+    return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, rolling: 0, rollingDir: 1, damage: 0, dead: false, ...flags }, extra);
+  }
   const [[tx, ty, tz], dir] = TILE(name);
   if (kind === "leashKnot") return Object.assign(h, { x: tx, y: ty, z: tz, dead: false });
   return Object.assign(h, { x, y, z, yaw, tx, ty, tz, dir, art: name === "paintingBig" ? ARTS.findIndex((a) => a[0] === "BurningSkull") : 0, item: name === "frameItem" && t >= 3 ? { id: FEATHER.id, count: 1, damage: 0 } : null, rotation: name === "frameItem" && t >= 3 ? 3 : 0, dead: false });
@@ -46,18 +53,21 @@ function replay(name, tweak = null) {
   const rows = new Map(rec.rows.map((r) => [r[0], expected(r[1])]));
   let sentLog = [];
   tracker.view.log = (p) => { const x = p.type === "destroy" ? ["destroy"] : flat(p); if (x) sentLog.push(x); };
-  const bad = [], h = { id: rec.id };
+  const bad = [], h = { id: rec.id }, destroyed = [];
   // The probe adds the entity to the tracker when it is created (EntityTracker.addEntityToTracker: updatePlayerList at once, before the scenario's first push), so the spawn
-  // packets carry the entity's creation state (no motion); the port's entries start at the first tick that lists the entity, so the replay creates the entry the same way.
+  // packets carry the entity's creation state (no motion). The port's spawn sites record that state (tracker-birth.js recordBirth, what Boats.place and placeHeldMinecart do)
+  // and the tracker starts the entry from it when it first lists the entity.
   const first = rec.inputs[0];
   live(name, kind, [first[0], first[1], first[2], 0, 0, 0, first[6], first[7]], 0, h);
-  tracker.kinds.set(h, kind); tracker.view.player = player; tracker.entryOf(h, 0, 0);
-  // boatFar: the executed entry never untracks the boat at 82.7 blocks (tick 71, the 4-block trigger); the port destroys it there (unexplained difference, see the note)
-  const end = name === "boatFar" ? 71 : rec.inputs.length;
+  tracker.view.player = player;
+  if (kind === "boat" || kind === "minecart") recordBirth(h);
+  const end = rec.inputs.length;
   for (let t = 0; t < end; t++) {
     live(name, kind, rec.inputs[t], t, h);
     if (t > 0) sentLog = []; // (the creation's packets belong to tick 0)
     tracker.serverTick(rec.inputs[t][10] === 1 ? {} : { [kind]: [h] }, player);
+    // the probe's player double only logs the destroy (EntityPlayerMP.func_152339_d is not queued), so the executed rows never list it: the executed client entity is gone the tick after
+    if (sentLog.some((p) => p[0] === "destroy")) { destroyed.push(t); sentLog = sentLog.filter((p) => p[0] !== "destroy"); }
     const sent = sentLog;
     tracker.clientTick();
     const en = tracker.entries.get(h) ?? tracker.dying[0], c = en?.client, want = rec.client[t];
@@ -76,6 +86,9 @@ function replay(name, tweak = null) {
       }
     } catch (e) { if (process.env.DBG) console.log(name, t, e.message.split("\n").slice(0, 3).join(" | ")); bad.push([t, e.message.split("\n")[0]]); if (bad.length > 3) break; }
   }
+  const gone = rec.client.findIndex((c) => c[0] === 0 && rec.client[0][0] === 1);
+  if (name === "boatFar") { if (!(gone > 0 && destroyed.length === 1 && destroyed[0] === gone - 1)) bad.push(["destroy tick", destroyed, gone]); }
+  else if (destroyed.length) bad.push(["unexpected destroy", destroyed]);
   return bad;
 }
 

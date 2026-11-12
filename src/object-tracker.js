@@ -21,9 +21,10 @@
 // every S12/S14-S18/S1C of the scenarios, the boat's extra yOffset at spawn, its 8 tick interpolation (3 + 5) then its coast on the S12 motion (0.99F / 0.95F / 0.99F), the cart's
 // 5 tick interpolation (3 + 2) with no motion of its own, the hanging boxes, the item frame's data watcher, and the dragon's three-draw retarget on a part hit (`retargetDragon`).
 // Bytecode-read only: the boat's splash particles above 0.2625 blocks a tick (the reference run never reached that speed on the client), the furnace cart's S1C 16, a cart below y -64.
-// Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), airBorne on pushed vehicles (the live
-// ones never set it), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
+// Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
 // boats, carts, paintings, frames and knots are not switched to the copies.
+// Batch 48 (tracker-birth.js, boats.js, minecarts.js): entries of placed boats and carts start from their creation state; pushes set airBorne (addVelocity) and attacks velocityChanged
+// (setBeenAttacked), which this entry already honoured; the far-boat untrack matched the executed entry all along (the probe never logged its destroy); furnace (16) and command block cart (23, 24) watcher objects.
 import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-tracker.js";
 import { toOriginal, fromOriginal } from "./block-registry.js";
 import { originalOfLive } from "./item-names.js";
@@ -38,6 +39,7 @@ import { moveEntity } from "./entities.js";
 import { tickTnt } from "./explosion.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { hangingGeometry, ARTS, FRAME_PIXELS } from "./hanging.js";
+import { takeBirth } from "./tracker-birth.js";
 
 const f = Math.fround;
 const PI_D = 3.1415927410125732;
@@ -84,7 +86,7 @@ export function nativeStack(stack) {
   return o ? { id: o.id, count: stack.count, damage: o.damage ?? stack.damage ?? 0 } : null;
 }
 const copyStack = (st) => (st ? { ...st, ...(st.fireworks ? { fireworks: JSON.parse(JSON.stringify(st.fireworks)) } : {}) } : null);
-const sameStack = (a, b) => (a === b) || (a && b && a.id === b.id && a.count === b.count && (a.damage | 0) === (b.damage | 0) && JSON.stringify(a.fireworks ?? null) === JSON.stringify(b.fireworks ?? null));
+const sameStack = (a, b) => (a === b) || (a && b && typeof a === "object" && typeof b === "object" && a.id === b.id && a.count === b.count && (a.damage | 0) === (b.damage | 0) && JSON.stringify(a.fireworks ?? null) === JSON.stringify(b.fireworks ?? null));
 // DataWatcher (te): the objects as [type, index, value], iterated like Java's HashMap (index & 15, then insertion order). Every object is
 // "watched" from its creation; updateObject marks the watcher changed, getChanged returns the watched objects once and clears both flags.
 // Types: 0 byte, 1 short, 5 ItemStack. Executed: tracker-extras-reference.json (the S1C packets of every kind).
@@ -117,9 +119,10 @@ export function metaValues(kind, p) {
   else if (kind === "arrow") out.push([0, 16, p.crit ? 1 : 0]);
   else if (kind === "firework") out.push([5, 8, p.stack?.fireworks ? copyStack(p.stack) : null]);
   // EntityBoat: timeSinceHit (17), forwardDirection (18, 1), damageTaken (19, float); EntityMinecart adds the display tile (20), its offset (21, 6) and its flag (22);
-  // EntityMinecartFurnace the powered flag (16) (executed for the rideable, chest and TNT cart; the furnace flag is bytecode-read)
+  // EntityMinecartFurnace the powered flag (16, executed: cartFurnace); EntityMinecartCommandBlock the command (23) and the last output as its JSON (24, executed: cartCommand: "" and "" at
+  // creation, then updateCommand writes the command and `null` or the ChatComponentText's JSON string; the port cannot tell whether updateCommand ran, so a cart with a command and no output reads `null`)
   else if (kind === "boat") out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0]);
-  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, 0], [2, 21, 6], [0, 22, 0]); }
+  else if (kind === "minecart") { if (p.cartType === 2) out.push([0, 16, p.lit ? 1 : 0]); if (p.cartType === 6) out.push([4, 23, p.cmd ?? ""], [4, 24, p.cmdOut == null ? (p.cmd ? "null" : "") : JSON.stringify(p.cmdOut)]); out.push([2, 17, p.hit | 0], [2, 18, p.dir ?? 1], [3, 19, p.dmg ?? 0], [2, 20, 0], [2, 21, 6], [0, 22, 0]); }
   else if (kind === "itemFrame") out.push([5, 2, copyStack(p.stack)], [0, 3, p.rotation | 0]); // EntityItemFrame: the item (2) and its rotation (3)
   return out;
 }
@@ -255,6 +258,7 @@ export class ObjectClient extends ClientEntity {
   // (target - pos) / n, yaw by wrapAngleTo180(target - yaw) / n, pitch by (target - pitch) / n, then setRotation's % 360); the boat without increments coasts on
   // the S12 motion (position += motion, then 0.99F / 0.95F / 0.99F drag), the cart stays where it is. Bytecode-read for the branches, executed for the numbers.
   stepVehicle() {
+    if (this.meta.has(16)) this.meta.set(16, 0); // EntityMinecartFurnace.onUpdate is not guarded by isRemote: the client sets its powered flag (16) from its own fuel (0) every update, so the S1C's 1 lasts only until the update (executed: cartFurnace)
     const v = this.vt;
     if (v && v.inc > 0) {
       const n = v.inc, wrap = (d) => { d %= 360; if (d >= 180) d -= 360; if (d < -180) d += 360; return d; };
@@ -460,7 +464,7 @@ export class ObjectTracker extends MobTracker {
       p.block = e.block; p.meta = e.meta;
     } else if (spec.vehicle) { // boats and carts: posY is the native field (the box bottom is `y`), yaw and pitch in degrees
       p.y = e.posY; p.vx = e.vx; p.vy = e.vy; p.vz = e.vz; p.rotationYaw = e.yaw ?? 0; p.rotationPitch = e.pitch ?? 0; p.health = 0;
-      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.lit = e.lit;
+      p.hit = kind === "boat" ? e.timeSinceHit : e.rolling; p.dir = kind === "boat" ? e.forwardDir : e.rollingDir; p.dmg = e.damage; p.cartType = e.type; p.lit = e.lit; p.cmd = e.command?.command; p.cmdOut = e.command?.lastOutput;
     } else if (spec.hanging) { // the entity's own position drives the range test, its tile (not x * 32) the spawn packet
       p.y = e.y; p.vx = p.vy = p.vz = 0; p.rotationYaw = kind === "leashKnot" ? 0 : e.yaw ?? 0; p.rotationPitch = 0; p.health = 0; p.dir = e.dir | 0;
       p.stack = kind === "itemFrame" ? e.item : null; p.rotation = e.rotation | 0;
@@ -477,7 +481,7 @@ export class ObjectTracker extends MobTracker {
   }
   create(e) {
     const kind = this.kinds.get(e), spec = OBJECT_KINDS[kind];
-    const p = this.read(kind, e, {});
+    const p = this.read(kind, takeBirth(e) ?? e, {}); // an entity its spawn site recorded starts the entry with its creation state (tracker-birth.js)
     const object = spec.orb ? { orb: true, value: e.value } : { kind, data: spec.data(p), objectType: spec.type, ...(kind === "painting" ? { title: p.title } : {}) };
     const dirty = kind === "item" || (kind === "itemFrame" && !!p.stack) || (kind === "arrow" && p.crit) || (kind === "firework" && !!p.stack?.fireworks); // updateObject calls in the entity's constructor
     const entry = new ObjectEntry(p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object }, this.view, new Watcher(metaValues(kind, p), dirty));

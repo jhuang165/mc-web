@@ -12,6 +12,7 @@
 // box bottom. Riders use the same feet convention as carts (vehicle-simulation.js).
 import { ensureUuid, isUuid } from "./entity-uuid.js";
 import { Minecarts } from "./minecarts.js";
+import { recordBirth } from "./tracker-birth.js";
 import { WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { blockCollisions } from "./block-collisions.js";
 import { entityWaterBox, waterAcceleration, inLava } from "./fluids.js";
@@ -35,7 +36,7 @@ export class Boats extends Minecarts {
   get boats() { return this.carts; }
 
   // EntityBoat(world, x, y, z): setPosition(x, y + yOffset, z); `yaw` is applied by the caller (ItemBoat).
-  spawnBoat({ x, y, z, yaw = 0, vx = 0, vy = 0, vz = 0 }, { seed } = {}) {
+  spawnBoat({ x, y, z, yaw = 0, vx = 0, vy = 0, vz = 0 }, { seed, born = false } = {}) {
     const boat = {
       id: this.nextId++, boat: true, type: 0, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx, vy, vz,
       yaw: f(yaw), pitch: 0, prevYaw: f(yaw), prevPitch: 0, onGround: false, collidedH: false, fallDistance: 0, inWeb: false, inWater: false, fire: 0,
@@ -44,6 +45,7 @@ export class Boats extends Minecarts {
     boat.random = seed === undefined ? this.makeRandom(boat) : new JavaRandom(seed);
     this.setPosition(boat, x, y + BOAT_Y_OFFSET, z);
     boat.px = boat.x; boat.py = boat.posY; boat.pz = boat.z;
+    if (born) recordBirth(boat); // World.spawnEntityInWorld -> EntityTracker.trackEntity: the tracker entry starts with this state (tracker-birth.js)
     this.carts.push(boat);
     this.joined?.(boat); // entity-simulation.js (entityWalkers): the boat's place in World.loadedEntityList
     return boat;
@@ -147,6 +149,7 @@ export class Boats extends Minecarts {
   // Creative player's hit, the rider is released and the boat breaks (the Creative break drops nothing).
   attack(boat, amount, { creative = false } = {}) {
     if (boat.dead) return true;
+    boat.velocityChanged = true; // EntityBoat.attackEntityFrom: setBeenAttacked() before the damage (executed path: Entity.velocityChanged -> the entry's S12)
     boat.forwardDir = -boat.forwardDir;
     boat.timeSinceHit = 10;
     boat.damage = f(boat.damage + f(amount * 10));
@@ -287,8 +290,8 @@ export class Boats extends Minecarts {
     if (k > 1) k = 1;
     dx *= k; dz *= k;
     dx *= 0.05000000074505806; dz *= 0.05000000074505806;
-    boat.vx += -dx; boat.vz += -dz;
-    if (mutual) { other.vx += dx; other.vz += dz; return [0, 0]; }
+    boat.vx += -dx; boat.vz += -dz; boat.airBorne = true; // Entity.applyEntityCollision -> addVelocity sets isAirBorne on both (bytecode-read: sa.g(DDD))
+    if (mutual) { other.vx += dx; other.vz += dz; other.airBorne = true; return [0, 0]; }
     return [dx, dz];
   }
   pushEntity(entity, box) {
@@ -321,7 +324,7 @@ export class Boats extends Minecarts {
     }
     let [x, y, z] = hit.block;
     if (world.get(x, y, z) === SNOW_LAYER) y--;
-    const boat = this.spawnBoat({ x: x + 0.5, y: y + 1, z: z + 0.5, yaw: ((Math.floor(f(f(f(yaw) * 4) / 360) + 0.5) & 3) - 1) * 90 });
+    const boat = this.spawnBoat({ x: x + 0.5, y: y + 1, z: z + 0.5, yaw: ((Math.floor(f(f(f(yaw) * 4) / 360) + 0.5) & 3) - 1) * 90 }, { born: true });
     const b = boat.bb, shrunk = [b[0] + 0.1, b[1] + 0.1, b[2] + 0.1, b[3] - 0.1, b[4] - 0.1, b[5] - 0.1];
     if (this.boxes(world, boat, shrunk, entities).length) { this.carts.pop(); this.nextId--; return null; }
     return boat;
