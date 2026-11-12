@@ -260,7 +260,12 @@ export class Arrows {
     a.my += wet.push[1];
     a.mz += wet.push[2];
     if (a.water) a.fire = 0;
-    if (a.fire > 0) a.fire--;
+    if (a.fire > 0) {
+      // Entity.onEntityUpdate: `if (fire % 20 == 0) attackEntityFrom(DamageSource.onFire, 1)`; Entity.attackEntityFrom only runs setBeenAttacked, so a burning arrow
+      // flags velocityChanged every 20th tick (executed: tracker-hits-reference.json arrowFire_*, the tracker sends the arrow's S12 with it)
+      if (a.fire % 20 === 0) a.velocityChanged = true;
+      a.fire--;
+    }
     if (a.y >= 0 && inLava(world, box(a))) a.fire = Math.max(a.fire, 300);
     if (a.y < -64) a.dead = true;
     // zc.h: an arrow that never got a heading takes its angles from its motion.
@@ -324,15 +329,17 @@ export class Arrows {
         const speed = sqrtF(a.mx * a.mx + a.my * a.my + a.mz * a.mz);
         let dmg = ceil(speed * a.damage);
         if (a.crit) dmg += a.rand.nextInt(Math.trunc(dmg / 2) + 2);
-        aimPart(hit.entity); // an arrow into one of the dragon's parts
-        // A client world's copy (ctx.remote): World.isRemote makes every attackEntityFrom return false, so the damage is drawn
-        // (the crit's nextInt included) and handed to `ctx.attack` for the log, then the arrow ricochets whatever it hit.
-        if (ctx.remote ? (ctx.attack?.(hit.entity.ref, dmg), false) : this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
+        if (!ctx.remote) aimPart(hit.entity); // an arrow into one of the dragon's parts
+        // A client world's copy (ctx.remote): the damage is drawn (the crit's nextInt included), a burning arrow (the S1C fire flag) sets the target on fire for 5 seconds
+        // (not an enderman), and `ctx.attack` answers what attackEntityFrom does on a client world: false for living entities (isRemote), true for boats, carts, hanging
+        // entities and the dragon's parts. A false answer ricochets the arrow; a true one plays the hit sound and ends it (none of those is an EntityLivingBase: no knockback).
+        if (ctx.remote && a.clientBurning && hit.entity.ref?.type !== "enderman") ctx.ignite?.(hit.entity.ref, hit.entity);
+        if (ctx.remote ? ctx.attack?.(hit.entity.ref, dmg, hit.entity) === true : this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
           // Knockback (the Knockback enchantment only): addVelocity(m * k * 0.6 / h, 0.1, ...).
           const h = sqrtF(a.mx * a.mx + a.mz * a.mz);
-          if (a.knockback > 0 && h > 0 && hit.entity.ref !== "player")
+          if (!ctx.remote && a.knockback > 0 && h > 0 && hit.entity.ref !== "player")
             this.push(ctx.mobs, hit.entity.ref, (a.mx * a.knockback * 0.6000000238418579) / h, 0.1, (a.mz * a.knockback * 0.6000000238418579) / h);
-          else if (hit.entity.ref === "player" && ctx.survival) arrowPunch(ctx.survival, a, sqrtF);
+          else if (!ctx.remote && hit.entity.ref === "player" && ctx.survival) arrowPunch(ctx.survival, a, sqrtF);
           this.sound(a, "random.bowhit", 1, f(f(1.2) / f(f(a.rand.nextFloat() * f(0.2)) + f(0.9))));
           a.dead = true;
         } else {

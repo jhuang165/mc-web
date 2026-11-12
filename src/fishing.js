@@ -211,7 +211,10 @@ export class FishHook {
       if (d < d0 || d0 === 0) { target = e; d0 = d; }
     }
     if (target) {
-      if (env.remote ? (env.hitEntity?.(target.ref), false) : (env.hitEntity?.(target.ref) ?? true)) this.hooked = target.ref;
+      // A client's hook calls attackEntityFrom too: false on a living client entity (isRemote), true on a boat, cart, hanging entity or dragon part, which sets `hooked`.
+      // Nothing reads it on the client (the follow and the angler check are under !isRemote), so the hook keeps flying and searches again the next tick.
+      const hit = env.hitEntity?.(target.ref, target);
+      if (env.remote ? hit === true : (hit ?? true)) this.hooked = target.ref;
     } else if (block) this.inGround = true;
 
     if (!this.inGround) this.fly(env);

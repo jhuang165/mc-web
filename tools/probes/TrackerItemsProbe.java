@@ -207,6 +207,7 @@ public class TrackerItemsProbe {
       if (c != null) {
         TrackerProbe.set(c, "S", d(c, "s")); TrackerProbe.set(c, "T", d(c, "t")); TrackerProbe.set(c, "U", d(c, "u"));
         c.h();
+        if (removeDead && b(c, "K")) c = null; // World.updateEntities removes an entity that setDead itself during its update (batch 46: a client arrow that hit a collidable)
       }
       if (tickHook != null) tickLog.add(tickHook.get());
       clientRows.append(t > 0 ? "," : "").append(c == null ? "[0]" : "[1," + num(d(c, "s")) + "," + num(d(c, "t")) + "," + num(d(c, "u")) + "," + num(d(c, "v")) + "," + num(d(c, "w")) + "," + num(d(c, "x")) + "," + num(d(c, "S")) + "," + num(d(c, "T")) + "," + num(d(c, "U")) + "," + (b(c, "D") ? 1 : 0) + "," + num(fl(c, "y")) + "," + num(fl(c, "z")) + (clientExtra != null ? "," + clientExtra.apply(c) : "") + "]");
@@ -215,7 +216,7 @@ public class TrackerItemsProbe {
     out.append("],\"inputs\":[" + inputs + "],\"client\":[" + clientRows + "]" + (tickHook != null ? ",\"log\":[" + String.join(",", tickLog) + "]" : "") + "}");
     return out.toString();
   }
-  static boolean pendingDestroy;
+  static boolean pendingDestroy, removeDead;
   static Class<?> clientWorldClass = CW2.class; // batch 44: a client world double that records spawnParticle and makeFireworks
   static java.util.function.BiConsumer<sa, Object> spawnedPacket; // batch 45: runs after the client entity has its id
   static java.util.function.Consumer<sa> clientSpawned; // batch 44: runs right after the client entity is built (reseeds Entity.rand)

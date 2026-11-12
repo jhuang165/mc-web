@@ -261,6 +261,7 @@ import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
+import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
 import { SkullRenderer } from "./skull-renderer.js";
@@ -439,12 +440,21 @@ function bindObjectTracker() {
     for (const [live, en] of mobs?.tracker?.entries ?? []) {
       const c = en.client;
       if (!c.present || !(live.health > 0)) continue;
+      // The ender dragon is not collidable (EntityDragon.canBeCollidedWith is false): its seven client parts are, while the world lists them (reachesDragon)
+      if (c.dragon?.parts) { for (const p of c.dragon.parts) out.push({ ref: c, kind: "dragonPart", box: p.box, answers: true, reach: (area) => reachesDragon(c, area) }); continue; }
       const [w, h] = mobs.size(live);
       out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
     }
+    // Batch 46: the other collidables of the client world. The port has no client copy of boats, carts, paintings, item frames and leash knots, so the live ones stand in.
+    // EntityBoat, EntityMinecart, EntityHanging (item frame, painting, knot) answer attackEntityFrom with true on a client world (executed, tracker-hits-reference.json).
+    for (const b of boats?.carts ?? []) if (!b.dead) out.push({ ref: b, kind: "boat", box: b.bb, answers: true });
+    for (const m of minecarts?.carts ?? []) if (!m.dead) out.push({ ref: m, kind: "minecart", box: m.bb, answers: true });
+    for (const t of hangingArrowTargets(hanging)) out.push({ ...t, kind: t.ref.kind === "painting" ? "painting" : "itemFrame", answers: true });
+    for (const k of mobs?.knotList ?? []) if (!k.dead) { const x = k.summoned ? Math.floor(k.px) : k.x, y = k.summoned ? Math.floor(k.py) : k.y, z = k.summoned ? Math.floor(k.pz) : k.z; out.push({ ref: { type: "leashKnot", x: x + 0.5, y: y + 0.5, z: z + 0.5 }, kind: "leashKnot", box: [x + 0.25, y + 0.5, z + 0.25, x + 0.75, y + 1, z + 0.75], answers: true }); }
     out.push({ ref: "player", box: [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2], immune: survival.creative });
     return out;
   };
+  objectTracker.hooks.ignite = (ref, fire) => { if (ref?.present !== undefined && ref.type) ref.fire = fire; }; // a client mob copy's Entity.fire (zeroed at its next update, entity-tracker.js)
   objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;
   if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; }
