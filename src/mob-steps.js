@@ -69,7 +69,7 @@ export function mobStepSound(type, block, above = 0, e = {}) {
 // Advances `e.stepDistance` / `e.nextStep` for a move from `from` ({x, y, z}) to the entity's position and returns the
 // sound events it makes (zero or one). `hostile` picks game.hostile.swim over game.neutral.swim; `random` is the entity's
 // Random (drawn twice, only for the swim sound). `e.inWater` is the entity's own flag.
-export function mobStepEvents(world, e, from, { hostile = false, random, onWalk } = {}) {
+export function mobStepEvents(world, e, from, { hostile = false, random, onWalk, nextInt } = {}) {
   if (!canTriggerWalking(e.type) || e.riding) return [];
   const dx = e.x - from.x, dz = e.z - from.z;
   const dy = countsVertical(world, e.x, e.y, e.z) ? e.y - from.y : 0;
@@ -87,6 +87,8 @@ export function mobStepEvents(world, e, from, { hostile = false, random, onWalk 
   }
   const s = mobStepSound(e.type, block, world.get(x, y + 1, z), e);
   if (s) events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position });
+  // EntityHorse.func_145780_a: a gallop step of a horse (type 0) then draws nextInt(10) on Entity.rand and on 0 breathes at 0.6 x the block's volume (b47h records: executed).
+  if (s?.name === "mob.horse.gallop" && (e.horse?.type ?? 0) === 0 && nextInt && nextInt(10) === 0) events.push({ sound: "mob.horse.breathe", volume: f(f(s.volume / f(0.15)) * f(0.6)), pitch: s.pitch, position });
   onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
   return events;
 }

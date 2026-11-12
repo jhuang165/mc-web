@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { replayEndermanWolf, reference47 as reference, firstDivergence } from "./enderman-wolf-replay.js";
+import { replayEndermanWolf, reference47sp as reference, firstDivergence } from "./enderman-wolf-replay.js";
 import { drainMobEvents } from "./living-simulation.js";
 import { finishMinecartSimulation } from "./structure-simulation.js";
 

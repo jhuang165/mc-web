@@ -24,7 +24,7 @@ const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 // The view horse.js works on: record fields merged with the shared record's age, health and love.
 // `maxHealth` stays the base (createChild averages bases); `liveMaxHealth` is getMaxHealth with saved modifiers (feeding, breeding readiness).
 export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0, liveMaxHealth: maxHealthOf(e, e.horse?.maxHealth) });
-function apply(e, h) {
+function apply(e, h, world) {
   const was = e.growingAge ?? 0;
   for (const k of KEEP) e.horse[k] = h[k];
   if (Array.isArray(e.horse.items)) ensureItems(e.horse); // a chest just attached grows the stack list
@@ -32,11 +32,11 @@ function apply(e, h) {
   e.health = h.health;
   if (h.inLove && !(e.love > 0)) e.love = 600;
   if (h.loveFed) e.love = 600; // wf.f(yz) (setInLove) runs for every golden apple or carrot a tame adult is given, in love or not
-  if (h.age !== was) growSize(e, was); // EntityAgeable.addGrowth / setGrowingAge resizes the box at once
+  if (h.age !== was) growSize(e, was, world); // EntityAgeable.addGrowth / setGrowingAge resizes the box at once
 }
-function growSize(e, was) {
+export function growSize(e, was, world) {
   const k0 = H.growthScale(was), k1 = H.growthScale(e.growingAge);
-  if (k1 !== k0) resizeBox(e, f(H.HORSE_WIDTH) * k0, f(H.HORSE_HEIGHT) * k0, f(H.HORSE_WIDTH) * k1, f(H.HORSE_HEIGHT) * k1);
+  if (k1 !== k0) resizeBox(e, f(H.HORSE_WIDTH) * k0, f(H.HORSE_HEIGHT) * k0, f(H.HORSE_WIDTH) * k1, f(H.HORSE_HEIGHT) * k1, world);
 }
 
 // EntityHorse.onSpawnWithEgg with no group data (wi.a(sy)); `group` is an {type, variant} from a herd.
@@ -188,7 +188,7 @@ export function installHorse(EntityWorld) {
   };
   // rx.e -> setGrowingAge -> wi.a(boolean) -> setSize(1.4 * ci(), 1.6 * ci()) each tick of a foal's growth (bytecode-read; b45 records). Entity.setSize keeps the box minimum and, when the width grows
   // outside the first update, calls moveEntity(oldWidth - width, 0, oldWidth - width) (entities.js resizeBox).
-  proto.horseGrowSize = growSize;
+  proto.horseGrowSize = function (e, was) { growSize(e, was, this.world); };
   proto.horseRear = function (e, sound = false) {
     e.rearing = true;
     e.rearTicks = 1; // makeHorseRear starts the counter at 1
@@ -198,7 +198,7 @@ export function installHorse(EntityWorld) {
     const sound = H.angrySound(e.horse.type);
     // wi.cJ: playSound(cv(), bf(), bg()); bg() draws the horse's own rand twice (a foal adds 0.5), as the talk sound does (b45 feed-wild-170: three rears shift the stream).
     const rand = entityRandom(e);
-    if (sound) this.events.push({ sound, volume: H.SOUND_VOLUME, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1)), position: { x: e.x, y: e.y, z: e.z } });
+    if (sound) this.events.push({ sound, volume: f(H.SOUND_VOLUME), pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1)), position: { x: e.x, y: e.y, z: e.z } });
   };
   // Per tick (EntityHorse.onUpdate / onLivingUpdate): the rearing timer, regeneration, taming while ridden and the land sound.
   proto.horseTick = function (e) {
@@ -211,35 +211,36 @@ export function installHorse(EntityWorld) {
     // wi.e (bytecode-read): nextInt(200) moves the tail before wf.e (EntityWorld, ahead of the AI); after it (server side) nextInt(900) with a live horse heals 1 (the draw is not gated on health),
     // then a horse not eating and with no rider draws nextInt(300) and starts eating when the block below is grass; eating stops after 50 ticks.
     if (rand.nextInt(900) === 0 && e.health > 0) e.health = Math.min(max, e.health + 1);
-    if (!e.horse.eating && !e.rider && rand.nextInt(300) === 0 && this.world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z)) === GRASS) e.horse.eating = true;
+    if (!e.horse.eating && !e.rider && !e.riddenBy && rand.nextInt(300) === 0 && this.world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z)) === GRASS) e.horse.eating = true;
     if (e.horse.eating && (e.eatTicks = (e.eatTicks ?? 0) + 1) > 50) { e.eatTicks = 0; e.horse.eating = false; }
-    const rider = e.rider;
-    // EntityAIRunAroundLikeCrazy with a mob rider (a pig, /summon Riding): the same nextInt(50) roll, then the rider is thrown off and the horse
-    // rears (status 6) with no taming and no temper (leads2-reference.json horseTame, leads3-reference.json horseTameMob).
-    const mobRider = !rider && e.riddenBy && this.entities.includes(e.riddenBy) ? e.riddenBy : null;
-    if (mobRider && !e.horse.tame) {
-      const out = H.tameTick(view(e), rand, "");
-      if (out.status !== null) {
-        apply(e, out.horse);
-        mountEntity(mobRider, null, (m) => this.size(m)[1]);
-        this.horseRear(e, true);
-        burst(this.fx, "smoke", 7, e, rand, 0.5);
+  };
+  // EntityAIRunAroundLikeCrazy.updateTask (vg.e, run by the AI task of an untamed horse with a rider, ai.js RunAround): nextInt(50) == 0, then for a player rider
+  // nextInt(100) < temper tames the horse (setTamedBy, status 7), otherwise temper + 5 (capped at 100); the rider is thrown off and the horse rears with the angry sound (status 6).
+  // The status 6 and 7 particles are the client's (handleHealthUpdate), so the server's Entity.rand draws nothing for them (b47h records: executed).
+  // The client's own Random draws the particles of statuses 6 and 7 (EntityHorse.spawnHorseParticles, seven per call).
+  proto.horseParticles = function (e, name) { burst(this.fx, name, 7, e, new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), 0.5); };
+  proto.horseRunAround = function (e) {
+    const rand = entityRandom(e);
+    if (rand.nextInt(50) !== 0) return;
+    const rider = e.rider, mob = !rider && e.riddenBy && this.entities.includes(e.riddenBy) ? e.riddenBy : null;
+    if (rider?.player) {
+      if (rand.nextInt(H.MAX_TEMPER) < e.horse.temper) {
+        e.horse.tame = true; e.horse.owner = "player";
+        this.horseParticles?.(e, "heart");
+        return;
       }
-    }
-    if (rider && !e.horse.tame && rider.player) {
-      const out = H.tameTick(view(e), rand, "player");
-      if (out.status !== null) {
-        apply(e, out.horse);
-        e.horse.owner = out.horse.owner;
-        if (out.status === 7) burst(this.fx, "heart", 7, e, rand, 0.5);
-        else {
-          this.horseSeats.dismount(this.world, rider);
-          e.rider = null;
-          this.horseRear(e, true);
-          burst(this.fx, "smoke", 7, e, rand, 0.5);
-        }
-      }
-    }
+      e.horse.temper = Math.min(H.MAX_TEMPER, e.horse.temper + 5);
+      this.horseSeats.dismount(this.world, rider);
+      e.rider = null;
+      // Entity.mountEntity(null): setLocationAndAngles(mount x, mount minY + mount height, mount z); the player's feet are posY - yOffset (1.62F) below that, inside the horse, which
+      // then pushes it (and is pushed) in its own collideWithNearbyEntities this tick (b47h records: executed).
+      const off = { x: e.x, z: e.z }; // the y stays the seat's: the record's look at the thrown player (pitch -27.7 after the rear) needs its eye at seat + 1.62
+      Object.assign(rider, off);
+      if (this.ai.player) Object.assign(this.ai.player, off); // the mobs' copy of the player, for the push in this same tick
+    } else if (mob) mountEntity(mob, null, (m) => this.size(m)[1]);
+    else return;
+    this.horseRear(e, true);
+    this.horseParticles?.(e, "smoke");
   };
   // wi.b(F) fall damage and the land sound (probe: fall rows): over 1 block plays mob.horse.land at 0.4, over 6 hurts.
   // EntityLiving.onEntityUpdate's roll at the horse's 400 interval, then wi.t(): idle sound at 0.8 volume, nextInt(10) == 0 rears.
@@ -249,7 +250,8 @@ export function installHorse(EntityWorld) {
     const out = H.livingSound(e.horse.type, rand);
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
     this.events.push({ sound: out.sound, volume: f(H.SOUND_VOLUME), pitch, position: { x: e.x, y: e.y, z: e.z } });
-    if (out.rearing) this.horseRear(e);
+    // wi.t(): nextInt(10) == 0 && !isMovementBlocked() (bh: a saddled rider, eating or rearing) rears, so a rearing horse keeps its counter (b47h sound-R-170 records, executed).
+    if (out.rearing && !(e.rider && e.horse.saddled) && !e.rearing && !e.horse.eating) this.horseRear(e);
   };
   proto.horseLand = function (e, distance) {
     if (distance <= 1) return 0;
@@ -263,17 +265,17 @@ export function installHorse(EntityWorld) {
     const id = stack ? originalOfLive(stack.id)?.id ?? null : null;
     const h = view(e), rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: H.HORSE_WIDTH, height: H.HORSE_HEIGHT };
     const take = (n = 1) => { if (!creative && n > 0) survival.inventory.decr(survival.inventory.current, n); };
-    const eatSound = () => this.events.push({ sound: "random.eat", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
+    const eatSound = () => this.events.push({ sound: "eating", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
     const fed = id != null ? H.feedHorse(h, id, { creative }) : null;
     if (fed?.used) {
-      apply(e, fed.horse);
+      apply(e, fed.horse, this.world);
       take(1);
       eatSound();
       return true;
     }
     const out = H.interactHorse(h, id, { sneak: !!ctx.sneak });
     if (!out.result) return false;
-    apply(e, out.horse);
+    apply(e, out.horse, this.world);
     if (out.action === "rear") { this.horseRear(e, true); if (!creative && stack && stack.count <= 0) survival.inventory.main[survival.inventory.current] = null; /* interactWith destroys a spent held stack */ }
     else if (out.action === "chest") {
       take(1);
