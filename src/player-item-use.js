@@ -12,6 +12,8 @@ export function tickPlayerItemUse(use, heldId, survival, {
   if (!use) return { use: null, cancelled: false, completed: false };
   if (heldId !== use.id) return { use: null, cancelled: true, completed: false };
 
+  // ItemSword.onItemRightClick sets the item in use for 72000 ticks (EnumAction.block): nothing completes, the right button's release ends it.
+  if (use.block) return { use, cancelled: false, completed: false };
   if (use.bow) {
     // EntityPlayer counts item use upward; the release path consumes this draw length.
     return { use: { ...use, ticks: use.ticks + 1 }, cancelled: false, completed: false };

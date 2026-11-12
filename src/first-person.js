@@ -364,14 +364,14 @@ export class FirstPerson {
     this.mapSurface.update(data);
     return m.base;
   }
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined, map = null, pitchDeg = 0 } = {}) {
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, blocking = false, glint = false, color = undefined, map = null, pitchDeg = 0 } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
     this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     const mapMode = !!map?.data && pose.item === ITEM_FILLED_MAP;
-    this.pivot.matrix.copy(mapMode ? this.mapPose(pose, pitchDeg, map.data) : firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
+    this.pivot.matrix.copy(mapMode ? this.mapPose(pose, pitchDeg, map.data) : firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null,blocking}));
     if (this.mapRoot) this.mapRoot.visible = mapMode;
     if (this.item) this.item.visible = !mapMode;
     // Keep the native pose visible when the browser panel is narrower than a game window.

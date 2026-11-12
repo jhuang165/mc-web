@@ -3,8 +3,8 @@ const radians = degrees => degrees * Math.PI / 180;
 // OpenGL post-multiplies each operation. Preserve that order instead of
 // combining Y/Z/X rotations into a Three.js XYZ Euler rotation.
 // `bowDraw` is ItemRenderer's bow term while the bow is drawn: getMaxItemUseDuration -
-// (itemInUseCount - partial + 1), i.e. the ticks of use - 1 + partial (null otherwise).
-export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null, bowDraw = null} = {}) {
+// (itemInUseCount - partial + 1), i.e. the ticks of use - 1 + partial (null otherwise). `blocking` is a sword in use (EnumAction.block).
+export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null, bowDraw = null, blocking = false} = {}) {
   const matrix = new Matrix4(), scratch = new Matrix4();
   const translate = (x,y,z) => matrix.multiply(scratch.makeTranslation(x,y,z));
   const rotate = (axis,angle) => matrix.multiply(axis === 'x' ? scratch.makeRotationX(angle) : axis === 'y' ? scratch.makeRotationY(angle) : scratch.makeRotationZ(angle));
@@ -28,6 +28,11 @@ export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eat
   }else translate(pose.swing.x,pose.swing.y,pose.swing.z);
   translate(.7*.8,-.65*.8-(1-pose.equip)*.6,-.9*.8);
   rotate('y',radians(45));rotate('y',pose.swing.ry);rotate('z',pose.swing.rz);rotate('x',pose.swing.rx);scale(.4);
+  if(blocking){
+    // ItemRenderer.renderItemInFirstPerson (bly.a, bytecode-read), EnumAction.block with getItemInUseCount() > 0: after the 0.4 scale the sword moves
+    // across the view (translate -0.5, 0.2, 0), then turns 30 about y, -80 about x and 60 about y. The swing translate above stays (only food and drink replace it).
+    translate(-.5,.2,0);rotate('y',radians(30));rotate('x',radians(-80));rotate('y',radians(60));
+  }
   if(bowDraw !== null){
     // ItemRenderer.renderItemInFirstPerson (bly.a), EnumAction.bow: the pull tilts the bow,
     // wobbles it once it is past 0.1, draws it back 0.1 and stretches it by 20% along z.

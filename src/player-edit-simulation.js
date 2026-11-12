@@ -258,6 +258,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
     } else if (!state.survival.creative && item?.food) {
       beginEating(state, id, hook);
+    } else if (item?.kind === 'sword') {
+      beginBlocking(state, id);
     }
     // EntityPlayer.interactWith / interactFirst returned true: a held stack left at size <= 0 is destroyed outside Creative (leads2-reference.json sizes).
     if (!state.survival.creative && state.survival.held && state.survival.held.count <= 0) { state.survival.inventory.main[state.survival.inventory.current] = null; hook('renderHotbar'); }
@@ -280,6 +282,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 
   if (!target) {
     if (place && !state.survival.creative && item?.food) beginEating(state, id, hook);
+    else if (place && item?.kind === 'sword') beginBlocking(state, id);
     return act('no-block-target');
   }
 
@@ -513,6 +516,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('use-flint-and-steel');
     }
     if (!state.survival.creative && item?.food) { beginEating(state, id, hook); return act('begin-eating'); }
+    if (item?.kind === 'sword') { beginBlocking(state, id); return act('begin-blocking'); }
 
     // ItemBed.onItemUse (bed-reference.json): top face only, both cells air with a solid top below.
     if (id === ITEM_BED) {
@@ -603,6 +607,12 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
   state.mining = { block: [...target.block], type: block, progress: 0, tool: id, auto: !state.mineHeld };
   return act('start-mining');
+}
+
+// ItemSword.onItemRightClick: setItemInUse(72000) with EnumAction.block. Only the use state exists here (the first- and third-person sword pose); the movement slowdown
+// while an item is in use and the halved damage of isBlocking are not ported.
+function beginBlocking(state, id) {
+  if (state.survival.usable(id) && !state.eating) state.eating = { id, ticks: 72000, block: true };
 }
 
 function beginEating(state, id, hook) {
