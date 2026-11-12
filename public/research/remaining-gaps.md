@@ -2,6 +2,27 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 52
+
+Batch 52 covered these areas:
+- **The ridden cart's copy.** The cart the player rides is drawn and aimed through its client copy, and the player sits on the copy, so the camera trails the live cart as natively. The sneak dismount still uses the live cart's seat. Bytecode-read.
+- **Dig start and finish in the network tick.** The dragon egg teleport, the note block click and the redstone ore touch of a dig start are queued with the other block clicks. A finished dig is refused when the block in the cell changed. Bytecode-read.
+- **Display block colours.** An executed sweep of `Block.getRenderColor` over every id and meta (`b52dx`): leaves (by type), tall grass, fern and stems on a cart's display block take their colour, drawn from the grey block atlas instead of the pre-tinted item atlas. The grass block's top face alone is green, as `renderBlockAsItem` draws it (lead fix, bytecode-read). The boat splash matched executed records unchanged.
+- **Command output in the chat window.** Command feedback, errors, help pages, `/say`, `/me` and the command block broadcast draw their formatted components. An invalid `LastOutput` in an imported chunk now fails the whole chunk, which is then treated as absent. Executed: `ChatComponentProbe` (15 trees, `b52cc`).
+- **Mob effects and lightning.** Every mob kind exports `ActiveEffects` in the native map order, with the signed amplifier and `Ambient` (168 executed `b52me` records). Lightning's 8-second ignition is shortened by Fire Protection, and a fire-immune mob's rested counter stays at -1, so a strike ignites it (54 executed `bolt` records). A player's arrow on a zombie pigman matched 4 executed records.
+- **Saved entity order.** A save stamps every entity record with its place in the native chunk save walk (chunk, then vertical section, then list order), and a load restores it, so mixed kinds tick in the order a native chunk load gives (7 executed `b52so` scenarios). A spawn egg draws its yaw before `onSpawnWithEgg`, and a villager from an egg rolls its profession from the world Random (54 executed rows).
+- **Tracker walk and destroys.** The joint mob and object tracker walk matches an executed `EntityTracker` run tick by tick (3 cases of 60 ticks). An entity removed before the player in the list has its destroy flushed in the same tick. Eyes of ender, fish hooks and restored items, arrows and orbs take their entity id when created or loaded. The squid's client copy and the client dragon's body turn matched executed records unchanged.
+- **Browser check.** A real click placed a block, a held click dug a grass block, a click hit a cow, a right click mounted a cart and the player followed the cart's copy, and the display carts drew with the native tints. The lead fixed the grass block's top tint.
+
+Still open from batch 52:
+- **Vehicles.** The ridden boat's copy only mirrors the live boat (no enter-water bubbles or splash sound). The client position jump when mounting or dismounting a moving cart is not modelled. Horses and pigs as mounts still seat the player from the live entity. The crystal copy's End fire needs a client block layer. The flat display shapes (types 1, 6, 19, 2) are not executed (they need a GL and Tessellator stub). The item atlas uses `D()` (5bab46) for oak foliage where `getRenderColor` answers 48b518: held, dropped and inventory leaves are unchecked.
+- **Commands.** The help, gamerule and admin trees come from the 1.7.10 source (the command classes are not in the client jar), and the probe's lang lines are the port's own. `/tell` sends plain text, and player chat (`chat.type.text`) is unchecked. A chunk that fails to load is mirrored only in the region import; the runtime stores still skip just the block or cart.
+- **Damage and fire.** The wither zeroes its own fire counter each tick (natively it runs down by 4). Fire Aspect, flame arrows and zombie ignition on mobs ignore Fire Protection. Effects the port does not model (haste, hunger and others) are dropped on import. Multiplayer has no item-in-use sync. The first-person blocking pose is bytecode-read only.
+- **Tracker.** The player's place in the list is approximated (entities present at the first tick count as before it). A player joining a running walk gets its spawns in id order, not HashSet order. Vehicles, hanging entities, hooks and eyes are not in the executed joint record.
+- **Player actions.** The client half of a dig start (`Block.onBlockClicked` on the client world, the creative and instant destroy) waits for the queue, because there is one shared world. A placed block is not drawn before the walk. Natively a finished dig breaks whatever block is there with the server's damage; the port refuses instead. `/kill` with a selector cannot be checked.
+- **Mobs.** The server dragon's death spin is not run through a server-side probe (the client record covers the arithmetic). A removed mob keeps health 0 where natively it keeps its old health (`removedHealth` is set only for creeper explosions and peaceful despawns).
+- **Saved order and eggs.** Chunks load in the order of their first joined entity, not the chunk provider's. An entity that changed section keeps its place instead of moving to the end of the new section's list. A mount and its rider are two records, not one nested record. Fireballs and skulls are not stamped. The egg's living sound is not played. Saves from before 0.81.0 carry no order.
+
 ## Done in batch 51
 
 Batch 51 covered these areas:
@@ -15,14 +36,7 @@ Batch 51 covered these areas:
 - **Dragon beam and display tint.** The healing beam scrolls by the dragon's tick count, not the crystal's. Tall grass and fern on a cart's display block take the grass colour; the dead shrub stays untinted. Bytecode-read.
 - **Browser check.** A real right click placed a block through the queue, a click hit a cow after the walk, and the grass, fern and shrub display carts drew with the right tints. The lead fixed the gamerule list join.
 
-Still open from batch 51:
-- **Vehicles.** A ridden cart is still drawn, and its rider seated, from the live entity; the ridden boat's copy only mirrors it (no enter-water bubbles or splash sound). The crystal copy's End fire needs a client block layer. Leaves on a display block are untinted. Splash and the flat display shapes are not executed.
-- **Commands.** The help, deprecated-id, gamerule and admin trees come from the 1.7.10 source, not bytecode (client jar). Their translated text was not executed. An invalid `LastOutput` drops only that block or cart, where natively the chunk fails to load. The chat window draws the sender string, not the component.
-- **Damage.** The `ActiveEffects` export covers only zombies, villagers and iron golems. Lightning's `++fire` on a fire-immune mob is unchecked. Multiplayer has no item-in-use sync. The first-person blocking pose is bytecode-read only.
-- **Tracker.** A destroy flushed in the removal's own tick (an entity before the player in the list) is not modelled. The joint walk is bytecode-read, and the Java 7 order is not executed. Saved entities, eyes of ender and fish hooks still take their id at the tracker's first sight.
-- **Player actions.** Dig-start side effects (dragon egg, note block, redstone ore) still run at click time. A queued dig does not re-check the block type. A placed block is not drawn before the walk (one shared world). A held dig was not seen in the headless check (it fails there on 0.79.0 too). `/kill` with a selector cannot be checked.
-- **Mobs.** The client dragon copy skips the legacy body turn. The squid copy's client turn and the dragon's death-spin body yaw are bytecode-read. A removed mob keeps health 0 where natively it keeps its old health.
-- **Away runs and dispensers.** The saved cross-kind list order is not kept. A dispensed egg's `onSpawnWithEgg` draws and living sound are not made. The away frame drop's motion uses the run's own item stream.
+Still open from batch 51: carried into the batch 52 list above, except the items batch 52 closed.
 
 ## Done in batch 50
 

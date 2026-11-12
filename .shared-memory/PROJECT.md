@@ -113,6 +113,18 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 52 (2026-11-12, eight Sonnet tracks in `../wt52-<name>` on `batch52-<name>`, cut from 8cd3f1725, merged --no-ff on `batch52-lead`; lead note `b52-lead-track.md`; the gun side runs separately):
+- 0.81.0, by track:
+  - ridecart: the ridden cart is drawn, aimed and seats the player from its client copy (`rideCopy`, `seatOnCartCopy` in main.js); the sneak dismount re-seats on the live cart first. Bytecode-read.
+  - digstart: dig-start effects (dragon egg, note block, redstone ore) queue to the network tick (`serverTask`); a finished dig is refused if the cell's type changed. Bytecode-read.
+  - dragoncopy: client dragon body turn already native; squid client copy executed (`b52dc`); removed-mob health kept at 0 (documented).
+  - displayfx: executed `getRenderColor` sweep (`b52dx`); leaves, tall grass and stems tinted; tinted display blocks draw from the grey terrain atlas (`displayTerrain`); the grass block's top alone is tinted (lead fix, `displayTopTint`); boat splash executed.
+  - cmdchat: the chat window draws command output from its components (`print(text, component)`); an invalid `LastOutput` fails the whole imported chunk. `ChatComponentProbe` executed (`b52cc`).
+  - mobexport: `ActiveEffects` for all 28 mob kinds in native bucket order, signed amplifier, `Ambient` (`b52me`); lightning ignition uses Fire Protection; a rested fire-immune counter stays -1.
+  - savedorder: records carry `ord`, their place in the native chunk/section save walk, restored on load (`saved-order.js`, `b52so`); spawn egg yaw drawn before `onSpawnWithEgg`, villager profession roll.
+  - trackerflush: executed joint tracker walk (`TrackerJointProbe`, `tracker-joint-reference.json`); a destroy before the player in the list flushes in its own tick (`beforePlayer`); eyes, hooks and restored objects take ids at creation.
+- Verification: see `b52-lead-track.md`. Pushed to github main by the lead.
+
 Batch 51 (2026-11-12, eight Sonnet tracks in `../wt51-<name>` on `batch51-<name>`, cut from 119a6db93, merged --no-ff on `batch51-lead`; lead note `b51-lead-track.md`; the gun side runs separately):
 - 0.80.0, by track:
   - ridecopy: the ridden boat's copy mirrors the live boat and splashes (`ObjectClient.mirrorRidden`, `hooks.rides`); a ridden cart interpolates. Bytecode-read.

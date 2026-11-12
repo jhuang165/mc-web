@@ -19,3 +19,6 @@ Branch `batch52-displayfx` from 8cd3f1725.
 - Flat display shape geometry still bytecode-read (needs a GL/Tessellator/IIcon stub harness around blm.a).
 - The item atlas bakes D() for oak foliage (5bab46) while ItemLeaves/Block.getRenderColor answer i(meta) (48b518): check whether held/dropped/GUI leaves should use i(meta) (executed in the reference: leaves i = 48b518 / 619961 / 80a755).
 - Cart display tint not seen in a browser (terrain atlas swap unverified on screen).
+
+## Lead correction (32af910af)
+The grass block is not all white: `blm.a` offsets 237-364 set glColor to `i(meta)` before `renderFaceYPos` and back to white after it, so the top face is tinted 7cbd6b and the other faces are white. `displayTopTint` draws that; the "forced white" readings above apply to the first colour only.
