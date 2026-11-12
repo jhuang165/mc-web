@@ -231,6 +231,7 @@ import { breakPlayerBlock } from "./block-break-simulation.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
+import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
@@ -3012,7 +3013,13 @@ function vehicleState() {
 // Batch 52: the client player on a minecart is seated from the cart's client copy (World.updateEntity: the copy's update, then the rider's updateRiderPosition), so the camera and
 // the player model follow the interpolated cart the renderer draws. The server side (the tick's physics, the dismount) keeps the live seat; this runs at the end of each seating.
 function seatOnCartCopy() {
-  const live = rider.vehicle, c = live && !live.boat && !live.horse && rideCopy(objectTracker, live);
+  const live = rider.vehicle;
+  if (live?.horse && live.entity?.type === "pig") { // Batch 53: a ridden pig is seated from its packet-driven client copy the same way (Entity.updateRiderPosition, height * 0.75)
+    const pc = mobs?.tracker?.clientIfTracked(live.entity);
+    if (pc) { position.x = pc.x; position.y = pc.y + PIG_MOUNTED_OFFSET - 0.5; position.z = pc.z; }
+    return;
+  }
+  const c = live && !live.boat && !live.horse && rideCopy(objectTracker, live);
   if (!c) return;
   position.x = c.x; position.y = c.y + minecarts.getMountedYOffset() - 0.5; position.z = c.z;
 }
