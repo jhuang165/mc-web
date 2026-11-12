@@ -24,8 +24,8 @@ const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...['MobMoveProbe','PlantProbe','PlayerStepProbe','XpOrbProbe','NbtProbe','MinecartProbe','HangingProbe','EntityListProbe','SavedOrderProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'SavedOrderProbe'],{maxBuffer:1<<26});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
-const cases=records.filter(r=>r.case==='saved-order'),cases2=records.filter(r=>r.case==='saved-order2');
-assert.equal(cases.length,7,'7 b52so scenarios');assert.equal(cases2.length,13,'13 b53so scenarios');
+const cases=records.filter(r=>r.case==='saved-order'),cases2=records.filter(r=>r.case==='saved-order2'),cases3=records.filter(r=>r.case==='saved-order3');
+assert.equal(cases.length,7,'7 b52so scenarios');assert.equal(cases2.length,13,'13 b53so scenarios');assert.equal(cases3.length,9,'9 b54so scenarios');
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
  method:'Batch 52 b52so: the unchanged AnvilChunkLoader writer (Chunk.entityLists, 16 sections each in list order) and reader, then Chunk.onChunkLoad (addLoadedEntities per section 0..15) over EntityListProbe World double; EntityItem, EntityXPOrb, EntityArrow, EntityTNTPrimed and EntityCow added to chunks in a given order, saved, read back; each record has the index order before the save and in loadedEntityList after the load.',
  cases};
@@ -37,3 +37,9 @@ const reference2={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases2};
 await writeFile(path.join(root,'../public/research/saved-order2-reference.json'),JSON.stringify(reference2)+'\n');
 console.log(`${cases2.length} saved order 2 scenarios`);
+// Batch 54 (b54so): the chunk/section check per entity right after its own update, and a mount that carries the player (read back from the player's Riding compound); replayed by src/saved-order3-b54.test.js.
+const reference3={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 54 b54so: SavedOrderProbe scenario3. The b53so set-up, but each tick walks loadedEntityList by index and runs the unchanged World.updateEntityWithOptionalForce(entity, false) on an entity right after that entity own moves (a move by another entity, "pusher" p, lands right after p check, so the refile waits for the next pass); the chunks are read back and loaded with the real Chunk.onChunkLoad (apx.c, loadedEntityList = ahb.e; the b52/b53 probes called apx.d, Chunk.onChunkUnload, which appends the same per-section lists to the unloaded list). playerCart: the mount carries the player (a cow stands in, as a player is not in a chunk): the writer skips the mount, the rider Riding compound is read back with EntityList.createEntityFromNBT, forceSpawn and the real World.spawnEntityInWorld after the chunks, as ServerConfigurationManager.initializeConnectionToPlayer does (bytecode-read for the caller, executed for the calls).',
+ cases:cases3};
+await writeFile(path.join(root,'../public/research/saved-order3-reference.json'),JSON.stringify(reference3)+'\n');
+console.log(`${cases3.length} saved order 3 scenarios`);
