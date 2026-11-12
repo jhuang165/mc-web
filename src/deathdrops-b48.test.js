@@ -95,3 +95,18 @@ test("batch 48: main.js hands the live carts, boats and hanging entities the joi
   assert.match(src, /minecarts\.joined = joinedAs\("cart"\)/);
   assert.match(src, /hanging\.joined = joinedAs\("hanging"\)/);
 });
+
+import { WitchPotions } from "./witch-potions.js";
+import { JavaRandom } from "./java-random.js";
+import { expBottleOrbs } from "./spawn-eggs.js";
+
+test("batch 48: an experience bottle's orb total comes from the world's random, not the ball's own", () => {
+  const ew = new EntityWorld(new World("b48-bottle", "meadow"), []);
+  ew.worldRandom = new JavaRandom(12345);
+  const wp = new WitchPotions(ew, () => 0.5);
+  wp.expImpact({ x: 1, y: 2, z: 3 });
+  const orbs = ew.events.filter((e) => e.bottle).map((e) => e.xp), want = expBottleOrbs(new JavaRandom(12345));
+  assert.deepEqual(orbs, want);
+  const after = new JavaRandom(12345); expBottleOrbs(after);
+  assert.equal(ew.worldRandom.nextInt(1000), after.nextInt(1000), "the world generator advanced by exactly the two draws");
+});

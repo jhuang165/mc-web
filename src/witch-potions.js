@@ -6,6 +6,7 @@ import { Projectiles, heading, launch, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { addMobEffect } from "./mob-effects.js";
 import { expBottleOrbs } from "./spawn-eggs.js";
+import { JavaRandom } from "./java-random.js";
 import { chooseThrownPotion, throwSpawn, splashImpact, WITCH } from "./witch.js";
 const f = Math.fround, UNDEAD = new Set(["zombie", "skeleton"]);
 
@@ -84,7 +85,8 @@ export class WitchPotions {
   // event 2002 with colour 0 at the rounded position (the break particles and game.potion.smash) like EntityPotion's.
   expImpact({ x, y, z }) {
     const rng = this.projectiles.rng(), events = this.mobs.events;
-    for (const n of expBottleOrbs(rng)) events.push({ xp: n, position: { x, y, z }, bottle: true }); // `bottle`: the walk spawns these orbs in the bottle's own update (entity-simulation.js)
+    // Batch 48: `3 + world.rand.nextInt(5) + world.rand.nextInt(5)` draws from World.rand (bytecode-read; the replay record uses World.rand = Random(2)), the world's shared generator, not the ball's own.
+    for (const n of expBottleOrbs((this.mobs.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))))) events.push({ xp: n, position: { x, y, z }, bottle: true }); // `bottle`: the walk spawns these orbs in the bottle's own update (entity-simulation.js)
     const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
     events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }
