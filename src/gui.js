@@ -51,7 +51,7 @@ export function tooltipLines(item,stack,advanced=false){
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
  const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;
- if(item.rarity)lines[0].color=item.rarity[Math.min(stack.damage|0,item.rarity.length-1)]; // Item.getRarity: the golden apple is rare (aqua), the enchanted one epic (light purple)
+ if(Array.isArray(item.rarity))lines[0].color=item.rarity[Math.min(stack.damage|0,item.rarity.length-1)]; // Item.getRarity: the golden apple is rare (aqua), the enchanted one epic (light purple)
  if(Array.isArray(stack.enchantments))lines[0].color='aqua';
  if(stored?.length)lines[0].color='yellow';
  for(const text of storedEnchantmentLines(stored))lines.push({text,color:'gray'});

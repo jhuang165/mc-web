@@ -4,6 +4,8 @@
 // public/research/commands-b13.md. Feedback goes out as chat components (ChatComponentTranslation), so the client-side
 // StringTranslate rule applies: %d and %.2f in the en_US pattern print the argument with %s.
 import { parseChatJson, text, translation, Style, translateKey } from "./chat-component.js";
+import { itemComponent } from "./item-component.js";
+import { ORIGINAL_ITEMS } from "./original-items.js";
 import { ACHIEVEMENTS, BY_ID as ACHIEVEMENT_BY_ID } from "./achievements.js";
 import { isStat, GENERAL, EGGS } from "./stats.js";
 import { STAT_DATA } from "./stats-data.js";
@@ -22,13 +24,14 @@ export function lookupStat(id) {
 export const allStatIds = () => STAT_DATA.order.slice();
 
 // StatBase.statName: the translation the StatList constructor gave the stat. Item stats wrap ItemStack.func_151000_E, a "[name]"
-// text; the port names the item through `itemName` and gives it the common rarity colour (white).
+// text; the port names the item through `itemName` (item-component.js adds the rarity colour and the show_item hover).
 function statName(id, itemName) {
   const m = /^stat\.(mineBlock|craftItem|useItem|breakItem)\.(\d+)$/.exec(id);
   if (m) {
-    const n = Number(m[2]), item = text("[").append(text(itemName?.(n) ?? String(n))).append(text("]"));
-    item.style.color = "white";
-    item.style.hover = { action: "show_item", value: text(`{id:${n}s,Damage:0s,Count:1b}`) };
+    // StatBase for an item: new ItemStack(item).func_151000_E() (no tag, damage 0), so the rarity is the item's own.
+    const n = Number(m[2]), liveId = ORIGINAL_ITEMS[`${n}:0`] ?? ORIGINAL_ITEMS[n], live = liveId === undefined ? null : { id: liveId, damage: 0 };
+    const item = itemComponent({ id: live?.id ?? -1, count: 1, damage: live?.damage ?? 0 }, itemName?.(n) ?? String(n));
+    if (!live) item.style.hover = { action: "show_item", value: text(`{id:${n}s,Count:1b,Damage:0s,}`) };
     return translation("stat." + m[1], item);
   }
   const e = /^stat\.(killEntity|entityKilledBy)\.(.+)$/.exec(id);

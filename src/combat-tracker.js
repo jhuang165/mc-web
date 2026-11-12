@@ -33,11 +33,11 @@ const articleless = (reason) => String(reason).replace(/^(an?|the) /i, "").trim(
 /** The entity of a DamageSource: a name (Entity.func_145748_c_), whether it is a living entity (EntityLivingBase) and a player, and the
  *  named item it holds (EntityLivingBase.func_70694_bm, only a renamed stack counts). `held` is read when the message is built. */
 function entity(raw, { self = false, projectile = null } = {}) {
-  if (self) return { self: true, living: true, tracked: true, player: true, rawPlayer: (ctx) => ctx.rawName ?? ctx.name, name: (ctx) => ctx.name, held: (ctx) => ctx.selfItem ?? null };
-  if (projectile) return { living: false, tracked: projectile === FIREBALL, player: false, name: () => translate(...projectile), held: () => null };
+  if (self) return { self: true, living: true, tracked: true, player: true, rawPlayer: (ctx) => ctx.rawName ?? ctx.name, name: (ctx) => ctx.name, held: (ctx) => ctx.selfItem ?? null, heldStack: (ctx) => ctx.selfStack ?? null };
+  if (projectile) return { living: false, tracked: projectile === FIREBALL, player: false, name: () => translate(...projectile), held: () => null, heldStack: () => null };
   const named = raw?.equipment?.[0]?.displayName ?? raw?.heldItem?.displayName ?? raw?.held?.displayName;
   // EntityPlayer.func_145748_c_ applies the scoreboard team (team-names.js); Entity.func_145748_c_ of any other entity is the plain name.
-  return { raw, living: true, tracked: true, player: !!raw?.isPlayer, rawPlayer: () => (raw?.isPlayer ? raw.customName ?? raw.name ?? "Player" : null), name: () => (raw?.isPlayer && typeof raw.formattedName === "string" ? raw.formattedName : entityDisplayName(raw)), held: () => (typeof named === "string" && named ? named : null) };
+  return { raw, living: true, tracked: true, player: !!raw?.isPlayer, rawPlayer: () => (raw?.isPlayer ? raw.customName ?? raw.name ?? "Player" : null), name: () => (raw?.isPlayer && typeof raw.formattedName === "string" ? raw.formattedName : entityDisplayName(raw)), held: () => (typeof named === "string" && named ? named : null), heldStack: () => { const st = raw?.equipment?.[0] ?? raw?.heldItem ?? raw?.held; return typeof named === "string" && named && st?.id != null ? st : null; } };
 }
 const ARROW = ["entity.Arrow.name", "arrow"], FIREBALL = ["entity.SmallFireball.name", "Small Fireball"];
 // EntityPotion has no "entity.ThrownPotion.name" key in en_US, so an ownerless thrown or indirectMagic source prints the raw key (probed).
@@ -145,6 +145,7 @@ export class CombatTracker {
     // `players`: per argument, the raw player name when the argument is EntityPlayer.func_145748_c_ (victim, a player attacker), else null.
     out.players = out.args.map((_, i) => (i === 0 ? ctx.rawName ?? ctx.name : out.who?.[i - 1] ?? null));
     delete out.who;
+    out.stack ??= null; // the held stack behind a ".item" argument (ItemStack.func_151000_E reads its rarity and NBT)
     return out;
   }
   #message(ctx) {
@@ -155,14 +156,15 @@ export class CombatTracker {
       const name = near.src.entity?.tracked ? near.src.entity.name(ctx) : null;
       if (near.src.type === "fall" || near.src.type === "outOfWorld") return { key: "death.fell.accident." + (near.site ?? "generic"), args: [victim] };
       const itemOf = (who) => { const item = who?.living ? who.held(ctx) : null; return item ? `[${item}]` : null; };
+      const stackOf = (who) => who?.heldStack?.(ctx) ?? null;
       const rawOf = (e) => (e?.tracked && e.player ? e.rawPlayer(ctx) : null);
       if (name !== null && (lastName === null || name !== lastName)) {
         const item = itemOf(near.src.entity), who = [rawOf(near.src.entity)];
-        return item ? { key: "death.fell.assist.item", args: [victim, name, item], who } : { key: "death.fell.assist", args: [victim, name], who };
+        return item ? { key: "death.fell.assist.item", args: [victim, name, item], who, stack: stackOf(near.src.entity) } : { key: "death.fell.assist", args: [victim, name], who };
       }
       if (lastName !== null) {
         const item = itemOf(last.src.entity), who = [rawOf(last.src.entity)];
-        return item ? { key: "death.fell.finish.item", args: [victim, lastName, item], who } : { key: "death.fell.finish", args: [victim, lastName], who };
+        return item ? { key: "death.fell.finish.item", args: [victim, lastName, item], who, stack: stackOf(last.src.entity) } : { key: "death.fell.finish", args: [victim, lastName], who };
       }
       return { key: "death.fell.killer", args: [victim] };
     }
@@ -181,7 +183,7 @@ export function attackMessage(src, victim, ctx, fighter, hasKey = hasLangKey) {
   const who = src.entity.name(ctx), held = src.entity.living ? src.entity.held(ctx) : null;
   // EntityDamageSource (type mob/player/thorns...) and the indirect family both look the ".item" key up only when the held stack has a custom name.
   const raw = src.entity.player ? src.entity.rawPlayer(ctx) : null;
-  if (held && hasKey(base + ".item")) return { key: base + ".item", args: [victim, who, `[${held}]`], who: [raw] };
+  if (held && hasKey(base + ".item")) return { key: base + ".item", args: [victim, who, `[${held}]`], who: [raw], stack: src.entity.heldStack?.(ctx) ?? null };
   return { key: base, args: [victim, who], who: [raw] };
 }
 
