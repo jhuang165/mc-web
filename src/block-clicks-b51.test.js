@@ -27,7 +27,7 @@ test("batch 51: a finished dig (survival, creative or instant) is queued as a C0
   const body = fnBody("breakBlockPacket");
   assert.match(body, /pendingEdits\.push\(\{ fn: /);
   assert.match(body, /runningEdits[^]*?return/);
-  assert.match(main, /breakBlock: \(p, c\) => breakBlockPacket\(p, c, \(\) => serverClick\(\{ kind: 'dig'/);
+  assert.match(main, /breakBlock: \(p, c(?:, type)?\) => breakBlockPacket\(p, c, \(\) => [^\n]*?serverClick\(\{ kind: 'dig'/);
   assert.match(main, /breakBlock: breakBlockPacket,\n\s+clientEyeInWater/);
 });
 

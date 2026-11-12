@@ -119,7 +119,7 @@ function system(actions, functions) {
     inventory: (station) => log.push(["inventory", station]), useFurnace: () => log.push("furnace"),
     openCommandBlock: () => log.push("command-block"), touchRedstoneOre: () => {}, // main.js touchRedstoneOre (redstone-ore.test.js)
     useBed: (...args) => log.push(["bed", ...args]),
-    openContainer: () => log.push("chest"), breakBlock: (...args) => log.push(["break", ...args]), breakBlockPacket: (...args) => log.push(["break", ...args]),
+    openContainer: () => log.push("chest"), breakBlock: (...args) => log.push(["break", ...args]), breakBlockPacket: (...args) => log.push(["break", ...args]), serverTask: (fn) => fn(),
     clientEyeInWater: () => false, handleEntityEvents: () => log.push("events"), boneMealSparkles: () => log.push("sparkles"),
   };
   bindings.compiled = compile(functions, bindings);
