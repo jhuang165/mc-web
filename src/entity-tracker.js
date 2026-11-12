@@ -463,6 +463,7 @@ export class MobTracker {
     this.view = { player: null, watches: (cx, cz) => this.watch.watches(cx, cz), log: null };
     this.ctx = { clientOf: (live) => this.clientIfTracked(live), holderOf: (d) => this.holderClient(d) };
     this.entries = new Map();
+    this.pendingJoin = true; // the first update is the player's join (`joinPlayer`)
     this.order = order; // EntityTracker.trackedEntities: a HashSet whose iteration order is the walk order (java-hashset-order.js)
     // Batch 50: the client world's entity list (World.loadedEntityList of the client): a copy joins it when its spawn packet is applied and leaves with its destroy
     // packet, so the client steps its entities in spawn-packet arrival order, not in the order the entries were created. `dying`: entries whose entity left the world
@@ -491,7 +492,16 @@ export class MobTracker {
     return m ? Number(m[1]) | 0 : ++this.surrogateId;
   }
   // The entries in the order updateTrackedEntities walks them: HashSet bucket order of their ids
-  walk() { const keys = this.order.keys(); return this.order.shared ? keys.filter((e) => this.entries.has(e)) : keys; }
+  walk() { const keys = this.order.keys(); return this.order.shared || this.playerKey ? keys.filter((e) => this.entries.has(e)) : keys; }
+  // Batch 53: the player's own EntityTrackerEntry is one of the keys of the set (executed: tracker-joint-reference.json, its id takes a slot and so counts toward the table's
+  // resize). It enters the set at the player's join (the first update: the entities loaded with the world are in the set before it, and are sent to it in the set's order; the entities
+  // spawned later are sent at their spawn) and at a respawn (a new EntityPlayerMP with a new id, appended at the end of the list). `id` is the player's entity id.
+  joinPlayer(id) {
+    if (this.playerKey) this.order.remove(this.playerKey);
+    this.playerId = id;
+    if (!this.pendingJoin) this.addPlayerKey(); // a later join: the entry goes in at once
+  }
+  addPlayerKey() { this.playerKey ??= { player: true }; this.order.add(this.playerKey, this.playerId); }
   forget(e) { this.order.remove(e); }
   // Puts this tracker's entries into the HashSet of another tracker (the object tracker joins the mob tracker's), moving the entries it has already.
   shareOrder(other) {
@@ -502,7 +512,7 @@ export class MobTracker {
     for (const e of mine) this.order.add(e, this.hashId(this.entries.get(e)));
     return this;
   }
-  entryOf(e, size, height) {
+  entryOf(e, size, height, hold = false) {
     let en = this.entries.get(e);
     if (!en) {
       en = this.create(e, size);
@@ -510,7 +520,7 @@ export class MobTracker {
       if (height !== undefined) en.client.height = height;
       this.entries.set(e, en);
       this.order.add(e, this.hashId(en));
-      if (this.view.player) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once
+      if (this.view.player && !hold) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once (`hold`: the player is not in the world yet)
     }
     return en;
   }
@@ -579,11 +589,21 @@ export class MobTracker {
     const all = o.allOf(o.withExtra(joint.lists)), none = () => [0];
     this.beginTick(mobs, player, size, false);
     o.beginTick(all, player, none, false);
+    // The player's own update (EntityPlayerMP.onUpdate, the S13 flush) runs inside the world's entity loop, before the entities that spawn at its end are tracked: the destroys that are due
+    // reach the client before this tick's spawn packets (executed order: tracker-joint-reference.json, a destroy and a spawn in one tick).
+    if (this.dying.length || o.dying.length) this.applyParts([[this, this.dying], [o, o.dying]]);
     // the new entities enter in the order they were created, which is the order of their entity ids (EntityTracker.addEntityToTracker at spawn); an object that has no id yet takes
     // the next one at its first sight, after every id that exists
     const idOf = (t, e) => { const id = t === this ? e.id : e.entityId ?? e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; };
     const fresh = [...mobs.filter((e) => !this.entries.has(e)).map((e) => [this, e]), ...all.filter((e) => !o.entries.has(e)).map((e) => [o, e])].sort((a, b) => { const x = idOf(...a), y = idOf(...b); return x < y ? -1 : x > y ? 1 : 0; });
-    for (const [t, e] of fresh) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
+    // Batch 53: at the player's join the entities the world already held (before the player in loadedEntityList) are in the set first, then the player's entry goes in and sends the lot
+    // in the set's order (EntityTracker.addEntityToTracker for an EntityPlayerMP walks trackedEntities); the entities after the player enter one by one with their spawn packets.
+    const joining = this.pendingJoin && this.playerId !== undefined && !!this.beforePlayer;
+    const early = joining ? fresh.filter(([, e]) => this.beforePlayer(e)) : [], held = new Set(early.map(([, e]) => e));
+    for (const [t, e] of early) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height, true); }
+    if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }
+    if (held.size) for (const e of this.order.keys()) if (held.has(e)) { const t = this.entries.has(e) ? this : o, en = t.entries.get(e); en.entry.updatePlayerList(); t.flush(en); }
+    for (const [t, e] of fresh) if (!held.has(e)) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
     const keys = this.order.keys(), owner = (e) => this.entries.has(e) ? this : o.entries.has(e) ? o : null;
     for (const e of keys) owner(e)?.stepEntry(e);
     this.flagPlayer(player); o.flagPlayer(player);
@@ -599,6 +619,7 @@ export class MobTracker {
   }
   serverTick(mobs, player, size) {
     this.beginTick(mobs, player, size);
+    if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }
     for (const e of this.walk()) this.stepEntry(e);
     this.flagPlayer(player);
     if (this.lastFlagged) for (const e of this.walk()) this.entries.get(e).entry.tryStart(); // the second loop of updateTrackedEntities, in set order

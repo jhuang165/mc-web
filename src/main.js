@@ -2631,6 +2631,7 @@ async function respawnPlayer() {
     const time = survival.time;
     const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
     scoreboardLive.respawn(); // the new EntityPlayerMP re-sends its health criteria
+    mobs?.playerJoined?.(true); // the new EntityPlayerMP takes a new entity id and joins the end of loadedEntityList (tracker-joint2-b53.test.js)
     survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
     statsLive.bind(survival);
     portalTimer.reset();

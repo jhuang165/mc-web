@@ -31,9 +31,8 @@ function replay(name, tweak = null) {
   const playerId = rec.ids.player;
   m.beforePlayer = (e) => e.beforeP === true;
   tweak?.(m);
-  // the player's own entry sits in the same HashSet (its id takes a slot, which changes when the table doubles)
-  const phantom = { phantom: true };
-  m.order.add(phantom, playerId);
+  // the player's own entry sits in the same HashSet (its id takes a slot, which changes when the table doubles); batch 53: it joins at the first update
+  m.joinPlayer(playerId);
   const applied = [], who = new Map(), firstRow = new Map();
   for (const t of [m, o]) {
     const c = t.create.bind(t);
@@ -55,10 +54,7 @@ function replay(name, tweak = null) {
     }
     applied.length = 0;
     m.update(live, player, () => [0.3, 0.7], null, { tracker: o, lists, world: grass });
-    let got = applied.map((p) => p.type + ":" + num(who.get(p))).filter((x) => KINDS.has(x.split(":")[0]));
-    let w = want(k);
-    // a player that joins last (playerLast) is sent the entries it has not seen in the HashSet order at its join, the port's player is there from the start: compare that tick as a set
-    if (name === "playerLast" && k === 0) { got.sort(); w = [...w].sort(); }
+    const got = applied.map((p) => p.type + ":" + num(who.get(p))).filter((x) => KINDS.has(x.split(":")[0])), w = want(k);
     if (JSON.stringify(got) !== JSON.stringify(w)) bad.push([k, got, w]);
   }
   return bad;
