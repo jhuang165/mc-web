@@ -11,7 +11,7 @@ import { NBT } from "./nbt.js";
 import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { createExtraCommands } from "./commands-extra.js";
-import { createScoreboardCommands } from "./commands-scoreboard.js";
+import { createScoreboardCommands, joinNiceString } from "./commands-scoreboard.js";
 import { translation, text as textComponent } from "./chat-component.js";
 import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
@@ -263,7 +263,7 @@ export function createCommandRunner(host) {
       } else if (a.length === 1) {
         if (!(a[0] in r)) throw new CommandException("commands.gamerule.norule", [a[0]]);
         { const line = `${a[0]} = ${r[a[0]]}`; say(line, textComponent(line)); } // CommandGameRule: a ChatComponentText (executed, b51ct)
-      } else if (a.length === 0) { const line = Object.keys(r).sort().join(", "); say(line, textComponent(line)); }
+      } else if (a.length === 0) { const line = joinNiceString(Object.keys(r).sort()); say(line, textComponent(line)); } // CommandBase.joinNiceString over GameRules.getRules (a TreeMap key set): "a, b and c"
       else usage("commands.gamerule.usage");
     },
     give(a) {

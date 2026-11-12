@@ -79,3 +79,11 @@ test("loaders skip a block or cart whose LastOutput is invalid JSON", async () =
   const m = Minecarts.fromJSON({ carts: [good, bad] });
   assert.equal(m.carts.length, 1);
 });
+
+test("the gamerule list joins the sorted rule names with CommandBase.joinNiceString (lead, batch 51)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./commands.js", import.meta.url), "utf8");
+  assert.match(src, /joinNiceString\(Object\.keys\(r\)\.sort\(\)\)/);
+  const { joinNiceString } = await import("./commands-scoreboard.js");
+  assert.equal(joinNiceString(["a", "b", "c"]), "a, b and c");
+});
