@@ -16,7 +16,9 @@ import { ChestRenderer } from "./chest-renderer.js";
 import { christmas } from "./chest.js";
 import { TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { CART_HEIGHT } from "./minecarts.js";
+import { DISPLAY } from "./cart-variants.js";
 import { CartBlockRenderer } from "./cart-block-renderer.js";
+import { displayShape, displayGeometry } from "./cart-display-shape.js";
 
 const D = Math.PI / 180;
 // ModelMinecart.a[0..5]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -80,17 +82,22 @@ export class MinecartRenderer {
     const root = new THREE.Group(), body = new THREE.Group(), material = entityMaterial(this.view.lighting, { map: this.texture });
     root.rotation.order = "YZX";
     const { display, materials, white } = this.blocks.build(type);
-    body.add(display, cartModel(material, this.geometries));
-    if (white) body.add(white);
+    // RenderTntMinecart.func_147910_a: glScalef(swell) inside RenderMinecart's scale 0.75 / translate(0, offset / 16) frame, so only the display block and the flash cube swell, not the cart.
+    const swell = new THREE.Group();
+    swell.add(display);
+    if (white) swell.add(white);
+    body.add(swell, cartModel(material, this.geometries));
     root.add(body);
     this.scene.add(root);
-    return { root, display, body, white, materials: [material, ...materials], festive };
+    return { root, display, body, swell, white, materials: [material, ...materials], festive };
   }
   // The watched display block: scale 0.75, raised offset / 16 (set every frame), renderBlockAsItem's turn about Y. Null for air or a block the port has no cell for.
   buildCustom(d, festive) {
     const cell = d.id ? fromOriginal(d.id, d.data) : null;
     if (!cell) return null;
     if (d.id === 154) { const { display, materials } = this.blocks.build(5); return { group: display, materials, geometries: [] }; }
+    const shape = displayShape(d.id); // renderBlockAsItem has no branch for most non-item render types: nothing is drawn (cart-display-shape.js)
+    if (shape === "none") return null;
     const group = new THREE.Group(), turn = new THREE.Group();
     group.scale.setScalar(0.75);
     turn.rotation.y = Math.PI / 2;
@@ -100,6 +107,12 @@ export class MinecartRenderer {
       chest.root.position.y = -0.5;
       turn.add(chest.root);
       return { group, materials: [chest.material], geometries: [] };
+    }
+    if (shape !== "item") {
+      const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture, side: THREE.DoubleSide }), g = displayGeometry(shape, cell);
+      turn.rotation.y = 0; // renderBlockAsItem turns only types 0, 16, 22, 26, 31, 39
+      turn.add(new THREE.Mesh(g, material));
+      return { group, materials: [material], geometries: [g] };
     }
     const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture }), g = blockItemGeometry(cell.id, cell.meta, 1) ?? blockCubeGeometry(cell.id, cell.meta, 1);
     turn.rotation.y = blockItemTurn(cell.id, cell.meta);
@@ -133,13 +146,14 @@ export class MinecartRenderer {
       const d = cart.display;
       if (d) {
         const key = d.id + ":" + d.data;
-        if (!r.custom || r.custom.key !== key) { this.dropCustom(r); r.custom = { ...(this.buildCustom(d, festive) ?? { group: null }), key }; if (r.custom.group) (r.body ?? r.root).add(r.custom.group); }
-        if (r.custom.group) r.custom.group.position.y = 0.75 * (d.offset / 16);
+        if (!r.custom || r.custom.key !== key) { this.dropCustom(r); r.custom = { ...(this.buildCustom(d, festive) ?? { group: null }), key }; if (r.custom.group) (r.swell ?? r.root).add(r.custom.group); }
+        if (r.custom.group) r.custom.group.position.y = r.swell ? 0 : 0.75 * (d.offset / 16);
         r.display.visible = false;
       } else { this.dropCustom(r); r.display.visible = cart.type !== 0; }
-      if (r.body) {
+      if (r.swell) {
         const { scale, flash } = CartBlockRenderer.fuse(cart, partial);
-        r.body.scale.setScalar(scale);
+        r.swell.position.y = 0.75 * ((d ? d.offset : DISPLAY[cart.type]?.offset ?? 6) / 16);
+        r.swell.scale.setScalar(scale);
         if (r.white) { r.white.visible = flash > 0; r.white.material.opacity = flash; }
       }
       const pose = this.minecarts.renderPose(world, cart, partial);

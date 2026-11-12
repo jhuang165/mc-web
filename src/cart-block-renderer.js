@@ -7,7 +7,6 @@ import { pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { tntRender } from "./explosion.js";
 import { HOPPER_BOXES } from "./hopper-shape.js";
-import { DISPLAY } from "./cart-variants.js";
 
 const tex = (name) => pixelTexture(`/media/1.7.10/blocks/${name}.png`);
 // BoxGeometry faces: +x, -x, +y, -y, +z, -z. Furnace data 2 puts the front on the north (-z) face.
@@ -39,17 +38,16 @@ export class CartBlockRenderer {
     }
     const display = new THREE.Group();
     display.scale.setScalar(0.75);
-    display.position.y = 0.75 * ((DISPLAY[type]?.offset ?? 6) / 16);
     display.add(turn);
     let white = null;
     if (type === 3) {
-      // RenderTntMinecart: the flash cube at the cart origin in the swollen (unscaled by 0.75) frame.
+      // RenderTntMinecart: the flash cube in the same swollen, 0.75 scaled, offset frame as the display block.
       white = new THREE.Mesh(this.unit, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-      white.renderOrder = 1; white.visible = false;
+      white.scale.setScalar(0.75); white.renderOrder = 1; white.visible = false; // blm.a(TNT, 0, 1): a unit block inside the 0.75 frame
     }
     return { display, materials, white };
   }
-  // The swell of the whole cart and the flash for a TNT cart (only while the fuse runs).
+  // The swell of the display block (not the cart model) and the flash for a TNT cart (only while the fuse runs).
   static fuse(cart, partial) {
     if (cart.type !== 3 || !(cart.fuse > -1)) return { scale: 1, flash: 0 };
     return tntRender(cart.fuse, partial);

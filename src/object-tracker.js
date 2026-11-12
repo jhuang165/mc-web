@@ -307,7 +307,7 @@ export class ObjectClient extends ClientEntity {
     this.px = this.x; this.py = this.y; this.pz = this.z;
     const t = this.tracker, s = this.sim, spec = this.spec;
     if (spec.hanging) return; // EntityHanging.onUpdate checks its wall only under !isRemote
-    if (spec.vehicle) { this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.stepWobble(); this.stepVehicle(); if (this.fuse > 0) this.fuse--; return; } // EntityMinecartTNT.h: after super.h, a fuse above 0 counts down (smoke; the explosion at 0 is under !isRemote)
+    if (spec.vehicle) { this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.stepWobble(); this.stepVehicle(); if (this.fuse > 0) { this.fuse--; t.particle("smoke", this.x, this.y + 0.5, this.z, 0, 0, 0); } return; } // EntityMinecartTNT.h (bytecode-read): after super.h, a fuse above 0 counts down and spawns smoke at (posX, posY + 0.5, posZ); the explosion at 0 is under !isRemote
     if (this.kind === "item") {
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.onGround = this.onGround; s.dead = false;
       t.sims.items.items = [s]; t.sims.items.tick(world); t.sims.items.sounds.length = 0;
