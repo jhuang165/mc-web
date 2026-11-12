@@ -535,17 +535,30 @@ export class ObjectTracker extends MobTracker {
     if (e.airBorne) e.airBorne = false;
     if (e.velocityChanged && !en.entry.e.velocityChanged) e.velocityChanged = false;
   }
-  // lists: { item: [...], orb: [...], ... }
-  serverTick(lists, player) {
+  withExtra(lists) {
+    const extra = this.hooks.extraLists?.(); // Batch 47: the boats, minecarts, paintings, item frames and leash knots (main.js)
+    return extra ? { ...lists, ...extra } : lists;
+  }
+  // lists: { item: [...], orb: [...], ... }; the live entities of all of them, with their kinds recorded
+  allOf(lists) {
     const all = [];
     for (const kind in lists) for (const e of lists[kind]) { this.kinds.set(e, kind); all.push(e); }
+    return all;
+  }
+  // (MobTracker.serverTick runs this, then the walk of the entries, then endTick; `jointUpdate` interleaves it with the mob tracker's)
+  beginTick(all, player, size = () => [0], add = true) {
     // removeEntityFromAllTrackingPlayers: the destroy goes out now and the client entity lives until its queue flushes (one tick later)
     const alive = new Set(all);
     for (const [e, en] of this.entries) if (!alive.has(e)) {
       if (e.exploded && this.kinds.get(e) === "firework") en.entry.send({ type: "status", id: en.entry.e.id, status: 17 }); // World.setEntityState(rocket, 17), then setDead
       en.entry.remove(); this.entries.delete(e); this.forget(e); this.dying.push(en); }
-    super.serverTick(all, player, () => [0]);
-    for (const e of this.kinds.keys()) if (!this.entries.has(e)) this.kinds.delete(e);
+    super.beginTick(all, player, size, add);
+  }
+  serverTick(lists, player) { super.serverTick(this.allOf(lists), player); }
+  endTick() { for (const e of this.kinds.keys()) if (!this.entries.has(e)) this.kinds.delete(e); }
+  clientStepper() {
+    const ctx = this.ctx;
+    return (en) => { if (!en.client.present) { this.clientList.delete(en); return; } en.client.step(ctx); };
   }
   clientTick() {
     const ctx = this.ctx;
@@ -557,9 +570,7 @@ export class ObjectTracker extends MobTracker {
   }
   update(lists, player, world) {
     this.ctx.world = world; this.ctx.player = player;
-    const extra = this.hooks.extraLists?.(); // Batch 47: the boats, minecarts, paintings, item frames and leash knots (main.js)
-    if (extra) lists = { ...lists, ...extra };
-    this.serverTick(lists, player);
+    this.serverTick(this.withExtra(lists), player);
     this.clientTick();
   }
   clientEntity(e) { const en = this.entries.get(e); return en?.client.present ? en.client : null; }

@@ -2853,17 +2853,25 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     flushArrows,
   } };
   tickEntitySimulation(entityTick.state, entityTick.hooks);
-  const trackObjects = () => {
-  if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
+  const trackLists = () => {
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
-    if (mobs?.tracker) objectTracker.shareOrder(mobs.tracker); // EntityTracker.trackedEntities: one HashSet for mobs and objects
-    objectTracker.update(lists, position, world);
+    return lists;
+  };
+  const afterTrack = () => {
     for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
+  };
+  // Batch 51: with the one list walk the object tracker's entries join the mob tracker's loop (EntityWorld.tickMobs, `jointTracking`), as EntityTracker walks mobs and objects together
+  if (mobs) mobs.jointTracking = () => world && screen !== "home" ? { tracker: objectTracker, lists: trackLists(), world, after: afterTrack } : null;
+  const trackObjects = () => {
+  if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
+    if (mobs?.tracker) objectTracker.shareOrder(mobs.tracker); // EntityTracker.trackedEntities: one HashSet for mobs and objects
+    objectTracker.update(trackLists(), position, world);
+    afterTrack();
   }
   };
-  entityTick.track = trackObjects;
+  entityTick.track = () => { if (mobs?.jointRan) mobs.jointRan = false; else trackObjects(); }; // the walked tick's tracker pass ran in tickMobs when `jointRan`
   if (!isWalked(mobs)) trackObjects();
   fishing.tick(fishingHost());
   statsLive.fishing(fishing);
