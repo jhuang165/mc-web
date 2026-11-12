@@ -113,6 +113,18 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 53 (2026-11-12, eight Sonnet tracks in `../wt53-<name>` on `batch53-<name>`, cut from 5ea7bb4d1, merged --no-ff on `batch53-lead`; lead note `b53-lead-track.md`; the gun side runs separately):
+- 0.82.0, by track:
+  - ridemounts: a ridden pig seats the player on its client copy (`seatOnCartCopy` pig branch, `PIG_MOUNTED_OFFSET`); boat copies run `ObjectClient.waterMovement` (flow push, splash sound, bubbles). Bytecode-read.
+  - cmdtell: `/tell` gray italic incoming/outgoing, word-sibling message components with selectors (`messageComponent`), player chat name with the `/msg` click (`senderComponent`). Executed `b53ct` rows.
+  - leafcolor: item atlas leaves and vine in 48b518/619961/80a755, no grass side overlay in item renders (`block-textures.js`). Executed `LeafColorProbe` (`b53lc`).
+  - displayquads: the real `renderBlockAsItem` run with a GL11/Tessellator stub (`DisplayQuadsProbe`, `b53dq`); crops from the origin in native plane order.
+  - digfinish: `server-dig.js`, ItemInWorldManager's own timer (0.7 break, delayed break at 1, S23 resend). Executed `b53df`; lead fix: instant starts keep the earlier cell, float `0.7F`.
+  - trackerjoint2: `EntityWorld.playerJoined`, `MobTracker.joinPlayer` (the player's list place, id and HashSet key), join-order spawns, destroys before spawns; vehicles in the joint record (`b53tj`).
+  - firetimes: fire-immune mobs end each update at 0 (`b53ft` executed, corrects b52); `setMobFire` applies Fire Protection on mob ignition; unmodelled effects kept; mob Jump Boost. Lead fix: a flame arrow skips endermen.
+  - savedorder2: `trackSections` refiles chunk and section moves, mounts load after their riders, fireballs and skulls stamped, `removedHealth` on cure and shear (`b53so`).
+- Verification: see `b53-lead-track.md`. Pushed to github main by the lead.
+
 Batch 52 (2026-11-12, eight Sonnet tracks in `../wt52-<name>` on `batch52-<name>`, cut from 8cd3f1725, merged --no-ff on `batch52-lead`; lead note `b52-lead-track.md`; the gun side runs separately):
 - 0.81.0, by track:
   - ridecart: the ridden cart is drawn, aimed and seats the player from its client copy (`rideCopy`, `seatOnCartCopy` in main.js); the sneak dismount re-seats on the live cart first. Bytecode-read.
