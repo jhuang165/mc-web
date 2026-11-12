@@ -16,6 +16,7 @@ export class FireworkRockets {
   launch(x, y, z, stack) {
     const r = createRocket(x, y, z, stack, this.random);
     this.rockets.push(r);
+    this.joined?.(r); // entity-simulation.js (the away run's walk): the rocket's place in World.loadedEntityList
     return r;
   }
   // hooks: world (collisions), sound(name,x,y,z,volume,pitch,delay), spark(x,y,z,vx,vy,vz), explode(x,y,z,vx,vy,vz,fireworks).
@@ -25,15 +26,18 @@ export class FireworkRockets {
   // With `hooks.clientCopies` the trail and the explosion belong to the client's copy (object-tracker.js: the rocket's client onUpdate and the S1A 17):
   // the server rocket draws no sparks and hooks.explode is not called.
   tick(world, hooks = {}) {
-    for (const r of this.rockets) {
-      if (hooks.ringActive && !hooks.ringActive(r)) continue;
-      const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true });
-      if (out.launch) hooks.sound?.('fireworks.launch', r.x, r.y, r.z, 3, 1, false);
-      if (out.spark) hooks.spark?.(...out.spark);
-      if (out.explode && !hooks.clientCopies && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);
-    }
-    this.rockets = this.rockets.filter((r) => !r.dead);
+    for (const r of this.rockets) this.tickOne(world, r, hooks);
+    this.reap();
   }
+  // One rocket's update, where a walk that holds every kind in one list reaches it (away-entities.js).
+  tickOne(world, r, hooks = {}) {
+    if (r.dead || (hooks.ringActive && !hooks.ringActive(r))) return;
+    const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true });
+    if (out.launch) hooks.sound?.('fireworks.launch', r.x, r.y, r.z, 3, 1, false);
+    if (out.spark) hooks.spark?.(...out.spark);
+    if (out.explode && !hooks.clientCopies && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);
+  }
+  reap() { this.rockets = this.rockets.filter((r) => !r.dead); }
   // Renderer rows ({kind, x, y, z, px, py, pz}) shared with the snowball billboards (RenderSnowball(Items.fireworks)).
   get balls() { return this.rows(this.rockets); }
   // The rows of rockets or of their client views (object-tracker.js objectView)
