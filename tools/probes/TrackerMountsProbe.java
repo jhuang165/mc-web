@@ -305,7 +305,13 @@ public class TrackerMountsProbe {
       for (sa part : d.at()) b.append(",").append(num(part.s)).append(",").append(num(part.t)).append(",").append(num(part.u)).append(",").append(num(part.C.a)).append(",").append(num(part.C.b)).append(",").append(num(part.C.c)).append(",").append(num(part.C.d)).append(",").append(num(part.C.e)).append(",").append(num(part.C.f));
       return b.append("]").toString();
     }
-    if (c instanceof ws) return "[" + ((sv) c).ar() + "]";
+    // b52dc: the client squid's air and what EntitySquid.onLivingUpdate's isRemote half writes: squidPitch / prev, squidYaw / prev, squidRotation / prev, tentacleAngle / prev,
+    // randomMotionSpeed, rotateSpeed (bp..bz; the swim vector bA..bC is the server's and stays 0 here)
+    if (c instanceof ws) {
+      StringBuilder b = new StringBuilder("[" + ((sv) c).ar());
+      for (String n : new String[]{"bp", "bq", "br", "bs", "bt", "bu", "bv", "bw", "bx", "bz"}) b.append(",").append(num(MobMoveProbe.fl(c, n)));
+      return b.append("]").toString();
+    }
     return "[]";
   }
   static void tickClient(sa c) throws Exception {
