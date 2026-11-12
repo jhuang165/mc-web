@@ -2,6 +2,22 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 46
+
+Batch 46 covered these areas:
+- **Client hit targets beyond mobs.** On a client world, boats, minecarts, paintings, item frames, leash knots and the dragon's seven parts answer `attackEntityFrom` with true. So a client arrow plays `random.bowhit` and ends there instead of ricocheting, and a client hook sets `hooked` and keeps flying. The dragon itself is not collidable, only its parts. A burning client arrow calls `setFire(5)` before the hit (not on an enderman); the copy's next update zeroes it, so the flame shows for one update. A burning server arrow resyncs its velocity every 20th tick (`fire % 20 == 0` runs `attackEntityFrom(onFire)`). Executed: `TrackerHitsProbe`, 11 new scenarios.
+- **Player-thrown entities.** The player's throws draw exactly the constructor's three gaussians; the potion and exp bottle used `Math.sin`/`Math.cos` where MathHelper's sine table belongs, and now share `launch` (25 executed launch records). The player's snowballs, eggs and pearls hit carts and boats (a wobble with 0 damage; a Creative thrower breaks the vehicle with no drop), and eggs and pearls break paintings. A pearl moves once more after its impact, as `EntityThrowable.onUpdate` goes on. Executed: `EntityListProbe`, 63 scenarios.
+- **Mobs push the player.** The player you control is pushed out of mobs after its move each tick (`EntityLivingBase.collideWithNearbyEntities` on the client player, bytecode-read), from the client copies' positions, Creative included. The integrated server's copy of the player keeps its own motion: mob pushes, hit knockback and blast pushes, the motion snap, ground friction and its own push of the mobs it meets (19 executed `b46mp` records). The witch leads its aim by that motion (or a mob target's own).
+- **Item atlas, continued.** Spawn eggs and potions draw their two native passes from atlas cells (`item-passes.js`), so held and dropped potions now show their liquid. The clock and compass are atlas cells that show the current frame. Bytecode-read: the item TextureMap has no mipmaps (only the blocks map gets them), and the piston item is a cube with its native faces (executed draws), so neither needed a change.
+- **Away vehicles in the walk.** The away run ticks minecarts, boats, hanging entities and firework rockets at their join place in the one walk with the mobs; a mob rider updates right after its mount, and carts and boats now meet the away mobs as blockers.
+
+Still open from batch 46:
+- Client copies of boats, carts, paintings, item frames and leash knots do not exist; client arrows and hooks test the live ones. A client dragon-part hit's three `Entity.rand` draws are not made.
+- The server copy of the player has no block collision or fluid, web or ladder friction, and its position is pinned to the client's. Dragon, piston, cart and boat pushes do not reach it. The client half of the mob push (the mob side) is not modelled, because client copies keep no motion.
+- Thrown potions and mob-held potions and eggs draw one pass. The item-frame compass has its own canvas. Inventory egg and potion icons are CSS-tinted layers.
+- The away run's thrown balls target only mobs. Live rockets still tick after the walk. The away list order has no native probe.
+- Egg hatching and exp-bottle orbs on a vehicle or painting hit are not probed, and neither is a pearl thrown by a real `EntityPlayerMP` at a cart.
+
 ## Done in batch 45
 
 Batch 45 covered these areas:
@@ -31,32 +47,25 @@ Batch 45 covered these areas:
 - **Away run edges and order.** An entity next to a natively loaded column that the run has no copy of is held, so it does not walk into air. This uses an 8-block bound chosen for the port. Items, orbs, TNT, thrown entities, arrows, falling blocks, potions, golem balls, skulls and knots tick in one join-ordered walk with the mobs, as in the live world.
 - **Fire effects re-audit.** Punching out fire in Creative plays two fizzes, the client's own and the server packet's, and Survival plays one (javap of `ItemInWorldManager.onBlockClicked`). An item's lava fizz plays at posY. Re-read and matching: the water, in-wall and fire overlays, flint and steel, the orb fizz and fire on burning entities ([fire-fx.md](fire-fx.md)).
 
-Still open from batch 45:
+Still open from batch 45 (items closed in batch 46 removed):
 - Tracker and client:
-  - Boats, minecarts, hanging entities and dragon parts are not client hit targets. A burning arrow's setFire on a client mob copy is not modelled.
   - The tracker walks the live list. Native walks a HashSet in entity id order.
   - The dragon's client crystal search and its living-sound emission are not modelled.
   - A ridden pig's client copy follows the live pig. Natively it is packet-driven and the rider sits on it, so the seat and camera would have to move to the client copy too. A ridden horse's client steering is not ported, and boat and cart rider copies are not examined.
   - The angler end of the line has no native replay.
 - Mobs:
-  - Mob collisions do not push the player, and the witch aims with target motion 0.
-  - Player-thrown potions and bottles may lack the constructor's three gaussians.
   - Spawned items, orbs and potions are not recorded in flight.
   - Horses: run-around with a rider, skeleton and zombie horse spawn rolls, eat and angry sounds, and the growth nudge against walls have no records.
   - No record pushes a mob with a piston or opens a chest under a sitting cat.
 - Entity list:
   - A mob taken aboard by a cart listed later is not updated a second time (`cart-cow-mount-ba`).
-  - Player-thrown balls do not target carts or boats.
-  - The egg and pearl hit on a painting is not executed.
 - Rendering:
-  - Item sprites have no mip chain.
   - An HD pack scales the 16 px cells.
-  - Animated items, skulls, eggs, leather, potions and block-atlas items are not atlas cells, and the piston icon is a cube.
+  - Block-atlas items are not item atlas cells.
   - Sword blocking, the witch's held item and baby mobs' held items are not drawn natively.
   - The first-person arm was not re-checked after the bottom-face fix.
   - The water overlay tint is not pixel-compared.
 - Away:
-  - Carts, boats, hanging entities and rockets still tick after the walk.
   - The 8-block edge hold is a port bound.
   - The death screen after a shadow kill shows on return.
 - Multiplayer (unchanged from batch 44):
