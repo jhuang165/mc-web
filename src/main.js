@@ -3214,7 +3214,7 @@ function edit(place = false) {
     breakBlock: breakBlockPacket,
     clientEyeInWater,
     serverTask,
-    digStart: (cell) => serverDig.start(cell),
+    digStart: (cell) => serverDig.start(cell, serverDigRate(cell)),
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
     placeBoat: () => {

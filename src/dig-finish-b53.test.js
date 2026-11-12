@@ -90,3 +90,17 @@ test('a finish at another cell, with no start or after an abort, breaks nothing'
   }
   assert.equal(replay(ref.records.find((r) => r.name === 'finish-other-cell'))[1], 'ignore');
 });
+
+// Lead fix (bytecode-read, ItemInWorldManager.onBlockClicked): an instant start sets initialDamage but keeps the earlier dig cell, so a finish for that cell still counts.
+test("an instant start keeps the earlier dig cell", () => {
+  const d = createServerDig();
+  d.start([1, 64, 1], 0.1);
+  for (let i = 0; i < 9; i++) d.tick(() => null);
+  d.start([5, 64, 5], 1.5); // tall grass: broken at once, partiallyDestroyedBlock stays at the stone
+  assert.equal(d.state.pos.join(), "1,64,1");
+  assert.equal(d.state.initial, 9);
+  assert.equal(d.finish([5, 64, 5], 1.5), "ignore");
+  assert.equal(d.finish([1, 64, 1], 0.7), "break"); // rate * (ticks since the instant start + 1)
+  d.start([2, 64, 2], null); // air: isDestroyingBlock with the cell moved
+  assert.equal(d.state.pos.join(), "2,64,2");
+});

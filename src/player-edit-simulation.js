@@ -607,7 +607,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (now === REDSTONE_ORE || now === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...dug); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
   };
   if (block === DRAGON_EGG || block === 177 || block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hooks.serverTask ? hooks.serverTask(serverClicked) : serverClicked();
-  // C07 status 0 also starts the server's own dig timer (ItemInWorldManager.initialDamage, b53 digfinish): in the network tick like the click above.
+  // C07 status 0 also starts the server's own dig timer (ItemInWorldManager.initialDamage, b53 digfinish): in the network tick like the click above. An instant
+  // break starts it too (initialDamage only; server-dig.js keeps the earlier cell).
   if (hooks.digStart) hooks.serverTask ? hooks.serverTask(() => hooks.digStart(dug)) : hooks.digStart(dug);
   const under = hook('clientEyeInWater');
   if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {

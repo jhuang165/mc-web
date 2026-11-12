@@ -20,12 +20,13 @@ export function createServerDig() {
       if (f(rate * (s.cur - s.delayedInitial + 1)) >= 1) { s.received = false; return [...s.delayed]; }
       return null;
     },
-    // C07 status 0 on a block that does not break at once.
-    start(pos) { s.initial = s.cur; s.pos = [...pos]; },
+    // C07 status 0 (ItemInWorldManager.onBlockClicked, Survival): initialDamage is set on every start, but the cell only moves when the block does not
+    // break at once (air, or a rate below 1); an instant break leaves partiallyDestroyedBlockX/Y/Z where an earlier dig put them. `rate` as in finish (omitted: not instant).
+    start(pos, rate) { s.initial = s.cur; if (rate == null || !(f(rate) >= 1)) s.pos = [...pos]; },
     // C07 status 2: 'break' (the block at the cell goes now), 'delay' (the server waits for its own damage to reach 1) or 'ignore'.
     finish(pos, rate) {
       if (!same(pos, s.pos) || rate === null) return 'ignore';
-      if (f(rate * (s.cur - s.initial + 1)) >= 0.7) return 'break';
+      if (f(rate * (s.cur - s.initial + 1)) >= f(0.7)) return 'break'; // the float 0.7F
       if (s.received) return 'ignore';
       s.received = true; s.delayed = [...pos]; s.delayedInitial = s.initial;
       return 'delay';
