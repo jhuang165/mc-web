@@ -219,6 +219,7 @@ import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked } from "./entity-simulation.js";
 import { ObjectTracker, objectViews } from "./object-tracker.js";
+import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
@@ -3274,6 +3275,7 @@ function movementTick(controls) {
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
+  pushClientPlayer(mobs, { x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height, riding: !!rider.vehicle, dead: survival.health <= 0 }, velocity); // sv.bo on the client player, after the move
   streamPrefetch?.update(position.x, position.z);
   if (world.ringSink?.rtList && world.warmBiomes) world.warmBiomes(world.ringSink.rtList); // ring chunks' biomes, a few ms a tick, before their ice rolls need them
   walkFrozen = sneakOnGround;
