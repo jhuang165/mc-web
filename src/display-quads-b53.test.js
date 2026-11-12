@@ -11,7 +11,7 @@ import { blockTile, tileRect } from "./block-textures.js";
 const ref = JSON.parse(await readFile(new URL("../public/research/display-quads-reference.json", import.meta.url), "utf8"));
 const recs = ref.records, fr = Math.fround, near = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-6, `${m}: ${a} vs ${b}`);
 const quadsOf = (draw) => { const out = []; for (let i = 0; i < draw.vertices.length; i += 4) out.push(draw.vertices.slice(i, i + 4)); return out; };
-const SHAPE_BY_TYPE = { 1: "cross", 6: "crops", 19: "stem", 2: "torch" };
+const SHAPE_BY_TYPE = { 1: "cross", 6: "crops", 19: "stem", 2: "torch" }, DISPLAY_SHAPE = { ...SHAPE_BY_TYPE, 38: "hopper" }; // batch 54: the hopper has its own executed quads (display-cubes-b54.test.js)
 const at = (id, meta, name) => recs.find((r) => r.id === id && r.meta === meta && (!name || r.name === name));
 // the colour glColor4f held at each draw call, in order
 const drawColors = (r) => { let c = null; const out = []; for (const l of r.calls) { const p = l.split(" "); if (p[0] === "color") c = p.slice(1).map(Number); else if (p[0] === "draw") out.push(c); } return out; };
@@ -24,7 +24,7 @@ test("the reference is an executed record set of the unchanged client", () => {
 });
 
 test("displayShape follows the executed render type of every recorded block", () => {
-  for (const r of recs) assert.equal(displayShape(r.id), SHAPE_BY_TYPE[r.renderType] ?? "item", `block ${r.id} render type ${r.renderType}`);
+  for (const r of recs) assert.equal(displayShape(r.id), DISPLAY_SHAPE[r.renderType] ?? "item", `block ${r.id} render type ${r.renderType}`);
 });
 
 test("the flat shapes' quads match the executed Tessellator vertices, in order (cross, crops, stem, torch)", () => {

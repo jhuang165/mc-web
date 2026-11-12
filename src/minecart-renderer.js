@@ -95,7 +95,6 @@ export class MinecartRenderer {
   buildCustom(d, festive) {
     const cell = d.id ? fromOriginal(d.id, d.data) : null;
     if (!cell) return null;
-    if (d.id === 154) { const { display, materials } = this.blocks.build(5); return { group: display, materials, geometries: [] }; }
     const shape = displayShape(d.id); // renderBlockAsItem has no branch for most non-item render types: nothing is drawn (cart-display-shape.js)
     if (shape === "none") return null;
     const group = new THREE.Group(), turn = new THREE.Group();

@@ -1,0 +1,23 @@
+# displaycubes b54 track
+
+Branch `batch54-displaycubes` from 20bbab13b.
+
+## Summary
+- The cube-path display shapes (every full cube, slabs, logs, stairs, fence, wall, cactus, anvil, dragon egg, beacon, enchanting table) are now compared vertex by vertex against the executed `renderBlockAsItem` quads (`src/display-cubes-b54.test.js`): same four corners per quad, same winding direction, same uv per corner, same tile (by icon name), same face normal. The port already matched. The only differences are the starting corner of each quad and the order the faces are emitted (BoxGeometry order vs native bottom, top, -z, +z, -x, +x), neither of which changes the picture. No change needed for those shapes.
+- Probe fix: the b53 records showed "?" for borrowed icons (stairs borrow planks, beacon base obsidian, ...) and, worse, the beacon's glass shell recorded as "beacon" because an earlier case (glass, id 20) left its small-k icon on the shared glass block. `DisplayQuadsProbe` now re-registers every block's 1000+ icons before each case and resolves 1000+ icons by name. No "?" icons remain; the beacon draws obsidian base, beacon core, glass shell (the port's `BEACON_ITEM_BOXES` tile order already matches).
+- Real bug found and fixed: the hopper (type 38) was a 5-box approximation (full 5/8 floor plus four full-height walls). Native draws 17 quads: bowl underside and rim, four outer sides, four inner walls, the floor (hopper_inside) and a funnel box 0.25..0.75 topped at 0.623, unturned. `displayQuads("hopper")` / `displayShape(154) === "hopper"` now draw the executed quads (table `HOPPER_ROWS` in `cart-display-shape.js`), used both for a minecart carrying a hopper block and for the hopper minecart (`cart-block-renderer.js` build(5); `HOPPER_BOXES` import removed there, still used by collision).
+- Flat normal: every flat vertex carries the item normal (0,-1,0) natively (executed). `EntityRenderer.renderWorld` (blt.a) wraps the entity pass in `RenderHelper.enableStandardItemLighting` (bam.b), ambient 0.4 + two 0.6 diffuse lights both pointing up (0.2,1,-0.7)/(-0.2,1,0.7) normalised (bytecode-read). A downward normal gets no diffuse, so native flat display blocks shade at a constant 0.4 (times lightmap). The port's `entityMaterial` uses the same formula but fed computed face normals, so crossed squares, crops, stems and torches were brighter (side normals give about 0.50). `displayGeometry` now sets (0,-1,0) for the flat shapes. For cube-path shapes and the hopper, native normals equal the face normals the port computes (tested).
+- Chests: the cart's chest branch builds `chestModel` with root y = -0.5 under the 90 degree turn, which is exactly `chestItemModel` (executed in b43, `chest-item-reference.json`: recorded R 90, same prefix and part boxes, three blocks identical geometry). Tested that the cart's boxes equal `chestItemModel`'s and that the recorded vertex normals, taken through the model's S(1,-1,-1), are the geometric outward normals (18 quads). `TileEntityRendererChestHelper` therefore was already executed; no further harness run was needed. Not covered: the beacon and enchanting-table tile-entity renderers (no tile entity draws in the item path for them: renderBlockAsItem draws the enchanting table as a cube, executed, and the beacon as boxes, both compared).
+
+## Evidence
+- Executed: `DisplayQuadsProbe` (96 records, re-recorded; `public/research/display-quads-reference.json`), `chest-item-reference.json` (b43).
+- Bytecode-read: blt.a calls bam.b / bam.a around bma.a(entities) in renderWorld; bam.b constants (0.4f ambient, 0.6f diffuse, light vectors (0.2,1,-0.7) and (-0.2,1,0.7)).
+- Not executed: GL lighting itself (the probe records normals and the stubbed GL11 cannot light), so "constant 0.4" is derived from the fixed-function formula and the recorded normals, not measured pixels.
+
+## Verification
+- `node tools/verify-display-quads.mjs` -> 96 displayquads records.
+- `node --test src/display-cubes-b54.test.js src/display-quads-b53.test.js src/cart-render2-b50.test.js src/cart-display-b49.test.js src/displayfx-b52.test.js src/carts.test.js src/minecarts.test.js src/hopper.test.js src/furnace-cart-b49.test.js src/spawner-cart.test.js src/ride-cart-b52.test.js` -> all pass (100+ tests, 0 fail). `npm run build` ok. No browser smoke.
+
+## Follow-ups (proposed gap lines)
+- Display blocks' lightmap brightness and the cart-body vs display-block light differences are not checked against a pixel render.
+- Render types of every block id are still not swept (only recorded ids); the hopper meta does not change the item shape (tested at meta 0 only).

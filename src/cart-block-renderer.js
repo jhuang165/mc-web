@@ -1,12 +1,12 @@
 // The display block of the furnace, TNT, hopper and command block carts (RenderMinecart.func_147910_a: scale 0.75, raised
 // offset / 16, RenderBlocks.renderBlockAsItem rotated 90 degrees about Y and centred), plus RenderTntMinecart's swell and white
 // flash (the same maths as the primed TNT, explosion.js tntRender). The furnace always shows lit_furnace with its front on
-// the north face (data 2); the hopper is drawn as the bowl boxes of hopper-shape.js, an approximation of render type 38.
+// the north face (data 2); the hopper is drawn as the 17 executed quads of render type 38 (cart-display-shape.js).
 import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { tntRender } from "./explosion.js";
-import { HOPPER_BOXES } from "./hopper-shape.js";
+import { displayGeometry } from "./cart-display-shape.js";
 
 const tex = (name) => pixelTexture(`/media/1.7.10/blocks/${name}.png`);
 // BoxGeometry faces: +x, -x, +y, -y, +z, -z. Furnace data 2 puts the front on the north (-z) face.
@@ -23,14 +23,11 @@ export class CartBlockRenderer {
   build(type) {
     const turn = new THREE.Group(), materials = [];
     turn.rotation.y = Math.PI / 2;
-    if (type === 5) {
-      const outside = entityMaterial(this.view.lighting, { map: tex("hopper_outside") }), top = entityMaterial(this.view.lighting, { map: tex("hopper_top") });
-      materials.push(outside, top);
-      for (const [x0, y0, z0, x1, y1, z1] of HOPPER_BOXES) {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), [outside, outside, top, outside, outside, outside]);
-        mesh.position.set((x0 + x1) / 2 - 0.5, (y0 + y1) / 2 - 0.5, (z0 + z1) / 2 - 0.5);
-        turn.add(mesh);
-      }
+    if (type === 5) { // render type 38 as renderBlockAsItem draws it (executed quads, cart-display-shape.js); not turned
+      turn.rotation.y = 0;
+      const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture, side: THREE.DoubleSide }), g = (this.hopper ??= displayGeometry("hopper", { id: 133, meta: 0 })); // one shared geometry
+      materials.push(material);
+      turn.add(new THREE.Mesh(g, material));
     } else {
       const m = FACES[type]().map((map) => entityMaterial(this.view.lighting, { map }));
       materials.push(...m);
