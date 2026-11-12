@@ -31,6 +31,7 @@ import { mountEntity, seatPosition } from "./mob-riding.js";
 import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox } from "./dragon.js";
 import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
+import { JavaHashSetOrder } from "./java-hashset-order.js";
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -429,6 +430,8 @@ export class MobTracker {
     this.view = { player: null, watches: (cx, cz) => this.watch.watches(cx, cz), log: null };
     this.ctx = { clientOf: (live) => this.clientIfTracked(live), holderOf: (d) => this.holderClient(d) };
     this.entries = new Map();
+    this.order = new JavaHashSetOrder(); // EntityTracker.trackedEntities: a HashSet whose iteration order is the walk order (java-hashset-order.js)
+    this.surrogateId = 0;
     this.player = { initialised: false, x: 0, y: 0, z: 0 };
     this.tick = 0;
   }
@@ -442,12 +445,24 @@ export class MobTracker {
     for (const [e, en] of this.entries) if (e.uuid === d.uuid) return en.client.present ? en.client : null;
     return null;
   }
+  // EntityTrackerEntry.hashCode(): the entity id. The port's mobs name theirs "mob-<n>" (a counter in spawn order), the object tracker's entries carry numeric ids; a stand-in
+  // without either takes the next number of its own counter (spawn order again).
+  hashId(en) {
+    const id = en.entry.e.id;
+    if (Number.isInteger(id)) return id;
+    const m = /(\d+)$/.exec(typeof id === "string" ? id : "");
+    return m ? Number(m[1]) | 0 : ++this.surrogateId;
+  }
+  // The entries in the order updateTrackedEntities walks them: HashSet bucket order of their ids
+  walk() { return this.order.keys(); }
+  forget(e) { this.order.remove(e); }
   entryOf(e, size, height) {
     let en = this.entries.get(e);
     if (!en) {
       en = this.create(e, size);
       if (height !== undefined) en.client.height = height;
       this.entries.set(e, en);
+      this.order.add(e, this.hashId(en));
       if (this.view.player) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once
     }
     return en;
@@ -482,16 +497,16 @@ export class MobTracker {
     this.view.player = player;
     this.watch.update(player);
     const alive = new Set(mobs);
-    for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); en.client.present = false; }
+    for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); this.forget(e); en.client.present = false; }
     // 1. every entry sends its location
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
     for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
-    // Bytecode-read, not executed (Batch 45): native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id), i.e. bucket order, not
-    // this list order; the port has no shared entity-id counter, so the relative order of different entities' packets within a tick is the live list's (each entity's own stream is unchanged).
-    for (const e of mobs) {
-      const height = size(e)[1];
+    // Batch 49: native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id, bytecode-read; executed order in
+    // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).
+    for (const e of this.walk()) {
       const en = this.entries.get(e);
+      const height = size(e)[1];
       en.client.height = height;
       const { airBorne, changed } = this.observe(e, en);
       en.entry.sendLocation(airBorne, changed);
@@ -504,7 +519,7 @@ export class MobTracker {
     if (!p.initialised || dx * dx + dy * dy + dz * dz > 16) { p.x = player.x; p.y = player.y ?? 0; p.z = player.z; p.initialised = true; flagged = true; }
     // 3. a flagged player re-evaluates every entry; an entry that moved did so in sendLocation (updatePlayerList)
     this.lastFlagged = flagged;
-    if (flagged) for (const en of this.entries.values()) en.entry.tryStart();
+    if (flagged) for (const e of this.walk()) this.entries.get(e).entry.tryStart(); // the second loop of updateTrackedEntities, in set order
   }
   // the client tick: packets in order, then the interpolation step
   // `physics(client, mob)` moves a client entity like moveEntityWithHeading(0, 0) on the client's world (entities.js supplies it)
