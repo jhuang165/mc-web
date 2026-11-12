@@ -219,7 +219,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -3980,6 +3980,7 @@ function animate(now) {
       survival.creative ? 5 : 4.5,
     );
     eyeRay = { origin: [aim.x, aim.y, aim.z], dir: [dir.x, dir.y, dir.z] };
+    mobs.knotBoxOf ??= (k) => aimKnotBox(objectTracker, k, (live) => { const c = live.summoned ? [live.px, live.py, live.pz] : [live.x + 0.5, live.y + 0.5, live.z + 0.5]; return [c[0] - 0.25, c[1], c[2] - 0.25, c[0] + 0.25, c[1] + 0.5, c[2] + 0.25]; }); // Batch 50: a leash knot is aimed through its client copy's box
     aimedEntity = mobs.pick(
       aim,
       dir,

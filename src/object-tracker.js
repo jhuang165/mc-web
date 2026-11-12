@@ -20,7 +20,7 @@
 // too (the same unchanged EntityTrackerEntry executed, the real client classes ticked), and they are the client's hit targets (`vehicleTargets`). Executed: the spawn packets and
 // every S12/S14-S18/S1C of the scenarios, the boat's extra yOffset at spawn, its 8 tick interpolation (3 + 5) then its coast on the S12 motion (0.99F / 0.95F / 0.99F), the cart's
 // 5 tick interpolation (3 + 2) with no motion of its own, the hanging boxes, the item frame's data watcher, and the dragon's three-draw retarget on a part hit (`retargetDragon`).
-// Bytecode-read only: the boat's splash particles above 0.2625 blocks a tick (the reference run never reached that speed on the client), the furnace cart's S1C 16, a cart below y -64.
+// Bytecode-read only: the boat copy's splash particles above 0.2625 blocks a tick (batch 50: ObjectClient.splash; the reference run never reached that speed on the client), the furnace cart's S1C 16, a cart below y -64.
 // Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
 // boats, carts, paintings, frames and knots are not switched to the copies.
 // Batch 48 (tracker-birth.js, boats.js, minecarts.js): entries of placed boats and carts start from their creation state; pushes set airBorne (addVelocity) and attacks velocityChanged
@@ -257,7 +257,22 @@ export class ObjectClient extends ClientEntity {
   // EntityBoat.onUpdate (isRemote, isBoatEmpty) and EntityMinecart.onUpdate (isRemote): with increments left both step towards the last position packet (position by
   // (target - pos) / n, yaw by wrapAngleTo180(target - yaw) / n, pitch by (target - pitch) / n, then setRotation's % 360); the boat without increments coasts on
   // the S12 motion (position += motion, then 0.99F / 0.95F / 0.99F drag), the cart stays where it is. Bytecode-read for the branches, executed for the numbers.
+  // Batch 50: EntityBoat.onUpdate (xi.h, bytecode-read) before its remote branch: d3 = sqrt(motionX^2 + motionZ^2) of the copy (the S12 motion, drag-reduced each tick); above 0.2625
+  // (0.26249999999999996) 1 + d3 * 60 "splash" particles are spawned (loop `i < 1 + d3 * 60`, doubles) at posY - 0.125 with the copy's own motion as velocity. Per particle the draws on
+  // Entity.rand are nextFloat (d4 = (f * 2 - 1) as floats), nextInt(2) (d5 = (n * 2 - 1) * 0.7) and nextBoolean; true: x - cos * d4 * 0.8 + sin * d5, z - sin * d4 * 0.8 - cos * d5,
+  // false: x + cos + sin * d4 * 0.7, z + sin - cos * d4 * 0.7 (cos / sin of yaw * PI / 180, doubles). It does not test for water, only the speed, and it runs for a client copy too.
+  splash() {
+    const d3 = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    if (!(d3 > 0.26249999999999996)) return;
+    const r = this.sim.rand, rad = this.yaw * Math.PI / 180, c = Math.cos(rad), sn = Math.sin(rad), y = this.y - 0.125;
+    for (let i = 0; i < 1 + d3 * 60; i++) {
+      const d4 = f(f(r.nextFloat() * 2) - 1), d5 = (r.nextInt(2) * 2 - 1) * 0.7;
+      if (r.nextBoolean()) this.tracker.particle("splash", this.x - c * d4 * 0.8 + sn * d5, y, this.z - sn * d4 * 0.8 - c * d5, this.vx, this.vy, this.vz);
+      else this.tracker.particle("splash", this.x + c + sn * d4 * 0.7, y, this.z + sn - c * d4 * 0.7, this.vx, this.vy, this.vz);
+    }
+  }
   stepVehicle() {
+    if (this.kind === "boat") this.splash();
     if (this.meta.has(16)) this.meta.set(16, 0); // EntityMinecartFurnace.onUpdate is not guarded by isRemote: the client sets its powered flag (16) from its own fuel (0) every update, so the S1C's 1 lasts only until the update (executed: cartFurnace)
     const v = this.vt;
     if (v && v.inc > 0) {
@@ -446,7 +461,7 @@ export class ObjectTracker extends MobTracker {
     if (c.spec.eye) return { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false };
     if (c.spec.rocket) { const r = createRocket(c.x, c.y, c.z, null, s.balls.rng()); r.rand = s.balls.rng(); return r; } // the client's constructor draws its own random motion, the S12 replaces it
     if (c.spec.hook) return new FishHook(s.balls.rng()); // its own Entity.rand
-    if (c.spec.vehicle || c.spec.hanging) return { prevYaw: 0, prevPitch: 0 };
+    if (c.spec.vehicle || c.spec.hanging) return c.kind === "boat" ? { prevYaw: 0, prevPitch: 0, rand: s.balls.rng() } : { prevYaw: 0, prevPitch: 0 }; // the boat copy's own Entity.rand (its splash draws)
     return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, fuse: 80, px: 0, py: 0, pz: 0 };
   }
   // Copies the live entity into the stand-in the tracker entry reads (Java's posY and field names).
@@ -593,6 +608,13 @@ export function vehicleView(tracker, e, rides = false) {
   const r = f(c.spec.width) / 2, bb = (Object.hasOwn(v, "bb") ? v.bb : (v.bb = [0, 0, 0, 0, 0, 0]));
   bb[0] = c.x - r; bb[1] = c.y - off; bb[2] = c.z - r; bb[3] = c.x + r; bb[4] = bb[1] + f(c.spec.height); bb[5] = c.z + r;
   return v;
+}
+// Batch 50: the box the view ray tests for a leash knot, the copy's own 0.5 cube (EntityLeashKnot is a collidable EntityHanging); null when the tracker follows the knot but its copy is
+// absent. `live` is the box the port gives a knot the tracker does not follow yet.
+export function aimKnotBox(tracker, k, live) {
+  const c = shownOf(tracker, k, false);
+  if (c === null) return null;
+  return c === k ? live(k) : c.box();
 }
 // Batch 49: the box EntityRenderer.getMouseOver tests for a boat, cart, painting or frame: the client copy's (bytecode-read: it searches the client world's entities and the use or
 // attack packet names the entity id, which the port maps back to the live entity). null when the tracker follows the entity but its copy is absent (not aimable); an entity the
