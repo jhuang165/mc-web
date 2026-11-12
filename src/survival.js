@@ -846,7 +846,7 @@ export class Survival {
     let dealt = fresh ? n : Math.fround(n - this.hurtAmount);
     // EntityPlayer.damageEntity: the halving of a blocking sword comes before applyArmorCalculations and applies to the amount that gets through
     // the hurt-resistance window (amount - lastDamage), not to the stored lastDamage (`hurtAmount` stays the raw hit).
-    dealt = blockedDamage(dealt, damageSourceKey(source ?? reason), this.blocking);
+    dealt = blockedDamage(dealt, damageSourceKey(source ?? (reason === "an accident" ? "generic" : reason)), this.blocking); // the default reason is DamageSource.generic, not a mob
     if (blockable) dealt = this.applyArmor(dealt);
     // EntityLivingBase.applyPotionDamageCalculations: the enchantment step comes after armour, also for the
     // sources that bypass armour (fall, drowning, magic ...), and is skipped only for starvation.

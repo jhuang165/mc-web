@@ -9,6 +9,7 @@ import { movePlayer } from './player-physics.js';
 import { playerFixture } from './player-physics-fixture.js';
 import { moveInput } from './player-movement.js';
 import { tickPlayerItemUse } from './player-item-use.js';
+import { readFileSync } from 'node:fs';
 import { VOID } from './survival.js';
 const f = Math.fround;
 const IRON_SWORD = 267;
@@ -82,4 +83,33 @@ test('the block use state never completes and survives while the sword stays hel
   for (let i = 0; i < 100; i++) use = tickPlayerItemUse(use, IRON_SWORD, p).use;
   assert.deepEqual(use, { id: IRON_SWORD, ticks: 72000, block: true });
   assert.equal(tickPlayerItemUse(use, 1, p).use, null, 'switching the held item ends it');
+});
+
+// Executed record: sword-block-reference.json (tools/verify-sword-block.mjs, BlockingProbe.java): the unchanged EntityPlayerMP.attackEntityFrom with itemInUse set.
+const reference = JSON.parse(readFileSync(new URL('../public/research/sword-block-reference.json', import.meta.url)));
+const SOURCES = { mob: ['a zombie', true], inFire: ['fire', true], lava: ['lava', true], cactus: ['a cactus', true], onFire: ['burning', false], inWall: ['suffocation', false],
+  drown: ['drowning', false], starve: ['starvation', false], fall: ['a fall', false], outOfWorld: [VOID, false], generic: ['an accident', false] };
+const SWORDS = new Set([267, 268, 272, 276, 283]);
+test('the executed 1.7.10 record: damage lost while blocking, per source, amount, armour and hurt window', () => {
+  assert.equal(reference.clientSha1, 'e80d9b3bf5085002218d4be59e668bac718abbc6');
+  let checked = 0, blocked = 0;
+  for (const r of reference.records) {
+    const p = survivor(false);
+    if (r.armor) for (let i = 0; i < 4; i++) p.inventory.setStack(36 + i, makeStack(408 + i, 1, 0));
+    p.blocking = SWORDS.has(r.item);
+    assert.equal(p.blocking, r.blocking, r.name + ' ' + r.item); // yz.bC: only EnumAction.block
+    let tick = 0;
+    for (const h of r.hits) {
+      for (; tick < h.tick; tick++) if (p.hurtTicks > 0) p.hurtTicks--;
+      const before = p.health, [reason, blockable] = SOURCES[h.source];
+      const accepted = h.source === 'mob' ? p.scaledDamage(f(h.amount), reason) : p.damage(f(h.amount), reason, blockable);
+      const at = `${r.name} item ${r.item} armor ${r.armor} ${h.source} ${h.amount} @${h.tick}`;
+      assert.equal(accepted, h.accepted, at);
+      assert.equal(f(before - p.health), f(h.lost), at);
+      assert.equal(p.health, f(h.health), at);
+      if (accepted) assert.equal(p.hurtAmount, f(h.last), at);
+      checked++; if (r.blocking && h.lost < h.amount) blocked++;
+    }
+  }
+  assert.ok(checked >= 119 && blocked >= 25, `${checked} hits, ${blocked} reduced`);
 });
