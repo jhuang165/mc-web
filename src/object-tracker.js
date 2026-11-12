@@ -447,7 +447,7 @@ export class ObjectTracker extends MobTracker {
     for (const [live, en] of [...this.entries, ...this.dying.map((d) => [d.live, d])]) {
       const c = en.client, spec = c.spec;
       if (!c.present || !(spec.vehicle || spec.hanging) || (live.dead && this.entries.get(live) === en)) continue;
-      const ridden = spec.vehicle && rides(live) && live.bb;
+      const ridden = c.kind === "boat" && rides(live) && live.bb;
       out.push({ ref: c, kind: c.kind, box: ridden ? live.bb : c.box(), answers: true });
     }
     return out;
@@ -610,8 +610,15 @@ function shownOf(tracker, e, rides) {
   if (!en) return e; // not tracked yet
   const c = en.client;
   if (!c.present) return null;
-  if (rides && c.spec.vehicle) return e;
+  if (rides && c.kind === "boat") return e; // Batch 52: a ridden cart is drawn from its copy too (the boat's copy only mirrors the live one)
   return c;
+}
+// Batch 52: the client copy of the minecart the client player rides, or null (not tracked, copy absent, not a cart). World.updateEntity runs the copy (xl.h interpolates it
+// from the S18 packets like any cart, no rider test), then the rider's updateRidden -> the mount's updateRiderPosition, so the player is seated from the copy a few ticks behind the
+// live cart. Bytecode-read: ahb.a(sa, boolean) calls ab() for a rider (m != null) after its mount's own update.
+export function rideCopy(tracker, live) {
+  const en = tracker.entries.get(live), c = en?.client;
+  return c?.present && c.kind === "minecart" ? c : null;
 }
 function laidOver(e) {
   let v = SHOWN.get(e);
