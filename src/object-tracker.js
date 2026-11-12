@@ -508,7 +508,7 @@ export class ObjectTracker extends MobTracker {
     const alive = new Set(all);
     for (const [e, en] of this.entries) if (!alive.has(e)) {
       if (e.exploded && this.kinds.get(e) === "firework") en.entry.send({ type: "status", id: en.entry.e.id, status: 17 }); // World.setEntityState(rocket, 17), then setDead
-      en.entry.remove(); this.entries.delete(e); this.dying.push(en); }
+      en.entry.remove(); this.entries.delete(e); this.forget(e); this.dying.push(en); }
     super.serverTick(all, player, () => [0]);
     for (const e of this.kinds.keys()) if (!this.entries.has(e)) this.kinds.delete(e);
   }
