@@ -113,6 +113,19 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 54 (2026-11-12, eight Sonnet tracks in `../wt54-<name>` on `batch54-<name>`, cut from 20bbab13b, merged --no-ff on `batch54-lead`; lead note `b54-lead-track.md`; the gun side runs separately):
+- 0.83.0, by track:
+  - horsecopy: the ridden saddled horse's copy is packet-driven and steered by the rider's look (`src/horse-copy.js`: `steerHorseCopy`, `copySeat`, `rearSeat`), and horses and pigs seat the player on the copy. The rider shifts 0.7 * rearAmount when the horse rears. The dismount lands at `dismountSpot` (`sv.m`). Executed `HorseCopyProbe` (8 steer, 20 rear rows).
+  - displaycubes: the cube-path display shapes were compared vertex by vertex against the executed quads (they already matched). The hopper now draws its 17 executed quads (`HOPPER_ROWS`). Flat shapes carry the item normal (0, -1, 0) under the standard item lighting. The `DisplayQuadsProbe` icon names are fixed.
+  - chatnames: death messages and the achievement broadcast use the player component with the `/msg` click (`deathComponent`, `CombatTracker.message` `players`). Scoreboard displays are Strings natively (bytecode-read). 4 executed `b54cn` rows.
+  - digabort: `server-dig.js` `abort()` (`cancelDestroyingBlock`) and the crack stages `(int)(damage * 10)`. The client sends the abort when an unfinished dig ends (`watchClientDig`). 20 executed `da-*` records (1741 in all).
+  - respawntracker: a respawn re-sends every tracker entry in set order (`resendWorld`), and the non-joint `beginTick` join uses set order. Leash knots, fireworks, falling blocks, TNT and thrown potions are in the joint record (`b54rt`).
+  - effects2: instant health and instant damage are imported and fire. Health boost applies its transient max-health modifier. Effects export in HashMap bucket order. A negative Jump Boost lengthens a fall. Executed `MobEffects2Probe` (371 records).
+  - savedorder3: the section check runs after each entity's own update, the player's mount is stamped last (`carriesPlayer`), a mob above y 256 is restored, and despawns and the dragon's end keep `removedHealth`. 9 executed `b54so` scenarios.
+  - tintsflow: the item atlas no longer tints the reed tile. Tall grass meta 0 is the dead shrub (no change; the gap was wrong). The boat copy in flowing water matches 8 executed `BoatCopyProbe` records with no code change.
+- Lead fixes: a rider skipped at its own place gets no section check there; the `flyturn-b51` test expects the kept `removedHealth`; `tickMobs` flushes loot queued outside the tick before taking the far mark, and `dropFarEvents` no longer leaves holes in the event list.
+- Verification: see `b54-lead-track.md`. Pushed to github main by the lead.
+
 Batch 53 (2026-11-12, eight Sonnet tracks in `../wt53-<name>` on `batch53-<name>`, cut from 5ea7bb4d1, merged --no-ff on `batch53-lead`; lead note `b53-lead-track.md`; the gun side runs separately):
 - 0.82.0, by track:
   - ridemounts: a ridden pig seats the player on its client copy (`seatOnCartCopy` pig branch, `PIG_MOUNTED_OFFSET`); boat copies run `ObjectClient.waterMovement` (flow push, splash sound, bubbles). Bytecode-read.
