@@ -50,6 +50,6 @@ test("batch 50: main.js queues entity-aimed and entity-spawning actions for the 
   assert.match(main, /function defersToNetworkTick\(place\)/);
   assert.match(main, /function clickEdit\(place = false\) \{[^]*?defersToNetworkTick\(place\)\) \{\s*if \(!place\) animation\.swing\(\);/);
   assert.match(main, /key\.attack"\) \{ mineHeld = true; clickEdit\(false\)/);
-  assert.match(main, /mobs\.afterEntities = \(\) => \{ tiles\(\); runPendingEdits\(\); \}/);
+  assert.match(main, /mobs\.afterEntities = \(\) => \{ tiles\(\); tickServerDig\(\); runPendingEdits\(\); \}/);
   assert.match(main, /mobs\.afterEntities = \(\) => redstoneRuntime\?\.tickTiles\(\);/);
 });

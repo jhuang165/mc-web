@@ -226,6 +226,8 @@ import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
+import { createServerDig } from "./server-dig.js";
+import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { shapedPick } from "./shaped-blocks.js";
@@ -1506,7 +1508,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.fx = scene.fx;
     pendingEdits = [];
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
-    { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
+    { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
@@ -3064,6 +3066,22 @@ function runPendingEdits() {
     }
   } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; target = wasTarget; }
 }
+// ItemInWorldManager's own dig timer (b53 digfinish, server-dig.js): the player's update (before the network tick) counts a tick and runs a delayed break.
+const serverDig = createServerDig();
+let serverDigTicked = false;
+const serverDigRate = (p) => { const b = world.get(p[0], p[1], p[2]); return b ? playerMiningState(survival, b, heldId(), clientEyeInWater(), grounded).progress : null; };
+function tickServerDig() {
+  if (serverDigTicked) return;
+  serverDigTicked = true;
+  const hit = serverDig.tick(serverDigRate);
+  if (hit) breakBlock(hit, false);
+}
+// C07 status 2 on the server: breaks whatever block is at the cell once 0.7 of its own damage is reached, else resends it (S23) and waits for damage 1.
+function serverFinishDig(p) {
+  const r = serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept && serverDig.finish(p, serverDigRate(p));
+  if (r !== 'break') scene.updateBlock(p[0], p[2], p[1]);
+  return r === 'break';
+}
 // C07 (finished digging, creative / instant break): the block goes in the network tick. The progress, sounds and hit particles stay client-side and at once.
 function breakBlockPacket(p, creative = false, accept = null) {
   if (runningEdits || !mobs || multiplayer) return !accept || accept() ? breakBlock(p, creative) : false;
@@ -3189,6 +3207,7 @@ function edit(place = false) {
     breakBlock: breakBlockPacket,
     clientEyeInWater,
     serverTask,
+    digStart: (cell) => serverDig.start(cell),
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
     placeBoat: () => {
@@ -3304,7 +3323,7 @@ function tickMining() {
     },
     // C07 status 2 (finished digging): refused past 6 blocks from the eye or at y >= 256; the block is resent unchanged.
     // ItemInWorldManager.blockRemoving also reads the block at the cell when the packet is handled: one that is no longer the dug type is refused and resent.
-    breakBlock: (p, c, type) => breakBlockPacket(p, c, () => (type === undefined || world.get(p[0], p[1], p[2]) === type) && serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept || (scene.updateBlock(p[0], p[2], p[1]), false)),
+    breakBlock: (p, c, type) => breakBlockPacket(p, c, () => type === undefined || serverFinishDig(p)), // a finished dig is the server's own check (ItemInWorldManager.blockRemoving); creative and instant breaks are unchecked
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
     mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });
@@ -3405,7 +3424,8 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
-  runPendingEdits(); // no-op when the walk already ran them
+  tickServerDig(); runPendingEdits(); // no-ops when the walk already ran them
+  serverDigTicked = false;
   redstoneRuntime?.tickTiles(); // no-op when the walk's afterEntities hook already ran them
   if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); seatOnCartCopy(); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)

@@ -71,8 +71,8 @@ test("b52: a finished survival dig reports the dug type to the break hook", () =
   assert.deepEqual(calls, [[POS, false, 1]]);
 });
 
-test("b52 main.js: dig-start effects are queued and the finish re-checks the block", () => {
+test("b52 main.js: dig-start effects are queued and the finish runs the server's dig check (b53)", () => {
   assert.match(main, /function serverTask\(fn\) \{\n\s+if \(runningEdits \|\| !mobs \|\| multiplayer\) \{ fn\(\); return; \}\n\s+pendingEdits\.push\(\{ fn \}\);/);
   assert.match(main, /breakBlock: breakBlockPacket,\n\s+clientEyeInWater,\n\s+serverTask,/);
-  assert.match(main, /breakBlock: \(p, c, type\) => breakBlockPacket\(p, c, \(\) => \(type === undefined \|\| world\.get\(p\[0\], p\[1\], p\[2\]\) === type\) && serverClick/);
+  assert.match(main, /breakBlock: \(p, c, type\) => breakBlockPacket\(p, c, \(\) => type === undefined \|\| serverFinishDig\(p\)\)/);
 });
