@@ -447,15 +447,15 @@ function bindObjectTracker() {
       const [w, h] = mobs.size(live);
       out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
     }
-    // Batch 46: the other collidables of the client world. The port has no client copy of boats, carts, paintings, item frames and leash knots, so the live ones stand in.
-    // EntityBoat, EntityMinecart, EntityHanging (item frame, painting, knot) answer attackEntityFrom with true on a client world (executed, tracker-hits-reference.json).
-    for (const b of boats?.carts ?? []) if (!b.dead) out.push({ ref: b, kind: "boat", box: b.bb, answers: true });
-    for (const m of minecarts?.carts ?? []) if (!m.dead) out.push({ ref: m, kind: "minecart", box: m.bb, answers: true });
-    for (const t of hangingArrowTargets(hanging)) out.push({ ...t, kind: t.ref.kind === "painting" ? "painting" : "itemFrame", answers: true });
-    for (const k of mobs?.knotList ?? []) if (!k.dead) { const x = k.summoned ? Math.floor(k.px) : k.x, y = k.summoned ? Math.floor(k.py) : k.y, z = k.summoned ? Math.floor(k.pz) : k.z; out.push({ ref: { type: "leashKnot", x: x + 0.5, y: y + 0.5, z: z + 0.5 }, kind: "leashKnot", box: [x + 0.25, y + 0.5, z + 0.25, x + 0.75, y + 1, z + 0.75], answers: true }); }
+    // Batch 47: the other collidables of the client world are the client copies of the boats, minecarts, paintings, item frames and leash knots the tracker spawned (object-tracker.js
+    // vehicleTargets: their own boxes; the live boat or cart only while the client player rides it). EntityBoat, EntityMinecart, EntityHanging answer attackEntityFrom with true on a
+    // client world (executed, tracker-hits-reference.json). The renderers still draw the live entities.
+    out.push(...objectTracker.vehicleTargets((live) => rider.vehicle === live));
     out.push({ ref: "player", box: [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2], immune: survival.creative });
     return out;
   };
+  // Batch 47: what the tracker follows besides the lists trackObjects passes: the live boats and carts, paintings and item frames, and the leash knots (a summoned knot stands on its floored tile)
+  objectTracker.hooks.extraLists = () => ({ boat: (boats?.carts ?? []).filter((b) => !b.dead), minecart: (minecarts?.carts ?? []).filter((m) => !m.dead), painting: (hanging?.pickable() ?? []).filter((e) => e.kind === "painting"), itemFrame: (hanging?.pickable() ?? []).filter((e) => e.kind !== "painting"), leashKnot: (mobs?.knotList ?? []).filter((k) => !k.dead) });
   objectTracker.hooks.ignite = (ref, fire) => { if (ref?.present !== undefined && ref.type) ref.fire = fire; }; // a client mob copy's Entity.fire (zeroed at its next update, entity-tracker.js)
   objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;

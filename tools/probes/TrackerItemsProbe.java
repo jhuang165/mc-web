@@ -48,6 +48,7 @@ public class TrackerItemsProbe {
 
   // bjb.a(fw) and bjb.a(fx), bytecode-read: the client entity of the spawn packet
   static sa spawn(Object p) throws Exception {
+    if (p instanceof ga) { ga s = (ga) p; return new tb(client, s.d(), s.e(), s.f(), s.g(), s.h()); } // bjb.a(ga): the painting by its tile, direction and title
     if (p instanceof fx) {
       fx s = (fx) p;
       sq e = new sq(client, s.d(), s.e(), s.f(), s.g()); // the packet carries the position in 1/32 and the value; the constructor takes them unscaled (bytecode: d()/e()/f() as doubles)
@@ -68,16 +69,21 @@ public class TrackerItemsProbe {
       case 76: e = new zf(client, x, y, z, null); break;
       case 73: e = new zo(client, x, y, z, s.m()); break;
       case 90: e = new xe(client, x, y, z, clientPlayer); break;
+      case 1: e = new xi(client, x, y, z); break; // batch 47: boat, minecart (xl.a picks the class by the data word), item frame and leash knot (int casts of d / 32.0)
+      case 10: e = xl.a(client, x, y, z, s.m()); break;
+      case 71: e = new st(client, (int) x, (int) y, (int) z, s.m()); break;
+      case 77: e = new su(client, (int) x, (int) y, (int) z); break;
       default: throw new IllegalStateException("type " + s.l());
     }
     return e;
   }
   static sa handle(sa c, Object p) throws Exception {
-    if (p instanceof fw || p instanceof fx) {
+    if (p instanceof fw || p instanceof fx || p instanceof ga) {
       c = spawn(p);
       if (clientSpawned != null) clientSpawned.accept(c);
-      c.d(p instanceof fw ? ((fw) p).c() : ((fx) p).c()); // Entity.setEntityId: the client entity has the server's id (the orb's homing check uses id % 100)
+      c.d(p instanceof fw ? ((fw) p).c() : p instanceof ga ? ((ga) p).c() : ((fx) p).c()); // Entity.setEntityId: the client entity has the server's id (the orb's homing check uses id % 100)
       if (spawnedPacket != null) spawnedPacket.accept(c, p); // batch 45: the arrow's shooter lookup (bjb.a(fw) after addEntityToWorld)
+      if (p instanceof ga) return c; // the painting keeps its own placement (no serverPos, rotation or motion from the packet)
       MobMoveProbe.field(sa.class, "bZ").setInt(c, p instanceof fw ? ((fw) p).d() : ((fx) p).d());
       MobMoveProbe.field(sa.class, "ca").setInt(c, p instanceof fw ? ((fw) p).e() : ((fx) p).e());
       MobMoveProbe.field(sa.class, "cb").setInt(c, p instanceof fw ? ((fw) p).f() : ((fx) p).f());
@@ -86,7 +92,7 @@ public class TrackerItemsProbe {
         MobMoveProbe.field(sa.class, "z").setFloat(c, (float) (s.j() * 360) / 256.0f);
         MobMoveProbe.field(sa.class, "y").setFloat(c, (float) (s.k() * 360) / 256.0f);
         int t = s.l(); // bjb.a(fw) calls fw.g(0) after building a falling block, potion, experience bottle and fishing hook: no velocity from the packet
-        if (s.m() > 0 && t != 70 && t != 73 && t != 75 && t != 90) c.i(s.g() / 8000.0, s.h() / 8000.0, s.i() / 8000.0); // sa.i = setVelocity; also zc.c: the arrow's shooter is not needed here
+        if (s.m() > 0 && t != 70 && t != 73 && t != 75 && t != 90 && t != 71 && t != 77) c.i(s.g() / 8000.0, s.h() / 8000.0, s.i() / 8000.0); // sa.i = setVelocity; also zc.c: the arrow's shooter is not needed here
         if (c instanceof xk && !metaMode) ((xk) c).a(stack());
       } else {
         MobMoveProbe.field(sa.class, "y").setFloat(c, 0f);
@@ -134,6 +140,7 @@ public class TrackerItemsProbe {
 
   static String fmt(Object p) {
     if (p instanceof fw) { fw s = (fw) p; return "[\"S0E\"," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + "," + s.h() + "," + s.i() + "," + s.j() + "," + s.k() + "," + s.l() + "," + s.m() + "]"; }
+    if (p instanceof ga) { ga s = (ga) p; return "[\"S10\"," + s.c() + "," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + ",\"" + s.h() + "\"]"; }
     if (p instanceof fx) { fx s = (fx) p; return "[\"S11\"," + s.d() + "," + s.e() + "," + s.f() + "," + s.g() + "]"; }
     if (p instanceof hy) { hy s = (hy) p; return "[\"S12\"," + s.d() + "," + s.e() + "," + s.f() + "]"; }
     if (p instanceof hg) { hf s = (hf) p; return "[\"S15\"," + s.c() + "," + s.d() + "," + s.e() + "]"; }

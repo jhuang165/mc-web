@@ -198,7 +198,7 @@ export class TrackerEntry {
           // EntityTrackerEntry.func_151260_c: S0E / S11 at floor(pos * 32) (not the size class rounding), the motion in S0E only when its data
           // is above 0, and a following S12 for every entry that sends velocity (a non-S0F spawn is followed by sendVelocityUpdates' packet).
           const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
-          this.emit({ type: "spawn", ...this.object, id: e.id, x: floor(e.x * 32), y: floor(e.y * 32), z: floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
+          this.emit({ type: "spawn", ...this.object, id: e.id, x: e.tile ? e.tile[0] * 32 : floor(e.x * 32), y: e.tile ? e.tile[1] * 32 : floor(e.y * 32), z: e.tile ? e.tile[2] * 32 : floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
         } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ), ...this.watched() });
         if (e.type === "bat") { this.lastHang = !!e.batHanging; this.emit({ type: "meta", batHanging: this.lastHang }); } // the spawn's S1C
