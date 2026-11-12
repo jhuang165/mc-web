@@ -13,14 +13,14 @@ export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREAT
 // Nausea (9) is the cured zombie villager's villager (EntityZombie.convertToVillager); it has no effect on the mob here.
 const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER, RESISTANCE, ABSORPTION]);
 
-// NBT "ActiveEffects": Id, Amplifier (byte), Duration (int). Unknown ids and spent effects
-// are dropped.
+// NBT "ActiveEffects": Id, Amplifier (byte), Duration (int), Ambient. Unknown ids and spent effects
+// are dropped. The saved Amplifier is a signed byte (PotionEffect.b reads dh.d), so a native 255 comes back as -1 and shifts like Java's ints do.
 export function readMobEffects(saved) {
   if (!Array.isArray(saved)) return [];
   const out = [];
   for (const e of saved)
     if (e && MOB_EFFECTS.has(e.id) && Number.isInteger(e.duration) && e.duration > 0 && e.duration <= 2147483647 && !out.some((o) => o.id === e.id))
-      out.push({ id: e.id, duration: e.duration, amplifier: Number.isInteger(e.amplifier) ? Math.max(0, Math.min(255, e.amplifier)) : 0 });
+      out.push({ id: e.id, duration: e.duration, amplifier: Number.isInteger(e.amplifier) ? Math.max(-128, Math.min(255, e.amplifier)) : 0, ...(e.ambient === true ? { ambient: true } : {}) });
   return out.sort((a, b) => a.id - b.id);
 }
 export const mobEffect = (e, id) => e.effects?.find((x) => x.id === id) ?? null;

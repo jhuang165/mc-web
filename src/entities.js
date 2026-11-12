@@ -1666,7 +1666,7 @@ export class EntityWorld {
     // Entity.isImmuneToFire: the counter runs down by 4, no onFire damage, lava neither burns nor hurts (setOnFireFromLava does nothing).
     // EntityMagmaCube.handleLavaMovement (yf.P) is false: it ignores lava altogether.
     if (fireproof(e)) {
-      e.fire = Math.max(0, (e.fire || 0) - 4);
+      if (e.fire > 0) e.fire = Math.max(0, e.fire - 4); // sa.C: only a positive counter runs down (a rested -1 stays, so lightning's ++fire reaches 0 and ignites)
       e.burn = 0;
       e.inLava = e.type === "magma_cube" ? false : inLava(this.world, [e.x - t.width / 2, e.y, e.z - t.width / 2, e.x + t.width / 2, e.y + t.height, e.z + t.width / 2]);
       if (e.inLava) e.fallDistance *= 0.5;

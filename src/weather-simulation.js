@@ -12,13 +12,13 @@ export function tickWeatherSimulation({ world, weather, mobs, survival }, player
       const type = ENTITY_TYPES[e.type];
       if (!type || e.health <= 0 || !overlaps(entityBox(e, type.width, type.height), box)) continue;
       if (e.type === 'pig' && mobs.pigStruck) { mobs.pigStruck(e); continue; } // EntityPig.onStruckByLightning: a zombie pigman, no damage
-      const hit = struckByLightning(e.fire || 0);
+      const hit = struckByLightning(e.fire || 0, e.equipment ?? []);
       mobs.hazard(e, hit.damage, 'inFire');
       e.fire = hit.fire;
       if (e.type === 'creeper') powerCreeper(e);
     }
     if (!survival.creative && survival.health > 0 && overlaps(entityBox(player, width, height), box)) {
-      const hit = struckByLightning(survival.fire || 0);
+      const hit = struckByLightning(survival.fire || 0, survival.inventory?.armor ?? []);
       survival.damage(hit.damage, 'lightning', true);
       survival.fire = hit.fire;
     }

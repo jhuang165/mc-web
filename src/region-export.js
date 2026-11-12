@@ -139,8 +139,9 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.type==='blaze'||e.type==='ghast'){delete n.Age;delete n.InLove;if(e.type==='ghast')n.ExplosionPower=int(e.explosionPower??1);}
   // EntityIronGolem.writeEntityToNBT: PlayerCreated (EntityAgeable's fields do not apply to a golem).
   if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
-  // EntityLivingBase.writeEntityToNBT: ActiveEffects (Id, Amplifier, Duration, Ambient) for the effects this build models on mobs.
-  if(e.effects?.length&&['zombie','villager','iron_golem'].includes(e.type))n.ActiveEffects=list(NBT.COMPOUND,e.effects.map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(0)]])));
+  // EntityLivingBase.writeEntityToNBT: ActiveEffects (Id, Amplifier, Duration, Ambient) for every mob with effects (rw.a(dh) writes the Ambient flag; the HashMap<Integer, PotionEffect> iterates by bucket, id & 15 until more than 12 entries, id & 31 after; equal buckets stay in id order,
+  // not insertion order).
+  if(e.effects?.length){const mask=e.effects.length>12?31:15;n.ActiveEffects=list(NBT.COMPOUND,[...e.effects].sort((a,b)=>(a.id&mask)-(b.id&mask)||a.id-b.id).map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(x.ambient?1:0)]])));}
   // The horse or pig the player rides (entities.js serializeOne `playerRides`) is the player's Riding compound, not a chunk entity (player-riding-reference.json).
   if(e.playerRides===true&&!report.playerMount)report.playerMount=new Map(Object.entries(n));else built.push({e,n});
  }

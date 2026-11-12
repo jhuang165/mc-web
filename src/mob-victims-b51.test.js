@@ -18,7 +18,7 @@ import { decodeCompressedNbt } from "./nbt-compression.js";
 import { Survival } from "./survival.js";
 const f = Math.fround;
 const reference = JSON.parse(readFileSync(new URL("../public/research/mob-victims-reference.json", import.meta.url)));
-const records = reference.records, groups = records.filter((r) => r.victim === "pigman-group"), singles = records.filter((r) => r.victim !== "pigman-group");
+const records = reference.records, groups = records.filter((r) => r.victim === "pigman-group"), singles = records.filter((r) => ["skeleton", "witherSkeleton", "pigman", "wither"].includes(r.victim));
 
 const flat = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 8.5, y: 0, z: 8.5 }) };
 const BASE = [[298, 299, 300, 301], [306, 307, 308, 309], [310, 311, 312, 313]];
