@@ -98,6 +98,7 @@ export function blazeThink(m, e, t, aiMoveSpeed) {
   if (!st.target) e.blazeBurning = false;
   st.randomYaw = f(f(st.randomYaw || 0) * f(0.9));
   e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+  e.rotationYawHead = e.rotationYaw; // EntityLiving.onLivingUpdate without AI (sw.e): the action state, then rotationYawHead = rotationYaw (b50lb executed)
   e.moveForward = st.moveForward; e.moveStrafing = st.moveStrafing; e.jumping = st.jumping;
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }

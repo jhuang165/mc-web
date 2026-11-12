@@ -401,4 +401,24 @@ public class EndermanWolfScenarios {
     sc48("b49po-golem-ride-east-9610", 9610, 50, "G", onTop, none, look, east);
     sc48("b49po-spider-ceiling-9611", 9611, 50, "B", new double[][] {{70.5, 64.5, 1.0}, {100.5, 100.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}, {70, 3, 64, 70, 3, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
   }
+
+  // Batch 50 (legacybody): EW_SET=b50lb, the b49po harness (pistons push the mob; the player stands far away) with the mobs whose isAIEnabled (sw.bk) is false in the bytecode and no
+  // earlier record: f silverfish, g giant, z zombie pigman, a blaze; K witch and X creeper are the AI-enabled controls (bk true). A push east moves the mob 1 block, so the
+  // legacy turn (renderYawOffset eases toward the travel direction) and the body helper (renderYawOffset = rotationYaw) differ; a push into a wall and a retracting block (the pull the other way) add the stop cases.
+  static void run50() throws Exception {
+    int[][] none = new int[0][0];
+    int[][] wall = {{72, 0, 60, 72, 5, 68, 1, 0}};
+    String look = "0 look 90 0", east = "0 piston 70 0 64 5 1 1 0", north = "0 piston 70 0 64 2 1 1 0";
+    double[][] far = {{70.5, 64.5}, {100.5, 100.5}};
+    long seed = 9700;
+    for (String t : new String[] {"f", "g", "z", "a", "K", "X"}) {
+      String n = t.equals("f") ? "silverfish" : t.equals("g") ? "giant" : t.equals("z") ? "pigman" : t.equals("a") ? "blaze" : t.equals("K") ? "witch" : "creeper";
+      int ticks = t.equals("g") ? 40 : 60;
+      sc48("b50lb-" + n + "-east-" + seed, seed++, ticks, t, far, none, look, east);
+      sc48("b50lb-" + n + "-north-" + seed, seed++, ticks, t, far, none, look, north);
+      sc48("b50lb-" + n + "-wall-" + seed, seed++, ticks, t, far, wall, look, east);
+      if (t.equals("f")) { seed++; continue; } // a silverfish (0.3 wide) pulled into the retracting block suffocates: not a body-turn case
+      sc48("b50lb-" + n + "-retract-" + seed, seed++, ticks, t, far, none, look, "0 piston 70 0 64 4 0 1 0");
+    }
+  }
 }

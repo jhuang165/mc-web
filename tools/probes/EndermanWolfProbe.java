@@ -156,6 +156,11 @@ public class EndermanWolfProbe {
         // batch 49 (pistonorder): B a spider (yn, 1.4 x 0.9), I a size 4 slime (ym, 2.04 x 2.04; its jump timer fixed to 20 so the constructor's draw does not matter)
         case 'B': ents[i] = new yn(w); break;
         case 'I': { ym slime = new ym(w); java.lang.reflect.Method setSize = ym.class.getDeclaredMethod("a", int.class); setSize.setAccessible(true); setSize.invoke(slime, 4); MobMoveProbe.set(slime, "bn", 20); ents[i] = slime; break; }
+        // batch 50 (legacybody): the other mobs whose EntityLiving.isAIEnabled (sw.bk) is false: f silverfish (yk), g giant (ye), z zombie pigman (yh), a blaze (xx)
+        case 'f': ents[i] = new yk(w); break;
+        case 'g': ents[i] = new ye(w); break;
+        case 'z': ents[i] = new yh(w); break;
+        case 'a': ents[i] = new xx(w); break;
         case 'c': { wh calf = new wh(w); calf.c(-24000); ents[i] = calf; break; }
         case 'p': { wo piglet = new wo(w); piglet.c(-24000); ents[i] = piglet; break; }
         case 'm': { wm calf = new wm(w); calf.c(-24000); ents[i] = calf; break; }
@@ -370,11 +375,11 @@ public class EndermanWolfProbe {
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B47H = args.length > 0 && args[0].equals("b47h");
     B45 = B47H || (args.length > 0 && args[0].equals("b45"));
-    B48 = args.length > 0 && (args[0].equals("b48pp") || args[0].equals("b49po"));
-    B47 = B48 || (args.length > 0 && args[0].equals("b47sp"));
+    B48 = args.length > 0 && (args[0].equals("b48pp") || args[0].equals("b49po") || args[0].equals("b50lb"));
+    B47 = B48 || (args.length > 0 && (args[0].equals("b47sp") || args[0].equals("b46mp"))); // b50: the b46mp scenarios run under the b47 client / server-copy rules (client position, C03 packets, ticksExisted counted by the world tick)
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }
