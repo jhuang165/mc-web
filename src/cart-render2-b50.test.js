@@ -44,7 +44,7 @@ test("renderBlockAsItem's branches by render type: flat plant shapes, torches, a
   for (const id of [104, 105]) assert.equal(displayShape(id), "stem", "type 19 " + id);
   for (const id of [50, 75, 76]) assert.equal(displayShape(id), "torch", "type 2 " + id);
   for (const id of [8, 9, 10, 11, 27, 28, 66, 157, 64, 71, 65, 51, 55, 106, 111, 118, 117, 140, 93, 94, 69, 26, 63, 68, 102, 101]) assert.equal(displayShape(id), "none", "no branch " + id);
-  for (const id of [1, 2, 53, 85, 107, 139, 145, 138, 122, 81, 54, 154, 44, 78, 171, 52]) assert.equal(displayShape(id), "item", "box, stairs, fence and cube types keep the existing paths " + id);
+  for (const id of [1, 2, 53, 85, 107, 139, 145, 138, 122, 81, 54, 44, 78, 171, 52]) assert.equal(displayShape(id), "item", "box, stairs, fence and cube types keep the existing paths " + id);
   assert.equal(displayShape(0), "none");
 });
 

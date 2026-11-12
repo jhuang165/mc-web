@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL11;
 // registration, so a recorded u or v is "k + icon fraction" and the icon name is recovered from it (fractions are v from the top, as the port's displayQuads uses).
 public class DisplayQuadsProbe {
   static final List<String> names = new ArrayList<>();
+  static final List<String> allNames = new ArrayList<>(); // names of the 1000+ pre-registration, so a borrowed icon (stairs: planks, beacon base: obsidian, glass shell) reports its name too (batch 54)
   static class Icon implements rf {
     final String name; int k;
     Icon(String name, int k) { this.name = name; this.k = k; }
@@ -30,7 +31,7 @@ public class DisplayQuadsProbe {
     final Map<String, Icon> icons = new LinkedHashMap<>();
     public rf a(String name) { return icons.computeIfAbsent(String.valueOf(name), n -> new Icon(n, icons.size())); }
   }
-  static Reg reg;
+  static Reg reg, all;
   static Field fld(String n) throws Exception { Field f = bmh.class.getDeclaredField(n); f.setAccessible(true); return f; }
   static final List<String> draws = new ArrayList<>();
   static String fl(float v) { return Float.toString(v); }
@@ -44,7 +45,7 @@ public class DisplayQuadsProbe {
         int o = (GL11.drawFirst + i) * 32;
         float x = b.getFloat(o), y = b.getFloat(o + 4), z = b.getFloat(o + 8), u = b.getFloat(o + 12), v = b.getFloat(o + 16);
         int ku = (int) Math.floor(u / 2), kv = (int) Math.floor(v / 2);
-        String icon = ku == kv && ku >= 0 && ku < names.size() ? names.get(ku) : "?";
+        String icon = ku != kv || ku < 0 ? "?" : ku >= 1000 ? (ku - 1000 < allNames.size() ? allNames.get(ku - 1000) : "?") : ku < names.size() ? names.get(ku) : "?";
         s.append(i == 0 ? "" : ",").append("{\"pos\":[").append(fl(x)).append(",").append(fl(y)).append(",").append(fl(z)).append("],\"uv\":[").append(fl(u - 2 * ku)).append(",").append(fl(v - 2 * kv)).append("],\"icon\":\"").append(icon).append("\"");
         if (hasColor) s.append(",\"rgba\":[").append(b.get(o + 20) & 255).append(",").append(b.get(o + 21) & 255).append(",").append(b.get(o + 22) & 255).append(",").append(b.get(o + 23) & 255).append("]");
         if (hasNormal) s.append(",\"normal\":[").append(b.get(o + 24)).append(",").append(b.get(o + 25)).append(",").append(b.get(o + 26)).append("]");
@@ -61,6 +62,7 @@ public class DisplayQuadsProbe {
   }
   static void render(String name, int id, int meta, float brightness) {
     aji b = aji.e(id);
+    for (int i = 1; i < 256; i++) { aji o = aji.e(i); if (o != null && o != ajn.a) o.a(all); } // reset every block to its 1000+ icons first: an earlier case's small-k icons must not stay on a block another block borrows (the beacon's glass shell)
     reg = new Reg();
     b.a(reg); // Block.registerIcons
     if (id == 2) aji.e(3).a(reg); // the grass block's bottom face is the dirt block's icon
@@ -78,9 +80,9 @@ public class DisplayQuadsProbe {
   public static void main(String[] args) throws Exception {
     GL11.drawHook = DisplayQuadsProbe::capture;
     aji.p(); adb.l();
-    Reg all = new Reg(); // every block's icons registered once (icons at 1000+), so a block that borrows another block's icon never meets null; the block drawn is registered again per case with small k
+    all = new Reg(); // every block's icons registered once (icons at 1000+), so a block that borrows another block's icon never meets null; the block drawn is registered again per case with small k
     for (int id = 1; id < 256; id++) { aji b = aji.e(id); if (b != null && b != ajn.a) b.a(all); }
-    for (Icon i : all.icons.values()) i.k += 1000;
+    for (Icon i : all.icons.values()) { i.k += 1000; allNames.add(i.name); }
     aha.a(pixels(args[0]));
     agx.a(pixels(args[1]));
     int[][] cases = {
