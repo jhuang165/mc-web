@@ -446,7 +446,7 @@ export class Arrows {
     if (ctx.hanging?.entities.includes(ref)) return ctx.hanging.attack(ref, a.shooter === "player" ? { player: true, creative: !!ctx.survival?.creative } : null);
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
-    if (a.fire > 0) setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection
+    if (a.fire > 0 && ref.type !== "enderman") setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection; never on an enderman (offset 906: instanceof ya, bytecode-read)
     const s = a.shooter, from = s === "player" ? ctx.player || a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
     return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });

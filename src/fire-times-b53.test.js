@@ -167,3 +167,9 @@ test("an imported mob keeps the effects and saves them back (NBT round trip)", (
   const world = new EntityWorld(flat, [{ ...rec, x: 8, y: 0, z: 8 }], () => 0.5);
   assert.deepEqual(world.entities[0].effects.map((x) => x.id), [3, 4, 8, 15, 16, 17, 21, 23]);
 });
+
+// Lead fix (bytecode-read, zc.h offsets 898-918): a burning arrow's setFire(5) skips an EntityEnderman (instanceof ya), on the server as on the client.
+test("a flame arrow does not ignite an enderman", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("./bow.js", import.meta.url), "utf8");
+  assert.match(src, /a\.fire > 0 && ref\.type !== "enderman"\) setMobFire\(ref, 5\)/);
+});
