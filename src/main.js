@@ -3084,6 +3084,15 @@ function tickServerDig() {
   const hit = serverDig.tick(serverDigRate);
   if (hit) breakBlock(hit, false);
 }
+// C07 status 1 (b54 digabort): PlayerControllerMP.resetBlockRemoving sends it when the client stops a dig it has not finished (the button released, the aim or the
+// held item changed, a screen opened); the server half (ItemInWorldManager.cancelDestroyingBlock) clears its cracks and its digging flag, in the network tick.
+// The digger itself never receives the crack packets (they go to the other players), so only the timer's state shows here.
+let watchedDig = null;
+function digAbortPacket() { watchedDig = null; serverTask(() => serverDig.abort()); }
+function watchClientDig() {
+  if (watchedDig && mining !== watchedDig) { if (!watchedDig.finished) digAbortPacket(); watchedDig = null; }
+  if (mining && !watchedDig) watchedDig = mining;
+}
 // C07 status 2 on the server: breaks whatever block is at the cell once 0.7 of its own damage is reached, else resends it (S23) and waits for damage 1.
 function serverFinishDig(p) {
   const r = serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept && serverDig.finish(p, serverDigRate(p));
@@ -3092,6 +3101,7 @@ function serverFinishDig(p) {
 }
 // C07 (finished digging, creative / instant break): the block goes in the network tick. The progress, sounds and hit particles stay client-side and at once.
 function breakBlockPacket(p, creative = false, accept = null) {
+  if (accept && watchedDig) watchedDig.finished = true; // a finished dig ends the client's dig state (onPlayerDestroyBlock): no abort follows
   if (runningEdits || !mobs || multiplayer) return !accept || accept() ? breakBlock(p, creative) : false;
   pendingEdits.push({ fn: () => { if (!accept || accept()) breakBlock(p, creative); } });
   return true;
@@ -3331,12 +3341,14 @@ function tickMining() {
     },
     // C07 status 2 (finished digging): refused past 6 blocks from the eye or at y >= 256; the block is resent unchanged.
     // ItemInWorldManager.blockRemoving also reads the block at the cell when the packet is handled: one that is no longer the dug type is refused and resent.
+    digAbort: digAbortPacket,
     breakBlock: (p, c, type) => breakBlockPacket(p, c, () => type === undefined || serverFinishDig(p)), // a finished dig is the server's own check (ItemInWorldManager.blockRemoving); creative and instant breaks are unchecked
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
     mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });
   mining = state.mining;
   mineCooldown = state.cooldown;
+  watchClientDig();
 }
 // Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
 // just became resident for the first time. Resident columns already claimed are never handed over again.
