@@ -15,6 +15,7 @@ import { ringEntityActive } from './streaming-ticks.js';
 // region-import.js itemFromOriginal; an original item this build cannot map stays in `unmapped`
 // (same slot) so it is saved and re-mapped later, and it still takes its native spill randoms.
 import { ensureUuid, isUuid } from "./entity-uuid.js";
+import { recordBirth } from "./tracker-birth.js";
 import * as W from "./world.js";
 import { collisionBoxList, normalCube, CACTUS, WEB } from "./world.js";
 import { blockCollisions, setInWeb } from "./block-collisions.js";
@@ -126,7 +127,7 @@ export class Minecarts {
 
   // EntityMinecartChest(world, x, y, z) at the native spawn doubles, then the contents. `record` is
   // { x, y, z, items: [{ slot, id, damage, count, stored? }] } with original item ids.
-  spawnChest(record, { seed } = {}) {
+  spawnChest(record, { seed, born = false } = {}) {
     const cart = {
       id: this.nextId++, type: V.isSupportedType(record.type) ? record.type : 1, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0,
       yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, onGround: false, fallDistance: 0, inWeb: false, fire: 0,
@@ -138,6 +139,7 @@ export class Minecarts {
     this.setPosition(cart, record.x, record.y, record.z);
     cart.px = cart.x; cart.py = cart.posY; cart.pz = cart.z;
     for (const it of record.items ?? []) this.put(cart, it.slot, it);
+    if (born) recordBirth(cart); // World.spawnEntityInWorld -> EntityTracker.trackEntity: the tracker entry starts with this state (tracker-birth.js)
     this.carts.push(cart);
     this.joined?.(cart); // entity-simulation.js (entityWalkers): the cart's place in World.loadedEntityList
     return cart;
@@ -507,12 +509,12 @@ export class Minecarts {
       const sx = other.vx + cart.vx, sz = other.vz + cart.vz;
       cart.vx *= 0.20000000298023224; cart.vz *= 0.20000000298023224;
       // Entity.addVelocity adds 0 to motionY too (so -0 becomes 0).
-      cart.vx += sx / 2 - dx; cart.vy += 0; cart.vz += sz / 2 - dz;
+      cart.vx += sx / 2 - dx; cart.vy += 0; cart.vz += sz / 2 - dz; cart.airBorne = true; // addVelocity sets isAirBorne on both carts (bytecode-read: xl.g(sa) calls g(DDD) on this and the other)
       other.vx *= 0.20000000298023224; other.vz *= 0.20000000298023224;
-      other.vx += sx / 2 + dx; other.vy += 0; other.vz += sz / 2 + dz;
+      other.vx += sx / 2 + dx; other.vy += 0; other.vz += sz / 2 + dz; other.airBorne = true;
       return [0, 0];
     }
-    cart.vx += -dx; cart.vy += 0; cart.vz += -dz;
+    cart.vx += -dx; cart.vy += 0; cart.vz += -dz; cart.airBorne = true; // this.addVelocity(-dx, 0, -dz); the entity gets addVelocity(dx / 4, 0, dz / 4) from the caller
     return [dx / 4, dz / 4];
   }
   // The carts a living entity's box (grown by 0.2, 0, 0.2) touches, pushed as collide() does;
@@ -533,6 +535,7 @@ export class Minecarts {
   // PlayerCapabilities.isCreativeMode. Returns true (the hit always registers).
   attack(cart, amount, { creative = false, source = null } = {}) {
     if (cart.dead) return true;
+    cart.velocityChanged = true; // EntityMinecart.attackEntityFrom: setBeenAttacked() before the damage (bytecode-read: xl.a(ro, float) calls Q())
     cart.rollingDir = -cart.rollingDir;
     cart.rolling = 10;
     cart.damage = f(cart.damage + f(amount * 10));
