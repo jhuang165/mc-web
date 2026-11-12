@@ -67,3 +67,31 @@ test("batch 48: the record needs the in-turn spawn; with the loot drained after 
   const c = rec("death-fall-cow-hit");
   assert.notEqual(entityListDivergence(c, replayEntityList(c, null, "lootInTurn")), null);
 });
+
+// Batch 48: live carts, boats and hanging entities report their join (main.js wires the hooks the classes already call).
+import { readFileSync } from "node:fs";
+import { Minecarts } from "./minecarts.js";
+import { Boats } from "./boats.js";
+import { Hanging } from "./hanging.js";
+import { entityWalkers } from "./entity-simulation.js";
+import { plain } from "./legacy-ai-replay.js";
+
+test("batch 48: a cart, boat and painting placed after a mob take a stamp after it and walk after it", () => {
+  const ew = new EntityWorld(plain([]), []);
+  const minecarts = new Minecarts(), boats = new Boats(), hanging = new Hanging({ random: () => new (class { nextInt() { return 0; } })() });
+  ew.walks = entityWalkers(() => ({ state: { minecarts, boats, hanging, world: ew.world, items: { items: [] }, arrows: { list: [] }, projectiles: { balls: [] }, primed: [] }, hooks: {} }));
+  minecarts.joined = (e) => ew.joined(e, "cart"); boats.joined = (e) => ew.joined(e, "boat");
+  const cow = ew.create("cow", 0.5, 0, 0.5); ew.entities.push(cow);
+  const cart = minecarts.spawnEmpty({ x: 5.5, y: 1, z: 5.5 }), boat = boats.spawnBoat({ x: 8.5, y: 1, z: 5.5 });
+  const seq = (e) => ew.orderSeqs.get(e);
+  assert.ok(seq(cart) > 0 && seq(boat) > seq(cart), "stamped in placement order");
+  const order = ew.withBalls([cow]);
+  assert.deepEqual(order.map((e) => (e === cow ? "cow" : e === cart ? "cart" : e === boat ? "boat" : "?")), ["cow", "cart", "boat"]);
+});
+
+test("batch 48: main.js hands the live carts, boats and hanging entities the join hook", () => {
+  const src = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(src, /boats\.joined = joinedAs\("boat"\)/);
+  assert.match(src, /minecarts\.joined = joinedAs\("cart"\)/);
+  assert.match(src, /hanging\.joined = joinedAs\("hanging"\)/);
+});

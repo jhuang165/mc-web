@@ -1485,9 +1485,11 @@ async function launch(record, prepared, { slice = false } = {}) {
     })());
     watchSpawnerBlocks(world, spawners);
     boats = Boats.fromJSON(record.boats, { ids: entityIds });
+    boats.joined = joinedAs("boat"); // batch 48: a boat or cart the player places joins World.loadedEntityList at its spawn, not at the end of the walk (entity-simulation.js entityWalkers)
+    if (minecarts) minecarts.joined = joinedAs("cart");
     if (boatRenderer) { boatRenderer.clear(); boatRenderer.boats = boats; }
     aimedCart = null;
-    hanging = Hanging.fromJSON(record.hanging, { ids: entityIds }); aimedHanging = null; hangingRenderer?.clear();
+    hanging = Hanging.fromJSON(record.hanging, { ids: entityIds }); hanging.joined = joinedAs("hanging"); aimedHanging = null; hangingRenderer?.clear();
     signs = Signs.fromJSON(record.signs); signRenderer?.clear();
     SKULLS.tiles = Skulls.fromJSON(record.skulls).tiles; skullRenderer?.clear();
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
