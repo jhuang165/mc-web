@@ -10,11 +10,15 @@ const f = Math.fround;
 // hurt-window refusals, so it only sees hits that landed.
 export function queueKnockBack(survival, from) {
   (survival.knockQueue ??= []).push({ kind: "knock", x: from.x, z: from.z });
+  const server = survival.serverPlayer; // the server's EntityPlayerMP takes the same knockBack in the hit itself, the client's copy when the queue drains
+  if (server) knockBack(server.motion, server, from, Math.random, 0, () => 1);
 }
 // Entity.addVelocity (sa.g(DDD)V) on the player, applied after the knockback of the same hit (EntityMob.attackEntityAsMob, EntityArrow
 // Punch, EntityIronGolem.attackEntityAsMob).
 export function queueVelocity(survival, x, y, z) {
   (survival.knockQueue ??= []).push({ kind: "add", x, y, z });
+  const m = survival.serverPlayer?.motion;
+  if (m) { m.x += x; m.y += y; m.z += z; }
 }
 
 // EntityLivingBase.knockBack (sv.a(Entity, F, D, D)V) on a velocity {x, y, z}. The player's knockbackResistance is 0, so the

@@ -79,7 +79,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   } = hooks;
 
   inhabited.tick(survival.time);
-  if (mobs.ai?.player) mobs.ai.player.sneaking = !!state.sneaking; // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
+  if (mobs.ai?.player) { mobs.ai.player.sneaking = !!state.sneaking; if (state.onGround !== undefined) mobs.ai.player.onGround = !!state.onGround; } // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
   mobs.lootItems = items; // equipment mobs with canPickUpLoot pick items up (mob-equipment.md)
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;

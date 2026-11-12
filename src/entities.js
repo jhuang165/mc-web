@@ -315,6 +315,15 @@ export const pushBox = (o, width, height) => {
 const AGEABLE_EGG_TYPES = { Pig: ["pig"], Sheep: ["sheep"], Cow: ["cow", "mooshroom"], MushroomCow: ["mooshroom"], Chicken: ["chicken"], Wolf: ["wolf"], Ozelot: ["ocelot"], EntityHorse: ["horse"], Villager: ["villager"] };
 const AGEABLE_TYPES = new Set(Object.values(AGEABLE_EGG_TYPES).flat());
 export const isAgeable = (type) => AGEABLE_TYPES.has(type);
+// Entity.applyEntityCollision(self = mob o, other = the player's server copy, `at` its box position): the mob and the player's motion move apart. `mob` pushes (the
+// mob's own collideWithNearbyEntities, the pair self = player, other = mob) when `playerCollides` is false.
+function pushServerPlayer(p, o, at = p, playerCollides = false) {
+  const m = p.motion, copy = { x: at.x, z: at.z, vx: m.x, vz: m.z };
+  if (playerCollides) applyEntityCollision(o, copy); // player.collideWithEntity(o) -> o.applyEntityCollision(player): o is self, the player is other
+  else applyEntityCollision(copy, o); // o.collideWithEntity(player) -> player.applyEntityCollision(o): the player is self, o is other
+  m.x = copy.vx;
+  m.z = copy.vz;
+}
 const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && o.type !== "ender_dragon" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
@@ -2262,16 +2271,32 @@ export class EntityWorld {
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
     this.tickOrder = null;
-    // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
-    // world's entities: each mob beside the player is pushed away once more (the server's copy
-    // of the player is pushed too, which the client never sees).
+    // EntityPlayerMP.onUpdateEntity (mw.i), in the network tick after the world's entities: EntityLivingBase.onLivingUpdate on the server's copy of the player (its motion
+    // is only what mobs, hits and explosions gave it: snapped below 0.005, moved, then slowed by the ground friction) and, at its end, collideWithNearbyEntities: every mob beside
+    // the moved box is pushed by (and pushes) the player (b46mp records).
     const p = this.ai.player;
     if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
-      const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
-      for (const o of this.entities) if (Math.abs(o.x - p.x) <= 12 && Math.abs(o.z - p.z) <= 12 && Math.abs(o.y - p.y) <= 12 && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
+      this.serverPlayerUpdate(p);
     }
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
+  }
+  // The tick of the server's copy of the player (see tick): sv.e's motion snap, moveEntity of the motion (the box moves; blocks stop it only in the real game), the friction of
+  // moveEntityWithHeading (the block under the new position while onGround, else 0.91F) and collideWithNearbyEntities against the moved box.
+  serverPlayerUpdate(p) {
+    const m = p.motion;
+    if (Math.abs(m.x) < 0.005) m.x = 0; // EntityLivingBase.onLivingUpdate
+    if (Math.abs(m.z) < 0.005) m.z = 0;
+    const at = { x: p.x + m.x, y: p.y, z: p.z + m.z, width: p.width, height: p.height };
+    const friction = p.onGround ? f(slipperiness(this.world.get(Math.floor(at.x), Math.floor(at.y) - 1, Math.floor(at.z))) * f(0.91)) : f(0.91);
+    m.x *= friction;
+    m.z *= friction;
+    const box = pushBox(at, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+    for (const o of this.entities) {
+      if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
+        pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
+      }
+    }
   }
   // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement
   // blocked (sv.bh): it slides on its knockback, falls and is pushed, with no AI input.
@@ -2314,7 +2339,7 @@ export class EntityWorld {
     this.walks?.get("cart")?.pushMob?.(e);
     this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
-    if (p?.alive && boxesMeet(near, pushBox(p, p.width, p.height))) applyEntityCollision(p, e, false, true);
+    if (p?.alive && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
   // The end of EntityIronGolem.onLivingUpdate: the attack/rose counters and the walking dust (iron-golem.js golemTail).

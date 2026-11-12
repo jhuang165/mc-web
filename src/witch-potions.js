@@ -18,11 +18,11 @@ export class WitchPotions {
     return this.projectiles.balls;
   }
   // The ranged attack of one witch at the player (the ArrowAttack task calls it every 60 ticks within range 10 and in sight).
-  // The player's motion is taken as 0 (the original adds target.motionX/Z).
+  // The aim leads by the target's motion (EntityWitch: target.posX + target.motionX): the server's copy of the player, or the mob's own.
   throwAt(e, target) {
-    const survival = target.survival, rand = entityRandom(e);
+    const survival = target.survival, rand = entityRandom(e), motion = target.isPlayer ? { x: target.motion.x, z: target.motion.z } : { x: target.e?.vx, z: target.e?.vz };
     const choice = chooseThrownPotion(rand, e, {
-      x: target.x, y: target.y, z: target.z, eyeHeight: target.eyeHeight, motionX: 0, motionZ: 0,
+      x: target.x, y: target.y, z: target.z, eyeHeight: target.eyeHeight, motionX: motion.x ?? 0, motionZ: motion.z ?? 0,
       health: survival?.health ?? 20, hasEffect: (id) => !!survival?.effects?.has?.(id),
     }, !!e.drinking);
     if (!choice) return null;

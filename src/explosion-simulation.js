@@ -145,6 +145,8 @@ export function applyExplosion(state, request, hooks = {}) {
       // Explosion.doExplosionA: knockback is impact less floor(impact * Blast Protection level * 0.15F).
       const kick = blastKnockback(survival.inventory?.armor ?? [], playerHit.impact), scale = playerHit.impact && kick !== playerHit.impact ? kick / playerHit.impact : 1;
       velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale;
+      const server = survival.serverPlayer?.motion; // the server's EntityPlayerMP gets the same Explosion.func_77277_b push (its motion leads a witch's aim); the hit's own knockback reached it in queueKnockBack
+      if (server) { server.x += playerHit.push[0] * scale; server.y += playerHit.push[1] * scale; server.z += playerHit.push[2] * scale; }
     }
   }
 
