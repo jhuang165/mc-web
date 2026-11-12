@@ -99,7 +99,8 @@ function game({ mode = "survival", allowCommands } = {}) {
   };
   const host = createCommandHost(env);
   const runner = createCommandRunner(host);
-  const out = () => chat.lines.map((l) => l.text).reverse();
+  // The chat window holds the component beside the sender text (GuiNewChat draws its formatted text): the root colour and the unformatted text stand in for the sender string.
+  const out = () => chat.history.map((h) => (typeof h.text === "string" ? h.text : h.text.style.code() + h.text.unformatted())).reverse();
   return { log, world, survival, weather, experience, active, host, runner, state, lan, run: (t) => { chat.clear(); runner.run(t); return out(); } };
 }
 

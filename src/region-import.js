@@ -1,5 +1,5 @@
 import { readCommandBlock } from "./command-block.js";
-import { LastOutputError } from "./chat-component.js";
+import { LastOutputError, normalizeLastOutput } from "./chat-component.js";
 import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from './mob-spawner.js';
 import { readNoteTile } from "./note-blocks.js";
 import { readJukeboxTile } from "./jukebox.js";
@@ -236,6 +236,17 @@ export function boatFromNbt(tag, { shiftX = 0, shiftZ = 0 } = {}) {
 }
 
 // The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
+// TileEntity "Control" and entity "MinecartCommandBlock" (including a Riding chain) read LastOutput through IChatComponent.Serializer on load.
+function invalidLastOutput(entities, tileEntities) {
+  const bad = (tag) => { const last = get(tag, 'LastOutput', NBT.STRING); if (typeof last !== 'string') return false; try { normalizeLastOutput(last); return false; } catch (e) { if (e instanceof LastOutputError) return true; throw e; } };
+  for (const tile of tileEntities) if (get(tile, 'id', NBT.STRING, '') === 'Control' && bad(tile)) return true;
+  for (const entity of entities) {
+    let n = 0;
+    for (let e = entity; e && n++ < 16; e = get(e, 'Riding', NBT.COMPOUND)) if (get(e, 'id', NBT.STRING, '') === 'MinecartCommandBlock' && bad(e)) return true;
+  }
+  return false;
+}
+
 function levelRecord(record, { level, levelGen, javaPlayer: first, world, generationVersion, mode, report, importedColumns, stats, name, convertItem }) {
   const ox = world.originX, oz = world.originZ;
   const worldSpawn = [level.spawn[0] - ox, level.spawn[1], level.spawn[2] - oz];
@@ -460,6 +471,14 @@ export async function importJavaRegionArea(regions, options = {}) {
       throw new Error(`${file.filename} slot ${regionSlot(address.x, address.z)}: ${cause.message}`, { cause });
     }
     const { chunk, entities, tileEntities, tileTicks } = decoded;
+    // AnvilChunkLoader.readChunkFromNBT (aqk.a(ahb, dh)) has no handler around TileEntity.c / EntityList.a, so the JsonSyntaxException of an invalid
+    // LastOutput (CommandBlockLogic.readFromNBT) ends the chunk read; ChunkProviderServer.safeLoadChunk (ms.f) catches Exception, logs "Couldn't load chunk" and
+    // returns null, and provideChunk generates the chunk again (bytecode-read). The whole chunk is therefore not imported, as an absent one.
+    if (invalidLastOutput(entities, tileEntities)) {
+      report.chunks.missing.push({ x: cx, z: cz, reason: "chunk failed to load: invalid LastOutput of a command block or cart" });
+      if (missing === 'air') for (let dx = 0; dx < 16; dx++) for (let dz = 0; dz < 16; dz++) for (let y = 0; y < height; y++) write(baseX + dx, y, baseZ + dz, 0, 0);
+      continue;
+    }
     report.chunks.converted++;
     if (dimension || level) {
       // Streamed population cells (streaming-population.js) are keyed by local chunk: the imported column is never re-populated.

@@ -357,7 +357,7 @@ export function replayPlayerCommands(queue, { host, records = [], carts = [], gi
   if (byXp) for (const [kind, n] of xpOps) { if (kind === "levels") host.addLevels(n); else host.addExperience(n); }
   let lines = 0;
   const replay = Object.create(host);
-  replay.print = (text) => { if (lines++ < chatCap) host.print(text); else out.muted++; };
+  replay.print = (text, component) => { if (lines++ < chatCap) host.print(text, component); else out.muted++; };
   if (giveStack) replay.giveDrop = (stack) => giveStack(stack);
   for (const e of queue ?? []) {
     if (death && (e.eff || e.xpd || e.inv)) { out.applied++; out.byDelta++; if (e.ok) out.succeeded++; else out.failed++; continue; }

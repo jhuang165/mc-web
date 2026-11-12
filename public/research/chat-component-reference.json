@@ -1,0 +1,136 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "fq": {
+   "name": "ChatComponentText",
+   "sha256": "1ed0a90e237aeed31434da047e48ebef977d2529e56751d812eb661148ceb5ad"
+  },
+  "fr": {
+   "name": "ChatComponentTranslation",
+   "sha256": "9fd71a929542368197f4dbef5fff3e3f72f5d0e31b3d4531d8a97b042e239c96"
+  },
+  "fn": {
+   "name": "ChatStyle",
+   "sha256": "41a6e1bd60b764afba367441bb51b3d4f779aa18bfb5d2dabbb56df6da72b501"
+  },
+  "fk": {
+   "name": "IChatComponent$Serializer",
+   "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
+  },
+  "dd": {
+   "name": "StatCollector",
+   "sha256": "d880d64cf98aac2a5bb239245b6a5d3a1ccec1424af1d1bbcbfbb5eb001b510e"
+  },
+  "de": {
+   "name": "StringTranslate",
+   "sha256": "46315b5835adb1ba7f326a9437e47b14873ad2e825ed3a54c4a21016e8fcc261"
+  }
+ },
+ "method": "Executed on the unchanged ChatComponentTranslation (fr), ChatComponentText (fq), ChatStyle (fn), IChatComponent.Serializer (fk) and StatCollector/StringTranslate (dd/de, lang stub below). Rows are [name, fk.a JSON, getFormattedText (fj.d), getUnformattedText (fj.c)]. The command classes are server-only, so the trees are the ones their 1.7.10 source builds.",
+ "lang": {
+  "commands.help.header": "--- Showing help page %d of %d (/help <page>) ---",
+  "commands.tp.usage": "/tp [target player] <destination player> OR /tp [target player] <x> <y> <z>",
+  "commands.help.footer": "Tip: Use the <tab> key while typing a command to auto-complete the command or its arguments",
+  "commands.generic.deprecatedId": "Warning: Using numeric IDs will not be supported in the future. Please use names, such as '%s'",
+  "chat.type.admin": "[%s: %s]",
+  "commands.give.success": "Given %s * %d to %s",
+  "commands.tp.success.coordinates": "Teleported %s to %.2f,%.2f,%.2f",
+  "commands.generic.usage": "Usage: %s",
+  "chat.type.achievement": "%s has just earned the achievement %s",
+  "chat.type.announcement": "[%s] %s",
+  "chat.type.text": "<%s> %s"
+ },
+ "rows": [
+  [
+   "helpHeader",
+   "{\"color\":\"dark_green\",\"translate\":\"commands.help.header\",\"with\":[\"1\",\"5\"]}",
+   "§2--- Showing help page §r§21§r§2 of §r§25§r§2 (/help <page>) ---§r",
+   "--- Showing help page 1 of 5 (/help <page>) ---"
+  ],
+  [
+   "helpLine",
+   "{\"translate\":\"commands.tp.usage\"}",
+   "/tp [target player] <destination player> OR /tp [target player] <x> <y> <z>§r",
+   "/tp [target player] <destination player> OR /tp [target player] <x> <y> <z>"
+  ],
+  [
+   "helpFooter",
+   "{\"color\":\"green\",\"translate\":\"commands.help.footer\"}",
+   "§aTip: Use the <tab> key while typing a command to auto-complete the command or its arguments§r",
+   "Tip: Use the <tab> key while typing a command to auto-complete the command or its arguments"
+  ],
+  [
+   "deprecatedId",
+   "{\"color\":\"gray\",\"translate\":\"commands.generic.deprecatedId\",\"with\":[\"minecraft:stone\"]}",
+   "§7Warning: Using numeric IDs will not be supported in the future. Please use names, such as '§r§7minecraft:stone§r§7'§r",
+   "Warning: Using numeric IDs will not be supported in the future. Please use names, such as 'minecraft:stone'"
+  ],
+  [
+   "deprecatedIdSibling",
+   "{\"color\":\"gray\",\"extra\":[\" (more)\"],\"translate\":\"commands.generic.deprecatedId\",\"with\":[\"minecraft:stone\"]}",
+   "§7Warning: Using numeric IDs will not be supported in the future. Please use names, such as '§r§7minecraft:stone§r§7'§r§7 (more)§r",
+   "Warning: Using numeric IDs will not be supported in the future. Please use names, such as 'minecraft:stone' (more)"
+  ],
+  [
+   "adminGive",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"chat.type.admin\",\"with\":[\"@\",{\"translate\":\"commands.give.success\",\"with\":[\"Stone\",\"5\",\"Player\"]}]}",
+   "§7§o[§r§7§o@§r§7§o: §r§7§oGiven §r§7§oStone§r§7§o * §r§7§o5§r§7§o to §r§7§oPlayer§r§7§o]§r",
+   "[@: Given Stone * 5 to Player]"
+  ],
+  [
+   "adminTp",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"chat.type.admin\",\"with\":[\"Rcon\",{\"translate\":\"commands.tp.success.coordinates\",\"with\":[\"Player\",\"1.5\",\"64.0\",\"-3.0\"]}]}",
+   "§7§o[§r§7§oRcon§r§7§o: §r§7§oTeleported §r§7§oPlayer§r§7§o to §r§7§o1.5§r§7§o,§r§7§o64.0§r§7§o,§r§7§o-3.0§r§7§o]§r",
+   "[Rcon: Teleported Player to 1.5,64.0,-3.0]"
+  ],
+  [
+   "usageError",
+   "{\"color\":\"red\",\"translate\":\"commands.generic.usage\",\"with\":[{\"translate\":\"commands.tp.usage\"}]}",
+   "§cUsage: §r§c/tp [target player] <destination player> OR /tp [target player] <x> <y> <z>§r",
+   "Usage: /tp [target player] <destination player> OR /tp [target player] <x> <y> <z>"
+  ],
+  [
+   "nestedStyles",
+   "{\"bold\":true,\"extra\":[{\"italic\":true,\"color\":\"red\",\"extra\":[\"inner \"],\"text\":\"mid \"},\"tail\"],\"text\":\"root \"}",
+   "§lroot §r§c§l§omid §r§c§l§oinner §r§ltail§r",
+   "root mid inner tail"
+  ],
+  [
+   "argumentStyle",
+   "{\"color\":\"aqua\",\"translate\":\"commands.give.success\",\"with\":[{\"italic\":true,\"text\":\"[Stone]\"},\"5\",\"Player\"]}",
+   "§bGiven §r§b§o[Stone]§r§b * §r§b5§r§b to §r§bPlayer§r",
+   "Given [Stone] * 5 to Player"
+  ],
+  [
+   "ownColour",
+   "{\"bold\":true,\"color\":\"yellow\",\"text\":\"gold\"}",
+   "§e§lgold§r",
+   "gold"
+  ],
+  [
+   "achievement",
+   "{\"translate\":\"chat.type.achievement\",\"with\":[\"Player\",{\"color\":\"green\",\"text\":\"[Taking Inventory]\"}]}",
+   "Player§r has just earned the achievement §r§a[Taking Inventory]§r",
+   "Player has just earned the achievement [Taking Inventory]"
+  ],
+  [
+   "announcement",
+   "{\"translate\":\"chat.type.announcement\",\"with\":[\"Server\",\"hello world\"]}",
+   "[§rServer§r] §rhello world§r",
+   "[Server] hello world"
+  ],
+  [
+   "chatText",
+   "{\"translate\":\"chat.type.text\",\"with\":[\"Player\",\"plain\"]}",
+   "<§rPlayer§r> §rplain§r",
+   "<Player> plain"
+  ],
+  [
+   "emptyRoot",
+   "{\"extra\":[{\"color\":\"red\",\"text\":\"first\"},\" second\"],\"text\":\"\"}",
+   "§r§cfirst§r second§r",
+   "first second"
+  ]
+ ]
+}
