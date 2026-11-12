@@ -125,7 +125,7 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
       const action=captureVehicleAction({dismount:true}); hooks.trace?.(action); dispatchVehicleAction(state,action,hooks);
     } else {minecarts.dismount(state.world,rider);releaseRider(state);}
   } else {
-    const input=moveInput({...controls,usingItem:!!state.eating});
+    const input=moveInput({...controls}) /* EntityPlayerSP.onLivingUpdate: the 0.2 item-use slowdown needs isUsingItem && !isRiding (bytecode-read blk.e), so a rider is not slowed */;
     rider.moveForward=f(input.forward*f(.98));
     // EntityLivingBase moveStrafing is positive to the left; the browser strafe is positive to the right.
     rider.moveStrafing=f(-input.strafe*f(.98));
