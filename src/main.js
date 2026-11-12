@@ -1450,8 +1450,8 @@ async function launch(record, prepared, { slice = false } = {}) {
         arrow: (e) => { const a = arrows.make(e, e.rand, { shooter: null, pickup: 1 }); arrows.list.push(a); arrows.joined(a); },
         thrown: (kind, e) => {
           const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
-          if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
-          else projectiles.balls.push(ball);
+          if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; (mobs.potions?.projectiles ?? projectiles).balls.push(b); mobs.joined?.(b, "potion"); } // potions and bottles walk as "potion"
+          else { projectiles.balls.push(ball); projectiles.joined?.(ball); }
         },
         fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
