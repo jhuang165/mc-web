@@ -2,6 +2,7 @@
 // list/add/remove/empty/join/leave/option (color, friendlyfire, seeFriendlyInvisibles; 1.7.10 has no nametagVisibility, no
 // players enable/test/operation and no dataTag). Argument counts, check order, exception classes (WrongUsage messages are wrapped
 // in "Usage: ...") and message arguments follow the bytecode and are replayed from public/research/scoreboard-reference.json.
+import { translation } from "./chat-component.js";
 import { JavaHashSet } from "./java-hash.js";
 import { Scoreboard, slotIndex, SLOT_NAMES, isCriteria, criteriaNames, isReadOnly } from "./scoreboard.js";
 
@@ -26,7 +27,7 @@ export function createScoreboardCommands(ctx) {
   // ICommandSender.addChatMessage (the sender's own lines; headers DARK_GREEN) and CommandBase.func_152373_a (notifyAdmins).
   const tell = (text) => host.print(text);
   const header = (key, ...args) => tell("§2" + tr(key, ...args));
-  const notify = (key, ...args) => { (host.feedback ?? host.print)(tr(key, ...args)); host.changed?.(); };
+  const notify = (key, ...args) => { (host.feedback ?? host.print)(tr(key, ...args), translation(key, ...args)); host.changed?.(); };
   const isPlayerSender = () => !host.isCommandBlock;
   const senderName = () => host.playerName ?? host.name ?? "Player";
   // CommandBase.func_96332_d: a selector must match a player; any other text is taken as the score holder's name as typed.

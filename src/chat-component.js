@@ -250,10 +250,33 @@ export function serializeComponent(c) {
     }
     return o;
   };
-  return JSON.stringify(json(c));
+  // Gson's default htmlSafe writer: < > & = ' and the line separators U+2028/2029 leave as \\u escapes (they only occur inside strings here).
+  return JSON.stringify(json(c)).replace(/[<>&='\u2028\u2029]/g, (ch) => "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0"));
 }
 export const text = (s) => new TextComponent(s);
 export const translation = (key, ...args) => new TranslationComponent(key, args);
+// A legacy "§x" message start as a component: a leading colour code becomes the style colour (the sender texts that carry no component).
+const CODE_COLOURS = Object.fromEntries(Object.entries(FORMATTING).filter(([k]) => !["obfuscated", "bold", "strikethrough", "underline", "italic", "reset"].includes(k)).map(([k, v]) => [v, k]));
+export function componentFromLegacy(s) {
+  const m = /^§([0-9a-f])([^]*)$/.exec(s);
+  if (!m) return new TextComponent(s);
+  const c = new TextComponent(m[2]);
+  c.style.color = CODE_COLOURS[m[1]];
+  return c;
+}
+// IChatComponent.Serializer on load and save (CommandBlockLogic.readFromNBT agp.b: fk.a(LastOutput); writeToNBT: fk.a(component)): a stored string is
+// parsed and written back in the serializer's shape, so the port's old {"text":"[t] msg"} becomes the bare string native writes (executed, cmd-output-reference.json).
+// "" reads as no output (fk.a returns null). Invalid JSON throws natively and ends the load; the port keeps the string.
+export function normalizeLastOutput(s) {
+  if (typeof s !== 'string') return null;
+  if (s === '') return null;
+  try { const { component } = parseChatJson(s); return component ? serializeComponent(component) : s; } catch { return s; }
+}
+// The GUI's Previous Output (bfh: func_145749_h().getUnformattedText()): the component's text, translations through the language table; an unparsable string shows as it is.
+export function lastOutputPlainText(s) {
+  if (!s) return '';
+  try { const { component } = parseChatJson(s); return component ? component.unformatted() : String(s); } catch (e) { if (e instanceof TranslationError) return String(s); throw e; }
+}
 export const isComponent = (c) => c instanceof Base;
 
 // ---- FontRenderer (ascii.png widths; '§' is -1 and skips its code; bold set by l, cleared by r, adds 1 per glyph) ----

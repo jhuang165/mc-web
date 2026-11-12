@@ -1,3 +1,4 @@
+import { lastOutputPlainText } from './chat-component.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -30,7 +31,7 @@ test('command block executes once, one tick after each rising edge, with compara
   g.runtime.tick();
   assert.equal(g.survival.time, 1234);
   const tile = g.runtime.commandBlocks.tile(10,60,10);
-  assert.equal(tile.successCount, 1); assert.match(tile.lastOutput, /Set the time to 1234/);
+  assert.equal(tile.successCount, 1); assert.match(lastOutputPlainText(tile.lastOutput), /Set the time to 1234/);
   assert.equal(r.behaviours[137].comparator(r,10,60,10), 1);
   tile.command = 'time add 10';
   for (let i=0;i<4;i++) g.runtime.tick();
@@ -49,7 +50,7 @@ test('command block sender has level 2, its own position and name, player select
   assert.equal(g.survival.count(303), 2);
   assert.match(g.lines[0], /^§7§o\[@: Given/);
   g.active.gameRules.commandBlockOutput = 'false'; g.lines.length = 0;
-  runner.run('time set 3'); assert.equal(g.lines.length, 0); assert.match(tile.lastOutput, /\[12:34:56\] Set the time to 3/);
+  runner.run('time set 3'); assert.equal(g.lines.length, 0); assert.match(lastOutputPlainText(tile.lastOutput), /\[12:34:56\] Set the time to 3/);
   tile.trackOutput = false; const before = tile.lastOutput;
   runner.run('time set 4'); assert.equal(tile.lastOutput, before);
   assert.equal(runner.run('publish'), false); assert.equal(runner.run('kill'), false);

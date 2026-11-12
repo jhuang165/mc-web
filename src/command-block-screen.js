@@ -8,6 +8,7 @@
 //   (position and command; the port applies it to the tile), both buttons close the screen.
 // The 1.7.10 screen has no output-tracking toggle: the "O/X" button of earlier builds was an invention and is gone.
 import { t } from "./menu-screens.js";
+import { lastOutputPlainText } from "./chat-component.js";
 
 const btn = (x, y, w, h = 20) => ({ x, y, w, h });
 export function commandBlockLayout(w, h) {
@@ -18,10 +19,7 @@ export function commandBlockLayout(w, h) {
   };
 }
 /** The tile's last output as the field text (the stored chat component's text, or the raw string). */
-export function lastOutputText(lastOutput) {
-  if (!lastOutput) return "";
-  try { return JSON.parse(lastOutput)?.text ?? ""; } catch { return String(lastOutput); }
-}
+export const lastOutputText = lastOutputPlainText;
 export const COMMAND_HINTS = ["advMode.nearestPlayer", "advMode.randomPlayer", "advMode.allPlayers"];
 
 /** `done(command)` applies the edit (Done), `cancel()` closes without it. */

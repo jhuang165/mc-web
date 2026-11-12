@@ -61,6 +61,6 @@ test("command cart watcher 24 holds the executed value in each state", () => {
   assert.deepEqual([loaded.command.command, loaded.command.watch24], rows.readNoOutput);
   assert.deepEqual(rows.guiNoOutput, rows.readNoOutput);
   const loadedOut = carts.spawnCart(6, { x: 0.5, y: 0.5, z: 0.5, command: { command: "say hi", lastOutput: '{"text":"x"}' } }, { seed: 1 });
-  assert.equal(loadedOut.command.watch24, '{"text":"x"}');
+  assert.equal(loadedOut.command.watch24, '"x"'); // fk.a re-serializes the old {"text":"x"} as the bare string (cmd-output-reference.json loads)
   assert.equal(rows.writeNoOutput[1], "");
 });

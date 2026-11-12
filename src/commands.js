@@ -12,6 +12,7 @@ import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { createExtraCommands } from "./commands-extra.js";
 import { createScoreboardCommands } from "./commands-scoreboard.js";
+import { translation, text as textComponent } from "./chat-component.js";
 import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
 
@@ -144,7 +145,8 @@ export function createCommandRunner(host) {
   const allowed = command => host.canUse ? host.canUse(command) : canUse(command, host.cheats);
   const playerName = () => host.playerName ?? name();
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
-  const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args));
+  // The ChatComponentTranslation(key, args) the native sender receives travels beside the text (a command block keeps it as LastOutput); a number argument is Double/Integer.toString.
+  const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args), translation(key, ...args));
   const player = (s) => {
     const selected = selectLocalPlayer(s, host);
     if (selected || s.toLowerCase() === playerName().toLowerCase()) return selected ?? playerName();
@@ -323,7 +325,7 @@ export function createCommandRunner(host) {
       if (a.length - i === 3) {
         const x = parseCoordinate(here.x, a[i]), y = parseCoordinate(here.y, a[i + 1], 0, 0), z = parseCoordinate(here.z, a[i + 2]);
         host.teleport(x, y, z);
-        return feedback("commands.tp.success.coordinates", who, x, y, z);
+        return feedback("commands.tp.success.coordinates", who, javaDouble(x), javaDouble(y), javaDouble(z)); // CommandTeleport passes Doubles
       }
       if (a.length - i === 1) {
         const target = player(a[i]);
@@ -491,13 +493,15 @@ export function createCommandRunner(host) {
   // CommandHandler.func_71556_a: the failure texts are red; unknown name, permission, usage, then the exception text.
   function fail(e) {
     if (!(e instanceof CommandException)) {
-      say("§c" + tr("commands.generic.exception"));
+      host.print("§c" + tr("commands.generic.exception"), (() => { const c = translation("commands.generic.exception"); c.style.color = "red"; return c; })());
       if (typeof console !== "undefined") console.error(e);
       return;
     }
-    if (e.kind === "unsupported") say("§c" + e.args[0]);
-    else if (e.kind === "usage") say("§c" + tr("commands.generic.usage", tr(e.key, ...e.args)));
-    else say("§c" + tr(e.key, ...e.args));
+    // CommandHandler.func_71556_a: a red ChatComponentTranslation(message, args); usage nests the usage translation as the argument.
+    const red = (c) => { c.style.color = "red"; return c; };
+    if (e.kind === "unsupported") host.print("§c" + e.args[0], red(textComponent(e.args[0])));
+    else if (e.kind === "usage") host.print("§c" + tr("commands.generic.usage", tr(e.key, ...e.args)), red(translation("commands.generic.usage", translation(e.key, ...e.args))));
+    else host.print("§c" + tr(e.key, ...e.args), red(translation(e.key, ...e.args)));
   }
   function run(text) {
     let line = text.trim();
