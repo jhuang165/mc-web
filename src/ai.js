@@ -1255,6 +1255,10 @@ class PlayerView {
     // Every mob call site (EntityLookHelper, EntitySenses.canSee, EntityAIWatchClosest) reads that virtual, never EntityPlayer's 0.12.
     this.eyeHeight = PLAYER_EYE_HEIGHT;
     this.alive = true;
+    // The integrated server's copy of the player: its motion as mobs, hits and explosions left it (EntityWitch.attackEntityWithRangedAttack leads its aim by it) and whether
+    // it stood on the ground (the friction of EntityPlayerMP.onUpdateEntity). The position is the client's.
+    this.motion = { x: 0, y: 0, z: 0 };
+    this.onGround = true;
     this.creative = false;
     this.held = 0;
     this.has = true;
@@ -1268,7 +1272,10 @@ class PlayerView {
     this.x = player.x;
     this.y = player.y;
     this.z = player.z;
-    this.alive = !(survival.health <= 0);
+    const alive = !(survival.health <= 0);
+    if (alive && !this.alive) this.motion.x = this.motion.y = this.motion.z = 0; // a respawned player is a new EntityPlayerMP
+    this.alive = alive;
+    survival.serverPlayer = this; // player-knockback.js gives this copy the hits' motion at once
     this.creative = !!survival.creative;
     this.held = held;
     this.survival = survival;

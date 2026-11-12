@@ -24,6 +24,7 @@ import { liveAttribute } from "./mob-attributes.js";
 export const reference42 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b42-reference.json", import.meta.url)));
 export const reference44 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b44-reference.json", import.meta.url)));
 export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45cw-reference.json", import.meta.url)));
+export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
@@ -110,7 +111,10 @@ function run(r) {
     ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; // the probe never flies a potion it spawned: the record keeps the launch
   }
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
-  ew.ai.player.unticked = true;
+  // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
+  // the rows' player motion is compared every tick (x and z).
+  const x46 = r.name.startsWith("b46mp");
+  ew.ai.player.unticked = !x46;
   ew.ai.budget.perTick = Infinity;
   ew.look = { yaw: 180 * RAD, pitch: 0 };
   ew.playerLook = () => ew.look; // OcelotTempt's scared check reads the player's view
@@ -181,12 +185,14 @@ function run(r) {
       }
     }
     player.x += vel[n][0]; player.z += vel[n][1];
+    if (x46) player.y = r.rows[t][7]; // the client's y (the probe's server copy falls and rises with its own motion; the replay takes it as the position packet's y)
     ew.ai.beginTick(player, survival, held);
     for (const l of logs) l.log.length = 0;
     booms.length = cells.length = 0;
     const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
     ew.events.length = 0;
     if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
+    if (x46) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it
     ew.tick(player, survival, held);
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
     // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
@@ -227,7 +233,8 @@ function run(r) {
       for (const o of orbs.orbs.splice(0)) spawned.push(["xp", o.value, o.x, o.posY, o.z]);
       for (const _ of primed.splice(0)) spawned.push(["other", "xw"]); // EntityTNTPrimed (xw) a blast chained
       for (const b of ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]);
-      state.push([booms.slice(), spawned, cells.slice(), [pv.x, pv.y, pv.z]]);
+      const pm = ew.ai.player.motion; // b46mp: the server copy's motion (mob pushes, hits, blasts); the older sets: the blasts' push on `pv` only
+      state.push([booms.slice(), spawned, cells.slice(), x46 ? [pm.x, pm.y, pm.z] : [pv.x, pv.y, pv.z]]);
       state.gone = [...gone];
     }
     states.push(state);
@@ -267,8 +274,10 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded ? bad("player motion", wm, gm) : null); // outside an explosion the original's server-side player motion is a mob-collision push (Entity.applyEntityCollision moves both); the port never pushes the player from a mob's update, so it is compared only after a blast
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") ? bad("player motion", wm, gm) : null);
+      const d2 = r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : null;
       if (d) return d;
+      if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
     if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
   }
