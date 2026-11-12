@@ -250,7 +250,7 @@ export function poseModel(p, pose) {
 export function animateDragon(r, e, pose, partial, client = null) {
   const s = e.dragon, st = r.dragonRig;
   if (!s) return;
-  // the ring buffer of past positions and the wing clock are the client copy's (entity-tracker.js dragonUpdate); the death and crystal state stays live
+  // the ring buffer of past positions and the wing clock are the client copy's (entity-tracker.js dragonUpdate); the crystal target is the copy's too; the death flag stays live
   // the health (data watcher, from the spawn packet and S1C) and the death counter are the client copy's too: RenderDragon and BossStatus read the rendered entity
   const cd = client?.dragon, health = client?.health ?? e.health, deathTicks = cd?.deathTicks ?? s.deathTicks, clientRing = cd ? { health, dragon: cd } : e;
   // RenderDragon.doRender: BossStatus.setBossStatus(dragon, ...) every drawn frame (boss-bar.js keeps it 100 frames).
@@ -274,7 +274,7 @@ export function animateDragon(r, e, pose, partial, client = null) {
   st.passes[1].head.parent.visible = dying;
   r.materials[1].uniforms.alphaTest.value = Math.max(0, deathTicks / 200);
   r.materials[0].depthFunc = dying ? THREE.EqualDepth : THREE.LessEqualDepth;
-  const h = s.healer, b = st.beam;
+  const h = cd ? cd.healer : s.healer, b = st.beam; // the client copy's own crystal target (entity-tracker.js crystalUpdate), the live dragon's only without a copy
   b.pivot.visible = !!h && health > 0;
   if (b.pivot.visible) {
     const t2 = (h.innerRotation ?? 0) + partial, w = (Math.sin(t2 * 0.2) / 2 + 0.5), bob = (w * w + w) * 0.2;

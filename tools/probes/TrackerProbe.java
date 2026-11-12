@@ -32,6 +32,7 @@ public class TrackerProbe {
   }
   // the client world: a loaded chunk answers World.getChunkFromBlockCoords (EntityLivingBase.moveEntityWithHeading reads isChunkLoaded on a client)
   static boolean chunkLoaded = true;
+  static boolean queueDestroy = false; // batch 49: S13 reaches the client of TrackerMountsProbe (the earlier cases never destroyed anything)
   static int unloadFrom = -1, unloadTo = -1;
   public static class CW extends ChickenProbe.World {
     public apx d(int x, int z) {
@@ -63,7 +64,7 @@ public class TrackerProbe {
     PMP() { super(null, null, null, null); }
     TW world;
     public mt r() { return world; }
-    public void d(sa e) { sent.add("[\"destroy\"]"); }
+    public void d(sa e) { sent.add("[\"destroy\"]"); if (queueDestroy) queue.add(Integer.valueOf(e.y())); }
   }
   static Object get(Object o, String n) throws Exception { return MobMoveProbe.field(o.getClass(), n).get(o); }
   static void set(Object o, String n, Object v) throws Exception { MobMoveProbe.set(o, n, v); }
