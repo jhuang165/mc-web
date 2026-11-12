@@ -207,12 +207,14 @@ export function spawnerBurst(x, y, z, random, particle) {
  * collision border, the eye ray meets within `reach` and before `wallDistance`.
  * `dir` must be a unit vector. Returns { cart, distance } or null.
  */
-export function pickMinecart(minecarts, origin, dir, reach, wallDistance = reach, ignoredCart = null) {
+export function pickMinecart(minecarts, origin, dir, reach, wallDistance = reach, ignoredCart = null, boxOf = null) {
   let best = null;
   const limit = Math.min(reach, wallDistance);
   for (const cart of minecarts?.pickable() ?? []) {
     if (cart === ignoredCart) continue;
-    const b = cart.bb, lo = [b[0] - BORDER, b[1] - BORDER, b[2] - BORDER], hi = [b[3] + BORDER, b[4] + BORDER, b[5] + BORDER];
+    const b = boxOf ? boxOf(cart) : cart.bb; // Batch 49: the client copy's box (null: no copy, not aimable)
+    if (!b) continue;
+    const lo = [b[0] - BORDER, b[1] - BORDER, b[2] - BORDER], hi = [b[3] + BORDER, b[4] + BORDER, b[5] + BORDER];
     const o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z];
     let near = 0, far = limit, inside = true;
     for (let i = 0; i < 3 && inside; i++) {

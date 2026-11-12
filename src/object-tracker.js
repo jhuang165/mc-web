@@ -584,6 +584,14 @@ export function vehicleView(tracker, e, rides = false) {
   bb[0] = c.x - r; bb[1] = c.y - off; bb[2] = c.z - r; bb[3] = c.x + r; bb[4] = bb[1] + f(c.spec.height); bb[5] = c.z + r;
   return v;
 }
+// Batch 49: the box EntityRenderer.getMouseOver tests for a boat, cart, painting or frame: the client copy's (bytecode-read: it searches the client world's entities and the use or
+// attack packet names the entity id, which the port maps back to the live entity). null when the tracker follows the entity but its copy is absent (not aimable); an entity the
+// tracker does not follow yet, or the vehicle the client player rides, keeps the live box, as the renderers do.
+export function aimBox(tracker, e, rides = false) {
+  const c = shownOf(tracker, e, rides);
+  if (c === null) return null;
+  return c === e ? e.bb : c.box();
+}
 // The views of a list of live boats or carts (skipping the ones that are not on the client); `visible(x, z)` is the port's loaded-chunk test.
 export function vehicleViews(tracker, list, rides = () => false, visible = null) {
   const out = [];

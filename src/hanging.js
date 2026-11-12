@@ -279,11 +279,13 @@ export const hangingArrowTargets = (hanging) => (hanging?.pickable() ?? []).map(
 // EntityRenderer.getMouseOver for hanging entities: the nearest one whose box, grown by the 0.1
 // collision border (which also un-inverts the thickness axis), the eye ray meets within `reach` and
 // before `wallDistance`. `dir` must be a unit vector.
-export function pickHanging(hanging, origin, dir, reach, wallDistance = reach) {
+export function pickHanging(hanging, origin, dir, reach, wallDistance = reach, boxOf = null) {
   let best = null;
   const limit = Math.min(reach, wallDistance), border = f(0.1);
   for (const entity of hanging?.pickable() ?? []) {
-    const b = entity.bb, lo = [b[0] - border, b[1] - border, b[2] - border], hi = [b[3] + border, b[4] + border, b[5] + border];
+    const b = boxOf ? boxOf(entity) : entity.bb; // Batch 49: the client copy's box (null: no copy, not aimable)
+    if (!b) continue;
+    const lo = [b[0] - border, b[1] - border, b[2] - border], hi = [b[3] + border, b[4] + border, b[5] + border];
     const o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z];
     let near = 0, far = limit, inside = true;
     for (let i = 0; i < 3 && inside; i++) {
