@@ -13,6 +13,7 @@ const newRand = () => new GaussianRandom(Math.floor(Math.random() * 2 ** 48));
 export class Fishing {
   constructor() {
     this.hook = null;
+    this.ids = null; // the shared EntityIds (main.js): the hook takes its entity id when it is cast or loaded (Entity.<init>)
     this.events = [];
     this.particleRand = newRand();
   }
@@ -75,6 +76,7 @@ export class Fishing {
     host.sound('random.bow', 0.5, f(0.4 / f(f(host.itemRand.nextFloat() * f(0.4)) + f(0.8))), null);
     const a = mcAngles(host.yaw, host.pitch);
     this.hook = FishHook.cast(newRand(), { x: host.position.x, y: host.position.y, z: host.position.z, yaw: a.yaw, pitch: a.pitch });
+    if (this.ids) this.hook.entityId = this.ids.take();
     this.sync();
     return 'cast';
   }
@@ -96,7 +98,7 @@ export class Fishing {
   serialize() { return this.hook && !this.hook.dead ? this.hook.serialize() : null; }
   load(data) {
     this.clear();
-    if (data) this.hook = FishHook.load(data, newRand());
+    if (data) { this.hook = FishHook.load(data, newRand()); if (this.ids) this.hook.entityId = this.ids.take(); }
     this.sync();
   }
 }
