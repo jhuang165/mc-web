@@ -25,8 +25,8 @@ export function createScoreboardCommands(ctx) {
   const fail = (key, ...args) => { throw new CommandException(key, args); };
   const usageWith = (key, ...args) => { throw new CommandException(key, args, "usage"); };
   // ICommandSender.addChatMessage (the sender's own lines; headers DARK_GREEN) and CommandBase.func_152373_a (notifyAdmins).
-  const tell = (text) => host.print(text);
-  const header = (key, ...args) => tell("§2" + tr(key, ...args));
+  const tell = (text, component) => host.print(text, component);
+  const header = (key, ...args) => { const c = translation(key, ...args); c.style.color = "dark_green"; tell("§2" + tr(key, ...args), c); };
   const notify = (key, ...args) => { (host.feedback ?? host.print)(tr(key, ...args), translation(key, ...args)); host.changed?.(); };
   const isPlayerSender = () => !host.isCommandBlock;
   const senderName = () => host.playerName ?? host.name ?? "Player";

@@ -44,7 +44,7 @@ export function commandBlockSender(host, tile, position, { now = () => new Date(
     sender.print(text, component);
     if (ruleOn({ gameRules: host.rules }, 'commandBlockOutput') && host.cheats) host.print(`§7§o[${tile.customName}: ${text}]`, adminComponent(tile.customName, component ?? componentFromLegacy(String(text))));
   };
-  sender.broadcast = text => { host.print(text); };
+  sender.broadcast = (text, component) => { host.print(text, component); };
   return sender;
 }
 export function installCommandBlocks(redstone, { host, changed = () => {} } = {}) {

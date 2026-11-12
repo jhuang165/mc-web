@@ -221,11 +221,11 @@ export function createCommandRunner(host) {
     },
     me(a) {
       if (a.length < 1) usage("commands.me.usage");
-      (host.broadcast ?? say)(tr("chat.type.emote", name(), a.join(" ")));
+      (host.broadcast ?? say)(tr("chat.type.emote", name(), a.join(" ")), translation("chat.type.emote", name(), a.join(" ")));
     },
     say(a) {
       if (a.length < 1) usage("commands.say.usage");
-      (host.broadcast ?? say)(tr("chat.type.announcement", name(), a.join(" ")));
+      (host.broadcast ?? say)(tr("chat.type.announcement", name(), a.join(" ")), translation("chat.type.announcement", name(), a.join(" ")));
     },
     tell(a) {
       if (a.length < 2) usage("commands.message.usage");

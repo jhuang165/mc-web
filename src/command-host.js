@@ -41,7 +41,8 @@ export function createCommandHost(env) {
     shareToLan: (mode, cheats) => env.shareToLan(mode, cheats),
     lanNotice: LAN_NOTICE,
     get rules() { const a = env.active(); return (a.gameRules ??= { ...DEFAULT_RULES }); },
-    print: (text) => printChat(text),
+    // GuiNewChat.printChatMessage takes the IChatComponent and draws its getFormattedText: the component beside the sender text is what the chat window shows.
+    print: (text, component) => printChat(component ?? text),
     position: () => env.position(),
     seed: () => env.seed(),
     playerPosition: () => env.position(),
