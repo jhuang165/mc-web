@@ -13,7 +13,9 @@ public class TrackerJointProbe {
   static ChickenProbe.World server;
   static TrackerProbe.PMP angler;
   static String tag = null; // "b53tj" on the batch 53 cases (the batch 52 cases carry none, so their records stay as they were)
-  static boolean hangs(String k) { return k.equals("painting") || k.equals("frame"); }
+  static boolean hangs(String k) { return k.equals("painting") || k.equals("frame") || k.equals("knot"); }
+  // Batch 54 (b54rt): kinds whose scripted motion rides in the S12 like an item's (a rocket, a falling block, primed TNT, a thrown potion); they keep yaw 0
+  static boolean drifts(String k) { return k.equals("firework") || k.equals("falling") || k.equals("tnt") || k.equals("potion"); }
   // kinds whose scripted motion rides in the S12 and whose yaw turns with the tick (the batch 52 kinds keep their own rules below)
   static boolean flies(String k) { return k.equals("boat") || k.startsWith("cart") || k.equals("eye") || k.equals("hook"); }
   static final List<Integer> pending = new ArrayList<>();
@@ -37,6 +39,12 @@ public class TrackerJointProbe {
       case "frame": return new st(server, (int) s[0], (int) s[1], (int) s[2], (int) s[3]);
       case "eye": return new zd(server, s[0], s[1], s[2]);
       case "hook": return new xe(server, s[0], s[1], s[2], angler);
+      // Batch 54 (b54rt): a leash knot (su, tile in s[0..2]), a firework rocket (zf), a falling sand block (xj), primed TNT (xw) and a thrown potion (zo, damage 16388)
+      case "knot": return new su(server, (int) s[0], (int) s[1], (int) s[2]);
+      case "firework": return new zf(server, s[0], s[1], s[2], new add(ade.G, 1));
+      case "falling": return new xj(server, s[0], s[1], s[2], aji.e(12), 0);
+      case "tnt": return new xw(server, s[0], s[1], s[2], null);
+      case "potion": return new zo(server, s[0], s[1], s[2], 16388);
       default: throw new IllegalStateException(kind);
     }
   }
@@ -175,7 +183,7 @@ public class TrackerJointProbe {
     if (it.kind.equals("arrow")) y = it.start[1] + it.vel[1] * t - 0.002 * t * t;
     TrackerProbe.set(e, "s", x); TrackerProbe.set(e, "t", y); TrackerProbe.set(e, "u", z);
     MobMoveProbe.set(e, "v", 0.0); MobMoveProbe.set(e, "w", 0.0); MobMoveProbe.set(e, "x", 0.0); MobMoveProbe.field(sa.class, "H").setBoolean(e, false);
-    if (it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind)) {
+    if (it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind) || drifts(it.kind)) {
       MobMoveProbe.set(e, "v", it.vel[0] * (1 + (t % 5) * 0.1)); MobMoveProbe.set(e, "w", it.vel[1]); MobMoveProbe.set(e, "x", it.vel[2]);
     }
     float yaw = it.kind.equals("chicken") || flies(it.kind) ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
@@ -194,7 +202,7 @@ public class TrackerJointProbe {
         // the states are recomputed from the script on a throwaway entity-free path: position() reads only the script, so replay the same arithmetic
         double x = it.start[0] + it.vel[0] * t, y = it.start[1] + it.vel[1] * t, z = it.start[2] + it.vel[2] * (double) t;
         if (it.kind.equals("arrow")) y = it.start[1] + it.vel[1] * t - 0.002 * t * t;
-        boolean motion = it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind);
+        boolean motion = it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind) || drifts(it.kind);
         double vx = motion ? it.vel[0] * (1 + (t % 5) * 0.1) : 0, vy = motion ? it.vel[1] : 0, vz = motion ? it.vel[2] : 0;
         float yaw = it.kind.equals("chicken") || flies(it.kind) ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
         r.append(t > 0 ? "," : "").append("[" + num(x) + "," + num(y) + "," + num(z) + "," + num(vx) + "," + num(vy) + "," + num(vz) + "," + yaw + "," + (it.kind.equals("arrow") ? -10 : 0) + "]");
@@ -254,5 +262,28 @@ public class TrackerJointProbe {
     System.out.println(run("vehicles", 1, 60, veh, 6));
     // ids in the 16-bit fold range, the player last: the entities loaded with the chunks come first, the player joins and is sent the lot in the set's order
     System.out.println(run("vehiclesLast", 65530, 60, veh, 9));
+    // Batch 54: leash knots, firework rockets, falling blocks, primed TNT and thrown potions among chickens, an item and a painting, the player mid-list (and last in the 16-bit fold range).
+    // The knot's tile is in start[0..2]; entities of every kind die before and after the player's slot and are born during the run.
+    tag = "b54rt";
+    Item[] ext = {
+      item("c1", "chicken", new double[]{2.5, 0, 3.5}, new double[]{0.09, 0, 0.01}, 0, -1, 2.5f),
+      item("n1", "knot", new double[]{4, 3, 6, 0}, z, 0, 36, 0),
+      item("w1", "firework", new double[]{3.5, 2.0, 2.5}, new double[]{0.04, 0.2, 0.03}, 0, 28, 0),
+      item("t1", "tnt", new double[]{5.5, 1.0, 4.5}, new double[]{0.03, 0, -0.02}, 0, 44, 0),
+      item("g1", "falling", new double[]{1.5, 3.0, 5.5}, new double[]{0.0, -0.05, 0.02}, 0, -1, 0),
+      item("p1", "painting", new double[]{6, 2, 3, 2}, z, 0, -1, 0),
+      item("v1", "potion", new double[]{2.5, 2.5, 1.5}, new double[]{0.2, 0.1, 0.15}, 0, 22, 0),
+      item("n2", "knot", new double[]{7, 3, 2, 0}, z, 0, -1, 0),
+      item("i1", "item", new double[]{4.5, 1.125, 2.5}, new double[]{0.05, 0, 0.02}, 0, 20, 0),
+      item("t2", "tnt", new double[]{6.5, 1.0, 6.5}, new double[]{-0.04, 0, 0.03}, 9, 40, 0),
+      item("w2", "firework", new double[]{2.0, 1.5, 6.0}, new double[]{-0.03, 0.15, -0.02}, 13, 50, 0),
+      item("g2", "falling", new double[]{5.5, 4.0, 1.5}, new double[]{0.02, -0.04, 0.0}, 17, -1, 0),
+      item("v2", "potion", new double[]{3.5, 3.0, 5.5}, new double[]{-0.15, 0.05, -0.1}, 21, 47, 0),
+      item("n3", "knot", new double[]{1, 4, 4, 0}, z, 26, 54, 0),
+      item("t3", "tnt", new double[]{4.0, 1.0, 4.0}, new double[]{0.05, 0, 0.05}, 31, -1, 0),
+      item("w3", "firework", new double[]{5.0, 2.5, 3.0}, new double[]{0.06, 0.1, -0.05}, 37, 58, 0),
+    };
+    System.out.println(run("extras", 1, 60, ext, 7));
+    System.out.println(run("extrasLast", 65530, 60, ext, 8));
   }
 }
