@@ -98,6 +98,7 @@ public class DigFinishProbe {
     return l.toArray(new String[0]);
   }
   static String[] cat(String[] a, String... b) { String[] r = Arrays.copyOf(a, a.length + b.length); System.arraycopy(b, 0, r, a.length, b.length); return r; }
+  static String[] cat3(String[] a, String[] b, String... c) { String[] r = Arrays.copyOf(a, a.length + b.length); System.arraycopy(b, 0, r, a.length, b.length); return cat(r, c); }
   static String[] ticks(int n) { String[] r = new String[n]; Arrays.fill(r, "t"); return r; }
   public static void main(String[] args) throws Exception {
     PlayerDamageProbe.init();
@@ -111,21 +112,21 @@ public class DigFinishProbe {
     for (int b : blocks) for (int t : tools) for (int g : new int[] { 1, 0 }) {
       for (int k : new int[] { 0, 1, 2, 3, 4, 5, 8, 12, 17, 20, 25, 30, 40, 60, 100, 160 }) {
         // run on until the delayed destroy breaks (up to 400 ticks), or stop at once if it broke on the finish
-        run("finish-k" + k, b, t, 1, cat(cat(seq("s:10:5:10", k, "ground:" + g, "f:10:5:10"), ticks(400))));
+        run("finish-k" + k, b, t, 1, cat(cat3(seq("s:10:5:10", k, "ground:" + g, "f:10:5:10"), ticks(400))));
       }
     }
     // Block swapped under the dig: started on A, B at the cell when the finish arrives.
     int[][] swaps = { { 1, 3 }, { 3, 1 }, { 1, 31 }, { 1, 0 }, { 3, 49 }, { 1, 7 }, { 12, 1 }, { 31, 1 }, { 50, 3 } };
     for (int[] sw : swaps) for (int k : new int[] { 2, 10, 30, 60, 160 })
-      run("swap-" + sw[0] + "-" + sw[1] + "-k" + k, sw[0], 0, 1, cat(seq("s:10:5:10", k, "set:10:5:10:" + sw[1], "f:10:5:10"), ticks(300)));
+      run("swap-" + sw[0] + "-" + sw[1] + "-k" + k, sw[0], 0, 1, cat3(seq("s:10:5:10", k, "set:10:5:10:" + sw[1], "f:10:5:10"), ticks(300)));
     // Finish at another cell than the dig start, finish with no start, finish after abort.
-    run("finish-other-cell", 3, 0, 1, cat(seq("s:10:5:10", 10, "set:11:5:10:3", "f:11:5:10"), ticks(2)));
+    run("finish-other-cell", 3, 0, 1, cat3(seq("s:10:5:10", 10, "set:11:5:10:3", "f:11:5:10"), ticks(2)));
     run("finish-no-start", 3, 0, 1, "f:10:5:10", "t", "t");
-    run("finish-after-abort", 3, 0, 1, cat(seq("s:10:5:10", 10, "a:10:5:10", "f:10:5:10"), ticks(2)));
+    run("finish-after-abort", 3, 0, 1, cat3(seq("s:10:5:10", 10, "a:10:5:10", "f:10:5:10"), ticks(2)));
     // The cell turns into air while digging (the cracks clear), and a second start while a delayed break waits.
     run("air-while-digging", 3, 0, 1, cat(seq("s:10:5:10", 5, "set:10:5:10:0", "t", "t"), "f:10:5:10"));
-    run("restart-during-delay", 3, 0, 1, cat(seq("s:10:5:10", 3, "f:10:5:10", "t", "t", "s:10:5:10"), ticks(300)));
-    run("double-finish", 3, 0, 1, cat(seq("s:10:5:10", 3, "f:10:5:10", "f:10:5:10"), ticks(300)));
+    run("restart-during-delay", 3, 0, 1, cat3(seq("s:10:5:10", 3, "f:10:5:10", "t", "t", "s:10:5:10"), ticks(300)));
+    run("double-finish", 3, 0, 1, cat3(seq("s:10:5:10", 3, "f:10:5:10", "f:10:5:10"), ticks(300)));
     // Instant blocks and the start of the dig.
     run("start-tall-grass", 31, 0, 1, "s:10:5:10", "t");
     run("start-torch", 50, 0, 1, "s:10:5:10", "t");
@@ -135,7 +136,31 @@ public class DigFinishProbe {
     detail = true;
     run("cracks-stone", 1, 257, 1, cat(seq("s:10:5:10", 40, "f:10:5:10")));
     detail = false;
+    // Batch 54 (digabort): the abort packet and the crack stages, every tick recorded (names "da-*"). Cracks: rate*(ticks+1)*10 truncated, 10 on an air cell,
+    // -1 on abort / break-at-finish / air under the dig; the abort names the last start cell (0,0,0 before any start) and leaves the delayed break running.
+    detail = true;
+    run("da-abort-no-start", 3, 0, 1, "a:10:5:10", "t", "a:10:5:10");
+    run("da-abort-mid", 1, 257, 1, cat3(seq("s:10:5:10", 6, "a:10:5:10"), ticks(4)));
+    run("da-abort-then-restart", 1, 257, 1, cat3(seq("s:10:5:10", 6, "a:10:5:10", "s:10:5:10"), ticks(12)));
+    run("da-abort-then-finish", 3, 0, 1, cat3(seq("s:10:5:10", 14, "a:10:5:10", "f:10:5:10"), ticks(3)));
+    run("da-abort-other-cell", 3, 0, 1, cat3(seq("s:10:5:10", 4, "a:11:5:10"), ticks(3)));
+    run("da-abort-in-delay", 3, 0, 1, cat3(seq("s:10:5:10", 8, "f:10:5:10", "t", "a:10:5:10"), ticks(12)));
+    run("da-abort-twice", 3, 0, 1, cat3(seq("s:10:5:10", 3, "a:10:5:10", "a:10:5:10"), ticks(2)));
+    run("da-second-start", 3, 0, 1, cat3(seq("s:10:5:10", 4, "set:11:5:10:3", "s:11:5:10"), ticks(4), "a:10:5:10", "t"));
+    run("da-finish-break", 3, 0, 1, cat3(seq("s:10:5:10", 12, "f:10:5:10"), ticks(2)));
+    run("da-finish-delay", 3, 0, 1, cat3(seq("s:10:5:10", 8, "f:10:5:10"), ticks(10)));
+    run("da-air-under-dig", 3, 0, 1, cat3(seq("s:10:5:10", 4, "set:10:5:10:0"), ticks(3), "a:10:5:10"));
+    run("da-swap-under-dig", 3, 0, 1, cat3(seq("s:10:5:10", 3, "set:10:5:10:1"), ticks(4)));
+    run("da-tool-swap", 1, 0, 1, cat3(seq("s:10:5:10", 5, "tool:257"), ticks(6)));
+    run("da-start-air", 0, 0, 1, "s:10:5:10", "t", "t", "a:10:5:10");
+    run("da-start-bedrock", 7, 0, 1, "s:10:5:10", "t", "t", "a:10:5:10");
+    run("da-start-instant", 31, 0, 1, "s:10:5:10", "t", "a:10:5:10");
+    run("da-obsidian-bare", 49, 0, 1, cat3(seq("s:10:5:10", 30, "a:10:5:10"), ticks(2)));
+    run("da-sand-air", 12, 0, 0, cat(seq("s:10:5:10", 8, "a:10:5:10")));
+    run("da-leaves-sword", 18, 268, 1, cat3(seq("s:10:5:10", 5, "f:10:5:10"), ticks(3)));
+    run("da-stone-diamond", 1, 278, 1, cat3(seq("s:10:5:10", 6, "f:10:5:10"), ticks(3)));
+    detail = false;
     // Tool switched between start and finish; hand to pickaxe.
-    run("tool-swap", 1, 0, 1, cat(seq("s:10:5:10", 20, "tool:257", "f:10:5:10"), ticks(300)));
+    run("tool-swap", 1, 0, 1, cat3(seq("s:10:5:10", 20, "tool:257", "f:10:5:10"), ticks(300)));
   }
 }
