@@ -526,6 +526,8 @@ export class MobTracker {
     return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) };
   }
   settle(e, en) { en.health = e.health; en.air = e.air ?? 300; en.hang = !!e.batHanging; en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
+  // Batch 52: `beforePlayer(entity)` (EntityWorld) says an entity that left the world sits before the player in loadedEntityList: World.updateEntities removes it at its own place,
+  // so the player's update that follows in the same pass flushes the destroy at once. The default is the player-first order: one tick later.
   // The client takes the queue in order; a destroy (EntityPlayerMP.func_152339_d) is flushed by the player's next update, one tick later (bytecode-read, batch 50:
   // MinecraftServer.v runs WorldServer.tick, then updateEntities, then EntityTracker.updateTrackedEntities; an untrack or a range loss queues the S13 in
   // destroyedItemsNetCache, and the player's onUpdate (mw.h) sends it at the start of its next update).
@@ -542,7 +544,7 @@ export class MobTracker {
     if (parts.length > 1 || parts[0][1].length > 1) queue.sort((a, b) => a[0] - b[0]);
     const blocked = new Set(), done = new Set();
     for (const [, t, en, p] of queue) {
-      if (!blocked.has(en) && p.type === "destroy") { p.after ??= t.tick + 1; if (p.after > t.tick) blocked.add(en); }
+      if (!blocked.has(en) && p.type === "destroy") { p.after ??= t.tick + (t.dying.includes(en) && t.beforePlayer?.(en.live) ? 0 : 1); if (p.after > t.tick) blocked.add(en); }
       if (blocked.has(en)) continue;
       done.add(p);
       en.client.apply(p, t.ctx);
@@ -572,7 +574,7 @@ export class MobTracker {
   // the second loop (a flagged player), then the client applies every queued packet in sending order and steps both kinds of copy in the one client list's order.
   jointUpdate(mobs, player, size, physics, joint) {
     const o = joint.tracker;
-    o.shareOrder(this);
+    o.shareOrder(this); o.beforePlayer = this.beforePlayer;
     o.ctx.world = joint.world; o.ctx.player = player;
     const all = o.allOf(o.withExtra(joint.lists)), none = () => [0];
     this.beginTick(mobs, player, size, false);

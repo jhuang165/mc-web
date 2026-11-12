@@ -557,13 +557,13 @@ projectiles.joined = (e) => mobs?.joined(e, "thrown");
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const compass = createCompass();
 let compassEpoch = 0, compassShownFrames = COMPASS_FRAMES;
-const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
+const eyes = Object.assign(new EyesOfEnder(), { ids: entityIds }); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
 rockets.joined = (e) => mobs?.joined(e, "rocket"); // the rocket's place in the loaded-entity list (entity-simulation.js entityWalkers)
 // The scene is created in start(), so particles look up its effect renderer when they spawn.
 const fireworkFx = new FireworkParticles({ effects: { add: (p) => scene.effectRenderer.add(p) }, playSound: (name, x, y, z, volume, pitch, distanceDelay) => sounds.play(name, { volume, pitch, position: { x, y, z }, distanceDelay: !!distanceDelay }) });
 // The fishing rod's bobber (fishing-simulation.js).
-const fishing = new Fishing();
+const fishing = Object.assign(new Fishing(), { ids: entityIds });
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
 // bow draw drives (EntityRenderer.fovModifierHand and its previous value).
 const arrows = new Arrows();

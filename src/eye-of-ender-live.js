@@ -23,11 +23,13 @@ export class EyesOfEnder {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
     this.random = random;
     this.eyes = [];
+    this.ids = null; // the shared EntityIds (main.js): an eye takes its entity id when it is thrown or loaded (Entity.<init>), not at the tracker's first sight
   }
   // ItemEnderEye.onItemRightClick: spawn at the player's feet (posY + 1.62 - yOffset 1.62) heading for `target`.
   launch(x, y, z, target) {
     const eye = createEye(x, y, z);
     moveTowards(eye, target[0], target[1], target[2], this.random);
+    if (this.ids) eye.entityId = this.ids.take();
     this.eyes.push(eye);
     return eye;
   }
@@ -45,7 +47,7 @@ export class EyesOfEnder {
   get balls() { return this.rows(this.eyes); }
   // The rows of eyes or of their client views (object-tracker.js objectView: the client entity's position)
   rows(list) { return list.map((e) => { const row = ROWS.get(e) ?? ROWS.set(e, { kind: "eyeOfEnder" }).get(e); return Object.assign(row, { x: e.x, y: e.y, z: e.z, px: e.px, py: e.py, pz: e.pz }); }); }
-  serialize() { return { random: this.random.save(), eyes: this.eyes.map(({ ball, ...e }) => e) }; }
+  serialize() { return { random: this.random.save(), eyes: this.eyes.map(({ ball, entityId, ...e }) => e) }; }
   load(record) {
     this.eyes = [];
     if (!record || typeof record !== "object") return;
@@ -53,7 +55,7 @@ export class EyesOfEnder {
     const keys = ["x", "y", "z", "px", "py", "pz", "vx", "vy", "vz", "yaw", "pitch", "prevYaw", "prevPitch", "tx", "ty", "tz", "age"];
     for (const e of Array.isArray(record.eyes) ? record.eyes : []) {
       if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
-      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false });
+      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false, ...(this.ids ? { entityId: Number.isInteger(e.entityId) ? e.entityId : this.ids.take() } : {}) }); // a saved eye is built anew (a new id); one handed over live (a summon) keeps its own
     }
   }
 }
