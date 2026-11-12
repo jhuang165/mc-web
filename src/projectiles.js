@@ -94,17 +94,19 @@ export function heading(rand, x, y, z, velocity, inaccuracy) {
 // EntityPlayerMP reports 1.62), shifted 0.16 to the right and 0.1 down, with
 // motion 0.4 along the view before func_70186_c(1.5, 1.0). This build's yaw and
 // pitch are radians looking along (-sin yaw cos pitch, sin pitch, -cos yaw cos
-// pitch); Minecraft's are degrees with yaw' = 180 - yaw and pitch' = -pitch.
-export function launch(rand, feet, yaw, pitch) {
+// pitch); Minecraft's are degrees with yaw' = 180 - yaw and pitch' = -pitch. `velocity` is the class's func_70182_d (snowball, egg, pearl 1.5;
+// EntityPotion 0.5, EntityExpBottle 0.7) and `pitchOffset` its func_70183_g (-20 for both bottles: only the vertical motion tilts); the aim always
+// draws the three gaussians of setThrowableHeading with inaccuracy 1.0 (executed: EntityListProbe throw-launch records).
+export function launch(rand, feet, yaw, pitch, velocity = 1.5, pitchOffset = 0) {
   const mcYaw = f(180 - (yaw * 180) / Math.PI), mcPitch = f((-pitch * 180) / Math.PI),
     k = f(f(mcYaw / 180) * PI_F), p = f(f(mcPitch / 180) * PI_F),
     s = mhSin(k), c = mhCos(k), power = f(0.4);
   const h = heading(
     rand,
     f(f(-s * mhCos(p)) * power),
-    f(-mhSin(p) * power),
+    f(-mhSin(pitchOffset ? f(f(f(mcPitch + f(pitchOffset)) / 180) * PI_F) : p) * power),
     f(f(c * mhCos(p)) * power),
-    1.5,
+    velocity,
     1,
   );
   return {
@@ -444,12 +446,10 @@ export class Projectiles {
         if (typeof onPearlImpact !== "function") throw new Error("Ender pearl impact requires a synchronous adapter hook");
         aimPart(hit);
         onPearlImpact({ pearl: b, world, hit: hit?.ref ?? null, target: hit, block });
-        return; // native client impacts remain alive until server synchronization
-      }
-      // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0),
-      // eight snowballpoof at the ball's current position, then setDead.
-      // EntityPotion.onImpact (witch-potions.js applies it): the position, the entity struck and the owner go out as an event.
-      if (b.kind === "potion") {
+        // EntityThrowable.onUpdate goes on after onImpact (the pearl is dead now): it still moves, turns and falls once, as the other balls do (executed: pthrow-pearl-* records)
+      } else if (b.kind === "potion") {
+        // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0), eight snowballpoof at the ball's current position, then setDead.
+        // EntityPotion.onImpact (witch-potions.js applies it): the position, the entity struck and the owner go out as an event.
         this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null } });
         b.dead = true;
       } else if (b.kind === "expBottle") {

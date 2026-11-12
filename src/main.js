@@ -217,7 +217,7 @@ import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
-import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked } from "./entity-simulation.js";
+import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
 import { ObjectTracker, objectViews } from "./object-tracker.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent } from "./living-simulation.js";
@@ -2795,12 +2795,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
     // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
-    projectileTargets: () => [...mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), ...hangingArrowTargets(hanging)],
-    projectileHit: (e, ball) => e === "player" ? false : hanging.entities.includes(e) ? thrownAtHanging(e) : thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
+    projectileTargets: () => [...mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
+    projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
-        hit:(e,source)=>e!=="player"&&(hanging.entities.includes(e)?thrownAtHanging(e):mobs?.attackEntityFrom(e,source.amount,{
+        hit:(e,source)=>e!=="player"&&(thrownAtStruck(e)||mobs?.attackEntityFrom(e,source.amount,{
           name:'thrown',player:!!source.thrower,attacker:'projectile',
           ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
         })),
@@ -3144,8 +3144,9 @@ const cartHost = {
   changed: () => { saved = false; },
   runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
-// EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a painting or item frame: attackEntityFrom(thrown by the player, 0) breaks it (a frame with an item loses the item).
-function thrownAtHanging(e) { hanging.attack(e, { player: true, creative: survival.creative }); spawnHangingDrops(); saved = false; return true; }
+// EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a cart, boat, painting or item frame: attackEntityFrom(thrown by the player, 0) wobbles a vehicle (a Creative thrower breaks it)
+// and breaks a painting (a frame with an item loses the item), entity-simulation.js. False for anything else (a mob).
+function thrownAtStruck(e) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, { player: true, creative: survival.creative })) return false; saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
     survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, {

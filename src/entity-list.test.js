@@ -24,7 +24,7 @@ const row = (r, t, kind, x) => r.rows[t][0][entityIndex(r, kind, x)];
 const differs = (a, b, kind, x) => a.rows.some((_, t) => JSON.stringify(row(a, t, kind, x)) !== JSON.stringify(row(b, t, kind, x)));
 
 test("the records show the list order: the same entities end differently when listed the other way round", () => {
-  assert.equal(entityListReference.length, 49);
+  assert.equal(entityListReference.length, 63);
   // two equal stacks: the first to update merges into the other, so the list order picks the survivor
   const dead = (r) => last(r).map((e) => e[6]);
   assert.deepEqual(dead(by("items-equal-ab")), [1, 0]);
@@ -145,4 +145,22 @@ test("a cart or boat pushes a mob inside the mob's own update, so the list order
     assert.ok(differs(by(a), by(b), kind, x), a);
     assert.notEqual(entityListDivergence(by(a), replayEntityList(by(a), null, "mobPush")), null, a + " needs the push in the walk");
   }
+});
+
+// Batch 46: balls the player threw (the probe's thrower is an EntityPlayerSP shell; b = Creative). Cart rows end [.., yaw, pitch, damage, rollingAmplitude, rollingDirection],
+// boat rows [.., yaw, timeSinceHit, damage]; the ball is the second entity.
+test("a snowball, egg or pearl the player throws wobbles a cart or boat without damage; a Creative thrower breaks it; a potion leaves the cart alone", () => {
+  const cart = (n) => last(by(n))[0], boat = (n) => last(by(n))[0];
+  for (const n of ["pthrow-snowball-cart", "pthrow-egg-cart", "pthrow-pearl-cart"]) { assert.equal(cart(n)[6], 0, n); assert.equal(cart(n)[9], 0, n + " damage 0"); assert.equal(cart(n)[11], -1, n + " rolling direction flips"); assert.ok(cart(n)[10] > 0, n + " rolling"); assert.equal(last(by(n))[1][6], 1, n + " ball dead"); }
+  assert.equal(cart("pthrow-snowball-cart-creative")[6], 1, "a Creative thrower breaks the cart"); assert.equal(by("pthrow-snowball-cart-creative").rows[5][3].length, 0, "and no item drops");
+  assert.equal(boat("pthrow-snowball-boat")[6], 0); assert.equal(boat("pthrow-snowball-boat")[9], 0); assert.ok(boat("pthrow-snowball-boat")[8] > 0, "the boat's hit timer runs");
+  assert.equal(boat("pthrow-snowball-boat-creative")[6], 1); assert.equal(boat("pthrow-pearl-boat-creative")[6], 1);
+  assert.equal(cart("pthrow-potion-cart")[10], 0, "a splash potion does not touch the cart"); assert.equal(last(by("pthrow-potion-cart"))[1][6], 1, "but it shatters on it");
+  for (const n of ["pthrow-snowball-cart", "pthrow-egg-cart", "pthrow-pearl-cart", "pthrow-snowball-boat", "pthrow-snowball-boat-creative", "pthrow-pearl-boat-creative", "pthrow-snowball-cart-creative"]) assert.notEqual(entityListDivergence(by(n), replayEntityList(by(n), null, "throwTargets")), null, n + " needs the carts and boats among the targets");
+});
+
+test("an egg or pearl the player throws breaks a painting like a snowball; a Creative thrower's hit drops nothing", () => {
+  for (const n of ["pthrow-snowball-painting", "pthrow-egg-painting", "pthrow-pearl-painting"]) { assert.equal(last(by(n))[0][6], 1, n); assert.equal(by(n).rows[5][3].length, 1, n + " the painting item joins the list on the hit tick"); }
+  for (const n of ["pthrow-snowball-painting-creative", "pthrow-pearl-painting-creative"]) { assert.equal(last(by(n))[0][6], 1, n); assert.equal(by(n).rows[7][3].length, 0, n + " no drop"); }
+  assert.equal(last(by("pthrow-potion-painting"))[0][6], 0, "a potion leaves the painting standing");
 });
