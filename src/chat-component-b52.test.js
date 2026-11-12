@@ -36,7 +36,7 @@ const trees = {
 };
 
 test("every executed row: JSON, getFormattedText and getUnformattedText match", () => {
-  assert.equal(ref.rows.length, Object.keys(trees).length + 8); // the 8 rows after the first 15 are b53ct (cmd-tell-b53.test.js)
+  assert.equal(ref.rows.length, Object.keys(trees).length + 12); // 8 rows after the first 15 are b53ct (cmd-tell-b53.test.js), the last 4 b54cn (chat-names-b54.test.js)
   for (const [name, json, formatted, unformatted] of ref.rows.filter((r) => trees[r[0]])) {
     const c = trees[name]();
     assert.equal(serializeComponent(c), json, name + " json");

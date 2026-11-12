@@ -67,8 +67,15 @@ public class ChatComponentProbe {
     fr sayWords = new fr("chat.type.announcement", player("Steve", "Steve"), words("hi", "there"));
     fr sayBlock = new fr("chat.type.announcement", new fq("@"), selWords);
     fr emoteWords = new fr("chat.type.emote", player("Steve", "Steve"), words("waves", "hello"));
-    fj[] comps = { header, usageLine, footer, dep, depMore, admin, admin2, usageErr, nested, argStyled, ownColour, ach, say, chatText, empty, tellIn, tellOut, tellBlock, chatClick, chatTeam, sayWords, sayBlock, emoteWords };
-    String[] names = { "helpHeader", "helpLine", "helpFooter", "deprecatedId", "deprecatedIdSibling", "adminGive", "adminTp", "usageError", "nestedStyles", "argumentStyle", "ownColour", "achievement", "announcement", "chatText", "emptyRoot", "tellIncoming", "tellOutgoing", "tellFromBlock", "chatTextClick", "chatTextTeam", "sayWords", "sayBlockSelector", "emoteWords" };
+    // b54cn: EntityPlayer.func_145748_c_ components as arguments of the death messages (DamageSource.func_151519_b / CombatTracker.func_151521_b build
+    // ChatComponentTranslation(key, victim.func_145748_c_(), killer.func_145748_c_())) and StatisticsFile's achievement broadcast. The trees are
+    // source-recalled; the formatting and serialization of them is executed. A mob killer is a plain ChatComponentText (Entity.func_145748_c_).
+    fr deathPlayer = new fr("death.attack.player", player("Steve", "Steve"), player("\u00a79Alex\u00a7r", "Alex"));
+    fr deathMob = new fr("death.attack.mob", player("\u00a7cSteve\u00a7r", "Steve"), new fq("Zombie"));
+    fr deathSelf = new fr("death.attack.generic", player("Steve", "Steve"));
+    fr achClick = new fr("chat.type.achievement", player("Steve", "Steve"), text("[Taking Inventory]", a.k, null, null));
+    fj[] comps = { header, usageLine, footer, dep, depMore, admin, admin2, usageErr, nested, argStyled, ownColour, ach, say, chatText, empty, tellIn, tellOut, tellBlock, chatClick, chatTeam, sayWords, sayBlock, emoteWords, deathPlayer, deathMob, deathSelf, achClick };
+    String[] names = { "helpHeader", "helpLine", "helpFooter", "deprecatedId", "deprecatedIdSibling", "adminGive", "adminTp", "usageError", "nestedStyles", "argumentStyle", "ownColour", "achievement", "announcement", "chatText", "emptyRoot", "tellIncoming", "tellOutgoing", "tellFromBlock", "chatTextClick", "chatTextTeam", "sayWords", "sayBlockSelector", "emoteWords", "deathPlayerClick", "deathMobPlayerVictim", "deathGenericClick", "achievementClick" };
     StringBuilder o = new StringBuilder();
     for (int i = 0; i < comps.length; i++) o.append(i > 0 ? "," : "").append(row(names[i], comps[i]));
     System.out.println("{\"name\":\"chat\",\"rows\":[" + o + "]}");

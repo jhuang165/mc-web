@@ -109,7 +109,7 @@ import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { showChatLine, PLAYER_NAME } from "./death-messages.js";
-import { deathComponent, chatTextComponent } from "./team-names.js";
+import { deathComponent, chatTextComponent, senderComponent } from "./team-names.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
@@ -599,7 +599,7 @@ const achievements = new Achievements({
   onUnlock: (a) => {
     achievementToast.show(a);
     // StatisticsFile.func_150873_a: chat.type.achievement with StatBase.func_150955_j, whose hover shows the achievement.
-    printChat(translation("chat.type.achievement", scoreboard.formatName(PLAYER_NAME), statComponent(lookupStat("achievement." + a.id))));
+    printChat(translation("chat.type.achievement", senderComponent(scoreboard.formatName(PLAYER_NAME), PLAYER_NAME), statComponent(lookupStat("achievement." + a.id))));
     saved = false;
   },
 });
