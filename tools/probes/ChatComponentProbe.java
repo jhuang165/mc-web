@@ -21,6 +21,17 @@ public class ChatComponentProbe {
     if (italic != null) t.b().b(italic);
     return t;
   }
+  static fq player(String formatted, String raw) {
+    fq t = new fq(formatted);
+    t.b().a(new fh(fi.e, "/msg " + raw + " "));
+    return t;
+  }
+  // CommandBase.func_147176_a: ChatComponentText("") with each word a sibling, " " siblings between.
+  static fq words(String... w) {
+    fq r = new fq("");
+    for (int i = 0; i < w.length; i++) { if (i > 0) r.a(new fq(" ")); r.a(new fq(w[i])); }
+    return r;
+  }
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
@@ -41,8 +52,23 @@ public class ChatComponentProbe {
     fr say = new fr("chat.type.announcement", "Server", "hello world");
     fr chatText = new fr("chat.type.text", "Player", "plain");
     fq empty = new fq(""); empty.a(text("first", a.m, null, null)); empty.a(new fq(" second"));
-    fj[] comps = { header, usageLine, footer, dep, depMore, admin, admin2, usageErr, nested, argStyled, ownColour, ach, say, chatText, empty };
-    String[] names = { "helpHeader", "helpLine", "helpFooter", "deprecatedId", "deprecatedIdSibling", "adminGive", "adminTp", "usageError", "nestedStyles", "argumentStyle", "ownColour", "achievement", "announcement", "chatText", "emptyRoot" };
+    // b53ct: the trees CommandMessage, CommandBroadcast, CommandServerEmote (CommandBase.func_147176_a) and NetHandlerPlayServer.processChatMessage
+    // build (source-recalled; none of those classes is in the client jar). EntityPlayer.func_145748_c_ (yz.c_) is read from bytecode: a ChatComponentText
+    // of the team-formatted name with a ClickEvent(fi.e = suggest_command, "/msg <name> "), no hover; it is built here with the real fq/fn/fh/fi.
+    fq whisperer = player("Steve", "Steve"), target = player("Alex", "Alex");
+    fq msg = words("hi", "there");
+    fr tellIn = new fr("commands.message.display.incoming", whisperer, msg); tellIn.b().a(a.h).b(true);
+    fr tellOut = new fr("commands.message.display.outgoing", target, words("hi", "there")); tellOut.b().a(a.h).b(true);
+    fr tellBlock = new fr("commands.message.display.incoming", new fq("@"), words("hi", "there")); tellBlock.b().a(a.h).b(true);
+    fr chatClick = new fr("chat.type.text", player("Steve", "Steve"), "hello");
+    fr chatTeam = new fr("chat.type.text", player("\u00a7c[Red] Steve\u00a7r", "Steve"), "hello");
+    fq selWords = new fq(""); selWords.a(new fq("hi")); selWords.a(new fq(" "));
+    fq sel = new fq(""); sel.a(player("Steve", "Steve")); selWords.a(sel);
+    fr sayWords = new fr("chat.type.announcement", player("Steve", "Steve"), words("hi", "there"));
+    fr sayBlock = new fr("chat.type.announcement", new fq("@"), selWords);
+    fr emoteWords = new fr("chat.type.emote", player("Steve", "Steve"), words("waves", "hello"));
+    fj[] comps = { header, usageLine, footer, dep, depMore, admin, admin2, usageErr, nested, argStyled, ownColour, ach, say, chatText, empty, tellIn, tellOut, tellBlock, chatClick, chatTeam, sayWords, sayBlock, emoteWords };
+    String[] names = { "helpHeader", "helpLine", "helpFooter", "deprecatedId", "deprecatedIdSibling", "adminGive", "adminTp", "usageError", "nestedStyles", "argumentStyle", "ownColour", "achievement", "announcement", "chatText", "emptyRoot", "tellIncoming", "tellOutgoing", "tellFromBlock", "chatTextClick", "chatTextTeam", "sayWords", "sayBlockSelector", "emoteWords" };
     StringBuilder o = new StringBuilder();
     for (int i = 0; i < comps.length; i++) o.append(i > 0 ? "," : "").append(row(names[i], comps[i]));
     System.out.println("{\"name\":\"chat\",\"rows\":[" + o + "]}");

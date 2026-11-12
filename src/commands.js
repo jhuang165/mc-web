@@ -13,6 +13,7 @@ import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { createExtraCommands } from "./commands-extra.js";
 import { createScoreboardCommands, joinNiceString } from "./commands-scoreboard.js";
 import { translation, text as textComponent } from "./chat-component.js";
+import { senderComponent } from "./team-names.js";
 import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
 
@@ -146,6 +147,25 @@ export function createCommandRunner(host) {
   const coloured = (colour, key, ...args) => { const c = translation(key, ...args); c.style.color = colour; return c; };
   const allowed = command => host.canUse ? host.canUse(command) : canUse(command, host.cheats);
   const playerName = () => host.playerName ?? name();
+  // The sender's / a player's func_145748_c_: a player's team-formatted name with its /msg click, a command block's plain name.
+  const playerComponent = (n) => senderComponent(host.scoreboard?.formatName?.(n) ?? n, n);
+  const senderOf = () => (host.isCommandBlock ? textComponent(name()) : playerComponent(name()));
+  // CommandBase.func_147176_a (source-recalled; the command classes are not in the client jar): an empty ChatComponentText with one sibling per word,
+  // joined by " " siblings; with selectors on, a word that is an @p/@a/@r token becomes the matched players' names joined by ", " (none: PlayerNotFoundException).
+  const messageComponent = (words, selectors) => {
+    const root = textComponent("");
+    words.forEach((w, i) => {
+      if (i > 0) root.append(textComponent(" "));
+      let part = textComponent(w);
+      if (selectors && /^@[parf](?:\[[\w=,!-]*\])?$/.test(w)) {
+        const hit = selectLocalPlayer(w, host);
+        if (hit == null) throw playerNotFound();
+        part = textComponent("").append(playerComponent(hit));
+      }
+      root.append(part);
+    });
+    return root;
+  };
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
   // The ChatComponentTranslation(key, args) the native sender receives travels beside the text (a command block keeps it as LastOutput); a number argument is Double/Integer.toString.
   const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args), translation(key, ...args));
@@ -221,17 +241,24 @@ export function createCommandRunner(host) {
     },
     me(a) {
       if (a.length < 1) usage("commands.me.usage");
-      (host.broadcast ?? say)(tr("chat.type.emote", name(), a.join(" ")), translation("chat.type.emote", name(), a.join(" ")));
+      const c = translation("chat.type.emote", senderOf(), messageComponent(a, !!host.isCommandBlock)); // selectors only for a non-player sender
+      (host.broadcast ?? say)(tr("chat.type.emote", name(), c.args[1].unformatted()), c);
     },
     say(a) {
       if (a.length < 1) usage("commands.say.usage");
-      (host.broadcast ?? say)(tr("chat.type.announcement", name(), a.join(" ")), translation("chat.type.announcement", name(), a.join(" ")));
+      const c = translation("chat.type.announcement", senderOf(), messageComponent(a, true));
+      (host.broadcast ?? say)(tr("chat.type.announcement", name(), c.args[1].unformatted()), c);
     },
     tell(a) {
       if (a.length < 2) usage("commands.message.usage");
       const target = player(a[0]);
       if (target === name()) throw new CommandException("commands.message.sameTarget");
-      say(tr("commands.message.display.outgoing", target, a.slice(1).join(" ")));
+      const message = messageComponent(a.slice(1), !!host.isCommandBlock);
+      // CommandMessage: both are gray italic translations; the target gets the incoming one (the sender's component), the sender the outgoing one.
+      const grey = (key, who) => { const c = translation(key, who, message); c.style.color = "gray"; c.style.italic = true; return c; };
+      const incoming = grey("commands.message.display.incoming", senderOf()), outgoing = grey("commands.message.display.outgoing", playerComponent(target));
+      host.broadcast?.(tr("commands.message.display.incoming", name(), message.unformatted()), incoming);
+      say(tr("commands.message.display.outgoing", target, message.unformatted()), outgoing);
     },
     seed() { feedback("commands.seed.success", String(host.seed())); },
     list() { say(tr("commands.players.list", 1, 8)); say(name()); },

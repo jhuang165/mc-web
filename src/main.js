@@ -1770,7 +1770,7 @@ function chatSpamGate(text, deliver) {
 }
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); }),
+  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text, PLAYER_NAME), 0, false); }),
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;

@@ -39,7 +39,10 @@
   "commands.generic.usage": "Usage: %s",
   "chat.type.achievement": "%s has just earned the achievement %s",
   "chat.type.announcement": "[%s] %s",
-  "chat.type.text": "<%s> %s"
+  "chat.type.text": "<%s> %s",
+  "commands.message.display.incoming": "%s whispers to you: %s",
+  "commands.message.display.outgoing": "You whisper to %s: %s",
+  "chat.type.emote": "* %s %s"
  },
  "rows": [
   [
@@ -131,6 +134,54 @@
    "{\"extra\":[{\"color\":\"red\",\"text\":\"first\"},\" second\"],\"text\":\"\"}",
    "§r§cfirst§r second§r",
    "first second"
+  ],
+  [
+   "tellIncoming",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"commands.message.display.incoming\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"extra\":[\"hi\",\" \",\"there\"],\"text\":\"\"}]}",
+   "§7§oSteve§r§7§o whispers to you: §r§7§o§r§7§ohi§r§7§o §r§7§othere§r",
+   "Steve whispers to you: hi there"
+  ],
+  [
+   "tellOutgoing",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"commands.message.display.outgoing\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Alex \"},\"text\":\"Alex\"},{\"extra\":[\"hi\",\" \",\"there\"],\"text\":\"\"}]}",
+   "§7§oYou whisper to §r§7§oAlex§r§7§o: §r§7§o§r§7§ohi§r§7§o §r§7§othere§r",
+   "You whisper to Alex: hi there"
+  ],
+  [
+   "tellFromBlock",
+   "{\"italic\":true,\"color\":\"gray\",\"translate\":\"commands.message.display.incoming\",\"with\":[\"@\",{\"extra\":[\"hi\",\" \",\"there\"],\"text\":\"\"}]}",
+   "§7§o@§r§7§o whispers to you: §r§7§o§r§7§ohi§r§7§o §r§7§othere§r",
+   "@ whispers to you: hi there"
+  ],
+  [
+   "chatTextClick",
+   "{\"translate\":\"chat.type.text\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},\"hello\"]}",
+   "<§rSteve§r> §rhello§r",
+   "<Steve> hello"
+  ],
+  [
+   "chatTextTeam",
+   "{\"translate\":\"chat.type.text\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"§c[Red] Steve§r\"},\"hello\"]}",
+   "<§r§c[Red] Steve§r§r> §rhello§r",
+   "<§c[Red] Steve§r> hello"
+  ],
+  [
+   "sayWords",
+   "{\"translate\":\"chat.type.announcement\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"extra\":[\"hi\",\" \",\"there\"],\"text\":\"\"}]}",
+   "[§rSteve§r] §r§rhi§r §rthere§r",
+   "[Steve] hi there"
+  ],
+  [
+   "sayBlockSelector",
+   "{\"translate\":\"chat.type.announcement\",\"with\":[\"@\",{\"extra\":[\"hi\",\" \",{\"extra\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"}],\"text\":\"\"}],\"text\":\"\"}]}",
+   "[§r@§r] §r§rhi§r §r§rSteve§r",
+   "[@] hi Steve"
+  ],
+  [
+   "emoteWords",
+   "{\"translate\":\"chat.type.emote\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"extra\":[\"waves\",\" \",\"hello\"],\"text\":\"\"}]}",
+   "* §rSteve§r §r§rwaves§r §rhello§r",
+   "* Steve waves hello"
   ]
  ]
 }

@@ -36,8 +36,8 @@ const trees = {
 };
 
 test("every executed row: JSON, getFormattedText and getUnformattedText match", () => {
-  assert.equal(ref.rows.length, Object.keys(trees).length);
-  for (const [name, json, formatted, unformatted] of ref.rows) {
+  assert.equal(ref.rows.length, Object.keys(trees).length + 8); // the 8 rows after the first 15 are b53ct (cmd-tell-b53.test.js)
+  for (const [name, json, formatted, unformatted] of ref.rows.filter((r) => trees[r[0]])) {
     const c = trees[name]();
     assert.equal(serializeComponent(c), json, name + " json");
     assert.equal(c.formatted(), formatted, name + " formatted");
@@ -70,7 +70,7 @@ test("a numeric id warning keeps the gray colour through the nested argument", (
 test("/say and /me broadcast translations the window formats", () => {
   const log = new ChatLog();
   createCommandRunner(chatHost(log, { broadcast: (t, c) => log.print(c ?? t) })).run("/say hi there");
-  assert.equal(log.history[0].text.formatted(), "[§rPlayer§r] §rhi there§r");
+  assert.equal(log.history[0].text.formatted(), row("sayWords")[2].replace("Steve", "Player")); // b53ct: the words are siblings of an empty root
 });
 
 // AnvilChunkLoader.readChunkFromNBT has no handler around TileEntity.c / EntityList.a and ChunkProviderServer.safeLoadChunk catches Exception (bytecode-read):
