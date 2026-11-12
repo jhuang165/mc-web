@@ -70,6 +70,20 @@ export function pushPlayer(world, player, dx, dy, dz) {
   return landed;
 }
 
+// The integrated server's copy of the player (ai.js PlayerView, an EntityPlayerMP in the loaded entity list) under TileEntityPiston.func_145863_a: Entity.moveEntity on its own state at the position it
+// rests at (stepHeight 0, its sneak flag and the sneak edge, onGround, the web flag), so a blocked axis zeroes its motion and a push over a ledge or into a wall stops. The position stays pushed until
+// a C03 position packet puts the client's place back (b48pp records). Written back: position, motion, onGround, the web flag. The copy keeps no fall distance of its own here.
+export function pushServerPlayer(world, copy, dx, dy, dz) {
+  const m = copy.motion ?? (copy.motion = { x: 0, y: 0, z: 0 });
+  const body = { x: copy.x, y: copy.y, z: copy.z, vx: m.x, vy: m.y, vz: m.z, onGround: !!copy.onGround, inWater: false, inLava: false, sneaking: !!copy.sneaking, player: true, living: true, inWeb: !!copy.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
+  if (world) moveEntity(world, body, copy.width ?? 0.6, copy.height ?? 1.8, dx, dy, dz, 0);
+  else { body.x += dx; body.y += dy; body.z += dz; }
+  copy.x = body.x; copy.y = body.y; copy.z = body.z;
+  m.x = body.vx; m.y = body.vy; m.z = body.vz;
+  copy.onGround = body.onGround;
+  copy.inWeb = !!body.inWeb;
+}
+
 // The pushable entities a cart or boat move is blocked by, as structure-simulation.js tickMinecartSimulation builds them
 // (EntityMinecart / EntityBoat getCollisionBox): the player (its rider identity keeps its own vehicle out) and living mobs.
 function vehicleBlockers(game) {

@@ -19,6 +19,7 @@
 //   entities  what can be pushed (all optional):
 //               player: { x, y, z } feet position (or { position: { x, y, z } }), width 0.6, height 1.8 by default,
 //                       move?(dx, dy, dz): shift the runtime player (default: write the delta into the position);
+//               serverPlayer: () => the integrated server's copy of the player (ai.js PlayerView: x, y, z, motion, onGround, sneaking, inWeb), pushed with its own moveEntity (b48pp);
 //               mobs:   an EntityWorld, an array or a function returning an array of { x, y, z, type, growingAge }, moved
 //                       with entities.js moveEntity through `world`;
 //               extra:  () => [{ box: [minX, minY, minZ, maxX, maxY, maxZ], move(dx, dy, dz) }] (drops, orbs, carts ...);
@@ -57,7 +58,7 @@ import { blockBounds, collisionBounds } from "./world.js";
 import { pistonQuads, FACING_OFFSETS, PISTON, STICKY_PISTON, PISTON_HEAD } from "./dispenser-piston.js";
 import { ENTITY_TYPES, pushBox, moveEntity } from "./entities.js";
 import { pistonTile } from "./redstone.js";
-import { pushPlayer } from "./piston-push.js";
+import { pushPlayer, pushServerPlayer } from "./piston-push.js";
 
 const f32 = Math.fround;
 export const ORIGINAL_PISTON = 33, ORIGINAL_STICKY = 29, ORIGINAL_HEAD = 34, ORIGINAL_MOVING = 36;
@@ -203,6 +204,14 @@ export function installPistons({ redstone, scene = null, world = null, entities 
           if (p.move) return p.move(dx, dy, dz);
           pushPlayer(world, p, dx, dy, dz);
         },
+      });
+    }
+    // The server's copy of the player (EntityPlayerMP in the loaded entity list) is pushed by its own tile entity update too: entities.serverPlayer() -> ai.js PlayerView (b48pp records).
+    const copy = entities.serverPlayer?.();
+    if (copy && copy.alive !== false && copy.has !== false) {
+      out.push({
+        box: pushBox(copy, copy.width ?? 0.6, copy.height ?? 1.8), entity: copy,
+        move: (dx, dy, dz) => (entities.move ? entities.move(copy, dx, dy, dz) : pushServerPlayer(world, copy, dx, dy, dz)),
       });
     }
     const source = mobSource();

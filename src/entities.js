@@ -2300,6 +2300,7 @@ export class EntityWorld {
     // EntityPlayerMP.onUpdateEntity (mw.i), in the network tick after the world's entities: EntityLivingBase.onLivingUpdate on the server's copy of the player (its motion
     // is only what mobs, hits and explosions gave it: snapped below 0.005, moved, then slowed by the ground friction) and, at its end, collideWithNearbyEntities: every mob beside
     // the moved box is pushed by (and pushes) the player (b46mp records).
+    this.afterEntities?.(); // World.updateEntities' tile entity pass (moving piston blocks push mobs and the copy: b48pp records), after every entity and before the network tick
     const p = this.ai.player;
     if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
       this.serverPlayerUpdate(p);
@@ -2328,6 +2329,7 @@ export class EntityWorld {
     if (p.flying && !p.riding) e.vy = vy * 0.6; // EntityPlayer.moveEntityWithHeading (yz.e(FF)): a flying player keeps 0.6 of the vertical motion it had
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
+    p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of this.entities) {
