@@ -135,7 +135,7 @@ export function dragonUpdate(mobs, e, player, survival) {
   e.prevRotationYaw = nearAngle(e.prevRotationYaw, e.rotationYaw);
   e.prevRenderYawOffset = nearAngle(e.prevRenderYawOffset, e.renderYawOffset);
   if (host.edits.length) mobs.events.push({ blockEdit: host.edits });
-  if (done) { e.death = 20; e.health = 0; e.dragonGone = true; }
+  if (done) { e.removedHealth = e.health; e.death = 20; e.health = 0; e.dragonGone = true; }
 }
 
 function restoreState(e) {

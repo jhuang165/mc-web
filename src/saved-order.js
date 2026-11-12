@@ -7,8 +7,11 @@
 // compares the unclamped posY / 16 with the clamped filed section, as World.updateEntityWithOptionalForce does, so one above 256 or below 0 is refiled every tick), and a
 // mount saved with its rider is one record natively (the rider with the mount nested under `Riding`, the mount skipped; the loader adds the rider, then its mount to the
 // chunk it is reading): the stamps are the places of that load. Fireballs and wither skulls are stamped too (their records are dimension-split).
-// Approximations: the chunks are taken in the order of their first joined entity (a native load follows the chunk provider's order), and the section check runs at the end of
-// the pass (natively right after each entity's own update).
+// Batch 54 (b54so, saved-order3-reference.json): the section check runs right after each entity's own update (EntityWorld.tickMobs), as World.updateEntities does, and a mount
+// that carries the player is not in a chunk at all natively (the player's NBT nests it under `Riding`, and the mount is skipped by the chunk writer because it is ridden): the
+// player's login reads it back, spawns it with forceSpawn after the chunks are loaded and mounts the player, so it is the last of the loaded list (carriesPlayer, last in saveWalk).
+// The browser keeps the mount's record in its own list (cart `rider: true`, mob `playerRides`) so older saves load unchanged; only the stamp follows the native shape.
+// Approximation: the chunks are taken in the order of their first joined entity (a native load follows the chunk provider's order).
 const SECTIONS = 16;
 const sectionOf = (e) => Math.min(SECTIONS - 1, Math.max(0, Math.floor((e.posY ?? e.y ?? 0) / 16)));
 const finite = (v) => Number.isFinite(v);
@@ -45,8 +48,13 @@ function saveWalk(mobs, groups) {
   const first = new Map(), moved = mobs.sectionSeqs, born = mobs.chunkBirth; // born: the place of the first entity a chunk had in the passes seen (a mover joining it later does not lower it)
   for (const r of rows) { const k = `${r.cx},${r.cz}`; first.set(k, Math.min(first.get(k) ?? Infinity, born?.get(k) ?? r.seq)); r.chunk = k; r.list = moved?.get(r.e) ?? r.seq; }
   rows.sort((a, b) => first.get(a.chunk) - first.get(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
-  return loadOrder(rows);
+  // b54so: the mount carrying the player is read from the player's file (Riding) and spawned after the chunks: last, in list order among such mounts
+  const carried = rows.filter((r) => carriesPlayer(r.e)), rest = carried.length ? rows.filter((r) => !carriesPlayer(r.e)) : rows;
+  return [...loadOrder(rest), ...carried];
 }
+
+// A cart, boat or mob the local player rides (minecarts.js / boats.js `rider`, entities.js serializeOne's playerRides rule).
+const carriesPlayer = (e) => { const r = e?.rider; return !!r && !r.dead && (r.player === true || r.vehicle?.entity === e); };
 
 // The order a load gives the file the walk writes (AnvilChunkLoader): a mount with a rider is not written (Entity.writeToNBTOptional); its rider carries it nested under `Riding`,
 // and the reader adds the rider to the chunk it is reading, then each mount of the chain (Chunk.addEntity, filed by the mount's own posY / 16). Chunk.onChunkLoad then
@@ -68,8 +76,8 @@ function loadOrder(rows) {
   return out.length === rows.length ? out : rows; // a mount whose rider is not in the walk (a ring) would be lost: keep the plain walk
 }
 
-/** The chunk/section check of World.updateEntityWithOptionalForce, run for the entities of a pass (`order`) at its end (`start`: at its beginning, only to note where an entity
- *  joined). An entity whose posX / 16, posY / 16 or posZ / 16 (floor, y unclamped) differs from the cell it is filed in leaves that list and joins the end of the new one: it gets
+/** The chunk/section check of World.updateEntityWithOptionalForce, run for the entities in `order`: tickMobs calls it with one entity right after that entity's own update (b54so) (`start`: for the
+ *  whole pass at its beginning, only to note where an entity joined). An entity whose posX / 16, posY / 16 or posZ / 16 (floor, y unclamped) differs from the cell it is filed in leaves that list and joins the end of the new one: it gets
  *  a stamp above everything so far in `sectionSeqs`, which the save walk reads for the order inside a section. The filed section is clamped (Chunk.addEntity), so an entity
  *  at y >= 256 or y < 0 is refiled every pass. */
 export function trackSections(mobs, order, start = false) {

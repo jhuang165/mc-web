@@ -856,8 +856,7 @@ export class EntityWorld {
       !t ||
       ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
       (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
-      e.y < -64 ||
-      e.y >= (world.height ?? HEIGHT) ||
+      e.y < -64 || // b54so: no upper bound: AnvilChunkLoader files a record above 256 in section 15 (Chunk.addEntity clamps) and loads it; only the void (y < -64) removes
       (e.health <= 0 && !summoned && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200))
     )
       return null;
@@ -1963,7 +1962,7 @@ export class EntityWorld {
       rangedAttack:(e,target,scale)=>e.type==="wither"?witherRanged(this,e,target):e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
-      despawn:(e)=>{e.despawnedHealth=e.health;e.health=0;e.death=20;freeRider(e);}, // setDead leaves the native health; the rest of that update (its path search's fall tries) still reads it (ai.js maxSafePointTries)
+      despawn:(e)=>{e.despawnedHealth=e.removedHealth=e.health;e.health=0;e.death=20;freeRider(e);}, // setDead leaves the native health; the rest of that update (its path search's fall tries) still reads it (ai.js maxSafePointTries)
     });
   }
   // The mob tick reads blocks through the headless ring's view (resident column first, then the ring's), so mobs outside the resident
@@ -2208,10 +2207,14 @@ export class EntityWorld {
     trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
+    let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
+    const sections = () => { if (prevEntity) trackSections(this, [prevEntity]); prevEntity = null; };
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       const e = order[oi];
       seat();
+      sections();
       if (e.lateHook) { e.lateHook(); continue; }
+      prevEntity = e;
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       const walk = this.walkOf?.get(e);
       // A rider that sat down during this pass (a cow taken aboard by a cart's push): World.updateEntities skips an entity riding a live mount at its own place; the rider's
@@ -2357,7 +2360,7 @@ export class EntityWorld {
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
-    trackSections(this, order); // b53so: an entity that changed chunk or section in this pass joins the end of its new list (saved-order.js)
+    sections(); // b53so / b54so: an entity that changed chunk or section joins the end of its new list right after its own update (saved-order.js)
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
     this.tickOrder = null;

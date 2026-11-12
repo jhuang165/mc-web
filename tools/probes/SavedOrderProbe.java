@@ -123,6 +123,63 @@ public class SavedOrderProbe {
     s.append("],\"ticks\":").append(Arrays.deepToString(ticks)).append(",\"before\":").append(before).append(",\"after\":").append(after).append("}");
     System.out.println(s);
   }
+  // Batch 54 (b54so): the same World.updateEntityWithOptionalForce check run per entity, right after that entity's own update (as World.updateEntities does), and a mount that carries
+  // the player. A tick walks loadedEntityList by index: entity i first applies its own moves ({index, y, chunk shift, -1}), then the check runs on it; moves with pusher p ({index, y, shift, p})
+  // are applied right after entity p's check (another entity pushed it after its own turn, so its refile waits for the next pass). `playerCart` >= 0 names a spec whose mount carries
+  // the player: a cow stand-in for the player (a player is not in a chunk) rides it; the chunk writer skips the mount (riddenByEntity != null), the rider's own Riding compound is
+  // written (Entity.writeToNBT), and after the chunks are loaded (Chunk.onChunkLoad) the compound is read back as ServerConfigurationManager.initializeConnectionToPlayer does:
+  // EntityList.createEntityFromNBT(Riding), forceSpawn, World.spawnEntityInWorld (real, appended after the chunks), then mountEntity. The record's `after` is loadedEntityList.
+  static void scenario3(String name, int[][] chunks, String[][] specs, double[][][] ticks, int playerCart) throws Throwable {
+    aqk loader = new aqk(new File("unused-probe-path"));
+    Method writer = aqk.class.getDeclaredMethod("a", apx.class, ahb.class, dh.class); writer.setAccessible(true);
+    Method reader = aqk.class.getDeclaredMethod("a", ahb.class, dh.class); reader.setAccessible(true);
+    java.lang.invoke.MethodHandle spawn = java.lang.invoke.MethodHandles.privateLookupIn(XpOrbProbe.XW.class, java.lang.invoke.MethodHandles.lookup()).findSpecial(ahb.class, "d", java.lang.invoke.MethodType.methodType(boolean.class, sa.class), XpOrbProbe.XW.class);
+    SW w = world();
+    List<apx> made = new ArrayList<>();
+    for (int[] c : chunks) { apx ch = new apx(w, c[0], c[1]); made.add(ch); w.chunkMap.put(SW.key(c[0], c[1]), ch); }
+    List<sa> ents = new ArrayList<>();
+    List<Integer> before = new ArrayList<>();
+    for (int i = 0; i < specs.length; i++) {
+      int ci = Integer.parseInt(specs[i][2]);
+      sa e = make(w, specs[i][0], chunks[ci][0] * 16 + 1 + 0.5 * i, Double.parseDouble(specs[i][1]), chunks[ci][1] * 16 + 8.5);
+      made.get(ci).a(e);
+      loaded(w).add(e);
+      ents.add(e);
+      before.add(index(e, chunks));
+    }
+    for (int i = 0; i < specs.length; i++) { int m = Integer.parseInt(specs[i][3]); if (m >= 0) ents.get(i).a(ents.get(m)); }
+    sa player = null;
+    if (playerCart >= 0) { player = new wh(w); PlayerStepProbe.field(sa.class, "Z").set(player, new Random(7)); player.b(0, 0, 0); player.a(ents.get(playerCart)); }
+    for (double[][] tick : ticks) {
+      for (sa e : new ArrayList<>(loaded(w))) {
+        int me = ents.indexOf(e);
+        for (double[] mv : tick) if ((int) mv[0] == me && mv[3] < 0) { e.b(e.s + 16 * mv[2], mv[1], e.u); }
+        w.a(e, false);
+        for (double[] mv : tick) if ((int) mv[3] == me) { sa t = ents.get((int) mv[0]); t.b(t.s + 16 * mv[2], mv[1], t.u); }
+      }
+    }
+    SW w2 = world();
+    MobMoveProbe.field(ahb.class, "e").set(w2, new ArrayList()); // loadedEntityList
+    MobMoveProbe.field(ahb.class, "g").set(w2, new ArrayList()); // loadedTileEntityList (Chunk.onChunkLoad adds the chunk tile entities)
+    for (int ci = 0; ci < chunks.length; ci++) {
+      dh level = new dh(); writer.invoke(loader, made.get(ci), w, level);
+      apx back = (apx) reader.invoke(loader, w2, level);
+      w2.chunkMap.put(SW.key(chunks[ci][0], chunks[ci][1]), back);
+      back.c(); // Chunk.onChunkLoad: addLoadedEntities for sections 0..15
+    }
+    if (player != null) {
+      dh tag = new dh(); player.e(tag); // Entity.writeToNBT: the Riding compound holds the cart
+      sa cart = sg.a(tag.m("Riding"), w2); // EntityList.createEntityFromNBT
+      PlayerStepProbe.field(sa.class, "Z").set(cart, new Random(7));
+      cart.n = true; spawn.invoke(w2, cart); cart.n = false;
+    }
+    List<Integer> after = new ArrayList<>();
+    for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(w2)) after.add(index((sa) o, chunks));
+    StringBuilder s = new StringBuilder("{\"case\":\"saved-order3\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
+    for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
+    s.append("],\"ticks\":").append(Arrays.deepToString(ticks)).append(",\"playerCart\":").append(playerCart).append(",\"before\":").append(before).append(",\"after\":").append(after).append("}");
+    System.out.println(s);
+  }
   static String[] S(String kind, double y, int chunk, int mount) { return new String[] {kind, Double.toString(y), Integer.toString(chunk), Integer.toString(mount)}; }
   static String[][] plain(String[] kinds, double[] ys, int[] chunk) {
     String[][] out = new String[ys.length][];
@@ -135,7 +192,7 @@ public class SavedOrderProbe {
     for (int i = 0; i < ys.length; i++) out[i] = new String[] {kinds[i % kinds.length], Double.toString(ys[i]), Integer.toString(chunk[i])};
     return out;
   }
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws Throwable {
     aji.p(); adb.l();
     PlantProbe.unsafe = MobMoveProbe.unsafe();
     int[][] one = {{0, 0}}, two = {{0, 0}, {1, 0}}, three = {{-1, 3}, {2, 2}, {0, 0}};
@@ -165,5 +222,15 @@ public class SavedOrderProbe {
     scenario2("b53so-mount-chain", one, new String[][] {S("cow", 70, 0, 1), S("cow", 70, 0, 2), S("cart", 70, 0, -1), S("item", 70, 0, -1), S("item", 5, 0, -1)}, new double[][][] {none});
     scenario2("b53so-mount-two-chunks", two, new String[][] {S("item", 70, 0, -1), S("cow", 70, 1, 2), S("cart", 70, 1, -1), S("item", 70, 1, -1), S("cow", 70, 0, 5), S("cart", 70, 0, -1), S("item", 70, 0, -1)}, new double[][][] {none});
     scenario2("b53so-mount-after-move", one, new String[][] {S("item", 70, 0, -1), S("cart", 70, 0, -1), S("cow", 70, 0, 1), S("item", 20, 0, -1), S("orb", 70, 0, -1)}, new double[][][] {{{2, 20, 0}, {1, 20, 0}}, {{0, 20, 0}}});
+    // ---- batch 54 (b54so): the check per entity, right after its own update; a cart that carries the player ----
+    scenario3("b54so-pushed-after-turn", one, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, c0), new double[][][] {{{0, 20, 0, 1}, {2, 20, 0, -1}}, none}, -1);
+    scenario3("b54so-pusher-earlier", one, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, c0), new double[][][] {{{5, 20, 0, 1}, {3, 20, 0, -1}, {1, 20, 0, -1}}, none}, -1);
+    scenario3("b54so-pushed-chunk", two, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, alt), new double[][][] {{{0, 70, 1, 4}, {2, 70, 1, -1}}, none, {{4, 20, 0, -1}}}, -1);
+    scenario3("b54so-pushed-twice", one, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, c0), new double[][][] {{{0, 20, 0, 1}, {1, 20, 0, 2}, {2, 20, 0, 9}}, {{0, 70, 0, 3}}, none}, -1);
+    scenario3("b54so-no-player", one, new String[][] {S("item", 70, 0, -1), S("cart", 70, 0, -1), S("item", 5, 0, -1), S("orb", 70, 0, -1)}, new double[][][] {none}, -1);
+    scenario3("b54so-player-cart-first", one, new String[][] {S("cart", 70, 0, -1), S("item", 70, 0, -1), S("item", 5, 0, -1), S("orb", 70, 0, -1)}, new double[][][] {none}, 0);
+    scenario3("b54so-player-cart-middle", one, new String[][] {S("item", 70, 0, -1), S("cart", 5, 0, -1), S("item", 70, 0, -1), S("orb", 40, 0, -1)}, new double[][][] {none}, 1);
+    scenario3("b54so-player-cart-two-chunks", two, new String[][] {S("item", 70, 0, -1), S("cart", 70, 1, -1), S("item", 70, 1, -1), S("orb", 70, 0, -1), S("cow", 20, 1, -1)}, new double[][][] {none}, 1);
+    scenario3("b54so-player-cart-moved", two, new String[][] {S("item", 70, 0, -1), S("cart", 70, 0, -1), S("item", 70, 1, -1), S("orb", 70, 0, -1)}, new double[][][] {{{1, 20, 1, -1}, {0, 20, 0, -1}}}, 1);
   }
 }
