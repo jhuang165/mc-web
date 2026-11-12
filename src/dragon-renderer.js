@@ -246,6 +246,10 @@ export function poseModel(p, pose) {
   }
 }
 
+// The beam's texture scroll: RenderDragon.func_110827_a reads the DRAGON's ticksExisted (xa.aa) + partialTicks (the rendered copy's), not the crystal's innerRotation or age
+// (bytecode-read, bnl.a(xa, D, D, D, F, F)).
+export const beamTicks = (cd, e, partial) => (cd?.age ?? e.ticksExisted ?? e.age ?? 0) + partial;
+
 // RenderDragon.doRender for the pose at `partial`. `e.dragon` is the state of dragon.js.
 export function animateDragon(r, e, pose, partial, client = null) {
   const s = e.dragon, st = r.dragonRig;
@@ -281,7 +285,7 @@ export function animateDragon(r, e, pose, partial, client = null) {
     const dx = h.x - pose.x, dy = bob + h.y - 1 - pose.y, dz = h.z - pose.z, horizontal = Math.hypot(dx, dz), length = Math.hypot(dx, dy, dz);
     b.pivot.position.set(0, 2, 0);
     b.pivot.rotation.set((-Math.atan2(horizontal, dy) * 180) / Math.PI * RAD - Math.PI / 2, (-Math.atan2(dz, dx) * 180) / Math.PI * RAD - Math.PI / 2, 0);
-    const ticks = (h.age ?? 0) + partial, v0 = -ticks * 0.01, v1 = length / 32 - ticks * 0.01, uv = b.geometry.attributes.uv, pos = b.geometry.attributes.position;
+    const ticks = beamTicks(cd, e, partial), v0 = -ticks * 0.01, v1 = length / 32 - ticks * 0.01, uv = b.geometry.attributes.uv, pos = b.geometry.attributes.position;
     for (let i = 0; i < 9; i++) {
       uv.setY(i * 2, v1);
       uv.setY(i * 2 + 1, v0);

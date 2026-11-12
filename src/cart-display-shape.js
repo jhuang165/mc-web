@@ -8,6 +8,7 @@
 import * as THREE from "three";
 import { blockTile, tileRect } from "./block-textures.js";
 import { crossedSquares, stemSmall } from "./render-vessels.js";
+import { hasColormaps, itemGrassColor, rgbFloats } from "./biome-colors.js";
 
 const CROSS = new Set([6, 30, 31, 32, 37, 38, 39, 40, 83]), CROPS = new Set([59, 115, 141, 142]), STEMS = new Set([104, 105]), TORCHES = new Set([50, 75, 76]);
 const NOTHING = new Set([8, 9, 10, 11, 26, 27, 28, 34, 36, 51, 55, 63, 64, 65, 66, 68, 69, 71, 90, 93, 94, 101, 102, 106, 111, 117, 118, 119, 127, 131, 132, 140, 144, 149, 150, 157, 160, 175]);
@@ -65,4 +66,12 @@ export function displayGeometry(shape, cell) {
   g.setIndex(indices);
   g.computeVertexNormals();
   return g;
+}
+
+// Batch 51: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing
+// (bytecode-read; the grass block is forced to white). The tall grass block (31) answers white for meta 0 (dead shrub) and else ColorizerGrass.getGrassColor(0.5, 1.0)
+// (anz.i(int) -> aha.a(0.5, 1.0)), the same colour as its inventory icon; so the grass tuft (1) and fern (2) are tinted. Returns [r, g, b] floats or null (white).
+export function displayTint(id, meta) {
+  if (id === 31 && (meta & 15) !== 0 && hasColormaps()) return rgbFloats(itemGrassColor());
+  return null;
 }
