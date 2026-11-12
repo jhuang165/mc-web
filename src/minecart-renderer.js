@@ -18,7 +18,7 @@ import { TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { CART_HEIGHT } from "./minecarts.js";
 import { DISPLAY } from "./cart-variants.js";
 import { CartBlockRenderer } from "./cart-block-renderer.js";
-import { displayShape, displayGeometry } from "./cart-display-shape.js";
+import { displayShape, displayGeometry, displayTint } from "./cart-display-shape.js";
 
 const D = Math.PI / 180;
 // ModelMinecart.a[0..5]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -109,7 +109,7 @@ export class MinecartRenderer {
       return { group, materials: [chest.material], geometries: [] };
     }
     if (shape !== "item") {
-      const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture, side: THREE.DoubleSide }), g = displayGeometry(shape, cell);
+      const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture, side: THREE.DoubleSide, color: displayTint(d.id, d.data) }), g = displayGeometry(shape, cell);
       turn.rotation.y = 0; // renderBlockAsItem turns only types 0, 16, 22, 26, 31, 39
       turn.add(new THREE.Mesh(g, material));
       return { group, materials: [material], geometries: [g] };
