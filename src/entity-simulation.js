@@ -123,6 +123,11 @@ export function thrownAtVehicleOrHanging(state, e, hooks, by) {
   return true;
 }
 
+function spawnBottleOrbs({ mobs, xpOrbs }, from) {
+  if (!xpOrbs) return;
+  for (let i = from; i < mobs.events.length; i++) if (mobs.events[i].bottle) { const [ev] = mobs.events.splice(i--, 1); xpOrbs.spawn(ev.xp, ev.position); }
+}
+
 /**
  * The kinds the loaded-entity walk ticks besides the mobs and fireballs: [kind, { list, tick, reap }] in the order a tick used to run them.
  * `ctx()` returns the tick's `{ state, hooks }` (the ones tickEntitySimulation takes); the callbacks read the current one, so a dimension change that
@@ -134,7 +139,8 @@ export function entityWalkers(ctx) {
     ["item", { list: () => st().items.items, tick: (e) => st().items.tickOne(st().world, e, hk().maxStack), reap: () => st().items.reap() }],
     ["arrow", { list: () => st().arrows.list, tick: (e) => st().arrows.tickOne(st().world, e, hk().arrowOptions?.(st()) ?? {}), reap: () => st().arrows.reap() }],
     ["thrown", { list: () => st().projectiles.balls,
-      tick: (e) => st().projectiles.tickOne(st().world, e, hk().projectileTargets?.(st()) ?? [], hk().projectileHit, hk().projectilePearlImpact), reap: () => st().projectiles.reap() }],
+      // EntityEgg.onImpact spawns its chicks in the ball's own update (World.spawnEntityInWorld joins the list being walked: the chick updates in this pass), so the ball's events run here.
+      tick: (e) => { st().projectiles.tickOne(st().world, e, hk().projectileTargets?.(st()) ?? [], hk().projectileHit, hk().projectilePearlImpact); for (const ev of st().projectiles.drain()) hk().projectileEvent?.(ev); }, reap: () => st().projectiles.reap() }],
     ["tnt", { list: () => st().primed, tick: (e) => tickOneTnt(st().world, st().primed, e, { smoke: hk().smoke, explode: hk().explodeTnt }), reap: () => {} }],
     ["orb", { list: () => st().xpOrbs?.orbs ?? [], tick: (e) => st().xpOrbs.tickOne(st().world, e, st().position), reap: () => st().xpOrbs?.reap() }],
     ["falling", { list: () => st().falling?.entities ?? [], tick: (e) => st().falling.tickOne(e), reap: () => st().falling?.reap() }],
@@ -147,7 +153,9 @@ export function entityWalkers(ctx) {
     ["rocket", { list: () => st().rockets?.rockets ?? [], tick: (e) => st().rockets.tickOne(st().world, e, hk().rocketHooks?.(st()) ?? {}), reap: () => st().rockets?.reap() }],
     ["knot", { list: () => st().mobs?.knotList ?? [], tick: (e) => st().mobs.knotTickOne(e), reap: () => {} }],
     // Witch and dispenser potions, snow golem snowballs and wither skulls (a skull's explosion runs in its own update, as World.newExplosion does).
-    ["potion", { list: () => st().mobs?.potions?.balls ?? [], tick: (e) => st().mobs.potions.tickOne(e, st().position, st().survival, vehicleTargets(st())), reap: () => st().mobs?.potions?.reap() }],
+    // EntityExpBottle.onImpact spawns its orbs in the bottle's own update (World.spawnEntityInWorld joins the list being walked, so each orb updates in this pass): the
+    // bottle's `xp` events are taken out of the mob event queue and spawned here; every other event keeps its place for the usual drain.
+    ["potion", { list: () => st().mobs?.potions?.balls ?? [], tick: (e) => { const mobs = st().mobs, from = mobs.events.length; mobs.potions.tickOne(e, st().position, st().survival, vehicleTargets(st())); spawnBottleOrbs(st(), from); }, reap: () => st().mobs?.potions?.reap() }],
     ["golemBall", { list: () => st().mobs?._golemBalls?.balls ?? [], tick: (e) => st().mobs._golemBalls.tickOne(e, vehicleTargets(st()), (v) => vehicleThrownHit(st(), v, hk())), reap: () => st().mobs?._golemBalls?.reap() }],
     ["skull", { list: () => st().mobs?._skulls?.list ?? [],
       tick: (e) => { const mobs = st().mobs; mobs._skulls.tickOne(e); if (hk().mobExplosion) for (const ev of mobs.takeExplosions()) hk().mobExplosion(ev); }, reap: () => st().mobs?._skulls?.reap() }],

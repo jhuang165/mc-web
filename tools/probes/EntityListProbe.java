@@ -19,6 +19,8 @@ public class EntityListProbe {
     public int k(int x, int y, int z) { return 15; }
     public boolean d(sa e) { // World.spawnEntityInWorld: the end of loadedEntityList
       if (e instanceof xk) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityItem's constructor draws the sideways motion from Math.random: fixed here (the replay passes the same motion)
+      if (e instanceof sq) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityXPOrb's constructor draws its motion from Math.random: fixed here (the replay passes the same motion)
+      if (e instanceof wg) hatchling(e); // an EntityEgg's chick: its own Random seeded like the other entities, no AI task list
       entities.add(e); extras.add(e); return true;
     }
     // World.getCollidingBoundingBoxes: the blocks, then the entity boxes within 0.25 (getBoundingBox for a boat, getCollisionBox for the mover): carts and boats only
@@ -51,6 +53,14 @@ public class EntityListProbe {
       return ex;
     }
   }
+  // The chick of EntityEgg.onImpact (EntityChicken wg): Entity.rand is unseeded, so it is set to Random(7) like every entity here, and its AI task lists are emptied
+  // (a cow's updateAITasks is switched off the same way); its motion, friction and living update run unchanged.
+  static void hatchling(sa e) {
+    try {
+      PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
+      for (java.lang.reflect.Field f : sw.class.getDeclaredFields()) if (f.getType().getName().equals("rw") || f.getType().getName().equals("ru")) { f.setAccessible(true); Object tasks = f.get(e); if (tasks != null) for (java.lang.reflect.Field g : tasks.getClass().getDeclaredFields()) if (List.class.isAssignableFrom(g.getType())) { g.setAccessible(true); ((List) g.get(tasks)).clear(); } }
+    } catch (Exception x) { throw new RuntimeException(x); }
+  }
   // EntityCow with updateAITasks (sw.bn: the AI task list, the random wander) switched off; its motion, friction, knockback, hurt and death run unchanged.
   static class Cow extends wh { Cow(ahb w) { super(w); } protected void bn() {} }
   // The player of the orb scenarios: an EntityPlayerSP shell (XpOrbProbe.Target) whose addExperience and onItemPickup only count.
@@ -81,7 +91,8 @@ public class EntityListProbe {
         t.o = w; t.s = 0.0; t.t = 0.0; t.u = 0.0; t.y = 0f; t.z = 0f;
         yw cap = new yw(); cap.d = s[8].equals("1"); t.bE = cap;
         int type = Integer.parseInt(s[7]);
-        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : new zo(w, t, 32732);
+        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : type == 4 ? new zn(w, t) : new zo(w, t, 32732);
+        if (s.length > 10) { PlayerStepProbe.field(sa.class, "Z").set(e, new Random(Long.parseLong(s[10]))); e.b(x, y, z); e.v = Double.parseDouble(s[4]); e.w = Double.parseDouble(s[5]); e.x = Double.parseDouble(s[6]); return e; } // a seeded Entity.rand (the egg's hatch roll)
         break;
       }
       case "skull": e = new zp(w, x, y, z, Double.parseDouble(s[4]), Double.parseDouble(s[5]), Double.parseDouble(s[6])); break; // EntityFireball(World, x, y, z, ax, ay, az): the aim normalised to 0.1, no noise
@@ -197,6 +208,8 @@ public class EntityListProbe {
   static String[] snowball(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"snowball", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   // a wither skull: the aim (ax, ay, az) is normalised to 0.1 by EntityFireball's second constructor, as a dispenser's ball is
   // a ball thrown by a player shell: type 0 snowball, 1 egg, 2 pearl, 3 potion; creative 1 for a Creative thrower
+  // type 4: an experience bottle. `seed` is the Entity.rand seed (Random(7) when omitted: the egg's hatch roll is false, 5)
+  static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join, long seed) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join, "" + seed}; }
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join}; }
   static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
   static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
@@ -334,6 +347,16 @@ public class EntityListProbe {
     scenario("pthrow-pearl-painting-creative", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 1, 0), setBlock(0, 3, 0, 0, 4));
     scenario("pthrow-potion-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 3, 0, 0), setBlock(0, 3, 0, 0, 4));
 
+    // Batch 47. An egg's hatch roll both ways (Entity.rand seeds 4096: one chick, 4104: four; seed 7 is false) and an experience bottle (type 4) on a cart, boat and painting.
+    // The chick and the orbs join the entity list in the pass (World.spawnEntityInWorld) and are listed after the main states.
+    scenario("pthrow-egg-cart-hatch", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4096));
+    scenario("pthrow-egg-cart-hatch4", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4104));
+    scenario("pthrow-egg-boat-hatch", 8, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4096));
+    scenario("pthrow-egg-painting-hatch", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 1, 0, 0, 4096), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-egg-cart-creative-hatch", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 1, 0, 4096));
+    scenario("pthrow-expbottle-cart", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 4, 0, 0));
+    scenario("pthrow-expbottle-boat", 8, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 4, 0, 0));
+    scenario("pthrow-expbottle-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 4, 0, 0), setBlock(0, 3, 0, 0, 4));
     // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
     float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};
     String[] names = {"snowball", "egg", "pearl", "potion", "expbottle"};

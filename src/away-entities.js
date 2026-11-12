@@ -155,6 +155,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     projectileTargets: () => [...mobTargets(mobs.entities, null), ...vehicleTargets(walkState)],
     projectileHit: (ref, b) => ref !== "player" && (thrownAtVehicleOrHanging(walkState, ref, walkHooks, null) || thrownHit(mobs, ref, b)), projectilePearlImpact: (hit) => pearlLands(hit),
     mobExplosion: (ev) => explodeEvent(ev, (...a) => self.explode(...a)),
+    projectileEvent: (h) => { if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw); }, // EntityEgg.onImpact: the chick joins the list in the egg's own update
     carts: { drop: dropVehicle, cartHost }, boats: { drop: dropVehicle }, hangingActive: (h) => entityTicks(h.x, h.z),
     hangingDrop: (d) => items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }),
   };

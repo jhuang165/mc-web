@@ -974,6 +974,7 @@ export class EntityWorld {
     chick.yaw = (-yawDegrees * Math.PI) / 180;
     syncInterpolation(chick);
     this.entities.push(chick);
+    this.tickOrder?.push(chick); // World.spawnEntityInWorld: appended to the list being walked (an egg's chick updates in the pass it hatched)
     return chick;
   }
   // Fresh motion state: grounded only after the first collision, no AI move target yet.
