@@ -395,7 +395,7 @@ test("a skeleton's arrow leaves from the eye, with the target a third of its hei
 test("a killed skeleton drops up to two arrows and two bones, maybe its worn bow, and 6 to 8 experience at deathTime 20", () => {
   const w = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }]), e = w.entities[0];
   setEntityRandom(e, fixedRand(0.99));
-  w.kill(e);
+  w.kill(e, { player: true });
   for (let i = 0; i < 20; i++) w.deathUpdate(e, ENTITY_TYPES.skeleton);
   const events = w.drain();
   assert.deepEqual(events.filter((x) => x.drop).map((x) => [x.drop, x.count]), [[ARROW, 1], [ARROW, 1], [311, 1], [311, 1]]);
@@ -403,7 +403,7 @@ test("a killed skeleton drops up to two arrows and two bones, maybe its worn bow
   assert.equal(events.find((x) => x.xp !== undefined).xp, 8);
   const none = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }]), n = none.entities[0];
   setEntityRandom(n, fixedRand(0));
-  none.kill(n);
+  none.kill(n, { player: true });
   // nextFloat() < 0.085 drops the bow at maxDamage - nextInt(1 + nextInt(359)), held to 359.
   assert.deepEqual(none.drain().filter((x) => x.drop).map((x) => [x.drop, x.damage]), [[127, 359]]);
 });

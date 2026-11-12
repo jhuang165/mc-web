@@ -88,7 +88,7 @@ function create() {
 
   // Exercise an actual player-hit death before the first tick. Sound and item
   // drops queue now; death XP is queued later, on deathTime 20.
-  withMathRandom(3, () => mobs.kill(cow));
+  withMathRandom(3, () => { cow.health = 0; cow.recentlyHit = 100; mobs.events.push({ sound: "mob.cow.hurt", volume: 0.4, pitch: 1, position: cow }); mobs.onDeath(cow, { player: true }); });
   return state;
 }
 

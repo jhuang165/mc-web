@@ -1555,13 +1555,12 @@ export class EntityWorld {
     e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
   }
-  // The player's kill (main.js /kill, tests): a generic death with the player as attacker.
-  kill(e) {
+  // /kill and the tests' kill: attackEntityFrom(DamageSource.outOfWorld, Float.MAX_VALUE) with no attacker, so no recentlyHit (no xp, no player-only drops)
+  // unless a player hit it within the last 100 ticks. The 1.7.10 client jar has no command classes; Entity has no onKillCommand there (bytecode-read), and the
+  // port's /kill only kills the sender player.
+  kill(e, source = {}) {
     if (e.health <= 0) return;
-    e.health = 0;
-    e.recentlyHit = 100;
-    this.events.push({ sound: deathOf(e), volume: soundVolume(e.type), pitch: soundPitch(entityRandom(e), e.growingAge < 0), position: e });
-    this.onDeath(e, { player: true });
+    this.attackEntityFrom(e, 3.4028234663852886e38, { ...source, name: "outOfWorld" });
   }
   // EntityLivingBase.onDeathUpdate (sv.aF): at deathTime 20 a mob a player hit within the
   // last 100 ticks, not a child, leaves its experience (split into orbs by xpOrbs.spawn),
