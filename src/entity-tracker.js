@@ -237,6 +237,7 @@ export class ClientEntity {
     // live health stands in) and the squid's air (index 1, from the same packets, then the client's own EntityWaterMob.onEntityUpdate).
     this.health = null; this.air = 300;
     this.fx = []; // what the client copy does that the live entity cannot: { sound | particle, ... }, taken by MobTracker.takeFx
+    this.fire = 0; // Entity.fire of the copy: a client arrow's setFire(5) sets it, the copy's next onEntityUpdate zeroes it (World.isRemote)
     this.leash = null; // EntityLiving.leashedToEntity: { player: true }, a ClientEntity, or { knot: true, x, y, z }
   }
   static makeRandom() { return new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))); }
@@ -525,6 +526,7 @@ export class MobTracker {
         c.ridingEntity = null;
       }
       c.dead = e.health <= 0;
+      c.fire = 0; // Entity.onEntityUpdate: `if (worldObj.isRemote) fire = 0`
       c.step(...hooks(e));
       if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`). Natively a ridden pig is packet-driven (see followLive), but the port's camera and seat still follow the live pig, so its copy follows it too until the seat moves to the client copy (lead, batch 45: otherwise the drawn pig trails its rider)
       const rider = c.riddenBy;

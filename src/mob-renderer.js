@@ -19,6 +19,7 @@ import { createWitchRig, animateWitch } from "./witch-renderer.js";
 import { createSlimeRig, animateSlime } from "./slime-renderer.js";
 import { createMagmaCubeRig } from "./magma-cube-renderer.js";
 import { mobScale } from "./slime.js";
+import { FIRE_IMMUNE } from "./fireballs.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 import { createOcelotRig } from "./ocelot-renderer.js";
 import { createHorseRig } from "./horse-renderer.js";
@@ -595,7 +596,7 @@ export class MobRenderer {
       }
       // Render.doRenderShadowAndFire: canRenderOnFire (isBurning; fire-immune mobs keep e.burn at 0) draws
       // renderEntityOnFire at the entity's feet, sized by its own width and height, even when invisible.
-      const burning = e.burn > 0 && !e.displayMatrix;
+      const burning = (e.burn > 0 || (client?.fire > 0 && !FIRE_IMMUNE.has(e.type))) && !e.displayMatrix; // a client arrow's setFire on the copy (entity-tracker.js `fire`)
       if (burning) {
         // mobScale carries the slime size and a child's half-size box (EntityAgeable.setScale, EntityZombie.setChildSize).
         const w = (t?.width ?? 0.6) * mobScale(e), key = w + "x" + h;
