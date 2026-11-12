@@ -144,6 +144,8 @@ function savedMaxHealth(entity) {
   for (const a of list?.elementType === NBT.COMPOUND ? list.items : []) if (tagValue(a, 'Name', NBT.STRING, '') === 'generic.maxHealth') return tagValue(a, 'Base', NBT.DOUBLE);
   return undefined;
 }
+// EntityLivingBase.readEntityFromNBT: AbsorptionAmount (float) goes through setAbsorptionAmount, which floors at 0. Only a positive amount is kept on the record.
+export const absorptionFields = (tag) => { const a = tagValue(tag, 'AbsorptionAmount', NBT.FLOAT, 0); return a > 0 ? { absorption: a } : {}; };
 function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
   const summonType = JAVA_SUMMON_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   if (summonType) {
@@ -164,7 +166,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
     yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
     fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)),
-    effects: readActiveEffects(entity),
+    effects: readActiveEffects(entity), ...absorptionFields(entity),
   };
   if (type === 'villager') {
     record.profession = tagValue(entity, 'Profession', NBT.INT, 0);
@@ -232,8 +234,8 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
-    effects: readActiveEffects(tag), growingAge: ['pig','cow','mooshroom','sheep','chicken','wolf','villager','ocelot'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','mooshroom','sheep','chicken','wolf','ocelot'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
-  const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'Fire', 'Motion']);
+    effects: readActiveEffects(tag), ...absorptionFields(tag), growingAge: ['pig','cow','mooshroom','sheep','chicken','wolf','villager','ocelot'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','mooshroom','sheep','chicken','wolf','ocelot'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
+  const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'AbsorptionAmount', 'Fire', 'Motion']);
   if (type === 'wither_skeleton') kept.add('SkeletonType');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'villager', 'ocelot'].includes(type)) kept.add('Age');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'ocelot'].includes(type)) kept.add('InLove');

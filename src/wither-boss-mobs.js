@@ -249,8 +249,8 @@ export function installWither(EntityWorld) {
   };
   around("attackEntityFrom", function (base, e, amount, source = {}) {
     if (e?.type !== "wither") return base.call(this, e, amount, source);
-    const name = source.name ?? "generic", a = source.attacker;
-    if (name === "drown" || (e.invul ?? 0) > 0 || name === "onFire" || name === "inFire" || name === "lava") return false;
+    const name = source.name ?? "generic", a = source.shooter ?? source.attacker; // DamageSource.getEntity: an arrow's shooter
+    if (name === "drown" || (e.invul ?? 0) > 0) return false;
     if (armored(e.health) && (source.arrow || name === "arrow")) return false;
     if (a && typeof a === "object" && !source.player && witherIsUndead(a)) return false;
     const s = witherState(e);

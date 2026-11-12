@@ -271,7 +271,8 @@ const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.ty
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 // EntityMob subclasses on EntityCreature.updateEntityActionState (td.bq), whose entityToAttack the port keeps in silverfishState(e).target.
 const TARGETS_ATTACKER = new Set(["spider", "cave_spider", "pigman", "silverfish", "blaze", "giant"]);
-const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
+const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman" || e.type === "wither_skeleton"; // Entity.isImmuneToFire (sa.ae): yl.a(1) sets it for the wither skeleton
+const fireImmune = (e) => fireproof(e) || e.type === "wither"; // the wither's constructor sets it too (xc)
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
 // Classes whose onSpawnWithEgg rolls draw the follow-range spawn bonus themselves (difficulty.js, horse.js) or, for the cave spider, never.
 const OWN_SPAWN_BONUS = new Set(["spider", "cave_spider", "zombie", "pigman", "skeleton", "wither_skeleton", "horse", "ender_crystal"]); // the crystal is no EntityLiving
@@ -906,6 +907,7 @@ export class EntityWorld {
       ...(e.type === "creeper" ? { ...creeperFields(), ...creeperSavedFields(e), powered: e.powered === true, ignited: e.ignited === true } : {}),
       // NBT ActiveEffects and the Attributes the spawn rolls modified.
       effects: readMobEffects(e.effects),
+      absorption: e.absorption > 0 ? f(e.absorption) : undefined, // EntityLivingBase.readEntityFromNBT: AbsorptionAmount (setAbsorptionAmount floors at 0)
       knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
       ...(Number.isFinite(e.followRange) ? { followRange: Math.min(2048, Math.max(0, e.followRange)) } : { followRange: undefined }),
       ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement, villager: false, conversionTime: undefined, ...readZombieVillager(e) } : {}),
@@ -1063,8 +1065,8 @@ export class EntityWorld {
       amount = wolfHurtAmount(amount, { attacker: source.attacker || source.player, player: source.player, arrow: source.arrow });
     }
     const rand = entityRandom(e), name = source.name ?? "generic";
-    // Potion.fireResistance: fire damage is refused.
-    if ((name === "onFire" || name === "inFire" || name === "lava") && (e.effects?.some((x) => x.id === 12) || fireproof(e))) return false;
+    // Potion.fireResistance: fire damage is refused. Entity.isImmuneToFire is no part of attackEntityFrom (hazard / dealFireDamage checks it); executed: mob-victims-reference.json (b51mv).
+    if ((name === "onFire" || name === "inFire" || name === "lava") && e.effects?.some((x) => x.id === 12)) return false;
     // An anvil or falling block wears the helmet slot's stack (a broken one stays at size 0) and deals 0.75 (mob-equipment.js fallingBlockHelmet).
     if ((name === "anvil" || name === "fallingBlock") && e.equipment) amount = fallingBlockHelmet(e.equipment, amount, rand, () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(rand); });
     e.limbSwingAmount = 1.5;
@@ -1604,6 +1606,7 @@ export class EntityWorld {
   // attackEntityFrom with a source that has no attacker: fall, onFire, lava, drown,
   // inFire (fire blocks, lightning), cactus, explosion (unowned TNT), generic.
   hazard(e, points, name = "generic") {
+    if ((name === "onFire" || name === "inFire" || name === "lava") && fireImmune(e)) return false; // Entity.dealFireDamage / setOnFireFromLava: nothing when isImmuneToFire
     return this.attackEntityFrom(e, points, { name });
   }
   // EntityLivingBase.onEntityUpdate after the fire (Entity.onEntityUpdate) and before the air: a mob

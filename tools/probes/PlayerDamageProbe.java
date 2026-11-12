@@ -23,6 +23,14 @@ public class PlayerDamageProbe {
     public void a(sa entity, byte state) { events.add("status|" + state); }
     public void a(sa entity, String sound, float volume, float pitch) { events.add("sound|" + sound + "|" + volume); }
     public void a(yz except, String sound, float volume, float pitch) { events.add("except|" + sound + "|" + volume); }
+    // Batch 51 (mobvictims): the entities World.getEntitiesWithinAABBExcludingEntity returns when `near` is set (the pigman's call for help).
+    static List<sa> near = null;
+    public List b(sa entity, azt box) {
+      if (near == null) return super.b(entity, box);
+      List<sa> out = new ArrayList<>();
+      for (sa e : near) if (e != entity && e.C.b(box)) out.add(e);
+      return out;
+    }
   }
   // The original EntityPlayerMP. onDeath only records the death message its first line broadcasts
   // (chat, inventory scatter and scoreboard are not run).
