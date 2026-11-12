@@ -8,7 +8,7 @@
 import * as THREE from "three";
 import { blockTile, tileRect } from "./block-textures.js";
 import { crossedSquares, stemSmall } from "./render-vessels.js";
-import { hasColormaps, itemGrassColor, rgbFloats } from "./biome-colors.js";
+import { hasColormaps, itemGrassColor, rgbFloats, PINE, BIRCH, FOLIAGE_BASIC } from "./biome-colors.js";
 
 const CROSS = new Set([6, 30, 31, 32, 37, 38, 39, 40, 83]), CROPS = new Set([59, 115, 141, 142]), STEMS = new Set([104, 105]), TORCHES = new Set([50, 75, 76]);
 const NOTHING = new Set([8, 9, 10, 11, 26, 27, 28, 34, 36, 51, 55, 63, 64, 65, 66, 68, 69, 71, 90, 93, 94, 101, 102, 106, 111, 117, 118, 119, 127, 131, 132, 140, 144, 149, 150, 157, 160, 175]);
@@ -68,10 +68,21 @@ export function displayGeometry(shape, cell) {
   return g;
 }
 
-// Batch 51: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing
-// (bytecode-read; the grass block is forced to white). The tall grass block (31) answers white for meta 0 (dead shrub) and else ColorizerGrass.getGrassColor(0.5, 1.0)
-// (anz.i(int) -> aha.a(0.5, 1.0)), the same colour as its inventory icon; so the grass tuft (1) and fern (2) are tinted. Returns [r, g, b] floats or null (white).
+// Batch 51/52: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing; the grass block
+// (ajn.c) is forced to white. Executed (b52dx, public/research/displayfx-reference.json, every id 1..255 x meta 0..15 on the real Block.getRenderColor): grass block 7cbd6b (but
+// forced white here), leaves 18 by meta & 3 basic 0x48B518 / pine 0x619961 / birch 0x80A755 / basic, leaves2 161 basic, tall grass 31 white for meta 0 else ColorizerGrass(0.5, 1.0),
+// stems 104 / 105 (meta * 32, 255 - meta * 8, meta * 4); the vine 106 and lily pad 111 are tinted too but draw nothing here; everything else is white.
+// The port's item atlas (`textures.texture`) already bakes the item colours into the grass, tall grass, fern, reed, vine, lily and leaf tiles (D(), 0x5BAB46 for the oak foliage, not
+// i(meta)), so a tinted display block is drawn from the grey `terrain` atlas instead (displayTerrain) with the native colour as the material colour. Returns [r, g, b] floats or null (white).
+export const STEM_TINT = (meta) => (((meta * 32) & 255) << 16) | ((255 - meta * 8) & 255) << 8 | ((meta * 4) & 255);
 export function displayTint(id, meta) {
-  if (id === 31 && (meta & 15) !== 0 && hasColormaps()) return rgbFloats(itemGrassColor());
+  const m = meta & 15;
+  if (id === 18) return rgbFloats((m & 3) === 1 ? PINE : (m & 3) === 2 ? BIRCH : FOLIAGE_BASIC);
+  if (id === 161) return rgbFloats(FOLIAGE_BASIC);
+  if (id === 31 && m !== 0 && hasColormaps()) return rgbFloats(itemGrassColor());
+  if (id === 104 || id === 105) return rgbFloats(STEM_TINT(m));
   return null;
 }
+// Blocks whose tile is baked with an item colour in the item atlas: the display block takes the grey terrain atlas (tinted or white as the native draw is).
+const TERRAIN_ATLAS = new Set([2, 18, 31, 83, 161]);
+export const displayTerrain = (id) => TERRAIN_ATLAS.has(id);
