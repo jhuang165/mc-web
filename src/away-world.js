@@ -23,6 +23,7 @@ import { Weather } from "./weather.js";
 import { makeStack } from "./inventory.js";
 import { awayEntities } from "./away-entities.js";
 import { dispenseFirework } from "./fireworks-live.js";
+import { spawnEggMob } from "./spawn-egg-use.js";
 import { WATER, LAVA } from "./world.js";
 import { JavaRandom } from "./java-random.js";
 import { awayCommands } from "./away-commands.js";
@@ -131,6 +132,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
         if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; ents.mobs.potions.projectiles.balls.push(b); ents.mobs.joined(b, "potion"); } // as main.js: potions and bottles walk as "potion"
         else { ents.projectiles.balls.push(ball); ents.projectiles.joined(ball); }
       },
+      spawnEgg: (stack, at, roll) => { if (ents) spawnEggMob({ mobs: ents.mobs }, stack.damage, at, stack.displayName, roll); else unsupported.hit = true; }, // BehaviorDispenseSpawnEgg
       fireball: ({ x, y, z, ax, ay, az }) => { if (ents) ents.mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); else unsupported.hit = true; },
       firework: (stack, x, y, z, fx, fz) => { if (ents) dispenseFirework(ents.rockets, x, y, z, fx, fz, stack); else unsupported.hit = true; },
     },

@@ -1,7 +1,7 @@
 // Minecraft Java 1.7.10 BlockDispenser (original 23, internal 115) and BlockDropper (original 158, internal 132): the redstone
 // trigger, TileEntityDispenser.func_146017_i slot choice / func_146019_a addItemStack, and the Bootstrap dispense registry for the
 // items this build has (BehaviorDefaultDispenseItem, arrows, eggs, snowballs, splash potions, minecarts, buckets, flint and steel,
-// bone meal, TNT). Boats, fire charges and spawn eggs do not exist in this build.
+// bone meal, TNT, fire charges, Bottle o' Enchanting, fireworks, spawn eggs). Boats do not exist in this build.
 // Native evidence: public/research/dispense-reference.json (tools/verify-dispense.mjs, tools/probes/DispenseProbe.java), replayed by
 // src/dispense.test.js. public/research/dispense.md says what is verified and what is approximated.
 //
@@ -11,6 +11,7 @@
 //   host.aux(id, x, y, z, data)                   World.playAuxSFX (1000 click, 1001 failed click, 1002 shoot, 2000 smoke)
 //   host.spawnItem(stack, x, y, z, mx, my, mz)    an EntityItem with the given motion
 //   host.arrow / host.thrown(kind, ...)           projectiles: ({ x, y, z, mx, my, mz, yaw, pitch }) (+ kind, damage for thrown)
+//   host.spawnEgg(stack, { x, y, z }, nextFloat) -> mob|null  BehaviorDispenseSpawnEgg (ItemMonsterPlacer.spawnCreature); nextFloat draws the yaw from the world Random
 //   host.cart(type, x, y, z)                      EntityMinecart (0) / EntityMinecartChest (1) at the native spawn doubles
 //   host.spawnTnt(x, y, z)                        EntityTNTPrimed at the cell centre (no ignite sound); host.igniteTnt via w.primeTnt
 //   host.setLiquid(x, y, z, originalId) / host.setAir(x, y, z) / host.breakBlock(x, y, z) optional world writers
@@ -34,7 +35,7 @@ export const OPPOSITE = Object.freeze([1, 0, 3, 2, 5, 4]);
 // Internal item ids of this build.
 export const ITEM = Object.freeze({
   ARROW: 320, SNOWBALL: 312, EGG: 316, POTION: 385, MINECART: 366, CHEST_MINECART: 450, BUCKET: 340, WATER_BUCKET: 341,
-  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952, EXP_BOTTLE: 1951, FIREWORK: 2071, // firework rocket (fireworks.js ITEM_FIREWORK_ROCKET, original 401)
+  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952, EXP_BOTTLE: 1951, SPAWN_EGG: 1950, FIREWORK: 2071, // firework rocket (fireworks.js ITEM_FIREWORK_ROCKET, original 401)
 });
 export const SPLASH_BIT = 16384;
 const FLINT_MAX_DAMAGE = 64;
@@ -118,6 +119,7 @@ export class Dispensing {
       case ITEM.DYE: return DYE;
       case ITEM.TNT: return TNT;
       case ITEM.EXP_BOTTLE: return PROJECTILE.expBottle;
+      case ITEM.SPAWN_EGG: return SPAWN_EGG;
       case ITEM.FIRE_CHARGE: return FIRE_CHARGE;
       case ITEM.FIREWORK: return FIREWORK;
       default: return DEFAULT;
@@ -204,6 +206,19 @@ const FIRE_CHARGE = {
     const [fx, fy, fz] = FACING[facing], rand = w.rand; // BehaviorDispenseFireball (kz) draws from world.rand, not an entity's own Random (bytecode-read)
     const ax = rand.nextGaussian() * 0.05 + fx, ay = rand.nextGaussian() * 0.05 + fy, az = rand.nextGaussian() * 0.05 + fz;
     this.host.fireball?.({ x: x + 0.5 + 0.7 * fx + fx * 0.3, y: y + 0.5 + 0.7 * fy + fy * 0.3, z: z + 0.5 + 0.7 * fz + fz * 0.3, ax, ay, az });
+    stack.count--;
+    return stack;
+  },
+};
+
+// BehaviorDispenseSpawnEgg (kx, bytecode-read and executed in away-dispense-reference.json): ItemMonsterPlacer.spawnCreature at the
+// block's own level, not the facing cell's: (centre x + facing x, (float) int y + 0.2F, centre z + facing z), the yaw from the world
+// Random (nextFloat() * 360, wrapped), the stack's custom name; one egg is used up even when no mob came out (an unregistered damage).
+const SPAWN_EGG = {
+  sound: click,
+  stack(w, x, y, z, facing, stack) {
+    const [fx, , fz] = FACING[facing];
+    this.host.spawnEgg?.(stack, { x: x + 0.5 + fx, y: f(y + f(0.2)), z: z + 0.5 + fz }, () => w.rand.nextFloat());
     stack.count--;
     return stack;
   },
