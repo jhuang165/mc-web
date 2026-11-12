@@ -663,7 +663,7 @@ export function jump(e) {
 // isAIEnabled false (probed attributes2 `aiEnabled`): getAIMoveSpeed is 0.1 and the water acceleration 0.02; EntityCreature.updateEntityActionState
 // puts the movementSpeed attribute in moveForward. The ghast, squid and dragon move by their own code.
 // Mobs whose body yaw follows EntityLivingBase.func_110146_f instead of EntityBodyHelper (not isAIEnabled in 1.7.10): only the enderman so far, the one with native yaw records.
-const LEGACY_BODY = new Set(["enderman"]);
+const LEGACY_BODY = new Set(["enderman", "spider", "cave_spider", "slime", "magma_cube"]); // EntityLiving.isAIEnabled (sw.bk) is false unless overridden; yn, ym and yf do not (bytecode-read); b49po records executed spider and slime body yaw
 export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "giant", "pigman", "enderman", "slime", "magma_cube", "blaze"]);
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;

@@ -18,6 +18,7 @@ import { powerCreeper, creeperIgnite } from "./creeper.js";
 import { struckByLightning } from "./weather.js";
 import { addMobEffect, speedModifiers } from "./mob-effects.js";
 import { liveAttribute } from "./mob-attributes.js";
+import { slimeFields } from "./slime.js";
 import { RedstoneWorld, pistonTile } from "./redstone.js";
 import { installPistons } from "./piston-live.js";
 
@@ -30,6 +31,7 @@ export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
 export const reference47sp = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47sp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
+export const reference49 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b49po-reference.json", import.meta.url)));
 export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
@@ -42,7 +44,7 @@ class LogRandom extends JavaRandom {
   nextDouble() { const r = super.nextDouble(); if (!this.inGauss) this.log.push("d"); return r; }
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
-  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
+  C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", B: "spider", I: "slime", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
   Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse", 3: "horse", 4: "horse", 5: "horse", 6: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
 // b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
@@ -91,6 +93,7 @@ function run(r) {
     e.yaw = 0;
     if (ch === "T" || ch === "S" || ch === "O") { e.owner = "player"; e.health = 20; if (ch === "O") e.ownerUuid = "someone"; if (ch === "S") e.sitWish = true; }
     if (ch === "A") e.angry = true;
+    if (ch === "I") Object.assign(e, slimeFields(4, () => 0), { jumpDelay: 20 }); // b49po: a size 4 slime with the probe's fixed jump timer (bn = 20)
     if (ch === "U") { e.owner = "player"; e.health = 10; }
     if (ch === "R") { e.horse.maxHealth = e.health = 20; e.horse.speed = f32(0.2); } // fixed in the probe too (the rolled health and speed are not task draws)
     if (r.init && HORSES45[ch]) {
@@ -119,7 +122,7 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x48 = r.name.startsWith("b48pp"), x47 = x48 || r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
+  const x48 = /^b4[89](pp|po)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
   if (x48) ew.ai.player.onGround = true; // the probe's copy starts as a grounded player (EndermanWolfProbe B46: onGround true)
   if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
@@ -314,8 +317,8 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !r.name.startsWith("b48pp") ? bad("player motion", wm, gm) : null);
-      const d2 = r.name.startsWith("b48pp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !/^b4[89](pp|po)/.test(r.name) ? bad("player motion", wm, gm) : null);
+      const d2 = /^b4[89](pp|po)/.test(r.name) ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }

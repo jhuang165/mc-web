@@ -287,9 +287,10 @@ export class LiveRedstone extends RedstoneWorld {
     this.time++;
   }
   // Everything after the scheduled ticks: block events, the tile-entity loop, plate and sensor scans.
-  endTick() {
+  // `deferTiles`: the live game runs the tile-entity loop itself after the entity walk (World.updateEntities: entities, then tile entities; redstone-runtime.js tickTiles).
+  endTick(deferTiles = false) {
     this.sendQueuedBlockEvents();
-    this.updateTileEntities();
+    if (!deferTiles) this.updateTileEntities();
     if (this.clock - this.lastScan >= 100) this.scan();
     for (const [key, p] of this.watched) {
       if (!this.loaded(p.x, p.y, p.z)) continue;

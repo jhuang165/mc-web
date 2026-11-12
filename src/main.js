@@ -1497,6 +1497,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
+    mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
@@ -3303,7 +3304,7 @@ function movementTick(controls) {
       ? "SWIMMING"
       : "WALKING";
   tickSurvival(inWater, oldPosition, inLavaNow);
-  tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime },
+  tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime, deferTiles: true },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates,
       // Fluid writes notify redstone one by one through fluids.writers (added where the tree attaches), as each native setBlock does; fire edits pass the
@@ -3331,6 +3332,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  redstoneRuntime?.tickTiles(); // no-op when the walk's afterEntities hook already ran them
   if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
