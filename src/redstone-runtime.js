@@ -210,10 +210,22 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   };
   // After the scheduled ticks: block events, the tile-entity loop, the pistons' pushes. The shared tick tree (tile-ticks.js) calls tickBegin, takes and
   // runs the scheduled entries with the other kinds, and world-tick.js calls tickEnd.
-  const tickEnd = () => {
-    redstone.endTick();
+  // `deferTiles` (main.js): the tile-entity loop and the pistons' pushes wait for tickTiles, which runs after the entity walk (World.updateEntities:
+  // weather effects, entities, then tile entities; b49po). `tilesPending` lets the caller run it afterwards when the walk's hook did not.
+  let tilesPending = false;
+  const tickEnd = (deferTiles = false) => {
+    redstone.endTick(deferTiles);
+    if (deferTiles) { tilesPending = true; return; }
     pistons.tick();
     flush();
+  };
+  const tickTiles = () => {
+    if (!tilesPending) return false;
+    tilesPending = false;
+    redstone.updateTileEntities();
+    pistons.tick();
+    flush();
+    return true;
   };
   const tick = () => {
     tickBegin();
@@ -301,6 +313,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     tick,
     tickBegin,
     tickEnd,
+    tickTiles,
     frame: (partial) => pistons.frame(partial),
     flush,
     use,

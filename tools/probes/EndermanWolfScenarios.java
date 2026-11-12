@@ -379,4 +379,26 @@ public class EndermanWolfScenarios {
     sc48("b48pp-copy-retract-9528", 9528, 50, "C", far, none, look, "0 piston 70 0 64 5 0 1 0");
     sc48("b48pp-copy-herd-9529", 9529, 80, "CP", new double[][] {{70.3, 64.5}, {70.8, 64.9}, {70.5, 64.5}}, none, look, east);
   }
+
+  // Batch 49 (pistonorder): EW_SET=b49po, the b48pp harness (the tile loop runs after every entity and before the server copy's update) with mobs standing ON a moved block and large mobs. B spider, I size 4 slime,
+  // G iron golem. The player is the last index and far away (100.5, 100.5) so no target or push comes from it.
+  static void run49() throws Exception {
+    int[][] none = new int[0][0];
+    int[][] wall = {{72, 0, 60, 72, 5, 68, 1, 0}};
+    String look = "0 look 90 0", east = "0 piston 70 0 64 5 1 1 0";
+    double[][] far = {{70.5, 64.5}, {100.5, 100.5}};
+    double[][] onTop = {{70.5, 64.5, 1.0}, {100.5, 100.5}};
+    sc48("b49po-cow-ride-east-9600", 9600, 40, "C", onTop, none, look, east);
+    sc48("b49po-cow-ride-up-9601", 9601, 40, "C", new double[][] {{70.5, 64.5, 2.0}, {100.5, 100.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+    sc48("b49po-zombie-ride-east-9602", 9602, 60, "Z", onTop, none, look, east);
+    sc48("b49po-cow-ride-retract-9603", 9603, 40, "C", onTop, none, look, "0 piston 70 0 64 5 0 1 0");
+    sc48("b49po-spider-east-9604", 9604, 50, "B", far, none, look, east);
+    sc48("b49po-spider-wall-9605", 9605, 50, "B", far, wall, look, east);
+    sc48("b49po-slime-east-9606", 9606, 50, "I", far, none, look, east);
+    sc48("b49po-slime-lift-9607", 9607, 50, "I", new double[][] {{70.5, 64.5, 1.0}, {100.5, 100.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+    sc48("b49po-golem-east-9608", 9608, 50, "G", far, none, look, east);
+    sc48("b49po-golem-wall-9609", 9609, 50, "G", far, wall, look, east);
+    sc48("b49po-golem-ride-east-9610", 9610, 50, "G", onTop, none, look, east);
+    sc48("b49po-spider-ceiling-9611", 9611, 50, "B", new double[][] {{70.5, 64.5, 1.0}, {100.5, 100.5}}, new int[][] {{70, 0, 64, 70, 0, 64, 1, 0}, {70, 3, 64, 70, 3, 64, 1, 0}}, look, "0 piston 70 1 64 1 1 1 0");
+  }
 }
