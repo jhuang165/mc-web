@@ -3006,7 +3006,7 @@ function serverAcceptsClick(place) {
   const feet = [position.x, position.y, position.z];
   const resend = (b, a) => { for (const c of [b, a]) if (c) scene.updateBlock(c[0], c[2], c[1]); };
   // C02 for every aimed entity (mob, cart, boat, painting, frame): posY and getEyeHeight as the native entity has them, sight by a block ray.
-  const aimed = aimedEntity ? { pos: [aimedEntity.entity.x, aimedEntity.entity.y, aimedEntity.entity.z], eye: mobs.ai.brain(aimedEntity.entity).eyeHeight }
+  const aimed = aimedEntity ? { pos: [aimedEntity.entity.x, aimedEntity.entity.y, aimedEntity.entity.z], eye: aimedEntity.entity.knotRef ? 0 : mobs.ai.brain(aimedEntity.entity).eyeHeight } // a leash knot (EntityHanging) keeps Entity.getEyeHeight, 0
     : aimedCart ? { pos: [aimedCart.cart.x, aimedCart.cart.posY, aimedCart.cart.z], eye: 0 }
     : aimedHanging ? { pos: [aimedHanging.entity.x, aimedHanging.entity.y, aimedHanging.entity.z], eye: 0 } : null;
   if (aimed) return serverClick({ kind: 'entity', player: feet, entity: aimed.pos, eyeHeight: aimed.eye, action: place ? 'interact' : 'attack',

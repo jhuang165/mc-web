@@ -148,3 +148,14 @@ test("a cart copy never splashes", () => {
   const c = [...t.entries.values()][0].client; c.vx = 0.5;
   c.stepVehicle(); assert.equal(log.length, 0);
 });
+
+test("an aimed knot's C02 check uses Entity.getEyeHeight 0, not a mob brain (a knot stand-in has none)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  const line = src.split("\n").find((l) => l.includes("const aimed = aimedEntity ?"));
+  assert.ok(line && /knotRef \? 0 : mobs\.ai\.brain\(aimedEntity\.entity\)\.eyeHeight/.test(line), line);
+  const w = new EntityWorld({ numericSeed: 1, solid: (x, y) => y < 0, get: (x, y) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 0, y: 0, z: 0 }) }, []);
+  const k = w.knotSummon(0.5, 1, 0.5), hit = w.pick({ x: 0.5, y: 1.6, z: 3 }, { x: 0, y: -0.1, z: -1 }, 4.5);
+  assert.ok(hit?.entity?.knotRef === k);
+  assert.throws(() => w.ai.brain(hit.entity)); // what serverAcceptsClick called before the batch 50 lead fix
+});
