@@ -7,6 +7,7 @@ import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
 import { rawImgSrc } from "./gui-anaglyph.js"; // icons converted for 3D Anaglyph keep the page's own src (data-raw-src)
 import { tickItemAnimations, registerFrameTag } from "./item-animation.js";
+import { setItemAtlasFrame } from "./item-atlas.js";
 import { clockFrameCount, spriteEpoch } from "./sprite-frames.js";
 
 export function installMapsClockItems(items) {
@@ -50,6 +51,8 @@ export function clockFrameUrl(frame = clockState.frame) {
   return frameUrls.get(frame);
 }
 export const clockFrame = () => clockState.frame;
+// Whether a texture url is one the clock hands out: a cut frame or the raw strip (first-person.js maps these to the clock cell of the item atlas).
+export const isClockUrl = (url) => urlSet.has(url) || (typeof url === "string" && url.split("?")[0] === "/media/1.7.10/items/clock.png");
 
 // Per-original-block opacity cache by internal id for the height scan.
 const opacityCache = new Map();
@@ -80,6 +83,7 @@ export class MapsClock {
     tickClock(clockState, clockAngle(time, surface), clockFrameCount());
     tickItemAnimations(); // pack-animated item sprites (item-animation.js)
     if (typeof document !== "undefined") {
+      setItemAtlasFrame("clock", clockState.frame);
       const url = clockFrameUrl();
       if (this.lastFrame !== clockState.frame) {
         this.lastFrame = clockState.frame;

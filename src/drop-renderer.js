@@ -11,7 +11,7 @@ import { ITEMS } from "./survival.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
-import { leatherItemLayers } from "./leather-dye.js";
+import { itemPasses } from "./item-passes.js";
 import { flatItemSprites } from "./render-settings.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 
@@ -41,7 +41,7 @@ export class DropRenderer {
     return this.cubes.get(key);
   }
   build(stack, hover) {
-    const glint = stackHasEffect(stack, ITEMS[stack.id]), url = itemTexture(stack.id, stack.damage), leather = leatherItemLayers(stack.id, stack.color),
+    const glint = stackHasEffect(stack, ITEMS[stack.id]), leather = itemPasses(stack.id, stack.damage, stack.color), url = leather?.base ?? itemTexture(stack.id, stack.damage),
       color = leather?.color ?? 0, group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       chestUrl = !url && chestItemTexture(stack.id),
       material = url
@@ -49,7 +49,7 @@ export class DropRenderer {
         : chestUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(chestUrl) })
         : entityMaterial(this.view.lighting, { map: this.view.textures.texture });
     const overlayUrl = leather?.overlay,
-      overlayMaterial = overlayUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(overlayUrl), alphaTest: 0.1, side: THREE.DoubleSide }) : null;
+      overlayMaterial = overlayUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(overlayUrl), alphaTest: 0.1, side: THREE.DoubleSide, ...(leather.overlayTint ? { color: leather.overlayTint } : {}) }) : null;
     if (overlayMaterial) {
       overlayMaterial.depthWrite = false;
       overlayMaterial.polygonOffset = true;
@@ -139,7 +139,7 @@ export class DropRenderer {
       if (!stack) continue;
       seen.add(e);
       let pile = this.piles.get(e);
-      const leather = leatherItemLayers(stack.id, stack.color),
+      const leather = itemPasses(stack.id, stack.damage, stack.color),
         key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count, !!itemTexture(stack.id, stack.damage), flatItemSprites()) + ":" + itemFrameTag(itemTexture(stack.id, stack.damage)) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
