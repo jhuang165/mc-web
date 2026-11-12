@@ -46,3 +46,24 @@ test("batch 48: flushLoot spawns queued drops and orbs between two entries, leav
   w.flushLoot();
   assert.ok(w.events.some((e) => e.drop === 1), "without a host hook the event waits for drain()");
 });
+
+// Executed: tools/probes/EntityListProbe.java death-fall-cow-* (the real EntityCow with 1 health falls and dies on landing).
+import { entityListReference, replayEntityList, entityListDivergence } from "./entity-list-replay.js";
+const rec = (n) => entityListReference.find((r) => r.name === n);
+const DEATHS = ["death-fall-cow-hit", "death-fall-cow-nohit", "death-fall-cow-item-after", "death-fall-cow-item-before"];
+
+test("batch 48 (executed record): the dying cow's loot and orbs join in its own turn, as the real 1.7.10 walk does", () => {
+  for (const n of DEATHS) assert.equal(entityListDivergence(rec(n), replayEntityList(rec(n))), null, n);
+  // the record itself: the items are updated in the pass they spawn (age 1, pickup delay 9 at the landing tick); the orbs (recentlyHit 100 only) appear at deathTime 20
+  const hit = rec("death-fall-cow-hit"), nohit = rec("death-fall-cow-nohit"), spawned = (r, t) => r.rows[t][3].length;
+  assert.equal(hit.rows[13][3].length, 2);
+  assert.equal(hit.rows[13][3][0][8], 1);
+  assert.equal(hit.rows[13][3][0][9], 9);
+  assert.equal(spawned(hit, 33), 4, "two item stacks and two orbs once deathTime reaches 20");
+  assert.equal(spawned(nohit, 39), 2, "nobody hit it: no experience");
+});
+
+test("batch 48: the record needs the in-turn spawn; with the loot drained after the walk the items are a tick late", () => {
+  const c = rec("death-fall-cow-hit");
+  assert.notEqual(entityListDivergence(c, replayEntityList(c, null, "lootInTurn")), null);
+});
