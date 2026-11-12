@@ -5,11 +5,13 @@ import { potionColor, potionParticles } from "./fx.js";
 import { liveAttribute } from "./mob-attributes.js";
 const f = Math.fround;
 export const SPEED = 1, STRENGTH = 5, REGENERATION = 10, INVISIBILITY = 14;
+export const RESISTANCE = 11, ABSORPTION = 22;
 export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19, WITHER = 20;
 // Speed, strength, regeneration and invisibility from the spider spawn roll, plus what an EntityWitch drinks (instant health, speed, fire
 // resistance, water breathing) or throws (slowness, weakness, poison; witch.js).
+// Resistance (11) and Absorption (22) come from /effect, ActiveEffects and spawners: 1.7.10 has no potion item for them.
 // Nausea (9) is the cured zombie villager's villager (EntityZombie.convertToVillager); it has no effect on the mob here.
-const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER]);
+const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER, RESISTANCE, ABSORPTION]);
 
 // NBT "ActiveEffects": Id, Amplifier (byte), Duration (int). Unknown ids and spent effects
 // are dropped.
@@ -31,8 +33,16 @@ export function addMobEffect(e, id, duration = 2147483647, amplifier = 0) {
   if (!old) list.push({ id, duration, amplifier }), list.sort((a, b) => a.id - b.id);
   else if (amplifier > old.amplifier) Object.assign(old, { duration, amplifier });
   else if (amplifier === old.amplifier && duration > old.duration) old.duration = duration;
+  // PotionAbsorption (rr): onNewPotionEffect adds 4 * (amplifier + 1) to the absorption amount. Re-adding an effect the mob has runs onChangedPotionEffect(effect, true):
+  // remove (the amount minus 4 * (amplifier + 1) of the COMBINED effect, floored at 0), then apply it again, so a spent shield is refilled to the full amount.
+  if (id === ABSORPTION) {
+    const k = 4 * ((old ?? { amplifier }).amplifier + 1);
+    e.absorption = f((old ? Math.max(0, f((e.absorption || 0) - k)) : e.absorption || 0) + k);
+  }
   return true;
 }
+// EntityLivingBase.onFinishedPotionEffect: an expired Absorption effect takes its 4 * (amplifier + 1) off the amount (setAbsorptionAmount floors at 0).
+const finished = (e, effect) => { if (effect.id === ABSORPTION) e.absorption = Math.max(0, f((e.absorption || 0) - 4 * (effect.amplifier + 1))); };
 // Entity.isInvisible: the flag updatePotionEffects sets from the Invisibility effect.
 export const isInvisible = (e) => !!mobEffect(e, INVISIBILITY);
 
@@ -79,6 +89,7 @@ export function tickMobEffects(e, size, maxHealth, rand, fx, hurt) {
     }
     effect.duration--;
   }
+  for (const x of e.effects) if (x.duration <= 0) finished(e, x);
   e.effects = e.effects.filter((x) => x.duration > 0);
   potionParticles(fx ?? NO_FX, { x: e.x, y: e.y, z: e.z, yOffset: 0, width: size.width, height: size.height }, potionColor(e.effects), rand, { invisible: isInvisible(e) });
 }
