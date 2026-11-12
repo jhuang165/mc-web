@@ -23,8 +23,17 @@ export function deathComponent(tracker, name, ctx = {}) {
   return translation(key, ...args);
 }
 
-/** The chat line "<name> message" (NetHandlerPlayServer.processChatMessage: chat.type.text with the sender's func_145748_c_). */
-export const chatTextComponent = (formattedName, text) => translation("chat.type.text", formattedName, text);
+/** EntityPlayer.func_145748_c_ (yz.c_, bytecode-read): a ChatComponentText of the team-formatted name whose style holds a suggest_command click
+ *  "/msg <raw name> " (fi.e, no hover event). Any other sender's component is a plain text (`raw` omitted). */
+export function senderComponent(formattedName, raw) {
+  const c = text(formattedName);
+  if (raw != null) c.style.click = { action: "suggest_command", value: "/msg " + raw + " " };
+  return c;
+}
+
+/** The chat line "<name> message" (NetHandlerPlayServer.processChatMessage: ChatComponentTranslation("chat.type.text", the sender's func_145748_c_,
+ *  the message as a plain string); `rawName` is the player's own name when `formattedName` carries a team prefix or suffix. */
+export const chatTextComponent = (formattedName, message, rawName = formattedName) => translation("chat.type.text", senderComponent(formattedName, rawName), message);
 
 /** A player attacker as combat-tracker.js reads it: only a player carries its team-formatted name (`scoreboard.formatName`); any other entity keeps
  *  its plain name even when a team lists that name. */
