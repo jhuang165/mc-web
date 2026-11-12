@@ -95,6 +95,39 @@ public class MobVictimProbe {
     System.out.println("{\"victim\":\"pigman-group\",\"case\":\"" + name + "\",\"source\":\"" + src + "\",\"amount\":" + num(amount) + ",\"extra\":" + Arrays.toString(extraAt).replace("[", "[\"").replace("]", "\"]").replace(", ", "\",\"") + ",\"accepted\":" + ok
       + ",\"self\":{" + state(e, "pigman", attacker, other) + "},\"others\":[" + others + "]}");
   }
+  // Batch 52 (mobexport, tag b52me): Entity.onStruckByLightning (sa.a(xh): dealFireDamage(5), ++fire, setFire(8) at 0) on fire-immune and ordinary mobs from several fire counters, with and
+  // without Fire Protection IV armour (EnchantmentProtection.getFireTimeForEntity). The bolt is an unconstructed xh (the method ignores its argument).
+  static final Field FIRE, IMMUNE;
+  static { try { FIRE = MobMoveProbe.field(sa.class, "e"); IMMUNE = MobMoveProbe.field(sa.class, "ae"); } catch (Exception x) { throw new RuntimeException(x); } }
+  static void bolt(String kind, int fire, int material, int ench, int level) throws Exception {
+    PlayerDamageProbe.World.cells.clear();
+    sv e = kind.equals("zombie") ? new yq(PlayerDamageProbe.w) : kind.equals("magma_cube") ? (sv) sg.a("LavaSlime", PlayerDamageProbe.w) : make(kind);
+    PlayerDamageProbe.pos(e, 64.5, 5.0, 64.5);
+    gear(e, material, ench, level);
+    FIRE.setInt(e, fire);
+    float before = e.aS();
+    e.a((xh) PlayerDamageProbe.u.allocateInstance(xh.class));
+    System.out.println("{\"victim\":\"bolt\",\"kind\":\"" + kind + "\",\"start\":" + fire + ",\"material\":" + material + ",\"ench\":" + ench + ",\"level\":" + level
+      + ",\"fire\":" + FIRE.getInt(e) + ",\"health\":" + num(e.aS()) + ",\"before\":" + num(before) + ",\"immune\":" + IMMUNE.getBoolean(e) + "}");
+  }
+  // A pigman hit by an arrow: the shooter is a player (ro.a(arrow, player), DamageSource.causeArrowDamage) or a mob; the hit player's call angers every pigman within 32 blocks.
+  static void arrowGroup(String name, boolean playerShooter, String... extraAt) throws Exception {
+    PlayerDamageProbe.World.cells.clear();
+    yh e = (yh) place("pigman", 64.5, 64.5);
+    List<sa> near = new ArrayList<>();
+    for (String at : extraAt) { String[] c = at.split(","); near.add((yh) place("pigman", Double.parseDouble(c[0]), Double.parseDouble(c[1]))); }
+    near.add(e);
+    PlayerDamageProbe.World.near = near;
+    sv attacker = attackerFor("zombie");
+    yz other = (yz) PlayerDamageProbe.make("player"); PlayerDamageProbe.pos(other, 66.5, 5.0, 64.5);
+    MobMoveProbe.set(PlayerDamageProbe.w, "s", new Random(9));
+    boolean ok = e.a(ro.a((zc) PlayerDamageProbe.u.allocateInstance(zc.class), playerShooter ? (sa) other : (sa) attacker), 4.0f);
+    StringBuilder others = new StringBuilder();
+    for (int i = 0; i < near.size() - 1; i++) { yh o = (yh) near.get(i); others.append(i == 0 ? "" : ",").append("{\"angerLevel\":").append(ANGER.getInt(o)).append(",\"target\":\"").append(who((sa) TARGET.get(o), attacker, other)).append("\"}"); }
+    PlayerDamageProbe.World.near = null;
+    System.out.println("{\"victim\":\"pigman-arrow\",\"case\":\"" + name + "\",\"shooter\":\"" + (playerShooter ? "player" : "mob") + "\",\"neighbours\":" + extraAt.length + ",\"accepted\":" + ok
+      + ",\"self\":{" + state(e, "pigman", attacker, other) + "},\"others\":[" + others + "]}");
+  }
   public static void main(String[] args) throws Exception {
     PlayerDamageProbe.init();
     for (String kind : new String[] { "skeleton", "witherSkeleton", "pigman" })
@@ -119,5 +152,15 @@ public class MobVictimProbe {
     }
     // A pigman or wither skeleton at 1 health: the killing hit.
     for (String kind : new String[] { "skeleton", "witherSkeleton", "pigman" }) for (String src : new String[] { "player", "mob", "generic", "fire" }) if (!src.equals("fire")) run(kind, "kill-1hp", -1, -1, 0, -1, 0, 1.0f, -1, "zombie", src + ":6.0");
+    // Batch 52: lightning on fire-immune and ordinary mobs, and a pigman shot by a player's arrow.
+    for (String kind : new String[] { "zombie", "pigman", "witherSkeleton", "wither", "magma_cube", "skeleton" })
+      for (int fire : new int[] { -1, 0, 1, 5, 19, 160 }) {
+        bolt(kind, fire, -1, -1, 0);
+        if (kind.equals("zombie") || kind.equals("pigman") || kind.equals("skeleton")) bolt(kind, fire, 2, 1, 4);
+      }
+    for (boolean player : new boolean[] { true, false }) {
+      arrowGroup("alone", player);
+      arrowGroup("neighbours", player, "70.5,64.5", "64.5,95.5", "64.5,100.5", "100.5,64.5");
+    }
   }
 }

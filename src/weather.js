@@ -14,6 +14,7 @@ import { ringRandomActive } from "./streaming-ticks.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
 import { CAULDRON, cauldronRain } from "./stone-utility.js";
+import { setFireTicks } from "./armor-enchantments.js";
 
 const f = Math.fround;
 // How far (blocks) a random tick of a block reads or writes from its cell, for chunks outside the resident ticking window (their
@@ -89,10 +90,12 @@ export const isWet = (weather, world, e, height = 0) =>
 // Entity.onStruckByLightning (sa.a(xh)): 5 fire damage, then ++fire and setFire(8)
 // (160 ticks) when that reaches 0. A fresh entity has fire 0, so it lands on 1 and
 // burns for a tick; only one that rain had put out (fire -1 in vanilla) ignites.
-// Wet burning counters rest at -fireResistance in block-collisions.js.
-export function struckByLightning(fire) {
+// Wet burning counters rest at -fireResistance in block-collisions.js. A fire-immune mob takes no
+// damage (dealFireDamage checks isImmuneToFire, the caller's refusal) but the counter still advances;
+// setFire(8) is shortened by the worn Fire Protection (`armor`, EnchantmentProtection.getFireTimeForEntity).
+export function struckByLightning(fire, armor = []) {
   const next = fire + 1;
-  return { damage: 5, fire: next === 0 ? 160 : next };
+  return { damage: 5, fire: next === 0 ? setFireTicks(armor, 0, 8) : next };
 }
 // EntityLightningBolt.onUpdate's damage box: x/z +-3, y -3 to +9.
 export const strikeBox = (b) => [b.x - 3, b.y - 3, b.z - 3, b.x + 3, b.y + 9, b.z + 3];

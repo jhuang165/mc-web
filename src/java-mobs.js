@@ -34,7 +34,7 @@ const numbers = (map, key, type, n) => {
 export function readActiveEffects(entity) {
   const list = tagValue(entity, 'ActiveEffects', NBT.LIST);
   if (list?.elementType !== NBT.COMPOUND) return [];
-  return list.items.map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0) }));
+  return list.items.map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0), ...(tagValue(e, 'Ambient', NBT.BYTE, 0) !== 0 ? { ambient: true } : {}) }));
 }
 
 // `convertItem(compound)` is region-import's item converter (null for an unknown stack). Returns null when the id is not

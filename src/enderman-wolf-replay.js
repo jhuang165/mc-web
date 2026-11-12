@@ -212,7 +212,7 @@ function run(r) {
       else if (op === "fire") { if (Number(p[2]) === n) survival.setFire?.(Number(p[3])); else ents[Number(p[2])].fire = Number(p[3]) * 20; }
       else if (op === "effect") { const k = Number(p[2]), id = Number(p[3]); if (k === n) survival.effects.add({ id, duration: Number(p[4]), amplifier: 0 }); else addMobEffect(ents[k], id, Number(p[4]), 0); }
       else if (op === "bolt") { // Entity.onStruckByLightning on the mob (weather-simulation.js: 5 fire damage, the fire counter, a creeper turns charged)
-        const e = ents[Number(p[2])], hit = struckByLightning(e.fire || 0);
+        const e = ents[Number(p[2])], hit = struckByLightning(e.fire || 0, e.equipment ?? []);
         ew.hazard(e, hit.damage, "inFire"); e.fire = hit.fire;
         if (e.type === "creeper") powerCreeper(e);
       }
