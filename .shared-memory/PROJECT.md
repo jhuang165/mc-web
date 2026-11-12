@@ -113,6 +113,16 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 47 (2026-11-11, five Sonnet tracks in `../wt47-<name>` on `batch47-<name>`, cut from 3250e20f5, merged --no-ff on `batch47-lead`; lead note `b47-lead-track.md`; the gun side runs separately):
+- 0.76.0, by track:
+  - passes2: thrown potions and mob-held eggs and potions draw two passes (`held-sprite.js`); baby bipeds use the child held frame; the witch's held potion is at its nose (pivot [0,-2,0] executed); sword blocking pose in first and third person (pose only).
+  - awaythrows: away balls hit carts, boats and hanging entities; the live rocket ticks in the one walk; hatched chicks and riders seated mid-pass keep the walk order; carts keep their mob rider's box as a blocker. `EntityListProbe` 74 scenarios.
+  - clientvehicles: client copies of boats, carts, paintings, item frames and knots in the object tracker (`TrackerVehiclesProbe`), hit by client arrows and hooks; the dragon-part retarget draws three floats. Renderers still draw the live entities.
+  - serverplayer: the server copy of the player rests at the last C03 position (0.03 or 20 ticks), with block collision, the sneak edge, liquid, web and ladder friction and flying drag; dragon, cart and boat pushes reach it. 19 `b47sp` records.
+  - horses2: running around with a wild horse is the native AI task; unsaddled riders don't steer; horse sound and draw fixes; foal growth stops at walls. 62 `b47h` records.
+- Lead merges: the b47sp and b47h probe flags are `B47`/`B47H` (`run47`/`run47h`), and the replay exports are `reference47sp`/`reference47h`. Every replay except b47sp sends a position each tick, because those harnesses place the server copy directly.
+- Verification: see `b47-lead-track.md`. Pushed to github main by the lead.
+
 Batch 46 (2026-11-11, five Sonnet tracks in `../wt46-<name>` on `batch46-<name>`, cut from a1ba8548c, merged --no-ff on `batch46-lead`; lead note `b46-lead-track.md`; the gun side runs separately):
 - 0.75.0, by track:
   - clienttargets: client arrows and hooks hit boats, carts, paintings, item frames, leash knots and the dragon's parts (true on a client world: the arrow ends, the hook attaches); a burning client arrow sets the copy on fire for one update; a burning server arrow resyncs its velocity every 20th tick. `TrackerHitsProbe` +11 scenarios.

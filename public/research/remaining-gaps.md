@@ -2,6 +2,49 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 47
+
+Batch 47 covered these areas:
+- **Two passes for thrown and mob-held items.** A thrown potion draws its liquid pass tinted by the potion colour, then the bottle (`projectile-renderer.js`). Mobs draw held eggs and potions in two passes (`held-sprite.js`), and baby bipeds use the child held frame. The witch's nose pivot is the executed [0,-2,0], and its held potion sits at the nose. Bytecode-read: the inventory's tinted egg and potion layers equal the native two alpha-blended passes. The item-frame compass's own canvas has the pixels of the native shared cell, so neither needed a change.
+- **Sword blocking pose.** Holding use with a sword blocks (EnumAction.block, 72000 ticks) in first person and in third person until the button is released. This is the pose only.
+- **Away throws and the live rocket.** Away snowballs, eggs and pearls hit carts, boats and hanging entities. The live firework rocket ticks at its join place in the one walk, not after it. A chick hatched mid-walk joins the tick order, and a rider seated mid-pass updates right after its mount. A cart no longer leaves its mob rider's box out of its blockers. Executed: `EntityListProbe`, 74 scenarios.
+- **Client copies of vehicles and hanging entities.** The object tracker spawns client copies of boats, minecarts, paintings, item frames and leash knots, and client arrows and hooks hit those copies. The ridden vehicle stays the live one. Executed: the boat spawns 0.3 higher, interpolates for 8 ticks and then coasts on its last velocity packet with float drag. The cart interpolates for 5 ticks and never moves on its own. Hanging copies are static at the tile in their spawn packet. A client dragon-part hit draws three `Entity.rand` floats. Executed: `TrackerVehiclesProbe`.
+- **The integrated server's copy of the player.** It rests at the last position a C03 packet gave it: one is sent when the squared move since the last exceeds 9.0E-4, or on the 21st call. Its update has block collisions, the sneak edge, water, lava, web and ladder friction, and the flying 0.6 vertical drag. The server puts the copy back after the update, so only the motion, the web flag and pushes persist. Dragon, cart and boat pushes reach it. The revenge target is dropped when the attacker dies or leaves, or after 100 ticks. Executed: 19 `b47sp` records.
+- **Horses, continued.** Running around with an untamed rider is the native AI task: a 1 in 50 roll, temper, the tame roll, the buck and the angry rear. A rider without a saddle does not steer. Further fixes:
+  - The status 6 and 7 particles draw no server randoms.
+  - A type 0 gallop step draws `nextInt(10)` and breathes at 0.6 volume.
+  - Feeding plays `eating`, which has no sound in the manifest, so it is silent.
+  - The hurt sound is `mob.horse.hit`, and the angry volume is the float 0.8.
+  - A talk-sound rear is skipped while the horse rears or eats.
+  - A growing foal's nudge stops flush at a wall.
+  - Executed: 62 `b47h` records.
+
+Still open from batch 47:
+- **Renderers and vehicle copies.**
+  - The boat, cart, painting, item-frame and knot renderers and shadows still draw the live entities, not their client copies.
+  - The client copy of a ridden boat or cart does not run its own physics, and there are no client boat splash particles.
+  - Live boats and carts never set `airBorne`/`velocityChanged`, so pushes don't trigger the immediate tracker update.
+  - Tracker entries start at an entity's first listed tick, not at its creation.
+  - The far-boat untrack differs from the executed entry (`boatFar`).
+  - The furnace and command-block cart watcher objects are not executed.
+- **Sword blocking.** It has no movement slowdown and no halved incoming damage (`EntityPlayer.isBlocking`). There is no executed `HeldPoseProbe` record for the blocking pose or the witch's held potion.
+- **Server copy of the player.**
+  - A piston push of the copy is not routed.
+  - The physics of a riding copy is not modelled, and neither is the velocity of the mob client copies.
+  - The order between the position packet and the mob update is bytecode-read only.
+  - The `b46mp` harness should be regenerated so the replay's `hurtByTime`/`sent` workarounds can go.
+- **Away runs.**
+  - Live `main.js` does not report joins for carts, boats and hanging entities.
+  - Mob death drops and xp drain after the walk.
+  - The away list order and the item-frame and dispenser throws are not probed.
+  - Exp-bottle orbs use a per-ball random, not `World.rand`.
+- **Horses and cats.**
+  - A piston pushing a mob has no executed record.
+  - A chest opened under a sitting cat is bytecode-read only.
+  - Skeleton and zombie horses have no spawn-roll record (`onSpawnWithEgg` never makes types 3 or 4).
+  - The `b47h` reference's `method` text is the generic batch 42 one.
+- **Not yet in a browser check.** Arrows hitting the boat copies: the smoke's shot missed its aim, so only the unit tests cover it. Riding a wild horse.
+
 ## Done in batch 46
 
 Batch 46 covered these areas:
@@ -11,11 +54,8 @@ Batch 46 covered these areas:
 - **Item atlas, continued.** Spawn eggs and potions draw their two native passes from atlas cells (`item-passes.js`), so held and dropped potions now show their liquid. The clock and compass are atlas cells that show the current frame. Bytecode-read: the item TextureMap has no mipmaps (only the blocks map gets them), and the piston item is a cube with its native faces (executed draws), so neither needed a change.
 - **Away vehicles in the walk.** The away run ticks minecarts, boats, hanging entities and firework rockets at their join place in the one walk with the mobs; a mob rider updates right after its mount, and carts and boats now meet the away mobs as blockers.
 
-Still open from batch 46:
-- Client copies of boats, carts, paintings, item frames and leash knots do not exist; client arrows and hooks test the live ones. A client dragon-part hit's three `Entity.rand` draws are not made.
-- The server copy of the player has no block collision or fluid, web or ladder friction, and its position is pinned to the client's. Dragon, piston, cart and boat pushes do not reach it. The client half of the mob push (the mob side) is not modelled, because client copies keep no motion.
-- Thrown potions and mob-held potions and eggs draw one pass. The item-frame compass has its own canvas. Inventory egg and potion icons are CSS-tinted layers.
-- The away run's thrown balls target only mobs. Live rockets still tick after the walk. The away list order has no native probe.
+Still open from batch 46 (items closed in batch 47 removed):
+- The client half of the mob push (the mob side) is not modelled, because client copies keep no motion (serverplayer, bytecode-read: the server's mob packets overwrite the client copy within a tick).
 - Egg hatching and exp-bottle orbs on a vehicle or painting hit are not probed, and neither is a pearl thrown by a real `EntityPlayerMP` at a cart.
 
 ## Done in batch 45
