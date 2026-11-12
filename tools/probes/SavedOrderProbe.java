@@ -13,6 +13,11 @@ public class SavedOrderProbe {
     SW() { super(); }
     public List a(apx c, boolean remove) { return null; } // World.getPendingBlockUpdates: none
     public long I() { return 1000L; }
+    // batch 53 (b53so): World.updateEntityWithOptionalForce files an entity into the chunk that exists at its position (chunkExists / getChunkFromChunkCoords)
+    public Map<Long, apx> chunkMap = new HashMap<>();
+    static long key(int x, int z) { return ((long) x << 32) ^ (z & 0xffffffffL); }
+    public boolean c(int x, int z) { return chunkMap.containsKey(key(x, z)); }
+    public apx e(int x, int z) { return chunkMap.get(key(x, z)); }
   }
   static Object unsafeAlloc(Class<?> c) throws Exception { return PlantProbe.unsafe.allocateInstance(c); }
   static SW world() throws Exception {
@@ -26,6 +31,7 @@ public class SavedOrderProbe {
     MobMoveProbe.field(ahb.class, "u").set(w, new ArrayList());
     MobMoveProbe.field(ahb.class, "f").set(w, new ArrayList()); // loadedEntityList
     w.cells = new HashMap<>();
+    w.chunkMap = new HashMap<>();
     w.entities = new ArrayList<>();
     return w;
   }
@@ -39,6 +45,7 @@ public class SavedOrderProbe {
       case "arrow": e = new zc(w, x, y, z); break;
       case "tnt": e = new xw(w, x, y, z, null); break;
       case "cow": e = new wh(w); break;
+      case "cart": e = new xs(w, x, y, z); PlayerStepProbe.field(sa.class, "c").setInt(e, 1); break; // EntityMinecartEmpty (id set as EntityListProbe does)
       default: throw new RuntimeException(kind);
     }
     PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
@@ -78,6 +85,50 @@ public class SavedOrderProbe {
     s.append("],\"before\":").append(before).append(",\"after\":").append(after).append("}");
     System.out.println(s);
   }
+  // Batch 53 (b53so): the order after entities changed section or chunk and after a mount was saved with its rider. spec: kind, y, chunk, mount (the index of the entity this one
+  // rides, or -1). Each tick applies its moves ({index, y, chunk x shift}) and then runs the real World.updateEntityWithOptionalForce(entity, false) on every entity in
+  // loadedEntityList order (the walk of World.updateEntities: Chunk.removeEntityAtIndex then Chunk.addEntity when posX/16, posY/16 or posZ/16 differs from the filed cell).
+  static void scenario2(String name, int[][] chunks, String[][] specs, double[][][] ticks) throws Exception {
+    aqk loader = new aqk(new File("unused-probe-path"));
+    Method writer = aqk.class.getDeclaredMethod("a", apx.class, ahb.class, dh.class); writer.setAccessible(true);
+    Method reader = aqk.class.getDeclaredMethod("a", ahb.class, dh.class); reader.setAccessible(true);
+    SW w = world();
+    List<apx> made = new ArrayList<>();
+    for (int[] c : chunks) { apx ch = new apx(w, c[0], c[1]); made.add(ch); w.chunkMap.put(SW.key(c[0], c[1]), ch); }
+    List<sa> ents = new ArrayList<>();
+    List<Integer> before = new ArrayList<>();
+    for (int i = 0; i < specs.length; i++) {
+      int ci = Integer.parseInt(specs[i][2]);
+      sa e = make(w, specs[i][0], chunks[ci][0] * 16 + 1 + 0.5 * i, Double.parseDouble(specs[i][1]), chunks[ci][1] * 16 + 8.5);
+      made.get(ci).a(e);
+      loaded(w).add(e);
+      ents.add(e);
+      before.add(index(e, chunks));
+    }
+    for (int i = 0; i < specs.length; i++) { int m = Integer.parseInt(specs[i][3]); if (m >= 0) ents.get(i).a(ents.get(m)); } // Entity.mountEntity
+    for (double[][] tick : ticks) {
+      for (double[] mv : tick) { sa e = ents.get((int) mv[0]); e.b(e.s + 16 * mv[2], mv[1], e.u); }
+      for (sa e : new ArrayList<>(loaded(w))) w.a(e, false);
+    }
+    SW w2 = world();
+    for (int ci = 0; ci < chunks.length; ci++) {
+      dh level = new dh(); writer.invoke(loader, made.get(ci), w, level);
+      apx back = (apx) reader.invoke(loader, w2, level);
+      back.d();
+    }
+    List<Integer> after = new ArrayList<>();
+    for (sa e : loaded(w2)) after.add(index(e, chunks));
+    StringBuilder s = new StringBuilder("{\"case\":\"saved-order2\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
+    for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
+    s.append("],\"ticks\":").append(Arrays.deepToString(ticks)).append(",\"before\":").append(before).append(",\"after\":").append(after).append("}");
+    System.out.println(s);
+  }
+  static String[] S(String kind, double y, int chunk, int mount) { return new String[] {kind, Double.toString(y), Integer.toString(chunk), Integer.toString(mount)}; }
+  static String[][] plain(String[] kinds, double[] ys, int[] chunk) {
+    String[][] out = new String[ys.length][];
+    for (int i = 0; i < ys.length; i++) out[i] = S(kinds[i % kinds.length], ys[i], chunk[i], -1);
+    return out;
+  }
   static String[][] mix(double[] ys, int[] chunk) {
     String[] kinds = {"item", "cow", "arrow", "orb", "tnt", "item", "cow", "orb", "arrow", "tnt"};
     String[][] out = new String[ys.length][];
@@ -96,5 +147,23 @@ public class SavedOrderProbe {
     scenario("b52so-two-chunks", two, mix(new double[] {70, 5, 70, 40, 5, 100, 40, 250, 5, 70}, alt));
     scenario("b52so-three-chunks", three, mix(new double[] {20, 90, 20, 3, 200, 90, 3, 20, 200, 90}, tri));
     scenario("b52so-sorted-already", one, mix(new double[] {1, 17, 33, 49, 65, 81, 97, 113, 129, 145}, c0));
+    // ---- batch 53 (b53so) ----
+    String[] kinds = {"item", "cow", "arrow", "orb", "tnt", "item", "cow", "orb", "arrow", "tnt"};
+    double[][] none = {};
+    scenario2("b53so-no-move", one, plain(kinds, new double[] {70, 5, 70, 40, 5, 100, 40, 250, 5, 70}, c0), new double[][][] {none, none});
+    scenario2("b53so-section-move", one, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, c0), new double[][][] {{{2, 20, 0}}, {{0, 20, 0}, {5, 130, 0}}, {{2, 70, 0}}});
+    scenario2("b53so-move-within-section", one, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, c0), new double[][][] {{{1, 75, 0}, {3, 65, 0}}, {{4, 64, 0}}});
+    scenario2("b53so-two-moves-one-tick", one, plain(kinds, new double[] {70, 70, 20, 70, 20, 70, 70, 20, 70, 70}, c0), new double[][][] {{{7, 70, 0}, {1, 20, 0}, {9, 20, 0}, {3, 20, 0}}});
+    scenario2("b53so-move-back", one, plain(kinds, new double[] {70, 70, 70, 20, 20, 70, 70, 70, 20, 70}, c0), new double[][][] {{{0, 20, 0}}, {{3, 70, 0}}, {{0, 70, 0}, {4, 70, 0}}});
+    scenario2("b53so-chunk-move", two, plain(kinds, new double[] {70, 70, 70, 70, 70, 70, 70, 70, 70, 70}, alt), new double[][][] {{{0, 70, 1}, {1, 70, -1}}, {{6, 70, -1}}});
+    scenario2("b53so-unclamped-refile", one, plain(kinds, new double[] {250, 70, 270, 250, -5, 5, 130, 250, 400, 255.5}, c0), new double[][][] {none, none, {{0, 260, 0}, {3, 40, 0}}, none});
+    // a mount saved with its rider is one nested record: the rider is written, the mount is skipped, and the loader adds the rider, then its mount
+    String[] rk = {"cow", "cart", "item", "item", "cow", "orb"};
+    scenario2("b53so-mount-rider-first", one, new String[][] {S("cow", 70, 0, 1), S("cart", 70, 0, -1), S("item", 5, 0, -1), S("item", 70, 0, -1), S("orb", 70, 0, -1)}, new double[][][] {none});
+    scenario2("b53so-mount-first", one, new String[][] {S("item", 70, 0, -1), S("cart", 70, 0, -1), S("item", 5, 0, -1), S("cow", 70, 0, 1), S("orb", 70, 0, -1)}, new double[][][] {none});
+    scenario2("b53so-mount-sections", one, new String[][] {S("item", 70, 0, -1), S("cart", 63.5, 0, -1), S("item", 50, 0, -1), S("cow", 64.2, 0, 1), S("orb", 70, 0, -1), S("item", 40, 0, -1)}, new double[][][] {none});
+    scenario2("b53so-mount-chain", one, new String[][] {S("cow", 70, 0, 1), S("cow", 70, 0, 2), S("cart", 70, 0, -1), S("item", 70, 0, -1), S("item", 5, 0, -1)}, new double[][][] {none});
+    scenario2("b53so-mount-two-chunks", two, new String[][] {S("item", 70, 0, -1), S("cow", 70, 1, 2), S("cart", 70, 1, -1), S("item", 70, 1, -1), S("cow", 70, 0, 5), S("cart", 70, 0, -1), S("item", 70, 0, -1)}, new double[][][] {none});
+    scenario2("b53so-mount-after-move", one, new String[][] {S("item", 70, 0, -1), S("cart", 70, 0, -1), S("cow", 70, 0, 1), S("item", 20, 0, -1), S("orb", 70, 0, -1)}, new double[][][] {{{2, 20, 0}, {1, 20, 0}}, {{0, 20, 0}}});
   }
 }

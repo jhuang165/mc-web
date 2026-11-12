@@ -1,3 +1,4 @@
+import { trackSections } from "./saved-order.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -1834,6 +1835,7 @@ export class EntityWorld {
     if (e.growingAge < 0) v.growingAge = -24000;
     addMobEffect(v, NAUSEA, CURE_NAUSEA_TICKS, 0);
     this.entities.push(syncInterpolation(v));
+    e.removedHealth = e.health; // setDead keeps the zombie's health (b53so)
     e.health = 0;
     e.death = 20;
     e.recentlyHit = 0;
@@ -2203,6 +2205,7 @@ export class EntityWorld {
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
+    trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
@@ -2354,6 +2357,7 @@ export class EntityWorld {
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
+    trackSections(this, order); // b53so: an entity that changed chunk or section in this pass joins the end of its new list (saved-order.js)
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
     this.tickOrder = null;

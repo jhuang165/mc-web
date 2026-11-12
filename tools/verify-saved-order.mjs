@@ -23,10 +23,17 @@ await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib;
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...['MobMoveProbe','PlantProbe','PlayerStepProbe','XpOrbProbe','NbtProbe','MinecartProbe','HangingProbe','EntityListProbe','SavedOrderProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'SavedOrderProbe'],{maxBuffer:1<<26});
-const cases=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order');
-assert.equal(cases.length,7,'7 b52so scenarios');
+const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
+const cases=records.filter(r=>r.case==='saved-order'),cases2=records.filter(r=>r.case==='saved-order2');
+assert.equal(cases.length,7,'7 b52so scenarios');assert.equal(cases2.length,13,'13 b53so scenarios');
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
  method:'Batch 52 b52so: the unchanged AnvilChunkLoader writer (Chunk.entityLists, 16 sections each in list order) and reader, then Chunk.onChunkLoad (addLoadedEntities per section 0..15) over EntityListProbe World double; EntityItem, EntityXPOrb, EntityArrow, EntityTNTPrimed and EntityCow added to chunks in a given order, saved, read back; each record has the index order before the save and in loadedEntityList after the load.',
  cases};
 await writeFile(path.join(root,'../public/research/saved-order-reference.json'),JSON.stringify(reference)+'\n');
 console.log(`${cases.length} saved order scenarios`);
+// Batch 53 (b53so): entities that changed section or chunk (the real World.updateEntityWithOptionalForce refiles them) and a mount saved with its rider; replayed by src/saved-order2-b53.test.js.
+const reference2={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 53 b53so: SavedOrderProbe scenario2. The b52so set-up plus the unchanged World.updateEntityWithOptionalForce(entity, false) run over every entity in loadedEntityList order after each tick of moves (Chunk.removeEntityAtIndex then Chunk.addEntity when floor(pos/16) differs from the filed cell, with y unclamped against the clamped filed section), EntityMinecartEmpty and EntityCow mounted with Entity.mountEntity (the rider is written with its mount nested under Riding, the mount is skipped, the loader adds the rider and then its mount). specs: kind, y, chunk, index of the mount.',
+ cases:cases2};
+await writeFile(path.join(root,'../public/research/saved-order2-reference.json'),JSON.stringify(reference2)+'\n');
+console.log(`${cases2.length} saved order 2 scenarios`);

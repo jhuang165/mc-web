@@ -85,7 +85,7 @@ export function installMooshroomGolem(EntityWorld) {
     const cow = this.create("cow", e.x, e.y, e.z);
     cow.yaw = e.yaw; cow.pitch = e.pitch; cow.bodyYaw = e.bodyYaw ?? e.yaw; cow.health = e.health;
     for (const k of ["yaw", "bodyYaw", "headYaw"]) if (e[k] !== undefined) cow[k] = e[k];
-    e.health = 0; e.death = 20; // setDead
+    e.removedHealth = e.health; e.health = 0; e.death = 20; // setDead keeps the mooshroom's health (b53so)
     this.entities.push(cow);
     const h = ENTITY_TYPES.mooshroom.height;
     if (this.fx) this.fx.spawn("largeexplode", e.x, e.y + h / 2, e.z, 0, 0, 0);
