@@ -29,6 +29,7 @@ import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, spawnEggIconHtml } from "./spawn-eggs.js";
+import { spawnEggMob } from "./spawn-egg-use.js";
 import { isThrowable } from "./player-throw-simulation.js";
 import { ITEM_POTION } from "./item-passes.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
@@ -1454,6 +1455,7 @@ async function launch(record, prepared, { slice = false } = {}) {
           if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; (mobs.potions?.projectiles ?? projectiles).balls.push(b); mobs.joined?.(b, "potion"); } // potions and bottles walk as "potion"
           else { projectiles.balls.push(ball); projectiles.joined?.(ball); }
         },
+        spawnEgg: (stack, at, roll) => { if (spawnEggMob({ mobs }, stack.damage, at, stack.displayName, roll)) saved = false; }, // BehaviorDispenseSpawnEgg
         fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
         firework: (stack, x, y, z, fx, fz) => { dispenseFirework(rockets, x, y, z, fx, fz, stack); saved = false; },

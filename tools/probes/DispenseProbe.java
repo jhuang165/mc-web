@@ -53,6 +53,8 @@ public class DispenseProbe {
     public void a(sa e, String s, float v, float p) { log.add("entitySound," + s + "," + v + "," + p); }
     public agy O() { return rules; }
     public boolean t(int x, int y, int z) { return false; }
+    public Calendar V() { return new GregorianCalendar(2020, 6, 4); } // not Halloween (skeleton, zombie and pigman onSpawnWithEgg read the date)
+    public float B(int x, int y, int z) { return 0.0F; } // light brightness: the double has no chunks (zombie, skeleton, pigman, horse onSpawnWithEgg read it)
     void put(int x, int y, int z, int id, int meta) { blocks.put(key(x, y, z), id); metas.put(key(x, y, z), meta); }
   }
   static W world(long seed) throws Exception {
