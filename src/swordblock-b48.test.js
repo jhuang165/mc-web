@@ -12,7 +12,7 @@ import { tickPlayerItemUse } from './player-item-use.js';
 import { readFileSync } from 'node:fs';
 import { VOID } from './survival.js';
 const f = Math.fround;
-const IRON_SWORD = 267;
+const IRON_SWORD = 114; // this build's id of the Iron Sword (the executed record below uses the original id 267)
 const survivor = (blocking) => { const p = new Survival({}, 'survival'); p.protection = 0; p.health = 20; p.blocking = blocking; return p; };
 
 test('blockedDamage is (1 + amount) * 0.5 for blockable sources only', () => {

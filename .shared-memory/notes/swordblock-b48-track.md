@@ -1,0 +1,22 @@
+# swordblock batch 48 track (branch batch48-swordblock, from 61e069a4a)
+
+## Summary
+- Damage (bytecode-read yz.d(ro, float), EntityPlayer.damageEntity): `if (!source.isUnblockable() && isBlocking() && amount > 0) amount = (1 + amount) * 0.5F`, before armour. Ported in `Survival.damage` (`this.blocking`, `blockedDamage` in `src/armor-enchantments.js`); `main.js movementTick` syncs `survival.blocking = !!eating?.block` each tick (single player). The halving applies to the hurt-window top-up difference (`amount - lastDamage`); the stored last damage stays the raw hit.
+- isBlocking (bytecode-read yz.bC): `itemInUse != null && item.getItemUseAction(stack) == EnumAction.block`.
+- Unblockable sources (bytecode-read ro.<clinit>, `setDamageBypassesArmor` ro.k sets ro.p = isUnblockable): onFire, inWall, drown, starve, fall, outOfWorld, generic, magic, wither, plus the indirectMagic factory. Blockable: inFire, lava, cactus, anvil, fallingBlock, explosions, arrows, thrown, thorns, mob and player attacks. Matches the existing combat.js UNBLOCKABLE set (mobs).
+- Movement (bytecode-read blk.e, EntityPlayerSP.onLivingUpdate): `isUsingItem && !isRiding` scales input by 0.2 and zeroes sprintToggleTimer; sprint starts need `!isUsingItem`. The port already did this for on-foot play through `usingItem: !!eating` (block state is `eating`), so a blocking player was already slowed and cannot start a sprint (a running sprint ends as input falls below 0.8). Fixed one difference: `vehicle-simulation.js` slowed a rider too; native skips the slowdown when riding.
+- Server copy / multiplayer: nothing in `src/ai.js` reads blocking or the item in use. Native, the integrated server's EntityPlayerMP holds itemInUse (C08 block placement) and halves in its own damageEntity; the port's single-player damage is on the client `Survival`, so that is what is modelled. Multiplayer play (`multiplayer` branch of movementTick) is not synced: the gun-arena server has no item-in-use state.
+- Evidence (executed): `tools/probes/BlockingProbe.java` + `tools/verify-sword-block.mjs` -> `public/research/sword-block-reference.json` (119 records): the unchanged EntityPlayerMP.attackEntityFrom with itemInUse set to a sword, bow, apple or nothing, 11 DamageSources, armour, amounts 0.5/1/6/20, hurt-window top-ups. `PlayerDamageProbe.java` gained a tick counter (tickOf). The probe uses the stub `probes/held/.../GameProfile.java` (no authlib needed).
+- Held pose: `held-pose-reference.json` (batch 45, executed) already contains a sword in use (use 5) on the third-person player and witch id 373 at the nose; that part of the batch 47 follow-up is already executed. First-person `ItemRenderer.renderItemInFirstPerson` (bly.a(float), 1800 bytecode lines on the Minecraft/EntityPlayerSP statics) was not probed: still bytecode-read only.
+
+## Verification
+- `node --test src/swordblock-b48.test.js`: 6 pass (halving rule and source list, armour order, hurt-window difference, movement and sprint through `movePlayer`, use state, replay of the executed record).
+- Targeted: `node --test src/survival.test.js src/player-damage.test.js src/armor-enchantments.test.js src/player-physics.test.js src/vehicle-simulation.test.js src/player-edit-simulation.test.js src/player-item-use.test.js src/player-movement.test.js src/combat.test.js src/vehicle-riders.test.js src/away-vehicles.test.js src/minecarts.test.js src/boats.test.js`: all pass. `npm run build`: ok. No full `npm test`.
+- Muted browser check (vite port 5562, Survival world, `artifacts/b48-swordblock/smoke.mjs`): walking 4.29 blocks/s free vs 0.71 blocks/s with the right button held on an iron sword (1.5 s, includes the acceleration ramp); 6 damage from a zombie-style hit (`scaledDamage`) cost 6 hearts-halves free and 3.5 blocking; a 6 fall cost 6 blocking. Screenshots in that folder.
+
+## Follow-ups (proposed gap lines)
+- Sword blocking in multiplayer (the arena server) has no item-in-use sync, so a remote player never halves damage.
+- First-person blocking pose (`renderItemInFirstPerson`) is bytecode-read only; no executed record.
+- Burning (`onFire`, unblockable natively) goes through `Survival.damage` with `blockable` true (armour applies in the port); the blocking halving is right (key `onFire`), the armour step is a pre-existing difference worth a probe record.
+- `damageSourceKey("an accident")` maps to the mob key (existing test pins it); only blocking special-cases it as generic.
+- Port item ids differ from original ids (iron sword 114 here, 267 in records).
