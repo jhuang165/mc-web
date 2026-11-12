@@ -1,0 +1,16 @@
+# itematlas2 b46 track
+
+## Summary
+- Mip chain (bytecode-read, `javap` of bao/bpz/bqi/bbj): `Minecraft.startGame` builds the blocks TextureMap (`bpz(0, "textures/blocks")`) and calls `setMipmapLevels(gameSettings.mipmapLevels)` / `setAnisotropicFiltering` on it only; the items map (`bpz(1, "textures/items")`) keeps its defaults (mipmap 0, anisotropy 1), and the GameSettings option handler only touches `getTextureMapBlocks()`. With level 0 `bqi.allocateTexture` uploads level 0 only and `setTextureBlurMipmap(false, false)` gives GL_NEAREST min and mag. So the native item atlas has no mip chain, and the port's NEAREST item atlas already matches; nothing to model. (The earlier follow-up line "no mip chain, not modelled" was a misreading.)
+- Piston icon (executed, `item-render-reference.json` ids 33, 29, 23): render type 16 is accepted by `renderItemIn3d`, and `renderBlockAsItem` draws a unit cube (same six quads as stone) with `getIcon(side, 1)`: piston_bottom, piston_top_normal/sticky, piston_side x4. The port already drew exactly this; `src/piston-item.test.js` pins it (pistons and dispenser, per-face icons and no box table). No fix needed.
+- Multi-pass items (bytecode-read for ItemPotion `adp.a(int,int)`/`adp.a(add,int)`; ItemMonsterPlacer and leather armor as in 1.7.10): `src/item-passes.js` `itemPasses(id, damage, color)` gives pass 0 sprite+tint and pass 1 sprite+tint. Spawn egg: spawn_egg in the primary colour, spawn_egg_overlay in the secondary. Potion: potion_overlay in the liquid colour first, then the white bottle (splash by bit 16384). Leather unchanged. first-person.js, drop-renderer.js (so item frames too) and player-renderer.js (third-person hand) use it, so spawn eggs are two atlas passes (no composed data URL) and held/dropped potions now show the liquid overlay (they showed only the bottle before).
+- Animated items: the clock and compass are cells of the item atlas whose pixels follow the shared sprite's current strip frame (`setItemAtlasFrame`; native TextureClock/TextureCompass upload the frame into their cell every tick). `pixelTexture` maps the compass static url and every clock frame url to the atlas cell. Skulls were already cells (skull_* names are in the layout).
+
+## Verification
+- `node --test` over the clock, compass, maps, first-person, sprite-frames, item-anim, hanging, drop, player-r, mob-equip, models, atlas, projectile, item-*, leather, spawn, potion, piston-item, module-names and hand-models test files: 502 pass / 0 fail; plus `src/item-passes.test.js` 3/3 and `src/piston-item.test.js` 1/1. `npm run build` ok. Full suite not run. No browser check.
+
+## Follow-ups (proposed gap lines)
+- Thrown potions (projectile-renderer) and mob-held potions/eggs (mob-equipment-renderer, witch) still draw one pass (bottle only); native RenderSnowball/RenderBiped draw both.
+- The item-frame compass keeps its own canvas (hanging-renderer drawCompassCell) instead of the shared atlas cell.
+- Potion pass order: the port draws the bottle as the polygon-offset front pass like leather's overlay, which matches native order (pass 1 on top).
+- Inventory DOM icons for spawn eggs and potions are still CSS tinted layers; HD pack atlas re-stitching remains open.
