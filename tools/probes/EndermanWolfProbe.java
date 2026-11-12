@@ -375,11 +375,11 @@ public class EndermanWolfProbe {
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
     B47H = args.length > 0 && args[0].equals("b47h");
     B45 = B47H || (args.length > 0 && args[0].equals("b45"));
-    B48 = args.length > 0 && (args[0].equals("b48pp") || args[0].equals("b49po") || args[0].equals("b50lb"));
+    B48 = args.length > 0 && (args[0].equals("b48pp") || args[0].equals("b49po") || args[0].equals("b50lb") || args[0].equals("b51sf"));
     B47 = B48 || (args.length > 0 && (args[0].equals("b47sp") || args[0].equals("b46mp"))); // b50: the b46mp scenarios run under the b47 client / server-copy rules (client position, C03 packets, ticksExisted counted by the world tick)
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

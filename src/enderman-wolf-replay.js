@@ -32,6 +32,7 @@ export const reference46 = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference47sp = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47sp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
 export const reference50 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b50lb-reference.json", import.meta.url)));
+export const reference51 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b51sf-reference.json", import.meta.url)));
 export const reference49 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b49po-reference.json", import.meta.url)));
 export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
@@ -123,7 +124,7 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x48 = /^b(4[89](pp|po)|50lb)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp") || r.name.startsWith("b46mp"), x46 = x47, b47 = r.name.startsWith("b47h");
+  const x48 = /^b(4[89](pp|po)|50lb|51sf)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp") || r.name.startsWith("b46mp"), x46 = x47, b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
   if (x48) ew.ai.player.onGround = true; // the probe's copy starts as a grounded player (EndermanWolfProbe B46: onGround true)
   if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
@@ -318,8 +319,8 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !/^b(4[89](pp|po)|50lb)/.test(r.name) ? bad("player motion", wm, gm) : null);
-      const d2 = /^b(4[89](pp|po)|50lb)/.test(r.name) ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b47sp") || r.name.startsWith("b46mp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp and b46mp (regenerated in batch 50 under the b47 harness): all three motion axes and the copy's resting position (row element 8)
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") && !/^b(4[89](pp|po)|50lb|51sf)/.test(r.name) ? bad("player motion", wm, gm) : null);
+      const d2 = /^b(4[89](pp|po)|50lb|51sf)/.test(r.name) ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) ?? bad("moving tiles", want[9], have.pistons) : r.name.startsWith("b47sp") || r.name.startsWith("b46mp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp and b46mp (regenerated in batch 50 under the b47 harness): all three motion axes and the copy's resting position (row element 8)
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
