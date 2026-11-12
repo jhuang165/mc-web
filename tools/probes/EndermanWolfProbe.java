@@ -55,7 +55,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45, BCW, B46;
+  static boolean B44, B45, BCW, B46, B47;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -143,6 +143,11 @@ public class EndermanWolfProbe {
         case 'F': ents[i] = b45Horse(w, 0, 258, false, -24000, 20.0, 0.2, 0.7); break;
         case 'Y': ents[i] = b45Horse(w, 0, 258, true, -24000, 20.0, 0.2, 0.7); break;
         case 'V': ents[i] = new wi(w); break;
+        // batch 47 (horses2): skeleton and zombie horses (type 3 zombie, 4 skeleton; only /summon, NBT or a trap makes them), wild (3, 4) and tame (5, 6)
+        case '3': ents[i] = b45Horse(w, 3, 0, false, 0, 15.0, 0.2, 0.5); break;
+        case '4': ents[i] = b45Horse(w, 4, 0, false, 0, 15.0, 0.2, 0.5); break;
+        case '5': ents[i] = b45Horse(w, 3, 0, true, 0, 15.0, 0.2, 0.5); break;
+        case '6': ents[i] = b45Horse(w, 4, 0, true, 0, 15.0, 0.2, 0.5); break;
         case 'c': { wh calf = new wh(w); calf.c(-24000); ents[i] = calf; break; }
         case 'p': { wo piglet = new wo(w); piglet.c(-24000); ents[i] = piglet; break; }
         case 'm': { wm calf = new wm(w); calf.c(-24000); ents[i] = calf; break; }
@@ -212,6 +217,9 @@ public class EndermanWolfProbe {
           case "holdn": { yx inv = (yx) MobMoveProbe.field(yz.class, "bm").get(player); inv.a[inv.c] = p[2].equals("0") ? null : new add(adb.d(Integer.parseInt(p[2])), Integer.parseInt(p[3])); break; } // batch 44: a stack of p[3]
           case "use": player.q((sa) ents[Integer.parseInt(p[2])]); break; // batch 44: the player's real interaction (EntityPlayer.interactWith: feeding, taming, breeding)
           case "effect": ((sv) ents[Integer.parseInt(p[2])]).c(new rw(Integer.parseInt(p[3]), Integer.parseInt(p[4]), 0)); break; // addPotionEffect(id, ticks, amplifier 0)
+          case "mount": player.a((sa) ents[Integer.parseInt(p[2])]); break; // batch 47: the player mounts a horse (EntityPlayerMP.mountEntity; the network handler's position packet goes nowhere)
+          case "age": ((wi) ents[Integer.parseInt(p[2])]).c(Integer.parseInt(p[3])); break; // batch 47: EntityAgeable.setGrowingAge (a foal a few ticks from growing up)
+          case "temper": ((wi) ents[Integer.parseInt(p[2])]).u(Integer.parseInt(p[3])); break;
           case "difficulty": MobMoveProbe.set(w, "r", rd.values()[Integer.parseInt(p[2])]); break; // batch 45
           case "grief": w.O().a("mobGriefing", p[2].equals("on") ? "true" : "false"); break;
           case "power": ((sa) ents[Integer.parseInt(p[2])]).af.b(17, Byte.valueOf((byte) 1)); break; // a charged creeper (datawatcher 17)
@@ -244,13 +252,14 @@ public class EndermanWolfProbe {
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
       for (VillageFightProbe.Log l : logs) l.log.clear();
-      VillagerProbe.World.sounds.clear();
+      if (!B47) VillagerProbe.World.sounds.clear(); // batch 47: the sounds a script op makes (feeding, rearing) stay in the tick's row
       if (!B46) player.aa++; // (b46mp: mw.i counts it) EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
       for (int i = 0; i < n; i++) {
         sa e = (sa) ents[i];
         if (e.K) continue;
         e.aa++;
         VillageFightProbe.update(e);
+        if (B47 && e instanceof wi && e.l != null) ((wi) e).ac(); // World.updateEntityWithOptionalForce then updates the rider: Entity.updateRidden -> updateRiderPosition (the probe never ticks its player)
       }
       // Batch 46 (mobpush): the network tick after the world tick: EntityPlayerMP.onUpdateEntity (mw.i) runs the real EntityPlayer.onUpdate (onLivingUpdate, motion, collideWithNearbyEntities) on the probe player.
       if (B46) { try { gBefore = player.D ? 1 : 0; player.i(); VillageFightProbe.at(player, cpx, player.t, cpz); /* the client's position packet puts the server copy back at the client's x and z (its y follows its own fall) */ } catch (Throwable ex) { System.err.println("player.i failed at tick " + t + ": " + ex); ex.printStackTrace(); } }
@@ -284,6 +293,7 @@ public class EndermanWolfProbe {
       row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
+      if (B47) VillagerProbe.World.sounds.clear();
       player.g(1000.0f);
     }
     StringBuilder sc = new StringBuilder();
@@ -309,16 +319,18 @@ public class EndermanWolfProbe {
     MobMoveProbe.set(w, "C", new qi());
     for (Field f : ahb.class.getDeclaredFields())
       if (f.getType() == List.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new ArrayList()); }
+    if (args.length > 0 && args[0].equals("b47h")) for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == ArrayList.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new ArrayList()); } // batch 47: World.updateEntity's unmount path clears an ArrayList field
     MobMoveProbe.set(w, "t", u.allocateInstance(aqq.class));
     Object info = u.allocateInstance(ays.class);
     MobMoveProbe.set(info, "x", new agy());
     MobMoveProbe.set(w, "x", info);
     MobMoveProbe.set(w, "r", rd.values()[2]);
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(w, new bac()); }
-    B45 = args.length > 0 && args[0].equals("b45");
+    B47 = args.length > 0 && args[0].equals("b47h");
+    B45 = B47 || (args.length > 0 && args[0].equals("b45"));
     B46 = args.length > 0 && args[0].equals("b46mp");
     BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B45) EndermanWolfScenarios.run45(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B47) EndermanWolfScenarios.run47(); else if (B45) EndermanWolfScenarios.run45(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

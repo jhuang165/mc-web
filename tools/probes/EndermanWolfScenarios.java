@@ -270,4 +270,39 @@ public class EndermanWolfScenarios {
     // after a birth the parents are 5999 ticks from adult (growing age 6000) and cannot breed again; the run is long enough to see them age
     sc("b45hs-breed-again-7334", 7334, 700, "Qq", pair, "0 holdn 396 64", "2 use 0", "4 use 1", "0 look 90 0");
   }
+  // Batch 47 (horses2): a player riding a wild horse (EntityAIRunAroundLikeCrazy), skeleton and zombie horses, the sounds a feed or a rear makes, and a foal growing against a wall.
+  static void run47() throws Exception {
+    double[][] one = {{70.5, 64.5}, {64.5, 60.5}};
+    // an untamed horse with the probe player on its back: the run-around task rolls nextInt(50) every tick it runs, then temper against nextInt(maxTemper), buck, rear sound
+    for (int k = 0; k < 8; k++) sc("b47h-ride-wild-" + (8001 + k), 8001 + k, 500, "R", one, "1 mount 0", "0 look 90 0");
+    for (int k = 0; k < 4; k++) sc("b47h-ride-temper-" + (8011 + k), 8011 + k, 400, "R", one, "0 temper 0 " + (k < 2 ? 60 : 95), "1 mount 0", "0 look 90 0");
+    // after a buck the player gets on again (use with an empty hand mounts), and the temper has grown by 5
+    for (int k = 0; k < 4; k++) sc("b47h-ride-again-" + (8021 + k), 8021 + k, 700, "R", one, "1 mount 0", "150 mount 0", "300 mount 0", "450 mount 0", "0 look 90 0");
+    // the player mounts through the real interaction
+    for (int k = 0; k < 3; k++) sc("b47h-ride-use-" + (8031 + k), 8031 + k, 400, "R", one, "1 use 0", "0 look 90 0");
+    // skeleton and zombie horses (the types /summon and NBT make): idle, wander and talk
+    for (int k = 0; k < 2; k++) {
+      sc("b47h-undead-wild-" + (8041 + k), 8041 + k, 1500, "34", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+      sc("b47h-undead-tame-" + (8043 + k), 8043 + k, 1500, "56", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    }
+    // feeding and rearing: the eating sound on a feed (tame and a hurt tame horse), the rear sound on a wild horse and an unused food
+    int[] foods = {353, 296, 170, 322};
+    String[] kinds = {"R", "Q", "D", "3", "5", "4", "6"};
+    for (int j = 0; j < kinds.length; j++) for (int k = 0; k < foods.length; k++) {
+      sc("b47h-sound-" + kinds[j] + "-" + foods[k] + "-" + (8101 + j * 10 + k), 8101 + j * 10 + k, 120, kinds[j], one, "0 holdn " + foods[k] + " 16", "0 health 0 5", "5 use 0", "20 use 0", "40 use 0", "60 use 0", "0 look 90 0");
+    }
+    // undead horses mounted by the player (a wild one bucks, a tame one does not)
+    for (int k = 0; k < 3; k++) sc("b47h-undead-ride-" + (8201 + k), 8201 + k, 400, k == 0 ? "3" : k == 1 ? "4" : "5", one, "1 mount 0", "0 look 90 0");
+    // long idle runs of a wild horse and a donkey on grass-less floor: the idle, eat-grass and tail rolls and every talk sound
+    for (int k = 0; k < 3; k++) sc("b47h-idle-" + (8301 + k), 8301 + k, 2400, "RD", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 60.5}}, "0 look 90 0", "0 creative 1 on");
+    // a foal growing up next to a wall: EntityAgeable.setScale (setSize) grows the box about the position and, as the width grows, calls moveEntity(oldWidth - width, 0, oldWidth - width), so a wall at the
+    // negative x or z side stops the push flush; a gap lets it through; a wall inside the grown box was avoided by the layout (a foal inside a wall suffocates)
+    int[][] none = new int[0][0];
+    int[][] wallX = {{68, 0, 60, 68, 3, 70, 1, 0}}, wallZ = {{60, 0, 62, 80, 3, 62, 1, 0}};
+    double[][][] at = {{{69.8, 64.5}, {64.5, 60.5}}, {{70.5, 63.4}, {64.5, 60.5}}, {{70.5, 64.5}, {64.5, 60.5}}, {{69.8, 64.5}, {64.5, 60.5}}};
+    int[][][] walls = {wallX, wallZ, wallX, wallX};
+    for (int k = 0; k < 4; k++)
+      EndermanWolfProbe.scenario("b47h-foal-wall-" + (8401 + k), 8401 + k, 40, k < 3 ? "F" : "Y", at[k], new String[] {"0 look 90 0", "0 creative 1 on", "2 age 0 -3"}, none, walls[k], false, 15);
+    EndermanWolfProbe.scenario("b47h-foal-corner-8405", 8405, 40, "F", new double[][] {{69.8, 63.4}, {64.5, 60.5}}, new String[] {"0 look 90 0", "0 creative 1 on", "2 age 0 -3"}, none, new int[][] {{68, 0, 60, 68, 3, 70, 1, 0}, {60, 0, 62, 80, 3, 62, 1, 0}}, false, 15);
+  }
 }

@@ -15,6 +15,7 @@ public class ServerPlayerProbe {
   public static class Net extends nh { // NetHandlerPlayServer.sendPacket: effect, health and velocity packets go nowhere
     Net() { super(null, null, null); }
     public void a(ft packet) {}
+    public void a(double x, double y, double z, float yaw, float pitch) {} // setPlayerLocation (a rider's mount packet)
   }
   public static class Oi extends oi {
     Oi() { super(null); }
