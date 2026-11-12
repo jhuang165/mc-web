@@ -265,6 +265,7 @@ import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
+import { orderGroups, stampSavedOrder, restoreSavedOrder } from "./saved-order.js";
 import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
@@ -1070,6 +1071,7 @@ function save() {
   // Boats and the mounted state: only written when a boat exists, so older saves stay byte-identical.
   if (boats?.carts.length) active.boats = boats.toJSON(); else delete active.boats;
   active.hanging = hanging.toJSON();
+  if (mobs) stampSavedOrder(mobs, orderGroups({ mobs, items, xpOrbs, primed, arrows, projectiles, falling, minecarts, boats, hanging, rockets }, active)); // b52so: each record's place in the native save walk (sections of each chunk)
   if (signs.tiles.size) active.signs = signs.toJSON(); else delete active.signs;
   if (SKULLS.tiles.size) active.skulls = SKULLS.toJSON(); else delete active.skulls;
   if (beacons.tiles.size) active.beacons = beacons.toJSON(); else delete active.beacons;
@@ -1646,6 +1648,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
+    restoreSavedOrder(mobs, orderGroups({ mobs, items, xpOrbs, primed, arrows, projectiles, falling, minecarts, boats, hanging, rockets }, record)); // b52so: the saved list order
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
     velocity.set(0, 0, 0);
     flying = record.flying === true && survival.creative; // level.dat abilities.flying (import)
