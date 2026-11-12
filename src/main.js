@@ -219,7 +219,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -3985,13 +3985,13 @@ function animate(now) {
       target?.distance ?? 6,
     );
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
-    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
-    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
+    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c)); // Batch 49: the client copy's box, the live entity answers
+    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c));
     if (aimedBoat && (!aimedCart || aimedBoat.distance < aimedCart.distance)) aimedCart = aimedBoat;
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
     // EntityRenderer.getMouseOver: a painting or frame (box grown by 0.1) nearer than the block and any mob/cart.
-    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6);
+    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, (e) => aimBox(objectTracker, e));
     if (aimedHanging && ((aimedEntity && aimedEntity.distance <= aimedHanging.distance) || (aimedCart && aimedCart.distance <= aimedHanging.distance))) aimedHanging = null;
     if (aimedHanging) { aimedEntity = null; aimedCart = null; }
     scene.outline.visible = !hideGUI && !!target && !aimedEntity && !aimedCart && !aimedHanging; // drawSelectionBox skips while hideGUI
