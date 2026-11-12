@@ -8,21 +8,21 @@
 //   Every argument of the ChatComponentTranslation is its own component and the chat draws getFormattedText, which appends "§r" after each
 //   component (arguments and literal runs alike), so a team prefix without a closing "§r" cannot colour the rest of the line.
 import { translation, text } from "./chat-component.js";
+import { itemComponent } from "./item-component.js";
 
 /** The death message of a CombatTracker as the chat component EntityPlayerMP.onDeath broadcasts (ChatComponentTranslation of key + arguments).
  *  `name` is EntityPlayer.func_145748_c_ for the victim: scoreboard.formatName(PLAYER_NAME). */
 export function deathComponent(tracker, name, ctx = {}) {
   const rawName = ctx.rawName ?? "Player";
-  let { key, args, players } = tracker.message({ name, rawName, selfItem: ctx.selfItem ?? null });
+  let { key, args, players, stack } = tracker.message({ name, rawName, selfItem: ctx.selfItem ?? null, selfStack: ctx.selfStack ?? null });
   // Entity arguments are func_145748_c_ components: the victim and a player attacker carry the "/msg <name> " click (EntityPlayer.func_145748_c_,
   // bytecode-read); a mob's is plain text. The item argument keeps its own component below.
   args = args.map((a, i) => (players[i] != null ? senderComponent(a, players[i]) : a));
-  // ItemStack.func_151000_E: "[" + name + "]" as one component in the rarity colour (probed: "§f[§r§fSting§r§f]§r"; the port gives every stack the
-  // common colour, so a rare/epic or enchanted named stack would print aqua/light purple natively).
+  // ItemStack.func_151000_E: "[" + name + "]" in the rarity colour with a show_item hover (item-component.js). Without a stack behind the name
+  // (a caller that passes only the custom name) the stack is a common one.
   if (key.endsWith(".item") && args.length === 3) {
-    const item = text("[").append(text(args[2].slice(1, -1))).append(text("]"));
-    item.style.color = "white";
-    args = [args[0], args[1], item];
+    const name = args[2].slice(1, -1);
+    args = [args[0], args[1], itemComponent(stack ?? { id: -1, count: 1, damage: 0, displayName: name }, name)];
   }
   return translation(key, ...args);
 }

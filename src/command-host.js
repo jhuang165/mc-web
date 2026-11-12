@@ -1,3 +1,4 @@
+import { itemComponent } from "./item-component.js";
 import { readCommandBlock, writeCommandBlock } from "./command-block.js";
 // Connects the command engine (commands.js) to the running game. main.js passes accessors for its live state (`env`), so
 // everything here works on the real World, Survival, Weather and Experience objects and the tests can drive it without a browser.
@@ -65,7 +66,7 @@ export function createCommandHost(env) {
       // stack along the view, then sets the pickup delay to 0 and the owner (func_145797_a) to the player. It never touches the inventory.
       (this.giveDrop ?? env.giveDrop)(stack, this.name); // a replay (away-commands.js replayPlayerCommands) puts the stack straight in the inventory
       env.refreshInventory();
-      return { name: "[" + name + "]", ignored };
+      return { name: "[" + name + "]", component: itemComponent(stack, name), ignored }; // ItemStack.func_151000_E
     },
     clear(original, damage) {
       const inv = survival().inventory;

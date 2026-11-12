@@ -2577,7 +2577,7 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && deathComponent(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name, one component per argument (team-names.js)
+  const message = survival.died && deathComponent(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName, selfStack: survival.held }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name, one component per argument (team-names.js)
   survival.died = false;
   if (message) showChatLine(document, message);
   closeContainer();

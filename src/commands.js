@@ -301,7 +301,7 @@ export function createCommandRunner(host) {
       if (tag === null) return;
       const given = host.give(item, count, damage, tag);
       if (!given) throw new CommandException("commands.give.notFound", ["This item is not in this build"], "unsupported");
-      feedback("commands.give.success", given.name, count, target);
+      (host.feedback ?? say)(tr("commands.give.success", given.name, count, target), translation("commands.give.success", given.component ?? given.name, count, target)); // the item is ItemStack.func_151000_E
       note(given.ignored);
     },
     clear(a) {
