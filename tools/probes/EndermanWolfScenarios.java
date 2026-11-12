@@ -421,4 +421,15 @@ public class EndermanWolfScenarios {
       sc48("b50lb-" + n + "-retract-" + seed, seed++, ticks, t, far, none, look, "0 piston 70 0 64 4 0 1 0");
     }
   }
+
+  // Batch 51 (flyturn): EW_SET=b51sf, the b50lb harness with the silverfish (f) pulled into a retracting block (0.3 wide: it ends up inside the moving block and suffocates)
+  // by the two retract piston facings the harness uses and a retract with the player standing next to it; the rows carry health and death per tick.
+  static void run51() throws Exception {
+    int[][] none = new int[0][0];
+    String look = "0 look 90 0";
+    double[][] far = {{70.5, 64.5}, {100.5, 100.5}};
+    sc48("b51sf-silverfish-retract4-9703", 9703, 60, "f", far, none, look, "0 piston 70 0 64 4 0 1 0");
+    sc48("b51sf-silverfish-retract5-9801", 9801, 40, "f", far, none, look, "0 piston 70 0 64 5 0 1 0");
+    sc48("b51sf-silverfish-retract2-9802", 9802, 40, "f", far, none, look, "0 piston 70 0 64 2 0 1 0");
+  }
 }

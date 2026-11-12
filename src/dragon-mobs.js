@@ -3,7 +3,8 @@
 //
 // Hooks in the shared files (each one line): entities.js loop (`dragonUpdate`), entityHit (`dragonHit`), `pushable`, and the
 // installDragonMobs call; commands.js (/summon EnderDragon); region-export.js (name map); mob-renderer.js (rig dispatch).
-import { ENTITY_TYPES } from "./entities.js";
+import { ENTITY_TYPES, nearAngle, livingSoundRoll } from "./entities.js";
+import { legacyBodyTurn } from "./squid-bat.js";
 import { JavaRandom } from "./lighting.js";
 import { fromOriginal } from "./block-registry.js";
 import { gameRule } from "./game-rules.js";
@@ -116,18 +117,23 @@ export function dragonUpdate(mobs, e, player, survival) {
   if (e.health <= 0 && e.death === undefined) e.death = 0; // alive for the 200 tick death sequence (the end-of-tick filter keeps death < 20)
   if (e.health <= 0) done = deathTick(e, host);
   else {
-    // EntityLiving.onEntityUpdate: the growl, rand.nextInt(1000) < livingSoundTime++.
-    const sound = e.talk ?? -80;
-    e.talk = sound + 1;
-    if (rngOf(e).nextInt(1000) < sound) {
-      e.talk = -80;
-      mobs.events.push({ sound: DRAGON_SOUNDS.growl, volume: DRAGON_SOUNDS.volume, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
+    // EntityLiving.onEntityUpdate: the growl, rand.nextInt(1000) < livingSoundTime++ from 0 (livingSoundRoll), then livingSoundTime = -80 and playLivingSound draws the pitch
+    // (getSoundPitch, two nextFloat); b51ft executed: a growl at tick 37 of a seeded flight moves every later draw.
+    const rand = rngOf(e);
+    if (livingSoundRoll(e, rand, 80)) {
+      const pitch = Math.fround(Math.fround(Math.fround(rand.nextFloat() - rand.nextFloat()) * Math.fround(0.2)) + 1);
+      mobs.events.push({ sound: DRAGON_SOUNDS.growl, volume: DRAGON_SOUNDS.volume, pitch, position: { x: e.x, y: e.y, z: e.z } });
     }
   }
   // The wing flap sound and the death puffs belong to the client copy (entity-tracker.js ClientEntity.dragonUpdate); the server's spawnParticle is a no-op.
   dragonTick(e, host);
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
-  e.rotationYawHead = e.renderYawOffset = e.rotationYaw;
+  // xa.e ends with renderYawOffset = rotationYaw (the death spin too) and leaves rotationYawHead alone; EntityLivingBase.onUpdate then runs the legacy turn (sv.f, the dragon is not
+  // isAIEnabled) over this tick's travel: the body eases toward the flight direction within 75 degrees of the yaw (b51ft executed, xa.h() over 5 flights)
+  e.renderYawOffset = e.rotationYaw;
+  legacyBodyTurn(e, e.x - e.px, e.z - e.pz);
+  e.prevRotationYaw = nearAngle(e.prevRotationYaw, e.rotationYaw);
+  e.prevRenderYawOffset = nearAngle(e.prevRenderYawOffset, e.renderYawOffset);
   if (host.edits.length) mobs.events.push({ blockEdit: host.edits });
   if (done) { e.death = 20; e.health = 0; e.dragonGone = true; }
 }
