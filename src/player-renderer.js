@@ -14,7 +14,8 @@ import { mobPose, wrapDegrees, nearAngle } from "./entities.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
-import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
+import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents } from "./leather-dye.js";
+import { itemPasses } from "./item-passes.js";
 import { glintMesh, blockItemGeometry, blockItemTurn } from "./first-person.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
@@ -508,7 +509,7 @@ export class PlayerRenderer {
     // RenderPlayer.renderSpecials (bop.a, executed in held-pose-reference.json): while the player's bobber is out (fishEntity != null) the hand
     // holds a plain stick, not the cast rod icon (that icon is the first person one, first-person.js).
     if (id === FISHING_ROD && rodState.cast) { id = 300; damage = 0; color = undefined; glint = false; }
-    const leather = leatherItemLayers(id, color),
+    const leather = itemPasses(id, damage, color),
       cast = 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
     this.heldKey = key;
@@ -521,7 +522,7 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
-    const kind = heldKind(id, damage), url = itemTexture(id, damage);
+    const kind = heldKind(id, damage), url = leather?.base ?? itemTexture(id, damage);
     let mesh;
     const chestUrl = !url && chestItemTexture(id);
     if (chestUrl) {
@@ -534,7 +535,7 @@ export class PlayerRenderer {
       mesh = new THREE.Mesh(this.heldGeometry, this.heldMaterial);
       if (leather) {
         const overlayMap = pixelTexture(leather.overlay);
-        this.heldOverlayMaterial = this.material({ map: overlayMap, transparent: true, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+        this.heldOverlayMaterial = this.material({ map: overlayMap, ...(leather.overlayTint ? { color: leather.overlayTint } : {}), transparent: true, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
         const overlay = new THREE.Mesh(this.heldGeometry, this.heldOverlayMaterial);
         overlay.renderOrder = 1;
         mesh.add(overlay);

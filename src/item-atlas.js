@@ -49,10 +49,10 @@ function getAtlas() {
 }
 function drawEntry(a, e) {
   if (!e.img) return;
-  const [x, y, size] = NATIVE_ITEM_SPRITES[e.name], ctx = a.canvas.getContext("2d"), s = a.scale, w = e.img.naturalWidth; // the first frame of an animation strip
+  const [x, y, size] = NATIVE_ITEM_SPRITES[e.name], ctx = a.canvas.getContext("2d"), s = a.scale, w = e.img.naturalWidth, f = Math.min(e.frame, Math.max(0, Math.floor(e.img.naturalHeight / w) - 1)); // frame `e.frame` of an animation strip (0 unless TextureClock / TextureCompass set it)
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(x * s, y * s, size * s, size * s);
-  ctx.drawImage(e.img, 0, 0, w, w, x * s, y * s, size * s, size * s);
+  ctx.drawImage(e.img, 0, f * w, w, w, x * s, y * s, size * s, size * s);
 }
 function refreshGpu(a, resized) {
   if (resized) { a.texture.dispose(); for (const e of a.entries.values()) e.tex.dispose(); }
@@ -87,12 +87,23 @@ export function itemAtlasTexture(url) {
     tex.userData.st = new THREE.Vector4(...itemSpriteTransform(name));
     tex.userData.itemSprite = name;
     tex.needsUpdate = true;
-    e = { name, tex, img: null };
+    e = { name, tex, img: null, frame: pendingFrames.get(name) ?? 0 };
     a.entries.set(name, e);
     request(a, e, a.generation);
   }
   return e.tex;
 }
+// TextureClock / TextureCompass: the sprite's cell shows strip frame `frame` (the native sprite uploads the current frame's pixels into its atlas cell every tick, so every
+// view of the item shows the same frame). No effect without a DOM or before the sprite is requested; a later request starts at the frame set here.
+export function setItemAtlasFrame(name, frame) {
+  if (!atlas) { pendingFrames.set(name, frame); return; }
+  const e = atlas.entries.get(name);
+  if (!e) { pendingFrames.set(name, frame); return; }
+  if (e.frame === frame) return;
+  e.frame = frame;
+  if (e.img) { drawEntry(atlas, e); refreshGpu(atlas, false); }
+}
+const pendingFrames = new Map();
 // Resource pack change (also the Anaglyph toggle): every sprite image is read again and the atlas redrawn and re-uploaded.
 onResourcesRefreshed(async (gen) => {
   if (!atlas) return;

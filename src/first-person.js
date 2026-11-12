@@ -9,12 +9,12 @@ import { STAIR_ITEM_BOXES } from './stairs.js';
 import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS, applySpriteTransform } from "./light-material.js";
-import { leatherItemLayers } from "./leather-dye.js";
+import { itemPasses } from "./item-passes.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { ITEM_SKULL, skullIconUrl } from "./skull.js";
-import { ITEM_SPAWN_EGG, spawnEggTexture } from "./spawn-eggs.js";
+import { ITEM_SPAWN_EGG } from "./spawn-eggs.js";
 import { ITEM_CLOCK } from "./clock.js";
-import { clockFrameUrl, clockFrame } from "./maps-clock-live.js";
+import { clockFrameUrl, clockFrame, isClockUrl } from "./maps-clock-live.js";
 import { ITEM_COMPASS, COMPASS_STATIC, COMPASS_STRIP } from "./compass.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { MapSurface, mapHandMatrices } from "./map-render.js";
@@ -22,7 +22,7 @@ import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
 import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
-import { itemAtlasTexture } from "./item-atlas.js";
+import { itemAtlasTexture, setItemAtlasFrame } from "./item-atlas.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=BOX_FACE_CORNERS.map((v)=>({v}));
@@ -132,10 +132,16 @@ export function drawCompassCell(canvas, frame) {
 export function setCompassTextureFrame(frame) {
   if (frame === compassFrame) return;
   compassFrame = frame;
+  setItemAtlasFrame("compass", frame); // the atlas cell of the shared sprite (item-atlas.js)
   if (compassImage?.naturalWidth) drawCompassFrame();
 }
 onItemFramesReady((urls) => { for (const u of urls) pixelTexture(u); }); // decode every frame up front: no blank frame on the first switch
 export function pixelTexture(url) {
+  if (url === COMPASS_STATIC || isClockUrl(url)) {
+    // TextureCompass / TextureClock: one sprite cell of the item atlas that always shows the current frame (item-atlas.js setItemAtlasFrame).
+    const name = url === COMPASS_STATIC ? "compass" : "clock", atlased = itemAtlasTexture("/media/1.7.10/items/" + name + ".png");
+    if (atlased) { setItemAtlasFrame(name, name === "clock" ? clockFrame() : compassFrame); return atlased; }
+  }
   if (url === COMPASS_STATIC) {
     if (!compassTexture) {
       compassCanvas = document.createElement("canvas");
@@ -196,7 +202,7 @@ export function itemTexture(id, damage = 0, use = 0) {
 function itemTextureRaw(id, damage = 0, use = 0) {
   const item = ITEMS[id];
   if (id === ITEM_SKULL) return skullIconUrl(damage); // skull.js: one flat sprite per head type
-  if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
+  if (id === ITEM_SPAWN_EGG) return "/media/1.7.10/items/spawn_egg.png"; // pass 0; the tinted overlay is pass 1 (item-passes.js)
   if (id === ITEM_CLOCK) return clockFrameUrl(); // TextureClock frame (maps-clock-live.js)
   if (id === ITEM_COMPASS) return COMPASS_STATIC; // pixelTexture shares a mutable sprite across 3D renderers
   if (id === FISHING_ROD && use > 0) return "/media/1.7.10/items/fishing_rod_cast.png";
@@ -279,7 +285,7 @@ export class FirstPerson {
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
-    const leather = leatherItemLayers(id, color),
+    const leather = itemPasses(id, meta, color),
       cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : use)) : 0);
     if (key === this.last) return;
     this.last = key;
@@ -295,7 +301,7 @@ export class FirstPerson {
     this.arm.visible = !id;
     if (!id || !data) return;
     let mesh;
-    const url = itemTexture(id, meta, cast ? 1 : use), chestUrl = !url && chestItemTexture(id);
+    const url = leather?.base ?? itemTexture(id, meta, cast ? 1 : use), chestUrl = !url && chestItemTexture(id);
     if (chestUrl) {
       mesh = chestItemModel(this.material({ map: pixelTexture(chestUrl) }));
       mesh.rotation.y = Math.PI / 2;
@@ -316,6 +322,7 @@ export class FirstPerson {
       if (leather) {
         const overlay = new THREE.Mesh(mesh.geometry, this.material({
           map: pixelTexture(leather.overlay),
+          ...(leather.overlayTint ? { color: leather.overlayTint } : {}),
           transparent: true, alphaTest: 0.1, side: THREE.DoubleSide, depthWrite: false,
           polygonOffset: true, polygonOffsetFactor: -1,
         }));
