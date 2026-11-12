@@ -13,7 +13,7 @@ import { recordBirth } from "./tracker-birth.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/tracker-vehicles-reference.json", import.meta.url), "utf8"));
 const f = Math.fround;
-const KIND = { boatGlide: "boat", boatSplash: "boat", boatTeleport: "boat", boatFar: "boat", cart0: "minecart", cart1: "minecart", cart3: "minecart", cartTeleport: "minecart", cartFurnace: "minecart", cartCommand: "minecart", paintingBig: "painting", frameNegative: "itemFrame", knot: "leashKnot", frameItem: "itemFrame" };
+const KIND = { boatGlide: "boat", boatSplash: "boat", boatTeleport: "boat", boatFar: "boat", cart0: "minecart", cart1: "minecart", cart3: "minecart", cartTeleport: "minecart", boatPush: "boat", cartPush: "minecart", cartFurnace: "minecart", cartCommand: "minecart", paintingBig: "painting", frameNegative: "itemFrame", knot: "leashKnot", frameItem: "itemFrame" };
 for (let d = 0; d < 4; d++) { KIND["painting" + d] = "painting"; KIND["frame" + d] = "itemFrame"; }
 // the scenario's wall tile and facing (the probe's constructors)
 const TILE = (name) => name === "frameNegative" ? [[-3, 2, -5], 2] : name === "paintingBig" ? [[4, 2, 6], 1] : name === "frameItem" ? [[4, 2, 6], 1] : [[4, 2, 6], Number(name.slice(-1)) || 0];
@@ -29,11 +29,13 @@ const FEATHER = itemFromOriginal(288, 0);
 // The live entity the port would list for this tick of the scenario
 function live(name, kind, r, t, h) {
   const [x, y, z, vx, vy, vz, yaw, pitch] = r;
-  if (kind === "boat") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false });
+  // the push scenarios: Entity.addVelocity at tick 4 sets isAirBorne, setBeenAttacked at tick 8 sets velocityChanged (the probe's column 9)
+  const flags = { airBorne: name.endsWith("Push") && t === 4, velocityChanged: r[9] === 1 };
+  if (kind === "boat") return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false, ...flags });
   if (kind === "minecart") {
     // the furnace cart is lit by its fuel from tick 3 to 11; the command cart's command is set at tick 3 and its last output at 6 and 9 (the probe's hooks)
     const extra = name === "cartFurnace" ? { type: 2, lit: t >= 3 && t < 12 } : name === "cartCommand" ? { type: 6, command: { command: t >= 3 ? "say hi" : "", lastOutput: t >= 9 ? 'a "q" b' : t >= 6 ? "done" : null } } : { type: Number(name.slice(4, 5)) || 0 };
-    return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, rolling: 0, rollingDir: 1, damage: 0, dead: false }, extra);
+    return Object.assign(h, { x, posY: y, z, vx, vy, vz, yaw, pitch, rolling: 0, rollingDir: 1, damage: 0, dead: false, ...flags }, extra);
   }
   const [[tx, ty, tz], dir] = TILE(name);
   if (kind === "leashKnot") return Object.assign(h, { x: tx, y: ty, z: tz, dead: false });

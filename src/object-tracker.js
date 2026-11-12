@@ -21,9 +21,10 @@
 // every S12/S14-S18/S1C of the scenarios, the boat's extra yOffset at spawn, its 8 tick interpolation (3 + 5) then its coast on the S12 motion (0.99F / 0.95F / 0.99F), the cart's
 // 5 tick interpolation (3 + 2) with no motion of its own, the hanging boxes, the item frame's data watcher, and the dragon's three-draw retarget on a part hit (`retargetDragon`).
 // Bytecode-read only: the boat's splash particles above 0.2625 blocks a tick (the reference run never reached that speed on the client), the furnace cart's S1C 16, a cart below y -64.
-// Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), airBorne on pushed vehicles (the live
-// ones never set it), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
+// Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
 // boats, carts, paintings, frames and knots are not switched to the copies.
+// Batch 48 (tracker-birth.js, boats.js, minecarts.js): entries of placed boats and carts start from their creation state; pushes set airBorne (addVelocity) and attacks velocityChanged
+// (setBeenAttacked), which this entry already honoured; the far-boat untrack matched the executed entry all along (the probe never logged its destroy); furnace (16) and command block cart (23, 24) watcher objects.
 import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-tracker.js";
 import { toOriginal, fromOriginal } from "./block-registry.js";
 import { originalOfLive } from "./item-names.js";
