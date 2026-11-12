@@ -55,16 +55,16 @@ test("the weather step passes the worn armour to the strike, and a rested fire-i
   assert.ok(zombie.health < 20);
 });
 
-test("a burning fire-immune mob's counter runs down by 4 a tick a rested -1 stays", () => {
+test("burn() leaves a fire-immune mob's counter at 0 (sv.C extinguishes it after sa.C's run-down by 4; the move tail rests it afterwards)", () => {
   const world = new EntityWorld(flat, [{ id: "a", type: "pigman", x: 8, y: 0, z: 8, health: 20 }], () => 0.5);
   for (const e of world.entities) {
     const t = { width: 0.6, height: 1.8 };
     e.fire = 10;
     world.burn(e, t);
-    assert.equal(e.fire, 6, e.type);
+    assert.equal(e.fire, 0, e.type);
     e.fire = -1;
     world.burn(e, t);
-    assert.equal(e.fire, -1, e.type);
+    assert.equal(e.fire, 0, e.type);
   }
 });
 

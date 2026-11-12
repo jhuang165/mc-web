@@ -22,13 +22,13 @@ const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','ModelProbe','HorseProbe','MobEffectsProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'MobEffectsProbe'],{maxBuffer:1<<28});
-const rows=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-assert.equal(rows.filter(r=>r.error).length,0,rows.filter(r=>r.error).map(r=>r.kind+': '+r.error).join('; '));
+const all=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l)),rows=all.filter(r=>r.tag==='b52me'),ticks=all.filter(r=>r.tag==='b53ft');
+assert.equal(all.filter(r=>r.error&&r.error!=='null'&&(r.tag==='b52me'||r.tag==='b53ft')).length,0,all.filter(r=>r.error&&r.error!=='null').map(r=>r.kind+': '+r.error).join('; '));
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={sv:'EntityLivingBase',rw:'PotionEffect',sg:'EntityList',sa:'Entity'};
-const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',tag:'b52me',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
+const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',tag:'b52me',tagTicks:'b53ft',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
  method:'Unchanged original classes on the HorseProbe/MobMoveProbe world double (tools/probes/MobEffectsProbe.java). Each mob is created by EntityList.createEntityByName, PotionEffects are put into its active-effect map, it is saved with Entity.writeToNBTOptional (nbt, uncompressed hex), loaded with EntityList.createEntityFromNBT and the loaded mob is saved again (reload). effects are [id, amplifier, duration, ambient] of the loaded mob.',
- cases:[[],[[1,0,600,0]],[[5,1,100,0],[1,2,3000,1],[10,0,5,0]],[[11,200,1000,0],[22,255,40,0]],[[12,0,2147483647,0],[13,0,7,0]],[[3,0,50,0],[14,0,50,0]]],
- rows};
+ cases:[[],[[1,0,600,0]],[[5,1,100,0],[1,2,3000,1],[10,0,5,0]],[[11,200,1000,0],[22,255,40,0]],[[12,0,2147483647,0],[13,0,7,0]],[[3,0,50,0],[14,0,50,0]],[[3,0,3,0],[4,1,5,0],[8,2,40,0],[15,0,2,0],[16,0,600,1],[17,3,4,0],[21,1,6,0],[23,0,2,0]]],
+ rows,ticks};
 await writeFile(path.join(root,'../public/research/mob-effects-reference.json'),JSON.stringify(reference)+'\n');
 console.log('mob effects reference:',rows.length,'records',new Set(rows.map(r=>r.kind)).size,'kinds');

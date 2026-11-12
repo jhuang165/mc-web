@@ -4,13 +4,13 @@
 import { CACTUS, WEB } from "./world.js";
 import { SOUL_SAND, SOUL_SAND_SLOWDOWN } from "./nether-blocks.js";
 import { CAULDRON, cauldronExtinguishes } from "./stone-utility.js";
+import { setFireTicks } from "./armor-enchantments.js";
 import { boundingBoxBurning, contract } from "./fire.js";
 
 // Entity.fireResistance [sa.ab]: 1, and 20 for EntityPlayer. A counter at or below 0 that is
 // not in a burning box rests at -fireResistance, so the player stands 20 ticks in fire or lava
 // before setFire(8) catches; other entities catch on the first tick.
 export const FIRE_RESISTANCE = 1, PLAYER_FIRE_RESISTANCE = 20;
-const SET_FIRE = 8 * 20;
 
 // Entity.setInWeb [sa.as]; EntityPlayer skips it while flying and EntitySpider's override is empty.
 export function setInWeb(e, flying = false) {
@@ -52,7 +52,7 @@ export function blockCollisions(world, box, e, hooks) {
   e.fire ??= 0;
   if (boundingBoxBurning((x, y, z) => world.get(x, y, z), contract(box))) {
     hooks.hurt?.("inFire", 1);
-    if (!wet && ++e.fire === 0) e.fire = Math.max(e.fire, SET_FIRE);
+    if (!wet && ++e.fire === 0) e.fire = setFireTicks(hooks.armor ?? [], e.fire, 8); // setFire(8): Fire Protection on a mob's worn stacks shortens it
   } else if (e.fire <= 0) e.fire = -resistance;
   if (wet && e.fire > 0) {
     hooks.fizz?.();

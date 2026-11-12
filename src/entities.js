@@ -74,7 +74,7 @@ import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
 import { MobTracker } from "./entity-tracker.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
-import { enchantedDamage, isAbsolute } from "./armor-enchantments.js";
+import { enchantedDamage, isAbsolute, setMobFire } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
@@ -271,8 +271,8 @@ const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.ty
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 // EntityMob subclasses on EntityCreature.updateEntityActionState (td.bq), whose entityToAttack the port keeps in silverfishState(e).target.
 const TARGETS_ATTACKER = new Set(["spider", "cave_spider", "pigman", "silverfish", "blaze", "giant"]);
-const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman" || e.type === "wither_skeleton"; // Entity.isImmuneToFire (sa.ae): yl.a(1) sets it for the wither skeleton
-const fireImmune = (e) => fireproof(e) || e.type === "wither"; // the wither's constructor sets it too (xc)
+const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman" || e.type === "wither_skeleton" || e.type === "wither"; // Entity.isImmuneToFire (sa.ae): yl.a(1) sets it for the wither skeleton, the wither's constructor (xc) too
+const fireImmune = fireproof;
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
 // Classes whose onSpawnWithEgg rolls draw the follow-range spawn bonus themselves (difficulty.js, horse.js) or, for the cave spider, never.
 const OWN_SPAWN_BONUS = new Set(["spider", "cave_spider", "zombie", "pigman", "skeleton", "wither_skeleton", "horse", "ender_crystal"]); // the crystal is no EntityLiving
@@ -650,9 +650,11 @@ let SIN_TABLE;
 const sinTable = () => SIN_TABLE ??= Float32Array.from({ length: 65536 }, (_, i) => Math.sin((i * Math.PI * 2) / 65536));
 const mathHelperSin = (r) => sinTable()[Math.trunc(f(r * f(10430.378))) & 65535];
 const mathHelperCos = (r) => sinTable()[Math.trunc(f(f(r * f(10430.378)) + 16384)) & 65535];
-// EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost); a sprinting mob (only the ocelot at move speed 1.33) also gets 0.2 along its yaw.
+// EntityLivingBase.jump (sv.bj): 0.42 upward plus (amplifier + 1) * 0.1F with Jump Boost (the magma cube's own bj ignores it); a sprinting mob (only the ocelot at move speed 1.33) also gets 0.2 along its yaw.
 export function jump(e) {
   e.vy = e.type === "magma_cube" ? magmaJumpMotion(e.size) : 0.41999998688697815; // yf.bj: 0.42 + size * 0.1
+  const boost = e.type === "magma_cube" ? null : e.effects?.find?.((x) => x.id === JUMP_BOOST);
+  if (boost) e.vy += f(f(boost.amplifier + 1) * f(0.1));
   if (e.sprinting && e.rotationYaw !== undefined) { const r = f(f(e.rotationYaw) * f(0.017453292)); e.vx -= f(mathHelperSin(r) * f(0.2)); e.vz += f(mathHelperCos(r) * f(0.2)); }
 }
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)), without strafe. AI mobs
@@ -1517,7 +1519,7 @@ export class EntityWorld {
     if (critical) damage = criticalDamage(damage);
     damage = f(damage + weapon.damage);
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
-    if (ignite) e.fire = Math.max(e.fire || 0, 20);
+    if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
       this.ai.playerHit(e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget)
@@ -1542,7 +1544,7 @@ export class EntityWorld {
       if (owned && ["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) survival.wear(tool, item.kind === "sword" ? 1 : 2);
       survival.exhaust(0.3);
     }
-    if (weapon.fireAspect > 0 && landed) e.fire = Math.max(e.fire || 0, weapon.fireAspect * 80);
+    if (weapon.fireAspect > 0 && landed) setMobFire(e, weapon.fireAspect * 4);
     else if (ignite) e.fire = 0;
     return landed;
   }
@@ -1666,10 +1668,12 @@ export class EntityWorld {
   // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
   // halves the fall distance. EntityAIPanic keeps animals running while they burn.
   burn(e, t) {
-    // Entity.isImmuneToFire: the counter runs down by 4, no onFire damage, lava neither burns nor hurts (setOnFireFromLava does nothing).
+    // Entity.isImmuneToFire: no onFire damage, lava neither burns nor hurts (setOnFireFromLava does nothing). Entity.onEntityUpdate runs a positive counter
+    // down by 4, but EntityLivingBase.onEntityUpdate (sv.C, `if (isImmuneToFire() || isRemote) extinguish()`) then zeroes it, so every tick leaves 0 (executed,
+    // b53ft firetick): the move tail afterwards rests it at -1, or raises it to 1 inside a fire block, which therefore never ignites an immune mob.
     // EntityMagmaCube.handleLavaMovement (yf.P) is false: it ignores lava altogether.
     if (fireproof(e)) {
-      if (e.fire > 0) e.fire = Math.max(0, e.fire - 4); // sa.C: only a positive counter runs down (a rested -1 stays, so lightning's ++fire reaches 0 and ignites)
+      e.fire = 0;
       e.burn = 0;
       e.inLava = e.type === "magma_cube" ? false : inLava(this.world, [e.x - t.width / 2, e.y, e.z - t.width / 2, e.x + t.width / 2, e.y + t.height, e.z + t.width / 2]);
       if (e.inLava) e.fallDistance *= 0.5;
@@ -1684,7 +1688,7 @@ export class EntityWorld {
     const r = t.width / 2;
     if ((e.inLava = inLava(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r]))) {
       this.hazard(e, 4, "lava");
-      e.fire = Math.max(e.fire, 300);
+      setMobFire(e, 15); // setOnFireFromLava: setFire(15), shortened by Fire Protection
       e.fallDistance *= 0.5;
     }
     // Fire blocks and cactus act in moveEntity's tail (walk, block-collisions.js).
@@ -1761,11 +1765,11 @@ export class EntityWorld {
         const dx = target.x - e.x, dz = target.z - e.z, d = Math.hypot(dx, dz) || 1;
         addVelocity(target, f(f((dx / d) * melee.knockback) * 0.5), 0.1, f(f((dz / d) * melee.knockback) * 0.5));
       }
-      if (melee.fire > 0) target.fire = Math.max(target.fire || 0, melee.fire * 20);
+      if (melee.fire > 0) setMobFire(target, melee.fire);
     }
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
-      if (ticks) target.fire = Math.max(target.fire || 0, ticks);
+      if (ticks) setMobFire(target, ticks / 20);
     }
     // EntityCaveSpider.attackEntityAsMob: Poison (amplifier 0) on any living target.
     if (hit && e.type === "cave_spider") {
@@ -2295,7 +2299,7 @@ export class EntityWorld {
       if (((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day) {
         const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
           light = this.ai.brightness(bx, by, bz);
-        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
+        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) setMobFire(e, 8);
       }
       // EntityLivingBase.onUpdate's equipment block (before onLivingUpdate, so before the AI): when a slot differs from the last update's, the old stack's attribute modifiers leave the
       // attribute map and the new one's join it. A sword given after a mob's own update (loot pickup, another mob's hit) therefore adds its damage from the NEXT update (b36 records).
@@ -2461,6 +2465,7 @@ export class EntityWorld {
     const self = this;
     return {
       living: true,
+      armor: e.equipment,
       hurt: (source, points) => this.hazard(e, points, source),
       get wet() { return e.inWater || !!self.wet?.(e, t.height); },
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),

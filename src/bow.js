@@ -17,7 +17,7 @@ import { aimPart } from "./dragon-parts.js";
 import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
 import { arrowPunch } from "./player-knockback.js";
-import { applyBowEnchantments, bowEnchantments } from "./armor-enchantments.js";
+import { applyBowEnchantments, bowEnchantments, setMobFire } from "./armor-enchantments.js";
 
 const f = Math.fround;
 const PI_F = f(Math.PI), PI_D = 3.1415927410125732;
@@ -446,7 +446,7 @@ export class Arrows {
     if (ctx.hanging?.entities.includes(ref)) return ctx.hanging.attack(ref, a.shooter === "player" ? { player: true, creative: !!ctx.survival?.creative } : null);
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
-    if (a.fire > 0) ref.fire = Math.max(ref.fire || 0, 100);
+    if (a.fire > 0) setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection
     const s = a.shooter, from = s === "player" ? ctx.player || a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
     return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });

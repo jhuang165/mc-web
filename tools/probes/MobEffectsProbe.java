@@ -28,7 +28,9 @@ public class MobEffectsProbe {
     { { 5, 1, 100, 0 }, { 1, 2, 3000, 1 }, { 10, 0, 5, 0 } },
     { { 11, 200, 1000, 0 }, { 22, 255, 40, 0 } },
     { { 12, 0, 2147483647, 0 }, { 13, 0, 7, 0 } },
-    { { 3, 0, 50, 0 }, { 14, 0, 50, 0 } }
+    { { 3, 0, 50, 0 }, { 14, 0, 50, 0 } },
+    // Batch 53 (firetimes, b53ft): haste, mining fatigue, jump boost, blindness, night vision (ambient), hunger, health boost and saturation, with durations that run out within 6 ticks.
+    { { 3, 0, 3, 0 }, { 4, 1, 5, 0 }, { 8, 2, 40, 0 }, { 15, 0, 2, 0 }, { 16, 0, 600, 1 }, { 17, 3, 4, 0 }, { 21, 1, 6, 0 }, { 23, 0, 2, 0 } }
   };
   static void run(String kind, int ci) throws Exception {
     sa fresh = sg.a(kind, W);
@@ -52,6 +54,28 @@ public class MobEffectsProbe {
       s.append("[").append(p.a()).append(",").append(p.c()).append(",").append(p.b()).append(",").append(p.e() ? 1 : 0).append("]");
     }
     System.out.println(s.append("]}"));
+    if (ci == 6) tick(kind, loaded);
+  }
+  // EntityLivingBase.updatePotionEffects (sv.aO) six times on the loaded mob: the map after each call, [id, duration] pairs in map order, and the health.
+  static void tick(String kind, sa loaded) throws Exception {
+    Field f = MobMoveProbe.field(sv.class, "f");
+    java.lang.reflect.Method update = MobMoveProbe.method(sv.class, "aO");
+    StringBuilder s = new StringBuilder("{\"tag\":\"b53ft\",\"kind\":\"" + kind + "\",\"case\":6,\"ticks\":[");
+    String error = "null";
+    try {
+      for (int i = 0; i < 6; i++) {
+        update.invoke(loaded);
+        s.append(i == 0 ? "" : ",").append("{\"health\":").append(((sv) loaded).aS()).append(",\"effects\":[");
+        boolean first = true;
+        for (Object o : new TreeMap<Integer, Object>((HashMap) f.get(loaded)).values()) {
+          rw p = (rw) o;
+          s.append(first ? "" : ",").append("[").append(p.a()).append(",").append(p.b()).append("]");
+          first = false;
+        }
+        s.append("]}");
+      }
+    } catch (Throwable x) { Throwable c = x.getCause() != null ? x.getCause() : x; error = "\"" + c.toString().replace("\"", "'") + "\""; }
+    System.out.println(s.append("],\"error\":" + error + "}"));
   }
   public static void main(String[] args) throws Exception {
     aji.p();

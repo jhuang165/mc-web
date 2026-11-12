@@ -110,6 +110,30 @@ public class MobVictimProbe {
     System.out.println("{\"victim\":\"bolt\",\"kind\":\"" + kind + "\",\"start\":" + fire + ",\"material\":" + material + ",\"ench\":" + ench + ",\"level\":" + level
       + ",\"fire\":" + FIRE.getInt(e) + ",\"health\":" + num(e.aS()) + ",\"before\":" + num(before) + ",\"immune\":" + IMMUNE.getBoolean(e) + "}");
   }
+  // Batch 53 (firetimes, tag b53ft): Entity.setFire(seconds) (sa.e(int)) on mobs from several counters with and without Fire Protection armour (the sources the port
+  // routes through it: Fire Aspect 1 s and 4 s a level, a burning arrow and fireball 5 s, lava 15 s, sunlight and fire blocks 8 s, a zombie's hit 2 s a difficulty step), and
+  // Entity.onEntityUpdate (sa.C) run for a few ticks on fire-immune and ordinary mobs: the counter after each tick.
+  static void setFire(String kind, int fire, int seconds, int material, int ench, int level) throws Exception {
+    PlayerDamageProbe.World.cells.clear();
+    sv e = kind.equals("zombie") ? new yq(PlayerDamageProbe.w) : kind.equals("magma_cube") ? (sv) sg.a("LavaSlime", PlayerDamageProbe.w) : make(kind);
+    PlayerDamageProbe.pos(e, 64.5, 5.0, 64.5);
+    gear(e, material, ench, level);
+    FIRE.setInt(e, fire);
+    e.e(seconds);
+    System.out.println("{\"victim\":\"setfire\",\"kind\":\"" + kind + "\",\"start\":" + fire + ",\"seconds\":" + seconds + ",\"material\":" + material + ",\"ench\":" + ench + ",\"level\":" + level + ",\"fire\":" + FIRE.getInt(e) + "}");
+  }
+  static void fireTicks(String kind, int fire, int ticks) throws Exception {
+    PlayerDamageProbe.World.cells.clear();
+    sv e = kind.equals("zombie") ? new yq(PlayerDamageProbe.w) : make(kind);
+    PlayerDamageProbe.pos(e, 64.5, 5.0, 64.5);
+    FIRE.setInt(e, fire);
+    StringBuilder s = new StringBuilder();
+    String error = null;
+    try {
+      for (int i = 0; i < ticks; i++) { e.C(); s.append(i == 0 ? "" : ",").append(FIRE.getInt(e)); }
+    } catch (Throwable x) { error = String.valueOf(x); }
+    System.out.println("{\"victim\":\"firetick\",\"kind\":\"" + kind + "\",\"start\":" + fire + ",\"immune\":" + IMMUNE.getBoolean(e) + ",\"remote\":" + e.o.E + ",\"fires\":[" + s + "],\"error\":" + (error == null ? "null" : "\"" + error.replace("\"", "'") + "\"") + "}");
+  }
   // A pigman hit by an arrow: the shooter is a player (ro.a(arrow, player), DamageSource.causeArrowDamage) or a mob; the hit player's call angers every pigman within 32 blocks.
   static void arrowGroup(String name, boolean playerShooter, String... extraAt) throws Exception {
     PlayerDamageProbe.World.cells.clear();
@@ -162,5 +186,14 @@ public class MobVictimProbe {
       arrowGroup("alone", player);
       arrowGroup("neighbours", player, "70.5,64.5", "64.5,95.5", "64.5,100.5", "100.5,64.5");
     }
+    // Batch 53: setFire with and without Fire Protection IV, and the fire counter over ticks.
+    for (String kind : new String[] { "zombie", "pigman", "skeleton", "witherSkeleton", "wither" })
+      for (int fire : new int[] { -1, 0, 30, 400 })
+        for (int seconds : new int[] { 1, 2, 4, 5, 8, 15, 100 }) {
+          setFire(kind, fire, seconds, -1, -1, 0);
+          setFire(kind, fire, seconds, 2, 1, 4);
+          setFire(kind, fire, seconds, 2, 1, 1);
+        }
+    for (String kind : new String[] { "zombie", "pigman", "skeleton", "witherSkeleton", "wither" }) for (int fire : new int[] { -1, 0, 1, 3, 10, 21, 160 }) fireTicks(kind, fire, 6);
   }
 }
