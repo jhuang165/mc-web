@@ -2083,6 +2083,7 @@ export class EntityWorld {
   // `this.walks` (entity-simulation.js entityWalkers) adds arrows, thrown entities, items, orbs, TNT and falling blocks to that list: each has a stamp from
   // `joined` when it spawned, or is placed after the mobs known so far when it has none (a saved one, or a spawn site that does not report).
   joined(e, kind) {
+    if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); // Entity.<init>: nextEntityID++ (an item, arrow, thrown entity, TNT, falling block or rocket takes its number at its creation)
     const w = this.walks?.get(kind);
     if (!w) return;
     this.orderSeqs ??= new WeakMap();
@@ -2145,7 +2146,9 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
-    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }));
+    const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
+    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }), joint);
+    joint?.after?.(); this.jointRan = !!joint;
     // What the client copies did: the dragon's wing flap sound and its death puffs (the server's own particle accessor is a no-op)
     for (const x of this.tracker.takeFx()) {
       if (x.particle) this.fx?.spawn(x.particle, x.x, x.y, x.z, 0, 0, 0);

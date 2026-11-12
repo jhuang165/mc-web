@@ -78,7 +78,7 @@ const leashKey = (e) => { const h = holderOf(e.leash); return h ? `${h.kind}:${h
 // Batch 50: the order the entries put their packets on the (one) connection. The client applies packets in arrival order, so a flush of several entries sorts by this
 // stamp (a WeakMap, so the packet objects tests compare stay as they were).
 const SEQ = new WeakMap();
-let seqCounter = 0;
+let seqCounter = 0, joinCounter = 0;
 export const packetSeq = (p) => SEQ.get(p) ?? 0;
 
 // The tracker entry for one mob and one player. `view` is { player, watches(cx, cz) }.
@@ -532,19 +532,23 @@ export class MobTracker {
   flush(en) { this.applyQueue([en]); }
   // Applies the queued packets of `list` in the order they were sent (across entries), stopping an entry's queue at a destroy that is not due yet. A spawn puts the copy
   // at the end of the client list and a destroy takes it out.
-  applyQueue(list) {
+  applyQueue(list) { this.applyParts([[this, list]]); }
+  // `parts`: [[tracker, entries]...]. The queued packets of all of them are applied in the order they were sent, across the entries and the trackers (one EntityTracker, one
+  // connection); each copy joins its own tracker's client list, stamped with its place in the one client world's list (`joinSeq`).
+  applyParts(parts) {
     const queue = [];
-    for (const en of list) for (const p of en.entry.packets) queue.push([packetSeq(p), en, p]);
-    if (list.length > 1) queue.sort((a, b) => a[0] - b[0]);
+    let n = 0;
+    for (const [t, list] of parts) for (const en of list) for (const p of en.entry.packets) { queue.push([packetSeq(p), t, en, p]); n++; }
+    if (parts.length > 1 || parts[0][1].length > 1) queue.sort((a, b) => a[0] - b[0]);
     const blocked = new Set(), done = new Set();
-    for (const [, en, p] of queue) {
-      if (!blocked.has(en) && p.type === "destroy") { p.after ??= this.tick + 1; if (p.after > this.tick) blocked.add(en); }
+    for (const [, t, en, p] of queue) {
+      if (!blocked.has(en) && p.type === "destroy") { p.after ??= t.tick + 1; if (p.after > t.tick) blocked.add(en); }
       if (blocked.has(en)) continue;
       done.add(p);
-      en.client.apply(p, this.ctx);
-      if (en.client.present) this.clientList.add(en); else this.clientList.delete(en);
+      en.client.apply(p, t.ctx);
+      if (en.client.present) { if (!t.clientList.has(en)) en.joinSeq = ++joinCounter; t.clientList.add(en); } else t.clientList.delete(en);
     }
-    if (done.size) for (const en of list) en.entry.packets = en.entry.packets.filter((p) => !done.has(p));
+    if (done.size) for (const [, list] of parts) for (const en of list) en.entry.packets = en.entry.packets.filter((p) => !done.has(p));
   }
   // Every entry with something queued: the live ones and those whose entity left the world
   queued() { return this.dying.length ? [...this.entries.values(), ...this.dying] : [...this.entries.values()]; }
@@ -557,40 +561,80 @@ export class MobTracker {
     });
   }
   // mobs: the live list; size(e) -> [width, height]; player { x, y, z }
-  update(mobs, player, size, physics = null) {
+  update(mobs, player, size, physics = null, joint = null) {
+    if (joint) return this.jointUpdate(mobs, player, size, physics, joint);
     this.serverTick(mobs, player, size);
     this.clientTick(physics);
   }
+  // Batch 51: EntityTracker.updateTrackedEntities is one loop over trackedEntities, mobs and objects alike, so their packets are queued in the one HashSet order and the client
+  // applies them as one stream. `joint`: { tracker: the ObjectTracker, lists, world } (lists: kind -> live entities, as ObjectTracker.update takes them). The object tracker
+  // joins this one's HashSet (`shareOrder`); both trackers take their removals and new entries first, then each entry sends its location at its place in the one order, then
+  // the second loop (a flagged player), then the client applies every queued packet in sending order and steps both kinds of copy in the one client list's order.
+  jointUpdate(mobs, player, size, physics, joint) {
+    const o = joint.tracker;
+    o.shareOrder(this);
+    o.ctx.world = joint.world; o.ctx.player = player;
+    const all = o.allOf(o.withExtra(joint.lists)), none = () => [0];
+    this.beginTick(mobs, player, size, false);
+    o.beginTick(all, player, none, false);
+    // the new entities enter in the order they were created, which is the order of their entity ids (EntityTracker.addEntityToTracker at spawn); an object that has no id yet takes
+    // the next one at its first sight, after every id that exists
+    const idOf = (t, e) => { const id = t === this ? e.id : e.entityId ?? e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; };
+    const fresh = [...mobs.filter((e) => !this.entries.has(e)).map((e) => [this, e]), ...all.filter((e) => !o.entries.has(e)).map((e) => [o, e])].sort((a, b) => { const x = idOf(...a), y = idOf(...b); return x < y ? -1 : x > y ? 1 : 0; });
+    for (const [t, e] of fresh) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
+    const keys = this.order.keys(), owner = (e) => this.entries.has(e) ? this : o.entries.has(e) ? o : null;
+    for (const e of keys) owner(e)?.stepEntry(e);
+    this.flagPlayer(player); o.flagPlayer(player);
+    if (this.lastFlagged || o.lastFlagged) for (const e of this.order.keys()) { const t = owner(e); if (t?.lastFlagged) t.entries.get(e).entry.tryStart(); }
+    this.endTick(); o.endTick();
+    for (const en of o.queued()) en.client.world = o.ctx.world;
+    this.applyParts([[this, this.queued()], [o, o.queued()]]);
+    const mobStep = this.clientStepper(physics), objStep = o.clientStepper();
+    const copies = [...this.clientList].map((en) => [en, mobStep]).concat([...o.clientList].map((en) => [en, objStep]));
+    copies.sort((a, b) => (a[0].joinSeq ?? 0) - (b[0].joinSeq ?? 0));
+    for (const [en, step] of copies) step(en);
+    this.pruneDying(); o.pruneDying();
+  }
   serverTick(mobs, player, size) {
+    this.beginTick(mobs, player, size);
+    for (const e of this.walk()) this.stepEntry(e);
+    this.flagPlayer(player);
+    if (this.lastFlagged) for (const e of this.walk()) this.entries.get(e).entry.tryStart(); // the second loop of updateTrackedEntities, in set order
+    this.endTick();
+  }
+  // The part of updateTrackedEntities before the walk: the removals and the entries of new entities. Batch 51 split serverTick into beginTick, stepEntry (one entry of the
+  // walk), flagPlayer and endTick so that `jointUpdate` can walk the mob and the object entries as the one loop of the native EntityTracker.
+  beginTick(mobs, player, size, add = true) {
     this.tick++;
     this.view.player = player;
     this.watch.update(player);
+    this.sizeOf = size;
     const alive = new Set(mobs);
     // removeEntityFromAllTrackingPlayers: the destroy is queued now and the client copy lives until it is flushed, one tick later (it stays a crystal for the dragon's search)
     for (const [e, en] of this.entries) if (!alive.has(e)) { en.entry.remove(); this.entries.delete(e); this.forget(e); this.dying.push(en); }
     // 1. every entry sends its location
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
-    for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
-    // Batch 49: native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id, bytecode-read; executed order in
-    // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).
-    for (const e of this.walk()) {
-      const en = this.entries.get(e);
-      const height = size(e)[1];
-      en.client.height = height;
-      const { airBorne, changed } = this.observe(e, en);
-      en.entry.sendLocation(airBorne, changed);
-      this.settle(e, en);
-    }
-    // 2. the player's own entry (range 512, every 2 ticks) flags itself when it moved more than 4 blocks
+    if (add) for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
+  }
+  // Batch 49: native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id, bytecode-read; executed order in
+  // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).
+  stepEntry(e) {
+    const en = this.entries.get(e);
+    en.client.height = this.sizeOf(e)[1];
+    const { airBorne, changed } = this.observe(e, en);
+    en.entry.sendLocation(airBorne, changed);
+    this.settle(e, en);
+  }
+  // 2. the player's own entry (range 512, every 2 ticks) flags itself when it moved more than 4 blocks (3. a flagged player re-evaluates every entry, in the second loop)
+  flagPlayer(player) {
     const p = this.player;
     let flagged = false;
     const dx = player.x - p.x, dy = (player.y ?? 0) - p.y, dz = player.z - p.z;
     if (!p.initialised || dx * dx + dy * dy + dz * dz > 16) { p.x = player.x; p.y = player.y ?? 0; p.z = player.z; p.initialised = true; flagged = true; }
-    // 3. a flagged player re-evaluates every entry; an entry that moved did so in sendLocation (updatePlayerList)
     this.lastFlagged = flagged;
-    if (flagged) for (const e of this.walk()) this.entries.get(e).entry.tryStart(); // the second loop of updateTrackedEntities, in set order
   }
+  endTick() {}
   // the client tick: packets in order, then the interpolation step
   // `physics(client, mob)` moves a client entity like moveEntityWithHeading(0, 0) on the client's world (entities.js supplies it)
   // `physics` may carry `.turn(client, mob)` (the body turn) and `.pre(client, mob)` (the water check) next to the move itself.
@@ -598,6 +642,13 @@ export class MobTracker {
   // its mount (a rider whose mount is gone or no longer carries it is let go and updates on its own).
   clientTick(physics = null) {
     this.applyQueue(this.queued());
+    const step = this.clientStepper(physics);
+    // the client world's loadedEntityList: spawn-packet order
+    for (const en of [...this.clientList]) step(en);
+    this.pruneDying();
+  }
+  // The step of one client copy (`en`), built once per client tick: `physics` as in clientTick. A copy that is no longer present leaves the list.
+  clientStepper(physics = null) {
     // the crystal copies a client dragon searches: World.getEntitiesWithinAABB walks the chunks x, then z, then the y slice
     let crystals = null;
     const crystalCopies = () => crystals ??= [...this.clientList].filter((en) => en.live.type === "ender_crystal" && en.client.present).map((en) => en.client)
@@ -605,13 +656,12 @@ export class MobTracker {
     const hooks = (e) => e.type === "ender_crystal" ? [null, null, null] : physics && !CLIENT_PHYSICS_OFF.has(e.type)
       ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))]
       : [null, physics?.turn && ((c) => physics.turn(c, e)), null];
-    // the client world's loadedEntityList: spawn-packet order
-    for (const en of [...this.clientList]) {
+    return (en) => {
       const e = en.live, c = en.client;
-      if (!c.present) { this.clientList.delete(en); continue; }
+      if (!c.present) { this.clientList.delete(en); return; }
       const mount = c.ridingEntity;
       if (mount) {
-        if (mount.present && mount.riddenBy === c) continue;
+        if (mount.present && mount.riddenBy === c) return;
         if (mount.riddenBy === c) mount.riddenBy = null;
         c.ridingEntity = null;
       }
@@ -625,8 +675,7 @@ export class MobTracker {
         if (rider.ridingEntity !== c) c.riddenBy = null;
         else rider.stepRider(...hooks(this.liveOf(rider)));
       }
-    }
-    this.pruneDying();
+    };
   }
   // What the client copies did this tick that needs the world's effects: [{ entity (live), sound | particle, ... }], oldest first
   takeFx() {
