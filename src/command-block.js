@@ -4,7 +4,7 @@ import { createCommandRunner } from './commands.js';
 import { ruleOn } from './game-rules.js';
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
-import { serializeComponent, text as textComponent, componentFromLegacy, normalizeLastOutput, lastOutputPlainText } from './chat-component.js';
+import { serializeComponent, translation, text as textComponent, componentFromLegacy, normalizeLastOutput, lastOutputPlainText, LastOutputError } from './chat-component.js';
 export const COMMAND_BLOCK = 139, COMMAND_BLOCK_ITEM = 1139, COMMAND_BLOCK_ID = 137;
 export const newCommandBlock = () => ({ command: '', successCount: 0, customName: '@', trackOutput: true, lastOutput: null });
 export { normalizeLastOutput, lastOutputPlainText };
@@ -16,6 +16,12 @@ export function writeCommandBlock(tile, x, y, z) {
   const map = new Map([['id', t(NBT.STRING, 'Control')], ['x', t(NBT.INT, x)], ['y', t(NBT.INT, y)], ['z', t(NBT.INT, z)], ['Command', t(NBT.STRING, tile.command)], ['SuccessCount', t(NBT.INT, tile.successCount)], ['CustomName', t(NBT.STRING, tile.customName)], ['TrackOutput', t(NBT.BYTE, tile.trackOutput ? 1 : 0)]]);
   if (tile.lastOutput != null) map.set('LastOutput', t(NBT.STRING, tile.lastOutput));
   return map;
+}
+// CommandBase.notifyAdmins: ChatComponentTranslation("chat.type.admin", sender name, the message), gray and italic.
+export function adminComponent(senderName, component) {
+  const c = translation('chat.type.admin', senderName, component);
+  Object.assign(c.style, { color: 'gray', italic: true });
+  return c;
 }
 export function commandBlockSender(host, tile, position, { now = () => new Date() } = {}) {
   const sender = Object.create(host);
@@ -36,7 +42,7 @@ export function commandBlockSender(host, tile, position, { now = () => new Date(
   // ServerCommandManager.func_152372_a: the rule suppresses op feedback, never the sender's tracked output.
   sender.feedback = (text, component) => {
     sender.print(text, component);
-    if (ruleOn({ gameRules: host.rules }, 'commandBlockOutput') && host.cheats) host.print(`§7§o[${tile.customName}: ${text}]`);
+    if (ruleOn({ gameRules: host.rules }, 'commandBlockOutput') && host.cheats) host.print(`§7§o[${tile.customName}: ${text}]`, adminComponent(tile.customName, component ?? componentFromLegacy(String(text))));
   };
   sender.broadcast = text => { host.print(text); };
   return sender;
@@ -64,5 +70,5 @@ export function installCommandBlocks(redstone, { host, changed = () => {} } = {}
     breakBlock(w, x, y, z) { if (w.getBlock(x, y, z) !== COMMAND_BLOCK_ID) tiles.delete(key(x, y, z)); },
   });
   return { tile, save: () => [...tiles].filter(([k]) => { const p = k.split(',').map(Number); return !redstone.loaded?.(...p) || redstone.getBlock(...p) === COMMAND_BLOCK_ID; }).map(([k, value]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, ...value }; }),
-    restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger)) { const { x, y, z, ...value } = e; tiles.set(key(x, y, z), { ...newCommandBlock(), ...value, lastOutput: normalizeLastOutput(value.lastOutput) }); } } };
+    restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger)) { const { x, y, z, ...value } = e; try { tiles.set(key(x, y, z), { ...newCommandBlock(), ...value, lastOutput: normalizeLastOutput(value.lastOutput) }); } catch (err) { if (!(err instanceof LastOutputError)) throw err; /* agp.b threw: the block does not load */ } } } };
 }
