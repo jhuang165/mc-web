@@ -97,26 +97,37 @@ export function installHorseGear(EntityWorld) {
   // A /summon LeashKnot has no fence to click: its 0.5 x 0.5 box (probed, summon-reference.json: 10.25 to 10.75 around the command position, the
   // entity's own Entity.setPosition box) is what the view ray meets. The picker result carries a stable stand-in `{ id: "mob-<n>", knotRef, health: 1 }`
   // so the captured player action (player-actions.js) can name it; leashInteract and attack route it to the knot (EntityLeashKnot.interactFirst /
-  // attackEntityFrom). Placed knots keep their fence-click path.
+  // attackEntityFrom). Placed knots are picked the same way (batch 50); the fence-click path stays for a click the ray misses.
   const KNOT_ID_BASE = 900000000;
+  // Every knot, placed or summoned, is a collidable EntityHanging, so the view ray can meet it (batch 50): placed ones get a stand-in id on first use.
+  const placedIds = new WeakMap();
+  const knotIdOf = (k) => k.id ?? placedIds.get(k) ?? (placedIds.set(k, ++knotSeq), placedIds.get(k));
   proto.knotEntity = function (id) {
     const n = /^mob-(\d+)$/.exec(id ?? "")?.[1];
-    const k = n && knotsOf(this).find((c) => c.summoned && !c.dead && KNOT_ID_BASE + c.id === Number(n));
-    return k ? (k.stand ??= { id: `mob-${KNOT_ID_BASE + k.id}`, type: "leash_knot", knotRef: k, health: 1, x: k.px, y: k.py, z: k.pz }) : null;
+    const k = n && knotsOf(this).find((c) => !c.dead && KNOT_ID_BASE + knotIdOf(c) === Number(n));
+    if (!k) return null;
+    const c = knotCentre(k);
+    return (k.stand ??= { id: `mob-${KNOT_ID_BASE + knotIdOf(k)}`, type: "leash_knot", knotRef: k, health: 1, x: c.x, y: c.y, z: c.z });
   };
+  // The box the ray tests: the host's `knotBoxOf(k)` (main.js: the client copy's, object-tracker.js aimKnotBox; null is not aimable), else the live 0.5 cube
+  // (EntityLeashKnot's own box around its position: the block centre of a placed knot, the command position of a summoned one, y up from the position).
+  const liveKnotBox = (k) => { const c = knotCentre(k); return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
   const pick = proto.pick;
   proto.pick = function (origin, dir, reach, wall = reach) {
     let best = pick.call(this, origin, dir, reach, wall);
+    const limit = Math.min(reach, wall), border = Math.fround(0.1); // EntityRenderer.getMouseOver grows the box by getCollisionBorderSize (sa.af, 0.1F)
     for (const k of knotsOf(this)) {
-      if (!k.summoned || k.dead) continue;
-      const box = [[origin.x, dir.x, k.px - 0.25, k.px + 0.25], [origin.y, dir.y, k.py, k.py + 0.5], [origin.z, dir.z, k.pz - 0.25, k.pz + 0.25]];
-      let near = 0, far = Math.min(reach, wall);
+      if (k.dead) continue;
+      const b = this.knotBoxOf ? this.knotBoxOf(k) : liveKnotBox(k);
+      if (!b) continue;
+      const box = [[origin.x, dir.x, b[0] - border, b[3] + border], [origin.y, dir.y, b[1] - border, b[4] + border], [origin.z, dir.z, b[2] - border, b[5] + border]];
+      let near = 0, far = limit;
       for (const [o, d, min, max] of box) {
         if (Math.abs(d) < 1e-8) { if (o < min || o > max) { far = -1; break; } continue; }
-        const a = (min - o) / d, b = (max - o) / d;
-        near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
+        const a = (min - o) / d, c = (max - o) / d;
+        near = Math.max(near, Math.min(a, c)); far = Math.min(far, Math.max(a, c));
       }
-      if (far >= near && near <= Math.min(reach, wall) && (!best || near < best.distance)) best = { entity: this.knotEntity(`mob-${KNOT_ID_BASE + k.id}`), distance: near };
+      if (far >= near && near <= limit && (!best || near < best.distance)) best = { entity: this.knotEntity(`mob-${KNOT_ID_BASE + knotIdOf(k)}`), distance: near };
     }
     return best;
   };
@@ -138,7 +149,7 @@ export function installHorseGear(EntityWorld) {
     k.age = out.age;
     if (out.kill) this.knotKill(k);
   };
-  // EntityHanging.attackEntityFrom: any hit kills a knot without a drop. (Left click is not routed to knots in the browser.)
+  // EntityHanging.attackEntityFrom: any hit kills a knot without a drop. (An aimed knot's left click reaches it through `attack` above.)
   proto.knotAttack = function (k) { if (k.dead) return false; this.knotKill(k); return true; };
   // The mobs the player holds whose bounding box meets the 7-block box around `centre` (ahb.getEntitiesWithinAABB).
   proto.leashedNear = function (centre) {
