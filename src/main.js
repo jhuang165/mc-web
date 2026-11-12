@@ -2016,7 +2016,7 @@ function openCommandBlock(x, y, z, cartTile = null) {
   screen = "inventory"; mining = null; mineHeld = false;
   document.exitPointerLock?.();
   gui.show(commandBlockScreen({
-    command: tile.command, lastOutput: tile.trackOutput ? tile.lastOutput : null,
+    command: tile.command, lastOutput: tile.lastOutput, // bfh shows func_145749_h whatever TrackOutput says
     done: (command) => { tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
     cancel: resume,
   }));

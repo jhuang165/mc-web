@@ -1,0 +1,187 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "agp": {
+   "name": "CommandBlockLogic",
+   "sha256": "e87fe5c3beb09b70acd897a77fa8767ca9e801a6c9a35c2eb01246a8addfe46e"
+  },
+  "xn": {
+   "name": "EntityMinecartCommandBlock",
+   "sha256": "b58322492ba8f3a3735575e816ed241c49eaeb80b782a88cd94f2c0c0afd2ccd"
+  },
+  "fk": {
+   "name": "IChatComponent$Serializer",
+   "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
+  },
+  "fq": {
+   "name": "ChatComponentText",
+   "sha256": "1ed0a90e237aeed31434da047e48ebef977d2529e56751d812eb661148ceb5ad"
+  },
+  "fr": {
+   "name": "ChatComponentTranslation",
+   "sha256": "9fd71a929542368197f4dbef5fff3e3f72f5d0e31b3d4531d8a97b042e239c96"
+  },
+  "fn": {
+   "name": "ChatStyle",
+   "sha256": "41a6e1bd60b764afba367441bb51b3d4f779aa18bfb5d2dabbb56df6da72b501"
+  }
+ },
+ "method": "Executed on the unchanged classes with the MinecartProbe world double: an EntityMinecartCommandBlock logic (agp) receives components through addChatMessage (agp.a(fj)); rows are [name, JSON of func_145749_h via fk.a, NBT LastOutput after writeToNBT, getUnformattedText (fj.c(), no language table loaded so a translation shows its key), ...] with the [hh:mm:ss] time scrubbed. loads: readFromNBT (agp.b(dh)) of LastOutput strings. No game classes patched.",
+ "outputs": [
+  [
+   "text",
+   "{\"extra\":[\"done\"],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[\"done\"],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] done"
+  ],
+  [
+   "notFound",
+   "{\"extra\":[{\"color\":\"red\",\"translate\":\"commands.generic.notFound\"}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"color\":\"red\",\"translate\":\"commands.generic.notFound\"}],\"text\":\"[hh:mm:ss] \"}",
+   "!ExceptionInInitializerError"
+  ],
+  [
+   "tpCoords",
+   "{\"extra\":[{\"translate\":\"commands.tp.success.coordinates\",\"with\":[\"Player\",\"1.5\",\"64.0\",\"-3.0\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"translate\":\"commands.tp.success.coordinates\",\"with\":[\"Player\",\"1.5\",\"64.0\",\"-3.0\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "!NoClassDefFoundError"
+  ],
+  [
+   "give",
+   "{\"extra\":[{\"translate\":\"commands.give.success\",\"with\":[\"Stone\",\"5\",\"Player\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"translate\":\"commands.give.success\",\"with\":[\"Stone\",\"5\",\"Player\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "!NoClassDefFoundError"
+  ],
+  [
+   "usage",
+   "{\"extra\":[{\"color\":\"red\",\"translate\":\"commands.generic.usage\",\"with\":[{\"translate\":\"commands.tp.usage\"}]}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"color\":\"red\",\"translate\":\"commands.generic.usage\",\"with\":[{\"translate\":\"commands.tp.usage\"}]}],\"text\":\"[hh:mm:ss] \"}",
+   "!NoClassDefFoundError"
+  ],
+  [
+   "greenText",
+   "{\"extra\":[{\"color\":\"green\",\"text\":\"ok\"}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"color\":\"green\",\"text\":\"ok\"}],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] ok"
+  ],
+  [
+   "sibling",
+   "{\"extra\":[{\"extra\":[\"b\"],\"text\":\"a\"}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"extra\":[\"b\"],\"text\":\"a\"}],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] ab"
+  ],
+  [
+   "numbers",
+   "{\"extra\":[{\"translate\":\"commands.xp.success\",\"with\":[\"10\",\"Player\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"translate\":\"commands.xp.success\",\"with\":[\"10\",\"Player\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "!NoClassDefFoundError"
+  ],
+  [
+   "emptyText",
+   "{\"extra\":[\"\"],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[\"\"],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] "
+  ],
+  [
+   "special",
+   "{\"extra\":[\"say \\\"hi\\\" \\u003c\\u0026\\u003e \\u003d \\u0027 §c é \\u2028 \\\\ \\n\\t\"],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[\"say \\\"hi\\\" \\u003c\\u0026\\u003e \\u003d \\u0027 §c é \\u2028 \\\\ \\n\\t\"],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] say \"hi\" <&> = ' §c é   \\ \n\t"
+  ],
+  [
+   "styledAll",
+   "{\"extra\":[{\"bold\":true,\"italic\":true,\"underlined\":true,\"strikethrough\":true,\"obfuscated\":true,\"color\":\"red\",\"extra\":[\"y\"],\"text\":\"x\"}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"bold\":true,\"italic\":true,\"underlined\":true,\"strikethrough\":true,\"obfuscated\":true,\"color\":\"red\",\"extra\":[\"y\"],\"text\":\"x\"}],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] xy"
+  ],
+  [
+   "styledArg",
+   "{\"extra\":[{\"translate\":\"commands.tp.success\",\"with\":[{\"color\":\"gray\",\"text\":\"P\"},\"T\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[{\"translate\":\"commands.tp.success\",\"with\":[{\"color\":\"gray\",\"text\":\"P\"},\"T\"]}],\"text\":\"[hh:mm:ss] \"}",
+   "!NoClassDefFoundError"
+  ],
+  [
+   "trackOff",
+   null,
+   null,
+   null
+  ],
+  [
+   "second",
+   "{\"extra\":[\"two\"],\"text\":\"[hh:mm:ss] \"}",
+   "{\"extra\":[\"two\"],\"text\":\"[hh:mm:ss] \"}",
+   "[hh:mm:ss] two"
+  ]
+ ],
+ "loads": [
+  [
+   "{\"text\":\"[12:00:00] old\"}",
+   [
+    "load",
+    "\"[hh:mm:ss] old\"",
+    "\"[hh:mm:ss] old\"",
+    "[hh:mm:ss] old"
+   ]
+  ],
+  [
+   "{\"extra\":[\"msg\"],\"text\":\"[12:00:00] \"}",
+   [
+    "load",
+    "{\"extra\":[\"msg\"],\"text\":\"[hh:mm:ss] \"}",
+    "{\"extra\":[\"msg\"],\"text\":\"[hh:mm:ss] \"}",
+    "[hh:mm:ss] msg"
+   ]
+  ],
+  [
+   "\"plain\"",
+   [
+    "load",
+    "\"plain\"",
+    "\"plain\"",
+    "plain"
+   ]
+  ],
+  [
+   "{\"translate\":\"commands.generic.notFound\",\"color\":\"red\"}",
+   [
+    "load",
+    "{\"color\":\"red\",\"translate\":\"commands.generic.notFound\"}",
+    "{\"color\":\"red\",\"translate\":\"commands.generic.notFound\"}",
+    "!NoClassDefFoundError"
+   ]
+  ],
+  [
+   "[\"a\",\"b\"]",
+   [
+    "load",
+    "{\"extra\":[\"b\"],\"text\":\"a\"}",
+    "{\"extra\":[\"b\"],\"text\":\"a\"}",
+    "ab"
+   ]
+  ],
+  [
+   "not json",
+   [
+    "load",
+    "!JsonSyntaxException"
+   ]
+  ],
+  [
+   "",
+   [
+    "load",
+    null,
+    null,
+    null
+   ]
+  ],
+  [
+   "{\"text\":1",
+   [
+    "load",
+    "!JsonSyntaxException"
+   ]
+  ]
+ ]
+}

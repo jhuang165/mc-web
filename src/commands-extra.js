@@ -153,11 +153,11 @@ export function javaFloat(f) {
 export function createExtraCommands(ctx) {
   const { host, player, usage, CommandException } = ctx;
   const send = (component) => {
-    // A command block's sender keeps text output (LastOutput); the player gets the component.
-    if (host.isCommandBlock) return (host.feedback ?? host.print)(component.formatted());
+    // A command block's sender keeps the component as LastOutput (the formatted text goes beside it); the player gets the component.
+    if (host.isCommandBlock) return (host.feedback ?? host.print)(component.formatted(), component);
     return (host.feedback ?? host.print)(component);
   };
-  const tellSender = (component) => (host.isCommandBlock ? host.print(component.formatted()) : host.print(component)); // ICommandSender.addChatMessage
+  const tellSender = (component) => (host.isCommandBlock ? host.print(component.formatted(), component) : host.print(component)); // ICommandSender.addChatMessage
   const notify = (key, ...args) => send(translation(key, ...args)); // CommandBase.func_152373_a: the sender's plain copy
   const profiler = host.profiler ?? (host.profiler = new Profiler());
   const debugState = { startMs: 0, startTicks: 0 };

@@ -1,3 +1,4 @@
+import { lastOutputPlainText as plainText } from "./chat-component.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { populationBlockMapperReady } from "./population-world.js";
@@ -38,7 +39,7 @@ test("a due command block runs setblock on the run's world with no player", asyn
   assert.equal(cellOf(r, 5, 11, 5), STONE);
   assert.equal(block(r).successCount, 1);
   assert.equal(r.commandStats.run, 1);
-  assert.match(block(r).lastOutput, /Block placed/);
+  assert.match(plainText(block(r).lastOutput), /Block placed/);
 });
 
 test("say, time and an unknown command: native SuccessCount and LastOutput", async () => {
@@ -49,19 +50,19 @@ test("say, time and an unknown command: native SuccessCount and LastOutput", asy
   assert.equal(time.timeShift, 1000);
   const bad = await run(rootWith("frobnicate"));
   assert.equal(block(bad).successCount, 0);
-  assert.match(block(bad).lastOutput, /Unknown command|commands\.generic\.notFound/);
+  assert.match(plainText(block(bad).lastOutput), /Unknown command|commands\.generic\.notFound/);
 });
 
 test("a world-restricted selector finds nobody: silent zero, LastOutput untouched; a plain @p finds the player and the command is queued for the return", async () => {
   for (const sel of ["@p[r=10]", "@p[x=0,y=70,z=0]", "@a[rm=1]"]) {
     const r = await run(rootWith(`give ${sel} minecraft:stone`));
     assert.equal(block(r).successCount, 0, sel);
-    assert.equal(block(r).lastOutput, "old", sel);
+    assert.equal(block(r).lastOutput, '"old"', sel); // the load re-serializes the one-word string as the bare JSON string (Gson is lenient)
     assert.equal(r.commandStats.silent, 1, sel);
   }
   const plain = await run(rootWith("give @p minecraft:stone"));
   assert.equal(block(plain).successCount, 1, "batch 35: the shadow player runs it at fire time, the replay repeats it at return");
-  assert.match(JSON.parse(block(plain).lastOutput).text, /Given/);
+  assert.match(plainText(block(plain).lastOutput), /Given/);
   assert.equal(plain.commandStats.skipped, 0);
   assert.equal(plain.commandStats.queued, 1);
   assert.equal(plain.playerCommands[0].command, "give @p minecraft:stone");
@@ -125,7 +126,7 @@ test("give, xp, clear, tp and kill from a command block: queued or run, replayed
   assert.deepEqual([out.applied, out.succeeded], [1, 1]);
   assert.equal(live.survival.count(DIAMOND), 3, "the diamond is in the inventory");
   assert.equal(block(first).successCount, 1);
-  assert.match(JSON.parse(block(first).lastOutput).text, /^\[\d\d:\d\d:\d\d\] Given \[Item303\] \* 3 to Player$/);
+  assert.match(plainText(block(first).lastOutput), /^\[\d\d:\d\d:\d\d\] Given \[Item303\] \* 3 to Player$/);
   void give;
   // xp, clear (nothing to clear: failure 0 with the native text), a literal name, an @a, and tell
   const xp = await run(rootWith("xp 7 @p"));
@@ -133,18 +134,18 @@ test("give, xp, clear, tp and kill from a command block: queued or run, replayed
   assert.equal(live.experience.total, 7); assert.equal(block(xp).successCount, 1);
   const clear = await run(rootWith("clear @p minecraft:emerald"));
   replayPlayerCommands(clear.playerCommands, { host: live.host, records: clear.commandBlocks });
-  assert.equal(block(clear).successCount, 0); assert.match(block(clear).lastOutput, /Could not clear the inventory of Player/);
+  assert.equal(block(clear).successCount, 0); assert.match(plainText(block(clear).lastOutput), /Could not clear the inventory of Player/);
   const named = await run(rootWith("give Player minecraft:diamond"));
   assert.equal(named.commandStats.queued, 1, "a literal name finds the player in any dimension");
   const other = await run(rootWith("give Nobody minecraft:diamond"));
-  assert.equal(other.commandStats.queued, 0); assert.match(block(other).lastOutput, /That player cannot be found/); assert.equal(block(other).successCount, 0);
+  assert.equal(other.commandStats.queued, 0); assert.match(plainText(block(other).lastOutput), /That player cannot be found/); assert.equal(block(other).successCount, 0);
   // tp: native success text, the move discarded, nothing queued
   const tp = await run(rootWith("tp @p 1 2 3"));
   assert.equal(tp.playerCommands.length, 0); assert.equal(tp.commandStats.tpDiscarded, 1);
-  assert.equal(block(tp).successCount, 1); assert.match(block(tp).lastOutput, /Teleported Player to 1\.5,2\.5,3\.5/);
+  assert.equal(block(tp).successCount, 1); assert.match(plainText(block(tp).lastOutput), /Teleported Player to 1\.5,2\.5,3\.5/);
   // kill from a command block is PlayerNotFound natively
   const kill = await run(rootWith("kill"));
-  assert.equal(block(kill).successCount, 0); assert.match(block(kill).lastOutput, /That player cannot be found/); assert.equal(kill.playerCommands.length, 0);
+  assert.equal(block(kill).successCount, 0); assert.match(plainText(block(kill).lastOutput), /That player cannot be found/); assert.equal(kill.playerCommands.length, 0);
 });
 
 test("a clock firing a give keeps firing order and a bounded chat; the queue is capped and counted", async () => {
@@ -191,9 +192,9 @@ const at = (r, x) => r.commandBlocks.find((t) => t.x === x);
 test("a later command in the run sees an earlier one: give then clear, xp then a level filter, gamemode then a mode filter (fire-time shadow player)", async () => {
   const r = await runBlocks(["give @p minecraft:diamond 3", "clear @p minecraft:diamond", "clear @p minecraft:diamond"]);
   assert.equal(at(r, 3).successCount, 1, "the give succeeded at fire time");
-  assert.match(JSON.parse(at(r, 3).lastOutput).text, /Given \[.*\] \* 3 to Player/);
+  assert.match(plainText(at(r, 3).lastOutput), /Given \[.*\] \* 3 to Player/);
   assert.equal(at(r, 4).successCount, 1, "the clear found the diamonds the give put in");
-  assert.match(JSON.parse(at(r, 4).lastOutput).text, /Cleared the inventory of Player, removing 3 items/);
+  assert.match(plainText(at(r, 4).lastOutput), /Cleared the inventory of Player, removing 3 items/);
   assert.equal(at(r, 5).successCount, 0, "and the second clear finds nothing");
   assert.equal(r.commandStats.shadow, 3);
   assert.deepEqual(r.playerCommands.map((e) => e.command.split(" ")[0]), ["give", "clear", "clear"], "all three still replay at return");
@@ -207,13 +208,13 @@ test("the shadow player starts from the state the player returns with, and the r
   const state = new Survival({}, "survival"); state.inventory.add({ id: DIAMOND, count: 2, damage: 0 });
   const r = await runBlocks(["clear @p minecraft:diamond", "give @p minecraft:diamond 1"], 20, { state: JSON.parse(JSON.stringify(state.serialize())) });
   assert.equal(at(r, 3).successCount, 1, "the returning player's own 2 diamonds are cleared");
-  assert.match(JSON.parse(at(r, 3).lastOutput).text, /removing 2 items/);
+  assert.match(plainText(at(r, 3).lastOutput), /removing 2 items/);
 });
 
 test("/spawnpoint with four absolute integers sets the respawn point; without coordinates it is skipped; /difficulty is applied and returned", async () => {
   const sp = await runBlocks(["spawnpoint @p 7 70 -9", "spawnpoint @p ~ 70 4", "spawnpoint @p", "difficulty hard"]);
   assert.deepEqual(sp.world.playerSpawn, [7, 70, -9]);
-  assert.equal(at(sp, 3).successCount, 1); assert.match(JSON.parse(at(sp, 3).lastOutput).text, /Set Player's spawn point to \(7, 70, -9\)/);
+  assert.equal(at(sp, 3).successCount, 1); assert.match(plainText(at(sp, 3).lastOutput), /Set Player's spawn point to \(7, 70, -9\)/);
   assert.equal(at(sp, 4).successCount, 0, "~ is not an integer natively (CommandBase.a(sender, s, min, max))");
   assert.equal(at(sp, 5).successCount, 7, "no coordinates: the player's position in the other dimension is unknown, skipped");
   assert.equal(sp.commandStats.skipped, 1);
@@ -255,8 +256,8 @@ test("/spawnpoint @p takes the player's own block position at the firing (floor 
   const early = await runTimed([["spawnpoint @p", 10]], trace);
   assert.deepEqual(early.world.playerSpawn, [0, 64, 0]);
   const later = await runTimed([["spawnpoint @p", 10], ["spawnpoint @p", 50], ["spawnpoint Player", 120]], trace);
-  assert.match(JSON.parse(at(later, 4).lastOutput).text, /Set Player's spawn point to \(10, 71, -6\)/, "y 70.6 + 0.5 floors to 71, z -5.2 floors to -6");
-  assert.match(JSON.parse(at(later, 5).lastOutput).text, /\(50, 65, 50\)/, "the sample in force at tick 120 is the one from tick 100");
+  assert.match(plainText(at(later, 4).lastOutput), /Set Player's spawn point to \(10, 71, -6\)/, "y 70.6 + 0.5 floors to 71, z -5.2 floors to -6");
+  assert.match(plainText(at(later, 5).lastOutput), /\(50, 65, 50\)/, "the sample in force at tick 120 is the one from tick 100");
   assert.deepEqual(later.world.playerSpawn, [50, 65, 50], "the last firing wins; not queued for the replay");
   assert.equal(later.commandStats.shadowSpawn, 3);
   assert.equal(later.playerCommands.length, 0);
@@ -273,7 +274,7 @@ test("each firing starts from the player's state at its own tick: what he picked
   assert.equal(at(r, 3).successCount, 0, "tick 30: the player has no diamonds yet (he finds three at tick 60)");
   assert.equal(at(r, 4).successCount, 1);
   assert.equal(at(r, 5).successCount, 1);
-  assert.match(JSON.parse(at(r, 5).lastOutput).text, /removing 5 items/, "the 3 he picked up plus the 2 the earlier command gave");
+  assert.match(plainText(at(r, 5).lastOutput), /removing 5 items/, "the 3 he picked up plus the 2 the earlier command gave");
   assert.equal(r.commandStats.traceChanges, 1);
   const level = { samples: [[0, -1, 0, 64, 0]], states: [[0, snapshot(0)], [50, { ...snapshot(0), experience: (() => { const x = new Experience({}); x.add(200); return x.serialize(); })(), level: 11 }]] };
   const lv = await runTimed([["testfor @p[lm=5]", 20], ["testfor @p[lm=5]", 80]], level);
