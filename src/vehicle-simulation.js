@@ -122,6 +122,7 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
   Object.assign(state.previous,state.position);
   if (controls.sneak || rider.dead || rider.vehicle.dead) {
     if (!rider.dead && !rider.vehicle.dead) {
+      minecarts.updateRiderPosition(rider.vehicle); // the server seats the dismount from the live cart; the client's seat (a cart's copy) trails it
       const action=captureVehicleAction({dismount:true}); hooks.trace?.(action); dispatchVehicleAction(state,action,hooks);
     } else {minecarts.dismount(state.world,rider);releaseRider(state);}
   } else {

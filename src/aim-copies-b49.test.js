@@ -35,11 +35,12 @@ test("a copy absent while tracked is not aimable; an unlisted entity falls back 
   assert.equal(pickMinecart(list(other), eye, south, 6, 6, null, (e) => aimBox(t, e)).cart, other);
 });
 
-test("the ridden cart keeps the live box and the ignored cart is skipped", () => {
+test("the ridden cart answers with its copy's box (batch 52) and the ignored cart is skipped", () => {
   const t = mk(), c = cart();
   tick(t, { minecart: [c] });
   c.bb = [0, 64, 0, 1, 64.7, 1];
-  assert.deepEqual(aimBox(t, c, true), c.bb);
+  assert.deepEqual(aimBox(t, c, true), aimBox(t, c), "a ridden cart is aimed through its copy as any cart; only a boat stands in");
+  assert.notDeepEqual(aimBox(t, c, true), c.bb);
   assert.equal(pickMinecart(list(c), eye, south, 6, 6, c, (e) => aimBox(t, e, true)), null);
 });
 

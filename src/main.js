@@ -221,7 +221,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -2888,6 +2888,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const vehicle = vehicleState();
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
+  seatOnCartCopy();
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
   scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking, angler: multiplayer ? null : playerBody } : null);
@@ -3004,6 +3005,13 @@ function traceAction(action) {
 function vehicleState() {
   return { screen, world, minecarts, boats, horses: seatsFor(mobs, rider), rider, position, previous, velocity, motion, survival, yaw, eating,
     grounded, collidedH, flying, fallDistance, landedFall };
+}
+// Batch 52: the client player on a minecart is seated from the cart's client copy (World.updateEntity: the copy's update, then the rider's updateRiderPosition), so the camera and
+// the player model follow the interpolated cart the renderer draws. The server side (the tick's physics, the dismount) keeps the live seat; this runs at the end of each seating.
+function seatOnCartCopy() {
+  const live = rider.vehicle, c = live && !live.boat && !live.horse && rideCopy(objectTracker, live);
+  if (!c) return;
+  position.x = c.x; position.y = c.y + minecarts.getMountedYOffset() - 0.5; position.z = c.z;
 }
 function applyVehicleState(state) {
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
@@ -3389,7 +3397,7 @@ function movementTick(controls) {
   });
   runPendingEdits(); // no-op when the walk already ran them
   redstoneRuntime?.tickTiles(); // no-op when the walk's afterEntities hook already ran them
-  if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
+  if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); seatOnCartCopy(); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
