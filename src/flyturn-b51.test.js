@@ -66,19 +66,20 @@ for (const s of ref.scenarios.filter((x) => x.kind === "dragonTurn")) {
 
 // enderman-wolf-b51sf-reference.json (EW_SET=b51sf): a silverfish pulled by a retracting piston block, executed on the unchanged classes. Batch 50 thought the port killed it earlier than the game:
 // the original hides it in a block at the same tick (EntitySilverfish.updateEntityActionState: the explosion-particle draws, then setDead at tick 14 of seed 9703). setDead leaves the health
-// at 7, while the port's despawn marks a removed mob with health 0, so only that field differs; every position, draw and flag matches.
-test("b51sf: the silverfish pulled into a retracting block hides at the native tick (health 7 stays, the port marks the removed mob 0)", () => {
+// at 7, which the port keeps as removedHealth since batch 54 (it used to report 0); every position, draw and flag matches.
+test("b51sf: the silverfish pulled into a retracting block hides at the native tick (health 7 stays, kept as removedHealth since b54)", () => {
   assert.equal(reference51.records.length, 3);
   const rec = reference51.records[0];
   assert.equal(rec.rows[13][0][0][3], 7);
   assert.ok(rec.rows[14][0][0][7].length > 20, "the hide draws the explosion particles at tick 14");
   assert.equal(rec.rows[15][0][0][7].length, 0, "removed after the hide");
   const got = replayEndermanWolf(rec);
-  assert.deepEqual(firstDivergence(rec, got), [14, 0, "health", 7, 0]);
+  // Batch 54 (b54so removedHealth audit): the despawn keeps the health setDead leaves (removedHealth 7), so the health now matches and the first difference is the floor cell below.
   // The original's hide writes a monster egg (97, stone) into the floor cell below the mob; the replay arena reports no write to its implicit floor (y < 0), so that one cell is dropped.
   assert.deepEqual(rec.rows[14][5][2], [[70, -1, 63, 97, 0]]);
-  const marked = { ...rec, rows: rec.rows.map((row, t) => (t < 14 ? row : [[row[0][0].map((v, k) => (k === 3 ? 0 : v))], ...row.slice(1, 5), [row[5][0], row[5][1], [], row[5][3]], ...row.slice(6)])) };
-  assert.equal(firstDivergence(marked, got), null);
+  assert.equal(firstDivergence(rec, got)[0], 14);
+  const floorless = { ...rec, rows: rec.rows.map((row, t) => (t < 14 ? row : [row[0], ...row.slice(1, 5), [row[5][0], row[5][1], [], row[5][3]], ...row.slice(6)])) };
+  assert.equal(firstDivergence(floorless, got), null);
 });
 for (const r of reference51.records.slice(1)) {
   test(`b51sf ${r.name}: the silverfish survives the retract at health 7`, () => {
