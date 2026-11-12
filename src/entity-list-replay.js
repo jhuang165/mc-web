@@ -38,9 +38,10 @@ export function replayEntityList(c, onBoom = null, without = null) {
   const items = new ItemEntities(rand), arrows = new Arrows(), xpOrbs = new ExperienceOrbs([], rand), primed = [], booms = [], extras = [];
   const minecarts = new Minecarts(), boats = new Boats(), hanging = new Hanging({ random: () => new JavaRandom(1) });
   ew.potions = new WitchPotions(ew, rand);
+  if (c.specs.some((q) => q[0] === "pthrow" && q[7] === 4)) ew.potions.projectiles.rng = () => new GaussianRandom(2); // EntityExpBottle.onImpact draws from World.rand, which is Random(2) in the probe
   const projectiles = new Projectiles(rand); // the player's own thrown balls: only the pthrow scenarios put any in
   projectiles.clientParticles = true; projectiles.tickEffects = () => {};
-  const hasOrb = c.specs.some((q) => q[0] === "orb"), survival = new Survival({}, "survival"), player = { x: hasOrb ? 0.5 : 1e5, y: 0, z: 0.5, health: 20, alive: true, width: 0.6, height: 1.8, isPlayer: true };
+  const hasOrb = c.specs.some((q) => q[0] === "orb"), survival = new Survival({}, "survival"), hasMp = c.specs.some((q) => q[0] === "pthrow" && q[8] === 2), player = { x: hasOrb ? 0.5 : hasMp ? 0 : 1e5, y: 0, z: hasMp ? 0 : 0.5, health: 20, alive: true, width: 0.6, height: 1.8, isPlayer: true };
   let xp = 0, inPass = false;
   const explode = (x, y, z, power, who) => { booms.push([x, y, z, power]); if (without === "blast") items.explode(world, x, y, z, power, who?.exploder ?? who); else explodeNonLiving(state, x, y, z, power, who?.exploder ?? who, false, drop); onBoom?.(items); };
   // Entity.entityDropItem(stack, 0) and a broken cart's drops: an item that joins the end of the list in the pass (the probe's World.spawnEntityInWorld fixes its sideways motion).
@@ -52,6 +53,8 @@ export function replayEntityList(c, onBoom = null, without = null) {
     // the player's snowballs, eggs and pearls (main.js projectileTargets / projectileHit / projectilePearlImpact): the carts, boats and hanging entities are the targets
     projectileTargets: (st) => without === "throwTargets" ? vehicleTargets(st).filter((t) => st.hanging.entities.includes(t.ref)) : vehicleTargets(st), // "throwTargets": the old targets, hanging only
     projectileHit: (e, ball) => thrownAtVehicleOrHanging(state, e, hooks, { player: true, creative: !!ball.creative }),
+    // EntityEgg.onImpact's chicks (main.js projectileEvent): the chick joins the list in the thrown entity's own turn, like World.spawnEntityInWorld (the probe's chick has Random(7))
+    projectileEvent: (h) => { if (!h.sound) for (let i = 0; i < h.chicks; i++) { const chick = ew.hatch(h.x, h.y, h.z, h.yaw); setEntityRandom(chick, new JavaRandom(7)); extras.push({ at: { kind: "cow" }, entity: chick }); } },
     projectilePearlImpact: ({ pearl, hit }) => impactPlayerPearl({ world, position: player, survival, minecarts }, pearl, hit, { hit: (e) => thrownAtVehicleOrHanging(state, e, hooks, { player: true, creative: !!pearl.creative }), particle: () => {} }),
   };
   const state = { world, items, arrows, primed, xpOrbs, projectiles, mobs: ew, survival, position: player,
@@ -60,12 +63,12 @@ export function replayEntityList(c, onBoom = null, without = null) {
   ew.walks = entityWalkers(() => ctx);
   if (without === "mobPush") for (const w of ew.walks.values()) delete w.pushMob;
   items.joined = (e) => { ew.joined(e, "item"); if (inPass) extras.push({ at: { kind: "item" }, entity: e }); };
-  arrows.joined = (e) => ew.joined(e, "arrow"); xpOrbs.joined = (e) => ew.joined(e, "orb");
+  arrows.joined = (e) => ew.joined(e, "arrow"); xpOrbs.joined = (e) => { ew.joined(e, "orb"); if (inPass) { [e.vx, e.vy, e.vz] = [0, 0.2, 0]; extras.push({ at: { kind: "orb" }, entity: e }); } }; // an orb spawned in the pass (a bottle's): the probe fixes its motion (EntityXPOrb draws it from Math.random)
   minecarts.joined = (e) => ew.joined(e, "cart"); boats.joined = (e) => ew.joined(e, "boat"); hanging.joined = (e) => ew.joined(e, "hanging");
   const sets = c.specs.filter((s) => s[0] === "set").map((s) => ({ x: s[1], y: s[2], z: s[3], id: PORT_ID[s[7]] ?? s[7], tick: s[9] }));
   for (const st of sets) if (st.tick < 0) world.put(st.x, st.y, st.z, st.id, 0);
   const made = c.specs.filter((s) => s[0] !== "set" && s[0] !== "wall").map((s) => {
-    const [kind, x, y, z, vx, vy, vz, a, b, join] = s, at = { kind, x, y, z, vx, vy, vz, a, b, join };
+    const [kind, x, y, z, vx, vy, vz, a, b, join, seed] = s, at = { kind, x, y, z, vx, vy, vz, a, b, join, seed };
     return { at, entity: null };
   });
   // `build` makes the entity as its constructor does (it exists before it joins the list); `join` is World.spawnEntityInWorld.
@@ -88,10 +91,10 @@ export function replayEntityList(c, onBoom = null, without = null) {
       m.add = () => { list.push(ball); ew.joined(ball, kind === "potion" ? "potion" : "golemBall"); }; m.entity = ball;
     }
     else if (kind === "pthrow") { // a snowball (0), egg (1), ender pearl (2) or potion (3) the player threw, from the listed point (the launch is its own record); b = Creative thrower
-      const flat = Math.hypot(vx, vz), yaw = Math.fround((Math.atan2(vx, vz) * 180) / Math.PI), pitch = Math.fround((Math.atan2(vy, flat) * 180) / Math.PI), rng = new GaussianRandom(7);
-      const ball = { kind: ["snowball", "egg", "enderPearl", "potion"][a], damage: 32732, owner: a === 3 ? "player" : null, creative: !!b, x, y, z, px: x, py: y, pz: z, mx: vx, my: vy, mz: vz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: rng, random: rng, dead: false };
-      const list = a === 3 ? ew.potions.projectiles.balls : projectiles.balls;
-      m.add = () => { list.push(ball); ew.joined(ball, a === 3 ? "potion" : "thrown"); }; m.entity = ball;
+      const flat = Math.hypot(vx, vz), yaw = Math.fround((Math.atan2(vx, vz) * 180) / Math.PI), pitch = Math.fround((Math.atan2(vy, flat) * 180) / Math.PI), rng = new GaussianRandom(m.at.seed ?? 7); // Entity.rand: Random(7), or the spec's seed (the egg's hatch roll)
+      const ball = { kind: ["snowball", "egg", "enderPearl", "potion", "expBottle"][a], damage: 32732, owner: a >= 3 || b === 2 ? "player" : null, creative: b === 1, thrower: b === 2, x, y, z, px: x, py: y, pz: z, mx: vx, my: vy, mz: vz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: rng, random: rng, dead: false };
+      const list = a >= 3 ? ew.potions.projectiles.balls : projectiles.balls;
+      m.add = () => { list.push(ball); ew.joined(ball, a >= 3 ? "potion" : "thrown"); }; m.entity = ball;
     }
     else if (kind === "skull") { const sk = ew.skulls.launch({ owner: null, x, y, z, exact: [vx, vy, vz] }); ew.skulls.list.pop(); m.add = () => { ew.skulls.list.push(sk); ew.joined(sk, "skull"); }; m.entity = sk; }
     else if (kind === "cow") {
@@ -115,15 +118,15 @@ export function replayEntityList(c, onBoom = null, without = null) {
     ew.tickMobs(player, survival);
     finishEntitySimulation(state, hooks);
     inPass = false;
-    if (xpOrbs.orbs.length || hasOrb) { xp += xpOrbs.collect({ x: 0.5, y: 0, z: 0.5 }); }
-    rows.push([made.map((m) => view(m, primed, detail)), booms.map((b) => [...b]), hasOrb ? [xp, xpOrbs.cooldown] : [], extras.map((m) => view(m, primed, detail))]);
+    if (hasOrb) { xp += xpOrbs.collect({ x: 0.5, y: 0, z: 0.5 }); }
+    rows.push([made.map((m) => view(m, primed, detail, player, survival)), booms.map((b) => [...b]), hasOrb ? [xp, xpOrbs.cooldown] : [], extras.map((m) => view(m, primed, detail, player, survival))]);
   }
   return rows;
 }
 function explodeTntAll(world, primed, exploder, x, y, z, power) { for (const e of primed) if (e !== exploder) explodeTnt(world, e, x, y, z, power); }
 // EntityXPOrb.getTextureByXP (sq.f): the icon index of the value.
 const texture = (v) => [2477, 1237, 617, 307, 149, 73, 37, 17, 7, 3].findIndex((n) => v >= n) < 0 ? 0 : 10 - [2477, 1237, 617, 307, 149, 73, 37, 17, 7, 3].findIndex((n) => v >= n);
-function view(m, primed, detail = false) {
+function view(m, primed, detail = false, player = null, survival = null) {
   const e = m.entity;
     const { kind } = m.at, y = e.posY ?? e.y + (YOFF[kind] ?? 0);
   if (kind === "item") return [e.x, y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, e.stack.count, e.age, e.delay];
@@ -132,6 +135,7 @@ function view(m, primed, detail = false) {
   if (kind === "cart") return [e.x, e.posY, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.yaw, e.pitch, ...(detail ? [e.damage, e.rolling, e.rollingDir] : [])];
   if (kind === "boat") return [e.x, e.posY, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.yaw, e.timeSinceHit, ...(detail ? [e.damage] : [])];
   if (kind === "painting") return [e.x, e.y, e.z, 0, 0, 0, e.dead ? 1 : 0];
+  if (kind === "pthrow" && m.at.b === 2) return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, player.x, player.y, player.z, 20 - survival.health]; // a pearl of a real EntityPlayerMP thrower: where it stands afterwards and the damage it took
   if (kind === "potion" || kind === "snowball" || kind === "pthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
   if (kind === "skull") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.blue ? 1 : 0];
   if (kind === "cow") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.health];

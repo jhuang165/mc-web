@@ -13,7 +13,7 @@ async function library(prefix){
  }
  throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
-const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-'].map(library));
+const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','netty-all-4.0'].map(library));
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
@@ -23,7 +23,7 @@ await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.j
 const {stdout}=await exec('java',['-cp',cp,'EntityListProbe'],{maxBuffer:1<<26});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse),cases=records.filter(r=>r.case==='entity-list'),launches=records.filter(r=>r.case==='throw-launch');
 assert.equal(launches.length,25,'launch x5 views x5 classes');
-assert.equal(cases.length,63,'items x6, orbs x3, arrow x2, tnt x4, cart rider x2, carts x2, boat x2, painting x2, potion x2, snowball x2, skull x2, explosion vs cart, boat, potion and snowball x10, thrown at a painting x2, vehicle push on mobs x8, player-thrown balls at a cart, boat or painting x14');
+assert.equal(cases.length,74,'items x6, orbs x3, arrow x2, tnt x4, cart rider x2, carts x2, boat x2, painting x2, potion x2, snowball x2, skull x2, explosion vs cart, boat, potion and snowball x10, thrown at a painting x2, vehicle push on mobs x8, player-thrown balls at a cart, boat or painting x14');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={sa:'Entity',xk:'EntityItem',xw:'EntityTNTPrimed',zc:'EntityArrow',sq:'EntityXPOrb',wh:'EntityCow',agw:'Explosion',xl:'EntityMinecart',xs:'EntityMinecartEmpty',xi:'EntityBoat',ss:'EntityHanging',tb:'EntityPainting',zo:'EntityPotion',zk:'EntityThrowable',zj:'EntitySnowball',zl:'EntityEgg',zm:'EntityEnderPearl',zn:'EntityExpBottle',yz:'EntityPlayer',yw:'PlayerCapabilities',zp:'EntityWitherSkull',ze:'EntityFireball',agy:'GameRules',ahb:'World'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),

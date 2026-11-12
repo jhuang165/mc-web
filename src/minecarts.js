@@ -264,7 +264,8 @@ export class Minecarts {
           if (world.solid(bx, by, bz) && !this.railKind(world, bx, by, bz))
             for (const [a, c, d, g, h, i] of collisionBoxList(world, bx, by, bz))
               if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
-    for (const o of others) if (o !== cart && o !== cart.rider && o.ref !== cart.rider && o.ref?.ridingEntity !== cart && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
+    // A mob rider's box is in the list too (ahb.a(Entity, AxisAlignedBB) has no rider test, executed: cart-cow-mount-ba): a cow taken aboard ahead of the cart still stands where it was and stops the cart that tick.
+    for (const o of others) if (o !== cart && o !== cart.rider && o.ref !== cart.rider && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
     return out;
   }
   // Entity.moveEntity (sa.d) with stepHeight 0: web slowdown, y/x/z offsets, flags, fall state,

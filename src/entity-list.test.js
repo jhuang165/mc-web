@@ -7,9 +7,9 @@ import { entityListReference, replayEntityList, entityListDivergence } from "./e
 // World.loadedEntityList order (index loop, a rider updated right after its mount, spawned-in-pass joins the end, dead removed after), each scenario in both
 // list orders.
 // arrow-cow: needs a cow whose AI task list is off (the probe's Cow); the record shows the order effect, the port has no such double.
-// cart-cow-mount-ba: the cow listed before the cart is taken aboard in its own update and then, natively, updated a second time in the same pass right after its
-// mount (World.updateEntities updates a rider after its vehicle); the port fixes the walk order before the pass, so it has no second update.
-const NOT_REPLAYED = /^(arrow-cow|cart-cow-mount-ba$)/;
+// cart-cow-mount-ba (batch 47: replayed): the cow listed before the cart is taken aboard in its own update and then, natively, updated a second time in the same pass right after
+// its mount (World.updateEntities updates a rider after its vehicle), and the cart is still stopped by the cow's box where it stood (the world's collision list has no rider test).
+const NOT_REPLAYED = /^(arrow-cow)/;
 for (const c of entityListReference.filter((r) => !NOT_REPLAYED.test(r.name))) {
   test(`native entity list ${c.name}`, () => {
     assert.equal(entityListDivergence(c, replayEntityList(c)), null);
@@ -24,7 +24,7 @@ const row = (r, t, kind, x) => r.rows[t][0][entityIndex(r, kind, x)];
 const differs = (a, b, kind, x) => a.rows.some((_, t) => JSON.stringify(row(a, t, kind, x)) !== JSON.stringify(row(b, t, kind, x)));
 
 test("the records show the list order: the same entities end differently when listed the other way round", () => {
-  assert.equal(entityListReference.length, 63);
+  assert.equal(entityListReference.length, 74);
   // two equal stacks: the first to update merges into the other, so the list order picks the survivor
   const dead = (r) => last(r).map((e) => e[6]);
   assert.deepEqual(dead(by("items-equal-ab")), [1, 0]);
@@ -163,4 +163,29 @@ test("an egg or pearl the player throws breaks a painting like a snowball; a Cre
   for (const n of ["pthrow-snowball-painting", "pthrow-egg-painting", "pthrow-pearl-painting"]) { assert.equal(last(by(n))[0][6], 1, n); assert.equal(by(n).rows[5][3].length, 1, n + " the painting item joins the list on the hit tick"); }
   for (const n of ["pthrow-snowball-painting-creative", "pthrow-pearl-painting-creative"]) { assert.equal(last(by(n))[0][6], 1, n); assert.equal(by(n).rows[7][3].length, 0, n + " no drop"); }
   assert.equal(last(by("pthrow-potion-painting"))[0][6], 0, "a potion leaves the painting standing");
+});
+
+// Batch 47: a player's egg hatches (Entity.rand seeds 4096: one chick, 4104: four, 7: none) and an experience bottle's orbs on a cart, boat or painting hit (executed, EntityListProbe).
+test("batch 47: the egg's hatch roll and the bottle's orbs on a vehicle or painting hit", () => {
+  const spawned = (n) => by(n).rows[by(n).ticks - 1][3].length;
+  assert.equal(spawned("pthrow-egg-cart"), 0, "seed 7: nextInt(8) is not 0, no chick");
+  assert.equal(spawned("pthrow-egg-cart-hatch"), 1);
+  assert.equal(spawned("pthrow-egg-cart-hatch4"), 4, "nextInt(32) == 0: four chicks");
+  for (const n of ["pthrow-egg-boat-hatch", "pthrow-egg-cart-creative-hatch"]) assert.equal(spawned(n), 1, n);
+  assert.equal(spawned("pthrow-egg-painting-hatch"), 2, "the chick and the broken painting's item");
+  for (const n of ["pthrow-expbottle-cart", "pthrow-expbottle-boat", "pthrow-expbottle-painting"]) assert.equal(spawned(n), 2, `${n}: World.rand Random(2) gives 8 xp: orbs of 7 and 1`);
+  // the chick and the orbs update in the pass they joined (World.spawnEntityInWorld appends to the list being walked): the first row already has moved them
+  const chick = by("pthrow-egg-cart-hatch").rows[3][3][0], orb = by("pthrow-expbottle-cart").rows[3][3][0];
+  assert.ok(chick[4] < 0, "the chick has fallen once in its first pass");
+  assert.ok(orb[4] < 0.2, "the orb has had one update (gravity on its 0.2 upward motion)");
+});
+
+// Batch 47: a pearl thrown by a real EntityPlayerMP subclass (executed: the connection answers isChannelOpen, mw.setPositionAndUpdate and nh.setPlayerLocation run unchanged, the 5.0F fall hit is counted).
+test("batch 47: a player's pearl that hits a cart, boat or painting still teleports its owner to the impact point and costs 5 fall damage", () => {
+  for (const n of ["pthrow-pearl-mp-cart", "pthrow-pearl-mp-boat", "pthrow-pearl-mp-painting"]) {
+    const r = by(n), p = r.rows[r.ticks - 1][0].at(-1);
+    assert.equal(p[6], 1, `${n}: the pearl is gone`);
+    assert.equal(p[10], 5, `${n}: 5.0 fall damage once`);
+    assert.ok(p[7] !== 0 || p[8] !== 0, `${n}: the owner left the origin`);
+  }
 });

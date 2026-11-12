@@ -974,6 +974,7 @@ export class EntityWorld {
     chick.yaw = (-yawDegrees * Math.PI) / 180;
     syncInterpolation(chick);
     this.entities.push(chick);
+    this.tickOrder?.push(chick); // World.spawnEntityInWorld: appended to the list being walked (an egg's chick updates in the pass it hatched)
     return chick;
   }
   // Fresh motion state: grounded only after the first collision, no AI move target yet.
@@ -2131,12 +2132,23 @@ export class EntityWorld {
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
-    for (const e of order) {
+    for (let oi = 0; oi < order.length; oi++) {
+      const e = order[oi];
       seat();
       if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       const walk = this.walkOf?.get(e);
-      if (walk) { walk.tick(e); continue; } // an arrow, item, orb, thrown entity, TNT or falling block (entity-simulation.js)
+      // A rider that sat down during this pass (a cow taken aboard by a cart's push): World.updateEntities skips an entity riding a live mount at its own place; the rider's
+      // update follows the mount's (below). One already seated at the start of the pass was put right after its mount by seatRiders.
+      const mount = e.ridingEntity;
+      if (mount && !walk && order[oi - 1] !== mount && !mount.dead && mount.passenger === e && this.walkOf?.has(mount)) continue;
+      if (walk) { // an arrow, item, orb, thrown entity, TNT or falling block (entity-simulation.js)
+        walk.tick(e);
+        // updateEntityWithOptionalForce updates the rider of the mount it just ticked: one that sat down in this pass (before or after the mount's place in the list) goes now
+        const r = walk.pushMob ? e.passenger : null;
+        if (r && r.ridingEntity === e && !e.dead && order[oi + 1] !== r && this.entities.includes(r)) order.splice(oi + 1, 0, r);
+        continue;
+      }
       if (e.type === "fireball") { this._fireballs.tickOne(e); continue; } // a ball (fireballs.js) updates where it stands in the list
       if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;

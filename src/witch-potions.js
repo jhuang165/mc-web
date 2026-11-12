@@ -84,7 +84,7 @@ export class WitchPotions {
   // event 2002 with colour 0 at the rounded position (the break particles and game.potion.smash) like EntityPotion's.
   expImpact({ x, y, z }) {
     const rng = this.projectiles.rng(), events = this.mobs.events;
-    for (const n of expBottleOrbs(rng)) events.push({ xp: n, position: { x, y, z } });
+    for (const n of expBottleOrbs(rng)) events.push({ xp: n, position: { x, y, z }, bottle: true }); // `bottle`: the walk spawns these orbs in the bottle's own update (entity-simulation.js)
     const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
     events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }

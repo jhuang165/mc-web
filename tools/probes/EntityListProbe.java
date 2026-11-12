@@ -19,6 +19,8 @@ public class EntityListProbe {
     public int k(int x, int y, int z) { return 15; }
     public boolean d(sa e) { // World.spawnEntityInWorld: the end of loadedEntityList
       if (e instanceof xk) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityItem's constructor draws the sideways motion from Math.random: fixed here (the replay passes the same motion)
+      if (e instanceof sq) { e.v = 0; e.w = 0.2; e.x = 0; } // EntityXPOrb's constructor draws its motion from Math.random: fixed here (the replay passes the same motion)
+      if (e instanceof wg) hatchling(e); // an EntityEgg's chick: its own Random seeded like the other entities, no AI task list
       entities.add(e); extras.add(e); return true;
     }
     // World.getCollidingBoundingBoxes: the blocks, then the entity boxes within 0.25 (getBoundingBox for a boat, getCollisionBox for the mover): carts and boats only
@@ -51,12 +53,25 @@ public class EntityListProbe {
       return ex;
     }
   }
+  // The chick of EntityEgg.onImpact (EntityChicken wg): Entity.rand is unseeded, so it is set to Random(7) like every entity here, and its AI task lists are emptied
+  // (a cow's updateAITasks is switched off the same way); its motion, friction and living update run unchanged.
+  static void hatchling(sa e) {
+    try {
+      PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
+      for (java.lang.reflect.Field f : sw.class.getDeclaredFields()) if (f.getType().getName().equals("rw") || f.getType().getName().equals("ru")) { f.setAccessible(true); Object tasks = f.get(e); if (tasks != null) for (java.lang.reflect.Field g : tasks.getClass().getDeclaredFields()) if (List.class.isAssignableFrom(g.getType())) { g.setAccessible(true); ((List) g.get(tasks)).clear(); } }
+    } catch (Exception x) { throw new RuntimeException(x); }
+  }
   // EntityCow with updateAITasks (sw.bn: the AI task list, the random wander) switched off; its motion, friction, knockback, hurt and death run unchanged.
   static class Cow extends wh { Cow(ahb w) { super(w); } protected void bn() {} }
   // The player of the orb scenarios: an EntityPlayerSP shell (XpOrbProbe.Target) whose addExperience and onItemPickup only count.
   static class P extends XpOrbProbe.Target { P() { super(); } int xp; public void v(int n) { xp += n; } public void a(sa e, int n) {} }
   // The thrower of the player-thrown scenarios: an EntityPlayerSP shell (eye height 1.62) whose capabilities say whether it is in Creative.
   static class Th extends XpOrbProbe.Target { Th() { super(); } }
+  // The thrower of the teleport scenarios: a real EntityPlayerMP subclass (allocated, not constructed: the constructor needs a server). Its connection answers isChannelOpen; attackEntityFrom only
+  // counts the damage (the real one reads MinecraftServer), the pearl's own teleport (mw.setPositionAndUpdate, nh.setPlayerLocation, mw.setPositionAndRotation with its collision push-up) runs unchanged, and the 5.0F fall hit is counted. Needs netty-all 4.0.x (ej's class initialiser).
+  static class Ej extends ej { Ej() { super(false); } public boolean d() { return true; } }
+  static class Nh extends nh { Ej ej; Nh() { super(null, null, null); } public ej b() { return ej; } public void a(ft packet) {} } // sendPacket: nothing to send to
+  static class Sp extends mw { double dmg; Sp() { super(null, null, null, null); } public boolean a(ro src, float amount) { dmg += amount; return true; } }
   static boolean detail = false; // the pthrow scenarios append the cart's and boat's damage to their state (older records keep their bytes)
   static String num(double v) { return Double.toString(v); }
   static String q(String s) { return "\"" + s + "\""; }
@@ -77,11 +92,17 @@ public class EntityListProbe {
       case "potion": e = new zo(w, x, y, z, Integer.parseInt(s[7])); break; // EntityPotion (a dispenser's form: no thrower)
       case "snowball": e = new zj(w, x, y, z); break;
       case "pthrow": { // a snowball (0), egg (1), ender pearl (2), potion (3) thrown by a player shell: the constructor takes the thrower (EntityThrowable(World, EntityLivingBase)); b = 1 for a Creative thrower
-        Th t = (Th) PlantProbe.unsafe.allocateInstance(Th.class);
+        boolean mp = s[8].equals("2"); // b = 2: a real EntityPlayerMP subclass as the thrower (a pearl's teleport branch), Survival
+        yz t = mp ? (yz) PlantProbe.unsafe.allocateInstance(Sp.class) : (yz) PlantProbe.unsafe.allocateInstance(Th.class);
         t.o = w; t.s = 0.0; t.t = 0.0; t.u = 0.0; t.y = 0f; t.z = 0f;
         yw cap = new yw(); cap.d = s[8].equals("1"); t.bE = cap;
+        if (mp) { // an open connection: EntityEnderPearl.onImpact asks mw.playerNetServerHandler.netManager.isChannelOpen()
+          Ej ej = (Ej) PlantProbe.unsafe.allocateInstance(Ej.class); Nh nh = (Nh) PlantProbe.unsafe.allocateInstance(Nh.class); nh.ej = ej; nh.b = (mw) t; ((mw) t).a = nh; // nh.a (setPlayerLocation) then runs unchanged: mw.setPositionAndRotation
+          PlayerStepProbe.field(sa.class, "C").set(t, azt.a(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+        }
         int type = Integer.parseInt(s[7]);
-        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : new zo(w, t, 32732);
+        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : type == 4 ? new zn(w, t) : new zo(w, t, 32732);
+        if (s.length > 10) { PlayerStepProbe.field(sa.class, "Z").set(e, new Random(Long.parseLong(s[10]))); e.b(x, y, z); e.v = Double.parseDouble(s[4]); e.w = Double.parseDouble(s[5]); e.x = Double.parseDouble(s[6]); return e; } // a seeded Entity.rand (the egg's hatch roll)
         break;
       }
       case "skull": e = new zp(w, x, y, z, Double.parseDouble(s[4]), Double.parseDouble(s[5]), Double.parseDouble(s[6])); break; // EntityFireball(World, x, y, z, ax, ay, az): the aim normalised to 0.1, no noise
@@ -103,6 +124,7 @@ public class EntityListProbe {
     else if (e instanceof xl) b.append("," + num(e.y) + "," + num(e.z) + (detail ? "," + num(((xl) e).j()) + "," + ((xl) e).k() + "," + ((xl) e).l() : ""));
     else if (e instanceof xi) b.append("," + num(e.y) + "," + num(((xi) e).f()) + (detail ? "," + num(((xi) e).e()) : ""));
     else if (e instanceof zp) b.append("," + (((zp) e).f() ? 1 : 0));
+    if (e instanceof zm && detail && ((zm) e).j() instanceof Sp) { Sp p = (Sp) ((zm) e).j(); b.append("," + num(p.s) + "," + num(p.t) + "," + num(p.u) + "," + num(p.dmg)); } // the thrower after the pearl: where it stands and the fall damage it took
     return b.append("]").toString();
   }
   // World.updateEntityWithOptionalForce: lastTickPos and prevRotation, ticksExisted++, then updateRidden (a rider) or onUpdate; the rider of this entity is updated right after it
@@ -197,6 +219,8 @@ public class EntityListProbe {
   static String[] snowball(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"snowball", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   // a wither skull: the aim (ax, ay, az) is normalised to 0.1 by EntityFireball's second constructor, as a dispenser's ball is
   // a ball thrown by a player shell: type 0 snowball, 1 egg, 2 pearl, 3 potion; creative 1 for a Creative thrower
+  // type 4: an experience bottle. `seed` is the Entity.rand seed (Random(7) when omitted: the egg's hatch roll is false, 5)
+  static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join, long seed) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join, "" + seed}; }
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join}; }
   static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
   static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
@@ -334,6 +358,20 @@ public class EntityListProbe {
     scenario("pthrow-pearl-painting-creative", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 1, 0), setBlock(0, 3, 0, 0, 4));
     scenario("pthrow-potion-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 3, 0, 0), setBlock(0, 3, 0, 0, 4));
 
+    // Batch 47. An egg's hatch roll both ways (Entity.rand seeds 4096: one chick, 4104: four; seed 7 is false) and an experience bottle (type 4) on a cart, boat and painting.
+    // The chick and the orbs join the entity list in the pass (World.spawnEntityInWorld) and are listed after the main states.
+    scenario("pthrow-egg-cart-hatch", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4096));
+    scenario("pthrow-egg-cart-hatch4", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4104));
+    scenario("pthrow-egg-boat-hatch", 8, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0, 4096));
+    scenario("pthrow-egg-painting-hatch", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 1, 0, 0, 4096), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-egg-cart-creative-hatch", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 1, 0, 4096));
+    scenario("pthrow-expbottle-cart", 8, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 4, 0, 0));
+    scenario("pthrow-expbottle-boat", 8, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 4, 0, 0));
+    scenario("pthrow-expbottle-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.9, 1.7, 0.0, 0.0, -0.4, 4, 0, 0), setBlock(0, 3, 0, 0, 4));
+    // A pearl thrown by an EntityPlayerMP: the cart wobbles, then the thrower is put at the pearl's position (pre-move at the impact) and takes 5.0 fall damage; the pearl row ends with x, y, z, damage of the thrower.
+    scenario("pthrow-pearl-mp-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 2, 0));
+    scenario("pthrow-pearl-mp-boat", 6, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 2, 0));
+    scenario("pthrow-pearl-mp-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 2, 0), setBlock(0, 3, 0, 0, 4));
     // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
     float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};
     String[] names = {"snowball", "egg", "pearl", "potion", "expbottle"};
