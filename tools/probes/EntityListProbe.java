@@ -55,6 +55,9 @@ public class EntityListProbe {
   static class Cow extends wh { Cow(ahb w) { super(w); } protected void bn() {} }
   // The player of the orb scenarios: an EntityPlayerSP shell (XpOrbProbe.Target) whose addExperience and onItemPickup only count.
   static class P extends XpOrbProbe.Target { P() { super(); } int xp; public void v(int n) { xp += n; } public void a(sa e, int n) {} }
+  // The thrower of the player-thrown scenarios: an EntityPlayerSP shell (eye height 1.62) whose capabilities say whether it is in Creative.
+  static class Th extends XpOrbProbe.Target { Th() { super(); } }
+  static boolean detail = false; // the pthrow scenarios append the cart's and boat's damage to their state (older records keep their bytes)
   static String num(double v) { return Double.toString(v); }
   static String q(String s) { return "\"" + s + "\""; }
 
@@ -73,6 +76,14 @@ public class EntityListProbe {
       case "painting": { HangingProbe.seed = 1; HangingProbe.P pt = new HangingProbe.P(w, (int) x, (int) y, (int) z, Integer.parseInt(s[7])); PlayerStepProbe.field(ss.class, "e").setInt(pt, Integer.parseInt(s[8])); e = pt; break; }
       case "potion": e = new zo(w, x, y, z, Integer.parseInt(s[7])); break; // EntityPotion (a dispenser's form: no thrower)
       case "snowball": e = new zj(w, x, y, z); break;
+      case "pthrow": { // a snowball (0), egg (1), ender pearl (2), potion (3) thrown by a player shell: the constructor takes the thrower (EntityThrowable(World, EntityLivingBase)); b = 1 for a Creative thrower
+        Th t = (Th) PlantProbe.unsafe.allocateInstance(Th.class);
+        t.o = w; t.s = 0.0; t.t = 0.0; t.u = 0.0; t.y = 0f; t.z = 0f;
+        yw cap = new yw(); cap.d = s[8].equals("1"); t.bE = cap;
+        int type = Integer.parseInt(s[7]);
+        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : new zo(w, t, 32732);
+        break;
+      }
       case "skull": e = new zp(w, x, y, z, Double.parseDouble(s[4]), Double.parseDouble(s[5]), Double.parseDouble(s[6])); break; // EntityFireball(World, x, y, z, ax, ay, az): the aim normalised to 0.1, no noise
       default: throw new RuntimeException(s[0]);
     }
@@ -89,8 +100,8 @@ public class EntityListProbe {
     else if (e instanceof zc) b.append("," + (PlayerStepProbe.field(zc.class, "i").getBoolean(e) ? 1 : 0) + "," + ((zc) e).b);
     else if (e instanceof sq) b.append("," + ((sq) e).a + "," + ((sq) e).f());
     else if (e instanceof sv) b.append("," + ((sv) e).aS());
-    else if (e instanceof xl) b.append("," + num(e.y) + "," + num(e.z));
-    else if (e instanceof xi) b.append("," + num(e.y) + "," + num(((xi) e).f()));
+    else if (e instanceof xl) b.append("," + num(e.y) + "," + num(e.z) + (detail ? "," + num(((xl) e).j()) + "," + ((xl) e).k() + "," + ((xl) e).l() : ""));
+    else if (e instanceof xi) b.append("," + num(e.y) + "," + num(((xi) e).f()) + (detail ? "," + num(((xi) e).e()) : ""));
     else if (e instanceof zp) b.append("," + (((zp) e).f() ? 1 : 0));
     return b.append("]").toString();
   }
@@ -103,8 +114,7 @@ public class EntityListProbe {
       if (e.l.K || e.l.m != e) { e.l.m = null; e.l = null; } else update(e.l);
     }
   }
-  static void scenario(String name, int ticks, String[]... specs) throws Exception {
-    if (System.getenv("EL_ONLY") != null && !name.contains(System.getenv("EL_ONLY"))) return;
+  static EW newWorld() throws Exception {
     EW w = (EW) PlantProbe.unsafe.allocateInstance(EW.class);
     MobMoveProbe.set(w, "t", PlantProbe.unsafe.allocateInstance(aqq.class));
     MobMoveProbe.set(w, "s", new Random(2));
@@ -121,6 +131,12 @@ public class EntityListProbe {
     ((agy) w.O()).a("mobGriefing", "true");
     booms.clear();
     extras.clear();
+    return w;
+  }
+  static void scenario(String name, int ticks, String[]... specs) throws Exception {
+    if (System.getenv("EL_ONLY") != null && !name.contains(System.getenv("EL_ONLY"))) return;
+    detail = name.startsWith("pthrow");
+    EW w = newWorld();
     List<String[]> ents = new ArrayList<>(), sets = new ArrayList<>();
     for (String[] sp : specs) {
       if (sp[0].equals("wall")) for (int[] c : HangingProbe.plane(Integer.parseInt(sp[7]), Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]))) w.put(c[0], c[1], c[2], c[3], c[4]);
@@ -180,9 +196,47 @@ public class EntityListProbe {
   static String[] potion(double x, double y, double z, double vx, double vy, double vz, int meta, int join) { return new String[] {"potion", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + meta, "0", "" + join}; }
   static String[] snowball(double x, double y, double z, double vx, double vy, double vz, int join) { return new String[] {"snowball", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "0", "0", "" + join}; }
   // a wither skull: the aim (ax, ay, az) is normalised to 0.1 by EntityFireball's second constructor, as a dispenser's ball is
+  // a ball thrown by a player shell: type 0 snowball, 1 egg, 2 pearl, 3 potion; creative 1 for a Creative thrower
+  static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join}; }
   static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
   static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
   static String[] setBlock(int x, int y, int z, int id, int tick) { return new String[] {"set", "" + x, "" + y, "" + z, "0", "0", "0", "" + id, "0", "" + tick}; }
+
+
+  // Batch 46. The launch of every player-thrown EntityThrowable subclass: the constructor (World, EntityLivingBase) runs unchanged on a player shell. The entity's own Random is
+  // created unseeded by Entity's constructor, so the state it had before the aim is recovered: the LCG is stepped back until three nextGaussian draws from there end in the state
+  // the constructor left (including the cached second value). A port that restores that state and draws the same must reach the same state and the same motion.
+  static final java.math.BigInteger MULT = java.math.BigInteger.valueOf(0x5DEECE66DL), MOD = java.math.BigInteger.ONE.shiftLeft(48);
+  static long back(long seed, int steps) {
+    java.math.BigInteger inv = MULT.modInverse(MOD), v = java.math.BigInteger.valueOf(seed);
+    for (int i = 0; i < steps; i++) v = v.subtract(java.math.BigInteger.valueOf(0xBL)).multiply(inv).mod(MOD);
+    return v.longValue();
+  }
+  static void launch(String name, int type, double px, double py, double pz, float yaw, float pitch) throws Exception {
+    EW w = newWorld();
+    Th t = (Th) PlantProbe.unsafe.allocateInstance(Th.class);
+    t.o = w; t.s = px; t.t = py; t.u = pz; t.y = yaw; t.z = pitch;
+    yw cap = new yw(); t.bE = cap;
+    zk e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : type == 3 ? new zo(w, t, 16421) : new zn(w, t);
+    Random r = (Random) PlayerStepProbe.field(sa.class, "Z").get(e);
+    sun.misc.Unsafe u = PlantProbe.unsafe;
+    long seedOff = u.objectFieldOffset(Random.class.getDeclaredField("seed")), haveOff = u.objectFieldOffset(Random.class.getDeclaredField("haveNextNextGaussian")), nextOff = u.objectFieldOffset(Random.class.getDeclaredField("nextNextGaussian"));
+    long after = ((java.util.concurrent.atomic.AtomicLong) u.getObject(r, seedOff)).get();
+    boolean have = u.getBoolean(r, haveOff);
+    double next = u.getDouble(r, nextOff);
+    long found = -1; int draws = -1;
+    for (int k = 0; k <= 80 && found < 0; k++) {
+      long raw = back(after, k);
+      Random c = new Random(0);
+      ((java.util.concurrent.atomic.AtomicLong) u.getObject(c, seedOff)).set(raw);
+      u.putBoolean(c, haveOff, false);
+      c.nextGaussian(); c.nextGaussian(); c.nextGaussian();
+      if (((java.util.concurrent.atomic.AtomicLong) u.getObject(c, seedOff)).get() == after && u.getBoolean(c, haveOff) == have && (!have || u.getDouble(c, nextOff) == next)) { found = raw; draws = k; }
+    }
+    if (found < 0) throw new RuntimeException("no three-gaussian start for " + name);
+    System.out.println("{\"case\":\"throw-launch\",\"name\":" + q(name) + ",\"type\":" + type + ",\"from\":[" + num(px) + "," + num(py) + "," + num(pz) + "," + yaw + "," + pitch + "],\"seed\":\"" + found + "\",\"stepsBack\":" + draws
+      + ",\"after\":{\"seed\":\"" + after + "\",\"gaussian\":" + (have ? num(next) : "null") + "},\"entity\":[" + num(e.s) + "," + num(e.t) + "," + num(e.u) + "," + num(e.v) + "," + num(e.w) + "," + num(e.x) + "," + num((double) e.y) + "," + num((double) e.z) + "]}");
+  }
 
   public static void main(String[] args) throws Exception {
     aji.p(); adb.l();
@@ -261,5 +315,28 @@ public class EntityListProbe {
     // a cow riding one cart is pushed by a second cart: the push uses the position the rider has after its own update, before the seat is taken
     scenario("cart-rider-push-ab", 10, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), rider(0.5, 0.5, 0.5, 0, 0), cart(1.5, 0.5, 0.5, -0.05, 0.0, 0));
     scenario("cart-rider-push-ba", 10, cart(1.5, 0.5, 0.5, -0.05, 0.0, 0), cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), rider(0.5, 0.5, 0.5, 1, 0));
+
+    // Batch 46. Snowballs, eggs, pearls and potions thrown by a player shell (the constructor takes the thrower, so attackEntityFrom gets an indirect thrown source whose
+    // entity is the player: a Creative player's hit breaks a cart, a boat or a painting outright). The ball flies at the target from 2 blocks away (spec: type 0 snowball,
+    // 1 egg, 2 pearl, 3 potion; b = 1 Creative thrower). Cart and boat rows carry their damage after the rotation fields.
+    scenario("pthrow-snowball-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0, 0, 0));
+    scenario("pthrow-snowball-cart-creative", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0, 1, 0));
+    scenario("pthrow-snowball-boat", 6, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0, 0, 0));
+    scenario("pthrow-snowball-boat-creative", 6, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 0, 1, 0));
+    scenario("pthrow-egg-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 1, 0, 0));
+    scenario("pthrow-pearl-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 0, 0));
+    scenario("pthrow-pearl-boat-creative", 6, boat(0.5, 0.5, 0.5, 0.0, 0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 2, 1, 0));
+    scenario("pthrow-potion-cart", 6, cart(0.5, 0.5, 0.5, 0.0, 0.0, 0), pthrow(2.6, 0.6, 0.5, -0.4, 0.0, 0.0, 3, 0, 0));
+    scenario("pthrow-snowball-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 0, 0, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-snowball-painting-creative", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 0, 1, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-egg-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 1, 0, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-pearl-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 0, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-pearl-painting-creative", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 2, 1, 0), setBlock(0, 3, 0, 0, 4));
+    scenario("pthrow-potion-painting", 8, setBlock(0, 3, 0, 1, -1), painting(0, 3, 0, 0, 0, 0), pthrow(0.5, 3.5, 3.5, 0.0, 0.0, -0.4, 3, 0, 0), setBlock(0, 3, 0, 0, 4));
+
+    // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
+    float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};
+    String[] names = {"snowball", "egg", "pearl", "potion", "expbottle"};
+    for (int type = 0; type < 5; type++) for (int i = 0; i < views.length; i++) launch("launch-" + names[type] + "-" + i, type, 10.5 + i, 64.0 + 0.25 * i, -3.75 - i, views[i][0], views[i][1]);
   }
 }
