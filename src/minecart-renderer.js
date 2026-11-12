@@ -18,7 +18,7 @@ import { TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { CART_HEIGHT } from "./minecarts.js";
 import { DISPLAY } from "./cart-variants.js";
 import { CartBlockRenderer } from "./cart-block-renderer.js";
-import { displayShape, displayGeometry, displayTint, displayTerrain } from "./cart-display-shape.js";
+import { displayShape, displayGeometry, displayTint, displayTerrain, displayTopTint } from "./cart-display-shape.js";
 
 const D = Math.PI / 180;
 // ModelMinecart.a[0..5]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -114,8 +114,14 @@ export class MinecartRenderer {
       turn.add(new THREE.Mesh(g, material));
       return { group, materials: [material], geometries: [g] };
     }
-    const material = entityMaterial(this.view.lighting, { map: displayTerrain(d.id) ? this.view.textures.terrain : this.view.textures.texture, color: displayTint(d.id, d.data) }), g = blockItemGeometry(cell.id, cell.meta, 1) ?? blockCubeGeometry(cell.id, cell.meta, 1);
+    const map = displayTerrain(d.id) ? this.view.textures.terrain : this.view.textures.texture, material = entityMaterial(this.view.lighting, { map, color: displayTint(d.id, d.data) });
+    const g = blockItemGeometry(cell.id, cell.meta, 1) ?? blockCubeGeometry(cell.id, cell.meta, 1), top = displayTopTint(d.id);
     turn.rotation.y = blockItemTurn(cell.id, cell.meta);
+    if (top) { // the grass block: BoxGeometry group 2 is the +y face, drawn in getRenderColor; the rest white
+      const topMaterial = entityMaterial(this.view.lighting, { map, color: top });
+      turn.add(new THREE.Mesh(g, [material, material, topMaterial, material, material, material]));
+      return { group, materials: [material, topMaterial], geometries: [g] };
+    }
     turn.add(new THREE.Mesh(g, material));
     return { group, materials: [material], geometries: [g] };
   }

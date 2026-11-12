@@ -3,7 +3,7 @@
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
-import { displayTint, displayTerrain, displayShape, STEM_TINT } from "./cart-display-shape.js";
+import { displayTint, displayTerrain, displayTopTint, displayShape, STEM_TINT } from "./cart-display-shape.js";
 import { setColormaps, hasColormaps, itemGrassColor, rgbFloats } from "./biome-colors.js";
 import { ObjectTracker } from "./object-tracker.js";
 import { JavaRandom } from "./java-random.js";
@@ -27,7 +27,11 @@ test("displayTint replays Block.getRenderColor for every meta of the blocks a di
     for (let m = 0; m < 16; m++) {
       const native = b.colors[m], got = displayTint(b.id, m);
       if ([106, 111].includes(b.id)) { assert.equal(displayShape(b.id), "none"); continue; } // tinted, but renderBlockAsItem draws nothing for render types 20 and 23
-      if (b.id === 2) { assert.equal(got, null, "the grass block is forced to white (ajn.c)"); continue; }
+      if (b.id === 2) { // ajn.c: the first colour is white, and only renderFaceYPos takes i(meta) (blm.a offsets 237-364, bytecode-read)
+        assert.equal(got, null, "the grass block's other faces are white");
+        assert.deepEqual(displayTopTint(2), rgb(native), `grass top meta ${m}`);
+        continue;
+      }
       assert.deepEqual(got ?? rgb(0xFFFFFF), rgb(native), `block ${b.id} meta ${m}`);
     }
   }
@@ -37,6 +41,7 @@ test("displayTint replays Block.getRenderColor for every meta of the blocks a di
 test("every block the display can draw that the reference lists as white is not tinted", () => {
   const tinted = new Set(tint.blocks.map((b) => b.id));
   for (let id = 1; id < 256; id++) if (!tinted.has(id)) for (let m = 0; m < 16; m++) assert.equal(displayTint(id, m), null, `${id}:${m}`);
+  for (let id = 1; id < 256; id++) if (id !== 2) assert.equal(displayTopTint(id), null, String(id));
 });
 
 test("blocks whose tile the item atlas bakes an item colour into are drawn from the grey terrain atlas", () => {

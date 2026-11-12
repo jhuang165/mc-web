@@ -68,12 +68,15 @@ export function displayGeometry(shape, cell) {
   return g;
 }
 
-// Batch 51/52: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing; the grass block
-// (ajn.c) is forced to white. Executed (b52dx, public/research/displayfx-reference.json, every id 1..255 x meta 0..15 on the real Block.getRenderColor): grass block 7cbd6b (but
+// Batch 51/52: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing; for the grass block
+// (ajn.c) that first colour is white, and only its top face takes i(meta) (displayTopTint). Executed (b52dx, public/research/displayfx-reference.json, every id 1..255 x meta 0..15 on the real Block.getRenderColor): grass block 7cbd6b (but
 // forced white here), leaves 18 by meta & 3 basic 0x48B518 / pine 0x619961 / birch 0x80A755 / basic, leaves2 161 basic, tall grass 31 white for meta 0 else ColorizerGrass(0.5, 1.0),
 // stems 104 / 105 (meta * 32, 255 - meta * 8, meta * 4); the vine 106 and lily pad 111 are tinted too but draw nothing here; everything else is white.
 // The port's item atlas (`textures.texture`) already bakes the item colours into the grass, tall grass, fern, reed, vine, lily and leaf tiles (D(), 0x5BAB46 for the oak foliage, not
 // i(meta)), so a tinted display block is drawn from the grey `terrain` atlas instead (displayTerrain) with the native colour as the material colour. Returns [r, g, b] floats or null (white).
+// The grass block's own branch (bytecode-read, blm.a offsets 237-364): with useInventoryTint on it sets glColor to i(meta) * brightness just before renderFaceYPos and back to white
+// after it, so the top face alone is tinted (7cbd6b, the executed i(meta) above). Returns [r, g, b] floats for the +y face, or null.
+export const displayTopTint = (id) => (id === 2 && hasColormaps() ? rgbFloats(itemGrassColor()) : null);
 export const STEM_TINT = (meta) => (((meta * 32) & 255) << 16) | ((255 - meta * 8) & 255) << 8 | ((meta * 4) & 255);
 export function displayTint(id, meta) {
   const m = meta & 15;
