@@ -35,6 +35,16 @@ export const DISPLAY = Object.freeze({
   1: { block: 54, data: 0, offset: 8 }, 4: { block: 52, data: 0, offset: 6 }, 6: { block: 137, data: 0, offset: 6 },
 });
 
+// EntityMinecart's custom display (data watcher 20 = tile id & 0xffff | data << 16, 21 = offset (default 6), 22 = has custom display), bytecode-read in xl: getDisplayTile (n) is
+// the watched block when 22 is 1, else the type's own; setDisplayTile (k) keeps the current data (p), setDisplayTileData (l) the current tile (n), setDisplayTileOffset (m); each
+// of the three sets 22. The fields are the watcher values (dispRaw, dispOffset, dispOn), read by object-tracker.js's S1C and the copies.
+export const displayTile = (c) => (c.dispOn ? c.dispRaw & 0xffff : DISPLAY[c.type]?.block ?? 0);
+export const displayData = (c) => (c.dispOn ? c.dispRaw >> 16 : DISPLAY[c.type]?.data ?? 0);
+export const displayOffset = (c) => (c.dispOn ? c.dispOffset ?? 6 : DISPLAY[c.type]?.offset ?? 6);
+export function setDisplayTile(c, id) { c.dispRaw = (id & 0xffff) | (displayData(c) << 16); c.dispOn = 1; }
+export function setDisplayTileData(c, data) { c.dispRaw = (displayTile(c) & 0xffff) | (data << 16); c.dispOn = 1; }
+export function setDisplayTileOffset(c, offset) { c.dispOffset = offset | 0; c.dispOn = 1; }
+
 export function installCartItems(items) {
   const def = (id, name, texture, type, color) => { items[id] = { id, name, texture, stack: 1, minecartType: type, color, glyph: "▭" }; };
   def(ITEM_FURNACE_CART, "Minecart with Furnace", "minecart_furnace", 2, "#6e6e6e");
@@ -46,6 +56,7 @@ export function installCartItems(items) {
 // Per-type state added to a fresh cart (the native field defaults).
 export function initVariant(cart, record = {}) {
   const t = cart.type;
+  if (record.customDisplay) { setDisplayTile(cart, record.displayTile | 0); setDisplayTileData(cart, record.displayData | 0); setDisplayTileOffset(cart, record.displayOffset | 0); } // EntityMinecart.readEntityFromNBT: k, l, m in this order
   if (t === 2) Object.assign(cart, { fuel: Math.max(0, record.fuel | 0), pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
   if (t === 3) cart.fuse = Number.isInteger(record.fuse) ? record.fuse : -1;
   // EntityMinecartMobSpawner (xt): its MobSpawnerBaseLogic (xu) with the defaults of agq; the position follows the cart (cart-spawner in structure-simulation.js).
@@ -97,6 +108,7 @@ export function tntExplode(cart, d, host) {
 }
 export function tntIgnite(cart, host) {
   cart.fuse = FUSE_TICKS;
+  cart.igniteStatus = true; // World.setEntityState(this, 10): the tracker sends the S1A to the copies
   host?.sound?.("game.tnt.primed", cart);
 }
 export function tntFall(cart, distance, host) {
@@ -149,6 +161,10 @@ export function killExtras(cart, source, drop, host) {
 
 // Save fields.
 export function variantJSON(c) {
+  const own = variantFields(c);
+  return c.dispOn ? { ...own, customDisplay: true, displayTile: displayTile(c), displayData: displayData(c), displayOffset: displayOffset(c) } : own;
+}
+function variantFields(c) {
   if (c.type === 2) return { fuel: c.fuel, pushX: c.pushX, pushZ: c.pushZ };
   if (c.type === 3) return { fuse: c.fuse };
   if (c.type === 5) return { cooldown: c.cooldown };
@@ -158,6 +174,12 @@ export function variantJSON(c) {
 }
 // Entity.writeToNBT additions: [type, value] pairs (6 double, 2 short, 3 int).
 export function variantNBT(c) {
+  const own = variantNBTFields(c);
+  if (!c.dispOn && !c.customDisplay) return own;
+  const saved = !c.dispOn; // a saved record (region-export) carries the fields, a live cart the watcher values
+  return { ...own, CustomDisplayTile: [1, 1], DisplayTile: [3, saved ? c.displayTile | 0 : displayTile(c)], DisplayData: [3, saved ? c.displayData | 0 : displayData(c)], DisplayOffset: [3, saved ? c.displayOffset | 0 : displayOffset(c)] }; // EntityMinecart.writeEntityToNBT
+}
+function variantNBTFields(c) {
   if (c.type === 2) return { PushX: [6, c.pushX], PushZ: [6, c.pushZ], Fuel: [2, c.fuel] };
   if (c.type === 3) return { TNTFuse: [3, c.fuse] };
   if (c.type === 5) return { TransferCooldown: [3, c.cooldown] };

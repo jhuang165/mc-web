@@ -4,12 +4,17 @@
 // scaled 0.75 and raised 8/16, drawn as RenderBlocks.renderBlockAsItem does for render type 22
 // (rotated 90 degrees about Y, centred, TileEntityChestRenderer at metadata 0 with the lid shut);
 // then scale(-1, -1, 1) and the six ModelMinecart boxes at 1/16 from entity/minecart.png (64 x 32),
-// the floor's rotation point at y 4.1 (4 - f3, f3 = -0.1). The 0.5 shadow is not drawn.
+// the floor's rotation point at y 4.1 (4 - f3, f3 = -0.1). The 0.5 shadow is cast by main.js (SHADOWS.minecart).
+// Batch 49: a cart whose view carries `display` (data watcher 20-22: block id | data << 16, offset in 1/16) draws that block instead of its type's own (RenderMinecart: getDisplayTile
+// n(), getDisplayTileData p(), getDisplayTileOffset r(); air is render type -1 and draws nothing). Cubes and the item boxes come from the block atlas as a dropped block's do,
+// the chest family and the hopper from their own models; other render types (flowers, fluids, ...) are drawn as plain cubes (approximation).
 import * as THREE from "three";
-import { skinBox, pixelTexture } from "./first-person.js";
+import { skinBox, pixelTexture, blockItemGeometry, blockItemTurn, blockCubeGeometry } from "./first-person.js";
+import { fromOriginal } from "./block-registry.js";
 import { entityMaterial } from "./light-material.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { christmas } from "./chest.js";
+import { TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { CART_HEIGHT } from "./minecarts.js";
 import { CartBlockRenderer } from "./cart-block-renderer.js";
 
@@ -81,7 +86,35 @@ export class MinecartRenderer {
     this.scene.add(root);
     return { root, display, body, white, materials: [material, ...materials], festive };
   }
+  // The watched display block: scale 0.75, raised offset / 16 (set every frame), renderBlockAsItem's turn about Y. Null for air or a block the port has no cell for.
+  buildCustom(d, festive) {
+    const cell = d.id ? fromOriginal(d.id, d.data) : null;
+    if (!cell) return null;
+    if (d.id === 154) { const { display, materials } = this.blocks.build(5); return { group: display, materials, geometries: [] }; }
+    const group = new THREE.Group(), turn = new THREE.Group();
+    group.scale.setScalar(0.75);
+    turn.rotation.y = Math.PI / 2;
+    group.add(turn);
+    if (d.id === 54 || d.id === 130 || d.id === 146) {
+      const chest = this.chests.build(false, festive, d.id === 146 ? TRAPPED_CHEST : d.id === 130 ? ENDER_CHEST : 0);
+      chest.root.position.y = -0.5;
+      turn.add(chest.root);
+      return { group, materials: [chest.material], geometries: [] };
+    }
+    const material = entityMaterial(this.view.lighting, { map: this.view.textures.texture }), g = blockItemGeometry(cell.id, cell.meta, 1) ?? blockCubeGeometry(cell.id, cell.meta, 1);
+    turn.rotation.y = blockItemTurn(cell.id, cell.meta);
+    turn.add(new THREE.Mesh(g, material));
+    return { group, materials: [material], geometries: [g] };
+  }
+  dropCustom(r) {
+    if (!r.custom) return;
+    r.custom.group?.parent?.remove(r.custom.group);
+    for (const m of r.custom.materials ?? []) m.dispose();
+    for (const g of r.custom.geometries ?? []) g.dispose();
+    r.custom = null;
+  }
   dispose(r) {
+    this.dropCustom(r);
     this.scene.remove(r.root);
     for (const m of r.materials) m.dispose();
     r.white?.material.dispose();
@@ -97,7 +130,13 @@ export class MinecartRenderer {
     for (const cart of list) {
       let r = this.meshes.get(cart);
       if (!r) this.meshes.set(cart, (r = this.create(festive, cart.type)));
-      r.display.visible = cart.type !== 0;
+      const d = cart.display;
+      if (d) {
+        const key = d.id + ":" + d.data;
+        if (!r.custom || r.custom.key !== key) { this.dropCustom(r); r.custom = { ...(this.buildCustom(d, festive) ?? { group: null }), key }; if (r.custom.group) (r.body ?? r.root).add(r.custom.group); }
+        if (r.custom.group) r.custom.group.position.y = 0.75 * (d.offset / 16);
+        r.display.visible = false;
+      } else { this.dropCustom(r); r.display.visible = cart.type !== 0; }
       if (r.body) {
         const { scale, flash } = CartBlockRenderer.fuse(cart, partial);
         r.body.scale.setScalar(scale);
@@ -109,6 +148,7 @@ export class MinecartRenderer {
       // Entity.getBrightnessForRender: 0.66 of the box height above its bottom.
       const packed = this.view.brightness(cart.x, cart.bb[1] + CART_HEIGHT * 0.66, cart.z);
       for (const m of r.materials) m.setLight(packed);
+      for (const m of r.custom?.materials ?? []) m.setLight(packed);
     }
   }
   clear() {
