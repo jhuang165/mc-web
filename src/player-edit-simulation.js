@@ -49,7 +49,7 @@ import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCa
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
-const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, BEACON, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER,
+export const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, BEACON, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER,
   FENCE_GATE, TRAPDOOR, CAKE, 139, 177, DRAGON_EGG]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two

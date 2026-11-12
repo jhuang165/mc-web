@@ -287,7 +287,11 @@ export class VoxelScene {
     const key = `${cx},${cz}`;
     this.keyEpoch.set(key, (this.keyEpoch.get(key) || 0) + 1); // an async mesh of this column made before now is stale
     this.dirty.delete(key);
-    const m = this.meshColumn(cx, cz);
+    // Batch 55: while the client's own break or placement waits for the server's packet, the column is meshed from the predicted view (client-prediction.js).
+    const real = this.world, shown = this.predicted?.active && this.predicted.world === real ? this.predicted.view : null;
+    if (shown) this.world = shown;
+    let m;
+    try { m = this.meshColumn(cx, cz); } finally { this.world = real; }
     this.installChunk(key, { solid: m.solid.geometry(), water: m.water.geometry(), ice: m.ice.geometry(), flow: m.flow.geometry(), lava: m.lava.geometry(),
       lavaFlow: m.lavaFlow.geometry(), fire0: m.fire[0].geometry(), fire1: m.fire[1].geometry(), portal: m.portal.geometry() });
   }
@@ -327,7 +331,7 @@ export class VoxelScene {
   // Sends a column to the pool. Resolves with { geometries } for installChunk, or null (no pool, stale input, worker failure).
   meshRequest(cx, cz) {
     const key = `${cx},${cz}`, pool = this.meshPool;
-    if (!this.meshWorkers || !this.light || this.lightPending || !this.world.chunks.has(`${cx / 16},${cz / 16}`)) return null;
+    if (!this.meshWorkers || !this.light || this.lightPending || this.predicted?.active || !this.world.chunks.has(`${cx / 16},${cz / 16}`)) return null; // a worker snapshot reads the real world, not the predicted view
     const epoch = this.keyEpoch.get(key) || 0, gen = this.meshGen, stamp = this.dirty.stamps?.get(key), snap = snapshotRegion(this, cx, cz);
     const lit = new Map(snap.job.repeaters.map(([x, y, z, on]) => [`${x},${y},${z}`, on]));
     return pool.request(snap).then((r) => {
@@ -480,6 +484,12 @@ export class VoxelScene {
       const [x, y, z] = k.split(",").map(Number);
       this.updateBlock(x, z, y);
     }
+  }
+  // The client's predicted cell (client-prediction.js) is drawn at once: the chunk and its touching neighbours are meshed from the predicted view; the light volume
+  // is not changed (the server's own change relights when it lands).
+  showPredicted(x, z) {
+    const chunk = (v) => Math.floor(v / 16) * 16, keys = new Set([[x, z], [x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]].filter(([a, b]) => this.world.isLoaded(a, b)).map(([a, b]) => `${chunk(a)},${chunk(b)}`));
+    for (const k of keys) this.buildChunk(...k.split(",").map(Number));
   }
   // Relights around an edit; the edited chunk and its touching neighbours
   // rebuild now, the rest of the changed light box over the next frames.

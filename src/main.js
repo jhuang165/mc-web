@@ -230,6 +230,7 @@ import { createServerDig } from "./server-dig.js";
 import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
+import { createPrediction, dryPlace, predictsPlacement } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
@@ -843,7 +844,7 @@ function toast(message) {
 // Block.SoundType through block-sounds.js: RenderGlobal.playAuxSFX 2001 for a break, ItemBlock.onItemUse for a placement
 // (ItemDoor, ItemBed, ItemSign, ItemRedstone and ItemSeeds place silently), both at the cell's centre.
 function sound(place, block = target ? world.get(...target.block) : 3) {
-  if (place && placesSilently(block)) return;
+  if (place && (placesSilently(block) || mutePlaceSound)) return; // mutePlaceSound: the client half already played this placement's sound (b55 instantbreak)
   const s = place ? placeSound(block) : breakSound(block), cell = place ? target?.adjacent ?? target?.block : target?.block;
   sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
 }
@@ -1507,7 +1508,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
-    pendingEdits = [];
+    pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null;
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
@@ -3071,7 +3072,10 @@ function runPendingEdits() {
   try {
     for (const q of list) {
       if (q.fn) { q.fn(); continue; } // a C07 stop-digging / creative break queued by breakBlockPacket
-      [aimedEntity, aimedCart, aimedHanging] = q.aimed; target = q.target; edit(q.place);
+      [aimedEntity, aimedCart, aimedHanging] = q.aimed; target = q.target;
+      endPrediction(q.predicted); mutePlaceSound = !!q.predicted?.soundDone;
+      try { edit(q.place); } finally { mutePlaceSound = false; }
+      revertPrediction(q.predicted);
     }
   } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; target = wasTarget; }
 }
@@ -3104,9 +3108,54 @@ function serverFinishDig(p) {
 function breakBlockPacket(p, creative = false, accept = null) {
   if (accept && watchedDig) watchedDig.finished = true; // a finished dig ends the client's dig state (onPlayerDestroyBlock): no abort follows
   if (runningEdits || !mobs || multiplayer) return !accept || accept() ? breakBlock(p, creative) : false;
-  pendingEdits.push({ fn: () => { if (!accept || accept()) breakBlock(p, creative); } });
+  const predicted = predictBreak(p);
+  pendingEdits.push({ fn: () => {
+    endPrediction(predicted);
+    muteBreakFx = !!predicted;
+    try { if (!accept || accept()) breakBlock(p, creative); } finally { muteBreakFx = false; }
+    revertPrediction(predicted);
+  } });
   return true;
 }
+// Batch 55 (instantbreak, client-prediction.js): PlayerControllerMP removes the block on the client world at once (onPlayerDestroyBlock: aux 2001, then setBlockToAir)
+// and ItemBlock.onItemUse places on it at once; the shared world keeps the server half in the network tick, so the client half is an overlay the renderer, the aim ray
+// and the client player's collision read until the queued task runs. The sound and particles play here, once, and the queued run skips them.
+let prediction = null, predictionToken = 0, muteBreakFx = false, mutePlaceSound = false;
+function predictionLayer() {
+  if (!prediction || prediction.world !== world) { prediction = createPrediction(world); }
+  scene.predicted = prediction;
+  return prediction;
+}
+const clientWorld = () => (prediction && prediction.world === world ? prediction.read() : world);
+function showPrediction(list) {
+  const layer = predictionLayer(), token = ++predictionToken, cells = [];
+  for (const [x, y, z, block, meta] of list) {
+    const was = { block: world.get(x, y, z), meta: world.getMeta(x, y, z) };
+    if (layer.set(x, y, z, block, meta, token)) cells.push({ x, y, z, was });
+  }
+  for (const c of cells) scene.showPredicted(c.x, c.z);
+  return cells.length ? { token, cells } : null;
+}
+function predictBreak(p) {
+  const seen = predictionLayer().read(), block = seen.get(...p); // a cell an earlier queued break already cleared on the client is air
+  if (!block) return null;
+  const meta = seen.getMeta(...p), s = breakSound(block);
+  sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 } });
+  scene.particles.destroyBlock(world, ...p, block, meta);
+  return showPrediction([[p[0], p[1], p[2], 0, 0]]) ?? { token: 0, cells: [] };
+}
+function predictPlace() {
+  const held = heldId(), layer = predictionLayer();
+  if (!predictsPlacement({ world: layer.read(), target, heldId: held, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging })) return null;
+  let soundDone = false;
+  const out = dryPlace({ world: layer.read(), survival, position, flowers: FLOWERS, yaw }, { id: held, item: ITEMS[held], target }, { sound: (...a) => { soundDone = true; sound(...a); } });
+  if (!out.placed) return null;
+  const shown = showPrediction(out.cells.map((c) => [c.x, c.y, c.z, c.block, c.meta]));
+  return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone };
+}
+function endPrediction(pred) { if (pred) for (const c of pred.cells) prediction?.clear(c.x, c.y, c.z, pred.token); }
+// S23 for a cell the server left as it was (a refusal): the chunk is meshed from the real world again.
+function revertPrediction(pred) { if (pred) for (const c of pred.cells) if (world.get(c.x, c.y, c.z) === c.was.block && world.getMeta(c.x, c.y, c.z) === c.was.meta) scene.updateBlock(c.x, c.z, c.y); }
 // A server-side effect of a click (ItemInWorldManager.onBlockClicked at C07 status 0): queued in arrival order, at once in multiplayer or while the queue runs.
 function serverTask(fn) {
   if (runningEdits || !mobs || multiplayer) { fn(); return; }
@@ -3116,7 +3165,7 @@ function serverTask(fn) {
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
     if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
-    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target });
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && target ? predictPlace() : null });
     return;
   }
   edit(place);
@@ -3294,8 +3343,8 @@ function breakBlock(p, creative = false) {
     creative,
     updateBlock: (x, z, y) => scene.updateBlock(x, z, y),
     renderHotbar,
-    playBlockSound: sound,
-    destroyParticles: (...args) => scene.particles.destroyBlock(...args),
+    playBlockSound: (...a) => { if (!muteBreakFx) sound(...a); },
+    destroyParticles: (...args) => { if (!muteBreakFx) scene.particles.destroyBlock(...args); },
     markUnsaved: () => { saved = false; },
     releaseSilverfish: (x, y, z) => mobs.spawnSilverfishAt?.(x, y, z),
     harvested: (info) => statsLive.harvested(info),
@@ -3402,7 +3451,7 @@ function movementTick(controls) {
   const hold = streamPrefetch && world.isTicking(position.x, position.z) && !streamPrefetch.ready(position.x, position.z);
   const change = !hold && world.streamAround(position.x,position.z);
   if (change) { scene.syncChunks(change); materializeFresh(); }
-  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, horses: seatsFor(mobs, rider), rider,
+  const state = { world: clientWorld(), position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, horses: seatsFor(mobs, rider), rider,
     grounded, collidedH, flying, fallDistance, landedFall, sleeping: bedSleep.sleeping };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
@@ -4089,7 +4138,7 @@ function animate(now) {
       scene.camera.rotation.set(cam.rotation.x + (thirdPersonView === 2 ? -b.rx : b.rx), cam.rotation.y, b.rz - hurt, "YXZ");
     }
     target = raycast(
-      world,
+      clientWorld(),
       aim,
       dir,
       survival.creative ? 5 : 4.5,
