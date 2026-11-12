@@ -219,7 +219,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent } from "./living-simulation.js";
@@ -4033,12 +4033,14 @@ function animate(now) {
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
-  if (minecarts && screen !== "home") for (const c of minecarts.carts) if (c.type === 4 && !c.dead && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
-  if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.gearViews(), { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: mobs.leashKnots() });
+  if (minecarts && screen !== "home") for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live)) if (c.type === 4 && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
+  if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.gearViews(), { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: knotViews(objectTracker, mobs.knotList ?? []) }); // Batch 48: the knot copies
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial,180 - yaw * 180 / Math.PI,(e) => mobs.clientPosition(e));
-  minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
-  boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
-  hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
+  // Batch 48: drawn from the client copies (object-tracker.js vehicleViews / hangingViews); the boat or cart the client player rides keeps the live entity
+  const drawn = (x, z) => !world.streaming || world.isLoaded(x, z), rides = (live) => rider.vehicle === live;
+  minecartRenderer?.update(screen === "home" || !minecarts ? [] : vehicleViews(objectTracker, minecarts.carts, rides, drawn), partial, world);
+  boatRenderer?.update(screen === "home" ? [] : vehicleViews(objectTracker, boats.carts, rides, drawn), partial, world);
+  hangingRenderer?.update(screen === "home" ? [] : hangingViews(objectTracker, hanging.entities, drawn));
   if (screen !== "home") { hitboxes ??= new HitboxRenderer(scene.scene); hitboxes.update(debugHitbox ? debugHitboxList() : null); } // RenderManager.debugBoundingBox
   signRenderer?.update(screen === "home" ? [] : [...signs.tiles.values()], world, position);
   skullRenderer?.update(screen === "home" ? [] : [...SKULLS.tiles.values()], world, position);
@@ -4136,7 +4138,7 @@ function shadowCasters(partial) {
   if (bedSleep.sleeping && !survival.effects.has(INVISIBILITY)) list.push(sleeperShadowCaster(bedSleep.pos, SHADOWS.player));
   else if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   // RenderBoat: shadowSize 0.5; getShadowSize is 0, so `height` 0 keeps the cast at the boat's posY.
-  for (const b of boats.carts) if (!b.dead && (!world.streaming || world.isLoaded(b.x, b.z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
+  for (const b of vehicleViews(objectTracker, boats.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.
