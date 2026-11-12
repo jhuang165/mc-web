@@ -72,9 +72,19 @@ test("the owner's click toggles sitting and a sitting wolf stays put while the o
 });
 
 test("a standing tamed wolf follows its owner and teleports beside it past 12 blocks", () => {
+  // EntityAIFollowOwner (1.0, 10, 2) only starts again at 10 blocks, so after reaching its owner the wolf may wander up to the 10 block
+  // start (plus a tick's step) before following again; a tighter bound failed for about a quarter of unseeded Entity.rand streams.
   const w = wolfWorld({ owner: "player", health: 20, z: 64 }), e = w.entities[0], s = new Survival();
-  for (let i = 0; i < 200; i++) w.tick(player(64, 76), s);
-  assert.ok(Math.hypot(e.x - 64, e.z - 76) < 6, `${e.x} ${e.z}`);
+  setEntityRandom(e, new JavaRandom(4)); // a seed whose wander strays past 6 blocks
+  let reached = false, farthest = 0;
+  for (let i = 0; i < 200; i++) {
+    w.tick(player(64, 76), s);
+    const d = Math.hypot(e.x - 64, e.z - 76);
+    if (d < 2.5) reached = true;
+    if (reached) farthest = Math.max(farthest, d);
+  }
+  assert.ok(reached, `${e.x} ${e.z}`);
+  assert.ok(farthest < 11, `${farthest}`);
   const far = wolfWorld({ owner: "player", health: 20, z: 20 }), f = far.entities[0];
   for (let i = 0; i < 20; i++) far.tick(player(64, 72), s);
   assert.ok(Math.hypot(f.x - 64, f.z - 72) < 8, `${f.x} ${f.z}`);
