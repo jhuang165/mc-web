@@ -14,8 +14,38 @@ public class TrackerHitsProbe {
   static List<sa> listed = new ArrayList<>();
   static List<sa> within(sa self, azt box) { List out = new ArrayList(); for (sa o : listed) if (o != self && !o.K && o.C.b(box)) out.add(o); return out; }
   // A mob copy whose attackEntityFrom (sv.a(ro, float)) is logged with its result: the client's call, which must answer false
-  static class LoggedCow extends wh { LoggedCow(ahb w) { super(w); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:cow\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
-  static class LoggedEnder extends ya { LoggedEnder(ahb w) { super(w); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:enderman\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
+  static class LoggedCow extends wh { LoggedCow(ahb w) { super(w); } public void e(int sec) { super.e(sec); fireRow("cow", this, sec); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:cow\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
+  static class LoggedEnder extends ya { LoggedEnder(ahb w) { super(w); } public void e(int sec) { super.e(sec); fireRow("enderman", this, sec); } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add("[\"call:attackEntityFrom:enderman\"," + s + "," + t + "," + u + "," + d + "," + (r ? 1 : 0) + ",0]"); return r; } }
+  // Batch 46: the other client-world collidables. Each logs attackEntityFrom (with its result) and setFire (seconds, then the fire counter after); the box is logged once at listing.
+  static String fmtRow(String name, double a, double b, double c, double d, double e, double g) { return "[\"" + name + "\"," + a + "," + b + "," + c + "," + d + "," + e + "," + g + "]"; }
+  static int fireOf(sa e) { try { return MobMoveProbe.field(sa.class, "e").getInt(e); } catch (Exception ex) { throw new RuntimeException(ex); } }
+  static void callRow(String kind, sa e, float d, boolean r) { CW3.log.add(fmtRow("call:attackEntityFrom:" + kind, e.s, e.t, e.u, d, r ? 1 : 0, 0)); }
+  static void fireRow(String kind, sa e, int sec) { CW3.log.add(fmtRow("call:setFire:" + kind, e.s, e.t, e.u, sec, fireOf(e), 0)); }
+  static class LoggedBoat extends xi { LoggedBoat(ahb w, double x, double y, double z) { super(w, x, y, z); } public boolean a(ro src, float d) { boolean r = super.a(src, d); callRow("boat", this, d, r); return r; } public void e(int s) { super.e(s); fireRow("boat", this, s); } }
+  static class LoggedCart extends xs { LoggedCart(ahb w, double x, double y, double z) { super(w, x, y, z); } public boolean a(ro src, float d) { boolean r = super.a(src, d); callRow("minecart", this, d, r); return r; } public void e(int s) { super.e(s); fireRow("minecart", this, s); } }
+  static class LoggedPainting extends tb { LoggedPainting(ahb w, int x, int y, int z, int dir) { super(w, x, y, z, dir, "Kebab"); } public boolean a(ro src, float d) { boolean r = super.a(src, d); callRow("painting", this, d, r); return r; } public void e(int s) { super.e(s); fireRow("painting", this, s); } }
+  static class LoggedFrame extends st { LoggedFrame(ahb w, int x, int y, int z, int dir) { super(w, x, y, z, dir); } public boolean a(ro src, float d) { boolean r = super.a(src, d); callRow("itemFrame", this, d, r); return r; } }
+  static class LoggedKnot extends su { LoggedKnot(ahb w, int x, int y, int z) { super(w, x, y, z); } public boolean a(ro src, float d) { boolean r = super.a(src, d); callRow("leashKnot", this, d, r); return r; } }
+  // a dragon part: EntityDragonPart.attackEntityFrom forwards to the dragon (attackEntityFromPart), which retargets the dragon with three draws from its own Entity.rand; the row carries the dragon's new target
+  static class LoggedPart extends wy { final xa dragon; LoggedPart(xa d) { super(d, "head", 1.0f, 1.0f); dragon = d; } public boolean a(ro src, float d) { boolean r = super.a(src, d); CW3.log.add(fmtRow("call:attackEntityFrom:dragonPart", dragon.h, dragon.i, dragon.bm, d, r ? 1 : 0, 0)); return r; } }
+  static void listBox(String kind, sa e) { azt b = e.C; CW3.log.add(fmtRow("listed:" + kind, b.a, b.b, b.c, b.d, b.e, b.f)); listed.add(e); }
+  static void listOther(String kind, double x, double y, double z) throws Exception {
+    ahb w = TrackerItemsProbe.client;
+    switch (kind) {
+      case "boat": listBox(kind, new LoggedBoat(w, x, y, z)); break;
+      case "minecart": listBox(kind, new LoggedCart(w, x, y, z)); break;
+      case "painting": listBox(kind, new LoggedPainting(w, (int) x, (int) y, (int) z, 1)); break;
+      case "itemFrame": listBox(kind, new LoggedFrame(w, (int) x, (int) y, (int) z, 1)); break;
+      case "leashKnot": listBox(kind, new LoggedKnot(w, (int) x, (int) y, (int) z)); listBox("leashKnotFar", new LoggedKnot(w, 30, 3, 9)); break; // the second knot only logs a second tile's box
+      case "dragonPart": {
+        xa d = new xa(w); MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(d, x, y, z);
+        MobMoveProbe.field(sa.class, "Z").set(d, new Random(12345L));
+        LoggedPart p = new LoggedPart(d); MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(p, x, y, z);
+        listBox("dragon", d); listBox(kind, p); break;
+      }
+      default: throw new IllegalArgumentException(kind);
+    }
+  }
   public static class CW3 extends TrackerItemsProbe.CW2 {
     static List<String> log = new ArrayList<>();
     public aji a(int x, int y, int z) { aji w = waterAt(x, y, z, water); return w != null ? w : super.a(x, y, z); }
@@ -35,7 +65,7 @@ public class TrackerHitsProbe {
     TrackerItemsProbe.clientWorldClass = CW3.class; TrackerItemsProbe.serverWorldClass = SW2.class;
     TrackerItemsProbe.clientSpawned = (c) -> { try { MobMoveProbe.field(sa.class, "Z").set(c, new Random(12345L)); } catch (Exception ex) { throw new RuntimeException(ex); } };
     TrackerItemsProbe.tickHook = () -> { String s = "[" + String.join(",", CW3.log) + "]"; CW3.log.clear(); return s; };
-    listed.clear(); TrackerItemsProbe.serverHook = null;
+    listed.clear(); TrackerItemsProbe.serverHook = null; TrackerItemsProbe.removeDead = false;
     water = false; serverWater = false; MobMoveProbe.ProbeWorld.water = false;
   }
   static String arrowState(sa c) { try { zc a = (zc) c; return MobMoveProbe.field(zc.class, "i").getBoolean(a) + "," + a.b; } catch (Exception ex) { throw new RuntimeException(ex); } }
@@ -116,6 +146,37 @@ public class TrackerHitsProbe {
       } catch (Exception ex) { throw new RuntimeException(ex); } };
       TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0 && cow) listMob(false, 0.375, 0.0, 4.0); } catch (Exception ex) { throw new RuntimeException(ex); } };
       System.out.println(TrackerItemsProbe.run(cow ? "hookCow" : "hookNoCow", (w, s) -> new xe(w, TrackerItemsProbe.serverPlayer), new double[]{0.5, 1.0, 0.5}, 64, 5, true, 40, 0.5, 0.5, false, -1));
+    }
+    // Batch 46: arrows into the other client-world collidables (listed at t = 0, their box logged), then burning arrows (the server arrow's fire flag reaches the client through S1C)
+    for (String kind : new String[]{"boat", "minecart", "painting", "itemFrame", "leashKnot", "dragonPart"}) {
+      reset();
+      TrackerItemsProbe.clientExtra = TrackerHitsProbe::arrowState;
+      TrackerItemsProbe.removeDead = true;
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0) listOther(kind, 6.5, kind.equals("itemFrame") ? 1.0 : 0.5, 2.5); } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run("arrow_" + kind, (w, s) -> { zc e = new zc(w, s[0], s[1], s[2]); e.c(1.0, 0.04, 0.0, 1.6f, 0.0f); return e; }, new double[]{2.5, 1.0, 2.5}, 64, 20, false, 30, 0.5, 0.5, false, -1));
+    }
+    // a burning arrow into a cow (setFire(5) before attackEntityFrom, on the client copy too), into an enderman (no setFire), into a boat (setFire, then attackEntityFrom answers true: the arrow dies); the client mobs' own onEntityUpdate runs before the arrow each tick
+    for (String kind : new String[]{"cow", "enderman", "boat"}) {
+      reset();
+      TrackerItemsProbe.clientExtra = TrackerHitsProbe::arrowState;
+      TrackerItemsProbe.removeDead = true;
+      TrackerItemsProbe.serverHook = (e, t) -> { try {
+        if (t == 0) { if (kind.equals("boat")) listOther("boat", 6.5, 0.5, 2.5); else listMob(kind.equals("enderman"), 6.5, 0.0, 2.5); }
+        else for (sa m : listed) { m.C(); CW3.log.add(fmtRow("fire:" + kind, m.s, m.t, m.u, fireOf(m), 0, 0)); }
+      } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run("arrowFire_" + kind, (w, s) -> { zc e = new zc(w, s[0], s[1], s[2]); e.c(1.0, 0.04, 0.0, 1.6f, 0.0f); e.e(100); return e; }, new double[]{2.5, 1.2, 2.5}, 64, 20, false, 30, 0.5, 0.5, false, -1));
+    }
+    // a fishing hook into a boat (the client's attackEntityFrom answers true: the hook attaches, but the follow is under !isRemote, so it flies on) and into a dragon part
+    for (String kind : new String[]{"boat", "dragonPart"}) {
+      reset();
+      TrackerItemsProbe.playerSetup = (p) -> { try {
+        yx inv = new yx(p);
+        inv.a[0] = new add(adb.d(346), 1);
+        MobMoveProbe.field(yz.class, "bm").set(p, inv);
+        p.z().a(6, Float.valueOf(20.0f));
+      } catch (Exception ex) { throw new RuntimeException(ex); } };
+      TrackerItemsProbe.serverHook = (e, t) -> { try { if (t == 0) listOther(kind, 0.375, 0.5, 4.0); } catch (Exception ex) { throw new RuntimeException(ex); } };
+      System.out.println(TrackerItemsProbe.run("hook_" + kind, (w, s) -> new xe(w, TrackerItemsProbe.serverPlayer), new double[]{0.5, 1.0, 0.5}, 64, 5, true, 40, 0.5, 0.5, false, -1));
     }
     reset();
   }
