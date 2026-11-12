@@ -10,6 +10,7 @@ import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell, lookVe
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
+import { setMobFire } from "./armor-enchantments.js";
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
@@ -141,7 +142,7 @@ export class Fireballs {
       const t = hit.entity;
       if (t.player) {
         if (damage(FIREBALL.smallDamage)) mobs.ai?.survival?.setFire(FIREBALL.smallFireSeconds);
-      } else if (!FIRE_IMMUNE.has(t.type) && damage(FIREBALL.smallDamage)) t.fire = Math.max(t.fire || 0, FIREBALL.smallFireSeconds * 20);
+      } else if (!FIRE_IMMUNE.has(t.type) && damage(FIREBALL.smallDamage)) setMobFire(t, FIREBALL.smallFireSeconds);
     } else {
       const [x, y, z] = faceCell(...hit.block, hit.side);
       if (mobs.world.get(x, y, z) === 0) mobs.ignite?.(x, y, z);

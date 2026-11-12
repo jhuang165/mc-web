@@ -11,7 +11,11 @@ export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREAT
 // resistance, water breathing) or throws (slowness, weakness, poison; witch.js).
 // Resistance (11) and Absorption (22) come from /effect, ActiveEffects and spawners: 1.7.10 has no potion item for them.
 // Nausea (9) is the cured zombie villager's villager (EntityZombie.convertToVillager); it has no effect on the mob here.
-const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER, RESISTANCE, ABSORPTION]);
+// Haste (3), mining fatigue (4), jump boost (8), blindness (15), night vision (16), hunger (17), health boost (21) and saturation (23) are kept and counted
+// down but do nothing here: Potion.isReady is false for them and performEffect only acts on a player (hunger, saturation); jump boost is read by the mob jump
+// (entities.js). Health boost's maxHealth modifier is not applied on add (a load keeps the saved Attributes list), so it is not addable.
+export const INERT_EFFECTS = [3, 4, 8, 15, 16, 17, 21, 23];
+const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER, RESISTANCE, ABSORPTION, ...INERT_EFFECTS]);
 
 // NBT "ActiveEffects": Id, Amplifier (byte), Duration (int), Ambient. Unknown ids and spent effects
 // are dropped. The saved Amplifier is a signed byte (PotionEffect.b reads dh.d), so a native 255 comes back as -1 and shifts like Java's ints do.
@@ -27,7 +31,7 @@ export const mobEffect = (e, id) => e.effects?.find((x) => x.id === id) ?? null;
 // EntityLivingBase.addPotionEffect: PotionEffect.combine keeps the stronger amplifier, and the
 // longer duration at equal strength. The HashMap iterates small Integer keys in order.
 export function addMobEffect(e, id, duration = 2147483647, amplifier = 0) {
-  if (!MOB_EFFECTS.has(id)) return false;
+  if (!MOB_EFFECTS.has(id) || id === 21) return false;
   if (e.type === "wither") return false; // EntityWither.addPotionEffect (xc.c(rj)) is empty: the boss takes no effects
   const list = (e.effects ??= []), old = list.find((x) => x.id === id);
   if (!old) list.push({ id, duration, amplifier }), list.sort((a, b) => a.id - b.id);

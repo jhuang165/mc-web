@@ -81,6 +81,12 @@ export function setFireTicks(armor, fire, seconds) {
   return fire < ticks ? ticks : fire;
 }
 
+// Entity.setFire(seconds) on a mob: the same shortening by the Fire Protection on its worn stacks (`equipment`, hand first:
+// getFireTimeForEntity reads getLastActiveItems, all five slots). Writes and returns the mob's counter.
+export function setMobFire(e, seconds) {
+  return (e.fire = setFireTicks(e.equipment ?? [], e.fire || 0, seconds));
+}
+
 // --- Explosion.doExplosionA knockback (EnchantmentProtection.func_92092_a) -----------------------
 
 // The scale applied to the knockback of an explosion hit: impact - floor(impact * level * 0.15F) for the best Blast

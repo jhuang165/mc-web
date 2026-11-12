@@ -13,15 +13,15 @@ import { readRegion, decodeRegionChunk, regionSlot, regionAddress } from './regi
 import { chunkFromNbt } from './chunk-nbt.js';
 
 const tagOf = (hex) => decodeNbt(Uint8Array.from(hex.match(/../g).map((b) => parseInt(b, 16)))).tag.value;
-const MODELED = new Set([1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 18, 19, 20, 22]); // mob-effects.js MOB_EFFECTS
+const MODELED = new Set([1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]); // mob-effects.js MOB_EFFECTS
 const byId = (a, b) => a.id - b.id;
 const modeled = (effects) => effects.filter((e) => MODELED.has(e[0])).map(([id, amplifier, duration, ambient]) => ({ id, amplifier, duration, ...(ambient ? { ambient: true } : {}) })).sort(byId);
 const flat = { get: () => 0, getMeta: () => 0, solid: () => false, surface: () => 0, spawn: () => ({ x: 0, y: 0, z: 0 }), numericSeed: 1 };
 const listOf = (tag) => (tag.get('ActiveEffects')?.value.items ?? []).map((e) => [e.get('Id').value, e.get('Amplifier').value, e.get('Duration').value, e.get('Ambient').value]);
 
-test('the probe covers 28 kinds and 6 effect layouts; native writes ActiveEffects only for a non-empty map, in HashMap bucket order', () => {
+test('the probe covers 28 kinds and 7 effect layouts; native writes ActiveEffects only for a non-empty map, in HashMap bucket order', () => {
   assert.equal(new Set(reference.rows.map((r) => r.kind)).size, 28);
-  assert.equal(reference.rows.length, 28 * 6);
+  assert.equal(reference.rows.length, 28 * 7);
   for (const r of reference.rows) {
     const tag = tagOf(r.nbt);
     assert.equal(tag.has('ActiveEffects'), reference.cases[r.case].length > 0, `${r.kind} ${r.case}`);

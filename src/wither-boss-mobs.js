@@ -258,6 +258,6 @@ export function installWither(EntityWorld) {
     s.bu[0] += 3; s.bu[1] += 3;
     return base.call(this, e, amount, source);
   });
-  around("burn", function (base, e, t) { const out = base.call(this, e, t); if (e?.type === "wither") { e.fire = 0; e.burn = 0; } return out; });
+  // Fire: EntityWorld.burn treats the wither as fire-immune (xc constructor); the counter is 0 after every update (sv.C extinguishes), then the move tail's rest or raise.
   around("fall", function (base, e, d) { return e?.type === "wither" ? undefined : base.call(this, e, d); });
 }
