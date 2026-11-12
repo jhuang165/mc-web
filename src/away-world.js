@@ -124,11 +124,12 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
       boneMeal: () => false,
       // Projectile dispenses create the live entities (as main.js does) when the entity run exists; without it the stack is put back.
-      arrow: (e) => { if (ents) ents.arrows.list.push(ents.arrows.make(e, e.rand, { shooter: null, pickup: 1 })); else unsupported.hit = true; },
+      arrow: (e) => { if (ents) { const a = ents.arrows.make(e, e.rand, { shooter: null, pickup: 1 }); ents.arrows.list.push(a); ents.arrows.joined(a); } else unsupported.hit = true; },
       thrown: (kind, e) => {
         if (!ents) { unsupported.hit = true; return; }
         const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
-        if (kind === "potion") ents.mobs.potions.projectiles.balls.push({ ...ball, damage: e.damage, owner: null }); else ents.projectiles.balls.push(ball);
+        if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; ents.mobs.potions.projectiles.balls.push(b); ents.mobs.joined(b, "potion"); } // as main.js: potions and bottles walk as "potion"
+        else { ents.projectiles.balls.push(ball); ents.projectiles.joined(ball); }
       },
       fireball: ({ x, y, z, ax, ay, az }) => { if (ents) ents.mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); else unsupported.hit = true; },
       firework: (stack, x, y, z, fx, fz) => { if (ents) dispenseFirework(ents.rockets, x, y, z, fx, fz, stack); else unsupported.hit = true; },

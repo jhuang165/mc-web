@@ -99,6 +99,11 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const items = new ItemEntities(random);
   items.load(drops.inside, readStack, 0);
   const xp = new ExperienceOrbs(orbs.inside, random, ids);
+  // Each item and orb has its own Entity.rand (live: freshEntityRandom). The run must replay, so the streams are seeded from a separate
+  // generator, one per entity in the order each first draws; the shared `random` above is left untouched by items and orbs.
+  const seeder = new JavaRandom(BigInt(seed) * 2654435761n + 13n);
+  const ownRandom = () => { const r = new JavaRandom(Math.floor(seeder.nextDouble() * 2 ** 48)); return () => r.nextFloat(); };
+  items.entityRandom = ownRandom; xp.entityRandom = ownRandom;
   const primed = tnt.inside.filter((t) => [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(num))
     .map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse, random }), { vx: t.vx, vy: t.vy, vz: t.vz }));
   const minecarts = Minecarts.fromJSON({ version: 1, carts: carts.inside }, { ids });
