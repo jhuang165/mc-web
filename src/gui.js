@@ -52,6 +52,7 @@ export function tooltipLines(item,stack,advanced=false){
  // addInformation lists them; renderToolTip draws every later line gray.
  const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;
  if(Array.isArray(item.rarity))lines[0].color=item.rarity[Math.min(stack.damage|0,item.rarity.length-1)]; // Item.getRarity: the golden apple is rare (aqua), the enchanted one epic (light purple)
+ else if(item.rarity==='rare')lines[0].color='aqua'; // ItemRecord.getRarity: EnumRarity.rare (executed b55 ChatRarityProbe)
  if(Array.isArray(stack.enchantments))lines[0].color='aqua';
  if(stored?.length)lines[0].color='yellow';
  for(const text of storedEnchantmentLines(stored))lines.push({text,color:'gray'});

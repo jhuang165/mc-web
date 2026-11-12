@@ -65,3 +65,9 @@ test("death messages and /give use the rarity component", async () => {
   assert.match(c.formatted(), /§b\[§r§bSting§r§b\]§r/);
   assert.match(c.formatted(), /was slain by/);
 });
+
+test("a record's tooltip name is aqua (EnumRarity.rare), not the first letter of its rarity string", async () => {
+  const { tooltipLines } = await import("./gui.js");
+  const lines = tooltipLines({ name: "Music Disc", record: true, rarity: "rare" }, { id: 0, count: 1, damage: 0 });
+  assert.equal(lines[0].color, "aqua");
+});
