@@ -434,6 +434,7 @@ let entityTick = null; // this tick's { state, hooks } for tickEntitySimulation,
 let objectTracker = new ObjectTracker(10, Math.random, entityIds); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
+  objectTracker.hooks.rides = (live) => rider.vehicle === live; // Batch 51: the ridden boat's copy takes the live boat's state (object-tracker.js mirrorRidden)
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
   // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
   // Their sounds are logged (object-tracker.js `sound`) but not played: the client world's playSoundAtEntity reaches only RenderGlobal.playSound

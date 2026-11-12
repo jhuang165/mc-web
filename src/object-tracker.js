@@ -21,7 +21,7 @@
 // every S12/S14-S18/S1C of the scenarios, the boat's extra yOffset at spawn, its 8 tick interpolation (3 + 5) then its coast on the S12 motion (0.99F / 0.95F / 0.99F), the cart's
 // 5 tick interpolation (3 + 2) with no motion of its own, the hanging boxes, the item frame's data watcher, and the dragon's three-draw retarget on a part hit (`retargetDragon`).
 // Bytecode-read only: the boat copy's splash particles above 0.2625 blocks a tick (batch 50: ObjectClient.splash; the reference run never reached that speed on the client), the furnace cart's S1C 16, a cart below y -64.
-// Not modelled: the client copy of a boat or cart the client player rides (full physics; its live entity is the target and the renderer instead), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
+// Not modelled: the client copy of a cart the client player rides (it interpolates like any cart; its live entity is the target and the renderer instead; the ridden boat's copy mirrors the live boat, batch 51), the chunk send queue, the player's own attackEntityFrom call, a client world's lava hop random draws. Drawing still reads the live entities: the renderers of
 // boats, carts, paintings, frames and knots are not switched to the copies.
 // Batch 48 (tracker-birth.js, boats.js, minecarts.js): entries of placed boats and carts start from their creation state; pushes set airBorne (addVelocity) and attacks velocityChanged
 // (setBeenAttacked), which this entry already honoured; the far-boat untrack matched the executed entry all along (the probe never logged its destroy); furnace (16) and command block cart (23, 24) watcher objects.
@@ -271,8 +271,22 @@ export class ObjectClient extends ClientEntity {
       else this.tracker.particle("splash", this.x + c + sn * d4 * 0.7, y, this.z + sn - c * d4 * 0.7, this.vx, this.vy, this.vz);
     }
   }
+  // Batch 51: the boat the client player rides. NetHandlerPlayClient.a(S1B) calls setIsBoatEmpty(false) on it (bjb, bytecode-read), so EntityBoat.onUpdate (xi.h) skips the interpolation
+  // branch (`isRemote && isBoatEmpty`) and runs the full physics on the client, whose splash block (before that branch) draws on the copy's own Entity.rand. The port does not run a second
+  // physics: the copy takes the live boat's state, which the same rider input drives, as the client's own motion (the position, motion and heading it starts the tick with), so the splash
+  // above 0.2625 follows the ridden boat. A cart has no such branch: EntityMinecart.onUpdate (xl.h) interpolates a ridden copy as any other, so the port leaves its copy alone.
+  mirrorRidden() {
+    const live = this.live;
+    if (!live || live.dead || !this.tracker.hooks.rides?.(live)) return false;
+    this.x = live.x; this.y = live.posY; this.z = live.z; this.vx = live.vx; this.vy = live.vy; this.vz = live.vz; this.yaw = live.yaw; this.pitch = live.pitch ?? 0;
+    this.vt = null; // the S18 targets of a ridden boat are never consumed (c is read only in the isBoatEmpty branch)
+    return true;
+  }
   stepVehicle() {
-    if (this.kind === "boat") this.splash();
+    if (this.kind === "boat") {
+      this.splash();
+      if (this.mirrorRidden()) return;
+    }
     if (this.meta.has(16)) this.meta.set(16, 0); // EntityMinecartFurnace.onUpdate is not guarded by isRemote: the client sets its powered flag (16) from its own fuel (0) every update, so the S1C's 1 lasts only until the update (executed: cartFurnace)
     const v = this.vt;
     if (v && v.inc > 0) {
