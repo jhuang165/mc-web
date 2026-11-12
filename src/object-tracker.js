@@ -153,6 +153,7 @@ export class ObjectClient extends ClientEntity {
     this.kind = kind; this.spec = OBJECT_KINDS[kind]; this.tracker = tracker; this.world = null;
     this.yaw = 0; this.pitch = 0; this.sim = null; this.id = 0;
     this.meta = new Map(); this.fish = null; this.vt = null; this.live = null; this.bb = null; this.dir = 0; this.cv = [0, 0, 0]; // the S1C objects by index; the hook's interpolation target; its last S12 motion
+    this.prevYaw = 0; this.prevPitch = 0; this.cartType = 0; this.title = null; this.art = 0; // Batch 48: what the vehicle and hanging renderers read (the previous rotation, the S0E cart type, the painting's S10 title and its ARTS index)
   }
   // Entity.setPositionAndRotation2 for a non-living entity: position and rotation at once, then the box (shrunk 1/32 at the sides) is lifted
   // onto the highest block box it overlaps (EntityArrow's override sets position and rotation only).
@@ -200,6 +201,7 @@ export class ObjectClient extends ClientEntity {
         this.yaw = angleByte(p.yaw); this.pitch = angleByte(p.pitch);
       }
       this.px = this.x; this.py = this.y; this.pz = this.z;
+      this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.cartType = this.kind === "minecart" ? p.data | 0 : 0;
       this.vx = this.vy = this.vz = 0; this.onGround = false;
       this.meta.clear(); this.fish = null;
       this.sim = this.tracker.newSim(this);
@@ -230,6 +232,7 @@ export class ObjectClient extends ClientEntity {
       this.bb = [this.x - 0.25, this.y, this.z - 0.25, this.x + 0.25, this.y + 0.5, this.z + 0.25];
     } else {
       const art = this.kind === "painting" ? ARTS.find((a) => a[0] === p.title) ?? ARTS[0] : null;
+      this.title = art ? art[0] : null; this.art = art ? ARTS.indexOf(art) : 0;
       const g = hangingGeometry(this.dir, tx, ty, tz, art ? art[1] : FRAME_PIXELS, art ? art[2] : FRAME_PIXELS);
       this.x = g.x; this.y = g.y; this.z = g.z; this.yaw = g.yaw; this.pitch = 0; this.bb = g.bb;
     }
@@ -240,6 +243,13 @@ export class ObjectClient extends ClientEntity {
     if (this.spec.hanging) return this.bb;
     const r = f(this.spec.width) / 2, minY = this.y - this.spec.yOff;
     return [this.x - r, minY, this.z - r, this.x + r, minY + f(this.spec.height), this.z + r];
+  }
+  // Batch 48: EntityBoat.h() and EntityMinecart.h() begin (not under isRemote, bytecode-read in xi and xl) with timeSinceHit (watcher 17) - 1 while above 0 and the damage
+  // (19, a float) - 1 while above 0, written back to the client's own data watcher until the next S1C overwrites it.
+  stepWobble() {
+    const hit = this.meta.get(17) | 0, dmg = this.meta.get(19) ?? 0;
+    if (hit > 0) this.meta.set(17, hit - 1);
+    if (dmg > 0) this.meta.set(19, f(dmg - 1));
   }
   // EntityBoat.onUpdate (isRemote, isBoatEmpty) and EntityMinecart.onUpdate (isRemote): with increments left both step towards the last position packet (position by
   // (target - pos) / n, yaw by wrapAngleTo180(target - yaw) / n, pitch by (target - pitch) / n, then setRotation's % 360); the boat without increments coasts on
@@ -292,7 +302,7 @@ export class ObjectClient extends ClientEntity {
     this.px = this.x; this.py = this.y; this.pz = this.z;
     const t = this.tracker, s = this.sim, spec = this.spec;
     if (spec.hanging) return; // EntityHanging.onUpdate checks its wall only under !isRemote
-    if (spec.vehicle) { this.stepVehicle(); return; }
+    if (spec.vehicle) { this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.stepWobble(); this.stepVehicle(); return; }
     if (this.kind === "item") {
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.mx = this.vx; s.my = this.vy; s.mz = this.vz; s.onGround = this.onGround; s.dead = false;
       t.sims.items.items = [s]; t.sims.items.tick(world); t.sims.items.sounds.length = 0;
@@ -535,3 +545,80 @@ export function objectView(tracker, e, kind) {
   return v;
 }
 export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));
+
+// Batch 48: what the boat, minecart, painting, item frame and leash knot renderers draw (RenderManager draws WorldClient's entities: the copies). A view is the live entity (the
+// renderers key their meshes by it, and the fields the port keeps only on the live side, a TNT cart's fuse or a spawner cart's logic, read through it) with the copy's position,
+// previous position, rotation and watched fields laid over it. Bytecode-read: RenderBoat / RenderMinecart read the data watcher (timeSinceHit, damage, forward direction, rolling
+// amplitude and direction) and lerp the previous and current rotation; RenderItemFrame the watched item and rotation; RenderPainting its art by the S10 title.
+// An entity the tracker follows whose copy is not there (before its spawn packet, after its destroy, out of the 80 / 160 block range) is not drawn, as natively; one the tracker does
+// not follow (yet) falls back to the live entity, as does the boat or cart the client player rides (its copy would run full physics natively; not modelled).
+const SHOWN = new WeakMap(), SHOWN_KNOTS = new WeakMap();
+function shownOf(tracker, e, rides) {
+  const en = tracker.entries.get(e);
+  if (!en) return e; // not tracked yet
+  const c = en.client;
+  if (!c.present) return null;
+  if (rides && c.spec.vehicle) return e;
+  return c;
+}
+function laidOver(e) {
+  let v = SHOWN.get(e);
+  if (!v) SHOWN.set(e, (v = Object.create(e)));
+  return v;
+}
+// A boat or cart view: posY (the native field) is the copy's y, `y` the box bottom, the previous position in posY's convention as the live renderers' lerp reads it.
+export function vehicleView(tracker, e, rides = false) {
+  const c = shownOf(tracker, e, rides);
+  if (c === null || c === e) return c;
+  const off = c.spec.yOff, v = laidOver(e);
+  v.x = c.x; v.z = c.z; v.posY = c.y; v.y = c.y - off; v.px = c.px; v.pz = c.pz; v.py = c.py;
+  v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.prevYaw; v.prevPitch = c.prevPitch;
+  const hit = c.meta.get(17) ?? 0, dir = c.meta.get(18) ?? 1, dmg = c.meta.get(19) ?? 0;
+  if (c.kind === "boat") { v.timeSinceHit = hit; v.forwardDir = dir; v.damage = dmg; }
+  else { v.rolling = hit; v.rollingDir = dir; v.damage = dmg; v.type = c.cartType; }
+  const r = f(c.spec.width) / 2, bb = (Object.hasOwn(v, "bb") ? v.bb : (v.bb = [0, 0, 0, 0, 0, 0]));
+  bb[0] = c.x - r; bb[1] = c.y - off; bb[2] = c.z - r; bb[3] = c.x + r; bb[4] = bb[1] + f(c.spec.height); bb[5] = c.z + r;
+  return v;
+}
+// The views of a list of live boats or carts (skipping the ones that are not on the client); `visible(x, z)` is the port's loaded-chunk test.
+export function vehicleViews(tracker, list, rides = () => false, visible = null) {
+  const out = [];
+  for (const e of list) {
+    if (e.dead) continue;
+    const v = vehicleView(tracker, e, rides(e));
+    if (v && (!visible || visible(v.x, v.z))) out.push(v);
+  }
+  return out;
+}
+// A painting or item frame view: the copy's geometry (built from the packet's tile), the S10 art, and the frame's watched item (2) and rotation (3).
+export function hangingViews(tracker, list, visible = null) {
+  const out = [];
+  for (const e of list) {
+    if (e.dead) continue;
+    const c = shownOf(tracker, e, false);
+    if (c === null) continue;
+    if (c === e) { if (!visible || visible(e.x, e.z)) out.push(e); continue; }
+    if (visible && !visible(c.x, c.z)) continue;
+    const v = laidOver(e);
+    v.x = c.x; v.y = c.y; v.z = c.z; v.yaw = c.yaw; v.dir = c.dir; v.tx = c.tile[0]; v.ty = c.tile[1]; v.tz = c.tile[2];
+    if (c.kind === "painting") v.art = c.art;
+    else { v.item = c.meta.get(2) ?? null; v.rotation = c.meta.get(3) | 0; }
+    out.push(v);
+  }
+  return out;
+}
+// The leash knots to draw ({ x, y, z } tile; summoned ones add id and the copy's centre): a summoned knot stands on its floored tile on the client (the copy's spawn).
+export function knotViews(tracker, list) {
+  const out = [];
+  for (const k of list) {
+    if (k.dead) continue;
+    const c = shownOf(tracker, k, false);
+    if (c === null) continue;
+    let v = SHOWN_KNOTS.get(k);
+    if (!v) SHOWN_KNOTS.set(k, (v = {}));
+    if (c === k) { v.x = k.x; v.y = k.y; v.z = k.z; if (k.summoned) { v.px = k.px; v.py = k.py; v.pz = k.pz; v.id = k.id; } }
+    else { v.x = c.tile[0]; v.y = c.tile[1]; v.z = c.tile[2]; if (k.summoned) { v.px = c.x; v.py = c.y; v.pz = c.z; v.id = k.id; } }
+    out.push(v);
+  }
+  return out;
+}
