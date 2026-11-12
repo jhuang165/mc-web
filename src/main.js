@@ -554,6 +554,7 @@ const compass = createCompass();
 let compassEpoch = 0, compassShownFrames = COMPASS_FRAMES;
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
+rockets.joined = (e) => mobs?.joined(e, "rocket"); // the rocket's place in the loaded-entity list (entity-simulation.js entityWalkers)
 // The scene is created in start(), so particles look up its effect renderer when they spawn.
 const fireworkFx = new FireworkParticles({ effects: { add: (p) => scene.effectRenderer.add(p) }, playSound: (name, x, y, z, volume, pitch, distanceDelay) => sounds.play(name, { volume, pitch, position: { x, y, z }, distanceDelay: !!distanceDelay }) });
 // The fishing rod's bobber (fishing-simulation.js).
@@ -2764,7 +2765,6 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
-  rockets.tick(world, { ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), clientCopies: true }); // the client rocket copies draw the trail and the explosion (object-tracker.js)
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
@@ -2789,10 +2789,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       saved = false;
     },
   };
-  entityTick = { state: { world, items, primed, projectiles, arrows, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking, onGround: grounded,
+  entityTick = { state: { world, items, primed, projectiles, arrows, rockets, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking, onGround: grounded,
     minecarts, boats, hanging, velocity, rider, alive: survival.health > 0, width: PHYSICS.width, height: PHYSICS.height }, hooks: {
     carts: cartHooks,
     boats: boatHooks,
+    // the live rocket's hooks (fireworks-live.js): the 32-block ring, the 64-block tracking range for status 17, sounds and sparks; the client rocket copies draw the trail and the explosion (object-tracker.js)
+    rocketHooks: () => ({ ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), clientCopies: true }),
     hangingActive: (e) => !world.streaming || world.isTicking(e.x, e.z),
     hangingDrop: (d) => { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; },
     mobExplosion: (ev) => explodeEvent(ev, explodeAt),

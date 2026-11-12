@@ -14,7 +14,7 @@
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs } from "./experience.js";
 import { primeTnt, TNT_Y_OFFSET } from "./explosion.js";
-import { entityWalkers, watchJoin } from "./entity-simulation.js";
+import { entityWalkers, watchJoin, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
@@ -143,7 +143,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // entity keeps the 32-block rule (`entityTicks`), read at its place in the list. Spawns during the pass join the end of the list through `joined` stamps, as in main.js.
   // Batch 46: carts, boats, hanging entities and rockets join it. The player is absent: `alive: false` keeps him out of the vehicles' blockers and pushes, and `position` is the far
   // stand-in (an orb or potion sees nobody near).
-  const walkState = { world, items, primed, projectiles, arrows, mobs, xpOrbs: xp, survival: mobSv, position: player, minecarts, boats, hanging, velocity: { x: 0, y: 0, z: 0 }, rider: null, alive: false, width: 0.6, height: 1.8,
+  const walkState = { world, items, primed, projectiles, arrows, rockets, mobs, xpOrbs: xp, survival: mobSv, position: player, minecarts, boats, hanging, velocity: { x: 0, y: 0, z: 0 }, rider: null, alive: false, width: 0.6, height: 1.8,
     get falling() { return self.falling; } };
   const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
   const dropVehicle = (d) => { if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10); };
@@ -151,14 +151,15 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     maxStack, explodeTnt: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }),
     arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
       igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } }),
-    projectileTargets: () => mobTargets(mobs.entities, null), projectileHit: (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), projectilePearlImpact: (hit) => pearlLands(hit),
+    // Batch 47: the ball's ray takes the carts, boats and hanging entities too (vehicleTargets / thrownAtVehicleOrHanging, as in main.js); no player threw it, so the hit has no owner.
+    projectileTargets: () => [...mobTargets(mobs.entities, null), ...vehicleTargets(walkState)],
+    projectileHit: (ref, b) => ref !== "player" && (thrownAtVehicleOrHanging(walkState, ref, walkHooks, null) || thrownHit(mobs, ref, b)), projectilePearlImpact: (hit) => pearlLands(hit),
     mobExplosion: (ev) => explodeEvent(ev, (...a) => self.explode(...a)),
     carts: { drop: dropVehicle, cartHost }, boats: { drop: dropVehicle }, hangingActive: (h) => entityTicks(h.x, h.z),
     hangingDrop: (d) => items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }),
   };
   const walks = entityWalkers(() => ({ state: walkState, hooks: walkHooks }));
-  // A firework rocket (EntityFireworkRocket) is a loaded entity too; the live game ticks it after the walk, the away run puts it at its join place.
-  walks.set("rocket", { list: () => rockets.rockets, tick: (r) => rockets.tickOne(world, r, {}), reap: () => rockets.reap() });
+  // A firework rocket (EntityFireworkRocket) is a loaded entity too: the "rocket" walker of entityWalkers (the live game's, since batch 47) puts it at its join place.
   for (const [kind, w] of walks) {
     if (kind === "knot") continue; // a knot's own column check is in knotTickOne (horse-gear-live.js)
     const tick = w.tick;

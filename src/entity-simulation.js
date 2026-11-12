@@ -62,6 +62,7 @@ export function tickEntitySimulation(state, hooks = {}) {
 
   arrows.tick(world, arrowOptions(state));
   collectArrows(state, hooks);
+  state.rockets?.tick(world, hooks.rocketHooks?.(state) ?? {}); // no walk (no mob system): the rockets tick after the rest, as before batch 47
 }
 
 function collectItems(state, hooks) {
@@ -142,6 +143,8 @@ export function entityWalkers(ctx) {
     ["boat", { list: () => st().boats?.carts ?? [], tick: (e) => tickBoatOne(st(), hk().boats ?? {}, e), reap: () => st().boats?.reap(), pushMob: (m) => pushMobOnVehicles(st(), st().boats, m) }],
     // Paintings and item frames: EntityHanging.onUpdate with its 100-tick surface check; a broken one's drops join the list at once.
     ["hanging", { list: () => st().hanging?.entities ?? [], tick: (e) => { st().hanging.tickOne(st().world, e, hk().hangingActive); drainHanging(st(), hk()); }, reap: () => {} }],
+    // Firework rockets (EntityFireworkRocket): `rocketHooks(state)` is the live game's ring, tracking, sound, spark and clientCopies hooks (fireworks-live.js tickOne).
+    ["rocket", { list: () => st().rockets?.rockets ?? [], tick: (e) => st().rockets.tickOne(st().world, e, hk().rocketHooks?.(st()) ?? {}), reap: () => st().rockets?.reap() }],
     ["knot", { list: () => st().mobs?.knotList ?? [], tick: (e) => st().mobs.knotTickOne(e), reap: () => {} }],
     // Witch and dispenser potions, snow golem snowballs and wither skulls (a skull's explosion runs in its own update, as World.newExplosion does).
     ["potion", { list: () => st().mobs?.potions?.balls ?? [], tick: (e) => st().mobs.potions.tickOne(e, st().position, st().survival, vehicleTargets(st())), reap: () => st().mobs?.potions?.reap() }],
