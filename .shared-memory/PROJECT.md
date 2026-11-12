@@ -113,6 +113,19 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 51 (2026-11-12, eight Sonnet tracks in `../wt51-<name>` on `batch51-<name>`, cut from 119a6db93, merged --no-ff on `batch51-lead`; lead note `b51-lead-track.md`; the gun side runs separately):
+- 0.80.0, by track:
+  - ridecopy: the ridden boat's copy mirrors the live boat and splashes (`ObjectClient.mirrorRidden`, `hooks.rides`); a ridden cart interpolates. Bytecode-read.
+  - cmdtexts: help, deprecated-id, gamerule and `chat.type.admin` as native components; an invalid `LastOutput` throws `LastOutputError` and that block or cart is skipped. `CmdTextsProbe` executed (`b51ct`).
+  - mobvictims: `AbsorptionAmount` saved and loaded; skeleton, wither skeleton, pigman and wither executed as victims (1669 `b51mv`); fire immunity moved to `hazard`, wither armour flat 4, undead arrow shooters refused.
+  - trackerqueue: mob and object entries walk as one loop (`MobTracker.update(..., joint)`, `mobs.jointTracking`); objects take their id in `EntityWorld.joined`. Bytecode-read.
+  - blockclicks: block right clicks and finished digs queue to the network tick (`breakBlockPacket`, queued `target`). Bytecode-read.
+  - flyturn: ghast turn matched; dragon body yaw runs the legacy turn, growl timer from 0 with a pitch roll (`b51ft` executed); silverfish retract matched (`b51sf`).
+  - awaydispense2: spawn eggs dispensed (`SPAWN_EGG`, `host.spawnEgg`); exp bottle dispense and away frame drop matched 108 executed `b51ad` records.
+  - dragonfx: the beam scrolls by the dragon's ticks (`beamTicks`); tall grass and fern display tint (`displayTint`). Bytecode-read.
+- Lead fix: the gamerule list joins with `joinNiceString` ("a, b and c").
+- Verification: see `b51-lead-track.md`. Pushed to github main by the lead.
+
 Batch 50 (2026-11-12, eight Sonnet tracks in `../wt50-<name>` on `batch50-<name>`, cut from ca6a447bf, merged --no-ff on `batch50-lead`; lead note `b50-lead-track.md`; the gun side runs separately):
 - 0.79.0, by track:
   - knotsplash: leash knots on the crosshair pick through the copy box (`aimKnotBox`); boat copy splash particles (`ObjectClient.splash`). Bytecode-read.
