@@ -17,9 +17,9 @@ test("batch 51: a click on a block, and any click behind a queued action, waits 
 });
 
 test("batch 51: the queue keeps the click's own target and replays entries in arrival order", () => {
-  assert.match(main, /pendingEdits\.push\(\{ place, aimed: \[aimedEntity, aimedCart, aimedHanging\], target \}\)/);
+  assert.match(main, /pendingEdits\.push\(\{ place, aimed: \[aimedEntity, aimedCart, aimedHanging\], target, predicted: .*\}\)/);
   const run = fnBody("runPendingEdits");
-  assert.match(run, /for \(const q of list\) \{[^]*?if \(q\.fn\) \{ q\.fn\(\); continue; \}[^]*?target = q\.target; edit\(q\.place\)/);
+  assert.match(run, /for \(const q of list\) \{[^]*?if \(q\.fn\) \{ q\.fn\(\); continue; \}[^]*?target = q\.target;[^]*?edit\(q\.place\)/);
   assert.match(run, /target = wasTarget/);
 });
 
