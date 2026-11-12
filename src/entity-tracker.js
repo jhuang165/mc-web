@@ -28,7 +28,7 @@
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
 import { trackingRange } from "./ring-events.js";
 import { mountEntity, seatPosition } from "./mob-riding.js";
-import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox } from "./dragon.js";
+import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox, DRAGON_MAX_HEALTH, DRAGON_CRYSTAL_RANGE } from "./dragon.js";
 import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
 import { JavaHashSetOrder } from "./java-hashset-order.js";
@@ -231,7 +231,9 @@ export class ClientEntity {
     this.batHanging = false; // EntityBat's data watcher flag, from S1C
     this.height = 0; // the client class's own size, kept by the tracker
     // Entity.rand of the client copy (unseeded in Java; the replay seeds it): the squid's rotation speed re-roll reads it
-    this.rand = type === "squid" || type === "ender_dragon" ? ClientEntity.makeRandom() : null;
+    this.rand = type === "squid" || type === "ender_dragon" || type === "ender_crystal" ? ClientEntity.makeRandom() : null;
+    this.crystals = null; // the client dragon's world: () => the present crystal copies in the order getEntitiesWithinAABB walks them (MobTracker.clientTick)
+    this.innerRotation = 0; this.age = 0; // EntityEnderCrystal.innerRotation (rand.nextInt(100000), then +1 a tick) and the beam's ticks
     this.squid = null; // EntitySquid's client fields (squidPitch ... tentacleAngle), set at spawn
     this.dragon = null; // EntityDragon's client fields: ringBuffer, ringBufferIndex, prevAnimTime, animTime, deathTicks, the box and the seven parts
     // The data watcher values the client holds for the mobs that read one: the dragon's health (index 6, from the spawn packet and S1C; null = the
@@ -245,9 +247,10 @@ export class ClientEntity {
   apply(p, ctx = null) {
     if (p.type === "spawn") {
       if (this.type === "squid") this.squid = squidState(this.rand); // the constructor rolls rotationVelocity from Entity.rand
+      if (this.type === "ender_crystal") this.innerRotation = this.rand.nextInt(100000); // EntityEnderCrystal's constructor: its own Entity.rand
       if (this.type === "ender_dragon") {
         // EntityDragon's constructor on the client: setHealth(max) (200), the seven parts, then the spawn packet's data watcher list sets the health
-        this.dragon = { ring: new Float64Array(64 * 3), ri: -1, prevAnim: 0, anim: 0, deathTicks: 0, ryv: 0, talk: 0, bb: null,
+        this.dragon = { ring: new Float64Array(64 * 3), ri: -1, prevAnim: 0, anim: 0, deathTicks: 0, ryv: 0, talk: 0, bb: null, healer: null, age: 0,
           parts: PART_SIZES.map(([w, h]) => ({ width: w, height: h, box: partBox(0, 0, 0, w, h) })) };
         this.health = 200;
       }
@@ -296,6 +299,7 @@ export class ClientEntity {
     this.prevRotationYaw = this.rotationYaw; this.prevRotationPitch = this.rotationPitch;
     this.prevRenderYawOffset = this.renderYawOffset; this.prevRotationYawHead = this.rotationYawHead;
     if (this.type === "ender_dragon" && this.dragon) { this.dragonUpdate(); turn?.(this); return; }
+    if (this.type === "ender_crystal") { this.innerRotation++; this.age++; } // EntityEnderCrystal.onUpdate (++innerRotation) after the world's ++ticksExisted; its fire and watcher writes are not drawn
     if (move && pre) pre(this);
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
@@ -321,10 +325,11 @@ export class ClientEntity {
   // ring buffer of the previous 64 yaw / y samples (written before the move), the interpolation toward the packet's position and angles with the dragon's
   // own arithmetic (the yaw and pitch steps are doubles cast to float, no % 360 on the way, setPosition for the box), the body yaw, and the seven
   // parts (sizes, then placement; the wing sweep, the head attack and the block breaking are the server's). There is no moveEntity at all.
-  // The health is the client's data watcher value (spawn packet and S1C). Not modelled: the crystal search (client copies of crystals are not
-  // tracked here: only its rand.nextInt(10) draw), the client playing the living sound (its roll and pitch draws are made).
+  // The health is the client's data watcher value (spawn packet and S1C). The crystal search is the client copy's own (crystalUpdate, executed b49dc);
+  // the living sound is silent (RenderGlobal.playSound is empty in 1.7.10) but its roll and pitch draws are made.
   dragonUpdate() {
     const d = this.dragon, fr = Math.fround, rand = this.rand;
+    d.age++; // World.updateEntityWithOptionalForce: ++ticksExisted before onUpdate
     if (this.health <= 0) this.dragonDeathUpdate();
     else {
       const time = d.talk; d.talk = time + 1;
@@ -341,7 +346,7 @@ export class ClientEntity {
       this.fx.push({ particle: "largeexplode", x: this.x + a, y: this.y + 2 + b, z: this.z + c });
       return;
     }
-    rand.nextInt(10); // updateDragonEnderCrystal: the roll that searches for a crystal within 32 blocks
+    this.crystalUpdate();
     const g = fr(fr(0.2) / fr(fr(fr(Math.sqrt(this.vx * this.vx + this.vz * this.vz)) * 10) + 1));
     d.anim = fr(d.anim + fr(g * fr(Math.pow(2, this.vy))));
     this.rotationYaw = wrapFloat(this.rotationYaw);
@@ -358,6 +363,26 @@ export class ClientEntity {
     }
     this.renderYawOffset = this.rotationYaw;
     updateParts(this, null);
+  }
+  // EntityDragon.updateDragonEnderCrystal (xa.bP, executed b49dc: it runs on both sides, only the dead crystal's head attack is under !isRemote). A target whose copy is gone
+  // (the destroy packet made it dead) is dropped; a live one heals the client's own health by 1 on every 10th ticksExisted (setHealth, the data watcher). Then the roll
+  // `rand.nextInt(10) == 0` picks the nearest crystal copy whose 2 x 2 box meets the dragon's box grown by 32 on every side (strictly nearer wins, so the first of a tie in
+  // getEntitiesWithinAABB's chunk order stays).
+  crystalUpdate() {
+    const d = this.dragon;
+    if (d.healer) {
+      if (!d.healer.present) d.healer = null;
+      else if (d.age % 10 === 0 && this.health < DRAGON_MAX_HEALTH) this.health = Math.max(0, Math.min(DRAGON_MAX_HEALTH, this.health + 1));
+    }
+    if (this.rand.nextInt(10) !== 0) return;
+    const b = d.bb, r = DRAGON_CRYSTAL_RANGE;
+    let best = null, bestD = Number.MAX_VALUE;
+    for (const c of this.crystals?.() ?? []) {
+      if (!(c.x + 1 > b[0] - r && c.x - 1 < b[3] + r && c.y + 1 > b[1] - r && c.y - 1 < b[4] + r && c.z + 1 > b[2] - r && c.z - 1 < b[5] + r)) continue;
+      const dx = this.x - c.x, dy = this.y - c.y, dz = this.z - c.z, dist = dx * dx + dy * dy + dz * dz;
+      if (dist < bestD) { bestD = dist; best = c; }
+    }
+    d.healer = best;
   }
   // EntityDragon.onDeathUpdate (xa.aF) on the client: the counter, the hugeexplosion puff at 180..200 (three draws), moveEntity(0, 0.1, 0) with no
   // clip, and the spin of 20 degrees a tick (renderYawOffset follows). The xp orbs, the end sound and setDead are the server's (!isRemote).
@@ -469,7 +494,9 @@ export class MobTracker {
   }
   // The entry and the client entity of a new tracked entity (object-tracker.js overrides this for items, orbs and projectiles)
   create(e, size) {
-    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" }, this.view), client: new ClientEntity(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, wasGround: !!e.onGround };
+    // EntityTracker.trackEntity: an ender crystal is tracked at 256 (clamped), every Integer.MAX_VALUE ticks, with no velocity (bytecode-read, mn.a(sa))
+    const crystal = e.type === "ender_crystal";
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: new ClientEntity(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) {
@@ -528,7 +555,11 @@ export class MobTracker {
   // its mount (a rider whose mount is gone or no longer carries it is let go and updates on its own).
   clientTick(physics = null) {
     for (const en of this.entries.values()) this.flush(en);
-    const hooks = (e) => physics && !CLIENT_PHYSICS_OFF.has(e.type)
+    // the crystal copies a client dragon searches: World.getEntitiesWithinAABB walks the chunks x, then z, then the y slice
+    let crystals = null;
+    const crystalCopies = () => crystals ??= [...this.entries].filter(([e, en]) => e.type === "ender_crystal" && en.client.present).map(([, en]) => en.client)
+      .sort((a, b) => (floor(a.x / 16) - floor(b.x / 16)) || (floor(a.z / 16) - floor(b.z / 16)) || (floor(a.y / 16) - floor(b.y / 16)));
+    const hooks = (e) => e.type === "ender_crystal" ? [null, null, null] : physics && !CLIENT_PHYSICS_OFF.has(e.type)
       ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))]
       : [null, physics?.turn && ((c) => physics.turn(c, e)), null];
     for (const [e, en] of this.entries) {
@@ -541,6 +572,7 @@ export class MobTracker {
         c.ridingEntity = null;
       }
       c.dead = e.health <= 0;
+      if (c.dragon) c.crystals = crystalCopies;
       c.fire = 0; // Entity.onEntityUpdate: `if (worldObj.isRemote) fire = 0`
       c.step(...hooks(e));
       if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`). Natively a ridden pig is packet-driven (see followLive), but the port's camera and seat still follow the live pig, so its copy follows it too until the seat moves to the client copy (lead, batch 45: otherwise the drawn pig trails its rider)

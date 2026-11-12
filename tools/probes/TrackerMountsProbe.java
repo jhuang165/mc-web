@@ -32,7 +32,31 @@ public class TrackerMountsProbe {
     public void a(double x, double y, double z, String name, float vol, float pitch, boolean delay) { if (logOn && clientSide && name.startsWith("mob.enderdragon")) log.add("[\"snd\",\"" + name + "\"," + x + "," + y + "," + z + "," + vol + "," + pitch + "]"); }
     public void a(String name, double x, double y, double z, double vx, double vy, double vz) { if (logOn && clientSide && (name.equals("largeexplode") || name.equals("hugeexplosion"))) log.add("[\"fx\",\"" + name + "\"," + x + "," + y + "," + z + "]"); }
     boolean clientSide = false;
+    // batch 49 (dragonclient): World.getEntitiesWithinAABB(Class, box) on the client world: the client crystals whose box meets `box`, in the chunk walk's order
+    // (chunk x, chunk z, then the y slice; bytecode-read from ahb.a(Class, azt, sj), the double has no chunk lists of its own)
+    public List a(Class c, azt box) {
+      List<sa> out = new ArrayList<>();
+      for (sa e : clientOrder) {
+        if (!c.isInstance(e) || e.K) continue;
+        azt b = e.C;
+        if (b.d > box.a && b.a < box.d && b.e > box.b && b.b < box.e && b.f > box.c && b.c < box.f) out.add(e);
+      }
+      out.sort(Comparator.comparingInt((sa e) -> (int) Math.floor(e.s / 16.0)).thenComparingInt(e -> (int) Math.floor(e.u / 16.0)).thenComparingInt(e -> (int) Math.floor(e.t / 16.0)));
+      return out;
+    }
   }
+  // batch 49: the client's Entity.rand with a draw counter and the last raw value, so the replay can follow the stream draw for draw
+  static class CR extends Random {
+    long count; int last;
+    CR(long seed) { super(seed); }
+    protected int next(int bits) { count++; last = super.next(bits); return last; }
+  }
+  static CR dragonRand;
+  static boolean b49 = false; // the b49dc cases: the client world counts ticksExisted like World.updateEntityWithOptionalForce, and crystal destroys reach the client
+  static List<double[]> crystalSpec = new ArrayList<>(); // server ender crystals { x, y, z, dieTick (-1: never) }
+  static final List<sa> crystalClients = new ArrayList<>(); // the client copy of crystalSpec[i], null until its spawn packet arrives
+  static String crystalsJson() { StringBuilder b = new StringBuilder("["); for (int i = 0; i < crystalSpec.size(); i++) { double[] c = crystalSpec.get(i); b.append(i > 0 ? "," : "").append("[" + num(c[0]) + "," + num(c[1]) + "," + num(c[2]) + "," + (int) c[3] + "]"); } return b.append("]").toString(); }
+  static int crystalIdx(Object c) { for (int i = 0; i < crystalClients.size(); i++) if (crystalClients.get(i) == c) return i; return -1; }
   static boolean dragonRange = false; // EntityTracker.trackEntity: the dragon is tracked at 160 blocks
   static int cidx(sa c) { for (Map.Entry<Integer, sa> en : clientById.entrySet()) if (en.getValue() == c) return idx(en.getKey()); return -2; }
   static String num(double d) { return Double.toString(d); }
@@ -65,6 +89,21 @@ public class TrackerMountsProbe {
 
   // NetHandlerPlayClient (bjb, bytecode-read): S0F creates the client mob at pos / 32; S14 / S18 / S12 as in TrackerProbe.handle; S1B attach
   static void handle(Object p, List<sa> servers, List<Make> makes) throws Exception {
+    if (p instanceof fw) { // NetHandlerPlayClient.handleSpawnObject (bjb.a(fw), bytecode-read): type 51 is new EntityEnderCrystal(world, x / 32, y / 32, z / 32); then serverPos, rotation and the entity id
+      fw s = (fw) p; int eid = s.c();
+      wz c = new wz(clientWorld, s.d() / 32.0, s.e() / 32.0, s.f() / 32.0);
+      TrackerProbe.setI(c, "bZ", s.d()); TrackerProbe.setI(c, "ca", s.e()); TrackerProbe.setI(c, "cb", s.f());
+      MobMoveProbe.field(sa.class, "z").setFloat(c, (float) (s.j() * 360) / 256.0f); MobMoveProbe.field(sa.class, "y").setFloat(c, (float) (s.k() * 360) / 256.0f);
+      c.d(eid);
+      clientById.put(eid, c); clientOrder.add(c);
+      Integer k = indexOf.get(eid); if (k != null && k >= 2) { while (crystalClients.size() <= k - 2) crystalClients.add(null); crystalClients.set(k - 2, c); }
+      return;
+    }
+    if (p instanceof Integer) { // S13 (destroy): WorldClient.removeEntityFromWorld -> World.removeEntity -> setDead
+      sa c = clientById.remove((Integer) p);
+      if (c != null) { c.B(); clientOrder.remove(c); }
+      return;
+    }
     if (p instanceof fz) {
       fz s = (fz) p;
       int eid = (Integer) MobMoveProbe.field(fz.class, "a").get(p), i = idx(eid);
@@ -72,7 +111,7 @@ public class TrackerMountsProbe {
       TrackerProbe.setI(c, "bZ", s.f()); TrackerProbe.setI(c, "ca", s.g()); TrackerProbe.setI(c, "cb", s.h());
       c.b(s.f() / 32.0, s.g() / 32.0, s.h() / 32.0, (float) (s.l() * 360) / 256.0f, (float) (s.m() * 360) / 256.0f);
       MobMoveProbe.field(sv.class, "aO").setFloat(c, (float) (s.n() * 360) / 256.0f); // rotationYawHead
-      if (c instanceof ws || c instanceof xa) { MobMoveProbe.set(c, "Z", new Random(77)); if (c instanceof ws) squidInit = num(MobMoveProbe.fl(c, "by")); }
+      if (c instanceof ws || c instanceof xa) { if (c instanceof xa) { dragonRand = new CR(77); MobMoveProbe.set(c, "Z", dragonRand); } else MobMoveProbe.set(c, "Z", new Random(77)); if (c instanceof ws) squidInit = num(MobMoveProbe.fl(c, "by")); }
       if (c instanceof xa) { // NetHandlerPlayClient.handleSpawnMob (bytecode-read): each part's id moves by (packet id - the dragon's own id)
         sa[] parts = ((xa) c).at(); int delta = eid - c.y();
         for (sa part : parts) part.d(part.y() + delta);
@@ -130,7 +169,7 @@ public class TrackerMountsProbe {
     MobMoveProbe.set(clientWorld, "t", U.allocateInstance(aqq.class));
     MobMoveProbe.field(ahb.class, "E").setBoolean(clientWorld, true);
     ((MW) clientWorld).clientSide = true; MW.logOn = true; MW.log.clear();
-    clientById.clear(); clientOrder.clear(); indexOf.clear();
+    clientById.clear(); clientOrder.clear(); indexOf.clear(); crystalClients.clear();
     TrackerProbe.chunkLoaded = true;
 
     sa mount = mountMake.make(world), rider = riderMake.make(world);
@@ -160,10 +199,21 @@ public class TrackerMountsProbe {
     my[] entries = new my[2];
     entries[0] = new my(mount, dragonRange ? 160 : 80, 3, sendVel);
     entries[1] = new my(rider, 80, 3, true);
+    // batch 49: the server's ender crystals, tracked as EntityTracker.trackEntity does: range 256, frequency Integer.MAX_VALUE, no velocity (bytecode-read, mn.a(sa))
+    List<my> cEntries = new ArrayList<>(); List<Integer> cDie = new ArrayList<>(); List<sa> cServer = new ArrayList<>();
+    for (int k = 0; k < crystalSpec.size(); k++) {
+      double[] cs = crystalSpec.get(k);
+      wz cr = new wz(world, cs[0], cs[1], cs[2]);
+      TrackerProbe.chunk(cr);
+      indexOf.put(id(cr), 2 + k); cServer.add(cr); cDie.add((int) cs[3]);
+      cEntries.add(new my(cr, 256, Integer.MAX_VALUE, false));
+    }
+    StringBuilder dc = new StringBuilder();
     int[] order = riderFirst ? new int[]{1, 0} : new int[]{0, 1};
     List<String> events = new ArrayList<>();
     StringBuilder inputs = new StringBuilder(), client = new StringBuilder(), extra = new StringBuilder(), more = new StringBuilder(), fx = new StringBuilder();
     for (int i : order) entries[i].b(players); // updatePlayerList at once: spawn (and attach) packets
+    for (my ce : cEntries) ce.b(players);
     int lastLeash = 0;
     for (int t = 0; t < n; t++) {
       double[] r = script.at(t);
@@ -177,10 +227,12 @@ public class TrackerMountsProbe {
       }
       if (mount instanceof xa && r.length > 14) ((xa) mount).g((float) r[14]); // the server's health (data watcher 6 -> S1C)
       if (serverSquidTick && mount instanceof ws) { mount.C(); }
+      for (int k = 0; k < cEntries.size(); k++) if (cDie.get(k) == t && cEntries.get(k) != null) { cEntries.get(k).a(); cEntries.set(k, null); } // the crystal blows up: setDead, untracked, S13 to the watchers
       for (int i : order) entries[i].a(players);
+      for (my ce : cEntries) if (ce != null) ce.a(players);
       pe.a(players);
       boolean flagged = pe.n;
-      if (flagged) for (int i : order) entries[i].b(p);
+      if (flagged) { for (int i : order) entries[i].b(p); for (my ce : cEntries) if (ce != null) ce.b(p); }
       StringBuilder ev = new StringBuilder();
       for (Object q : TrackerProbe.queue) { if (ev.length() > 0) ev.append(","); ev.append(describe(q)); }
       if (ev.length() > 0) events.add("[" + t + ",[" + ev + "]]");
@@ -198,6 +250,12 @@ public class TrackerMountsProbe {
           if (r2.m != c) { r2.m = null; c.l = null; } else tickClient(r2);
         }
       }
+      if (b49 && mount instanceof xa) { // the dragon copy's crystal target (bC), health, ticksExisted, the draw count and last raw value of its Entity.rand, then each crystal copy: [innerRotation, isDead] or [-1]
+        xa dg = (xa) clientById.get(id(mount));
+        StringBuilder cc = new StringBuilder();
+        for (int k = 0; k < cEntries.size(); k++) { sa x = k < crystalClients.size() ? crystalClients.get(k) : null; cc.append(k > 0 ? "," : "").append(x == null ? "[-1]" : "[" + ((wz) x).a + "," + (x.K ? 1 : 0) + "]"); }
+        dc.append(t > 0 ? "," : "").append("[" + crystalIdx(MobMoveProbe.field(xa.class, "bC").get(dg)) + "," + num(((sv) dg).aS()) + "," + dg.aa + "," + dragonRand.count + "," + dragonRand.last + ",[" + cc + "]]");
+      }
       client.append(t > 0 ? "," : "").append("[");
       for (int i = 0; i < 2; i++) {
         sa c = clientById.get(id(servers.get(i)));
@@ -210,7 +268,7 @@ public class TrackerMountsProbe {
       more.append(t > 0 ? "," : "").append(moreOf(clientById.get(id(mount))));
       if (!MW.log.isEmpty()) { fx.append(fx.length() > 0 ? "," : "").append("[" + t + ",[" + String.join(",", MW.log) + "]]"); MW.log.clear(); }
     }
-    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"squidInit\":" + squidInit + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "],\"extra\":[" + extra + "],\"more\":[" + more + "],\"fx\":[" + fx + "],\"partIds\":" + dragonPartIds + "}";
+    return "{\"case\":\"" + name + "\",\"n\":" + n + ",\"squidInit\":" + squidInit + ",\"inputs\":[" + inputs + "],\"events\":[" + String.join(",", events) + "],\"client\":[" + client + "],\"extra\":[" + extra + "],\"more\":[" + more + "],\"fx\":[" + fx + "],\"crystals\":" + crystalsJson() + ",\"dc\":[" + dc + "],\"partIds\":" + dragonPartIds + "}";
   }
   // batch 44: the boss and squid fields of the client entity. Squid: squidPitch, prevSquidPitch, squidYaw, prevSquidYaw, squidRotation,
   // prevSquidRotation, tentacleAngle, lastTentacleAngle (bp..bw), then the six private fields (bx..bC). Dragon: prevAnimTime (bx), animTime (by),
@@ -243,6 +301,7 @@ public class TrackerMountsProbe {
     return "[]";
   }
   static void tickClient(sa c) throws Exception {
+    if (b49) c.aa++; // World.updateEntityWithOptionalForce: ++ticksExisted, then onUpdate
     if (c.m != null) c.ab(); else c.h(); // World.updateEntityWithOptionalForce: updateRidden for a rider, else onUpdate
   }
   // the server places the mount (its row), then the rider with the executed updateRiderPosition when it is mounted
@@ -310,6 +369,18 @@ public class TrackerMountsProbe {
       double a = t / 25.0;
       return new double[]{8.5 + 30 * Math.sin(a), 70, 5.5 + 30 * (1 - Math.cos(a)), (t * 3 + 100) % 360 - 180, 30 * Math.cos(a) / 25.0, 0, 30 * Math.sin(a) / 25.0, 0, 1, 0, 20, 0, 20, 0, t < 60 ? 200 : 0};
     }, 300));
+    // batch 49 dragonclient (b49dc): the client dragon copy's crystal search (EntityDragon.updateDragonEnderCrystal, bP, run by onLivingUpdate on both sides): the
+    // nearest EntityEnderCrystal copy within 32 blocks of its box on a nextInt(10) == 0 roll, +1 health every 10th ticksExisted with a target, the target let go once its copy is
+    // dead (the server's attack on the head is under !isRemote). The crystals are real server wz tracked at range 256, their copies real wz from the S0E type 51 packet.
+    // The server dragon (health 150, never ticked) only feeds the tracker; the client's own health climbs while a crystal is in reach.
+    b49 = true; TrackerProbe.queueDestroy = true; dragonRange = true;
+    crystalSpec = new ArrayList<>();
+    System.out.println(run("b49dc0", dragon, zombie, false, t -> new double[]{8.5 + 0.2 * t, 70, 5.5, 90, 0.2, 0, 0, 0, 1, 0, 20, 0, 20, 0, 150}, 80));
+    crystalSpec = new ArrayList<>(Collections.singletonList(new double[]{28.5, 66, 5.5, 50}));
+    System.out.println(run("b49dc1", dragon, zombie, false, t -> new double[]{8.5 + 0.2 * t, 70, 5.5, 90, 0.2, 0, 0, 0, 1, 0, 20, 0, 20, 0, 150}, 80));
+    crystalSpec = new ArrayList<>(Arrays.asList(new double[]{-20.5, 66, 5.5, -1}, new double[]{62.5, 70, 5.5, -1}));
+    System.out.println(run("b49dc2", dragon, zombie, false, t -> new double[]{8.5 + 0.5 * t, 70, 5.5, 90, 0.5, 0, 0, 0, 1, 0, 20, 0, 20, 0, 150}, 80));
+    b49 = false; TrackerProbe.queueDestroy = false; crystalSpec = new ArrayList<>();
     dragonRange = false;
     // the squid's air: out of the water the server ticks its air down (EntityWaterMob.onEntityUpdate: a dirtied data watcher, S1C every tick), the client counts its own
     serverSquidTick = true;
