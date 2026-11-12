@@ -2080,7 +2080,20 @@ export class EntityWorld {
   }
   gearViewOf(e) { return (e && this.views?.get(e)) ?? e; } // the view gearViews() made of `e` (the aimed mob is compared by identity)
   // EntityPlayerMP.onUpdate (the S13 flush) runs at the player's place in loadedEntityList: an entity removed before that place flushes in the same pass (entity-tracker.js `beforePlayer`)
-  beforePlayer(e) { const s = this.orderSeqs?.get(e); return s !== undefined && s < (this.playerStamp ?? 0); }
+  beforePlayer(e) { const s = this.orderSeqs?.get(e); return s !== undefined && s < (this.orderSeqs.get(this.playerKey) ?? this.playerStamp ?? 0); }
+  // Batch 53: the player joins loadedEntityList at a definite place. At login the world's own entities (loaded with its chunks) are in the list first and the player is appended
+  // (ServerConfigurationManager.initializeConnectionToPlayer -> spawnEntityInWorld); what spawns or loads later stands after it. A dimension change keeps the player and its id
+  // (the new world's list gets it at its first tick), a respawn is a new EntityPlayerMP: `fresh` takes a new entity id and the player moves to the end of the list again.
+  // Bytecode-read. The player's stamp is in `orderSeqs` under `playerKey`, its id in `ids.playerId` (the tracker's set holds its entry, `MobTracker.joinPlayer`).
+  playerJoined(fresh = false) {
+    this.withBalls?.(this.entities.slice()); // every entity the world holds gets its place first (restored items, arrows and orbs after the mobs known so far)
+    this.playerKey ??= { player: true };
+    this.playerStamp = this.orderStamp();
+    this.orderSeqs.set(this.playerKey, this.playerStamp);
+    const ids = this.ids;
+    if (ids && (fresh || ids.playerId === undefined)) ids.playerId = ids.take();
+    if (ids && this.tracker) this.tracker.joinPlayer(ids.playerId);
+  }
   takeId(e) { if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); }
   // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
   orderStamp() {
@@ -2155,6 +2168,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     this.tracker.beforePlayer ??= (e) => this.beforePlayer(e);
+    if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
     this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }), joint);
@@ -2185,7 +2199,6 @@ export class EntityWorld {
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
-    this.playerStamp ??= this.orderStamp(); // the player joined the list after everything the world held when it opened (loaded with its chunks); what spawns later stands after it
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {

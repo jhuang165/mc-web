@@ -11,6 +11,11 @@ import java.util.*;
 public class TrackerJointProbe {
   static sun.misc.Unsafe U;
   static ChickenProbe.World server;
+  static TrackerProbe.PMP angler;
+  static String tag = null; // "b53tj" on the batch 53 cases (the batch 52 cases carry none, so their records stay as they were)
+  static boolean hangs(String k) { return k.equals("painting") || k.equals("frame"); }
+  // kinds whose scripted motion rides in the S12 and whose yaw turns with the tick (the batch 52 kinds keep their own rules below)
+  static boolean flies(String k) { return k.equals("boat") || k.startsWith("cart") || k.equals("eye") || k.equals("hook"); }
   static final List<Integer> pending = new ArrayList<>();
   static String num(double v) { return Double.toString(v); }
   static double d(Object o, String n) throws Exception { return MobMoveProbe.d(o, n); }
@@ -24,6 +29,14 @@ public class TrackerJointProbe {
       case "arrow": return new zc(server, s[0], s[1], s[2]);
       case "snowball": return new zj(server, s[0], s[1], s[2]);
       case "orb": return new sq(server, s[0], s[1], s[2], 5);
+      // Batch 53 (b53tj): vehicles, hanging entities, an eye of ender and a fish hook (the angler is the player stand-in; its id rides in the S0E data)
+      case "boat": return new xi(server, s[0], s[1], s[2]);
+      case "cart0": return xl.a(server, s[0], s[1], s[2], 0);
+      case "cart1": return xl.a(server, s[0], s[1], s[2], 1);
+      case "painting": return new tb(server, (int) s[0], (int) s[1], (int) s[2], (int) s[3], "Kebab");
+      case "frame": return new st(server, (int) s[0], (int) s[1], (int) s[2], (int) s[3]);
+      case "eye": return new zd(server, s[0], s[1], s[2]);
+      case "hook": return new xe(server, s[0], s[1], s[2], angler);
       default: throw new IllegalStateException(kind);
     }
   }
@@ -32,7 +45,7 @@ public class TrackerJointProbe {
     return i;
   }
   static String kindOf(Object p) {
-    if (p instanceof fz || p instanceof fw || p instanceof fx) return "spawn";
+    if (p instanceof fz || p instanceof fw || p instanceof fx || p instanceof ga) return "spawn"; // ga: S10SpawnPainting
     if (p instanceof hg) return "move";
     if (p instanceof hh) return "moveLook";
     if (p instanceof hi) return "look";
@@ -73,6 +86,7 @@ public class TrackerJointProbe {
     MobMoveProbe.field(sa.class, "o").set(p, tw);
     TrackerProbe.set(p, "s", 0.5); TrackerProbe.set(p, "t", 0.0); TrackerProbe.set(p, "u", 0.5);
     TrackerProbe.watchX = 0; TrackerProbe.watchZ = 0; TrackerProbe.watchRadius = 10; TrackerProbe.watching = true;
+    angler = p;
     List<Object> players = new ArrayList<>(); // mt.h: the player joins it at its own place in the list (below)
     // the world's player list (mt.h = ahb.playerEntities) and the real EntityTracker: mn's constructor needs a MinecraftServer, so the object is allocated and its four fields set
     MobMoveProbe.field(ahb.class, "h").set(tw, players);
@@ -107,7 +121,7 @@ public class TrackerJointProbe {
       flushSent(setup, 0);
     }
     ids.append("}");
-    StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\",\"ids\":" + ids + ",\"setup\":" + setup + "],\"ticks\":[");
+    StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\"" + (tag != null ? ",\"tag\":\"" + tag + "\"" : "") + ",\"ids\":" + ids + ",\"setup\":" + setup + "],\"ticks\":[");
     for (int t = 1; t <= ticks; t++) {
       StringBuilder ev = new StringBuilder("[");
       // World.updateEntities: the loop over loadedEntityList by index
@@ -156,14 +170,15 @@ public class TrackerJointProbe {
   // the scripted state of an entity at tick t: position, motion, angles
   static void position(Item it, int t) throws Exception {
     sa e = it.e;
+    if (hangs(it.kind)) { TrackerProbe.chunk(e); return; } // paintings and frames never move: their tile and box come from the constructor
     double x = it.start[0] + it.vel[0] * t, y = it.start[1] + it.vel[1] * t, z = it.start[2] + it.vel[2] * (double) t;
     if (it.kind.equals("arrow")) y = it.start[1] + it.vel[1] * t - 0.002 * t * t;
     TrackerProbe.set(e, "s", x); TrackerProbe.set(e, "t", y); TrackerProbe.set(e, "u", z);
     MobMoveProbe.set(e, "v", 0.0); MobMoveProbe.set(e, "w", 0.0); MobMoveProbe.set(e, "x", 0.0); MobMoveProbe.field(sa.class, "H").setBoolean(e, false);
-    if (it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb")) {
+    if (it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind)) {
       MobMoveProbe.set(e, "v", it.vel[0] * (1 + (t % 5) * 0.1)); MobMoveProbe.set(e, "w", it.vel[1]); MobMoveProbe.set(e, "x", it.vel[2]);
     }
-    float yaw = it.kind.equals("chicken") ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
+    float yaw = it.kind.equals("chicken") || flies(it.kind) ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
     MobMoveProbe.field(sa.class, "y").setFloat(e, yaw);
     MobMoveProbe.field(sa.class, "z").setFloat(e, it.kind.equals("arrow") ? -10f : 0f);
     if (e instanceof sv) ((sv) e).e(yaw);
@@ -179,12 +194,12 @@ public class TrackerJointProbe {
         // the states are recomputed from the script on a throwaway entity-free path: position() reads only the script, so replay the same arithmetic
         double x = it.start[0] + it.vel[0] * t, y = it.start[1] + it.vel[1] * t, z = it.start[2] + it.vel[2] * (double) t;
         if (it.kind.equals("arrow")) y = it.start[1] + it.vel[1] * t - 0.002 * t * t;
-        boolean motion = it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb");
+        boolean motion = it.kind.equals("item") || it.kind.equals("snowball") || it.kind.equals("orb") || flies(it.kind);
         double vx = motion ? it.vel[0] * (1 + (t % 5) * 0.1) : 0, vy = motion ? it.vel[1] : 0, vz = motion ? it.vel[2] : 0;
-        float yaw = it.kind.equals("chicken") ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
+        float yaw = it.kind.equals("chicken") || flies(it.kind) ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
         r.append(t > 0 ? "," : "").append("[" + num(x) + "," + num(y) + "," + num(z) + "," + num(vx) + "," + num(vy) + "," + num(vz) + "," + yaw + "," + (it.kind.equals("arrow") ? -10 : 0) + "]");
       }
-      b.append(f ? "" : ",").append("\"" + it.name + "\":{\"kind\":\"" + it.kind + "\",\"born\":" + it.born + ",\"dies\":" + it.dies + ",\"rows\":" + r + "]}"); f = false;
+      b.append(f ? "" : ",").append("\"" + it.name + "\":{\"kind\":\"" + it.kind + "\",\"born\":" + it.born + ",\"dies\":" + it.dies + ",\"rows\":" + r + "]" + (hangs(it.kind) ? ",\"dir\":" + (int) it.start[3] : "") + "}"); f = false;
     }
     return b + "}";
   }
@@ -216,5 +231,28 @@ public class TrackerJointProbe {
     // the same entities with ids in the 16-bit fold range and the player first / last in the list: the flush then lands one tick late for everything (first) or in the same tick for everything (last)
     System.out.println(run("playerFirst", 65530, 60, mix, 0));
     System.out.println(run("playerLast", 65530, 60, mix, 10));
+    // Batch 53: the kinds the batch 52 record left out. Boats, minecarts (empty and chest), paintings, item frames, an eye of ender and a fish hook among chickens and items, the
+    // player mid-list; the hanging entities and the hook are removed before and after the player's slot, entities of every kind are born during the run. The hanging tile is in start[0..2], its direction in start[3].
+    tag = "b53tj";
+    Item[] veh = {
+      item("c1", "chicken", new double[]{2.5, 0, 3.5}, new double[]{0.09, 0, 0.01}, 0, -1, 2.5f),
+      item("b1", "boat", new double[]{5.5, 0.0, 5.5}, new double[]{0.12, 0, 0.06}, 0, 33, 3.0f),
+      item("p1", "painting", new double[]{4, 2, 6, 1}, z, 0, 40, 0),
+      item("k1", "cart0", new double[]{3.5, 0.35, 2.5}, new double[]{0.1, 0, -0.04}, 0, -1, 2.0f),
+      item("e1", "eye", new double[]{1.5, 3.0, 1.5}, new double[]{0.25, 0.05, 0.3}, 0, 26, 5.0f),
+      item("f1", "frame", new double[]{6, 2, 3, 2}, z, 0, -1, 0),
+      item("i1", "item", new double[]{4.5, 1.125, 2.5}, new double[]{0.05, 0, 0.02}, 0, 20, 0),
+      item("k2", "cart1", new double[]{6.5, 0.35, 6.5}, new double[]{-0.1, 0, 0.05}, 0, 48, 1.5f),
+      item("p2", "painting", new double[]{2, 3, 7, 3}, z, 0, -1, 0),
+      item("b2", "boat", new double[]{1.5, 0.0, 6.5}, new double[]{0.07, 0, -0.1}, 9, 55, 4.0f),
+      item("h1", "hook", new double[]{3.0, 1.0, 3.0}, new double[]{0.04, 0, 0.03}, 14, 45, 0.5f),
+      item("f2", "frame", new double[]{5, 4, 1, 0}, z, 21, 50, 0),
+      item("p3", "painting", new double[]{7, 2, 5, 2}, z, 24, -1, 0),
+      item("e2", "eye", new double[]{2.5, 2.0, 4.5}, new double[]{-0.2, 0.1, 0.15}, 30, 52, 2.0f),
+      item("k3", "cart0", new double[]{4.5, 0.35, 4.5}, new double[]{0.08, 0, 0.08}, 36, -1, 3.5f),
+    };
+    System.out.println(run("vehicles", 1, 60, veh, 6));
+    // ids in the 16-bit fold range, the player last: the entities loaded with the chunks come first, the player joins and is sent the lot in the set's order
+    System.out.println(run("vehiclesLast", 65530, 60, veh, 9));
   }
 }
