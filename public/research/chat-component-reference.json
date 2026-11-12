@@ -42,7 +42,10 @@
   "chat.type.text": "<%s> %s",
   "commands.message.display.incoming": "%s whispers to you: %s",
   "commands.message.display.outgoing": "You whisper to %s: %s",
-  "chat.type.emote": "* %s %s"
+  "chat.type.emote": "* %s %s",
+  "death.attack.player": "%1$s was slain by %2$s",
+  "death.attack.mob": "%1$s was slain by %2$s",
+  "death.attack.generic": "%1$s died"
  },
  "rows": [
   [
@@ -182,6 +185,30 @@
    "{\"translate\":\"chat.type.emote\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"extra\":[\"waves\",\" \",\"hello\"],\"text\":\"\"}]}",
    "* §rSteve§r §r§rwaves§r §rhello§r",
    "* Steve waves hello"
+  ],
+  [
+   "deathPlayerClick",
+   "{\"translate\":\"death.attack.player\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Alex \"},\"text\":\"§9Alex§r\"}]}",
+   "Steve§r was slain by §r§9Alex§r§r",
+   "Steve was slain by §9Alex§r"
+  ],
+  [
+   "deathMobPlayerVictim",
+   "{\"translate\":\"death.attack.mob\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"§cSteve§r\"},\"Zombie\"]}",
+   "§cSteve§r§r was slain by §rZombie§r",
+   "§cSteve§r was slain by Zombie"
+  ],
+  [
+   "deathGenericClick",
+   "{\"translate\":\"death.attack.generic\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"}]}",
+   "Steve§r died§r",
+   "Steve died"
+  ],
+  [
+   "achievementClick",
+   "{\"translate\":\"chat.type.achievement\",\"with\":[{\"clickEvent\":{\"action\":\"suggest_command\",\"value\":\"/msg Steve \"},\"text\":\"Steve\"},{\"color\":\"green\",\"text\":\"[Taking Inventory]\"}]}",
+   "Steve§r has just earned the achievement §r§a[Taking Inventory]§r",
+   "Steve has just earned the achievement [Taking Inventory]"
   ]
  ]
 }

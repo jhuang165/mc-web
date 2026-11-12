@@ -22,7 +22,7 @@ const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
 await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib; public class GameProfile {}\n');
 // The client jar ships no en_US.lang (it lives in the asset index); StringTranslate (de) reads it from the classpath. The lines the trees need are taken
 // from the port's table and recorded; the executed part is how fr/fq/fn/dd/de turn them into formatted and unformatted text.
-const LANG_KEYS=['commands.help.header','commands.tp.usage','commands.help.footer','commands.generic.deprecatedId','chat.type.admin','commands.give.success','commands.tp.success.coordinates','commands.generic.usage','chat.type.achievement','chat.type.announcement','chat.type.text','commands.message.display.incoming','commands.message.display.outgoing','chat.type.emote'];
+const LANG_KEYS=['commands.help.header','commands.tp.usage','commands.help.footer','commands.generic.deprecatedId','chat.type.admin','commands.give.success','commands.tp.success.coordinates','commands.generic.usage','chat.type.achievement','chat.type.announcement','chat.type.text','commands.message.display.incoming','commands.message.display.outgoing','chat.type.emote','death.attack.player','death.attack.mob','death.attack.generic'];
 const {EN_US}=await import(path.join(root,'../src/lang-en-us.js'));
 const lang=Object.fromEntries(LANG_KEYS.map(k=>{assert.ok(EN_US[k]!=null,k);return [k,EN_US[k]];}));
 const res=path.join(out,'res');await rm(res,{recursive:true,force:true});await mkdir(path.join(res,'assets/minecraft/lang'),{recursive:true});
