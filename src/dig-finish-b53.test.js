@@ -11,33 +11,42 @@ const CELL = [10, 5, 10];
 
 // Replays one record: the world is the single dug cell; the server dig answers the packets as the probe's did.
 function replay(rec) {
-  const dig = createServerDig();
+  const cracks = [];
+  const dig = createServerDig({ crack: (c, v) => cracks.push(`partial|${v}|${c.join('|')}`) });
+  const partials = (events) => events.filter((e) => e.startsWith('partial'));
   let cell = rec.block, rate = null, results = []; const other = {};
   for (const step of rec.steps) {
     if (step.o === 't') {
-      const breaks = [];
+      const breaks = []; cracks.length = 0;
       for (let j = 1; j <= step.n; j++) {
         const hit = dig.tick(() => (cell === 0 ? null : rate));
         if (hit) { assert.deepEqual(hit, CELL); breaks.push(j + ':remove|' + cell); cell = 0; rate = null; }
       }
       const expected = step.e.filter((e) => /:remove\|/.test(e));
       assert.deepEqual(breaks, expected, `${rec.name} ticks`);
+      assert.equal(cracks.length, step.p, `${rec.name} crack updates`); // folded runs only count them (the da-* records keep every tick)
       assert.equal(cell, step.c, `${rec.name} cell after ticks`);
       assert.equal(dig.state.cur, step.cur, `${rec.name} curblockDamage`);
       results.push({ ticks: step.n, breaks });
       continue;
     }
-    if (step.s.op === 't') { // detail records (cracks-stone) keep every tick as a step
-      assert.equal(dig.tick(() => (cell === 0 ? null : rate)), null);
+    if (step.s.op === 't') { // detail records (cracks-stone, da-*) keep every tick as a step
+      cracks.length = 0;
+      const hit = dig.tick(() => (cell === 0 ? null : rate));
+      assert.equal(!!hit, step.s.events.some((e) => e.startsWith('remove')), `${rec.name} tick break`);
+      if (hit) { cell = 0; rate = null; }
+      assert.deepEqual(cracks, partials(step.s.events), `${rec.name} tick cracks`);
       assert.equal(dig.state.cur, step.s.cur);
+      assert.equal(cell, step.c);
       continue;
     }
+    cracks.length = 0;
     const op = step.s.op, [kind, x, y, z] = op.split(':'), pos = [+x, +y, +z], events = step.s.events;
     const before = num(step.r);
     if (kind === 's') {
       // A block with relative hardness >= 1 breaks at once on the server (not this timer); air and the rest start the dig.
-      if (before !== null && before >= 1) { assert.ok(events.some((e) => e.startsWith('remove')), `${rec.name} instant`); cell = 0; }
-      else { dig.start(pos); assert.ok(!events.some((e) => e.startsWith('remove')), `${rec.name} start`); }
+      if (before !== null && before >= 1) { assert.ok(events.some((e) => e.startsWith('remove')), `${rec.name} instant`); cell = 0; dig.start(pos, before); }
+      else { dig.start(pos, before); assert.ok(!events.some((e) => e.startsWith('remove')), `${rec.name} start`); }
     } else if (kind === 'f') {
       const r = dig.finish(pos, before), s23 = events.find((e) => e.startsWith('S23'));
       assert.equal(r === 'break', events.some((e) => e.startsWith('remove')), `${rec.name} break at ${op}`);
@@ -46,7 +55,9 @@ function replay(rec) {
       assert.equal(at !== 0, !!s23, `${rec.name} resend at ${op}`);
       if (s23) assert.equal(s23, `S23|${pos.join('|')}|${at}`);
       results.push(r);
-    } else if (kind === 'set') { if (pos[0] === 10) cell = Number(op.split(':')[4]); else other[pos[0]] = Number(op.split(':')[4]); }
+    } else if (kind === 'a') dig.abort();
+    else if (kind === 'set') { if (pos[0] === 10) cell = Number(op.split(':')[4]); else other[pos[0]] = Number(op.split(':')[4]); }
+    assert.deepEqual(cracks, partials(events), `${rec.name} ${op} cracks`);
     assert.equal(cell, step.c, `${rec.name} ${op} cell`);
     rate = num(step.ra);
   }
@@ -56,6 +67,7 @@ function replay(rec) {
 test('every executed dig scenario replays through the server dig timer', () => {
   const cases = ref.records.filter((r) => r.case === 'dig');
   assert.ok(cases.length > 1500);
+  assert.ok(cases.some((r) => r.name.startsWith('da-')));
   for (const rec of cases) replay(rec);
 });
 
@@ -103,4 +115,34 @@ test("an instant start keeps the earlier dig cell", () => {
   assert.equal(d.finish([1, 64, 1], 0.7), "break"); // rate * (ticks since the instant start + 1)
   d.start([2, 64, 2], null); // air: isDestroyingBlock with the cell moved
   assert.equal(d.state.pos.join(), "2,64,2");
+});
+
+// Batch 54 (digabort, executed: da-* records of DigFinishProbe): C07 status 1 and the crack packets.
+const da = (name) => ref.records.find((r) => r.name === name);
+const opsOf = (rec) => rec.steps.map((s) => s.s.op + ' ' + s.s.events.join(' ').trim());
+test('an abort clears the cracks at the last start cell, wherever the packet points, and before any start at 0,0,0', () => {
+  assert.deepEqual(da('da-abort-no-start').steps.filter((s) => s.s.op[0] === 'a').map((s) => s.s.events), [['partial|-1|0|0|0'], ['partial|-1|0|0|0']]);
+  assert.ok(opsOf(da('da-abort-other-cell')).includes('a:11:5:10 partial|-1|10|5|10'));
+  const d = createServerDig({ crack: (c, v) => d.log.push([c.join(), v]) }); d.log = [];
+  d.start([4, 5, 6], 0.1); d.abort();
+  assert.deepEqual(d.log, [['4,5,6', 1], ['4,5,6', -1]]);
+});
+test('after an abort the tick stops cracking, a later finish still counts the damage and a delayed break keeps running', () => {
+  const mid = opsOf(da('da-abort-mid'));
+  const i = mid.findIndex((o) => o.startsWith('a:'));
+  assert.ok(mid.slice(i + 1).every((o) => !/partial/.test(o)), 'no cracks after the abort');
+  assert.ok(opsOf(da('da-abort-then-finish')).some((o) => /^f:10:5:10 .*remove\|3/.test(o)));
+  const delay = opsOf(da('da-abort-in-delay'));
+  assert.ok(delay.slice(delay.findIndex((o) => o.startsWith('a:'))).some((o) => o.includes('remove|3')), 'broken after the abort');
+  // the abort leaves lastCrack where it was: the next tick-side update is a new value, not a repeat
+  const j = delay.findIndex((o) => o.startsWith('a:'));
+  assert.equal(delay[j + 1], 't partial|7|10|5|10');
+});
+test('crack stages: (int)(damage * 10) on the start tick, 10 for an air cell, 0 for bedrock, none for an instant block', () => {
+  assert.equal(opsOf(da('da-start-air'))[0], 's:10:5:10 partial|10|10|5|10');
+  assert.equal(opsOf(da('da-start-bedrock'))[0], 's:10:5:10 partial|0|10|5|10');
+  assert.equal(opsOf(da('da-start-instant'))[0].includes('partial'), false);
+  assert.ok(opsOf(da('da-start-air'))[1].includes('partial|-1'), 'air under the dig clears the cracks and ends it');
+  assert.ok(opsOf(da('da-finish-break')).some((o) => /^f:.*partial\|-1.*remove/.test(o)));
+  assert.ok(!opsOf(da('da-finish-delay')).some((o) => /^f:.*partial/.test(o)), 'a delayed finish keeps the crack');
 });
