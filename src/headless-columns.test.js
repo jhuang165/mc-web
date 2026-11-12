@@ -428,7 +428,7 @@ function entityReplay(withRing) {
         arrows.drain();
         if (tick % 25 === 5) { // a ring mob dies (the player's kill: drops now, experience at deathTime 20)
           const e = mobs.entities.find((m) => m.health > 0 && !inWindow(m) && mobs.isActive(m));
-          if (e) { mobs.kill(e); killed++; }
+          if (e) { mobs.kill(e, { player: true }); killed++; }
         }
       } finally { world.ringReads = false; }
       ringItems += items.items.filter((e) => !inWindow(e)).length;

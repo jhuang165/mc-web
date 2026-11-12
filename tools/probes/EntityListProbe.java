@@ -406,6 +406,14 @@ public class EntityListProbe {
     scenario("b49hd-blast-two-cows-first", 6, dcow(2.0, 0.0, 0.5, 1, 0, 0), dcow(-1.0, 0.0, 0.5, 1, 0, 0), tnt(0.5, 0.5, 0.5, 0, 0));
     scenario("b49hd-kill-then-spawn", 6, dcow(0.5, 0.0, 0.5, 1, 100, 0), hit(0, 0, 2, 0, 4.0f, 1));
     scenario("b49hd-kill-then-spawn-post", 6, dcow(0.5, 0.0, 0.5, 1, 100, 0), hit(0, 0, 2, 1, 4.0f, 1));
+    // Batch 50 (b50mo): the network tick (C02) lands a player's attack after the world's entity walk. A cow that falls and dies in the walk (tick 13, drops in its own turn) and a second cow that a
+    // player hit kills at tick 13: the hit before the walk lists its drops ahead of the walker's (the old live order), after the walk behind them (native). `then` spawns another item right after the hurt call.
+    scenario("b50mo-hit-post-walk-death", 20, dcow(0.5, 6.0, 0.5, 1, 100, 0), dcow(2.5, 0.0, 0.5, 1, 0, 0), hit(1, 0, 13, 1, 4.0f, 0));
+    scenario("b50mo-hit-pre-walk-death", 20, dcow(0.5, 6.0, 0.5, 1, 100, 0), dcow(2.5, 0.0, 0.5, 1, 0, 0), hit(1, 0, 13, 0, 4.0f, 0));
+    scenario("b50mo-hit-post-walk-then", 20, dcow(0.5, 6.0, 0.5, 1, 100, 0), dcow(2.5, 0.0, 0.5, 1, 0, 0), hit(1, 0, 13, 1, 4.0f, 1));
+    scenario("b50mo-hit-pre-walk-then", 20, dcow(0.5, 6.0, 0.5, 1, 100, 0), dcow(2.5, 0.0, 0.5, 1, 0, 0), hit(1, 0, 13, 0, 4.0f, 1));
+    // /kill style (outOfWorld, no attacker, recentlyHit 0): the cow drops its items but leaves no experience (an orb needs recentlyHit > 0).
+    scenario("b50mo-outofworld-no-xp", 40, dcow(0.5, 0.0, 0.5, 5, 0, 0), hit(0, 1, 2, 1, 3.4028234663852886E38f, 0));
     scenario("death-fall-cow-item-before", 40, item(3.5, 0.3, 0.5, 0.0, 4, 0, 0), dcow(0.5, 6.0, 0.5, 1, 100, 0));
     // The launch of each player-thrown class from a few views (floats: yaw, pitch in degrees). type 0 snowball, 1 egg, 2 pearl, 3 potion, 4 experience bottle
     float[][] views = {{0f, 0f}, {37.5f, -12.25f}, {-123.75f, 45.5f}, {200.125f, -80f}, {90f, 10f}};

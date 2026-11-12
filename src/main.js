@@ -28,7 +28,8 @@ import { importWholeSave, regionFiles } from "./whole-save-import.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
-import { ITEM_SPAWN_EGG, spawnEggIconHtml } from "./spawn-eggs.js";
+import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, spawnEggIconHtml } from "./spawn-eggs.js";
+import { isThrowable } from "./player-throw-simulation.js";
 import { ITEM_POTION } from "./item-passes.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
@@ -1497,7 +1498,9 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
+    pendingEdits = [];
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
+    { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
@@ -3013,6 +3016,34 @@ function serverAcceptsClick(place) {
   if (r.message) printChat(r.message);
   return false;
 }
+// Batch 50: C02 (use entity) / C08 / C07 packets are handled in the network tick, after the worlds' entity walk of the same server tick
+// (MinecraftServer.updateTimeLightAndEntities; bytecode-read). An action aimed at an entity, or one that throws or places an entity, waits for the walk's
+// afterEntities hook; the client's own swing stays at once.
+let pendingEdits = [], runningEdits = false;
+function defersToNetworkTick(place) {
+  if (runningEdits || !mobs) return false;
+  if (aimedEntity || aimedCart || aimedHanging) return true;
+  const h = heldId();
+  return place && (isThrowable(h) || h === BOAT_ITEM || h === ITEM_EXP_BOTTLE || h === ITEM_SPAWN_EGG);
+}
+function runPendingEdits() {
+  if (!pendingEdits.length) return;
+  const list = pendingEdits; pendingEdits = [];
+  const was = [aimedEntity, aimedCart, aimedHanging];
+  runningEdits = true;
+  try {
+    for (const q of list) { [aimedEntity, aimedCart, aimedHanging] = q.aimed; edit(q.place); }
+  } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; }
+}
+// The player's click entry points call this instead of edit: the client's own part (the swing) at once, the packet's part in the network tick.
+function clickEdit(place = false) {
+  if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
+    if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging] });
+    return;
+  }
+  edit(place);
+}
 function edit(place = false) {
   if (screen !== "playing") return;
   if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); animation.swing(); return; }
@@ -3332,6 +3363,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  runPendingEdits(); // no-op when the walk already ran them
   redstoneRuntime?.tickTiles(); // no-op when the walk's afterEntities hook already ran them
   if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
   dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
@@ -3386,7 +3418,7 @@ function movementTick(controls) {
     markUnsaved: () => { saved = false; },
     random: Math.random,
   }).use;
-  if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
+  if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) clickEdit(true);
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
@@ -3562,8 +3594,8 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.drop") dropHeld(ctrl);
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
-  else if (d === "key.attack") { mineHeld = true; edit(false); }
-  else if (d === "key.use") { useHold.press(); edit(true); }
+  else if (d === "key.attack") { mineHeld = true; clickEdit(false); }
+  else if (d === "key.use") { useHold.press(); clickEdit(true); }
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
   else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
@@ -3708,8 +3740,8 @@ document.querySelectorAll("[data-key]").forEach((b) => {
   };
   b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.key); binds.touch.delete(d); };
 });
-$("#touch-break").onclick = () => edit(false);
-$("#touch-place").onclick = () => edit(true);
+$("#touch-break").onclick = () => clickEdit(false);
+$("#touch-place").onclick = () => clickEdit(true);
 $("#touch-inventory").onclick = () => inventory();
 $("#touch-fly").onclick = () => {
   if (survival.creative) {
@@ -3751,7 +3783,7 @@ function setupPointer() {
     const binding = binds.set(mouseCode(e.button), false);
     bindingReleased(binding);
     if (binding === "key.use") return; // a released use button is not a left click
-    if (dragging && dragDistance < 5 && e.pointerType !== "touch") edit(false);
+    if (dragging && dragDistance < 5 && e.pointerType !== "touch") clickEdit(false);
     dragging = false;
     mineHeld = false;
     if (mining && !mining.auto) mining = null;

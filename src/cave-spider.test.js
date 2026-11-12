@@ -80,7 +80,7 @@ test("cave spiders keep the spider's drops, experience, sounds and web immunity"
   w.entities.push(e);
   w.damage(e, 1, 63, 64);
   assert.ok(w.drain().some((ev) => ev.sound === "mob.spider.say"));
-  w.kill(e);
+  e.hurt = 0; w.kill(e, { player: true });
   assert.ok(w.drain().some((ev) => ev.sound === "mob.spider.death"));
   const state = { type: "cave_spider", inWeb: false };
   setInWeb(state);
