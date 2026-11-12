@@ -14,6 +14,7 @@ import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
 import { dropCount as horseDropCount } from "./horse.js";
 import { DISC_FIRST } from "./note-jukebox-content.js";
+import { UNBLOCKABLE_SOURCES } from "./armor-enchantments.js";
 import { totalArmor, dropEquipment, equipmentExperience } from "./mob-equipment.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
@@ -23,7 +24,8 @@ export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom", "horse"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
-const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
+// The same set the player uses (armor-enchantments.js isUnblockable): it also holds indirectMagic (a thrown harming potion), which batch 49 found missing here.
+const UNBLOCKABLE = UNBLOCKABLE_SOURCES;
 // EntityZombie.getTotalArmorValue: 2 natural points (a pigman is a zombie) plus the worn armour, at most 20;
 // a skeleton has only what it wears (mob-equipment.js).
 const ARMOR = { zombie: 2, wither: 4 }; // EntityWither.getTotalArmorValue (xc.aV) 4

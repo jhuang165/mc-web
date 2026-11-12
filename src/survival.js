@@ -8,7 +8,7 @@ import {normalCube} from "./world.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import {ENDER_SLOTS,ENDER_CHEST,enderOpenable,newEnderTile} from "./chest-blocks.js";
 import { Effects } from "./status-effects.js";
-import { damageSourceKey, blockedDamage, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
+import { damageSourceKey, isAbsolute, isUnblockable, blockedDamage, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 import { installSkullItems, installSkullMaterials } from './skull.js';
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
@@ -846,15 +846,23 @@ export class Survival {
     let dealt = fresh ? n : Math.fround(n - this.hurtAmount);
     // EntityPlayer.damageEntity: the halving of a blocking sword comes before applyArmorCalculations and applies to the amount that gets through
     // the hurt-resistance window (amount - lastDamage), not to the stored lastDamage (`hurtAmount` stays the raw hit).
-    dealt = blockedDamage(dealt, damageSourceKey(source ?? (reason === "an accident" ? "generic" : reason)), this.blocking); // the default reason is DamageSource.generic, not a mob
-    if (blockable) dealt = this.applyArmor(dealt);
+    const key = damageSourceKey(source ?? (reason === "an accident" ? "generic" : reason)); // the default reason is DamageSource.generic, not a mob
+    dealt = blockedDamage(dealt, key, this.blocking);
+    // EntityLivingBase.applyArmorCalculations: `if (!source.isUnblockable())` armour reduces the amount and loses durability. Native decides by the DamageSource
+    // alone (setDamageBypassesArmor: onFire, inWall, drown, starve, fall, outOfWorld, generic, magic, wither, indirectMagic), so the caller's `blockable` is not read
+    // (batch 49, executed: armor-source-reference.json).
+    if (!isUnblockable(key)) dealt = this.applyArmor(dealt);
     // EntityLivingBase.applyPotionDamageCalculations: the enchantment step comes after armour, also for the
     // sources that bypass armour (fall, drowning, magic ...), and is skipped only for starvation.
     // EntityLivingBase.applyPotionDamageCalculations: Resistance takes 20% per level (all but the void), then enchantments, then Absorption.
     const resistance = this.effects.get(11);
-    if (resistance && reason !== VOID) dealt = Math.fround(Math.fround(dealt * (25 - (resistance.amplifier + 1) * 5)) / 25);
+    // applyPotionDamageCalculations returns first for an absolute source (starvation): neither Resistance nor the enchantments touch it.
+    if (resistance && reason !== VOID && !isAbsolute(key)) dealt = Math.fround(Math.fround(dealt * (25 - (resistance.amplifier + 1) * 5)) / 25);
     dealt = enchantedDamage(this.inventory.armor, damageSourceKey(source ?? reason), dealt);
     if (this.absorption > 0 && dealt > 0) { const taken = Math.min(this.absorption, dealt); this.absorption = Math.fround(this.absorption - taken); dealt = Math.fround(dealt - taken); }
+    // EntityPlayer.damageEntity: nothing left after absorption returns before addExhaustion(source.hungerDamage); 0.3 by default, 0 for the sources
+    // that bypass armour (setDamageBypassesArmor) and for starvation (setDamageIsAbsolute).
+    if (dealt !== 0 && !isUnblockable(key)) this.exhaust(0.3);
     const before = this.health;
     this.health = Math.max(0, Math.fround(this.health - dealt));
     this.hurtAmount = n;
