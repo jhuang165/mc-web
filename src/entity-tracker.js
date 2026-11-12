@@ -671,7 +671,7 @@ export class MobTracker {
       if (c.dragon) c.crystals = crystalCopies;
       c.fire = 0; // Entity.onEntityUpdate: `if (worldObj.isRemote) fire = 0`
       c.step(...hooks(e));
-      if (e.rider) c.followLive(e); // the player rides it (entities.js sets `rider`). Natively a ridden pig is packet-driven (see followLive), but the port's camera and seat still follow the live pig, so its copy follows it too until the seat moves to the client copy (lead, batch 45: otherwise the drawn pig trails its rider)
+      if (e.rider && e.type !== "pig") c.followLive(e); // the player rides it (entities.js sets `rider`). A ridden horse's copy follows the live horse (not ported, see followLive). Batch 53: a ridden pig's copy is packet-driven as natively, and main.js seats the player on it (seatOnCartCopy)
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;

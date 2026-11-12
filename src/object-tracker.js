@@ -36,6 +36,7 @@ import { ExperienceOrbs } from "./experience.js";
 import { Arrows } from "./bow.js";
 import { Projectiles } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
+import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { tickTnt } from "./explosion.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { hangingGeometry, ARTS, FRAME_PIXELS } from "./hanging.js";
@@ -282,8 +283,36 @@ export class ObjectClient extends ClientEntity {
     this.vt = null; // the S18 targets of a ridden boat are never consumed (c is read only in the isBoatEmpty branch)
     return true;
   }
+  // Batch 53: Entity.handleWaterMovement (sa.N, bytecode-read) on a boat copy: EntityBoat.onUpdate (xi.h) begins with super.h() -> onEntityUpdate -> N(), which does not test isRemote. The box shrunk
+  // by 0.4 top and bottom and 0.001 at the sides, in water: the flow push is added to the motion; entering it (not wet before, not the first update) plays "game.neutral.swim.splash" at the entity
+  // (volume min(1, sqrt(mx^2 * 0.2 + my^2 + mz^2 * 0.2) * 0.2), pitch 1 + (nextFloat - nextFloat) * 0.4, drawn first; silent on a client: RenderGlobal.playSound is empty) and spawns 1 + width * 20
+  // "bubble" (two floats for the spread, a third for the downward speed) then as many "splash" particles (two floats) at floor(box.minY) + 1, all from the copy's own Entity.rand.
+  waterMovement() {
+    const world = this.world, first = this.firstUpdate !== false;
+    this.firstUpdate = false;
+    if (!world) return;
+    const water = waterAcceleration(world, entityWaterBox(this.box()));
+    if (!water.wet) { this.inWater = false; return; }
+    this.vx += water.push[0]; this.vy += water.push[1]; this.vz += water.push[2];
+    if (!this.inWater && !first) {
+      const r = this.sim.rand, width = f(this.spec.width);
+      const vol = Math.min(1, f(f(Math.sqrt(this.vx * this.vx * 0.20000000298023224 + this.vy * this.vy + this.vz * this.vz * 0.20000000298023224)) * f(0.2)));
+      this.tracker.sound("game.neutral.swim.splash", this.x, this.y, this.z, vol, f(1 + f(f(r.nextFloat() - r.nextFloat()) * f(0.4))));
+      const y = f(Math.floor(this.box()[1])), n = f(1 + f(width * 20));
+      for (let i = 0; i < n; i++) {
+        const a = f(f(f(r.nextFloat() * 2) - 1) * width), b = f(f(f(r.nextFloat() * 2) - 1) * width);
+        this.tracker.particle("bubble", this.x + a, f(y + 1), this.z + b, this.vx, this.vy - f(r.nextFloat() * f(0.2)), this.vz);
+      }
+      for (let i = 0; i < n; i++) {
+        const a = f(f(f(r.nextFloat() * 2) - 1) * width), b = f(f(f(r.nextFloat() * 2) - 1) * width);
+        this.tracker.particle("splash", this.x + a, f(y + 1), this.z + b, this.vx, this.vy, this.vz);
+      }
+    }
+    this.inWater = true;
+  }
   stepVehicle() {
     if (this.kind === "boat") {
+      this.waterMovement();
       this.splash();
       if (this.mirrorRidden()) return;
     }
