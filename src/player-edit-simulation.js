@@ -597,9 +597,16 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('creative-break');
   }
   if (state.mining && state.mining.tool === id && state.mining.block.every((v, i) => v === target.block[i])) return act('mining-already-started');
-  if (block === DRAGON_EGG) hook('useDragonEgg', ...target.block); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues
-  if (block === 177) hook('blockClicked', ...target.block); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
-  if (block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...target.block); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
+  // ItemInWorldManager.onBlockClicked is the server's half of C07 status 0 (b52 digstart): it runs in the network tick (hooks.serverTask, else at once)
+  // and reads the block at the cell then, as the server does.
+  const dug = [...target.block];
+  const serverClicked = () => {
+    const now = state.world.get(...dug);
+    if (now === DRAGON_EGG) hook('useDragonEgg', ...dug); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues
+    if (now === 177) hook('blockClicked', ...dug); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
+    if (now === REDSTONE_ORE || now === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...dug); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
+  };
+  if (block === DRAGON_EGG || block === 177 || block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hooks.serverTask ? hooks.serverTask(serverClicked) : serverClicked();
   const under = hook('clientEyeInWater');
   if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {
     hook('breakBlock', target.block);

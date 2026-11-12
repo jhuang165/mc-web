@@ -55,7 +55,7 @@ export function tickPlayerMining(state, {
           if (mine.progress >= 1) {
             const block = [...mine.block];
             state.mining = null;
-            breakBlock(block);
+            breakBlock(block, false, mine.type); // the server re-checks the block at the cell (ItemInWorldManager.blockRemoving)
             state.cooldown = 5;
           }
         }

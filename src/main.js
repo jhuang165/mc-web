@@ -3059,6 +3059,11 @@ function breakBlockPacket(p, creative = false, accept = null) {
   pendingEdits.push({ fn: () => { if (!accept || accept()) breakBlock(p, creative); } });
   return true;
 }
+// A server-side effect of a click (ItemInWorldManager.onBlockClicked at C07 status 0): queued in arrival order, at once in multiplayer or while the queue runs.
+function serverTask(fn) {
+  if (runningEdits || !mobs || multiplayer) { fn(); return; }
+  pendingEdits.push({ fn });
+}
 // The player's click entry points call this instead of edit: the client's own part (the swing) at once, the packet's part in the network tick.
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
@@ -3172,6 +3177,7 @@ function edit(place = false) {
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
     breakBlock: breakBlockPacket,
     clientEyeInWater,
+    serverTask,
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
     placeBoat: () => {
@@ -3286,7 +3292,8 @@ function tickMining() {
       sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
     },
     // C07 status 2 (finished digging): refused past 6 blocks from the eye or at y >= 256; the block is resent unchanged.
-    breakBlock: (p, c) => breakBlockPacket(p, c, () => serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept || (scene.updateBlock(p[0], p[2], p[1]), false)),
+    // ItemInWorldManager.blockRemoving also reads the block at the cell when the packet is handled: one that is no longer the dug type is refused and resent.
+    breakBlock: (p, c, type) => breakBlockPacket(p, c, () => (type === undefined || world.get(p[0], p[1], p[2]) === type) && serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept || (scene.updateBlock(p[0], p[2], p[1]), false)),
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
     mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });

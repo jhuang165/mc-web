@@ -242,6 +242,6 @@ test('the touches are wired into the live game (main.js, entities.js) and the ol
   assert.doesNotMatch(main, /populationBlocks\?\.touch\(Math\.floor\(position\.x\),Math\.floor\(position\.y-\.01\)/);
   assert.doesNotMatch(main, /if\(target\?\.block\)world\.populationBlocks\?\.touch/);
   assert.match(entities, /onWalk: \(x, y, z\) => this\.onEntityWalking\?\.\(x, y, z, e\)/);
-  assert.match(edit, /hook\('touchRedstoneOre', \.\.\.target\.block\)/);
+  assert.match(edit, /hook\('touchRedstoneOre', \.\.\.dug\)/);
   assert.match(edit, /hook\('touchRedstoneOre', x, y, z\)/);
 });
