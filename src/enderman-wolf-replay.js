@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
 import { EntityWorld, ENTITY_TYPES, setEntityRandom, entityRandom } from "./entities.js";
+import { growSize } from "./horse-live.js";
 import { Survival } from "./survival.js";
 import { WATER, LAVA, WEB } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
@@ -26,6 +27,7 @@ export const reference44 = JSON.parse(readFileSync(new URL("../public/research/e
 export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45cw-reference.json", import.meta.url)));
 export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
+export const reference47 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
@@ -37,10 +39,10 @@ class LogRandom extends JavaRandom {
 }
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
   C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
-  Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
+  Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse", 3: "horse", 4: "horse", 5: "horse", 6: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
 // b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
-const HORSES45 = { R: [0, 0, false, 0, 20, Math.fround(0.2), 0.7], Q: [0, 258, true, 0, 24, 0.25, 0.55], q: [0, 773, true, 0, 18, 0.3, 0.65], D: [1, 0, true, 0, 22, 0.175, 0.5], F: [0, 258, false, -24000, 20, 0.2, 0.7], Y: [0, 258, true, -24000, 20, 0.2, 0.7] };
+const HORSES45 = { R: [0, 0, false, 0, 20, Math.fround(0.2), 0.7], Q: [0, 258, true, 0, 24, 0.25, 0.55], q: [0, 773, true, 0, 18, 0.3, 0.65], D: [1, 0, true, 0, 22, 0.175, 0.5], F: [0, 258, false, -24000, 20, 0.2, 0.7], Y: [0, 258, true, -24000, 20, 0.2, 0.7], 3: [3, 0, false, 0, 15, 0.2, 0.5], 4: [4, 0, false, 0, 15, 0.2, 0.5], 5: [3, 0, true, 0, 15, 0.2, 0.5], 6: [4, 0, true, 0, 15, 0.2, 0.5] }; // b47h: zombie (3) and skeleton (4) horses, wild and tame
 const ITEM_OF = { 352: 311, 319: 202 };
 const key = (x, y, z) => `${x},${y},${z}`;
 const PORT_ID = { 1: 3, 9: WATER, 20: 9 };
@@ -113,7 +115,7 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x46 = r.name.startsWith("b46mp");
+  const x46 = r.name.startsWith("b46mp"), b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
   ew.ai.budget.perTick = Infinity;
   ew.look = { yaw: 180 * RAD, pitch: 0 };
@@ -148,14 +150,18 @@ function run(r) {
         const m = p[2] === "0" ? null : itemFromOriginal(Number(p[2]), 0);
         survival.inventory.main[0] = m ? makeStack(m.id, Number(p[3]), m.damage ?? 0) : null; survival.inventory.current = 0; held = m ? m.id : 0;
       }
+      else if (op === "age") { const e = ents[Number(p[2])], was = e.growingAge; e.growingAge = Number(p[3]); growSize(e, was, ew.world); } // b47h: EntityAgeable.setGrowingAge resizes the box at once
+      else if (op === "mount") { const at = { x: player.x, y: player.y, z: player.z }; ew.horseSeats.mount(ents[Number(p[2])], Object.assign(player, { player: true })); Object.assign(player, at); } // b47h: EntityPlayerMP.mountEntity(horse) (the probe seats the rider only after the horse's update, wi.ac(), so the player stays put for this tick)
+      else if (op === "temper") ents[Number(p[2])].horse.temper = Number(p[3]);
       else if (op === "health") ents[Number(p[2])].health = Number(p[3]);
+      else if (op === "health-old") ents[Number(p[2])].health = Number(p[3]);
       else if (op === "use") {
         // player-edit-simulation.js's order for the mobs here: wolf, ocelot, then EntityAnimal.interact (feed).
         const e = ents[Number(p[2])];
         if (e.type === "creeper") creeperIgnite(e, entityRandom(e)); // EntityCreeper.interact (flint and steel); its sound is cleared with the tick's ops
         else if (e.type === "wolf") ew.wolfInteract(e, survival);
         else if (e.type === "ocelot") ew.ocelotInteract(e, survival);
-        else if (e.type === "horse") ew.horseInteract(e, survival, { sneak: false });
+        else if (e.type === "horse") ew.horseInteract(e, survival, { sneak: false, horses: { player: Object.assign(player, { player: true }), mount: (h, p) => ew.horseSeats.mount(h, p) } }); // b47h: the mount action seats the player
         else ew.feed(e, survival.inventory.held?.id ?? 0, survival);
         held = survival.inventory.held?.id ?? 0;
       }
@@ -190,10 +196,11 @@ function run(r) {
     for (const l of logs) l.log.length = 0;
     booms.length = cells.length = 0;
     const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
-    ew.events.length = 0;
+    if (!b47) ew.events.length = 0; // b47h: the sounds a script op made (feed, rear) are in the tick's row
     if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
     if (x46) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it
     ew.tick(player, survival, held);
+    if (b47 && player.vehicle) ew.horseSeats.updateRiderPosition(player.vehicle); // b47h: the probe's wi.ac() after the horse's update seats the rider
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
     // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
     const kids = ew.entities.filter((x) => !ents.includes(x) && x.type === "horse").map(horseFlags);
@@ -213,6 +220,7 @@ function run(r) {
       }
       ew.events.length = 0;
     }
+    if (b47) ew.events.length = 0;
     const damage = 1000 - survival.health;
     survival.health = 1000;
     const rows = ents.map((e, i) => {

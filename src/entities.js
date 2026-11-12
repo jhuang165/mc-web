@@ -48,6 +48,7 @@ import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
 import { HORSE_ENTITY, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { hurtSoundName as horseHurtSoundName } from "./horse.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
@@ -264,7 +265,7 @@ export const ENTITY_TYPES = {
   bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.699999988079071, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
-const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : hurtSound(e.type));
+const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : e.type === "horse" ? horseHurtSoundName(e.horse?.type) : hurtSound(e.type));
 const deathOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.death : deathSound(e.type));
 const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.type));
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
@@ -463,11 +464,23 @@ function takeAnchorBox(e) {
 }
 // Entity.setSize on a box the entity keeps: the minimum corner stays, and a wider box is nudged back by the growth (moveEntity(oldWidth - width, 0, oldWidth - width); its collisions are not modelled),
 // so the centre ends half the growth towards -x and -z. The move has dy 0, so onGround is false until the next real move. EntityHorse resizes its foal this way every tick (horse-live.js).
-export function resizeBox(e, w0, h0, w1, h1) {
+export function resizeBox(e, w0, h0, w1, h1, world = null) {
   w0 = f(w0); h0 = f(h0); w1 = f(w1); h1 = f(h1);
   const bb = takeAnchorBox(e) ?? keptBox(e, w0, h0) ?? [e.x - w0 / 2, e.y, e.z - w0 / 2, e.x + w0 / 2, e.y + h0, e.z + w0 / 2];
   bb[3] = bb[0] + w1; bb[4] = bb[1] + h1; bb[5] = bb[2] + w1;
-  if (w1 > w0) { const d = w0 - w1; bb[0] += d; bb[3] += d; bb[2] += d; bb[5] += d; e.x = (bb[0] + bb[3]) / 2; e.z = (bb[2] + bb[5]) / 2; e.onGround = false; }
+  if (w1 > w0) {
+    let dx = w0 - w1, dz = dx;
+    // With a world the move runs the collision code (b47h foal-wall records, executed): Entity.moveEntity sweeps y (dy 0), then x, then z, each stopped flush by a block box in the way
+    // (the step-up attempt of a blocked move on the ground finds a wall too high). Without one the nudge is free.
+    if (world) {
+      const near = collisionBoxes(world, [bb[0] + dx, bb[1], bb[2] + dz, bb[3], bb[4], bb[5]], e);
+      for (const b of near) if (b[4] > bb[1] && b[1] < bb[4] && b[5] > bb[2] && b[2] < bb[5] && b[3] <= bb[0] + 1e-9 && b[3] - bb[0] > dx) dx = b[3] - bb[0];
+      bb[0] += dx; bb[3] += dx;
+      for (const b of near) if (b[4] > bb[1] && b[1] < bb[4] && b[3] > bb[0] && b[0] < bb[3] && b[5] <= bb[2] + 1e-9 && b[5] - bb[2] > dz) dz = b[5] - bb[2];
+      bb[2] += dz; bb[5] += dz;
+    } else { bb[0] += dx; bb[3] += dx; bb[2] += dz; bb[5] += dz; }
+    e.x = (bb[0] + bb[3]) / 2; e.z = (bb[2] + bb[5]) / 2; e.onGround = false;
+  }
   boxes.set(e, [bb, w1, h1]);
 }
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
@@ -1921,6 +1934,7 @@ export class EntityWorld {
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       horseCanMate,
+      horseRunAround:(e)=>this.horseRunAround(e),
       moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,{...base,width:base.width*scale,height:base.height*scale},forward);},
       wearHeld:(amount)=>this.wearStick?.(this.ai.survival,amount),
       eatGrass:(e)=>this.eatGrass(e),
@@ -2239,7 +2253,7 @@ export class EntityWorld {
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider && e.horse.saddled ? horseRideThink(this, e) : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
@@ -2399,7 +2413,7 @@ export class EntityWorld {
   // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
   moveSteps(e, from) {
     const rand = entityRandom(e);
-    this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
+    this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), nextInt: (n) => rand.nextInt(n), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
   }
   // The landing of a move (EntityLivingBase.fall).
   moveLanding(e, landed) {

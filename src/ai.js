@@ -301,6 +301,34 @@ class Panic extends Task {
     return !this.m.navigator.noPath();
   }
 }
+// EntityAIRunAroundLikeCrazy (vg), mutex 1: an untamed horse with a rider finds a random spot (5, 4) and runs to it at 1.2 while the rider is on; every tick of the run
+// rolls nextInt(50) (horse-live.js horseRunAround: temper, taming, throwing the rider). Bytecode-read and executed in the b47h records.
+class RunAround extends Task {
+  constructor(m, speed) {
+    super();
+    this.m = m;
+    this.speed = speed;
+    this.mutex = 1;
+    this.target = null;
+  }
+  ridden() { const e = this.m.e; return !!(e.rider || e.riddenBy); }
+  shouldExecute() {
+    if (this.m.e.horse.tame || !this.ridden()) return false;
+    const v = findRandomTarget(this.m, 5, 4);
+    if (!v) return false;
+    this.target = v;
+    return true;
+  }
+  startExecuting() {
+    this.m.navigator.tryMoveToXYZ(this.target.x, this.target.y, this.target.z, this.speed);
+  }
+  continueExecuting() {
+    return !this.m.navigator.noPath() && this.ridden();
+  }
+  updateTask() {
+    this.m.ai.deps.horseRunAround?.(this.m.e);
+  }
+}
 // EntityAIMate (ua), mutex 3: with love, find the nearest other animal in love of the
 // kind within 8 blocks, walk to it, and after 60 ticks within 3 blocks have the baby.
 class Mate extends Task {
@@ -1034,10 +1062,11 @@ export class Brain {
         return;
       }
       if (e.type === "horse") {
-        // EntityHorse (wi): swim 0, panic 1 (1.2), run around like crazy 1 (1.2, horse-live.js rolls it with a rider), mate 2 (1.0), follow parent 4 (1.0), wander 6 (0.7),
+        // EntityHorse (wi): swim 0, panic 1 (1.2), run around like crazy 1 (1.2, RunAround), mate 2 (1.0), follow parent 4 (1.0), wander 6 (0.7),
         // watch the player 7 (6 blocks), look idle 8 (bytecode-read). No tempt task.
         this.tasks.add(0, new Swim(this));
         this.tasks.add(1, new Panic(this, A.panic));
+        this.tasks.add(1, new RunAround(this, A.panic));
         this.tasks.add(2, new Mate(this, A.mate));
         this.tasks.add(4, new FollowParent(this, A.follow));
         this.tasks.add(6, new Wander(this, A.wander));

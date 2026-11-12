@@ -180,7 +180,7 @@ export function canMateWith(a, b, rideA = false, rideB = false) {
 }
 
 export const fallDamage = (distance) => Math.max(0, Math.ceil(f(distance * 0.5) - 3)); // wi.b(float)
-export const mountedOffset = (h) => f(f(HORSE_HEIGHT) * 0.75) * growthScale(h.age); // ae()
+export const mountedOffset = (h) => f(HORSE_HEIGHT) * 0.75 * growthScale(h.age); // sa.ae(): (double) height * 0.75D, no float rounding (b47h records, executed)
 
 export const deathSound = (t) => ["mob.horse.death", "mob.horse.donkey.death", "mob.horse.donkey.death", "mob.horse.zombie.death", "mob.horse.skeleton.death"][t];
 export const angrySound = (t) => (t === 3 || t === 4 ? null : t === 0 ? "mob.horse.angry" : "mob.horse.donkey.angry");
@@ -229,6 +229,7 @@ export function livingSound(type, r) {
   return { sound: SOUND_PREFIX[type] + "idle", rearing: r.nextInt(10) === 0 };
 }
 // wi.aT() hurt sound: hit, and nextInt(3) == 0 makes the horse rear.
+export const hurtSoundName = (type) => SOUND_PREFIX[type ?? 0] + "hit"; // wi.aT() names mob.horse.hit (not .hurt; b47h foal records, executed)
 export function hurtSound(type, r) {
-  return { sound: SOUND_PREFIX[type] + "hit", rearing: r.nextInt(3) === 0 };
+  return { sound: hurtSoundName(type), rearing: r.nextInt(3) === 0 };
 }

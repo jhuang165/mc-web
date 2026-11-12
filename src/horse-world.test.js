@@ -49,13 +49,13 @@ test("wheat heals and raises temper, creative keeps the stack, a saddle on a wil
   assert.equal(e.health, 12);
   assert.equal(e.horse.temper, 3);
   assert.equal(s.inventory.count?.(WHEAT) ?? s.count(WHEAT), 3);
-  assert.ok(w.events.some((x) => x.sound === "random.eat"));
+  assert.ok(w.events.some((x) => x.sound === "eating"));
   const sad = holding(SADDLE, 1);
   w.events.length = 0;
   assert.equal(w.horseInteract(e, sad, {}), true);
   assert.equal(e.rearing, true);
   assert.equal(e.horse.saddled, false);
-  assert.ok(w.events.some((x) => x.sound === "mob.horse.angry" && x.volume === 0.8));
+  assert.ok(w.events.some((x) => x.sound === "mob.horse.angry" && x.volume === Math.fround(0.8)));
 });
 
 test("a tame horse is saddled from the held stack and can then be mounted and ridden", () => {
