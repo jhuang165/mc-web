@@ -431,7 +431,7 @@ let primed = [], genPrimed = null;
 const joinedAs = (kind) => (e) => mobs?.joined(e, kind); // World.spawnEntityInWorld: a new entity's place in the loaded-entity list (entity-simulation.js entityWalkers)
 watchJoin(primed, joinedAs("tnt"));
 let entityTick = null; // this tick's { state, hooks } for tickEntitySimulation, which the walk in EntityWorld.tickMobs reads
-let objectTracker = new ObjectTracker(); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
+let objectTracker = new ObjectTracker(10, Math.random, entityIds); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
@@ -440,7 +440,8 @@ function bindObjectTracker() {
   // (bma.a(String,DDDFF)), whose body is a bare return in 1.7.10 (lead, javap), so the client copies are silent and only the server's sound packet is heard.
   objectTracker.hooks.clientTargets = () => {
     const out = [];
-    for (const [live, en] of mobs?.tracker?.entries ?? []) {
+    // (batch 50: a removed mob's copy stays until its S13 is flushed, one tick later, so it is still a target for that tick: `dying`)
+    for (const [live, en] of [...(mobs?.tracker?.entries ?? []), ...(mobs?.tracker?.dying ?? []).map((d) => [d.live, d])]) {
       const c = en.client;
       if (!c.present || !(live.health > 0)) continue;
       // The ender dragon is not collidable (EntityDragon.canBeCollidedWith is false): its seven client parts are, while the world lists them (reachesDragon)
@@ -1636,7 +1637,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     maps.load(record.maps);
     rockets.load(record.rockets);
     fishing.load(record.fishing);
-    objectTracker = new ObjectTracker(); // a fresh client world: nothing is tracked yet
+    objectTracker = new ObjectTracker(10, Math.random, entityIds); // a fresh client world: nothing is tracked yet
     bindObjectTracker();
     primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz })), joinedAs("tnt"));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
@@ -2853,6 +2854,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
+    if (mobs?.tracker) objectTracker.shareOrder(mobs.tracker); // EntityTracker.trackedEntities: one HashSet for mobs and objects
     objectTracker.update(lists, position, world);
     for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));

@@ -104,7 +104,7 @@ test("mutation check: a destroy applied in the tick it is sent (not one client t
   const rec = ref.snowball, gone = rec.inputs.findIndex((r) => r[10] === 1);
   assert.equal(rec.client[gone][0], 1); // the client's snowball still flies on the tick its server twin dies
   assert.equal(rec.client[gone + 1][0], 0);
-  const bad = replay("snowball", (tr) => { const flush = tr.flush.bind(tr); tr.flush = (en) => { for (const p of en.entry.packets) if (p.type === "destroy") p.after = 0; flush(en); }; });
+  const bad = replay("snowball", (tr) => { const apply = tr.applyQueue.bind(tr); tr.applyQueue = (list) => { for (const en of list) for (const p of en.entry.packets) if (p.type === "destroy") p.after = 0; apply(list); }; });
   assert.ok(bad.length > 0);
 });
 
