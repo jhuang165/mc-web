@@ -113,6 +113,22 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 45 (2026-11-11, ten Sonnet tracks in `../wt45-<name>` on `batch45-<name>`, cut from 82874be6b, merged --no-ff on `batch45-lead`; lead note `b45-lead-track.md`; the gun side runs separately):
+- 0.74.0, by track:
+  - clienthits: client arrows, hooks and thrown entities hit client copies (`TrackerHitsProbe`, 19 scenarios). Client copies' sounds are logged but silent, because `RenderGlobal.playSound` is empty in 1.7.10.
+  - dragonclient: the dragon's client parts, health, death branch and fx (`MobTracker.takeFx`); squid air in S1C; `tracker-mounts-reference.json` has 14 cases.
+  - horses: 88 records in `enderman-wolf-b45-reference.json`: food, love, breeding, foal health and growth, the float 1.4 x 1.6 box.
+  - creeperwitch: 77 records in `enderman-wolf-b45cw-reference.json`. The creeper explodes inside its update, the blast push uses the 1.62F eye height, witch drink timing is fixed, and potion throws make three gaussians first.
+  - mobfixes: a pushed mob lands before its step sound; the blaze strafe uses the float pi; ocelot-sit records and golem layout 4517.
+  - entitylist3: explosions vs carts, boats, potions and golem balls; thrown balls vs hanging entities; cart and boat pushes in the mob update; `EntityListProbe` has 49 scenarios.
+  - itematlas: one Stitcher-laid-out item atlas (`item-atlas.js`, 212 sprites, 0.01 px inset) for held, dropped, framed, glint and projectile sprites; the cactus icon uses render type 13 quads.
+  - modelfaces: bottom-face rows fixed in `skinBox` (`ModelFacesProbe`); third-person held poses (`HeldPoseProbe`).
+  - awayedge: away entities held next to uncopied loaded columns (EDGE 8, chosen for the port); one join-ordered away walk.
+  - firefx2: a Creative fire punch-out plays two fizzes; an item's lava fizz plays at posY.
+- Merge conflicts: mobfixes and horses both changed the record-count assertion in `verify-endermanwolf.mjs`, which is now one chain. creeperwitch first reused the `b45` set and was renamed `b45cw`.
+- Lead fixes: the item atlas is skipped when the test DOM has no `createElement`; the client-copy sound hook is removed (javap); a ridden pig's copy follows the live pig while the seat does; the away-mobs roofed-pit flake, which predated this batch, now runs seeded.
+- Verification: see `b45-lead-track.md`. Pushed to github main by the lead.
+
 Batch 44 (2026-11-11, eight Sonnet tracks in `../wt44-<name>` on `batch44-<name>`, cut from e131af9d6, merged --no-ff on `batch44-lead`; lead note `b44-lead-track.md`; the gun side runs separately):
 - 0.73.0, by track:
   - passivedraws: every remaining `EntityAITasks` mob on `Entity.rand`; 52 `b44pd-*` records in `enderman-wolf-b44-reference.json` (`EndermanWolfProbe`).
