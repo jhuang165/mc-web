@@ -187,6 +187,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
       // The runtime player adapter (position, velocity, motion, flag setters): pushed through its own moveEntity (piston-push.js).
       get player() { return game.player?.() ?? null; },
       mobs: () => game.mobs?.() ?? [], // the EntityWorld: pushMove runs each mob's own moveEntity
+      serverPlayer: () => game.mobs?.()?.ai?.player ?? null, // the integrated server's copy of the player (ai.js PlayerView), pushed by the same tile loop (b48pp records)
       extra: () => pistonPushExtras(world, game),
     },
   });
