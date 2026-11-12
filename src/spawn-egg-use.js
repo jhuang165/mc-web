@@ -16,18 +16,33 @@ export const eggMobType = (damage) => {
   return type && ENTITY_TYPES[type] ? type : null;
 };
 
-// ItemMonsterPlacer.spawnCreature: create at the point with the random yaw (setLocationAndAngles(x, y, z, wrap(nextFloat() * 360), 0),
-// rotationYawHead and renderYawOffset the same), onSpawnWithEgg (mobs.spawnNatural runs it), the stack's custom name.
-// An unknown mob type spawns nothing. Returns the mob or null. The original's playLivingSound after spawning is not played.
+// ItemMonsterPlacer.spawnCreature (aee.a, bytecode-read; the dispenser's kx runs it too): the entity is created, setLocationAndAngles(x, y, z, wrap(world.rand.nextFloat() * 360), 0)
+// draws the yaw (rotationYawHead and renderYawOffset the same), the stack's custom name is set, the entity joins the world and then onSpawnWithEgg runs, so the yaw is the
+// first draw of the world Random and the sheep colour, spider/zombie/ocelot rolls that use World.rand come after it (b52se: the rows of away-dispense-reference.json compare the
+// Random's next value). A mob created with `mobs.create` takes its yaw before its rolls (a kitten or a jockey is placed at the parent's yaw); a host with only `spawnNatural`
+// (a test double) falls back to it. An unknown mob type spawns nothing. Returns the mob or null. The original's playLivingSound after spawning draws from the mob's own
+// Entity.rand and is not played.
 export function spawnEggMob(state, damage, at, name, random = Math.random) {
   const type = eggMobType(damage);
   if (!type) return null;
-  const e = state.mobs.spawnNatural(type, at.x, at.y, at.z), yaw = eggYaw(random());
-  for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
-  e.yaw = (-yaw * Math.PI) / 180;
-  if (typeof name === "string" && name) e.customName = name;
+  const mobs = state.mobs, yaw = eggYaw(random());
+  const face = (e) => {
+    for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
+    e.yaw = (-yaw * Math.PI) / 180;
+    if (typeof name === "string" && name) e.customName = name;
+  };
+  let e;
+  if (typeof mobs.create === "function" && typeof mobs.onSpawnWithEgg === "function") {
+    e = mobs.create(type, at.x, at.y, at.z);
+    face(e);
+    mobs.entitySeed?.(e, "spawn"); // replay hook, as spawnNatural
+    mobs.entities.push(e);
+    mobs.onSpawnWithEgg(e);
+  } else { e = mobs.spawnNatural(type, at.x, at.y, at.z); face(e); }
   return e;
 }
+// The yaw is World.rand.nextFloat() natively (ItemMonsterPlacer.spawnCreature): the world's Random (EntityWorld.worldRandom = Weather.random) when the mobs have one.
+const worldRoll = (state) => { const r = state.mobs?.worldRandom; return r?.nextFloat ? () => r.nextFloat() : Math.random; };
 // The stack's display name (add.u() hasDisplayName, add.s() getDisplayName): only an anvil/NBT name, never the default.
 const customName = (stack) => (typeof stack?.displayName === "string" ? stack.displayName : undefined);
 const spend = (state, hooks) => {
@@ -48,7 +63,7 @@ export function useEggOnBlock(state, target, hooks = {}) {
   if (!held || held.id !== ITEM_SPAWN_EGG || !target?.block) return false;
   if (!eggOf(held.damage)) return true; // an unregistered id returns before spawning (noEgg): nothing happens, nothing is spent
   const side = target.side ?? sideOfAdjacent(target), fence = isFence(state.world.get(...target.block));
-  const at = eggSpawnPoint(target.block, side, fence), random = hooks.random ?? Math.random;
+  const at = eggSpawnPoint(target.block, side, fence), random = hooks.random ?? worldRoll(state);
   const mob = spawnEggMob(state, held.damage, at, customName(held), random);
   if (mob) { hooks.mobSpawned?.(mob); spend(state, hooks); }
   return true;
@@ -68,7 +83,7 @@ export function useEggOnWater(state, bucket, hooks = {}) {
   const [x, y, z] = now.block;
   if (state.world.get(x, y, z) !== WATER || state.survival.adventure) return false;
   if (!eggOf(held.damage)) return false;
-  const mob = spawnEggMob(state, held.damage, eggWaterPoint([x, y, z]), customName(held), hooks.random ?? Math.random);
+  const mob = spawnEggMob(state, held.damage, eggWaterPoint([x, y, z]), customName(held), hooks.random ?? worldRoll(state));
   if (!mob) return false;
   hooks.mobSpawned?.(mob);
   spend(state, hooks);

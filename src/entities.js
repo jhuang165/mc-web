@@ -1287,6 +1287,9 @@ export class EntityWorld {
       Object.assign(e, r.fields);
       this.addSpawnBonus(e, r.followBonus);
       if (e.growingAge < 0) { const t = ENTITY_TYPES.horse, k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; e.anchorBox = e.spawnBox.slice(); /* setSize keeps minX/minZ: the foal's centre moves on its first step (b45 records) */ }
+    } else if (type === "villager") {
+      // EntityVillager.onSpawnWithEgg (yv.a(sy), bytecode-read and executed in away-dispense-reference.json): the EntityAgeable roll, then setProfession(worldObj.rand.nextInt(5)).
+      e.profession = world.nextInt(5);
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
       for (let i = kittenLitter(world); i > 0 && this.entities.length < (opts.limit ?? 40); i--) {
