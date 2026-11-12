@@ -2789,7 +2789,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       saved = false;
     },
   };
-  entityTick = { state: { world, items, primed, projectiles, arrows, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking, onGround: grounded,
+  entityTick = { state: { world, items, primed, projectiles, arrows, mobs, xpOrbs, falling, survival, position, sneaking: !!motion.sneaking, onGround: grounded, flying,
     minecarts, boats, hanging, velocity, rider, alive: survival.health > 0, width: PHYSICS.width, height: PHYSICS.height }, hooks: {
     carts: cartHooks,
     boats: boatHooks,

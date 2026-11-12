@@ -2281,17 +2281,29 @@ export class EntityWorld {
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
-  // The tick of the server's copy of the player (see tick): sv.e's motion snap, moveEntity of the motion (the box moves; blocks stop it only in the real game), the friction of
-  // moveEntityWithHeading (the block under the new position while onGround, else 0.91F) and collideWithNearbyEntities against the moved box.
+  // The tick of the server's copy of the player (see tick): EntityPlayerMP.onUpdateEntity (mw.i). Entity.onEntityUpdate's handleWaterMovement (the flow push) and lava flag, then
+  // EntityLivingBase.onLivingUpdate: the motion snap below 0.005 (y too), moveEntityWithHeading with no input (the copy is a plain EntityPlayerMP: stepHeight 0, its own sneak flag
+  // and the sneak edge, water 0.8 / lava 0.5 drag, ladder clamp, web, the ground or 0.91 friction, and a flying player's motionY * 0.6) with Entity.moveEntity's block collisions on
+  // its own motion, then collideWithNearbyEntities against the moved box. NetHandlerPlayServer.processPlayer puts the copy's position back right after the update
+  // (setPositionAndRotation at the position it had), so only the motion, the web flag and the pushes keep what the move did (b47sp records).
   serverPlayerUpdate(p) {
-    const m = p.motion;
-    if (Math.abs(m.x) < 0.005) m.x = 0; // EntityLivingBase.onLivingUpdate
-    if (Math.abs(m.z) < 0.005) m.z = 0;
-    const at = { x: p.x + m.x, y: p.y, z: p.z + m.z, width: p.width, height: p.height };
-    const friction = p.onGround ? f(slipperiness(this.world.get(Math.floor(at.x), Math.floor(at.y) - 1, Math.floor(at.z))) * f(0.91)) : f(0.91);
-    m.x *= friction;
-    m.z *= friction;
-    const box = pushBox(at, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+    const m = p.motion, w = p.width, h = p.height, world = this.world;
+    // EntityLivingBase.onEntityUpdate: the revenge target (getAITarget) is dropped once it is dead or more than 100 ticks old.
+    const hb = p.hurtBy;
+    if (hb && typeof hb.health === "number" && (!(hb.health > 0) || !this.entities.includes(hb) || this.ai.clock - p.hurtByTime > 100)) p.hurtBy = null;
+    const e = { x: p.x, y: p.y, z: p.z, vx: m.x, vy: m.y, vz: m.z, onGround: p.onGround, inWater: false, inLava: false, sneaking: !!p.sneaking, player: true, living: true, inWeb: p.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
+    e.inWater = inWater(world, e, w, h); // Entity.handleWaterMovement (the flow adds to the motion)
+    e.inLava = inLava(world, [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2]);
+    if (Math.abs(e.vx) < 0.005) e.vx = 0; // EntityLivingBase.onLivingUpdate
+    if (Math.abs(e.vy) < 0.005) e.vy = 0;
+    if (Math.abs(e.vz) < 0.005) e.vz = 0;
+    const vy = e.vy;
+    moveEntityWithHeading(world, e, w, h, 0);
+    if (p.flying && !p.riding) e.vy = vy * 0.6; // EntityPlayer.moveEntityWithHeading (yz.e(FF)): a flying player keeps 0.6 of the vertical motion it had
+    m.x = e.vx; m.y = e.vy; m.z = e.vz;
+    p.inWeb = !!e.inWeb;
+    const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
+    const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of this.entities) {
       if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move

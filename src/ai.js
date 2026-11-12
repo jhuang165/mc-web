@@ -1259,6 +1259,14 @@ class PlayerView {
     // it stood on the ground (the friction of EntityPlayerMP.onUpdateEntity). The position is the client's.
     this.motion = { x: 0, y: 0, z: 0 };
     this.onGround = true;
+    // The position the copy rests at: the last one a C03 position packet gave it (EntityClientPlayerMP.sendMotionUpdates sends one when the squared move since the last is over 9.0E-4
+    // or 20 ticks passed; NetHandlerPlayServer.processPlayer puts the copy back after onUpdateEntity), so x, y, z trail the client by less than 0.03 between packets. `sent`: what
+    // the client last reported, `sinceSent` its tick counter. `inWeb` is the copy's own isInWeb flag, `flying` its abilities.isFlying, `riding` the client's mount (the copy follows it).
+    this.sent = null;
+    this.sinceSent = 0;
+    this.inWeb = false;
+    this.flying = false;
+    this.riding = false;
     this.creative = false;
     this.held = 0;
     this.has = true;
@@ -1269,9 +1277,16 @@ class PlayerView {
     this.armorPieces = 0;
   }
   update(player, survival, held) {
-    this.x = player.x;
-    this.y = player.y;
-    this.z = player.z;
+    // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
+    // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
+    const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
+    if (!s || d > 9.0E-4 || this.sinceSent >= 20 || this.riding) {
+      this.x = player.x;
+      this.y = player.y;
+      this.z = player.z;
+      this.sent = { x: player.x, y: player.y, z: player.z };
+      this.sinceSent = 0;
+    } else this.sinceSent++;
     const alive = !(survival.health <= 0);
     if (alive && !this.alive) this.motion.x = this.motion.y = this.motion.z = 0; // a respawned player is a new EntityPlayerMP
     this.alive = alive;

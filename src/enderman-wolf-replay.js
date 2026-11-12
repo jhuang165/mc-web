@@ -25,6 +25,7 @@ export const reference42 = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference44 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b44-reference.json", import.meta.url)));
 export const referenceCW = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45cw-reference.json", import.meta.url)));
 export const reference46 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b46mp-reference.json", import.meta.url)));
+export const reference47 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47sp-reference.json", import.meta.url)));
 export const reference45 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b45-reference.json", import.meta.url)));
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
@@ -113,8 +114,9 @@ function run(r) {
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
-  const x46 = r.name.startsWith("b46mp");
+  const x47 = r.name.startsWith("b47sp"), x46 = x47 || r.name.startsWith("b46mp");
   ew.ai.player.unticked = !x46;
+  if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
   ew.ai.budget.perTick = Infinity;
   ew.look = { yaw: 180 * RAD, pitch: 0 };
   ew.playerLook = () => ew.look; // OcelotTempt's scared check reads the player's view
@@ -162,6 +164,8 @@ function run(r) {
       else if (op === "hold" && xcw) { const m = p[2] === "0" ? null : itemFromOriginal(Number(p[2]), 0); survival.inventory.main[0] = m ? makeStack(m.id, 1, 0) : null; survival.inventory.current = 0; held = m ? m.id : 0; }
       else if (op === "hold") held = ITEM_OF[p[2]] ?? Number(p[2]); // original item id -> the project's (bone 352 -> 311, raw porkchop 319 -> 202); the player's held item id (the beg tasks)
       else if (op === "sneak") ew.ai.player.sneaking = p[3] === "on";
+      else if (op === "fly") ew.ai.player.flying = p[3] === "on"; // b47sp: abilities.isFlying of the server copy
+      else if (op === "ground") { /* b47sp: the onGround flag of every position packet; the record carries it (row element 6) */ }
       else if (op === "angry") ents[Number(p[2])].angry = true;
       else if (op === "sit") ents[Number(p[2])].sitWish = p[3] === "on";
       else if (op === "walk") { vel[Number(p[2])] = [Number(p[3]), Number(p[4])]; }
@@ -186,12 +190,14 @@ function run(r) {
     }
     player.x += vel[n][0]; player.z += vel[n][1];
     if (x46) player.y = r.rows[t][7]; // the client's y (the probe's server copy falls and rises with its own motion; the replay takes it as the position packet's y)
-    ew.ai.beginTick(player, survival, held);
+    if (!x46) ew.ai.beginTick(player, survival, held); // b46mp, b47sp: ew.tick's own beginTick is the only one, so the position packet counter and the revenge timer count once a tick
     for (const l of logs) l.log.length = 0;
     booms.length = cells.length = 0;
     const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
     ew.events.length = 0;
     if (xcw) { potionSeeds.length = 0; potionSeeds.push(...r.rows[t][5][1].filter((x) => x[0] === "potion").map((x) => x[8])); }
+    if (x46 && !x47 && ew.ai.player.hurtBy) ew.ai.player.hurtByTime = ew.ai.clock + 1; // b46mp: the probe's ticksExisted stayed 0 (mw.i does not count it), so its revenge target never aged; b47sp counts it
+    if (x46 && !x47) ew.ai.player.sent = null; // b46mp: the probe put the copy back at the client's place every tick, y included, so every tick is a position packet
     if (x46) ew.ai.player.onGround = r.rows[t][6] === 1; // the position packet's onGround flag, as the probe's server copy saw it
     ew.tick(player, survival, held);
     if (ew._golemBalls) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
@@ -236,6 +242,7 @@ function run(r) {
       const pm = ew.ai.player.motion; // b46mp: the server copy's motion (mob pushes, hits, blasts); the older sets: the blasts' push on `pv` only
       state.push([booms.slice(), spawned, cells.slice(), x46 ? [pm.x, pm.y, pm.z] : [pv.x, pv.y, pv.z]]);
       state.gone = [...gone];
+      state.pos = [ew.ai.player.x, ew.ai.player.y, ew.ai.player.z]; // b47sp: where the server copy rests
     }
     states.push(state);
   }
@@ -274,8 +281,8 @@ export function firstDivergence(r, got) {
       const [wb, ws, wc, wm] = want[5], [gb, gs, gc, gm] = have[5];
       if (wb.length) exploded = true;
       const bad = (k, a, b) => (!deepSame(a, b) ? [t, k, a, b] : null);
-      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") ? bad("player motion", wm, gm) : null);
-      const d2 = r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : null;
+      const d = bad("explosions", wb, gb) ?? bad("spawned", spawnedOf(ws), spawnedOf(gs)) ?? bad("changed cells", wc.map((c) => c.slice(0, 3)).sort(cmp), gc.map((c) => c.slice(0, 3)).sort(cmp)) ?? (exploded && !r.name.startsWith("b46mp") && !r.name.startsWith("b47sp") ? bad("player motion", wm, gm) : null);
+      const d2 = r.name.startsWith("b46mp") ? bad("player motion", [wm[0], wm[2]], [gm[0], gm[2]]) : r.name.startsWith("b47sp") ? bad("player motion", wm, gm) ?? bad("server copy position", want[8], have.pos) : null; // b47sp: all three motion axes and the copy's resting position (row element 8)
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
