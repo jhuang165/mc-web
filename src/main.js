@@ -1413,8 +1413,8 @@ async function openWorld(record) {
   }
   finally{openingWorld=false;tripLoading=false;warmer?.dispose();}
 }
+let awayIdle = null; // b60 lead: module scope, as tickSurvival reads it (set in launch, used once by the first tick's catch-up)
 async function launch(record, prepared, { slice = false } = {}) {
-  let awayIdle = null;
   try {
     active = record;
     world = prepared;
