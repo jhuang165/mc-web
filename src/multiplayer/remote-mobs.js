@@ -76,7 +76,7 @@ export class RemoteMobs {
   tick() {
     for (const { client, mob } of this.copies.values()) {
       client.dead = mob.health <= 0;
-      client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob));
+      client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob), (c) => this.physics.living?.(c, mob)); // batch 61: the potion swirl and the living roll follow the death update (entities.js clientLiving)
       mob.px = mob.x; mob.py = mob.y; mob.pz = mob.z;
       mob.x = client.x; mob.y = client.y; mob.z = client.z;
       for (const x of client.fx.splice(0)) if (x.particle) this.fx.particle?.(x.particle, x.x, x.y, x.z, x.vx ?? 0, x.vy ?? 0, x.vz ?? 0); // the death poof (death-fx.js)

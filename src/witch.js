@@ -50,7 +50,7 @@ export const SPLASH_EFFECT = { SLOWNESS: 2, WEAKNESS: 18, POISON: 19, HARM: 7, H
 // { rand, inWater, burning, health, maxHealth, target, targetDistSq, hasEffect(id) }. Mutates `w` ({ drinking, timer, held }) and
 // returns { finished, started } where finished is the held stack that was drunk.
 export function witchDrink(w, ctx) {
-  const out = { finished: null, started: null };
+  const out = { finished: null, started: null, magic: false };
   const rand = ctx.rand;
   if (w.drinking) {
     if (w.timer-- <= 0) { // `witchAttackTimer-- <= 0` tests the old value: the timer shows -1 on the finishing tick (creeperwitch-b45 records), 33 ticks after the start
@@ -73,7 +73,7 @@ export function witchDrink(w, ctx) {
       out.started = pick;
     }
   }
-  rand.nextFloat(); // the 7.5E-4 particle roll
+  out.magic = rand.nextFloat() < f(7.5E-4); // the 7.5E-4 particle roll: a hit is setEntityState(15) (the copy's witchMagic draws, copy-status.js)
   return out;
 }
 

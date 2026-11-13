@@ -14,6 +14,8 @@ import { wolfSay } from "./wolf.js";
 import { ocelotSay } from "./ocelot.js";
 import { batLivingSound } from "./squid-bat.js";
 import { slimeMakesLandSound } from "./slime.js";
+import { headParticleSpecs } from "./wither-boss.js";
+import { clientWorldRandom } from "./copy-meta.js";
 
 const SLOW_TALKERS = new Set(["pig", "cow", "mooshroom", "sheep", "chicken", "wolf", "ocelot", "snow_golem", "iron_golem", "squid"]);
 export const talkInterval = (type) => (SLOW_TALKERS.has(type) ? 120 : type === "horse" ? 400 : 80);
@@ -35,22 +37,32 @@ export function copyLivingRoll(c, m, rand = deathRandom(c)) {
   return true;
 }
 
-// The draws of onLivingUpdate (and the slime's onUpdate tail) on the copy, after the move. Skipped once the copy has been removed (deathDone before this tick).
-export function copyLivingUpdate(c, m, rand = deathRandom(c)) {
+// Batch 61: the part of onLivingUpdate that runs BEFORE its super call (the move): the enderman's portal particles and scream roll (ya.e: bytecode-read, `super` at the end) and
+// the blaze's sound roll and smoke. A splash inside the move (copy-water.js) therefore follows these draws (executed: MobCopies2Probe `water`, Enderman).
+export function copyLivingPre(c, m, rand = deathRandom(c)) {
   if (c.gone) return;
   switch (m.type) {
     case "enderman":
       for (let i = 0; i < 12; i++) rand.nextDouble();
-      // ya.e: `isScreaming() && !isAggressive() && nextInt(100) == 0` clears the copy's watcher 18; the client's isAggressive is never set (server AI only). The copy's screaming follows the live flag
-      // when that changes (the S1C would carry it), then clears itself on the roll.
-      if (!!m.screaming !== !!c.liveScream) { c.liveScream = !!m.screaming; c.screaming = c.liveScream; }
+      // ya.e: `isScreaming() && !isAggressive() && nextInt(100) == 0` clears the copy's watcher 18; the client's isAggressive is never set (server AI only).
+      // The copy's flag is the one S1C / S0F gave it (copy-meta.js), not the live one: the server's flag is not resent when the copy clears its own.
       if (c.screaming && rand.nextInt(100) === 0) c.screaming = false;
       break;
     case "blaze":
       if (rand.nextInt(24) === 0) { rand.nextFloat(); rand.nextFloat(); }
       for (let i = 0; i < 6; i++) rand.nextDouble();
       break;
-    case "wither": for (let i = 0; i < 9; i++) rand.nextGaussian(); break;
+    default:
+  }
+}
+
+// The draws of onLivingUpdate (the wither's, after its move) and the slime's onUpdate tail on the copy, after the move (the enderman's and the blaze's are copyLivingPre). Skipped once the copy has been removed (deathDone before this tick).
+export function copyLivingUpdate(c, m, rand = deathRandom(c)) {
+  if (c.gone) return;
+  switch (m.type) {
+    case "wither": // xc.e's tail on the copy: the head smoke, the armour roll on the client world's Random (health from watcher 6), the charge's "mobSpell" (watcher 20)
+      headParticleSpecs({ x: c.x, y: c.y, z: c.z, renderYawOffset: c.renderYawOffset, rotationYaw: c.rotationYaw, health: c.health ?? m.health, invul: c.invul ?? 0 }, rand, clientWorldRandom());
+      break;
     case "slime": case "magma_cube": {
       const landed = c.onGround && !c.slimeWasOnGround;
       c.slimeWasOnGround = c.onGround;

@@ -1,5 +1,9 @@
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
-import { copyLivingRoll, copyLivingUpdate } from "./copy-talk.js";
+import { copyLivingRoll, copyLivingUpdate, copyLivingPre } from "./copy-talk.js";
+import { copyWaterEnter, copyWaterAfterMove, copyBreathe } from "./copy-water.js"; // batch 61: the copies' water and air draws
+import { copyPotionSwirl } from "./copy-meta.js";
+import { copyWolfShake, copyStatus } from "./copy-status.js";
+import { deathRandom } from "./death-fx.js";
 import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
@@ -633,6 +637,7 @@ export function breathe(world, e, height, rand, fx) {
     e.air = 300;
     return false;
   }
+  if (e.type === "iron_golem" || e.effects?.some((x) => x.id === 13)) return false; // batch 61: wt.j returns the air unchanged; Water Breathing skips the air step (sv.C)
   e.air = (e.air ?? 300) - 1;
   if (e.air !== -20) return false;
   e.air = 0;
@@ -1633,6 +1638,7 @@ export class EntityWorld {
       rand: entityRandom(e), inWater: eyeInWater(this.world, e.x, e.y + livingEyeHeight(e.type, t.height), e.z), burning: e.fire > 0, health: e.health, maxHealth: t.health,
       target, targetDistSq: target ? m.distSq(target) : 0, hasEffect,
     });
+    if (r.magic) this.copyState(e, 15); // batch 61: setEntityState(15) on the copy
     e.drinking = w.drinking;
     e.drinkTimer = w.timer;
     e.held = w.held;
@@ -1707,7 +1713,7 @@ export class EntityWorld {
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
     // The client's handleHealthUpdate(18) draws these on its own copy's Entity.rand, never on the server's: a separate stream here.
     this.mobStatus?.(e,18); // a dedicated server sends S19 status 18 to the watchers (multiplayer/server-mobs.js)
-    if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},FX_RANDOM,0.5);}
+    if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},this.statusRand(e,FX_RANDOM),0.5);}
     return true;
   }
   // EntityAIMate.spawnBaby (ua.g): the child of two animals in love (growingAge -24000,
@@ -1817,7 +1823,8 @@ export class EntityWorld {
   startZombieConversion(e, ticks) {
     startConversion(e, ticks, addMobEffect);
     // The client plays state 16 with its own Random: the entity's server Random is not touched.
-    this.events.push(remedySound({ nextFloat: () => f(this.random()) }, e));
+    const copy = this.statusRand(e, null); // batch 61: the copy's own Random (status 16), else the world's
+    this.events.push(remedySound(copy ?? { nextFloat: () => f(this.random()) }, e));
   }
   // yq.h's conversion step: the timer drops by getConversionTimeBoost each tick; at 0 or below the villager returns.
   tickConversion(e) {
@@ -1888,7 +1895,7 @@ export class EntityWorld {
     if (!source.player) return;
     village.changeReputation(source.playerName ?? PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
     // status 13 is drawn by the client entity's Random (village-ai.js visualRandom), at the entity's real size
-    if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, visualRandom(e));
+    if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, this.statusRand(e, visualRandom(e)));
   }
   // EntityVillager.onDeath (yv.a(ro)): killed by a player -2 reputation; by a monster the village ends its mating
   // season; with no known attacker, a player within 16 blocks ends it too.
@@ -2016,6 +2023,7 @@ export class EntityWorld {
   moveClient(c, m) {
     if (c.steered) { steerHorseCopy(c, this.riderLook?.()); return; } // wi.e(FF), the saddled horse the player rides: only the angles follow the rider; the motion is the server's (horse-copy.js)
     const [w, h] = this.size(m);
+    copyLivingPre(c, m); // batch 61: the enderman's and the blaze's draws that precede the move
     c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
     // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's
@@ -2029,7 +2037,11 @@ export class EntityWorld {
       moveEntity(this.world, c, w, h, c.vx, c.vy, c.vz);
       const friction = c.inWater ? 0.8 : c.onGround ? f(f(0.6) * f(0.91)) : f(0.91);
       c.vx *= friction; c.vy *= friction; c.vz *= friction;
-    } else moveEntityWithHeading(this.world, c, w, h, 0);
+    } else {
+      const mx = [c.vx, c.vy, c.vz];
+      moveEntityWithHeading(this.world, c, w, h, 0);
+      if (c.inWater === false) copyWaterAfterMove(c, m, inWater(this.world, c, w, h), w, mx); // batch 61: updateFallState's second handleWaterMovement (a splash on the copy's Random)
+    }
   }
   // Entity.onEntityUpdate on the client entity: handleWaterMovement (which pushes a living entity along the flow) and handleLavaMovement at the
   // client entity's own box. EntityMagmaCube.handleLavaMovement is false.
@@ -2048,8 +2060,13 @@ export class EntityWorld {
       livingSoundRoll(c, c.rand, SQUID.talkInterval);
       c.clientAir(this.clientSquidWet(c)); // EntityWaterMob.onEntityUpdate: ws.M() decides the air
     }
-    if (m.type !== "squid") copyLivingRoll(c, m); // batch 60 (copy-talk.js): the living sound roll of every other living copy, on its own Random
+    if (m.type !== "squid") { copyWaterEnter(c, m, wasInWater, w); copyBreathe(c, m, this.world); } // batch 61 (copy-water.js): the splash, then the air / drowning draws
   }
+  // After the death update: the potion swirl (batch 61, copy-meta.js), then the living sound roll of every other copy (batch 60, copy-talk.js), on the copy's own Random
+  clientLiving(c, m) { copyPotionSwirl(c); if (m.type !== "squid") copyLivingRoll(c, m); }
+  // Batch 61: setEntityState on the tracked copy (copy-status.js draws), and the copy's Random for a visible burst of such a status (the live path's own Random otherwise)
+  copyState(e, status) { const c = this.tracker?.clientIfTracked?.(e); return c ? copyStatus(c, e, status) : false; }
+  statusRand(e, fallback) { const c = this.tracker?.clientIfTracked?.(e); return c ? deathRandom(c) : fallback; }
   // ws.M() on the client entity: the water in its shrunk box pushes it along the flow (swimSquid record). Returns whether it is wet.
   clientSquidWet(c) {
     const r = squidWet(this.world, c);
@@ -2065,7 +2082,7 @@ export class EntityWorld {
   }
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (the copy's own watcher 16, S0F / S1C through the tracker, entity-tracker.js, not the live horse's), and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
-    copyLivingUpdate(c, m); // batch 60 (copy-talk.js): onLivingUpdate's particle draws (enderman, blaze, wither, slime landing)
+    copyLivingUpdate(c, m); copyWolfShake(c, m); // batch 61: the wolf's shake after the living update; batch 60 (copy-talk.js): onLivingUpdate's particle draws (enderman, blaze, wither, slime landing)
     if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0, { alive: m.health > 0, child: m.growingAge < 0, type: m.horse?.type });
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
@@ -2214,7 +2231,7 @@ export class EntityWorld {
     if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
-    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }), joint);
+    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m), living: (c, m) => this.clientLiving(c, m) }), joint);
     joint?.after?.(); this.jointRan = !!joint;
     // What the client copies did: the dragon's wing flap sound and its death puffs (the server's own particle accessor is a no-op)
     for (const x of this.tracker.takeFx()) {
@@ -2972,7 +2989,9 @@ export class EntityWorld {
   wolfUpdate(e, t) {
     const rand = entityRandom(e), brain = this.ai.brain(e);
     // No target check here: a dead target ends through EntityAITarget.continueExecuting/resetTask in the 3-tick task update, as in 1.7.10.
+    const shook = e.shaking;
     const out = updateWolf(e, { inWater: !!e.inWater, onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand });
+    if (!shook && e.shaking) this.copyState(e, 8); // setEntityState(8): the copy's shake starts
     if (out.shakeSound) this.events.push({ sound: WOLF_SOUNDS.shake, volume: WOLF_SOUNDS.volume, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } });
     for (let i = 0; i < out.splashes; i++) {
       const dx = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5)), dz = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5));
@@ -2991,14 +3010,14 @@ export class EntityWorld {
     if (out.heal > 0 || out.status > 0) clearSpentStack(survival); // meat that heals, a bone that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
-    if (out.status) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the meat is used up; a puppy grows by a tenth
       // of its remaining time instead.
       if (e.growingAge === 0 && e.love <= 0) {
         e.love = 600;
         take(1);
-        if (this.fx) burst(this.fx, "heart", 7, box, FX_RANDOM, 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
+        if (this.fx) burst(this.fx, "heart", 7, box, this.statusRand(e, FX_RANDOM), 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
       } else if (e.growingAge < 0) {
         take(1);
         e.growingAge = Math.min(0, e.growingAge + Math.trunc(f(f(-e.growingAge / 20) * f(0.1))) * 20);
@@ -3020,13 +3039,13 @@ export class EntityWorld {
     if (out.status > 0) clearSpentStack(survival); // a fish that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
-    if (out.status) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the fish is used up; a kitten gets nothing.
       if (e.growingAge === 0 && e.love <= 0) {
         e.love = 600;
         take(1);
-        if (this.fx) burst(this.fx, "heart", 7, box, FX_RANDOM, 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
+        if (this.fx) burst(this.fx, "heart", 7, box, this.statusRand(e, FX_RANDOM), 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
       } else out.handled = false;
     }
     return out.handled || out.sitToggle;
