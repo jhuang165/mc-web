@@ -145,6 +145,7 @@ import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
+import { pickPlayer } from "./multiplayer/server-pvp.js"; // b63 mppvp: the client's aim at another player (C02 attack)
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
@@ -635,6 +636,7 @@ function applyServerPlayerOp(message) {
   if (message.op === 'kill') serverDeathShown = true;
   applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
 }
+let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair (multiplayer/server-pvp.js pickPlayer)
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
 let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
@@ -3443,7 +3445,7 @@ function multiplayerDigStart() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (heldId() === BOW && !eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true }; /* b63: the draw look and FOV from this player's own use state (the server decides the shot) */ } animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (heldId() === BOW && !eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true }; /* b63: the draw look and FOV from this player's own use state (the server decides the shot) */ } animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -4430,6 +4432,8 @@ function animate(now) {
     aimedRemoteMob = remoteMobs ? remoteMobs.pick(aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6)) : null; // a server mob's client copy (the attack goes out as C02)
     aimedRemoteVeh = remoteVehicles ? remoteVehicles.pick(aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, mpRiding || null) : null; // b61
     if (aimedRemoteVeh && aimedRemoteMob) { if (aimedRemoteMob.distance < aimedRemoteVeh.distance) aimedRemoteVeh = null; else aimedRemoteMob = null; }
+    aimedRemotePlayer = multiplayer && remotePlayers ? pickPlayer(remotePlayers.entries, aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6)) : null; // b63 mppvp: another player's box, nearer than the block and any mob / cart
+    if (aimedRemotePlayer && ((aimedRemoteMob && aimedRemoteMob.distance < aimedRemotePlayer.distance) || (aimedRemoteVeh && aimedRemoteVeh.distance < aimedRemotePlayer.distance))) aimedRemotePlayer = null;
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
     aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c)); // Batch 49: the client copy's box, the live entity answers
     const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c));

@@ -21,13 +21,13 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    simulation = new DedicatedSimulation(saved, { gameMode, difficulty });
+    simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp });
   }
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   let closing = false, saving = Promise.resolve(), saveError = null;
@@ -195,6 +195,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse
         else if (m.type === 'respawn') simulation.serverSurvival.respawn(simulation.players.get(id)); // C16 client status 0, perform respawn
         else if (m.type === 'attack' && Number.isInteger(m.mob)) simulation.queueAttack(id, m.mob); // C02 UseEntity (attack) on a mob, the wire id of its S0F spawn
+        else if (m.type === 'attackPlayer' && typeof m.player === 'string') simulation.queuePvpAttack(id, m.player); // b63 mppvp: C02 UseEntity (attack) on another player
         else if (m.type === 'animUse' && Number.isInteger(m.mob)) simulation.queueAnimUse(id, m.mob, m.claim); // b61: C02 UseEntity (interact) on an animal
         else if (m.type === 'vehUse' || m.type === 'vehHit') simulation.queueVehicle(id, { v: m.v, hit: m.type === 'vehHit' }); // b61: C02 on a minecart or boat
         else if (m.type === 'vehCmd') social.setCartCommand(id, m.v, m.command); // b63: MC|AdvCdm on a command block minecart (Creative operator)
@@ -286,7 +287,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), argument = (key, fallback) => { const at = args.indexOf(key); return at < 0 ? fallback : args[at + 1]; };
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: argument('--gamemode', 'creative'), difficulty: Number(argument('--difficulty', 2)), dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: argument('--gamemode', 'creative'), difficulty: Number(argument('--difficulty', 2)), pvp: String(argument('--pvp', process.env.MC_WEB_PVP ?? 'true')).toLowerCase() !== 'false', /* b63 mppvp: server.properties pvp */ dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }

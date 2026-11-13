@@ -40,6 +40,7 @@ public class PlayerDamageProbe {
     public void a(ro source) { message = chat(aW().b()); }
   }
 
+  static Class<? extends Player> playerClass = Player.class;
   static World w;
   static sun.misc.Unsafe u;
   static String num(double v) { return Double.toString(v); }
@@ -67,7 +68,7 @@ public class PlayerDamageProbe {
 
   static sv make(String type) throws Exception {
     if (type.equals("zombie")) return new yq(w);
-    Player p = (Player) u.allocateInstance(Player.class);
+    Player p = (Player) u.allocateInstance(playerClass); // b63 mppvp: the PvP probe swaps in a subclass that records the crit effects
     MobMoveProbe.set(p, "o", w); MobMoveProbe.set(p, "Z", new Random(0)); MobMoveProbe.set(p, "C", azt.a(0, 0, 0, 0, 0, 0));
     te watcher = new te(p); MobMoveProbe.set(p, "af", watcher);
     watcher.a(0, Byte.valueOf((byte) 0)); watcher.a(1, Short.valueOf((short) 300));

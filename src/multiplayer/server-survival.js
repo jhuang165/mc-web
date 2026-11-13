@@ -9,6 +9,7 @@ import { makeStack } from '../inventory.js';
 import { tickPlayerEnvironment, finishPlayerMovement } from '../player-environment.js';
 import { CombatTracker } from '../combat-tracker.js';
 import { deathComponent } from '../team-names.js';
+import { STAT } from '../stats.js';
 import { NORMAL } from '../difficulty.js';
 import { Experience } from '../experience.js';
 import { finishDrinking } from '../buckets.js';
@@ -41,7 +42,7 @@ export class ServerSurvival {
     s.difficulty = this.sim.difficulty ?? NORMAL;
     if (!p.dead) {
       tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying }, moved, { tickWeather() {} });
-      finishPlayerMovement(p, moved);
+      finishPlayerMovement(p, moved); p.inWater = !!moved?.inWater; // b63 mppvp: the critical-hit test of a melee attack reads it
       if (s.health <= 0) this.die(p);
     } else this.tickDeath(p);
     if (s.broken) this.sim.stats?.broken(p, s.broken); // b63 mpstats: the break stat of a tool that ran out
@@ -54,7 +55,9 @@ export class ServerSurvival {
     this.sim.stats?.death(p); // b63 mpstats: stat.deaths and the killed-by stat
     this.dropOnDeath(p);
     const component = deathComponent(p.survival.combat, p.name, { rawName: p.name });
-    (this.sim.events ??= []).push({ type: 'death', id: p.id, component });
+    const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
+    (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
+    if (killer !== undefined && killer !== p.id) { const k = this.sim.players.get(killer); if (k) this.sim.stats?.add(k, STAT.playerKills); } // b63 lead: EntityPlayer.addToPlayerScore of a player victim (stat.playerKills)
   }
   /** gamerule keepInventory (default false); the rule table keeps strings. */
   keepInventory() { return String(this.sim.gameRules?.keepInventory ?? 'false').toLowerCase() === 'true'; }
