@@ -147,6 +147,7 @@ import { RemotePlayers } from "./multiplayer/presence.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
+import { inventoryFields, applySlots, pickupFit } from "./multiplayer/server-items.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { replayPlayerCommands } from "./away-commands.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -638,12 +639,11 @@ function showMultiplayer() {
     profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
 }
 function leaveMultiplayer() {
-  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear();
+  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = [];
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
-  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current,
-    hotbar: survival.inventory.main.slice(0, 9).map(s => s ? { id: s.id, damage: s.damage ?? 0 } : null) });
+  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
 }
 // Cells from a tick (S22/S21 equivalents) or a placement resend (the clicker's two S23 packets).
 function applyMultiplayerCells(changes) {
@@ -657,7 +657,7 @@ function applyMultiplayerCells(changes) {
 }
 // Item entities of a Survival server (EntityItem): one stable object per wire id so the drop renderer keeps its mesh; positions interpolate from the previous tick.
 // Pickup stays the server's call: the client names the items in reach that its inventory has room for, the server repeats the test and answers with a stack.
-const remoteItems = new Map(), requestedPickups = new Map();
+const remoteItems = new Map(), requestedPickups = new Map(), mpInv = {}, remoteOrbs = new Map();
 function syncMultiplayerItems(list) {
   const seen = new Set();
   for (const d of list) {
@@ -670,14 +670,34 @@ function syncMultiplayerItems(list) {
   items.items = [...remoteItems.values()];
   scene.setDrops(items.items);
   if (survival.creative || !multiplayer?.ready) return;
-  const inv = survival.inventory, wanted = [], byStack = new Map(items.items.map(e => [e.stack, e]));
+  const inv = survival.inventory, wanted = [], fits = [], byStack = new Map(items.items.map(e => [e.stack, e]));
   items.collect(position, PHYSICS.width, PHYSICS.height, stack => {
     const e = byStack.get(stack);
-    if (e && !(requestedPickups.get(e.eid) > tickCounter - 10) && (inv.main.some(s => !s) || (inv.stackable(stack) && inv.storeItemStack(stack) >= 0))) { wanted.push(e.eid); requestedPickups.set(e.eid, tickCounter); }
+    const fit = e ? pickupFit(inv, stack) : 0; // a partial fit takes part of the stack and leaves the rest on the ground
+    if (e && fit > 0 && !(requestedPickups.get(e.eid) > tickCounter - 10)) { wanted.push(e.eid); fits.push(fit); requestedPickups.set(e.eid, tickCounter); }
     return false; // nothing leaves the list here; the server removes the item
   });
   items.items = [...remoteItems.values()]; // collect filters the list; it is rebuilt from the map
-  if (wanted.length) multiplayer.pickup(wanted.slice(0, 16));
+  if (wanted.length) multiplayer.pickup(wanted.slice(0, 16), fits.slice(0, 16));
+}
+// Experience orbs of the server (EntityXPOrb): plain objects the orb renderer reads (x, y, z, previous position, value, colour phase).
+function syncMultiplayerOrbs(list) {
+  const seen = new Set();
+  for (const d of list) {
+    seen.add(d.i);
+    let o = remoteOrbs.get(d.i);
+    if (!o) remoteOrbs.set(d.i, o = { px: d.x, py: d.y, pz: d.z });
+    Object.assign(o, { px: o.x ?? d.x, py: o.y ?? d.y, pz: o.z ?? d.z, x: d.x, y: d.y, z: d.z, posY: d.y + 0.25, value: d.v, color: d.c });
+  }
+  for (const id of [...remoteOrbs.keys()]) if (!seen.has(id)) remoteOrbs.delete(id);
+  xpOrbs.orbs = [...remoteOrbs.values()];
+}
+// The breaker's own client plays the break effect as PlayerControllerMP.onPlayerDestroyBlock does (aux 2001); other players get it from the server (S28).
+function multiplayerBreakFx(p, block = world.get(...p), meta = world.getMeta(...p)) {
+  if (!block) return;
+  const s = breakSound(block);
+  sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 } });
+  scene.particles.destroyBlock(world, ...p, block, meta);
 }
 function collectMultiplayerStack(stack) {
   if (!stack || survival.creative) return;
@@ -706,6 +726,11 @@ function applyMultiplayerTick(message) {
     if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
+  for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
+    const e = remoteItems.get(t.i), who = t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by);
+    if (e && who) scene.drops.pickup(e, who);
+  }
+  if (message.xp || remoteOrbs.size) syncMultiplayerOrbs(message.xp ?? []);
   if (message.items || remoteItems.size) syncMultiplayerItems(message.items ?? []);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   remotePlayers?.sync(message.players, multiplayer.id);
@@ -726,12 +751,14 @@ function openMultiplayerBeacon({ x, y, z, levels, primary, secondary, payment })
   useBeacon(`${x},${y},${z}`);
   containerView.remote = { client: multiplayer, x, y, z, sent: payment?.id ?? null };
 }
-const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp']);
+const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb']);
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
     onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
+    onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
+    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); },
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
@@ -748,7 +775,7 @@ async function joinMultiplayer(settings) {
     streamStorage?.dispose(); streamStorage = null;
     const record = { id: 'remote-' + client.id, remote: true, name: 'ledoge0 — Multiplayer', seed: snapshot.seed,
       biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
-      position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time },
+      position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time }, experience: welcome.self.experience,
       entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
@@ -3168,7 +3195,7 @@ function serverFinishDig(p) {
 // C07 (finished digging, creative / instant break): the block goes in the network tick. The progress, sounds and hit particles stay client-side and at once.
 function breakBlockPacket(p, creative = false, accept = null) {
   if (accept && watchedDig) watchedDig.finished = true; // a finished dig ends the client's dig state (onPlayerDestroyBlock): no abort follows
-  if (multiplayer && accept && !survival.creative) { multiplayer.dig(2); return true; } // Survival over a connection: C07 status 2, the server breaks the block (or waits) and sends the cell
+  if (multiplayer && accept && !survival.creative) { multiplayerBreakFx(p); multiplayer.dig(2); return true; } // Survival over a connection: C07 status 2, the server breaks the block (or waits) and sends the cell
   if (runningEdits || !mobs || multiplayer) return !accept || accept() ? breakBlock(p, creative) : false;
   const predicted = predictBreak(p);
   pendingEdits.push({ fn: () => {
@@ -3256,12 +3283,12 @@ function multiplayerDigStart() {
   if (mining && mining.tool === id && mining.block.every((v, i) => v === target.block[i])) return;
   if (mining) { digAbortPacket(); mining = null; }
   multiplayer.dig(0);
-  if (playerMiningState(survival, block, id, clientEyeInWater(), grounded).progress >= 1) return; // instant: no timer, no delay
+  if (playerMiningState(survival, block, id, clientEyeInWater(), grounded).progress >= 1) { multiplayerBreakFx(target.block); return; } // instant: no timer, no delay
   mining = { block: [...target.block], type: block, progress: 0, tool: id, auto: !mineHeld };
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {

@@ -130,7 +130,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     }
     return json(res, 404, { error: 'Unknown request' }, req);
   }
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   const send = (ws, message) => {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
@@ -185,7 +185,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
-        else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids); // item entities the client reaches (Survival)
+        else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids, m.fit); // item entities the client reaches (Survival)
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
@@ -227,8 +227,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.cracksOut && ws) send(ws, { type: 'crack', cracks: player.cracksOut }); // S25 block break animation of the other players (range 32)
         for (const stack of player.collectedOut ?? []) if (ws) send(ws, { type: 'collect', stack }); // items picked up, added to the client's inventory
         if (player.soundsOut && ws) send(ws, { type: 'sound', sounds: player.soundsOut }); // S29 random.eat / random.drink / random.burp of other players (range 16)
+        for (const m of player.itemsOut ?? []) if (ws) send(ws, m); // b59: S2F slot corrections, S28 break effects, XP gains (server-items.js)
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
-        player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null;
+        player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null; player.itemsOut = null;
       }
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }

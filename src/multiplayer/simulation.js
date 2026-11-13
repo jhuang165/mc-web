@@ -33,11 +33,11 @@ import { eyeInWater } from '../fluids.js';
 import { playerMiningState } from '../enchantment-effects.js';
 import { BOW, canDraw } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
+import { ServerItems } from './server-items.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
 // What a server-side survival break needs from the world around it. Item entities are real (`itemHost`); the dedicated world has no experience orbs.
-const SERVER_XP = { spawn: noop };
 // EntityPlayer.itemInUse, by the held item's EnumAction: swords block (ItemSword, 72000 ticks), the bow draws until released, food eats and a milk bucket
 // drinks for 32 ticks (this build has no potion items). The pose a remote client draws comes from the held stack, as natively (the flag is only "using", watcher 0 bit 4).
 const MILK_BUCKET = 343, USE_TICKS = 32;
@@ -81,6 +81,7 @@ export class DedicatedSimulation {
     this.nextItemId = 0; this.itemsSent = 0;
     this.items.joined = e => { e.eid = ++this.nextItemId; };
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
+    this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
     this.actions = [];
@@ -101,12 +102,12 @@ export class DedicatedSimulation {
     this.fire.watch();
     this.fire.sharedRandomTicks = true;
     this.fire.load(saved.fireTicks);
-    this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: noop,
+    this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: this.serverItems.stacksDrop,
       light: (x, y, z) => this.light.level(x, y, z, this.darkness) }).watch();
-    this.plants = new Plants(this.world, { drop: noop, broken: noop, apply: noop }).watch();
-    this.falling = new FallingBlocks(this.world, { drop: noop, apply: noop }, saved.falling).watch();
+    this.plants = new Plants(this.world, { drop: this.serverItems.stacksDrop, broken: noop, apply: noop }).watch();
+    this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
-    for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: noop, apply: noop }).watch();
+    for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
     this.redstone = new LiveRedstone(this.world, {
       entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
@@ -141,6 +142,7 @@ export class DedicatedSimulation {
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
       input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, rand: seeded(),
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
+    this.serverItems.join(player, saved);
     this.players.set(id, player);
     return player;
   }
@@ -150,12 +152,12 @@ export class DedicatedSimulation {
     this.players.delete(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
   input(id, message) {
-    const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch), slots = cleanHotbar(message.hotbar);
-    if (!p || !input || !look || !slots || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
+    const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
+    if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
+    if (!this.serverItems.adopt(p, message)) return false;
     Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
-    for (let i = 0; i < 9; i++) p.survival.inventory.main[i] = slots[i];
     p.survival.inventory.current = message.current;
     return true;
   }
@@ -165,18 +167,7 @@ export class DedicatedSimulation {
   }
   // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
-  pickup(id, eids) {
-    const p = this.players.get(id);
-    if (!p || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
-    const wanted = new Map();
-    for (const e of this.items.items) if (eids.includes(e.eid)) wanted.set(e.stack, e);
-    if (!wanted.size) return false;
-    this.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => {
-      if (!wanted.has(stack) || !(stack.count > 0)) return false;
-      (p.collectedOut ??= []).push(copyStack(stack)); stack.count = 0; return true;
-    });
-    return true;
-  }
+  pickup(id, eids, fits) { return this.serverItems.pickup(this.players.get(id), eids, fits); }
   itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay })); }
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
@@ -203,8 +194,8 @@ export class DedicatedSimulation {
     return b ? playerMiningState(p.survival, b, p.survival.held?.id ?? 0, eyeInWater(this.world, p.position.x, p.position.y + PHYSICS.eye, p.position.z), p.grounded).progress : null;
   }
   breakDug(p, cell) {
-    const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: SERVER_XP, heldTool: p.survival.held?.id ?? 0 };
-    return breakPlayerBlock(state, cell, { creative: p.survival.creative });
+    const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: this.serverItems.xp, heldTool: p.survival.held?.id ?? 0 };
+    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative }));
   }
   // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
   // (squared distance from the player's feet below 1024), gets the stage. Stage -1 (or 10, an air cell) takes the crack away.
@@ -306,7 +297,7 @@ export class DedicatedSimulation {
     if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
-    if (!place) return breakPlayerBlock(state, target.block, { creative: true });
+    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true }));
     // Block activations that don't open a GUI remain shared.
     const [x, y, z] = target.block, b = this.world.get(x, y, z);
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
@@ -416,6 +407,7 @@ export class DedicatedSimulation {
       this.items.tick(this.world);
       if (this.items.items.length > 300) this.items.items.splice(0, this.items.items.length - 300); // oldest first, a safety cap for one wire message
     }
+    this.serverItems.tickOrbs();
     for (const { id, place, dig, use } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p) continue;
@@ -424,6 +416,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) if (p.resendCells) {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
+    for (const p of this.players.values()) this.serverItems.settle(p);
     this.deliverSounds();
     this.weather.tick(this.world);
     this.weather.drain();
@@ -458,7 +451,7 @@ export class DedicatedSimulation {
       if (t) tiles.push(t);
     }
     this.dirtyTiles.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField() };
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields() };
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
@@ -472,7 +465,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(),
       tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
