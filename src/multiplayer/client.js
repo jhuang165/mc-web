@@ -14,10 +14,11 @@ export function restoreReplica(snapshot) {
   return world;
 }
 
+const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {} } = {}) {
-    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onSlot, onAux, onWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {} } = {}) {
+    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onSlot, onAux, onWindow, onInv, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -55,7 +56,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'mobs') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
-    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
     const merged = this.pending ??= { cells: new Map(), tiles: new Map() };
@@ -83,6 +84,7 @@ export class DedicatedClient {
     if (message.type === 'slot') this.onSlot(message);
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);
+    if (INV.has(message.type)) this.onInv(message);
     if (message.type === 'mobs') this.onMobs(message.packets);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
@@ -111,6 +113,10 @@ export class DedicatedClient {
   windowInventory(windowId, slots) { this.send({ type: 'windowInventory', windowId, slots }); }
   // C0F confirm transaction.
   confirmTransaction(windowId, action, accepted) { this.send({ type: 'confirmTransaction', windowId, action, accepted }); }
+  // b60: window 0 C0E / C0F / C0D
+  invClick(slot, button, mode, action, item) { this.send({ type: 'invClick', slot, button, mode, action, item: item ?? null }); }
+  invAck() { this.send({ type: 'invAck' }); }
+  invClose() { this.send({ type: 'invClose' }); }
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }

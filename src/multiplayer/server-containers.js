@@ -52,6 +52,7 @@ export class ServerContainers {
       const tile = (s.brewing[key] ??= newBrewingTile());
       container = new BrewingContainer(s.inventory, brewingView(tile), null); kind = 'brewing'; title = container.title;
     } else return false;
+    this.sim.serverItems.inv.close(p); // b60: the inventory window's grid and cursor are thrown first
     this.close(p);
     s.inventory.cursor = null;
     const id = (this.nextWindow % 100) + 1; this.nextWindow++;

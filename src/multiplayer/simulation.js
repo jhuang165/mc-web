@@ -163,12 +163,13 @@ export class DedicatedSimulation {
   }
   removePlayer(id) {
     const p = this.players.get(id);
+    if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
     this.mobs.removePlayer(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -385,6 +386,10 @@ export class DedicatedSimulation {
     return true;
   }
   // C0D close window.
+  // b60 (server-inventory.js): window 0 clicks, ack and close
+  invClick(id, m) { return this.serverItems.inv.click(this.players.get(id), m); }
+  invAck(id) { this.serverItems.inv.ack(this.players.get(id)); }
+  invClose(id) { this.serverItems.inv.close(this.players.get(id)); }
   closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
   clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
   windowInventory(id, m) { const p = this.players.get(id); return !!p && this.containers.inventory(p, m); }

@@ -149,7 +149,8 @@ test('pickup: a partial fit takes part of the stack, the rest stays; a full take
   assert.equal(s.pickup('a', [eid], [4]), true);
   assert.deepEqual(a.collectedOut.map(t => t.count), [4]);
   assert.equal(s.itemList()[0].stack.count, 6, 'the remainder stays on the ground');
-  assert.equal(s.serverItems.taken.length, 0);
+  assert.deepEqual(s.serverItems.taken, [{ i: eid, by: 'a', partial: true }]); // b60: S0D goes out for a partial take too
+  s.serverItems.taken.length = 0;
   assert.equal(s.pickup('a', [eid], [0]), true); assert.equal(a.collectedOut.length, 1, 'no room, nothing leaves');
   s.pickup('a', [eid], [64]);
   assert.deepEqual(a.collectedOut.map(t => t.count), [4, 6]);
