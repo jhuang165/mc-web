@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 58 (2026-11-13, ten Sonnet tracks in `../wt58-<name>` on `batch58-<name>`, cut from a584b2389, merged --no-ff on `batch58-lead`; shared track rules `../artifacts/b58-lead/track-rules.md`; lead note `b58-lead-track.md`):
+- 0.87.0, by track:
+  - mpsurvival: a Survival dedicated server (`--gamemode survival`) drops real item entities from `breakPlayerBlock`; the client digs with status 0/1/2 and the 5-tick delay, and picks items up (`pickup` / `collect`).
+  - mpeating: `multiplayer/remote-eating.js` draws remote eating crumbs from the synced use flag; the server sends random.eat / drink / burp as `sound` (S29, range 16); executed `MpEatingProbe` (18 records). The burp is not local-only.
+  - serverbroadcast: `server-broadcast.js` broadcasts death and first-unlock achievement components; `/give`, `/clear`, `/xp`, `/effect`, `/gamemode`, `/tp` and `/achievement` act on other players for `MC_WEB_OPS` operators (`player-op.js`); chat lines carry component JSON. No showDeathMessages gamerule in 1.7.10; `/kill <name>` kills the sender.
+  - prediction4: the held stack changes at the click (bucket swaps included); wooden button and comparator predicted; the client's own click sound is silent (only the server's S29 plays); the Nether water smoke is at the click, the fizz from the server (`client-predict-reference.json`, 241 records).
+  - itemtags2: raw non-string Lore kept; SkullOwner profile compounds through every path (`skull-profile.js`); dispenser splash potions keep CustomPotionEffects; map tooltips with F3+H (`item-tags2-reference.json`).
+  - rendering: the hopper block item (port 133) is its item sprite in slots, hands, drops and frames; the held-item light reads the player's tick cell (`held-light.js`). No native pixel capture possible here.
+  - vehicles4: executed walk-order, dismount fall and cart rider records (`vehicles4-reference.json`); horse hurt/death sound draws on the copy's Random (`horseCopyStatus`). The flag metadata delay was wrong.
+  - clientfire: the crystal overlay entry ends when the real cell changes; client fire `onBlockAdded` support; no client fire spread (gap wrong).
+  - trackerphase: `MobTracker.idleUpdate` (silent tick with nobody in the world), join sends every entry, spawn sets the last head angle (`tracker-joint-reference.json`). No caller yet.
+  - savedorder6: the taker is seated in a boat holding a mob (`releaseStaleRiders`); away-run falling blocks are stamped; post-login chunk ranks follow load order (`trackChunkLoads`, `saved-order6-reference.json`).
+- Lead fix: `movementTick` returned before `tickMining` over a connection, so a Survival dig never sent status 2 (found by the browser check).
+- Verification: see `b58-lead-track.md`. Pushed to github main by the lead.
+
 Batch 57 (2026-11-12, ten Sonnet tracks in `../wt57-<name>` on `batch57-<name>`, cut from 21c490724, merged --no-ff on `batch57-lead`; shared track rules `../artifacts/b57-lead/track-rules.md`; lead note `b57-lead-track.md`; the gun side runs separately):
 - 0.86.0, by track:
   - boatcollide: `ObjectClient.rideBoat` passes `clientBlockers` (every other client entity's box) to the copy's move; `clientRiderFall` plays the rider's landing sounds (`boat-collide-reference.json`, 25 `bx-*` records).
