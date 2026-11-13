@@ -220,7 +220,7 @@ export class ServerVehicles {
       if (!p) continue;
       const set = [], del = [], seen = new Set();
       for (const v of all) {
-        if (Math.abs(v.x - p.position.x) > RANGE || Math.abs(v.z - p.position.z) > RANGE) continue;
+        if (p.dimension || Math.abs(v.x - p.position.x) > RANGE || Math.abs(v.z - p.position.z) > RANGE) continue;
         const key = keyOf(v), json = JSON.stringify(states.get(v));
         seen.add(key);
         if (view.known.get(key) !== json) { view.known.set(key, json); set.push(states.get(v)); }

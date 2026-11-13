@@ -105,7 +105,7 @@ export class ServerItems {
   afterBreak(p, cell, run) {
     const block = this.sim.world.get(...cell), meta = this.sim.world.getMeta(...cell), done = run();
     if (done && block) for (const o of this.sim.players.values()) {
-      if (o === p) continue;
+      if (o === p || (o.dimension | 0) !== (p.dimension | 0)) continue; // b61: the same dimension only
       const dx = cell[0] - o.position.x, dy = cell[1] - o.position.y, dz = cell[2] - o.position.z;
       if (dx * dx + dy * dy + dz * dz < AUX_RANGE_SQ) (o.itemsOut ??= []).push({ type: 'aux', events: [{ id: 2001, x: cell[0], y: cell[1], z: cell[2], data: block + (meta << 12) }] });
     }

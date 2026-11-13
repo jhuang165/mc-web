@@ -162,7 +162,7 @@ export class ServerDispense {
   flush() {
     const fx = this.fx.splice(0);
     for (const p of this.sim.players.values()) {
-      const ents = this.snapshot(p), events = fx.filter(e => (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
+      const ents = p.dimension ? [] : this.snapshot(p), events = p.dimension ? [] : fx.filter(e => (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
       const msgs = p.dispOut ??= [];
       if (ents.length || p.dispSeen) msgs.push({ type: 'dispEnts', ents });
       p.dispSeen = ents.length > 0;
