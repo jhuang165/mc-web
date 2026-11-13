@@ -194,7 +194,7 @@ export const PART_NAMES = Object.keys(BIPED);
 // degrees; `swing` is onGround (swing progress 0..1); `heldRight`/`heldLeft` are
 // heldItemRight (m) / heldItemLeft (l). Returns each part's rotation point
 // (model pixels) and angles (radians). The riding branch is included; the bow pose is not.
-export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw = 0, headPitch = 0, swing = 0, sneak = false, riding = false, heldRight = 0, heldLeft = 0 } = {}) {
+export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw = 0, headPitch = 0, swing = 0, sneak = false, riding = false, heldRight = 0, heldLeft = 0, aimedBow = false } = {}) {
   const p = {};
   for (const n of PART_NAMES) p[n] = { point: [...BIPED[n].point], rot: [0, 0, 0] };
   const ls = limbSwing * 0.6662, lsa = limbSwingAmount, S = 57.295776;
@@ -252,6 +252,18 @@ export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw
   p.leftArm.rot[2] -= mhCos(age * 0.09) * 0.05 + 0.05;
   p.rightArm.rot[0] += mhSin(age * 0.067) * 0.05;
   p.leftArm.rot[0] -= mhSin(age * 0.067) * 0.05;
+  // ModelBiped.aimedBow (RenderPlayer sets it for a bow in use; f6 and f7 are 0.0F there): both arms raised along the head, then the idle sway again.
+  if (aimedBow) {
+    const half = Math.fround(Math.PI / 2);
+    p.rightArm.rot[2] = p.leftArm.rot[2] = 0;
+    p.rightArm.rot[1] = -0.1 + p.head.rot[1];
+    p.leftArm.rot[1] = 0.1 + p.head.rot[1] + 0.4;
+    p.rightArm.rot[0] = p.leftArm.rot[0] = -half + p.head.rot[0];
+    p.rightArm.rot[2] += mhCos(age * 0.09) * 0.05 + 0.05;
+    p.leftArm.rot[2] -= mhCos(age * 0.09) * 0.05 + 0.05;
+    p.rightArm.rot[0] += mhSin(age * 0.067) * 0.05;
+    p.leftArm.rot[0] -= mhSin(age * 0.067) * 0.05;
+  }
   return p;
 }
 
@@ -596,7 +608,7 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
     // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
@@ -623,7 +635,7 @@ export class PlayerRenderer {
     this.syncArrows(arrowCount, arrowEntityId);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
-      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak: sneak && !sleeping, riding: riding && !sleeping, heldRight: held ? (blocking ? 3 : 1) : 0, // RenderPlayer.func_82439_a: heldItemRight 3 for a blocking sword
+      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak: sneak && !sleeping, riding: riding && !sleeping, heldRight: held ? (blocking ? 3 : 1) : 0, aimedBow, // RenderPlayer.func_82439_a: heldItemRight 3 for a blocking sword
     });
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];

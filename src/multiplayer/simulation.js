@@ -27,9 +27,18 @@ import { tickBeacons } from '../pyramid-live.js';
 import { canSeeSky } from '../weather.js';
 import { MobSpawners } from '../mob-spawner.js';
 import { describeTiles, describeCell } from '../tile-sync.js';
+import { createServerDig } from '../server-dig.js';
+import { eyeInWater } from '../fluids.js';
+import { playerMiningState } from '../enchantment-effects.js';
+import { BOW, canDraw } from '../bow.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
+// What a server-side survival break needs from the world around it. The dedicated world has no item entities or experience orbs, so drops are not spawned.
+const SERVER_ITEMS = { spill: noop, dropBlock: noop, dropPlayer: noop }, SERVER_XP = { spawn: noop };
+// EntityPlayer.itemInUse, by the held item's EnumAction: swords block (ItemSword, 72000 ticks), the bow draws until released, food eats and a milk bucket
+// drinks for 32 ticks (this build has no potion items). The pose a remote client draws comes from the held stack, as natively (the flag is only "using", watcher 0 bit 4).
+const MILK_BUCKET = 343, USE_TICKS = 32;
 const vector = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
 export function cleanHotbar(slots) {
   if (!Array.isArray(slots) || slots.length !== 9) return null;
@@ -45,7 +54,8 @@ export function cleanHotbar(slots) {
 // One dedicated world, independent of all connected tabs. Finite terrain is an
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
-  constructor(saved = {}, { world = null } = {}) {
+  constructor(saved = {}, { world = null, gameMode = 'creative' } = {}) {
+    this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
     this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
     if (this.world.streaming) throw new Error('Dedicated v1 requires a finite world');
@@ -110,11 +120,12 @@ export class DedicatedSimulation {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
     if ([...this.players.values()].some(p => p.resumeKey === resumeKey)) throw new Error('That player is already connected.');
     const saved = this.savedPlayers.get(resumeKey), start = saved?.position ?? this.world.spawn();
-    const position = vector(start), survival = new Survival(saved?.player ?? {}, 'creative');
+    const position = vector(start), survival = new Survival(saved?.player ?? {}, this.gameMode);
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin };
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null,
+      dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.players.set(id, player);
     return player;
   }
@@ -137,7 +148,91 @@ export class DedicatedSimulation {
     if (!this.players.has(id) || this.actions.filter(a => a.id === id).length >= 4 || typeof message.place !== 'boolean') return false;
     this.actions.push({ id, place: message.place }); return true;
   }
+  // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
+  queueDig(id, status) {
+    if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
+    this.actions.push({ id, dig: status }); return true;
+  }
+  queueUse(id, active) {
+    if (!this.players.has(id) || typeof active !== 'boolean' || this.actions.filter(a => a.id === id).length >= 4) return false;
+    this.actions.push({ id, use: active }); return true;
+  }
+  // The server's ray for a dig: the cell the player's own position and look aim at (no client coordinate is trusted), or null.
+  aimCell(p) {
+    const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
+    const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
+    const target = raycast(this.world, eye, dir, 5);
+    if (!target) return null;
+    const gate = serverClick({ kind: 'dig', player: [p.position.x, p.position.y, p.position.z], pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    if (!gate.accept) { p.refusal = gate.message ?? null; return null; } // a refused dig is silent natively; only the build-height text can reach the player
+    return [...target.block];
+  }
+  // Block.getPlayerRelativeBlockHardness for this player as it is now (null for an air cell), the rate ItemInWorldManager's timer multiplies.
+  digRate(p, cell) {
+    const b = this.world.get(cell[0], cell[1], cell[2]);
+    return b ? playerMiningState(p.survival, b, p.survival.held?.id ?? 0, eyeInWater(this.world, p.position.x, p.position.y + PHYSICS.eye, p.position.z), p.grounded).progress : null;
+  }
+  breakDug(p, cell) {
+    const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: SERVER_ITEMS, xpOrbs: SERVER_XP, heldTool: p.survival.held?.id ?? 0 };
+    return breakPlayerBlock(state, cell, { creative: p.survival.creative });
+  }
+  // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
+  // (squared distance from the player's feet below 1024), gets the stage. Stage -1 (or 10, an air cell) takes the crack away.
+  crack(breaker, cell, stage) {
+    for (const o of this.players.values()) {
+      if (o.id === breaker) continue;
+      const dx = cell[0] - o.position.x, dy = cell[1] - o.position.y, dz = cell[2] - o.position.z;
+      if (dx * dx + dy * dy + dz * dz < 1024) (o.cracksOut ??= []).push({ id: breaker, x: cell[0], y: cell[1], z: cell[2], stage });
+    }
+  }
+  // C07 for a Survival player: status 0 starts the timer (an instant block breaks), status 1 is cancelDestroyingBlock, status 2 asks the timer to finish.
+  // A Creative player breaks at once on status 0 (the same path as `edit`); 1 and 2 do nothing for them. NetHandlerPlayServer resends the block (S23)
+  // after status 1 or 2 when it is not air.
+  handleDig(p, status) {
+    if (p.survival.creative) return status === 0 ? this.edit(p, false) : false;
+    if (status === 1) {
+      p.dig.abort();
+      const at = this.aimCell(p);
+      if (at && this.world.get(at[0], at[1], at[2])) (p.resendCells ??= []).push(at);
+    } else {
+      const cell = this.aimCell(p);
+      if (!cell) return false;
+      if (status === 0) {
+        p.swing = 6;
+        const rate = this.digRate(p, cell);
+        p.dig.start(cell, rate);
+        if (rate !== null && Math.fround(rate) >= 1) this.breakDug(p, cell);
+        return true;
+      }
+      const r = p.dig.finish(cell, this.digRate(p, cell));
+      if (r === 'break') this.breakDug(p, cell);
+      else if (this.world.get(cell[0], cell[1], cell[2])) (p.resendCells ??= []).push(cell);
+      return r === 'break';
+    }
+    return true;
+  }
+  // EntityPlayer.itemInUse: the right button on a sword, bow, food or milk bucket starts it (ItemFood needs hunger, and a Creative player cannot
+  // eat); releasing it ends it. A changed held item clears it (EntityPlayer.onUpdate), so does a finished eat or drink. Presence carries only the flag.
+  handleUse(p, active) {
+    if (!active) { p.itemInUse = null; return true; }
+    if (p.itemInUse) return false;
+    const held = p.survival.held, id = held?.id ?? 0, item = ITEMS[id];
+    if (item?.kind === 'sword') p.itemInUse = { id, block: true };
+    else if (id === BOW && canDraw(p.survival)) p.itemInUse = { id, bow: true, ticks: 0 };
+    else if (id === MILK_BUCKET) p.itemInUse = { id, ticks: USE_TICKS };
+    else if (item?.food && !p.survival.creative && (p.survival.food < 20 || item.alwaysEdible)) p.itemInUse = { id, ticks: USE_TICKS };
+    return !!p.itemInUse;
+  }
+  tickUse(p) {
+    const use = p.itemInUse;
+    if (!use) return;
+    if ((p.survival.held?.id ?? 0) !== use.id) { p.itemInUse = null; return; }
+    if (use.bow) use.ticks++;
+    else if (!use.block && --use.ticks <= 0) p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
+  }
   edit(p, place) {
+    // A Survival player breaks only through `dig` and its timer.
+    if (!place && !p.survival.creative) return false;
     // Compute the ray on the server from authoritative position/look. No client
     // block coordinate, reach, held item or collision claim is trusted.
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
@@ -257,8 +352,15 @@ export class DedicatedSimulation {
       if (p.position.y < -64) { p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
       p.survival.time = this.time;
       if (p.swing) p.swing--;
+      // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.
+      if (!p.survival.creative) { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }
+      this.tickUse(p);
     }
-    for (const { id, place } of this.actions.splice(0)) { const p = this.players.get(id); if (p) this.edit(p, place); }
+    for (const { id, place, dig, use } of this.actions.splice(0)) {
+      const p = this.players.get(id);
+      if (!p) continue;
+      if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
+    }
     for (const p of this.players.values()) if (p.resendCells) {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
@@ -299,7 +401,7 @@ export class DedicatedSimulation {
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin })); }
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse })); }
   snapshot() { const w = this.world; return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
   save() {

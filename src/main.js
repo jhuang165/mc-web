@@ -685,6 +685,7 @@ async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
     onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
+    onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
@@ -3185,7 +3186,7 @@ function clickEdit(place = false) {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -3750,7 +3751,7 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") { releaseBowUse(); eating = null; } // PlayerControllerMP.onStoppedUsingItem
+  else if (d === "key.use") { multiplayer?.use(false); releaseBowUse(); eating = null; } // PlayerControllerMP.onStoppedUsingItem
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
