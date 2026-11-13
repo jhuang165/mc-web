@@ -15,6 +15,7 @@
 
 ## Verification
 - `node --test src/smallchecks-b59.test.js src/gui.test.js src/sign-font.test.js src/itemtags2-b58.test.js src/rendering-b58.test.js src/prediction4-b58.test.js`: 45 pass, 0 fail.
+- `node --test src/books.test.js src/chat-rarity-b55.test.js src/food-items.test.js src/item-tags-b57.test.js src/mob-effects-b52.test.js src/mob-effects-b54.test.js`: 47 pass, 0 fail. `npm run build`: ok.
 - `node tools/verify-smallchecks.mjs`: 64 tooltip rows, 315 sweep rows.
 - Full npm test not run (batch rule). No browser check.
 
