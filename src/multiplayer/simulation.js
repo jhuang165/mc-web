@@ -73,6 +73,8 @@ export class DedicatedSimulation {
     if (!Array.isArray(edits)) throw new Error('Invalid dedicated edits');
     for (let i = 0; i < edits.length; i += 100000) this.world.restore(edits.slice(i, i + 100000));
     this.time = saved.time ?? 6000;
+    // World state the operator commands change (src/servercommands-b59.js): game rules, difficulty, the mode a new player starts in.
+    this.gameRules = { ...(saved.gameRules ?? {}) }; this.difficulty = Number.isInteger(saved.difficulty) ? saved.difficulty : 1; this.newPlayerMode = saved.newPlayerMode ?? null;
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
     // Item entities (EntityItem): a Survival break, drops from a container and the like. Each gets a wire id (`eid`); clients see them in `tick.items` and ask
@@ -136,10 +138,11 @@ export class DedicatedSimulation {
     if ([...this.players.values()].some(p => p.resumeKey === resumeKey)) throw new Error('That player is already connected.');
     const saved = this.savedPlayers.get(resumeKey), start = saved?.position ?? this.world.spawn();
     const position = vector(start), survival = new Survival(saved?.player ?? {}, this.gameMode);
+    if (!saved && this.newPlayerMode) survival.mode = this.newPlayerMode; // /defaultgamemode adventure
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, rand: seeded(),
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, rand: seeded(),
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.players.set(id, player);
     return player;
@@ -150,7 +153,7 @@ export class DedicatedSimulation {
     this.players.delete(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch), slots = cleanHotbar(message.hotbar);
     if (!p || !input || !look || !slots || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -173,7 +176,7 @@ export class DedicatedSimulation {
     if (!wanted.size) return false;
     this.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => {
       if (!wanted.has(stack) || !(stack.count > 0)) return false;
-      (p.collectedOut ??= []).push(copyStack(stack)); stack.count = 0; return true;
+      (p.collectedOut ??= []).push(copyStack(stack)); (this.events ??= []).push({ type: 'pickup', id, item: stack.id }); stack.count = 0; return true;
     });
     return true;
   }
@@ -401,11 +404,11 @@ export class DedicatedSimulation {
   }
   tick() {
     const beforeLit = new Set(this.redstone.lit);
-    this.ticks++; this.time++;
+    this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       movePlayer(p, controls);
-      if (p.position.y < -64) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
+      if (p.position.y < -64) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
       p.survival.time = this.time;
       if (p.swing) p.swing--;
       // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.
@@ -470,7 +473,7 @@ export class DedicatedSimulation {
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
-      edits: [...this.world.edits], time: this.time, ticks: this.ticks, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
+      edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(),
       tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };

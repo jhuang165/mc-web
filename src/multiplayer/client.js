@@ -93,6 +93,7 @@ export class DedicatedClient {
   // Item entities in reach with room in the inventory (Survival): the server repeats the pickup test and answers each one with a `collect` stack.
   pickup(ids) { this.send({ type: 'pickup', ids }); }
   // C0D close window.
+  openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }

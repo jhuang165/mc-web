@@ -20,9 +20,11 @@ import { makeStack } from "./inventory.js";
 import { stackName } from "./item-names.js";
 import { ITEMS } from "./survival.js";
 import { itemComponent } from "./item-component.js";
+import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
+import { pickedAchievement } from "./achievements-live.js";
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
-export const SERVER_COMMANDS = new Set(["tell", "me", "say", "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill"]);
+export const SERVER_COMMANDS = new Set(["tell", "me", "say", "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", ...SERVER_WORLD_COMMANDS]);
 export const SERVER_UNSUPPORTED_TEXT = (name) => `The /${name} command is not available on this server`;
 
 /** An S02PacketChat of this build: the component as JSON beside the legacy text older clients print. */
@@ -85,11 +87,16 @@ export class ServerSocial {
     return a;
   }
   award(id, achievementId) { return BY_ID[achievementId] ? this.achievementsOf(id).trigger(achievementId) : false; }
+  /** C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT (nh.a(is)): the client opened its own survival inventory. */
+  openInventory(id) { return this.simulation.players.has(id) && this.award(id, "openInventory"); }
   forget(id) { this.achievements.delete(id); }
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
     const events = this.simulation.events?.splice(0) ?? [];
-    for (const e of events) if (e.type === "death") this.death(e.id);
+    for (const e of events) {
+      if (e.type === "death") this.death(e.id);
+      else if (e.type === "pickup") { const a = pickedAchievement(e.item); if (a) this.award(e.id, a); } // EntityItem.onCollideWithPlayer (xk.b_)
+    }
     return events.length;
   }
 
@@ -103,8 +110,8 @@ export class ServerSocial {
     const rights = (name) => this.isOp(name);
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
     const host = Object.assign(Object.create(forPlayer(sender.name)), {
-      name: sender.name, playerName: sender.name, cheats: op, rules: {},
-      canUse: (command) => (op ? SERVER_COMMANDS.has(command.name) : canUse(command, false)),
+      name: sender.name, playerName: sender.name, cheats: op,
+      canUse: (command) => (op ? SERVER_COMMANDS.has(command.name) : canUse(command, false) || command.name === "list"),
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
@@ -119,6 +126,10 @@ export class ServerSocial {
         if (component) for (const r of records) if (r.name !== sender.name && rights(r.name)) to(r.name, grayItalic(translation("chat.type.admin", sender.name, component)));
       },
     });
+    // World commands act on the simulation (time, weather, rules, difficulty); /list and /tellraw see every connected player.
+    Object.defineProperties(host, Object.getOwnPropertyDescriptors(worldHost(sim)));
+    host.listPlayers = (uuids) => ({ names: [...sim.players.values()].map((q) => (uuids ? `${q.name} (${q.resumeKey})` : q.name)), max: host.maxPlayers });
+    host.printTo = (name, component) => to(name, component);
     createCommandRunner(host).run(line);
     // The per-player achievements of a target are reached through forPlayer (below); deliver everything collected in order.
     for (const { to: name, message } of out) {
@@ -145,15 +156,15 @@ export class ServerSocial {
         op("give", { id: item.id, count, damage: item.damage });
         return { name: "[" + name + "]", component: itemComponent(stack, name), ignored: tag ? ["NBT tag"] : [] };
       },
-      // Only the nine hotbar slots reach the server (the client sends them with each input); the client clears everything.
+      // The server clears every slot it holds (serverInventory: the hotbar the client sends, and the rest when inventory authority fills it); the client clears its own.
       clear: (original, damage) => {
         const want = original === -1 ? null : itemFromOriginal(original, Math.max(damage, 0));
         if (original !== -1 && !want) return 0;
         let removed = 0;
-        for (let i = 0; i < 9; i++) {
-          const s = p.survival.inventory.main[i];
+        for (const list of serverInventory(p).lists) for (let i = 0; i < list.length; i++) {
+          const s = list[i];
           if (!s || (want && (s.id !== want.id || (damage !== -1 && (s.damage ?? 0) !== want.damage)))) continue;
-          removed += s.count; p.survival.inventory.main[i] = null;
+          removed += s.count; list[i] = null;
         }
         if (removed || !want) op("clear", want ? want.id : -1, want ? damage : -1);
         return removed;
@@ -168,8 +179,7 @@ export class ServerSocial {
       },
       removeEffect: (effectId) => { if (!p.survival.effects.has(effectId)) return false; p.survival.effects.remove(effectId); op("removeEffect", effectId); return true; },
       clearEffects: () => { if (!p.survival.effects.active.size) return false; p.survival.effects.clear(); op("clearEffects"); return true; },
-      enchant: () => { throw unsupported("Enchanting is not available on this server"); },
-      setSpawnpoint: () => { throw unsupported("Spawn points are not available on this server"); },
+      ...playerHost(sim, p, op),
       get achievements() { return self.achievementsOf(id); },
     };
   }

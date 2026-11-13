@@ -114,7 +114,7 @@ test("operator feedback also goes to the other operators as chat.type.admin; unk
   f.log("a").length = 0;
   f.social.command("a", "/give Nobody 1");
   assert.match(texts(f.log("a"))[0], /cannot be found/);
-  f.social.command("a", "/time set day");
+  f.social.command("a", "/setworldspawn"); // /time moved to the server in batch 59
   assert.match(texts(f.log("a")).at(-1), /not available on this server/);
 });
 

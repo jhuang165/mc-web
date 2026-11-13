@@ -1,6 +1,6 @@
 // A playerOp message of the dedicated server (src/server-broadcast.js playerOps): a command an operator ran on this player, applied to the client's own
 // survival state. The server mirrors only what it holds (game mode, hotbar, effects, position); the inventory, experience and health live here.
-const ALLOWED = new Set(["setGameMode", "kill", "give", "clear", "addExperience", "addLevels", "addEffect", "removeEffect", "clearEffects"]);
+const ALLOWED = new Set(["setGameMode", "kill", "give", "clear", "addExperience", "addLevels", "addEffect", "removeEffect", "clearEffects", "enchant"]);
 export function applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack }) {
   if (!ALLOWED.has(message?.op) || !Array.isArray(message.args)) return false;
   const [a, b, c] = message.args;
@@ -26,6 +26,7 @@ export function applyPlayerOp(message, { survival, experience, commandHost, rend
     case "addEffect": if (Number.isInteger(a) && Number.isInteger(b) && Number.isInteger(c)) commandHost.addEffect(a, b, c); break;
     case "removeEffect": commandHost.removeEffect(a); break;
     case "clearEffects": commandHost.clearEffects(); break;
+    case "enchant": if (Number.isInteger(a) && Number.isInteger(b) && a >= 0 && a < 256 && b >= 1 && b <= 255) commandHost.enchant(a, b); break;
   }
   return true;
 }
