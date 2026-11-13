@@ -1345,6 +1345,8 @@ function comparatorGettingInput(w, x, y, z, m) {
   const side = comparatorSides(w, x, y, z, m);
   return side === 0 ? true : l >= side;
 }
+// b60: the rear input and the larger side input of the comparator cell as the engine reads them (client-comparator.js runs this over the client's own block data).
+export const comparatorReadings = (w, x, y, z, m) => ({ input: comparatorInput(w, x, y, z, m), side: comparatorSides(w, x, y, z, m), target: comparatorTarget(w, x, y, z, m) });
 function comparator(lit) {
   const self = lit ? POWERED_COMPARATOR : COMPARATOR,
     powered = (w, x, y, z, m) => lit || (m & 8) !== 0;

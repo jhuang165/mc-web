@@ -8,6 +8,7 @@
 // change, or its refusal, then lands in the real world and the cell is rebuilt, which is the S23).
 import { collides, isLiquid, BED, TORCH, REDSTONE_TORCH, REDSTONE_TORCH_OFF, LADDER, SNOW_LAYER, REEDS, CACTUS, DOUBLE_PLANT, SAPLING, TALL_GRASS, FERN, PISTON_HEAD,
   REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, LIGHT_PLATE, HEAVY_PLATE, isFlower, FIRE, COMMAND_BLOCK } from './world.js';
+import { clientComparatorToggle } from './client-comparator.js';
 import { ITEMS } from './survival.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable, doorSound } from './doors-panes.js';
@@ -168,9 +169,8 @@ export function dryActivate(state, target) {
   else if (b === TRAPDOOR) scratch.put(x, y, z, b, world.getMeta(x, y, z) ^ 4);
   else if (b === FENCE_GATE) scratch.put(x, y, z, b, gateUseMeta(world.getMeta(x, y, z), Math.fround(180 - (state.yaw * 180) / Math.PI)));
   else if (b === STONE_BUTTON || b === WOODEN_BUTTON) { const m = world.getMeta(x, y, z); if (!(m & 8)) scratch.put(x, y, z, b, m | 8); } // BlockButton.onBlockActivated has no isRemote guard: the pressed bit (probe: 77 and 143 meta 1 -> 9)
-  else if (b === COMPARATOR || b === COMPARATOR_POWERED) { // BlockRedstoneComparator.onBlockActivated on the client (probe 149 / 150, 12 records): subtract mode (bit 4) set -> the mode and the lit bit clear (m4, m5, m12 -> m & 3); else 149 sets bit 4 (m0 -> 4, m8 -> 12) and 150 sets bits 4 and 8 (m0, m8 -> 12)
-    const m = world.getMeta(x, y, z);
-    scratch.put(x, y, z, b, m & 4 ? m & 3 : m | (b === COMPARATOR ? 4 : 12));
+  else if (b === COMPARATOR || b === COMPARATOR_POWERED) { // BlockRedstoneComparator.onBlockActivated on the client (probe 149 / 150, 12 records) with the input powers read from the client's own block data (client-comparator.js, b60); state.redstoneHooks {lit, signal} are optional
+    scratch.put(x, y, z, b, clientComparatorToggle(scratch, x, y, z, state.redstoneHooks).meta);
   }
   else if (b === REPEATER) scratch.put(x, y, z, b, (world.getMeta(x, y, z) + 4) & 15); // BlockRedstoneRepeater: the delay steps by 4 and wraps at 16 (probe: 0->4 ... 12->0)
   else return null;

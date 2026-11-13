@@ -2442,7 +2442,7 @@ function refreshContainer() {
   }
   if (view.kind === "inventory") {
     // GuiInventory.func_146102_a: the active potion effects, listed left of the screen (icon, name with level, remaining time).
-    const list = $("#effect-list"), active = [...survival.effects.active.values()].sort((a, b) => a.id - b.id);
+    const list = $("#effect-list"), active = survival.effects.ordered(); // HashMap order, not id order (status-effects.js, b60)
     if (list) {
       const html = active.map((e) => {
         const t = POTION_TYPES[e.id], roman = ["", " II", " III", " IV", " V"][e.amplifier] ?? ` ${e.amplifier + 1}`;
@@ -3268,7 +3268,7 @@ function predictPlace() {
   // ItemSnowball / ItemEgg / ItemEnderPearl / ItemExpBottle.onItemRightClick take one from the client stack at once (the entity itself is the server's).
   if (!kind && !aimed && (isThrowable(held) || held === ITEM_EXP_BOTTLE || throwsPotion(held, survival.held?.damage)) && !(target && !motion.sneaking && activatesOnClick(seen.get(...target.block)))) kind = 'throw';
   if (!kind) return null;
-  const state = { world: seen, survival, position, flowers: FLOWERS, yaw };
+  const state = { world: seen, survival, position, flowers: FLOWERS, yaw, redstoneHooks: { lit: (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true } }; // b60: client comparator input powers
   let soundDone = false, cells = [], smokeDone = false, bucket = null, eggDone = false, potContent = null;
   if (kind === 'activate') {
     cells = dryActivate(state, target) ?? [];
