@@ -113,6 +113,19 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 56 (2026-11-12, eight Sonnet tracks in `../wt56-<name>` on `batch56-<name>`, cut from 626a467c3, merged --no-ff on `batch56-lead`; lead note `b56-lead-track.md`; the gun side runs separately):
+- 0.85.0, by track:
+  - dragondeath: dragon death records carry the XP orb spawn ticks and positions; the dragon egg has no living sound in 1.7.10 (gap corrected); `clientCrystalFire` in `ender-crystal-mobs.js` with a `ClientEntity.crystalFire` hook (not yet wired to a client block layer).
+  - trackermobs: executed mob spawn phases against the player's flush (`spawnsEarly`, `noteMobSpawns`, `endTilePass`); horse flags travel through the tracker as `ClientEntity.horseFlags` (`b56tm`).
+  - savedorder4: `loadRanks` gives the executed login chunk order; `stampSavedOrder` drops the chain below the player's mount (`lostMounts`). The away-run mount gap was backwards and needed no change.
+  - boatcopy: `ObjectClient.rideBoat` runs `Boats.tickBoat` in remote mode for the ridden boat's copy and seats the player on it (`boatSeat`); lily pad and corner-clear fixes in `boats.js`.
+  - horsepose: `horse-model.js` ports ModelHorse.setLivingAnimations and `horse-renderer.js` draws the copy's counters; `stepHorseCopy` with the tail roll on the copy's own Random; `ownGrowth` scale rule.
+  - prediction2: `dryBreak`, `dryActivate`, `dryUse`: the break cascade (door and bed halves), door and other right-click uses and non-block item placements (`PLACED_ITEMS`) are predicted; `showPredictedCells` relights each touching column once, detaching `ringSink`/`blockTap` during the swap.
+  - displaylight: `display-light.js` and `scene.entityBrightness`; `lighting.packed(x, y, z, emissive, mixed)`; cart display blocks lit by the cart's brightness; the portal display block draws a cube.
+  - chatnbt: full NBTTagCompound.toString hover text; `/tell`, `/say` and `/me` executed through the real CommandHandler (`cmd-chat-reference.json`); usage errors are bare red with no `commands.generic.usage` wrapper.
+- Lead fix 1a064141d: a mouse right click goes through `clickEdit`, so mouse uses are predicted like the key path (they had bypassed the prediction since batch 55).
+- Verification: see `b56-lead-track.md`. Pushed to github main by the lead.
+
 Batch 55 (2026-11-12, five Sonnet tracks in `../wt55-<name>` on `batch55-<name>`, cut from be55d463b, merged --no-ff on `batch55-lead`; paused and resumed the same day; lead note `b55-lead-track.md`; the gun side runs separately):
 - 0.84.0, by track:
   - chatrarity: `src/item-component.js` `itemComponent` (`ItemStack.func_151000_E`): "[name]" coloured by the executed EnumRarity table with a `show_item` hover. Used in death messages with a named weapon, `/give` and item statistic names. Executed `ChatRarityProbe` (315 items). The component sets no italic.

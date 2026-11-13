@@ -2,6 +2,27 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 56
+
+Batch 56 covered these areas:
+- **Prediction, part 2.** A break predicts its cascade (a door's or bed's other half), and right-click uses are predicted: door toggles, door, reed, redstone, repeater, stand, cauldron and flower pot items. Predicted cells are relit at once, meshing each touching column once. A mouse right click is now predicted like the key (it had bypassed the prediction).
+- **Vehicle copies.** The ridden boat's client copy runs the executed boat physics in remote mode and seats the player on it. The horse copy gets its flags through the tracker, runs its tail roll on its own Random, and the renderer draws ModelHorse's executed rearing, eating and mouth pose from the copy's counters.
+- **Tracker spawn phases.** Mob spawns from the spawner pass and the tile-entity pass are placed against the player's flush as the executed records show (`b56tm`).
+- **Saved order, part 4.** Login chunk ranks follow the executed order, and the chain below the player's mount is not saved. The away run's mount gap was backwards (no change).
+- **Display brightness.** Display blocks and entities take the executed brightness rules; carts light their display block by their own brightness.
+- **Chat.** Hover text prints the full NBTTagCompound.toString; `/tell`, `/say` and `/me` run on the real CommandHandler, and usage errors are bare red.
+- **Dragon death.** The XP orb spawn ticks and positions are executed; the dragon egg has no living sound in 1.7.10.
+- **Browser check.** A torch break and a door place and toggle were predicted ahead of the queued packet (door seen 38 ms after the press, real 84 ms; toggle 35 ms, real 75 ms). A ridden boat's copy matched the live boat with the player seated, and the dismount worked. A ridden horse's copy got its flags and drew the rearing pose. `/say` with no text printed bare red `commands.say.usage`. Ticks held at 160 per 8 s in the Overworld and the Nether with no long tasks.
+
+Still open from batch 56:
+- **Vehicles.** Other entities' boxes are not obstacles for the ridden boat copy, and the rider's client-side fall sound and effects are not played. The horse copy's Random lacks the living-sound draw; other flag sources (eating grass, the `bq` starters) are not ported. The crystal copy's End fire is a ready rule (`clientCrystalFire`, tracker hook `crystalFire`) with no client block layer wired to it.
+- **Rendering.** The display lightmap brightness is not checked against a pixel render, held-item lighting was not compared, and not every block id's display render type has been swept.
+- **Commands.** Multiplayer death and achievement broadcasts are untouched. Lore, SkullOwner, CustomPotionEffects and map tags are not carried on items. Only the local player can be selected or whispered, so three-player chat rows are not replayed, and one `/tell @p[r=5]` command-block row diverges. `/effect` gives no ambient flag (natively false).
+- **Player actions.** Buckets, cocoa, leads, beds, signs and seeds are not predicted. Predicted light after a refused change on a streaming world is unverified. The server range check is not applied to the prediction. Multiplayer digs bypass the server timer, the crack packets have no consumer, and multiplayer has no item-in-use sync.
+- **Tracker.** A network spawn arrives one update early; the probe's second world does not tick before the arrival.
+- **Damage and effects.** The effect order follows the Java 8+ HashMap; a Java 6/7 runtime orders buckets differently. The splash instant branch is replayed by formula for amplifiers other than instant damage I.
+- **Saved order.** The Nether and End load ranks have no spawn grid. A mob on a mount that carries the player is not modelled. Non-mob entities above y 256 were not checked.
+
 ## Done in batch 55
 
 Batch 55 covered these areas:
@@ -12,14 +33,7 @@ Batch 55 covered these areas:
 - **Combining and refusing effects.** `PotionEffect.combine` applies with its ambient rule for mobs and the player. `addMobEffect` checks `isPotionApplicable` (the undead refuse Regeneration and Poison, spiders and cave spiders refuse Poison). One executed undead set is used everywhere, including the witch's splash potions and the wither's targets; zombie and skeleton horses are not undead in 1.7.10, and the silverfish is an arthropod.
 - **Browser check.** A torch broke on the click: the predicted cell read air 36 ms after the press and the real world 75 ms after, with one break sound. A placed block showed on the next frame with one place sound. `/give` printed an aqua "[Edge]"; a skeleton's arrow death named "[Edge]" in aqua with a `show_item` hover. A ridden horse's copy reared from its own flags. Ticks held at 160 per 8 s in the Overworld and the Nether with no long tasks.
 
-Still open from batch 55:
-- **Vehicles.** The horse copy reads its flags straight from the live horse (no metadata delay), its tail counter never starts (the roll is not drawn on its Random), and no renderer draws the rearing pose from the new counters. Other flag sources (eating grass, the `bq` starters) are not ported. The ridden boat copy (batch 56) has its executed record, but other entities' boxes are not obstacles for it, and the rider's client-side fall sound and effects are not played. The crystal copy's End fire (`wz.h` has no isRemote guard) is a ready rule (`clientCrystalFire`, tracker hook `crystalFire`) but no client block layer is wired to it.
-- **Rendering.** The display lightmap brightness is not checked against a pixel render, and not every block id's display render type has been swept. The sugar cane and dead shrub items are not checked in a browser.
-- **Commands.** Multiplayer death and achievement broadcasts are untouched. The hover NBT now prints every tag the port carries as NBTTagCompound.toString does (executed HashMap order and number suffixes; Lore, SkullOwner, CustomPotionEffects and map tags are not carried). `/tell`, `/say` and `/me` are executed on the unchanged CommandHandler with a server double ([cmd-chat-reference.json](cmd-chat-reference.json)), but only the local player can be selected or whispered, so the three-player rows are not replayed. A chunk that fails to load is mirrored only in the region import. `/effect` gives no ambient flag (natively false, so this matches only by default).
-- **Player actions.** A predicted cell is not relit until the real change lands. A break predicts one cell (not a door's or bed's other half or neighbour updates), and doors, beds, signs, seeds and buckets are not predicted. The server range check is not applied to the prediction. Each predicted change meshes the touching columns twice (not profiled). Multiplayer digs bypass the server timer, and the crack packets have no consumer. Multiplayer has no item-in-use sync.
-- **Tracker.** A mob spawned inside the pass before the player's slot still comes after the flush; spawns from the network phase and the tile-entity pass are unmodelled. The probe's second world does not tick before the arrival.
-- **Damage and effects.** The effect order follows the Java 8+ HashMap; a Java 6/7 runtime orders buckets differently. The splash instant branch is replayed by formula for amplifiers other than instant damage I.
-- **Saved order.** The away run still ticks the player's mount. Chunks load in the order of their first entity, and the player's mount goes at the very end. A mob on a mount that carries the player is not modelled. Non-mob entities above y 256 were not checked. The server dragon's death spin was already an executed `death` record; b56 added the orb spawn ticks and positions. The dragon egg has no living sound in 1.7.10 (bytecode-read: `akp` holds only the string `portal`); the dragon's own growl is ported and a dying dragon plays none.
+Still open from batch 55: carried into the batch 56 list above, except the items batch 56 closed.
 
 ## Done in batch 54
 
