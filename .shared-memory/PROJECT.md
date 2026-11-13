@@ -113,6 +113,16 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 55 (2026-11-12, five Sonnet tracks in `../wt55-<name>` on `batch55-<name>`, cut from be55d463b, merged --no-ff on `batch55-lead`; paused and resumed the same day; lead note `b55-lead-track.md`; the gun side runs separately):
+- 0.84.0, by track:
+  - chatrarity: `src/item-component.js` `itemComponent` (`ItemStack.func_151000_E`): "[name]" coloured by the executed EnumRarity table with a `show_item` hover. Used in death messages with a named weapon, `/give` and item statistic names. Executed `ChatRarityProbe` (315 items). The component sets no italic.
+  - instantbreak: `src/client-prediction.js` overlay: instant, finished and creative breaks and plain ItemBlock placements are drawn, sounded and aimed at on the click, before the queued packet runs; the queued run mutes the repeated effects, and a refused change is rebuilt from the real world.
+  - dimtracker: executed respawn, dimension change and early-spawn records (`b55dt`). A spawn made by an object before the player's slot precedes the flush (`spawnEarly`); `leaveWorld` drops the player from the old world's tracker on a dimension change.
+  - horserear: the horse copy runs its own animation counters (`stepHorseAnim`) from watcher-16 flags; the buck lands on the executed `dismountEntity` spot (the b47h record's stub ignored `setPlayerLocation`; re-recorded); the unsaddled ridden copy matches an executed record with no change. Executed `HorseRearProbe`.
+  - effects3: `PotionEffect.combine` with the ambient flag for mobs and the player; `isPotionApplicable` in `addMobEffect`; one executed undead set (zombie and skeleton horses are not undead in 1.7.10; silverfish is an arthropod). Executed `MobEffects2Probe` b55 records.
+- Lead fix: a record's tooltip name is aqua (the string rarity was indexed as an array).
+- Verification: see `b55-lead-track.md`. Pushed to github main by the lead.
+
 Batch 54 (2026-11-12, eight Sonnet tracks in `../wt54-<name>` on `batch54-<name>`, cut from 20bbab13b, merged --no-ff on `batch54-lead`; lead note `b54-lead-track.md`; the gun side runs separately):
 - 0.83.0, by track:
   - horsecopy: the ridden saddled horse's copy is packet-driven and steered by the rider's look (`src/horse-copy.js`: `steerHorseCopy`, `copySeat`, `rearSeat`), and horses and pigs seat the player on the copy. The rider shifts 0.7 * rearAmount when the horse rears. The dismount lands at `dismountSpot` (`sv.m`). Executed `HorseCopyProbe` (8 steer, 20 rear rows).
