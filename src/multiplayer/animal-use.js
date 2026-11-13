@@ -20,6 +20,9 @@ const SHEAR_SOUND = 'mob.sheep.shear';
 // The server half. `mobs` is the EntityWorld, `p` the player record, `ctx.drop(stack)` throws an item at the player (a full inventory). Returns true when handled.
 export function serverAnimalUse(mobs, p, e, ctx) {
   const s = p.survival, held = s.held, id = held?.id ?? 0;
+  if (ctx.lead?.(p, e)) return true; // b62: EntityLiving.interactFirst: the lead comes before the mob's own interact (server-leads.js)
+  // b62: EntityPig.interact: the feed first, then a saddled pig takes the player (ItemSaddle only reaches a pig that did not).
+  if (e.type === 'pig' && e.saddled && ctx.ride) { if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } if (ctx.ride(p, e)) return true; }
   if (e.type === 'pig' && mobs.saddleUse?.(e, s)) return true;
   if (e.type === 'wolf' && mobs.wolfInteract?.(e, s)) return true; // only when mpmobtypes puts wolves on the server (SUPPORTED); status 6 / 7 are still to be wired (see the track note)
   if (e.type === 'ocelot' && mobs.ocelotInteract?.(e, s)) return true;

@@ -32,7 +32,7 @@ test('spawnVehicle makes carts and boats; bad input is refused; the state messag
   assert.equal(sv.spawnVehicle('nope', 1, 1, 1), null);
   assert.equal(sv.spawnVehicle('minecart', NaN, 1, 1), null);
   assert.ok(sv.spawnVehicle('tnt_minecart', 66.5, 10, 70.5) && sv.spawnVehicle('furnace_minecart', 67.5, 10, 70.5));
-  assert.deepEqual([...PLACEABLE_CARTS].sort(), [0, 2, 3]);
+  assert.deepEqual([...PLACEABLE_CARTS].sort(), [0, 1, 2, 3, 5]);
   assert.equal(sv.find(`c${cart.id}`), cart);
   assert.equal(sv.find(`b${boat.id}`), boat);
   assert.equal(sv.find('x1'), null);

@@ -79,6 +79,20 @@ export class ServerContainers {
     this.out(p, { type: 'openWindow', windowId: id, kind, title, x, y, z, size: container.slots.length, rows: container.rows, ...(kind === 'chest' ? { keys: container.keys } : {}), ...extra });
     return true;
   }
+  // b62 mpriding2: a chest or hopper minecart's window (EntityMinecartContainer.interactFirst -> displayGUIChest / displayGUIHopperMinecart). The window is keyed by the
+  // cart, not a block: `cart` on the wire is the vehicle key ('c<id>'); the client builds a local container over blank slots (client-containers.js, buildWindow).
+  openCart(p, cart, key) {
+    const s = p.survival, container = this.sim.vehicles.carts.container(cart, s.inventory);
+    if (!container) return false;
+    this.sim.serverItems.inv.close(p);
+    this.close(p);
+    s.inventory.cursor = null;
+    const id = (this.nextWindow % 100) + 1; this.nextWindow++; const kind = cart.type === 5 ? 'hopper' : 'chest';
+    p.window = { id, kind, container, key: [Math.floor(cart.x), Math.floor(cart.posY), Math.floor(cart.z)], block: null, cart, last: [], cursor: '', props: [], pending: 0, ready: false, stationProps: null };
+    container.title = container.title ?? 'Minecart';
+    this.out(p, { type: 'openWindow', windowId: id, kind, title: container.title, x: p.window.key[0], y: p.window.key[1], z: p.window.key[2], size: container.slots.length, rows: container.rows, cart: key });
+    return true;
+  }
   out(p, m) { (p.windowOut ??= []).push(m); }
   slotsOf(win) { return win.container.slots.map(s => wireStack(s.stack)); }
   sendAll(p) {
@@ -146,6 +160,7 @@ export class ServerContainers {
   // After the server changed the open window itself (C11, MC|ItemName): the dropped stacks, then the changed slots and properties.
   afterServerChange(p) { if (!p.window?.ready) return; this.drain(p); this.changes(p); this.sendProps(p, false); }
   canInteract(p) {
+    if (p.window.cart) return this.sim.vehicles.carts.usable(p.window.cart, p.position); // b62: EntityMinecartContainer.isUseableByPlayer (alive, within 8 blocks)
     const win = p.window, [x, y, z] = win.key, b = this.sim.world.get(x, y, z), ok = win.kind === 'chest' ? (win.container.keys ?? []).every(k => {
       const [a, c, d] = k.split(',').map(Number), bb = this.sim.world.get(a, c, d); return isChestBlock(bb) || bb === ENDER_CHEST;
     }) : b === win.block;

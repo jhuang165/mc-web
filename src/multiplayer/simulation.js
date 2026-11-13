@@ -1,4 +1,5 @@
 import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, raycast, collides } from '../world.js';
+import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
@@ -39,6 +40,7 @@ import { ServerAchievements } from './server-achievements.js';
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
+import { ServerLeads } from './server-leads.js'; // b62
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
@@ -122,7 +124,7 @@ export class DedicatedSimulation {
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
     this.redstone = new LiveRedstone(this.world, {
-      entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
+      entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? this.vehicles?.cartsIn(box, mode) ?? [] : [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
     });
@@ -148,7 +150,9 @@ export class DedicatedSimulation {
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
-    this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 2: 'furnace_minecart', 3: 'tnt_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
+    this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
+    this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
+    this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
     this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
     this.dimensions = new ServerDimensions(this, saved.dimensions); // b61 mpnether: after every system that watches the Overworld
   }
@@ -322,6 +326,7 @@ export class DedicatedSimulation {
     }
   }
   edit(p, place) {
+    if (place && this.vehicles.pigs.stick(p)) return true; // b62: ItemCarrotOnAStick.onItemRightClick boosts the pig under the player (server-riding.js)
     // A Survival player breaks only through `dig` and its timer.
     if (!place && !p.survival.creative) return false;
     // Compute the ray on the server from authoritative position/look. No client
@@ -348,6 +353,7 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
+    if (place && isFence(b) && !p.dimension && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
     if (place && this.vehicles.useHeld(p, target)) return true; // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
@@ -487,6 +493,7 @@ export class DedicatedSimulation {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, p.world.get(x, y, z), p.world.getMeta(x, y, z)]); // b61: the player's own world p.resendCells = null;
     }
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
+    this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();
     this.vehicles.tick(); // b61
     this.dispense.flush();

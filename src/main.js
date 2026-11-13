@@ -253,6 +253,7 @@ import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
+import { leadViews } from "./multiplayer/remote-leads.js"; // b62
 import { SpamCounter, chatPacket, serverClick } from "./server-handlers.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
@@ -4462,7 +4463,8 @@ function animate(now) {
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (minecarts && screen !== "home") for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live)) if (c.type === 4 && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
-  if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.gearViews(), { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: knotViews(objectTracker, mobs.knotList ?? []) }); // Batch 48: the knot copies
+  const mpLeads = remoteMobs && multiplayer ? leadViews(remoteMobs.list(), multiplayer.id, id => remotePlayers?.entries.get(id)?.last ?? null) : { mobs: [], knots: [] }; // b62: leads of the dedicated world's mobs (multiplayer/remote-leads.js)
+  if (mobs) horseGearRenderer?.update(screen === "home" ? [] : [...mobs.gearViews(), ...mpLeads.mobs], { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: [...knotViews(objectTracker, mobs.knotList ?? []), ...mpLeads.knots] }); // Batch 48: the knot copies
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...(remoteMobs && screen !== "home" ? remoteMobs.list() : []), ...shown],dt,partial,180 - yaw * 180 / Math.PI,(e) => remoteMobs?.clientOf(e) ?? mobs.clientPosition(e));
   // Batch 48: drawn from the client copies (object-tracker.js vehicleViews / hangingViews); the boat or cart the client player rides keeps the live entity
   const drawn = (x, z) => !world.streaming || world.isLoaded(x, z), rides = (live) => rider.vehicle === live;

@@ -1,7 +1,7 @@
 // Batch 59 (mpcontainers): the client half of the container windows (see server-containers.js for the wire). The singleplayer container classes and
 // slotClick run locally as the prediction; each top-level click goes to the server as C0E with the stack the local click returned, and the server's
 // S30 / S2F / S32 / S31 bring the authoritative contents back.
-import { makeStack } from '../inventory.js';
+import { makeStack, ChestContainer, StackArray } from '../inventory.js';
 import { DispenserContainer, newDispenser } from '../dispenser-container.js';
 import { HopperContainer, newHopperTile } from '../hopper.js';
 import { BrewingContainer } from '../brewing-container.js';
@@ -24,7 +24,10 @@ export function inventoryWire(inv) {
 export function buildWindow(m, { survival, world, station = {}, crafted = null }) {
   const key = `${m.x},${m.y},${m.z}`, inv = survival.inventory;
   let container, kind = m.kind;
-  if (kind === 'chest') container = m.ender ? survival.openEnderChest(world, m.x, m.y, m.z) : survival.openChest(world, m.x, m.y, m.z);
+  if (m.cart) { // b62: a chest or hopper minecart's window; the stacks come from the server (S30), the slots here start blank
+    const n = kind === 'hopper' ? 5 : 27;
+    container = kind === 'hopper' ? new HopperContainer(inv, { items: Array(n).fill(null), name: m.title }, null) : new ChestContainer(inv, new StackArray(Array(n).fill(null), null));
+  } else if (kind === 'chest') container = m.ender ? survival.openEnderChest(world, m.x, m.y, m.z) : survival.openChest(world, m.x, m.y, m.z);
   else if (kind === 'furnace') container = survival.openFurnace(key, () => {});
   else if (kind === 'dispenser') container = new DispenserContainer(inv, (survival.dispensers[key] ??= newDispenser()), null);
   else if (kind === 'hopper') container = new HopperContainer(inv, (survival.hoppers[key] ??= newHopperTile()), null);
