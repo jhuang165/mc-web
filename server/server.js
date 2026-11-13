@@ -10,6 +10,7 @@ import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial } from '../src/server-broadcast.js';
+import { installServerRules } from '../src/servercommands-b59.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -139,6 +140,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
   const broadcast = message => { let plain; for (const ws of sockets.values()) send(ws, ws.chunks || !message.chunks ? message : (plain ??= expandChunks(message))); };
   // Chat, commands, death and achievement broadcasts (src/server-broadcast.js); `ops` names the players who may run commands.
+  installServerRules(simulation); // /gamerule values reach the fire, griefing and tick readers of this process
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
@@ -190,6 +192,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
+        else if (m.type === 'openInventory') social.openInventory(id); // C16 status 2: Taking Inventory
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'chat' && typeof m.text === 'string') {
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.

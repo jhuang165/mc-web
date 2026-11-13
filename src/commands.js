@@ -131,6 +131,8 @@ export const UNSUPPORTED = new Set(); // every registered 1.7.10 command has a h
 const REGISTERED = COMMAND_LIST.filter((c) => c.group !== "dedicated"); // singleplayer: the always group plus /publish
 const BY_NAME = new Map();
 for (const c of REGISTERED) { BY_NAME.set(c.name, c); for (const a of c.aliases) BY_NAME.set(a, c); }
+// CommandListPlayers is registered by the dedicated server only (group "dedicated", level 0); a server host (host.listPlayers) answers it.
+const DEDICATED_LIST = COMMAND_LIST.find((c) => c.name === "list");
 export const registeredCommands = () => REGISTERED.slice();
 // EntityPlayerMP.canCommandSenderUseCommand in a singleplayer world (ServerCommandManager.getPossibleCommands uses it too).
 export const ALWAYS_ALLOWED = new Set(["tell", "help", "me", "seed"]);
@@ -272,7 +274,16 @@ export function createCommandRunner(host) {
       say(tr("commands.message.display.outgoing", target, message.unformatted()), outgoing);
     },
     seed() { feedback("commands.seed.success", String(host.seed())); },
-    list() { say(tr("commands.players.list", 1, 8)); say(name()); },
+    // CommandListPlayers (ay): commands.players.list (online, max), then the names (ServerConfigurationManager.func_152609_b: "name (uuid)" with the "uuids" argument).
+    list(a) {
+      if (host.listPlayers) {
+        const { names, max } = host.listPlayers(a[0] !== undefined && a[0].toLowerCase() === "uuids");
+        say(tr("commands.players.list", names.length, max), translation("commands.players.list", names.length, max));
+        const line = names.join(", ");
+        return say(line, textComponent(line));
+      }
+      say(tr("commands.players.list", 1, 8)); say(name());
+    },
     kill() {
       if (host.isCommandBlock) throw playerNotFound();
       host.kill();
@@ -565,7 +576,7 @@ export function createCommandRunner(host) {
     const parts = line.split(" ");
     while (parts.length && parts[parts.length - 1] === "") parts.pop(); // String.split drops trailing empty strings
     const word = parts.shift() ?? "";
-    const command = BY_NAME.get(word);
+    const command = BY_NAME.get(word) ?? (host.listPlayers && word === "list" ? DEDICATED_LIST : undefined);
     try {
       if (!command) throw new CommandException("commands.generic.notFound");
       if (host.unsupported?.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available on this server`], "unsupported"); // an operator's command this server cannot run

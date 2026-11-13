@@ -170,11 +170,12 @@ export function createExtraCommands(ctx) {
     // commands.tellraw.jsonException with ExceptionUtils.getRootCause's message.
     tellraw(a) {
       if (a.length < 2) usage("commands.tellraw.usage");
-      player(a[0]);
+      const target = player(a[0]);
       const out = parseChatJson(a.slice(1).join(" "));
       if ("jsonError" in out) throw new CommandException("commands.tellraw.jsonException", [out.jsonError]);
       if (out.generic) throw new Error("tellraw: " + out.generic);
       if (out.component == null) { console.warn("tellraw: a null component (the native server throws a NullPointerException)"); return; }
+      if (host.printTo) return host.printTo(target, out.component); // a server: the component goes to the named player (EntityPlayerMP.addChatMessage), not the sender
       (host.printPlayer ?? host.print)(out.component);
     },
     // CommandAchievement: only "give" (1.7.10 has no "take"); another first word does nothing.

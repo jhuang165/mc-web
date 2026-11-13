@@ -2026,7 +2026,7 @@ function inventory(station = false) {
     openCreative();
     return;
   }
-  if (!station) achievements.trigger("openInventory");
+  if (!station) { achievements.trigger("openInventory"); multiplayer?.openInventory?.(); }
   const container = station ? survival.openWorkbench() : survival.openInventory();
   container.onCraft = (stack, n) => { const id = craftedAchievement(stack?.id); if (id) achievements.trigger(id); statsLive.crafted(stack, n); };
   openContainer(container, station ? "workbench" : "inventory");
