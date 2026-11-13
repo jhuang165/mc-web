@@ -46,7 +46,8 @@ test("the seat follows the copy, not the live horse; a pig keeps its own offset"
   const seat = copySeat(copy, live);
   assert.equal(seat.x, 10); assert.equal(seat.z, 20);
   assert.ok(Math.abs(seat.y - (5 + mountedOffset({ age: 0 }) - 0.5)) < 1e-9);
-  const rear = copySeat(copy, { ...live, rearAmount: 1 });
+  const rear = copySeat({ ...copy, horse: { rearAmount: 1 } }, live); // the copy's own counter (batch 55), not the live horse's
+  assert.equal(copySeat(copy, { ...live, rearAmount: 1 }).y, seat.y, "the live horse's amount no longer moves the seat");
   assert.ok(rear.x > 10.6 && rear.y > seat.y + 0.1);
   assert.equal(copySeat(null, live), null);
   assert.ok(Math.abs(copySeat(copy, { type: "pig" }).y - (5 + f(0.9) * 0.75 - 0.5)) < 1e-9);

@@ -10,7 +10,7 @@ import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom, aiMoveSpeed, resizeBox } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
-import { rearSeat } from "./horse-copy.js";
+import { rearSeat, newHorseAnim, stepHorseAnim, horseFlagsOf } from "./horse-copy.js";
 import { Minecarts, dismountSpot } from "./minecarts.js";
 import { mountedYOffset, maxHealthOf, mountEntity } from "./mob-riding.js";
 
@@ -101,7 +101,7 @@ export function horseSeats(mobs) {
       return true;
     },
     // `landing`: EntityPlayer.mountEntity(null) runs dismountEntity on the server (sv.m, bytecode-read), then S08 puts the client player on that spot, so the drawn dismount
-    // jumps from the copy's seat to the first clear spot beside the mount (or its top). The run-around buck keeps its own executed placement (landing = false).
+    // jumps from the copy's seat to the first clear spot beside the mount (or its top). The run-around buck lands the same way (executed, horse-rear-reference.json).
     dismount(world, rider, landing = true) {
       const v = rider.vehicle;
       if (!v) return false;
@@ -115,7 +115,7 @@ export function horseSeats(mobs) {
     updateRiderPosition(v) {
       const e = v.entity, rider = e?.rider;
       if (!rider) return;
-      const r = rearSeat(e.rearAmount, e.renderYawOffset ?? 0), lift = r.dy; // wi.ac(): the rider also shifts 0.7 * bM along the body yaw (horse-copy.js)
+      const r = rearSeat(e.horseAnim?.rearAmount ?? 0, e.renderYawOffset ?? 0), lift = r.dy; // wi.ac(): the rider also shifts 0.7 * bM along the body yaw (horse-copy.js)
       // EntityPig keeps Entity.getMountedYOffset (height * 0.75, pig-saddle.js).
       // Any other mob a save seats the player on (level.dat Player.Riding) keeps Entity.getMountedYOffset: height * 0.75 (mob-riding.js).
       const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : e.type === "horse" ? H.mountedOffset(view(e)) : mountedYOffset(mobs.size(e)[1]);
@@ -201,6 +201,7 @@ export function installHorse(EntityWorld) {
     if (sound) this.horseAngry(e);
   };
   proto.horseAngry = function (e) {
+    e.mouthTicks = 1; // wi.cJ -> cv() -> cS(): the angry sound getter opens the mouth (bE = 1, flag 128)
     const sound = H.angrySound(e.horse.type);
     // wi.cJ: playSound(cv(), bf(), bg()); bg() draws the horse's own rand twice (a foal adds 0.5), as the talk sound does (b45 feed-wild-170: three rears shift the stream).
     const rand = entityRandom(e);
@@ -210,8 +211,12 @@ export function installHorse(EntityWorld) {
   proto.horseTick = function (e) {
     const rand = entityRandom(e);
     if (!e.rider) { e.stepHeight = e.jumpFactor = undefined; e.moveStrafing = 0; } // wi.e(): no rider restores 0.5 and 0.02
+    if (e.mouthTicks > 0 && ++e.mouthTicks > 30) e.mouthTicks = 0; // wi.h(): the mouth counter bE ends above 30 and clears flag 128 (started by every sound getter, wi.cS)
     if (e.rearing && ++e.rearTicks > 20) { e.rearing = false; e.rearTicks = 0; } // the rear counter starts at 1 and ends above 20 (b44pd records: AI resumes 20 ticks after the rear)
-    e.rearAmount = e.rearing ? Math.min(1, (e.rearAmount ?? 0) + 0.1) : Math.max(0, (e.rearAmount ?? 0) - 0.1);
+    // the horse's own animation counters from its own flags (wi.h(); the same stepHorseAnim as the client copy, executed in horse-rear-reference.json `anim`)
+    const anim = (e.horseAnim ??= newHorseAnim());
+    anim.flags = horseFlagsOf(e);
+    stepHorseAnim(anim);
     if (e.onGround) { e.jumpingHorse = false; if (!e.rider) e.jumpPower = 0; }
     const max = maxHealthOf(e, e.horse.maxHealth);
     // wi.e (bytecode-read): nextInt(200) moves the tail before wf.e (EntityWorld, ahead of the AI); after it (server side) nextInt(900) with a live horse heals 1 (the draw is not gated on health),
@@ -236,13 +241,13 @@ export function installHorse(EntityWorld) {
         return;
       }
       e.horse.temper = Math.min(H.MAX_TEMPER, e.horse.temper + 5);
-      this.horseSeats.dismount(this.world, rider, false);
+      // EntityPlayer.mountEntity(null) on the server runs EntityLivingBase.dismountEntity (yz.a(sa) -> sv.m(sa)): the rider lands on the first clear spot of the search around its seat, or
+      // on top of the horse, and the network handler moves the server player there. Executed (HorseRearProbe, horse-rear-reference.json `buck`: a real EntityPlayerMP and the unchanged
+      // vg.e()). The b47h records used to leave the player at the seat (their stub ignored setPlayerLocation); they were re-recorded with the spot applied. The horse's own push
+      // from that spot comes in its collideWithNearbyEntities this tick, and the mobs' copy of the player moves with it.
+      this.horseSeats.dismount(this.world, rider, true);
       e.rider = null;
-      // Entity.mountEntity(null): setLocationAndAngles(mount x, mount minY + mount height, mount z); the player's feet are posY - yOffset (1.62F) below that, inside the horse, which
-      // then pushes it (and is pushed) in its own collideWithNearbyEntities this tick (b47h records: executed).
-      const off = { x: e.x, z: e.z }; // the y stays the seat's: the record's look at the thrown player (pitch -27.7 after the rear) needs its eye at seat + 1.62
-      Object.assign(rider, off);
-      if (this.ai.player) Object.assign(this.ai.player, off); // the mobs' copy of the player, for the push in this same tick
+      if (this.ai.player) Object.assign(this.ai.player, { x: rider.x, y: rider.y, z: rider.z });
     } else if (mob) mountEntity(mob, null, (m) => this.size(m)[1]);
     else return;
     this.horseRear(e, true);
@@ -253,6 +258,7 @@ export function installHorse(EntityWorld) {
   proto.horseTalk = function (e, livingSoundRoll) {
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, H.TALK_INTERVAL)) return;
+    e.mouthTicks = 1; // wi.t() (the living sound getter) calls cS()
     const out = H.livingSound(e.horse.type, rand);
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
     this.events.push({ sound: out.sound, volume: f(H.SOUND_VOLUME), pitch, position: { x: e.x, y: e.y, z: e.z } });
@@ -271,7 +277,7 @@ export function installHorse(EntityWorld) {
     const id = stack ? originalOfLive(stack.id)?.id ?? null : null;
     const h = view(e), rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: H.HORSE_WIDTH, height: H.HORSE_HEIGHT };
     const take = (n = 1) => { if (!creative && n > 0) survival.inventory.decr(survival.inventory.current, n); };
-    const eatSound = () => this.events.push({ sound: "eating", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
+    const eatSound = () => (e.mouthTicks = 1, this.events.push({ sound: "eating", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } }));
     const fed = id != null ? H.feedHorse(h, id, { creative }) : null;
     if (fed?.used) {
       apply(e, fed.horse, this.world);

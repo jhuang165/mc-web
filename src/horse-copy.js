@@ -30,11 +30,11 @@ export function steerHorseCopy(c, look) {
 }
 
 // Entity.updateRiderPosition for the player's feet (the seat minus the player's 0.5 yOffset), from the client copy of a horse or pig.
-// The copy's own rearing amount is its client animation of the synced rear flag; the live horse's amount stands in for it (equal but for the watcher's delay).
+// The copy's own rearing amount is its client animation (stepHorseAnim) of the synced flag 64, not the live horse's.
 export function copySeat(c, live) {
   if (!c) return null;
   if (live.type === "pig") return { x: c.x, y: c.y + PIG_MOUNTED_OFFSET - 0.5, z: c.z };
-  const r = rearSeat(live.rearAmount, c.renderYawOffset);
+  const r = rearSeat(c.horse?.rearAmount ?? 0, c.renderYawOffset);
   return { x: c.x + r.dx, y: c.y + mountedOffset({ age: live.growingAge ?? 0 }) - 0.5 + r.dy, z: c.z + r.dz };
 }
 
@@ -44,3 +44,42 @@ export function rearSeat(rearAmount, bodyYaw) {
   const bM = f(rearAmount), shift = f(f(0.7) * bM), a = f(f(bodyYaw * f(Math.PI)) / f(180));
   return { dx: f(shift * mhSin(a)), dy: f(f(0.15) * bM), dz: -f(shift * mhCos(a)) };
 }
+
+// Batch 55: EntityHorse's animation counters (wi.h(), onUpdate; executed in horse-rear-reference.json `anim`: the copy's own h() on a client world with only watcher 16 written).
+// Watcher 16 bits (wi.x(I), cc/cg/co/cm/cn): 2 tame, 4 saddled, 8 chest, 16 bred, 32 eating (cm), 64 rearing (cn), 128 mouth open. The animation reads only 32, 64 and 128.
+export const HORSE_EATING = 32, HORSE_REARING = 64, HORSE_MOUTH = 128;
+// The watcher value of a live horse mob (what the server's DataWatcher holds; the tracker sends it to the client copy).
+export function horseFlagsOf(e) {
+  const h = e.horse ?? {};
+  return (h.tame ? 2 : 0) | (h.saddled ? 4 : 0) | (h.chested ? 8 : 0) | (h.bred ? 16 : 0) | (h.eating ? HORSE_EATING : 0) | (e.rearing ? HORSE_REARING : 0) | (e.mouthTicks > 0 ? HORSE_MOUTH : 0);
+}
+// The animation fields of one horse object (the client copy's, or the live horse's own): bJ/bK head lean, bL/bM rearing amount, bN/bO mouth openness, and the tail (bp) and bq counters.
+export const newHorseAnim = () => ({ headLean: 0, prevHeadLean: 0, rearAmount: 0, prevRearAmount: 0, mouth: 0, prevMouth: 0, tail: 0, counter: 0, flags: 0 });
+// The animation half of wi.h(), after the super call: float arithmetic in the bytecode's operation order. `a.flags` is the watcher value the object holds.
+export function stepHorseAnim(a) {
+  const flags = a.flags | 0;
+  if (a.tail > 0) { a.tail++; if (a.tail > 8) a.tail = 0; } // bp, started by the tail roll (wi.cR), ends above 8
+  if (a.counter > 0) { a.counter++; if (a.counter > 300) a.counter = 0; } // bq: only ever started elsewhere
+  a.prevHeadLean = a.headLean;
+  if (flags & HORSE_EATING) { a.headLean = f(a.headLean + f(f(f(1 - a.headLean) * f(0.4)) + f(0.05))); if (a.headLean > 1) a.headLean = 1; }
+  else { a.headLean = f(a.headLean + f(f(f(0 - a.headLean) * f(0.4)) - f(0.05))); if (a.headLean < 0) a.headLean = 0; }
+  a.prevRearAmount = a.rearAmount;
+  if (flags & HORSE_REARING) { // a rearing horse's head lean is zeroed (both the value and its previous one)
+    a.prevHeadLean = a.headLean = 0;
+    a.rearAmount = f(a.rearAmount + f(f(f(1 - a.rearAmount) * f(0.4)) + f(0.05))); if (a.rearAmount > 1) a.rearAmount = 1;
+  } else {
+    const r = a.rearAmount;
+    const cube = f(f(f(f(0.8) * r) * r) * r); // 0.8F * bL * bL * bL
+    a.rearAmount = f(r + f(f(f(cube - r) * f(0.6)) - f(0.05)));
+    if (a.rearAmount < 0) a.rearAmount = 0;
+  }
+  a.prevMouth = a.mouth;
+  if (flags & HORSE_MOUTH) { a.mouth = f(a.mouth + f(f(f(1 - a.mouth) * f(0.7)) + f(0.05))); if (a.mouth > 1) a.mouth = 1; }
+  else { a.mouth = f(a.mouth + f(f(f(0 - a.mouth) * f(0.7)) - f(0.05))); if (a.mouth < 0) a.mouth = 0; }
+}
+// wi.e(), before EntityAnimal's: nextInt(200) == 0 starts the tail swish (wi.cR sets bp = 1); both sides draw it, from the entity's own Random.
+export function horseTailRoll(a, rand) { if (rand.nextInt(200) === 0) a.tail = 1; }
+// wi.p / q / r (partial ticks) for the renderer: head lean, rearing amount, mouth openness.
+export const horseLean = (a, t) => f(a.prevHeadLean + f(f(a.headLean - a.prevHeadLean) * t));
+export const horseRear = (a, t) => f(a.prevRearAmount + f(f(a.rearAmount - a.prevRearAmount) * t));
+export const horseMouth = (a, t) => f(a.prevMouth + f(f(a.mouth - a.prevMouth) * t));
