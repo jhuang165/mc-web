@@ -8,6 +8,7 @@
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
 import { EntityWorld } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
+import { SharedMobTracker } from './server-mob-entries.js';
 import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
@@ -22,7 +23,9 @@ import { PHYSICS } from '../world.js';
 import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
 
-export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider']);
+// The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
+// jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
+export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom']);
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
@@ -53,6 +56,15 @@ export function mobState(e) {
   if (e.hurt > 0) s.hurt = 1;
   if (e.growingAge < 0) s.baby = 1;
   if (e.burn > 0 || e.fire > 0) s.burn = 1;
+  // b61: the watched objects the renderers of the other kinds read (EntityEnderman 16/17/18, EntitySlime 16, EntityWolf 16/18/19, EntityOcelot 16/18, EntityHorse type and variant, EntityZombie villager)
+  if (e.type === 'zombie' && e.villager) s.villager = 1;
+  if (e.type === 'enderman') { if (e.carried) { s.carried = e.carried; s.carriedData = e.carriedData || 0; } if (e.screaming) s.screaming = 1; }
+  if (e.type === 'slime' || e.type === 'magma_cube') s.size = e.size ?? 1;
+  if (e.type === 'witch' && e.held) s.held = { id: e.held.id, damage: e.held.damage || 0 };
+  if (e.type === 'wolf') { s.tamed = e.owner ? 1 : 0; if (e.angry) s.angry = 1; if (e.sitting) s.sitting = 1; s.collar = e.collar ?? 14; s.hp = Math.ceil(e.health); }
+  if (e.type === 'ocelot') { s.cat = e.catType | 0; if (e.owner) s.tamed = 1; if (e.sitting) s.sitting = 1; if (e.sneaking) s.sneaking = 1; if (e.sprinting) s.sprinting = 1; }
+  if (e.type === 'horse' && e.horse) s.horse = { type: e.horse.type | 0, variant: e.horse.variant | 0, armor: e.horse.armor | 0, saddled: e.horse.saddled ? 1 : 0, chested: e.horse.chested ? 1 : 0 };
+  if (e.type === 'bat' && e.batHanging) s.hang = 1;
   if (e.type === 'sheep') { s.color = e.color ?? 0; if (e.sheared) s.sheared = 1; }
   if (e.type === 'pig' && e.saddled) s.saddled = 1; // b61: the saddle on the model (set by the saddle item; riding is mpvehicles)
   if (e.type === 'creeper') { s.fuse = e.fuseTime ?? 0; s.last = e.lastActive ?? 0; if (e.powered) s.powered = 1; }
@@ -99,6 +111,7 @@ export class ServerMobs {
       if (who && ach) ach.attacker = who;
       try { return born.call(this, a, b); } finally { if (ach) ach.attacker = was; }
     };
+    this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
   }
@@ -114,11 +127,11 @@ export class ServerMobs {
       damage: (amount, name, ...rest) => self.hurt(p, amount, { name, from: rest[2] ?? null, call: () => p.survival.damage(amount, name, ...rest) }),
       setFire() {},
     });
-    const tracker = new MobTracker(10);
-    tracker.flush = () => {}; // the server half only: the entry keeps its packets for the wire (the client half is remote-mobs.js)
-    this.views.set(p.id, { player: p, view, survival, tracker, known: new Map(), destroys: [] });
+    // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
+    const watcher = this.tracker.addWatcher(p.id, () => p.position);
+    this.views.set(p.id, { player: p, view, survival, watcher, known: new Map(), destroys: [] });
   }
-  removePlayer(id) { this.views.delete(id); }
+  removePlayer(id) { this.views.delete(id); this.tracker.removeWatcher(id); }
   // Survival.scaledDamage of a mob's hit: the host decides (the player-state track); true means the hit landed.
   hurt(p, amount, source) { return this.host.damagePlayer(p, amount, source) !== false; }
   // World.getClosestPlayerToEntity for this mob: the AI reads `ai.player` and `ai.survival` for everything it does with the player.
@@ -234,41 +247,43 @@ export class ServerMobs {
     if (!q?.length) return;
     if (p.dead) q.length = 0; else drainKnockback(p.survival, p.velocity, p.position);
   }
-  // EntityTracker.updateTrackedEntities for each player, the server half only. Packets leave in the order they were queued (packetSeq).
+  // EntityTracker.updateTrackedEntities, the server half only: ONE tracker for the world (b61, `SharedMobTracker`): every entry ticks once and sends each packet to the players tracking
+  // it, so the entry's `ticks` phase, its last sent position and the S12 velocity flags are the entity's, as natively. Packets leave in the order they were queued (packetSeq).
   track() {
-    const mobs = this.mobs, states = new Map(), size = e => mobs.size(e);
+    const mobs = this.mobs, states = new Map(), size = e => mobs.size(e), t = this.tracker;
     const stateOf = e => { let s = states.get(e); if (s === undefined) states.set(e, s = JSON.stringify(mobState(e))); return s; };
-    // One EntityTrackerEntry per entity natively sends the S12 velocity (and sees isAirBorne) once for all watchers; with a tracker per player the first one would clear the flags
-    // for the rest, so every tracker starts from the flags this tick began with and they are cleared after the last (batch 60).
-    const flags = [];
-    for (const e of mobs.entities) if (e.velocityChanged || e.airBorne) flags.push([e, e.velocityChanged, e.airBorne]);
-    for (const v of this.views.values()) {
-      const p = v.player.position, t = v.tracker;
-      for (const [e, vc, ab] of flags) { e.velocityChanged = vc; e.airBorne = ab; }
-      t.serverTick(mobs.entities, { x: p.x, y: p.y, z: p.z }, size);
-      const queue = [], parts = t.queued();
-      for (const en of parts) for (const pk of en.entry.packets) queue.push([packetSeq(pk), en, pk]);
-      queue.sort((a, b) => a[0] - b[0]);
-      const out = [], later = [];
-      for (const [, en, pk] of queue) {
-        if (pk.type === 'attach') continue; // riding and leads are not connected
-        const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
-        if (pk.type === 'spawn') { out.push({ ...rest, i, mob: e.type, ...mobState(e) }); v.known.set(e, stateOf(e)); }
+    t.serverStep(mobs.entities, size);
+    const byWatcher = new Map(), outs = new Map();
+    for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
+    const queue = [], parts = t.queued();
+    for (const en of parts) for (const pk of en.entry.packets) queue.push([packetSeq(pk), en, pk]);
+    queue.sort((a, b) => a[0] - b[0]);
+    for (const [, en, pk] of queue) {
+      const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
+      if (pk.type === 'attach' && pk.mode !== 0) continue; // leads are not connected
+      for (const w of en.entry.dest.get(pk) ?? []) {
+        const v = byWatcher.get(w);
+        if (!v) continue;
+        const { out, later } = outs.get(v);
+        if (pk.type === 'attach') { if (vehicle === null || mobs.entities.includes(vehicle)) out.push({ ...rest, i, vehicle: vehicle ? num(vehicle) : null }); } // a mob on a mob (the spider jockey); other mounts belong to the vehicle track
+        else if (pk.type === 'spawn') { out.push({ ...rest, i, mob: e.type, ...mobState(e) }); v.known.set(e, stateOf(e)); }
         else if (pk.type === 'destroy') { later.push({ ...rest, i }); v.known.delete(e); } // S13 is flushed by the player's next update: one tick later than the rest (batch 52, bytecode-read)
         else out.push({ ...rest, i });
       }
-      out.unshift(...v.destroys); v.destroys = later; // the destroys held back from the last tick lead this one
-      for (const en of parts) en.entry.packets.length = 0;
-      t.dying.length = 0;
+    }
+    for (const en of parts) en.entry.packets.length = 0;
+    t.dying.length = 0;
+    for (const v of this.views.values()) {
+      const { out, later } = outs.get(v);
+      v.destroys = later;
       for (const [e, en] of t.entries) {
-        if (!en.entry.tracked) continue;
+        if (!en.entry.set.has(v.watcher)) continue;
         const s = stateOf(e);
         if (v.known.get(e) !== s) { v.known.set(e, s); out.push({ type: 'state', i: num(e), ...JSON.parse(s) }); }
       }
-      for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.tracked) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
+      for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.set.has(v.watcher)) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
       if (out.length) (v.player.mobPackets ??= []).push(...out);
     }
-    for (const [e] of flags) { e.velocityChanged = false; e.airBorne = false; }
     this.statuses.length = 0;
   }
   // C02 UseEntity, attack: the reach is the server's (the client aims), the damage the held weapon's (EntityWorld.attack). True when the hit landed.

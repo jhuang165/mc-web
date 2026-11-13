@@ -206,6 +206,19 @@ export class TrackerEntry {
     if (dx >= -this.range && dx <= this.range && dz >= -this.range && dz <= this.range) {
       if (!this.tracked && this.view.watches(floor(e.x / 16), floor(e.z / 16))) {
         this.tracked = true;
+        this.startPackets();
+      }
+    } else if (this.tracked) {
+      this.tracked = false;
+      this.emit({ type: "destroy" });
+    }
+  }
+  // The packets a player that starts watching the entity gets: the spawn, the bat's S1C, the rider's and the leash's S1B (EntityTrackerEntry.tryStartWachingThis; batch 61 split it out so
+  // a server entry shared by several watchers, multiplayer/server-mob-entries.js, can send it to the one that joins).
+  startPackets() {
+    const e = this.e;
+    {
+      {
         this.lastVX = e.vx ?? 0; this.lastVY = e.vy ?? 0; this.lastVZ = e.vz ?? 0;
         if (this.object) {
           // EntityTrackerEntry.func_151260_c: S0E / S11 at floor(pos * 32) (not the size class rounding), the motion in S0E only when its data
@@ -220,9 +233,6 @@ export class TrackerEntry {
         const held = holderOf(e.leash);
         if (held) { this.lastLeash = leashKey(e); this.emit({ type: "attach", mode: 1, entity: e, holder: held }); }
       }
-    } else if (this.tracked) {
-      this.tracked = false;
-      this.emit({ type: "destroy" });
     }
   }
   // EntityTrackerEntry.removePlayerFromTracker, when the entity leaves the world

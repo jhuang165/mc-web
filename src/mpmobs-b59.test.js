@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { World } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { RemoteMobs } from './multiplayer/remote-mobs.js';
+import { SUPPORTED } from './multiplayer/server-mobs.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -118,7 +119,7 @@ test('natural spawning fills the world around a player, and the saved mobs retur
   for (let i = 0; i < 900; i++) s.tick();
   const n = s.mobs.mobs.entities.length;
   assert.ok(n > 0, 'something spawned');
-  assert.ok(s.mobs.mobs.entities.every(e => ['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider'].includes(e.type)));
+  assert.ok(s.mobs.mobs.entities.every(e => SUPPORTED.has(e.type)));
   const saved = s.save();
   assert.equal(saved.mobs.length, n);
   const again = fixture('creative', JSON.parse(JSON.stringify(saved)));

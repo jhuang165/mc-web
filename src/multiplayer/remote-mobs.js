@@ -9,6 +9,7 @@ import { burst } from '../fx.js';
 import { JavaRandom } from '../java-random.js';
 import { ClientEntity } from '../entity-tracker.js';
 import { EntityIds } from '../entity-ids.js';
+import { slimeFields, slimeSquishStart, slimeSquishEnd } from '../slime.js';
 
 // The sound names the server's S29 may carry for the mobs (WorldServer.playSoundAtEntity: living, hurt, death, step, the creeper's fuse and blast, the skeleton's bow, the egg's plop).
 export const isMobSound = name => typeof name === 'string' && /^(mob\.[a-z.]+|creeper\.primed|random\.(explode|bow|pop|eat|burp)|step\.[a-z]+)$/.test(name);
@@ -24,6 +25,7 @@ export class RemoteMobs {
     const f = this.factory;
     this.physics = Object.assign((c, m) => f.moveClient(c, m), { turn: (c, m) => f.clientAfterMove(c, m), pre: (c, m) => f.clientEnvironment(c, m) });
     this.copies = new Map(); // wire id -> { client, mob }
+    this.ctx = { clientOf: id => this.copies.get(id)?.client ?? null, holderOf: () => null }; // S1B(0): the vehicle named by wire id (a spider jockey's skeleton)
   }
   // The `mobs` message of one server tick: packets in the order the server queued them.
   apply(packets) {
@@ -32,9 +34,9 @@ export class RemoteMobs {
         if (!p.mob) continue;
         const mob = this.factory.create(p.mob, p.x / 32, p.y / 32, p.z / 32), client = new ClientEntity(p.mob);
         mob.id = 'mob-' + p.i;
-        client.apply(p);
+        this.state(mob, p); // first: a slime's size and a horse's type decide the box
+        client.apply(p, this.ctx);
         client.height = this.factory.size(mob)[1];
-        this.state(mob, p);
         this.copies.set(p.i, { client, mob });
         continue;
       }
@@ -42,11 +44,17 @@ export class RemoteMobs {
       if (!c) continue;
       if (p.type === 'mobStatus') this.status(c, p.status);
       else if (p.type === 'state') this.state(c.mob, p);
+      else if (p.type === 'attach') this.attach(c, p);
       else {
-        c.client.apply(p);
+        c.client.apply(p, this.ctx);
         if (!c.client.present) this.copies.delete(p.i);
       }
     }
+  }
+  // S1B(0) from the server (batch 61, mob on mob): the copy mounts the vehicle's copy (or gets off); the stand-in follows for the riding legs.
+  attach(c, p) {
+    c.client.apply({ type: 'attach', mode: 0, vehicle: p.vehicle }, this.ctx);
+    c.mob.ridingEntity = p.vehicle === null || p.vehicle === undefined ? null : this.copies.get(p.vehicle)?.mob ?? null;
   }
   // S19 entity status on the copy (EntityLivingBase.handleHealthUpdate): 2 hurt and 3 death play their sound at the copy, pitch (r - r) * 0.2 + 1, volume getSoundVolume;
   // 6 smoke, 7 and 18 hearts are 7 particles on the copy's own Random (EntityAnimal / EntityTameable.func_70908_e).
@@ -71,6 +79,15 @@ export class RemoteMobs {
     if (dead && mob.health > 0) { mob.health = 0; mob.death = 0; }
     mob.growingAge = s.baby ? -24000 : 0;
     mob.burn = s.burn ? 1 : 0;
+    // batch 61: the other kinds' watched objects (server-mobs.js mobState)
+    if (mob.type === 'zombie') mob.villager = !!s.villager;
+    else if (mob.type === 'enderman') { mob.carried = s.carried ?? 0; mob.carriedData = s.carriedData ?? 0; mob.screaming = !!s.screaming; }
+    else if (mob.type === 'slime' || mob.type === 'magma_cube') { if ((s.size ?? 1) !== mob.size) Object.assign(mob, slimeFields(s.size ?? 1, () => 0)); }
+    else if (mob.type === 'witch') mob.held = s.held ? { ...s.held, count: 1 } : null;
+    else if (mob.type === 'wolf') { mob.owner = s.tamed ? 'owner' : ''; mob.angry = !!s.angry; mob.sitting = !!s.sitting; mob.collar = s.collar ?? 14; if (!dead && s.hp) mob.health = s.hp; }
+    else if (mob.type === 'ocelot') { mob.catType = s.cat ?? 0; mob.owner = s.tamed ? 'owner' : ''; mob.sitting = !!s.sitting; mob.sneaking = !!s.sneaking; mob.sprinting = !!s.sprinting; }
+    else if (mob.type === 'horse' && s.horse) mob.horse = { ...(mob.horse ?? {}), type: s.horse.type, variant: s.horse.variant, armor: s.horse.armor, saddled: !!s.horse.saddled, chested: !!s.horse.chested };
+    else if (mob.type === 'bat') mob.batHanging = !!s.hang;
     if (mob.type === 'sheep') { mob.color = s.color ?? 0; mob.sheared = !!s.sheared; }
     if (mob.type === 'pig') mob.saddled = !!s.saddled;
     if (mob.type === 'creeper') { mob.fuseTime = s.fuse ?? 0; mob.lastActive = s.last ?? 0; mob.powered = !!s.powered; }
@@ -79,8 +96,11 @@ export class RemoteMobs {
   tick() {
     for (const { client, mob } of this.copies.values()) {
       client.dead = mob.health <= 0;
+      const slime = mob.type === 'slime' || mob.type === 'magma_cube';
+      if (slime) slimeSquishStart(mob); // EntitySlime.onUpdate runs on the client copy too: the squish and the landing particles (the sounds come from the server's S29)
       client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob));
       mob.px = mob.x; mob.py = mob.y; mob.pz = mob.z;
+      if (slime) { mob.onGround = client.onGround; slimeSquishEnd(mob, this.rand, (dx, dz) => this.fx.particle?.('slime', client.x + dx, client.y, client.z + dz, 0, 0, 0), () => {}); }
       mob.x = client.x; mob.y = client.y; mob.z = client.z;
       for (const x of client.fx.splice(0)) if (x.particle) this.fx.particle?.(x.particle, x.x, x.y, x.z, x.vx ?? 0, x.vy ?? 0, x.vz ?? 0); // the death poof (death-fx.js)
       mob.age++;
