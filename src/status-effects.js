@@ -28,13 +28,21 @@ export class Effects {
       id: effect.id,
       duration: Math.min(2147483647, Math.floor(effect.duration)),
       amplifier: Number.isFinite(effect.amplifier) ? Math.max(0, Math.min(255, Math.floor(effect.amplifier))) : 0,
+      ...(effect.ambient === true ? { ambient: true } : {}),
     }, old = this.active.get(next.id);
-    // PotionEffect.combine: stronger replaces; equal strength only extends.
-    // A weaker effect never extends or resumes behind a stronger effect.
-    if (!old || next.amplifier > old.amplifier) {
+    if (!old) {
       this.active.set(next.id, next);
-      if (next.id === PT.ABSORPTION && this.player) this.player.absorption = Math.fround((this.player.absorption || 0) + 4 * (next.amplifier + 1) - (old ? 4 * (old.amplifier + 1) : 0)); // Potion.applyAttributesModifiersToEntity
-    } else if (next.amplifier === old.amplifier && next.duration > old.duration) old.duration = next.duration;
+      if (next.id === PT.ABSORPTION && this.player) this.player.absorption = Math.fround((this.player.absorption || 0) + 4 * (next.amplifier + 1)); // Potion.applyAttributesModifiersToEntity
+    } else {
+      // PotionEffect.combine (rw.a(rw), executed through EntityLivingBase.addPotionEffect, b55comb): a stronger amplifier replaces amplifier and duration (the ambient flag stays the
+      // old one's); an equal amplifier takes a longer duration; in every other case (weaker, or equal and not longer) a non-ambient effect clears the old one's ambient flag.
+      if (next.amplifier > old.amplifier) { old.amplifier = next.amplifier; old.duration = next.duration; }
+      else if (next.amplifier === old.amplifier && old.duration < next.duration) old.duration = next.duration;
+      else if (!next.ambient && old.ambient) delete old.ambient;
+      // addPotionEffect then runs onChangedPotionEffect(effect, true): the Absorption modifier of the combined effect comes off (the amount floors at 0) and goes on again, so an
+      // unchanged re-add refills a spent shield to the full amount.
+      if (next.id === PT.ABSORPTION && this.player) { const k = 4 * (old.amplifier + 1); this.player.absorption = Math.fround(Math.max(0, Math.fround((this.player.absorption || 0) - k)) + k); }
+    }
     return true;
   }
   food(id, random = Math.random, damage = 0) {

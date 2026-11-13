@@ -4,11 +4,11 @@
 // creates one per world (`mobs.potions`), EntityWorld.tick calls tick(), the scene draws `balls`. See public/research/witch.md.
 import { Projectiles, heading, launch, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
-import { addMobEffect } from "./mob-effects.js";
+import { addMobEffect, isUndeadMob, isPotionApplicable } from "./mob-effects.js";
 import { expBottleOrbs } from "./spawn-eggs.js";
 import { JavaRandom } from "./java-random.js";
 import { chooseThrownPotion, throwSpawn, splashImpact, WITCH } from "./witch.js";
-const f = Math.fround, UNDEAD = new Set(["zombie", "skeleton"]);
+const f = Math.fround;
 
 export class WitchPotions {
   constructor(mobs, random = Math.random) {
@@ -96,7 +96,7 @@ export class WitchPotions {
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
       const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
-      victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: UNDEAD.has(e.type), ref: e, direct: hit === e });
+      victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: isUndeadMob(e), applicable: (id) => isPotionApplicable(e, id), ref: e, direct: hit === e });
     }
     if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: 0.6, height: 1.8, undead: false, ref: "player", direct: hit === "player" });
     for (const r of splashImpact(damage, { x, y, z }, victims, owner)) {

@@ -17,9 +17,9 @@ import { WITHER, SKULL, WITHER_EYE, WITHER_PROOF_INTERNAL, chase, trackHead, hea
 const f = Math.fround;
 export const NETHER_STAR = 2060;
 const UNDEAD_TYPES = new Set(["zombie", "skeleton", "wither_skeleton", "pigman", "wither", "zombie_pigman"]);
-// The wither's attackEntitySelector (xc.bp): any EntityLivingBase whose creature attribute is not UNDEAD. Zombie and skeleton horses (types 3, 4)
-// report UNDEAD too; the giant does not (EntityGiantZombie keeps the default).
-export const witherIsUndead = (o) => UNDEAD_TYPES.has(o.type) || (o.type === "horse" && (o.horse?.type === 3 || o.horse?.type === 4));
+// The wither's attackEntitySelector (xc.bp): any EntityLivingBase whose creature attribute is not UNDEAD. The horse class has no getCreatureAttribute override, so the zombie
+// and skeleton horses report UNDEFINED and are targets (executed, b55attr); the giant does not report UNDEAD either (EntityGiantZombie keeps the default).
+export const witherIsUndead = (o) => UNDEAD_TYPES.has(o.type);
 // World.getEntitiesWithinAABB walks the chunks (x, then z) and each chunk's 16 high slices upwards (the entity lists are in insertion
 // order), so a candidate list is ordered by that triple; ties keep the engine's array order. Slice lists re-append an entity that crosses a
 // slice or chunk, which this engine does not track (approximate within one slice).

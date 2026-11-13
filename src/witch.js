@@ -120,8 +120,8 @@ export function splashImpact(damage, impact, targets, thrower = null) {
         else r.heal += Math.trunc(factor * (4 << amplifier) + 0.5);
       } else {
         const ticks = Math.trunc(factor * duration + 0.5);
-        // EntityLivingBase.isPotionApplicable: the undead take neither regeneration (10) nor poison (19).
-        if (ticks > 20 && !(t.undead && (id === 10 || id === 19))) r.effects.push({ id, amplifier, duration: ticks });
+        // EntityLivingBase.isPotionApplicable (`applicable`, mob-effects.js): the undead take neither regeneration (10) nor poison (19), a spider no poison.
+        if (ticks > 20 && (t.applicable ? t.applicable(id) : !(t.undead && (id === 10 || id === 19)))) r.effects.push({ id, amplifier, duration: ticks });
       }
     }
     out.push(r);
