@@ -323,6 +323,7 @@ export class DedicatedSimulation {
     }
   }
   edit(p, place) {
+    if (place && this.vehicles.pigs.stick(p)) return true; // b62: ItemCarrotOnAStick.onItemRightClick boosts the pig under the player (server-riding.js)
     // A Survival player breaks only through `dig` and its timer.
     if (!place && !p.survival.creative) return false;
     // Compute the ray on the server from authoritative position/look. No client
@@ -487,6 +488,7 @@ export class DedicatedSimulation {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, p.world.get(x, y, z), p.world.getMeta(x, y, z)]); // b61: the player's own world p.resendCells = null;
     }
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
+    this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();
     this.vehicles.tick(); // b61
     this.dispense.flush();

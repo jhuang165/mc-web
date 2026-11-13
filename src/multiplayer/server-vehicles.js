@@ -22,6 +22,7 @@ import { moveInput } from '../player-movement.js';
 import { heldAttackDamage } from '../entities.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
+import { ServerRiding } from './server-riding.js';
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
@@ -56,6 +57,7 @@ export class ServerVehicles {
       get transfer() { return host.containers.ticks?.hoppers.host; }, // b62: a hopper cart sucks from the container or item above it (cart-hopper.js)
       changed: keys => host.containers.ticks?.changed(keys),
     };
+    this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
   }
   // b62: the rail redstone (powered, detector and activator rails: powered-rails.js) and the detector rail's cart touch. The dedicated world never installed them before.
@@ -179,8 +181,9 @@ export class ServerVehicles {
   dismount(p) {
     const m = p.mount;
     if (!m) return;
-    const v = this.find(m.key) ?? m.rider.vehicle;
-    if (m.rider.vehicle) { (v?.boat ? this.boats : this.carts).dismount(this.host.world, m.rider); }
+    if (m.mob) this.pigs.leave(p); // b62: a pig's rider is put down beside it (horseSeats.dismount)
+    const v = m.mob ? null : this.find(m.key) ?? m.rider.vehicle;
+    if (!m.mob && m.rider.vehicle) { (v?.boat ? this.boats : this.carts).dismount(this.host.world, m.rider); }
     Object.assign(p.position, { x: m.rider.x, y: m.rider.y, z: m.rider.z });
     Object.assign(p.previous, { x: m.rider.x, y: m.rider.y, z: m.rider.z });
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
@@ -191,16 +194,25 @@ export class ServerVehicles {
 
   // One world tick, after the players' own update: riders let go (sneak, death, a broken vehicle), boats take the input, both lists tick, pushes, drops, seats, achievements.
   tick() {
-    const host = this.host, world = host.world, any = this.carts.carts.length || this.boats.carts.length;
+    const host = this.host, world = host.world;
+    this.riderInput();
+    const any = this.carts.carts.length || this.boats.carts.length || [...host.players.values()].some(p => p.mount);
+    if (!any) { this.track(); return; }
+    this.afterRiders();
+  }
+  // Riders let go and the input they give (before the mobs tick too, so a pig steers on this tick's keys: b62).
+  riderInput() {
+    const host = this.host;
     for (const p of host.players.values()) {
       const m = p.mount;
       if (!m) continue;
-      const v = this.find(m.key);
-      if (!v || p.dead || p.input?.sneak) { this.dismount(p); continue; }
+      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead || p.input?.sneak) { this.dismount(p); continue; }
       const input = moveInput({ forward: p.input?.forward ?? 0, strafe: p.input?.strafe ?? 0 }); // not slowed: a rider is not using an item (bytecode-read blk.e)
       Object.assign(m.rider, { yaw: f(180 - p.yaw * 180 / Math.PI), moveForward: f(input.forward * f(0.98)), moveStrafing: f(-input.strafe * f(0.98)), dead: false });
     }
-    if (!any) { this.track(); return; }
+  }
+  afterRiders() {
+    const host = this.host, world = host.world;
     // Blockers: every player (a rider excludes its own vehicle through `ref`) and every living mob.
     const blockers = [...host.players.values()].map(p => ({ bb: this.playerBox(p), ref: p.mount?.rider ?? p })).concat(this.boxesOfMobs());
     this.carts.tick(world, { entities: [...blockers, ...this.boats.carts.filter(b => !b.dead).map(b => ({ bb: b.bb, ref: b }))], host: this.cartHost });
@@ -222,6 +234,7 @@ export class ServerVehicles {
     for (const p of host.players.values()) {
       const m = p.mount;
       if (!m) { host.achievements?.stopRiding(p); continue; }
+      if (m.mob) { if (!this.pigs.keeps(p)) this.dismount(p); else { this.pigs.follow(p); this.seat(p); } host.achievements?.stopRiding(p); continue; } // b62
       const v = this.find(m.key);
       if (!v) { this.dismount(p); continue; }
       this.systemOf(v).updateRiderPosition(v);

@@ -141,6 +141,8 @@ export class ServerMobs {
       const p = v.player.position, d = (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2;
       if (d < bd) { bd = d; best = v; }
     }
+    const rider = e.rider?.ref && this.views.get(e.rider.ref.id); // b62: a ridden pig reads its rider's keys and stick, not the nearest player's
+    if (rider) best = rider;
     if (best) this.use(best);
   }
   use(v) { this.mobs.ai.player = v.view; this.mobs.ai.survival = v.survival; }
@@ -303,7 +305,7 @@ export class ServerMobs {
     const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
     if (dx * dx + dy * dy + dz * dz > 36) return false;
     this.use(v);
-    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
     p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks

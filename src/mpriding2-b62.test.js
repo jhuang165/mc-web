@@ -10,6 +10,7 @@ import { buildWindow, applyWindow } from './multiplayer/client-containers.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { makeStack } from './inventory.js';
 import { ITEM_HOPPER_CART } from './cart-variants.js';
+import { CARROT_ON_A_STICK, SADDLE } from './pig-saddle.js';
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const input = (controls = {}) => ({ type: 'input', controls: { ...IDLE_INPUT, ...controls }, yaw: 0, pitch: 0, current: 0, hotbar: Array(9).fill(null) });
@@ -85,4 +86,63 @@ test('a powered activator rail locks a hopper cart and an unpowered one frees it
   const locked = sv.spawnVehicle('hopper_minecart', 72.5, 10, 70.5), free = sv.spawnVehicle('hopper_minecart', 74.5, 10, 70.5);
   tick(s, 2);
   assert.equal(locked.enabled, false); assert.equal(free.enabled, true);
+});
+
+// ---- pig riding ----
+function pigFixture(gameMode = 'survival') {
+  const world = new World('mp-riding2-pig-b62');
+  for (let x = 20; x <= 110; x++) for (let z = 20; z <= 110; z++) for (let y = 9; y <= 40; y++) world.put(x, y, z, y === 9 ? 1 : 0, 0, false);
+  world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
+  const s = new DedicatedSimulation({}, { world, gameMode, mobs: true });
+  s.mobs.spawning = false; s.mobs.mobs.entities.length = 0;
+  return s;
+}
+const pig = (s, x = 66.5, z = 64.5, y = 10) => { const m = s.mobs.mobs.create('pig', x, y, z); m.saddled = true; s.mobs.mobs.entities.push(m); return m; };
+const give = (p, id, count = 1, damage = 0) => { p.survival.inventory.main[0] = makeStack(id, count, damage); p.survival.inventory.current = 0; };
+const wireId = m => Number(String(m.id).replace(/^mob-/, ''));
+
+test('C02 on a saddled pig seats the player, even holding a saddle; sneaking lets go', () => {
+  const s = pigFixture(), p = join(s, 'a', 1), e = pig(s);
+  give(p, SADDLE, 1);
+  s.queueAnimUse('a', wireId(e), false); s.tick();
+  assert.ok(p.mount?.mob === e && e.rider, 'mounted');
+  assert.equal(p.survival.inventory.main[0].count, 1, 'the saddle was not used up');
+  tick(s, 3);
+  assert.ok(Math.hypot(p.position.x - e.x, p.position.z - e.z) < 0.5, 'the player sits on the pig');
+  assert.ok(s.presence().find(x => x.id === 'a').riding, 'others see it riding');
+  s.input('a', input({ sneak: true })); tick(s, 2);
+  assert.equal(p.mount, null); assert.equal(e.rider ?? null, null);
+});
+
+test('an unsaddled pig is saddled, not mounted', () => {
+  const s = pigFixture(), p = join(s, 'a', 1), e = pig(s); e.saddled = false;
+  give(p, SADDLE, 1);
+  s.queueAnimUse('a', wireId(e), false); s.tick();
+  assert.equal(e.saddled, true); assert.ok(!p.mount);
+});
+
+test('a rider with a carrot on a stick steers the pig and the stick boost wears it by 7; a worn-out stick turns into a fishing rod', () => {
+  const s = pigFixture(), p = join(s, 'a', 1), e = pig(s);
+  give(p, CARROT_ON_A_STICK, 1, 0);
+  s.queueAnimUse('a', wireId(e), false); s.tick();
+  assert.ok(p.mount);
+  e.aiMoveSpeed = 0.25; // a pig that has walked before (the move helper sets it); a never-moved one has 0 here as in single player
+  const x0 = e.x, z0 = e.z;
+  s.input('a', input({ forward: true })); tick(s, 150);
+  assert.ok(Math.hypot(e.x - x0, e.z - z0) > 1.5, 'the pig walked where the rider pushed');
+  const before = p.survival.inventory.main[0].damage ?? 0; // the steering task may have worn it by 1 on the way (p = 0.006 a tick)
+  s.edit(p, true);
+  assert.equal(p.survival.inventory.main[0].damage, before + 7, 'boost costs 7');
+  p.survival.inventory.main[0].damage = 20; s.edit(p, true); assert.equal(p.survival.inventory.main[0].damage, 20, 'under 7 durability left: no boost'); // ItemCarrotOnAStick needs 7 left
+  p.survival.inventory.main[0].damage = 25; s.mobs.mobs.wearStick(p.survival, 1); // the steering task's wear (EntityAIControlledByPlayer)
+  assert.equal(p.survival.inventory.main[0].id, 700, 'the broken stick is a fishing rod');
+});
+
+test('a pig carrying a player that lands from more than 5 blocks awards flyPig', () => {
+  const s = pigFixture(), p = join(s, 'a', 1, 66.5, 64.5, 10), e = pig(s, 66.5, 64.5, 10);
+  s.queueAnimUse('a', wireId(e), false); s.tick();
+  assert.ok(p.mount);
+  e.y = 20; e.fallDistance = 0; s.events = [];
+  tick(s, 40);
+  assert.ok((s.events ?? []).some(ev => ev.type === 'award' && ev.achievement === 'flyPig' && ev.id === 'a'), 'flyPig');
 });
