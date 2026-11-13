@@ -24,7 +24,7 @@ export class ServerAchievements {
   award(p, achievement) { if (p && achievement) (this.sim.events ??= []).push({ type: 'award', id: p.id, achievement }); return !!achievement; }
   onCrafted(p, stack) { const a = craftedAchievement(stack?.id); this.award(p, a); return a; }
   onSmelted(p, stack) { const a = smeltedAchievement(stack?.id); this.award(p, a); return a; }
-  onPotionTaken(p, stack) { return stack?.id === ITEM.potion ? this.award(p, 'potion') : false; }
+  onPotionTaken(p, stack) { return stack?.id === ITEM.potion && (stack.damage ?? 0) > 0 ? this.award(p, 'potion') : false; }
 
   // EntityPlayer.dropOneItem: one item (or the whole stack) leaves the held slot and flies along the view, tagged with the thrower's name.
   dropThrown(p, all = false) {

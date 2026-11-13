@@ -7,19 +7,24 @@ import { isPotionIngredient, isBottleOrPotion, INGREDIENT_SLOT } from "./brewing
 export const BREWING_TITLE = "Brewing Stand";
 class IngredientSlot extends Slot { valid(s) { return !!s && isPotionIngredient(s); } }
 class BottleSlot extends Slot {
+  constructor(inv, index, x, y, owner) { super(inv, index, x, y); this.owner = owner; }
   get limit() { return 1; }
   valid(s) { return !!s && isBottleOrPotion(s); }
+  // SlotBrewingStandPotion.onPickupFromSlot (zz's aab, bytecode-read): a potion item with damage > 0 (not the water bottle) awards the "potion" achievement, then Slot.onPickupFromSlot.
+  onPickup(s) { if (s && s.id === POTION_ITEM && (s.damage ?? 0) > 0) this.owner.onPotionTaken?.(s); super.onPickup(s); }
 }
+const POTION_ITEM = 385;
 export class BrewingContainer extends Container {
   // `view` is a BrewingStand (brewing.js brewingView) sharing the store record's slots.
   constructor(inv, view, onChange, title = BREWING_TITLE) {
     super(inv);
     this.stand = view;
     this.title = view.customName || title;
+    this.onPotionTaken = null; // (stack) => void, set by the host: single player main.js, the dedicated server window (server-containers.js)
     this.tile = new StackArray(view.slots, onChange);
-    this.addSlot(new BottleSlot(this.tile, 0, 56, 46));
-    this.addSlot(new BottleSlot(this.tile, 1, 79, 53));
-    this.addSlot(new BottleSlot(this.tile, 2, 102, 46));
+    this.addSlot(new BottleSlot(this.tile, 0, 56, 46, this));
+    this.addSlot(new BottleSlot(this.tile, 1, 79, 53, this));
+    this.addSlot(new BottleSlot(this.tile, 2, 102, 46, this));
     this.addSlot(new IngredientSlot(this.tile, INGREDIENT_SLOT, 79, 17));
     this.addPlayerSlots(8, 84);
   }
