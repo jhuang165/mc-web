@@ -10,7 +10,7 @@ import { collides, isLiquid, BED, TORCH, REDSTONE_TORCH, REDSTONE_TORCH_OFF, LAD
   REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, LIGHT_PLATE, HEAVY_PLATE, isFlower } from './world.js';
 import { ITEMS } from './survival.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
-import { isDoor, activateDoor, doorNeighbourChange, doorReplaceable } from './doors-panes.js';
+import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable } from './doors-panes.js';
 import { bedNeighbourChange } from './bed.js';
 import { torchSupported } from './torches.js';
 import { flowerCanStay, flowerGround } from './flowers.js';
@@ -18,10 +18,11 @@ import { signShouldPop, isSign } from './signs.js';
 import { ladderSupported } from './ladders.js';
 import { snowFalls } from './snow.js';
 import { carpetCanStay, CARPET } from './colored-blocks.js';
-import { reedCanStay, cactusCanStay } from './plants.js';
+import { REEDS_ITEM, reedCanStay, cactusCanStay } from './plants.js';
 import { farmNeighbourChange } from './farming.js';
 import { isStemCake, popDrops, cakePlacement, CAKE } from './stems-cake.js';
-import { redstoneSupported } from './redstone-blocks.js';
+import { redstoneSupported, ITEM_REDSTONE, ITEM_REPEATER } from './redstone-blocks.js';
+import { ITEM_BREWING_STAND } from './brewing.js';
 import { wartCanStay, wartPlantedBy, NETHER_WART } from './nether-wart.js';
 import { plantedBlock } from './crops.js';
 import { baseOfHead, headOfBase, isPistonBase, pistonExtended } from './dispenser-piston.js';
@@ -31,7 +32,7 @@ import { ITEM_BED } from './bed.js';
 import { ITEM_SIGN } from './signs.js';
 import { ITEM_SKULL } from './skull.js';
 import { ITEM_CAKE } from './stems-cake.js';
-import { CAULDRON, FLOWER_POT } from './stone-utility.js';
+import { CAULDRON, FLOWER_POT, ITEM_CAULDRON, ITEM_FLOWER_POT } from './stone-utility.js';
 import { STATIONS } from './player-edit-simulation.js';
 
 const keyOf = (x, y, z) => `${x},${y},${z}`;
@@ -174,6 +175,8 @@ export function dryUse(state, request) {
 export function activatesOnClick(block) {
   return STATIONS.has(block) || block === 178 || block === CAULDRON || block === FLOWER_POT || isDoor(block) || isChestBlock(block);
 }
+// Items that are not ItemBlocks (no ITEMS[id].block) but that placeHeldBlock places: door items, reeds, redstone, repeater, brewing stand, cauldron, flower pot.
+export const PLACED_ITEMS = new Set([WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, REEDS_ITEM, ITEM_REDSTONE, ITEM_REPEATER, ITEM_BREWING_STAND, ITEM_CAULDRON, ITEM_FLOWER_POT]);
 const NOT_PLAIN = new Set([ITEM_BED, ITEM_SIGN, ITEM_SKULL, ITEM_CAKE]);
 // A held ItemBlock whose right click on a plain block reaches placeHeldBlock (no entity, no activated block, not sneaking past one).
 export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
@@ -188,7 +191,7 @@ export function useKind({ world, target, heldId, sneaking, aimed }) {
   if (aimed || !target) return null;
   const b = world.get(...target.block), item = heldId ? ITEMS[heldId] : null;
   if (!sneaking || !item) { if (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE) return 'activate'; }
-  if (predictsPlacement({ world, target, heldId, sneaking, aimed })) return 'place';
+  if (predictsPlacement({ world, target, heldId, sneaking, aimed }) || (PLACED_ITEMS.has(heldId) && (sneaking || !activatesOnClick(b)))) return 'place';
   if (!heldId || (!sneaking && activatesOnClick(b))) return null;
   return heldId === ITEM_CAKE || wartPlantedBy(heldId) || plantedBlock(heldId) ? 'use' : null;
 }

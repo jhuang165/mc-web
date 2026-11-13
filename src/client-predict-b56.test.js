@@ -13,6 +13,7 @@ import { serverClick } from "./server-handlers.js";
 import { LightVolume, lightEmission } from "./lighting.js";
 import { VoxelScene } from "./scene.js";
 import { ITEM_CAKE } from "./stems-cake.js";
+import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM } from "./doors-panes.js";
 import { ITEM_BED } from "./bed.js";
 import { ITEM_SIGN } from "./signs.js";
 import { ITEM_SKULL } from "./skull.js";
@@ -132,6 +133,43 @@ test("b56: a predicted break relights at once from the predicted view, writes no
   VoxelScene.prototype.showPredictedCells.call(q, [{ x: 47, y: 13, z: 40 }, { x: 48, y: 13, z: 40 }]);
   assert.deepEqual([...q.built].sort(), ["32,32", "48,32"]);
   assert.equal(new Set(q.built).size, q.built.length);
+});
+
+test("b56: the relight runs on a streaming world (ringSink and blockTap set): light updated, ring and tap never told, world unchanged", () => {
+  const w = litWorld("b56-ring"), light = new LightVolume(w, (x, y, z, b) => lightEmission(b, false));
+  const edits = [], taps = [], ring = { edited: (...a) => edits.push(a), holds: () => false, putOutside: () => false, get: () => 0 }, tap = (...a) => taps.push(a);
+  w.ringSink = ring; w.blockTap = tap;
+  const p = createPrediction(w); p.set(42, 14, 42, 0, 0, 1);
+  const fake = { world: w, light, predicted: p, dirty: new Set(), built: [], buildChunk(a, b) { this.built.push(`${a},${b}`); } };
+  VoxelScene.prototype.showPredictedCells.call(fake, [{ x: 42, y: 14, z: 42 }]);
+  assert.equal(light.skyAt(42, 13, 42), 15, "relit although the world has a ringSink");
+  assert.equal(fake.predictedRelights, 1);
+  assert.equal(w.ringSink, ring); assert.equal(w.blockTap, tap);
+  assert.deepEqual(edits, [], "ring columns were not told of the swap"); assert.deepEqual(taps, [], "the light shadow was not told of the swap");
+  assert.equal(w.get(42, 14, 42), 3); assert.equal(w.edits.has("42,14,42"), false, "no edit record");
+});
+
+test("b56: useKind with the real browser ids: held door item gives both door halves, empty hand toggles the live door (id 97)", () => {
+  assert.equal(WOODEN_DOOR_ITEM, 470); assert.equal(ITEMS[WOODEN_DOOR_ITEM]?.block, undefined, "the door item is not an ItemBlock");
+  const w = freshWorld("b56-doorkind"); w.set(8, 33, 8, 1, false, 0);
+  const survival = new Survival({ food: 10, slots: [] }, "creative");
+  survival.inventory.main[survival.inventory.current] = { id: WOODEN_DOOR_ITEM, count: 5, damage: 0 };
+  const target = { block: [8, 33, 8], adjacent: [8, 34, 8], hit: [8.5, 34, 8.5] }, st = { world: w, survival, position: { x: 100.5, y: 100, z: 100.5 }, flowers: {}, yaw: Math.PI };
+  const kind = useKind({ world: w, target, heldId: WOODEN_DOOR_ITEM, sneaking: false, aimed: false });
+  assert.equal(kind, "place");
+  const cells = dryPlace(st, { id: WOODEN_DOOR_ITEM, item: ITEMS[WOODEN_DOOR_ITEM], target }).cells;
+  assert.deepEqual(cells.map((c) => [c.y, c.block]).sort(), [[34, 97], [35, 97]], "lower and upper half, door block 97");
+  assert.equal(cells.find((c) => c.y === 35).meta, 8, "the upper half carries the top flag");
+  assert.equal(useKind({ world: w, target, heldId: IRON_DOOR_ITEM, sneaking: false, aimed: false }), "place");
+  // the other items placeHeldBlock places
+  for (const id of [327, 360, 356, 1134, 1105, 1106]) assert.equal(useKind({ world: w, target, heldId: id, sneaking: false, aimed: false }), "place", `item ${id}`);
+  // the live door: empty hand toggles, a held door item at the door toggles first, sneaking with the item places past it
+  w.set(8, 34, 8, 97, false, 0); w.set(8, 35, 8, 97, false, 8);
+  const doorT = { block: [8, 34, 8], adjacent: [8, 35, 8] };
+  assert.equal(useKind({ world: w, target: doorT, heldId: 0, sneaking: false, aimed: false }), "activate");
+  assert.equal(useKind({ world: w, target: doorT, heldId: WOODEN_DOOR_ITEM, sneaking: false, aimed: false }), "activate");
+  assert.equal(useKind({ world: w, target: doorT, heldId: 0, sneaking: true, aimed: false }), "activate", "sneaking with an empty hand still activates");
+  assert.deepEqual(dryActivate({ world: w, yaw: 0 }, doorT).map((c) => [c.y, c.block, c.meta]), [[34, 97, 4]]);
 });
 
 test("b56: the wiring in main.js and scene.js", () => {

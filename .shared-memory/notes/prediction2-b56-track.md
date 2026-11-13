@@ -25,5 +25,5 @@ Builds on the b55 overlay (`src/client-prediction.js`). Changes:
 - Comparator, hopper and other tile-entity cases were not probed.
 - Door open/close sound is not played at click time; the server task plays it.
 - While an overlay is active an unrelated updateBlock (for example fluids) relights from the real world, so predicted light can be lost for that moment.
-- Streaming light: relight uses put and restore; the shadow flush relights from the real world at the next tick if the server task has not landed.
+- Streaming world: the swap detaches world.ringSink and world.blockTap for the put and write-back (fixed after the lead review; before it the relight was skipped whenever a ringSink existed). The light shadow in native mode keeps the predicted id until the real landing; the shadow flush relights from the real world at the next tick if the server task has not landed.
 - Break cascade excludes dead bush, mushrooms, falling blocks, dust, rails, trapdoors (native client does nothing for the last four).

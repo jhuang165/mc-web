@@ -493,8 +493,12 @@ export class VoxelScene {
     if (!cells.length) return;
     const chunk = (v) => Math.floor(v / 16) * 16, keys = new Set(), world = this.world, view = this.predicted?.active && this.predicted.world === world ? this.predicted.view : null;
     for (const { x, z } of cells) for (const [a, b] of [[x, z], [x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]]) if (world.isLoaded(a, b)) keys.add(`${chunk(a)},${chunk(b)}`);
-    if (this.light && view && !world.ringSink) {
-      const swapped = [];
+    if (this.light && view) {
+      // A streaming world always has a ringSink and a light blockTap: World.put reports every write to both (ring columns drop their light, the light shadow marks the cell
+      // pending). The swap is not an edit, so both are detached for the swap and the write-back, and put back after.
+      const swapped = [], ringSink = world.ringSink, blockTap = world.blockTap;
+      if (ringSink !== undefined) world.ringSink = null;
+      if (blockTap !== undefined) world.blockTap = null;
       try {
         for (const { x, y, z } of cells) {
           const nb = view.get(x, y, z), nm = view.getMeta(x, y, z);
@@ -510,10 +514,15 @@ export class VoxelScene {
               for (let b = chunk(Math.max(world.minZ, box.z0 - 1)); b <= chunk(Math.min(world.maxZ - 1, box.z1 + 1)); b += 16) if (!keys.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
         }
       } finally {
-        for (let i = swapped.length - 1; i >= 0; i--) {
-          const c = swapped[i];
-          world.put(c.x, c.y, c.z, c.block, c.meta, false);
-          if (c.pot !== undefined) world.pots.set(`${c.x},${c.y},${c.z}`, c.pot);
+        try {
+          for (let i = swapped.length - 1; i >= 0; i--) {
+            const c = swapped[i];
+            world.put(c.x, c.y, c.z, c.block, c.meta, false);
+            if (c.pot !== undefined) world.pots.set(`${c.x},${c.y},${c.z}`, c.pot);
+          }
+        } finally {
+          if (ringSink !== undefined) world.ringSink = ringSink;
+          if (blockTap !== undefined) world.blockTap = blockTap;
         }
       }
     }
