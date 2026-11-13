@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 63 (2026-11-13, ten Sonnet tracks in `../wt63-<name>` on `batch63-<name>`, cut from 3144b37f2, merged --no-ff on `batch63-lead`; shared track rules `../artifacts/b63-lead/track-rules.md`; lead note `b63-lead-track.md`; no browser checks by request):
+- 0.92.0, by track:
+  - mpnether3: Nether orbs, `multiplayer/server-spawners.js` (MobSpawnerBaseLogic on the server, both dimensions), `server-nether-vehicles.js` (carts, boats, pigs, leads and animal clicks per dimension); one server difficulty for every world (bytecode-read), so `/difficulty` now reaches mobs.
+  - mpend: `multiplayer/server-end.js`: the End on the server (eye on frame lights the portal, platform, endermen, theEnd/theEnd2, saving), built with the Nether's code (`n.dim = 1`) in a shifted 128x128 window (`END_OFFSET`); a stand-in exit portal until the dragon exists.
+  - mpprojectiles2: connected bow draw and FOV, `projCollect` fly-in, potion kill credit (single player too), primed TNT, rockets and fireballs saved with the native fields, drinking on the server; a saved potion in flight no longer crashes server start.
+  - mppvp: `multiplayer/server-pvp.js`: C02 attacks on players (executed `PvpAttackProbe`, 69 records) and the `pvp` property, also gating arrows and potions; "X was slain by Y" with the killer.
+  - mpvehicles3: the command block cart on the server (`server-cart-commands.js`, `commandBlocks` option, default off as natively); `server-owners.js`: tamed animals' owner by key, name or offline UUID, `legacyOwner`. Seat height, a second lead and the knot click were already native.
+  - mpstats: `multiplayer/server-stats.js` / `client-stats.js`: per-player statistics, S37 on request with the 300-tick limit, the Statistics screen over a connection, animalsBred.
+  - mpwither: `multiplayer/server-wither.js`: summoning, skulls as server projectiles, blasts, nether star, aux 1013, spawnWither/killWither; server mob explosions now send the client burst.
+  - mobcopies3: burning enderman copies, boat boxes in the copy teleport test, executed dead-entity HashSet order (`TrackerDeadProbe`).
+  - horses2: executed horse spawn rolls (types 3 and 4 never roll) and 96 chest-under-cat scenes; a dead sitting cat still blocks a chest.
+  - heldrender: the first-person arm's uvs from the native ModelBox (they were mirrored), the baby held item lift; sword blocking and the witch's item were already native.
+- Lead fixes in the merge commits: PvP hits and kills count in the server statistics (damageDealt, playerKills); the End gets the per-dimension orbs, pickup list and vehicles mpnether3 gave the Nether (`b63-lead.test.js`); conflicts kept both sides.
+- Verification: see `b63-lead-track.md`. Pushed to github main by the lead.
+
 Batch 62 (2026-11-13, five Sonnet tracks in `../wt62-<name>` on `batch62-<name>`, cut from b5be6614f, merged --no-ff on `batch62-lead`; shared track rules `../artifacts/b62-lead/track-rules.md`; lead note `b62-lead-track.md`; no browser checks by request):
 - 0.91.0, by track:
   - mpprojectiles: `multiplayer/server-projectiles.js` and a lane system in `server-dispense.js`: skeleton arrows, witch potions, players' bows (C07) and throws (snowball, egg, pearl, splash potion, XP bottle) hit mobs and players; snipeSkeleton; arrow pickup (`projCollect`); arrows, balls and potions in flight are saved.

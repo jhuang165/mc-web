@@ -2,6 +2,33 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 63
+
+Batch 63 covered these areas:
+- **The Nether on a server, finished.** Experience orbs are spawned, collected, saved and sent only to Nether players; spawners tick on the server (MobSpawnerBaseLogic, both dimensions); minecarts, boats, pig riding, leads and animal clicks work in the Nether. Found wrong: there is no per-dimension difficulty (bytecode-read `MinecraftServer`); every world now follows the server's, and `/difficulty` reaches the mobs.
+- **The End on a server.** Built on first use with the End terrain; eyes on a full frame ring light the portal; the portal takes players to the obsidian platform (theEnd) and the exit portal home (theEnd2); endermen spawn; End players see only the End; it is saved, with its own orbs, pickups and vehicles.
+- **Projectiles.** The connected client draws the bow with its FOV change; `projCollect` flies in; a player's potion kill credits the thrower (single player too); primed TNT, rockets and fireballs are saved with the native NBT fields (bytecode-read: no placer or shooter); drinking runs on the server.
+- **PvP.** C02 attacks on players with the 1.7.10 damage, Sharpness, crits, Knockback, sprint push, Fire Aspect, armour, Thorns, hurt window and wear (executed `PvpAttackProbe`, 69 records); the `pvp` property also gates arrows and potions; "X was slain by Y"; hits and kills count in the statistics.
+- **Statistics on a server.** Per-player stats saved with the player, S37 on request (300-tick limit, bytecode-read), the Statistics screen over a connection, animalsBred. Found wrong: no 1.7.10 achievement depends on a stat counter.
+- **The wither on a server.** Summoned by the T, tracked to Overworld players, skulls as server projectiles, blasts that edit the world, the nether star, aux 1013 to the dimension, spawnWither and killWither.
+- **Vehicles and owners.** The command block cart (runs on a powered activator rail only with `enable-command-block`, default off natively, bytecode-read); tamed animals keep their owner by key, name or offline UUID. Found already native: riders' seat height, refusing a second lead (`sw.bM()`), freeing knot mobs.
+- **Mob copies and tracker.** A burning enderman copy teleports; a wet or burning screaming copy draws no scream roll (executed); the teleport test counts boat boxes (bytecode-read); the dead-entity HashSet order matches an executed run of the real tracker (`TrackerDeadProbe`).
+- **Horses and cats.** Lone and herd spawn rolls never make skeleton or zombie horses (executed, 4000 + 300 rolls); 96 executed chest-under-cat scenes, and a dead sitting cat still blocks a chest. The other horse items (run-around, sounds, growth nudge, client steering) were already closed by batches 47 to 55.
+- **Held items.** The first-person arm's faces were mirrored (executed `ModelFacesProbe` `playerArm`) and now use the native uvs; a baby mob's held item sat 1/256 too low. Sword blocking (both views), the witch's item and baby held items were already drawn natively.
+
+Still open from batch 63:
+- **Multiplayer.**
+  - End: no dragon, ender crystals or credits; the exit portal is a stand-in built at once; the End is a shifted 128x128 window (x -25..102, z -96..31), so F3 shows shifted coordinates and the island's far side is cut; no flying eye of ender; End projectiles are not saved.
+  - Wither: none in the Nether; no wither effect icon (S1D); skulls not saved; its AI sees only the nearest player; level events 1012 and 1014 travel as sounds (range 32, not 64).
+  - Spawners: no smoke and flame (aux 2004); a spawner's Riding mount is not checked.
+  - Stats: no fishing on the server; the 100-tick attacker credit for later deaths; the `use` stat for seeds, spawn eggs and flint and steel; mob damageDealt counts the health lost, while the PvP path uses `round(f * 10)`, so check which one 1.7.10 uses for mobs.
+  - The connected client does not animate its own eating or drinking; the victim's PvP hurt and knockback, the command cart screen, the wither and boss bar, the End sky and the Statistics screen over a connection were not seen in a browser.
+  - `commandBlocks` and `legacyOwner` have no CLI flag yet.
+  - Achievements and stats: spawnWither and killWither are awarded, but the server still has no scoreboard teams (PvP friendly fire).
+- **Tracker.** An entity that spawns and dies within one tick is never sampled, so it does not grow the HashSet (natively it doubles the table at the 13th entry). Rain does not count as wet for copies.
+- **Rendering.** A child's head is drawn at the body's 0.5 scale (natively 0.75 for bipeds); no baby holds a block; the first-person blocking transform has no executed record; no native pixel capture.
+- **Effects.** The Java 7 order (ids 16 to 23) is simulated, not executed.
+
 ## Done in batch 62
 
 Batch 62 covered these areas:
@@ -12,18 +39,7 @@ Batch 62 covered these areas:
 - **Saved order and tracker.** Frozen entities are skipped by arrows, explosions, pickups, merges, cart and boat pushes and village counts; a rider takes the first id and its mounts follow (executed `SavedOrderLoginProbe`, `saved-order9-reference.json`). The tracker replays airBorne and velocityChanged re-rises, keeps dead entities in HashSet order and samples hanging entities and knots.
 - **Mob copies.** An enderman copy in water draws its teleport attempt each tick and moves on success (executed `MobCopies2Probe`, 3 seeds). The wither's armour draws were already modelled.
 
-Still open from batch 62:
-- **Multiplayer.**
-  - Nether: no experience orbs, no spawner ticking, no vehicles or animal clicks there; Nether mobs use the Overworld's difficulty; no End, End portal or dragon (theEnd, theEnd2).
-  - Projectiles: no client bow-draw animation or FOV change; no pickup fly-in for `projCollect`; a player's potion kill credits nobody; primed TNT, rockets and fireballs are not saved; drinkable potions on the server were not checked; no PvP setting or player melee.
-  - Vehicles: third-person seat height for riders seen by others; the command-block cart; a second lead on a mob another player leads; mobs tied to a knot are only freed by breaking it.
-  - Achievements and stats: `animalsBred` (the server has no stats); spawnWither and killWither (no wither on the server).
-  - Wolves tamed in a single-player save have no owner key, so the nearest player counts as owner.
-  - Nothing of batch 59 to 62's multiplayer work was checked in a browser.
-- **Mob copies.** A burning enderman copy is not modelled (no fire flag); the teleport destination ignores other entities' boxes; copy particles and sounds are draws only.
-- **Tracker.** Dead entities' HashSet order rests on the batch 61 model and was not probed again.
-- **Effects.** The Java 7 order (ids 16 to 23) is simulated, not executed (no Java 7 runtime here).
-- **Rendering.** No native pixel capture.
+Still open from batch 62: carried into the batch 63 list above, except the items batch 63 closed or found wrong.
 
 ## Done in batch 61
 
@@ -248,7 +264,6 @@ Batch 47 covered these areas:
 Still open from batch 47:
 - **Server copy of the player.** The physics of a riding copy is not modelled, and neither is the velocity of the mob client copies. The order between the position packet and the mob update is bytecode-read only.
 - **Away runs.** The away list order and the item-frame and dispenser throws are not probed.
-- **Horses and cats.** A chest opened under a sitting cat is bytecode-read only. Skeleton and zombie horses have no spawn-roll record (`onSpawnWithEgg` never makes types 3 or 4). The `b47h` reference's `method` text is the generic batch 42 one.
 - **Not yet in a browser check.** Arrows hitting the boat copies: the batch 47 smoke's shot missed its aim, so only the unit tests cover it. Riding a wild horse.
 
 ## Done in batch 46
@@ -301,15 +316,12 @@ Still open from batch 45 (items closed in batch 46 removed):
   - The angler end of the line has no native replay.
 - Mobs:
   - Spawned items, orbs and potions are not recorded in flight.
-  - Horses: run-around with a rider, skeleton and zombie horse spawn rolls, eat and angry sounds, and the growth nudge against walls have no records.
-  - No record pushes a mob with a piston or opens a chest under a sitting cat.
+  - No record pushes a mob with a piston.
 - Entity list:
   - A mob taken aboard by a cart listed later is not updated a second time (`cart-cow-mount-ba`).
 - Rendering:
   - An HD pack scales the 16 px cells.
   - Block-atlas items are not item atlas cells.
-  - Sword blocking, the witch's held item and baby mobs' held items are not drawn natively.
-  - The first-person arm was not re-checked after the bottom-face fix.
   - The water overlay tint is not pixel-compared.
 - Away:
   - The 8-block edge hold is a port bound.
