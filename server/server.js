@@ -138,7 +138,11 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     ws.send(JSON.stringify(message));
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
-  const broadcast = message => { let plain; for (const ws of sockets.values()) send(ws, ws.chunks || !message.chunks ? message : (plain ??= expandChunks(message))); };
+  // b61 mpnether: `alt` maps a dimension to the tick message for the players in it (server-dimensions.js); everyone else gets `message`.
+  const broadcast = (message, alt) => {
+    const plain = new Map(), expanded = m => m.chunks ? (plain.has(m) ? plain.get(m) : (plain.set(m, expandChunks(m)), plain.get(m))) : m;
+    for (const [pid, ws] of sockets) { const m = alt?.[simulation.players.get(pid)?.dimension | 0] ?? message; send(ws, ws.chunks ? m : expanded(m)); }
+  };
   // Chat, commands, death and achievement broadcasts (src/server-broadcast.js); `ops` names the players who may run commands.
   installServerRules(simulation); // /gamerule values reach the fire, griefing and tick readers of this process
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
@@ -180,7 +184,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           }
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
           joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
-          send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(), self: simulation.savePlayer(simulation.players.get(id)) });
+          send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;
         }
@@ -224,7 +228,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   });
   const tickTimer = setInterval(() => {
     try {
-      broadcast(simulation.tick());
+      const tick = simulation.tick();
+      simulation.dimensions.flush((pid, m) => { const ws = sockets.get(pid); if (ws) send(ws, m); }); // b61: `dimRespawn` goes before that player's next tick
+      broadcast(tick, simulation.dimensions.alt);
       social.drain(); // death messages queued by the tick, to every player
       // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).
       // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.

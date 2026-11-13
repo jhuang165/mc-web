@@ -799,7 +799,7 @@ function onMultiplayerInventory(m) {
   if (r.hotbar) renderHotbar();
   if (r.container && containerView?.remote?.inv) refreshContainer();
 }
-const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break']);
+const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'fire.ignite']); // fire.ignite: b61 flint and steel is the server's
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
@@ -812,6 +812,7 @@ async function joinMultiplayer(settings) {
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
+    onDimRespawn: message => multiplayerDimension(client, settings, message), // b61 mpnether: S07 Respawn, the server moved this player to another dimension
     onHealthFx: applyHealthFx,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
@@ -836,12 +837,43 @@ async function joinMultiplayer(settings) {
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
-    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Dimension travel is not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Dimension travel is not connected yet.');
+    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; the End is not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; the End is not connected yet.');
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
     throw error;
   }
+}
+// b61 mpnether: S07 Respawn on the dedicated server. The server's `dimRespawn` carries the new world (Overworld or Nether columns) and this player's state;
+// the world is swapped as a portal trip does it (openWorld: the terrain screen, then launch). Messages that arrive meanwhile wait in the client's queue
+// (client.js apply) until client.start().
+async function multiplayerDimension(client, settings, m) {
+  if (multiplayer !== client || openingWorld) return;
+  openingWorld = true;
+  const tripFrom = screen;
+  try {
+    sounds?.stopStreams(); // Minecraft.loadWorld: the music and records stop between dimensions
+    const snapshot = m.world, prepared = restoreReplica(snapshot);
+    const self = snapshot.players.find(p => p.id === client.id) ?? m.self.position;
+    screen = 'home'; tripLoading = true; keys.clear(); $('#hud').classList.add('hidden');
+    gui.show(downloadTerrainScreen()); await nextPaint();
+    const record = { id: 'remote-' + client.id, remote: true, name: active?.name ?? 'ledoge0 — Multiplayer', seed: snapshot.seed,
+      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
+      position: { ...self, yaw: m.self.yaw, pitch: m.self.pitch }, player: { ...m.self.player, time: snapshot.time }, experience: m.self.experience,
+      entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
+    await launch(record, prepared, { slice: true });
+    if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
+    remoteItems.clear(); requestedPickups.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
+    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) });
+    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
+    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
+    client.start();
+    syncMultiplayerItems(snapshot.items ?? []);
+    sendMultiplayerInput();
+  } catch (error) {
+    client.close(); if (multiplayer === client) leaveMultiplayer();
+    screen = tripFrom; leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: String(error?.message ?? error), cancel: showMultiplayer }));
+  } finally { openingWorld = false; tripLoading = false; }
 }
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
@@ -2827,7 +2859,7 @@ function tickWeather() {
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
 const dims = new DimensionLive({
-  active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
+  active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; }, remote: () => !!multiplayer, // remote: b61 the dedicated server runs the portals
   // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
   ticks: () => tickCounter,
   totalTime: () => mobs?.saveTotalTime(), // WorldInfo.getWorldTotalTime, the Teleporter cache clock (dimension-live.js clock)

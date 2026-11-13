@@ -235,7 +235,7 @@ export class DimensionLive {
   // live lists at once; their arrival (Teleporter in the target dimension) resolves asynchronously into the target's inbox.
   // `carts` (Minecarts) and `boats` (Boats) travel as well: their lists are `.carts`, their box `bb`, riders block the portal collision.
   tickEntities(world, { mobs, items, xpOrbs, carts, boats } = {}) {
-    if (this.busy || !world || this.host.active()?.transit) return;
+    if (this.busy || !world || this.host.active()?.transit || this.host.remote?.()) return; // b61 mpnether: the server's entities never travel on this side
     const dim = world.dimension ?? OVERWORLD, getId = (x, y, z) => world.get(x, y, z), at = { dim, getId };
     const root = this.rootRecord();
     if (!root) return;
@@ -487,12 +487,13 @@ export class DimensionLive {
       const b = world.get(x, y, z);
       if (b === GAME_IDS.portal) inPortal = true; else if (b === GAME_IDS.endPortal) endPortal = true;
     }
-    if (endPortal && !riding) { this.travel(d === END ? OVERWORLD : END, { exit: d === END }); return false; }
+    const remote = !!this.host.remote?.(); // b61 mpnether: on the dedicated server the server runs the portal timer and the trip; here only the overlay state
+    if (endPortal && !riding && !remote) { this.travel(d === END ? OVERWORLD : END, { exit: d === END }); return false; }
     if (inPortal && !riding) this.state.setInPortal(prev.x, prev.z, pos.x, pos.z);
     const shown = this.state.inPortal;
     const go = this.state.tick(d, { creative, riding });
-    if (go !== null) this.travel(go);
-    else if (shown && !creative && !riding && this.prewarmEnabled && d !== END && this.state.portalCounter >= PREWARM_TICKS) this.warmExit(d, pos);
+    if (go !== null && !remote) this.travel(go);
+    else if (shown && !remote && !creative && !riding && this.prewarmEnabled && d !== END && this.state.portalCounter >= PREWARM_TICKS) this.warmExit(d, pos);
     return shown;
   }
   // The player has stood in a portal for PREWARM_TICKS of its countdown: build the terrain round the exit now (exit-prewarm.js). The trip ends the request.

@@ -1,8 +1,10 @@
 import { World, BLOCKS } from '../world.js';
 import { PROTOCOL, serverUrl, decodeColumn, expandChunks } from './protocol.js';
+import { restoreDimensionReplica } from './client-dimensions.js'; // b61 mpnether: the Nether's finite world
 export { expandChunks };
 
 export function restoreReplica(snapshot) {
+  if (snapshot.dimension) return restoreDimensionReplica(snapshot); // b61 mpnether: a Nether snapshot (welcome or dimRespawn)
   const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion);
   if (world.streaming || snapshot.columns.length !== world.chunks.size) throw new Error('Unsupported multiplayer world');
   const seen = new Set();
@@ -17,8 +19,8 @@ export function restoreReplica(snapshot) {
 const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {} } = {}) {
-    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDimRespawn = () => {} } = {}) {
+    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDimRespawn, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -55,6 +57,7 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
+    if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
     if (message.type === 'mobs') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
     if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
@@ -73,6 +76,8 @@ export class DedicatedClient {
     for (const message of this.messages.splice(0)) this.apply(message);
   }
   apply(message) {
+    // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
+    if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
     if (message.type === 'blocks') this.onBlocks(message);
     if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'effect') this.onEffect(message);

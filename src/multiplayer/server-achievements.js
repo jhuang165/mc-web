@@ -51,8 +51,8 @@ export class ServerAchievements {
     const biomes = sim.ticks % 20 === 0, beacons = sim.tileEntities.beacons.tiles;
     for (const p of sim.players.values()) {
       const a = sink.achievementsOf(p.id), at = p.position;
-      if (biomes) a.visit(sim.world.biomeAt?.(Math.floor(at.x), Math.floor(at.z))?.name, 0);
-      for (const [key, tile] of beacons) {
+      if (biomes) a.visit((p.world ?? sim.world).biomeAt?.(Math.floor(at.x), Math.floor(at.z))?.name, 0); // b61: the player's own dimension
+      if (!p.dimension) for (const [key, tile] of beacons) { // b61: the Overworld's beacons only
         const [bx, by, bz] = key.split(',').map(Number);
         a.beacon(key, tile.levels | 0, at.x >= bx - 10 && at.x <= bx + 11 && at.y >= by - 5 && at.y <= by + 6 && at.z >= bz - 10 && at.z <= bz + 11);
       }
