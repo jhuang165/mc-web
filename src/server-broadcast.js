@@ -94,7 +94,7 @@ export class ServerSocial {
   drain() {
     const events = this.simulation.events?.splice(0) ?? [];
     for (const e of events) {
-      if (e.type === "death") this.death(e.id);
+      if (e.type === "death") this.death(e.id, e.component);
       else if (e.type === "pickup") { const a = pickedAchievement(e.item); if (a) this.award(e.id, a); } // EntityItem.onCollideWithPlayer (xk.b_)
     }
     return events.length;

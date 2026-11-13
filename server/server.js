@@ -21,13 +21,13 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, gameMode = 'creative', ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    simulation = new DedicatedSimulation(saved, { gameMode });
+    simulation = new DedicatedSimulation(saved, { gameMode, difficulty });
   }
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   let closing = false, saving = Promise.resolve(), saveError = null;
@@ -189,6 +189,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
         else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids); // item entities the client reaches (Survival)
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse
+        else if (m.type === 'respawn') simulation.serverSurvival.respawn(simulation.players.get(id)); // C16 client status 0, perform respawn
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
@@ -230,6 +231,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.cracksOut && ws) send(ws, { type: 'crack', cracks: player.cracksOut }); // S25 block break animation of the other players (range 32)
         for (const stack of player.collectedOut ?? []) if (ws) send(ws, { type: 'collect', stack }); // items picked up, added to the client's inventory
         if (player.soundsOut && ws) send(ws, { type: 'sound', sounds: player.soundsOut }); // S29 random.eat / random.drink / random.burp of other players (range 16)
+        const vitals = simulation.serverSurvival.status(player); if (vitals && ws) send(ws, vitals); // S06 update health (health, food, saturation) when one changed
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
         player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null;
       }
@@ -256,7 +258,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), argument = (key, fallback) => { const at = args.indexOf(key); return at < 0 ? fallback : args[at + 1]; };
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: argument('--gamemode', 'creative'), dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: argument('--gamemode', 'creative'), difficulty: Number(argument('--difficulty', 2)), dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }
