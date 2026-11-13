@@ -131,7 +131,7 @@ export class DedicatedSimulation {
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null,
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null,
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.players.set(id, player);
     return player;
@@ -142,7 +142,7 @@ export class DedicatedSimulation {
     this.players.delete(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current } }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch), slots = cleanHotbar(message.hotbar);
     if (!p || !input || !look || !slots || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -371,7 +371,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       movePlayer(p, controls);
-      if (p.position.y < -64) { p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
+      if (p.position.y < -64) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
       p.survival.time = this.time;
       if (p.swing) p.swing--;
       // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.

@@ -179,10 +179,10 @@ export function createCommandRunner(host) {
     if (online) return online.name;
     throw playerNotFound();
   };
-  // Only chat reaches another player in this build; the other commands change the local player's state, so a different online player is refused.
+  // Without a server behind it (host.forPlayer) only chat reaches another player; the other commands change the local player's state, so a different online player is refused.
   const player = (s) => {
     const n = anyPlayer(s);
-    if (n.toLowerCase() !== playerName().toLowerCase()) throw new CommandException("commands.generic.exception", ["This command cannot target another player in this build"], "unsupported");
+    if (!host.forPlayer && !host.redirected && n.toLowerCase() !== playerName().toLowerCase()) throw new CommandException("commands.generic.exception", ["This command cannot target another player in this build"], "unsupported");
     return n;
   };
   const targetArg = (a, i) => { if (a.length > i) return player(a[i]); if (host.isCommandBlock) throw playerNotFound(); return playerName(); };
@@ -282,7 +282,7 @@ export function createCommandRunner(host) {
       if (a.length < 1) usage("commands.gamemode.usage");
       const mode = gameMode(a[0]), target = targetArg(a, 1);
       host.setGameMode(mode);
-      say(tr("gameMode.changed"));
+      (host.targetPrint ?? say)(tr("gameMode.changed"), translation("gameMode.changed")); // the target gets this line, not the sender
       feedback(target === name() && a.length < 2 ? "commands.gamemode.success.self" : "commands.gamemode.success.other", ...(a.length < 2 ? [modeText(mode)] : [target, modeText(mode)]));
     },
     defaultgamemode(a) {
@@ -369,7 +369,7 @@ export function createCommandRunner(host) {
       }
       if (a.length - i === 1) {
         const target = player(a[i]);
-        const p = pos();
+        const p = host.positionOf?.(target) ?? pos(); // the destination player's position (a server holds several)
         host.teleport(p.x, p.y, p.z);
         return feedback("commands.tp.success", who, target);
       }
@@ -543,6 +543,22 @@ export function createCommandRunner(host) {
     if (e.kind === "unsupported") host.print("§c" + e.args[0], red(textComponent(e.args[0])));
     else host.print("§c" + tr(e.key, ...e.args), red(translation(e.key, ...e.args)));
   }
+  // A server host (host.forPlayer(name) -> that player's state operations) runs the commands in REDIRECT on the named online player: the same handler over a
+  // host whose state operations, position and playerName are the target's, while the sender keeps print, feedback and broadcast.
+  const REDIRECT = { give: 0, clear: 0, xp: 1, effect: 0, gamemode: 1, enchant: 0, spawnpoint: 0, tp: 0, achievement: 2 };
+  function dispatch(command, parts) {
+    const at = REDIRECT[command.name];
+    if (host.forPlayer && !host.redirected && at !== undefined && parts[at] !== undefined && (command.name !== "tp" || parts.length === 2 || parts.length === 4) && (command.name !== "achievement" || parts.length >= 3)) {
+      const who = selectLocalPlayer(parts[at], host) ?? playerRecords(host).find((r) => r.name.toLowerCase() === parts[at].toLowerCase())?.name;
+      if (who && who.toLowerCase() !== playerName().toLowerCase()) {
+        const sub = Object.create(host);
+        Object.defineProperties(sub, Object.getOwnPropertyDescriptors(host.forPlayer(who))); // keeps the target's achievements getter
+        Object.assign(sub, { redirected: true, playerName: who, targetPrint: (t, c) => host.deliver?.(who, t, c) });
+        return createCommandRunner(sub).handlers[command.name](parts);
+      }
+    }
+    return handlers[command.name](parts);
+  }
   function run(text) {
     let line = text.trim();
     if (line.startsWith("/")) line = line.slice(1);
@@ -552,6 +568,7 @@ export function createCommandRunner(host) {
     const command = BY_NAME.get(word);
     try {
       if (!command) throw new CommandException("commands.generic.notFound");
+      if (host.unsupported?.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available on this server`], "unsupported"); // an operator's command this server cannot run
       if (!allowed(command)) throw new CommandException("commands.generic.permission");
       if (UNSUPPORTED.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available in this build`], "unsupported");
       if (selectsNobody(command.name, parts, host)) return false; // CommandHandler.a: no matching player, no run, no message
@@ -561,11 +578,11 @@ export function createCommandRunner(host) {
         let ran = false;
         for (const who of selectPlayers(parts[at], host)) {
           const copy = [...parts]; copy[at] = who;
-          try { handlers[command.name](copy); ran = true; } catch (e) { fail(e); }
+          try { dispatch(command, copy); ran = true; } catch (e) { fail(e); }
         }
         return ran;
       }
-      handlers[command.name](parts);
+      dispatch(command, parts);
       return true;
     } catch (e) {
       fail(e);
