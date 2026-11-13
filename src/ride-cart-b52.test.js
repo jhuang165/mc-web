@@ -23,13 +23,16 @@ test("a ridden cart is drawn from its copy, which trails the live cart", () => {
   assert.equal(vehicleViews(t, [live], (l) => l === live)[0].x, c.x);
 });
 
-test("a ridden boat keeps the live stand-in and has no seat copy", () => {
+test("a ridden boat is drawn from its copy and seated from it (batch 56: the copy runs its own physics)", () => {
   const { t, player } = mk(), boat = { id: 1, x: 5.5, posY: 0.3, z: 5.5, y: 0.3, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false, bb: [4.75, 0, 4.75, 6.25, 0.6, 6.25] };
   t.serverTick({ boat: [boat] }, player); t.clientTick();
-  assert.equal(vehicleView(t, boat, true), boat);
-  assert.equal(rideCopy(t, boat), null);
+  const v = vehicleView(t, boat, true), c = rideCopy(t, boat);
+  assert.notEqual(v, boat);
+  assert.equal(c.kind, "boat");
+  assert.equal(v.x, c.x);
   const targets = t.vehicleTargets((l) => l === boat);
-  assert.equal(targets[0].box, boat.bb);
+  assert.notEqual(targets[0].box, boat.bb);
+  assert.deepEqual(targets[0].box, c.box());
 });
 
 test("a ridden cart's hit box is its copy's, and an untracked cart has no seat copy", () => {

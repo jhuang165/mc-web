@@ -155,6 +155,11 @@ public class BoatProbe extends VehicleProbe {
     travel("beaching-ridden", beach, new double[] {0.5, 1.0, 0.0, 0, 0, 0}, -90, -90, 1, 0, true, 120);
     int[][] wall = join(water(-4, 24, -4, 4), col(1, 0, -4, 4, 0, 25), col(1, 0, -4, 4, 1, 25), col(1, 0, -4, 4, 2, 25));
     travel("crash-break-fast", wall, new double[] {0.5, 1.0, 0.0, 0, 0, 0}, -90, -90, 1, 0, true, 160);
+    // Batch 56: the break threshold `collidedHorizontally && d10 > 0.2` (d10 = the speed the tick began with) at the edge: exactly 0.2 keeps the boat, a hair above breaks it (3 planks, 2 sticks).
+    travel("crash-edge-0.2-keeps", wall, new double[] {24.1, 1.0, 0.0, 0.2, 0, 0}, -90, 0, 0, 0, false, 6);
+    travel("crash-edge-above-breaks", wall, new double[] {24.1, 1.0, 0.0, 0.2000001, 0, 0}, -90, 0, 0, 0, false, 6);
+    travel("crash-diagonal-breaks", wall, new double[] {24.1, 1.0, 0.0, 0.18, 0, 0.15}, -45, 0, 0, 0, false, 6);
+    travel("crash-ridden-edge", wall, new double[] {23.9, 1.0, 0.0, 0.0, 0, 0}, -90, -90, 1, 0, true, 40);
     travel("crash-slow-no-break", wall, new double[] {22.0, 1.0, 0.0, 0.12, 0, 0}, -90, 0, 0, 0, false, 40);
     travel("fall-break", new int[][] {}, new double[] {0.5, 9.0, 0.5, 0, 0, 0}, 0, 0, 0, 0, false, 40);
     travel("fall-small-no-break", new int[][] {}, new double[] {0.5, 2.5, 0.5, 0, 0, 0}, 0, 0, 0, 0, false, 30);

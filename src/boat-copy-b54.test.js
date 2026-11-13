@@ -49,16 +49,17 @@ function replay(c, tweak = null) {
 }
 
 test("the reference is the executed boat client copy", () => {
-  assert.equal(ref.tag, "b54bc");
+  assert.equal(ref.tag, "b56bc");
   for (const k of ["xi", "abj", "sa"]) assert.match(ref.classes[k].sha256, /^[0-9a-f]{64}$/);
-  assert.equal(ref.cases.length, 8);
-  const sounds = ref.cases.reduce((a, c) => a + c.ticks.filter((t) => t[1].length).length, 0);
+  assert.equal(ref.cases.filter((r) => r.kind === "copy").length, 8);
+  const copies = ref.cases.filter((r) => r.kind === "copy");
+  const sounds = copies.reduce((a, c) => a + c.ticks.filter((t) => t[1].length).length, 0);
   assert.ok(sounds >= 2, "splash sounds recorded");
-  assert.ok(ref.cases.some((c) => c.ticks.some((t) => t[2].length)), "particles recorded");
-  for (const c of ref.cases) for (const t of c.ticks) assert.ok(t[1].every(([n]) => n === "game.neutral.swim.splash"));
+  assert.ok(copies.some((c) => c.ticks.some((t) => t[2].length)), "particles recorded");
+  for (const c of copies) for (const t of c.ticks) assert.ok(t[1].every(([n]) => n === "game.neutral.swim.splash"));
 });
 
-for (const c of ref.cases) test(`boat copy ${c.name}: motion, splash sound and particles match the executed classes each tick`, () => {
+for (const c of ref.cases.filter((r) => r.kind === "copy")) test(`boat copy ${c.name}: motion, splash sound and particles match the executed classes each tick`, () => {
   assert.deepEqual(replay(c).slice(0, 3), []);
 });
 

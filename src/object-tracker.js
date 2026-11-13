@@ -36,6 +36,7 @@ import { ExperienceOrbs } from "./experience.js";
 import { Arrows } from "./bow.js";
 import { Projectiles } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
+import { Boats, BOAT_HEIGHT } from "./boats.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { tickTnt } from "./explosion.js";
 import { ringEntityActive } from "./streaming-ticks.js";
@@ -163,6 +164,13 @@ export class ObjectClient extends ClientEntity {
   // onto the highest block box it overlaps (EntityArrow's override sets position and rotation only).
   place(x, y, z, yaw, pitch) {
     if (this.spec.hanging) return; // a hanging copy is never moved (its frequency is Integer.MAX_VALUE; a stray position packet changes nothing the port models)
+    if (this.kind === "boat" && this.rides()) { // Batch 56 (bytecode-read, xi.a(DDDFFI)): with isBoatEmpty false the packet is dropped unless the target is over 1 block (squared) from the copy; then it sets 3 increments nothing consumes and the motion goes back to the last S12's
+      const dx = x - this.x, dy = y - this.y, dz = z - this.z;
+      if (!(dx * dx + dy * dy + dz * dz > 1)) return;
+      this.vt = { x, y, z, yaw: yaw ?? this.yaw, pitch: pitch ?? this.pitch, inc: 3 };
+      [this.vx, this.vy, this.vz] = this.cv;
+      return;
+    }
     if (this.spec.vehicle) { // EntityBoat / EntityMinecart.setPositionAndRotation2: a target for 3 + extra ticks (no box lift), the motion goes back to the last S12's
       this.vt = { x, y, z, yaw: yaw ?? this.yaw, pitch: pitch ?? this.pitch, inc: 3 + this.spec.extra };
       [this.vx, this.vy, this.vz] = this.cv;
@@ -272,15 +280,34 @@ export class ObjectClient extends ClientEntity {
       else this.tracker.particle("splash", this.x + c + sn * d4 * 0.7, y, this.z + sn - c * d4 * 0.7, this.vx, this.vy, this.vz);
     }
   }
-  // Batch 51: the boat the client player rides. NetHandlerPlayClient.a(S1B) calls setIsBoatEmpty(false) on it (bjb, bytecode-read), so EntityBoat.onUpdate (xi.h) skips the interpolation
-  // branch (`isRemote && isBoatEmpty`) and runs the full physics on the client, whose splash block (before that branch) draws on the copy's own Entity.rand. The port does not run a second
-  // physics: the copy takes the live boat's state, which the same rider input drives, as the client's own motion (the position, motion and heading it starts the tick with), so the splash
-  // above 0.2625 follows the ridden boat. A cart has no such branch: EntityMinecart.onUpdate (xl.h) interpolates a ridden copy as any other, so the port leaves its copy alone.
-  mirrorRidden() {
-    const live = this.live;
-    if (!live || live.dead || !this.tracker.hooks.rides?.(live)) return false;
-    this.x = live.x; this.y = live.posY; this.z = live.z; this.vx = live.vx; this.vy = live.vy; this.vz = live.vz; this.yaw = live.yaw; this.pitch = live.pitch ?? 0;
-    this.vt = null; // the S18 targets of a ridden boat are never consumed (c is read only in the isBoatEmpty branch)
+  // Batch 51 / 56: the boat the client player rides. NetHandlerPlayClient.a(S1B) calls setIsBoatEmpty(false) on it (bjb, bytecode-read), so EntityBoat.onUpdate (xi.h) skips the
+  // interpolation branch (`isRemote && isBoatEmpty`) and runs the full physics on the client from the rider's own input (moveForward, moveStrafing, yaw: the live rider's, which the
+  // same keys drive); its position packets never correct it (the targets are read only in the interpolation branch). Boats.tickBoat runs it with `remote` set, as EntityBoat's
+  // `!isRemote` guards decide (no break by collision or fall, no drops, no neighbour push, no lava or fire, wobble from the watcher), on the copy's own Entity.rand. Executed: the
+  // `ride` records of boat-copy-reference.json (tools/probes/BoatCopyProbe.java); not run: other entities' boxes as obstacles, the rider's client-side fall call (only counted).
+  rides() { return !!this.live && !this.live.dead && !!this.tracker.hooks.rides?.(this.live); }
+  rideBoat() {
+    if (!this.rides()) { this.rb = null; return false; }
+    const rider = this.live.rider;
+    if (!rider || !this.world) return false;
+    const boats = (this.tracker.rideBoats ??= new Boats());
+    let b = this.rb;
+    if (!b) {
+      b = this.rb = { boat: true, remote: true, type: 0, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, onGround: !!this.onGround,
+        collidedH: false, fallDistance: 0, inWeb: false, inWater: !!this.inWater, fire: 0, timeSinceHit: 0, damage: 0, forwardDir: 1, speed: 0.07, dead: false, height: BOAT_HEIGHT, wet: false, firstUpdate: this.firstUpdate !== false, random: this.sim.rand, falls: 0 };
+      b.view = null;
+    }
+    if (b.view?.base !== rider) { b.view = Object.create(rider); b.view.base = rider; b.view.fall = () => { b.falls++; }; } // the copy's rider call (EntityBoat.updateFallState -> Entity.fall) lands on the local player, whose damage is the server's
+    b.rider = b.view; b.random = this.sim.rand; b.inWater = !!this.inWater; b.firstUpdate = this.firstUpdate !== false;
+    b.vx = this.vx; b.vy = this.vy; b.vz = this.vz; b.yaw = this.yaw; b.pitch = this.pitch;
+    boats.setPosition(b, this.x, this.y, this.z);
+    b.timeSinceHit = this.meta.get(17) | 0; b.damage = this.meta.get(19) ?? 0;
+    const hooks = { splash: (_, vol, pitch) => this.tracker.sound("game.neutral.swim.splash", this.x, this.y, this.z, vol, pitch), clear: (x, y, z, block) => this.tracker.clientClear?.(x, y, z, block) };
+    const particles = boats.tickBoat(this.world, b, [], { ...hooks });
+    for (const q of particles) this.tracker.particle(q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
+    this.x = b.x; this.y = b.posY; this.z = b.z; this.vx = b.vx; this.vy = b.vy; this.vz = b.vz; this.yaw = b.yaw; this.pitch = b.pitch;
+    this.onGround = b.onGround; this.inWater = b.inWater; this.firstUpdate = false;
+    this.vt = null;
     return true;
   }
   // Batch 53: Entity.handleWaterMovement (sa.N, bytecode-read) on a boat copy: EntityBoat.onUpdate (xi.h) begins with super.h() -> onEntityUpdate -> N(), which does not test isRemote. The box shrunk
@@ -312,9 +339,9 @@ export class ObjectClient extends ClientEntity {
   }
   stepVehicle() {
     if (this.kind === "boat") {
+      if (this.rideBoat()) return;
       this.waterMovement();
       this.splash();
-      if (this.mirrorRidden()) return;
     }
     if (this.meta.has(16)) this.meta.set(16, 0); // EntityMinecartFurnace.onUpdate is not guarded by isRemote: the client sets its powered flag (16) from its own fuel (0) every update, so the S1C's 1 lasts only until the update (executed: cartFurnace)
     const v = this.vt;
@@ -476,8 +503,7 @@ export class ObjectTracker extends MobTracker {
     for (const [live, en] of [...this.entries, ...this.dying.map((d) => [d.live, d])]) {
       const c = en.client, spec = c.spec;
       if (!c.present || !(spec.vehicle || spec.hanging) || (live.dead && this.entries.get(live) === en)) continue;
-      const ridden = c.kind === "boat" && rides(live) && live.bb;
-      out.push({ ref: c, kind: c.kind, box: ridden ? live.bb : c.box(), answers: true });
+      out.push({ ref: c, kind: c.kind, box: c.box(), answers: true }); // Batch 56: the ridden boat's copy is its own (rideBoat), so its box is the copy's too
     }
     return out;
   }
@@ -639,7 +665,6 @@ function shownOf(tracker, e, rides) {
   if (!en) return e; // not tracked yet
   const c = en.client;
   if (!c.present) return null;
-  if (rides && c.kind === "boat") return e; // Batch 52: a ridden cart is drawn from its copy too (the boat's copy only mirrors the live one)
   return c;
 }
 // Batch 52: the client copy of the minecart the client player rides, or null (not tracked, copy absent, not a cart). World.updateEntity runs the copy (xl.h interpolates it
@@ -647,8 +672,11 @@ function shownOf(tracker, e, rides) {
 // live cart. Bytecode-read: ahb.a(sa, boolean) calls ab() for a rider (m != null) after its mount's own update.
 export function rideCopy(tracker, live) {
   const en = tracker.entries.get(live), c = en?.client;
-  return c?.present && c.kind === "minecart" ? c : null;
+  return c?.present && (c.kind === "minecart" || c.kind === "boat") ? c : null; // Batch 56: the ridden boat's copy runs its own physics (rideBoat), so the seat follows it too
 }
+// Batch 56: the client player's feet on a boat copy (Entity.updateRiderPosition: 0.4 ahead along the copy's yaw, posY + getMountedYOffset). A copy has posY in `y`.
+export function boatSeat(c) { return SEAT.seat({ x: c.x, posY: c.y, z: c.z, yaw: c.yaw }); }
+const SEAT = new Boats();
 function laidOver(e) {
   let v = SHOWN.get(e);
   if (!v) SHOWN.set(e, (v = Object.create(e)));

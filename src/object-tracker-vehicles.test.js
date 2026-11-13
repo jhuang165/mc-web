@@ -112,14 +112,14 @@ test("hanging copies: the client box is the one the executed classes built, the 
   for (const name of ["painting0", "painting3", "frame1", "paintingBig", "frameNegative", "knot"]) assert.deepEqual(replay(name), [], name);
 });
 
-test("targets: only copies the client spawned are hit targets; the ridden live boat stands in for its copy", () => {
+test("targets: only copies the client spawned are hit targets; the ridden boat is its copy too (batch 56)", () => {
   const tracker = new ObjectTracker(10, () => 0.5);
   const boat = { id: 1, x: 5.5, posY: 0.3, z: 5.5, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, timeSinceHit: 0, forwardDir: 1, damage: 0, dead: false, bb: [4.75, 0, 4.75, 6.25, 0.6, 6.25] };
   tracker.ctx.world = null;
   tracker.serverTick({ boat: [boat] }, { x: 0.5, y: 0, z: 0.5 }); tracker.clientTick();
   const copy = tracker.vehicleTargets()[0];
   assert.equal(copy.kind, "boat"); assert.equal(copy.answers, true); assert.notDeepEqual(copy.box, boat.bb); near(copy.box[1], 9 / 32, "copy y"); // 9 / 32 + 0.3 - 0.3
-  assert.deepEqual(tracker.vehicleTargets((l) => l === boat)[0].box, boat.bb);
+  assert.deepEqual(tracker.vehicleTargets((l) => l === boat)[0].box, copy.box); // batch 56: the ridden boat's copy runs its own physics, so its box is the copy's
   const far = { ...boat, id: 2, x: 400.5, bb: [399, 0, 4.75, 402, 0.6, 6.25] };
   tracker.serverTick({ boat: [far] }, { x: 0.5, y: 0, z: 0.5 }); tracker.clientTick();
   assert.equal(tracker.vehicleTargets().length, 1); // batch 50: the first boat left the world, but its S13 is flushed one tick later, so its copy is still hittable
