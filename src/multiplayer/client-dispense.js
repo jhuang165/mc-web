@@ -13,7 +13,7 @@ export class RemoteDispense {
   apply(message) {
     if (message.type === 'dispEnts') this.ents(message.ents ?? []);
     else if (message.type === 'dispFx') this.events(message.events ?? []);
-    else if (message.type === 'projCollect') for (const t of message.taken ?? []) this.hooks.collect?.(t.i, t.by); // S0D for an arrow: the pop sound arrives as a dispFx sound
+    else if (message.type === 'projCollect') for (const t of message.taken ?? []) this.hooks.collect?.(t.i, t.by, Number.isFinite(t.x) && Number.isFinite(t.y) && Number.isFinite(t.z) ? { x: t.x, y: t.y, z: t.z } : null); // b63: the arrow's last place, for the fly-in (its row is already gone from dispEnts) // S0D for an arrow: the pop sound arrives as a dispFx sound
   }
   ents(list) {
     const seen = new Set(), next = { a: [], b: [], t: [] };

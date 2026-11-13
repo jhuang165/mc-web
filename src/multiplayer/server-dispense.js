@@ -13,7 +13,7 @@ import { addStuckArrow } from '../stuck-arrows.js';
 import { Projectiles, mobTargets, thrownHit } from '../projectiles.js';
 import { WitchPotions } from '../witch-potions.js';
 import { splashImpact } from '../witch.js';
-import { primeTnt, TNT_POWER } from '../explosion.js';
+import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
 import { tickPrimedTnt } from '../entity-simulation.js';
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
@@ -170,6 +170,7 @@ export class ServerDispense {
 
   // One tick, after the players moved and before ServerMobs.tick (items, TNT, balls, arrows, rockets, then the mobs and their fireballs).
   tick() {
+    this.restorePotions(); this.restoreFireballs();
     const mobs = this.mobs;
     if (!this.any) return;
     if (this.primed.length) tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) });
@@ -235,7 +236,7 @@ export class ServerDispense {
       for (const ev of p.drain()) {
         const from = mobs.events.length;
         this.credit(this.ownerOf(ball), () => {
-          if (ev.potion) { potions.impact(ev.potion, null, null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
+          if (ev.potion) { const who = this.ownerOf(ball); potions.impact(ev.potion, null, null, who ? { x: who.position.x, z: who.position.z, name: who.name } : null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
         });
         for (let i = from; i < mobs.events.length; i++) {
           const e = mobs.events[i];
@@ -291,21 +292,56 @@ export class ServerDispense {
       p.dispSeen = ents.length > 0;
       if (events.length) msgs.push({ type: 'dispFx', events });
       const got = taken.filter(c => c.dim === dim && (c.x - p.position.x) ** 2 + (c.z - p.position.z) ** 2 < NEAR);
-      if (got.length) msgs.push({ type: 'projCollect', taken: got.map(c => ({ i: c.i, by: c.by })) });
+      if (got.length) msgs.push({ type: 'projCollect', taken: got.map(c => ({ i: c.i, by: c.by, x: c.x, y: c.y, z: c.z })) });
     }
   }
 
   // ---- b62: saved with the world. Arrows (stuck ones too: Arrows.serialize), thrown balls and potions of every lane, each with its shooter's name (so a pearl or an arrow keeps
   // its owner across a restart while that player is online). Primed TNT, rockets and fireballs are not saved here.
   save() {
+    this.restorePotions();
     const lanes = {}, own = this.sim.dimensions?.nether?.dispense, all = own && own !== this ? [...this.lanes, own] : this.lanes; // b62 lead: the Nether instance's lane is saved here
     for (const lane of all) {
-      const arrows = lane.arrows.list.filter(a => !a.dead), balls = lane.balls.balls, potions = lane.potions?.projectiles.balls.filter(b => !b.dead) ?? [];
-      if (!arrows.length && !balls.length && !potions.length) continue;
+      const arrows = lane.arrows.list.filter(a => !a.dead), balls = lane.balls.balls, potions = lane.potions?.projectiles.balls.filter(b => !b.dead) ?? [], more = lane.extrasOut ? lane.extrasOut() : lane.pending ? ((({ tnt, rockets, fireballs }) => Object.fromEntries(Object.entries({ tnt, rockets, fireballs }).filter(([, v]) => v)))(lane.pending)) : null; // a stand-in lane re-saves what it holds
+      if (!arrows.length && !balls.length && !potions.length && !(more && Object.keys(more).length)) continue;
       const names = list => list.map(e => this.ownerOf(e)?.name ?? e.ownerName ?? null), tag = (rows, list) => rows.map((r, i) => { const n = names(list)[i]; return n ? { ...r, by: n } : r; });
-      lanes[lane.dim] = { arrows: tag(lane.arrows.serialize(), arrows), balls: tag(lane.balls.serialize(), balls), potions: tag(lane.potions?.serialize() ?? [], potions) };
+      lanes[lane.dim] = { arrows: tag(lane.arrows.serialize(), arrows), balls: tag(lane.balls.serialize(), balls), potions: tag(lane.potions?.serialize() ?? [], potions), ...more };
     }
     return Object.keys(lanes).length ? { version: 1, lanes } : null;
+  }
+  // b63 (mpprojectiles2): what an instance (not a stand-in lane) also writes. EntityTNTPrimed saves only `Fuse` (a byte; bytecode-read xw) next to Pos and Motion, so a reloaded
+  // TNT has no placer; EntityFireworkRocket its Life, LifeTime and FireworksItem; EntityFireball xTile/yTile/zTile/inTile/inGround and `direction` (the motion; ze, bytecode-read), a
+  // large one ExplosionPower, and no shooter. The records are the browser save's (main.js `active.tnt`, FireworkRockets.serialize, Fireballs.serialize), so single player and
+  // the server read one format. Null when there is nothing to write.
+  extrasOut() {
+    const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
+      fireballs = (this.dim ? this.sim.dimensions?.nether?.mobs?.mobs : this.sim.mobs?.mobs)?._fireballs?.serialize(this.dim) ?? [], out = {};
+    if (tnt.length) out.tnt = tnt;
+    if (rockets) out.rockets = rockets;
+    if (fireballs.length) out.fireballs = fireballs;
+    return Object.keys(out).length ? out : null;
+  }
+  restoreExtras(d) {
+    if (!d || typeof d !== 'object') return;
+    for (const t of (Array.isArray(d.tnt) ? d.tnt : []).slice(0, 4096)) {
+      if (!t || ![t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)) continue;
+      this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+    }
+    if (d.rockets) { const tmp = new FireworkRockets(); tmp.load(d.rockets); this.rockets.rockets.push(...tmp.rockets); if (d.rockets.random) this.rockets.random.restore(d.rockets.random); }
+    if (Array.isArray(d.fireballs) && d.fireballs.length) this.pendingFireballs = d.fireballs; // the mobs (its owners' world) are built after this object: restored on the first tick
+  }
+  restorePotions() {
+    if (!this.pendingPotions || !this.sim.mobs) return;
+    const rows = this.pendingPotions; this.pendingPotions = null;
+    const lane = this.potionsOf(this); lane.load(rows);
+    lane.projectiles.balls.forEach((b, i) => { const n = rows[i]?.by; b.ownerName = typeof n === 'string' && n.length <= 16 ? n : undefined; });
+  }
+  restoreFireballs() {
+    if (!this.pendingFireballs) return;
+    const list = this.pendingFireballs, mobs = this.dim ? this.sim.dimensions?.nether?.mobs?.mobs : this.sim.mobs?.mobs; // this dimension's own mobs only
+    if (!mobs) return;
+    this.pendingFireballs = null;
+    mobs.fireballs.load(list, this.dim);
   }
   load(saved) {
     if (!saved || typeof saved !== 'object' || !saved.lanes) return;
@@ -313,11 +349,14 @@ export class ServerDispense {
       const dim = Number(key);
       if (!(dim === 0 || dim === -1) || !d) continue; // the Overworld and the Nether (b62 lead: the Nether is -1)
       const lane = this.laneFor(dim), rows = Array.isArray(d.arrows) ? d.arrows : [], balls = Array.isArray(d.balls) ? d.balls : [], potions = Array.isArray(d.potions) ? d.potions : [];
-      lane.arrows.load(rows); lane.balls.load(balls); this.potionsOf(lane).load(potions);
+      lane.arrows.load(rows); lane.balls.load(balls);
+      if (lane === this && !this.sim.mobs) this.pendingPotions = potions; // b63: the server's mobs (the potions' world) do not exist yet while the simulation builds this object; restorePotions runs on the first tick
+      else this.potionsOf(lane).load(potions);
+      if (lane.restoreExtras) lane.restoreExtras(d); else lane.pending = d; // b63: a stand-in lane keeps them for the dimension's instance (adopt)
       const name = (row) => (typeof row?.by === 'string' && row.by.length <= 16 ? row.by : undefined);
       lane.arrows.list.forEach((a, i) => { a.ownerName = name(rows[i]); if (a.ownerName) a.shooter = 'player'; });
       lane.balls.balls.forEach((b, i) => { b.ownerName = name(balls[i]); });
-      lane.potions.projectiles.balls.forEach((b, i) => { b.ownerName = name(potions[i]); });
+      if (lane.potions) lane.potions.projectiles.balls.forEach((b, i) => { b.ownerName = name(potions[i]); });
     }
   }
 }
@@ -328,5 +367,6 @@ ServerDispense.prototype.adopt = function (inst) {
   this.extra.delete(dim);
   inst.arrows.list.push(...lane.arrows.list); inst.balls.balls.push(...lane.balls.balls);
   if (lane.potions) inst.potionsOf(inst).projectiles.balls.push(...lane.potions.projectiles.balls);
+  if (lane.pending) inst.restoreExtras(lane.pending); // b63: its saved TNT, rockets and fireballs
 };
 const laneBusy = lane => lane.arrows.list.length + lane.balls.balls.length + (lane.potions?.projectiles.balls.length ?? 0) > 0;
