@@ -10,6 +10,7 @@ const CRYSTAL_FIRE = portId(ORIGINAL_FIRE); // the port world and overlay hold t
 
 function setup(isEnd = true) {
   const blocks = new Map(), world = { isEnd, get: (x, y, z) => blocks.get(`${x},${y},${z}`) ?? 0, getMeta: () => 0, put(x, y, z, b) { blocks.set(`${x},${y},${z}`, b); } };
+  blocks.set("4,59,-3", 7); // bedrock under the crystal: BlockFire.onBlockAdded keeps a supported fire (batch 58)
   let pred = null; const shown = [];
   const scene = { showPredictedCells: (c) => shown.push(...c), updateBlock: (x, z, y) => shown.push({ real: [x, y, z] }) };
   const layer = createCrystalFireLayer({ world: () => world, layer: () => (pred ??= createPrediction(world)), seen: () => (pred ? pred.read() : world), scene: () => scene });
