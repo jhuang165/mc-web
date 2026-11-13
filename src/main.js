@@ -232,7 +232,7 @@ import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { createCrystalFireLayer } from "./crystal-fire-layer.js";
-import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, useKind } from "./client-prediction.js";
+import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, dryBucket, useKind, activateSound, tracedBucket, drawPrediction, revertPrediction as revertCells } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
@@ -3067,7 +3067,7 @@ function defersToNetworkTick(place) {
   if (runningEdits || !mobs) return false;
   if (aimedEntity || aimedCart || aimedHanging) return true;
   if (pendingEdits.length) return true; // packets are handled in arrival order: nothing overtakes a queued action
-  if (place && target) return true; // C08 on a block (placement, doors, containers, item use): the client's own prediction is the swing and the GUI, which waits for the server anyway
+  if (place && (target || tracedBucket(heldId()))) return true; // C08 on a block (and ItemBucket's own trace, which can hit water with no block target) (placement, doors, containers, item use): the client's own prediction is the swing and the GUI, which waits for the server anyway
   const h = heldId();
   return place && (isThrowable(h) || h === BOAT_ITEM || h === ITEM_EXP_BOTTLE || h === ITEM_SPAWN_EGG);
 }
@@ -3136,15 +3136,7 @@ function predictionLayer() {
 }
 const clientWorld = () => (prediction && prediction.world === world ? prediction.read() : world);
 const crystalFireLayer = createCrystalFireLayer({ world: () => world, layer: predictionLayer, seen: clientWorld, scene: () => scene });
-function showPrediction(list) {
-  const layer = predictionLayer(), token = ++predictionToken, cells = [];
-  for (const [x, y, z, block, meta] of list) {
-    const was = { block: world.get(x, y, z), meta: world.getMeta(x, y, z) };
-    if (layer.set(x, y, z, block, meta, token)) cells.push({ x, y, z, was });
-  }
-  scene.showPredictedCells(cells); // one relight per cell and one mesh per touching column (client-prediction.js, scene.js)
-  return cells.length ? { token, cells } : null;
-}
+function showPrediction(list) { return drawPrediction(predictionLayer(), scene, ++predictionToken, list); } // client-prediction.js
 // PlayerControllerMP.onPlayerDestroyBlock: the broken cell and what its neighbour chain removes on the client world at once (a door's or bed's other half, a double
 // plant's top, unsupported torches, plants, signs...), measured by the probe (client-predict-reference.json).
 function predictBreak(p) {
@@ -3158,11 +3150,15 @@ function predictBreak(p) {
 // PlayerControllerMP.onPlayerRightClick on the client world: Block.onBlockActivated (door, trapdoor, gate toggle), else Item.onItemUse (ItemBlock, door item, cake, seeds...).
 function predictPlace() {
   const held = heldId(), layer = predictionLayer(), seen = layer.read();
-  const kind = useKind({ world: seen, target, heldId: held, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging });
+  const kind = useKind({ world: seen, target, heldId: held, heldDamage: survival.held?.damage ?? 0, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging });
   if (!kind) return null;
   const state = { world: seen, survival, position, flowers: FLOWERS, yaw };
   let soundDone = false, cells;
-  if (kind === 'activate') cells = dryActivate(state, target) ?? [];
+  if (kind === 'activate') {
+    cells = dryActivate(state, target) ?? [];
+    const s = cells.length ? activateSound(seen.get(...target.block)) : null; // the door's aux effect 1003 and the button's click play at the click, not in the network tick
+    if (s) { soundDone = true; sounds?.play(s.event, { volume: s.volume, pitch: s.pitch, position: { x: target.block[0] + 0.5, y: target.block[1] + 0.5, z: target.block[2] + 0.5 } }); }
+  } else if (kind === 'bucket') cells = eyeRay ? dryBucket({ world: seen, heldId: held }, eyeRay.origin, eyeRay.dir) : [];
   else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
   else {
     const out = dryPlace(state, { id: held, item: ITEMS[held], target }, { sound: (...a) => { soundDone = true; sound(...a); } });
@@ -3174,7 +3170,7 @@ function predictPlace() {
 }
 function endPrediction(pred) { if (pred) for (const c of pred.cells) prediction?.clear(c.x, c.y, c.z, pred.token); }
 // S23 for a cell the server left as it was (a refusal): the chunk is meshed from the real world again.
-function revertPrediction(pred) { if (pred) for (const c of pred.cells) if (world.get(c.x, c.y, c.z) === c.was.block && world.getMeta(c.x, c.y, c.z) === c.was.meta) scene.updateBlock(c.x, c.z, c.y); }
+function revertPrediction(pred) { revertCells(world, scene, pred); }
 // A server-side effect of a click (ItemInWorldManager.onBlockClicked at C07 status 0): queued in arrival order, at once in multiplayer or while the queue runs.
 function serverTask(fn) {
   if (runningEdits || !mobs || multiplayer) { fn(); return; }
@@ -3184,7 +3180,7 @@ function serverTask(fn) {
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
     if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
-    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && target ? predictPlace() : null });
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && (target || tracedBucket(heldId())) ? predictPlace() : null });
     return;
   }
   edit(place);
@@ -3247,7 +3243,7 @@ function edit(place = false) {
     renderVitals,
     spawnWither: (x, y, z, yaw) => { achievements.trigger("spawnWither"); return mobs.spawnWither(x, y, z, yaw); }, // wither-boss-mobs.js
     markUnsaved: () => { saved = false; },
-    playSound: (name, options) => sounds.play(name, options),
+    playSound: (name, options) => { if (!mutePlaceSound) sounds.play(name, options); }, // mutePlaceSound: the click's own sound already played with the prediction
     particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
     scheduleFalling:(x,y,z)=>falling.schedule(x,y,z,ANVIL),
     sound,
