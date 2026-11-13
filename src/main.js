@@ -3087,6 +3087,7 @@ const serverDigRate = (p) => { const b = world.get(p[0], p[1], p[2]); return b ?
 function tickServerDig() {
   if (serverDigTicked) return;
   serverDigTicked = true;
+  mobs?.endTilePass?.(); // b56tm: the tile entity pass is over; what the network tick spawns from here is early at the next flush (entities.js spawnsEarly)
   const hit = serverDig.tick(serverDigRate);
   if (hit) breakBlock(hit, false);
 }
@@ -3512,6 +3513,7 @@ function movementTick(controls) {
       thunderLightValue: (x, y, z) => level(x, y, z, 10),
       thundering: () => weather.isThundering(),
     }, { spawnParticles: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)) });
+    mobs.noteMobSpawns?.(false); // b56tm: a spawner's mobs spawn in the tile entity pass, after the player's flush (executed: mobSpawn m4)
     if (spawned.length) { handleEntityEvents(); saved = false; }
   }
   // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.

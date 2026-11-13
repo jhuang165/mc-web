@@ -133,7 +133,7 @@ test("leaveWorld: the old world's copies go, the player's entry leaves the set, 
   assert.doesNotThrow(() => Object.create(EntityWorld.prototype).leaveWorld());
 });
 
-test("EntityWorld: a spawn made in the update of an entity before the player's slot is early, one after it or outside the pass is not", () => {
+test("EntityWorld: a spawn made in the update of an entity before the player's slot is early, one after it is not, outside the pass (network phase) is early since b56", () => {
   const w = Object.create(EntityWorld.prototype);
   w.ids = new EntityIds(10); w.orderSeqs = new WeakMap(); w.entities = [];
   const a = { id: "a" }, b = { id: "b" };
@@ -145,5 +145,5 @@ test("EntityWorld: a spawn made in the update of an entity before the player's s
   assert.equal(spawn(a), true);
   assert.equal(spawn(b), false);
   const e = {}; w.slot = null; w.joined(e, "item");
-  assert.equal(w.earlySpawns?.has(e) === true, false);
+  assert.equal(w.earlySpawns?.has(e) === true, true, "b56: the network phase between ticks sends before the next flush (tracker-mobs-b56.test.js for the tile pass)");
 });

@@ -22,7 +22,7 @@ public class TrackerJointProbe {
   static String num(double v) { return Double.toString(v); }
   static double d(Object o, String n) throws Exception { return MobMoveProbe.d(o, n); }
 
-  static class Item { String name, kind; sa e; double[] start, vel; int born, dies = -1; float yaw0, yawStep; boolean player; String by; boolean inB; }
+  static class Item { String name, kind; sa e; double[] start, vel; int born, dies = -1; float yaw0, yawStep; boolean player; String by; boolean inB; boolean net; int[] flags; }
 
   static sa make(String kind, double[] s) throws Exception {
     switch (kind) {
@@ -45,6 +45,7 @@ public class TrackerJointProbe {
       case "falling": return new xj(server, s[0], s[1], s[2], aji.e(12), 0);
       case "tnt": return new xw(server, s[0], s[1], s[2], null);
       case "potion": return new zo(server, s[0], s[1], s[2], 16388);
+      case "horse": return new wi(server); // Batch 56 (b56tm): an EntityHorse; its watcher 16 is scripted per tick (Item.flags)
       default: throw new IllegalStateException(kind);
     }
   }
@@ -65,10 +66,23 @@ public class TrackerJointProbe {
     return p.getClass().getName();
   }
   static int idOf(Object p) throws Exception { return MobMoveProbe.field(p.getClass(), "a").getInt(p); }
+  static String xtag = "b55dt";
+  static boolean metaValues = false; // Batch 56: S1C and S0F records carry their watcher (index, value) pairs only in the b56tm cases
+  static String watchers(List<?> list) throws Exception {
+    StringBuilder b = new StringBuilder();
+    if (list != null) for (Object o : list) { tf w = (tf) o; Object v = w.b(); b.append(",[" + w.a() + "," + (v instanceof Number ? v.toString() : "\"" + String.valueOf(v).replace("\\", "\\\\").replace("\"", "\\\"") + "\"") + "]"); }
+    return b.toString();
+  }
+  static void setFlags(Item it, int t) throws Exception {
+    java.lang.reflect.Method flag = MobMoveProbe.method(wi.class, "b", int.class, boolean.class);
+    for (int bit : new int[] {2, 4, 8, 16, 32, 64, 128}) flag.invoke(it.e, bit, (it.flags[Math.min(t, it.flags.length - 1)] & bit) != 0);
+  }
   static String ints(Object p) throws Exception {
     // the packet's own int/byte fields after the id (positions in 1/32, motion in 1/8000, angles), in declaration order
     StringBuilder b = new StringBuilder();
+    if (metaValues && p instanceof hw) return watchers(((hw) p).c());
     boolean first = true;
+    String tail = metaValues && p instanceof fz ? watchers(((fz) p).c()) : "";
     for (Field f : p.getClass().getDeclaredFields()) {
       if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
       Class<?> t = f.getType();
@@ -77,7 +91,7 @@ public class TrackerJointProbe {
       if (first) { first = false; continue; } // the id
       b.append(',').append(f.get(p));
     }
-    return b.toString();
+    return b + tail;
   }
 
   static String run(String name, long counterStart, int ticks, Item[] script, int playerAt) throws Exception {
@@ -192,6 +206,7 @@ public class TrackerJointProbe {
     if (e instanceof sv) ((sv) e).e(yaw);
     TrackerProbe.chunk(e);
     MobMoveProbe.field(sa.class, "al").setBoolean(e, false);
+    if (it.flags != null) setFlags(it, t);
   }
   static String inputs(Item[] script, int ticks) throws Exception {
     StringBuilder b = new StringBuilder("{");
@@ -207,7 +222,7 @@ public class TrackerJointProbe {
         float yaw = it.kind.equals("chicken") || flies(it.kind) ? (float) (it.yawStep * t) : it.kind.equals("arrow") || it.kind.equals("snowball") ? 90f : 0f;
         r.append(t > 0 ? "," : "").append("[" + num(x) + "," + num(y) + "," + num(z) + "," + num(vx) + "," + num(vy) + "," + num(vz) + "," + yaw + "," + (it.kind.equals("arrow") ? -10 : 0) + "]");
       }
-      b.append(f ? "" : ",").append("\"" + it.name + "\":{\"kind\":\"" + it.kind + "\",\"born\":" + it.born + ",\"dies\":" + it.dies + ",\"rows\":" + r + "]" + (hangs(it.kind) ? ",\"dir\":" + (int) it.start[3] : "") + "}"); f = false;
+      b.append(f ? "" : ",").append("\"" + it.name + "\":{\"kind\":\"" + it.kind + "\",\"born\":" + it.born + ",\"dies\":" + it.dies + ",\"rows\":" + r + "]" + (hangs(it.kind) ? ",\"dir\":" + (int) it.start[3] : "") + (it.flags != null ? ",\"flags\":" + java.util.Arrays.toString(it.flags) : "") + "}"); f = false;
     }
     return b + "}";
   }
@@ -248,6 +263,11 @@ public class TrackerJointProbe {
   // One world's tick (World.updateEntities then updateTrackedEntities); `ev` null = nobody is watching (the packets go nowhere)
   static void tickWorld(W w, int t, Item[] script, boolean inB, StringBuilder ev, StringBuilder ids) throws Exception {
     StringBuilder sink = new StringBuilder("["), out = ev != null ? ev : sink;
+    // Batch 56 (b56tm): a spawn from the network phase (a spawn egg, a thrown item, a built golem) is made between ticks, after the previous tracker update: its packets go out before this tick's loop and flush
+    for (Item s : script) if (s.born == t && s.net && s.inB == inB) {
+      s.e = make(s.kind, s.start); position(s, t); w.list.add(s); w.tracker.a(s.e);
+      idAdd(ids, s.name, s.e.y()); flushTo(out);
+    }
     for (int i = 0; i < w.list.size(); i++) {
       Item it = w.list.get(i);
       if (it.player) {
@@ -261,7 +281,7 @@ public class TrackerJointProbe {
       }
       if (it.dies == t) { w.tracker.b(it.e); w.list.remove(i--); for (Object q : TrackerProbe.queue) if (q instanceof Integer) pending.add((Integer) q); TrackerProbe.queue.clear(); TrackerProbe.sent.clear(); }
     }
-    for (Item s : script) if (s.born == t && s.by == null && s.inB == inB) {
+    for (Item s : script) if (s.born == t && s.by == null && !s.net && s.inB == inB) {
       s.e = make(s.kind, s.start); position(s, t); w.list.add(s); w.tracker.a(s.e);
       idAdd(ids, s.name, s.e.y()); flushTo(out);
     }
@@ -295,7 +315,7 @@ public class TrackerJointProbe {
       a.list.add(it); a.tracker.a(it.e);
       idAdd(ids, it.name, it.e.y()); flushSent(setup, 0);
     }
-    StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\",\"tag\":\"b55dt\",\"respawnAt\":" + respawnAt + ",\"dimAt\":" + dimAt + ",\"setup\":" + setup + "],\"ticks\":[");
+    StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\",\"tag\":\"" + xtag + "\",\"respawnAt\":" + respawnAt + ",\"dimAt\":" + dimAt + ",\"setup\":" + setup + "],\"ticks\":[");
     for (int t = 1; t <= ticks; t++) {
       StringBuilder ev = new StringBuilder("[");
       if (t == respawnAt) { // the network thread: ServerConfigurationManager.respawnPlayer
@@ -318,7 +338,7 @@ public class TrackerJointProbe {
       out.append(t > 1 ? "," : "").append("[" + t + "," + ev + "]]");
     }
     StringBuilder meta = new StringBuilder("{"); boolean f = true;
-    for (Item it : script) { meta.append(f ? "" : ",").append("\"" + it.name + "\":{\"by\":" + (it.by == null ? "null" : "\"" + it.by + "\"") + ",\"inB\":" + it.inB + "}"); f = false; }
+    for (Item it : script) { meta.append(f ? "" : ",").append("\"" + it.name + "\":{\"by\":" + (it.by == null ? "null" : "\"" + it.by + "\"") + ",\"inB\":" + it.inB + (it.net ? ",\"net\":true" : "") + "}"); f = false; }
     out.append("],\"inputs\":" + inputs(script, ticks) + ",\"meta\":" + meta + "},\"ids2\":" + ids + ",\"ids\":" + ids + "}");
     return out.toString();
   }
@@ -451,5 +471,34 @@ public class TrackerJointProbe {
     System.arraycopy(born, 0, early, base.length, born.length);
     System.out.println(runX("earlySpawn", 1, 60, early, 9, 0, 0));
     System.out.println(runX("earlySpawnLast", 65530, 60, early, 12, 0, 0));
+    // Batch 56 (b56tm): MOBS spawned in the pass, in the tile entity pass (after the loop, `by` null) and in the network phase (`net`, between ticks), and a horse's watcher 16 flags (S0F list, S1C).
+    // Chickens stand for any mob (the spawn packet and tracker entry are the same for a baby, a reinforcement, a slime split, a hatched chick, a jockey, a golem, a spawner's mob).
+    xtag = "b56tm"; metaValues = true;
+    Item[] mobs = new Item[base.length + 7];
+    System.arraycopy(base, 0, mobs, 0, base.length);
+    Item[] spawned = {
+      item("m1", "chicken", new double[]{3.0, 0, 2.0}, new double[]{0.05, 0, 0.01}, 31, -1, 1.0f),  // by c1 (before the player), with a1's destroy in the tick
+      item("m2", "chicken", new double[]{2.0, 0, 4.0}, new double[]{0.02, 0, 0.03}, 34, 50, 2.0f),  // by c2 (before), with i1's destroy
+      item("m3", "chicken", new double[]{4.0, 0, 3.0}, new double[]{0.03, 0, 0.02}, 38, -1, 0.5f),  // by c4 (after the player), with s1's destroy: after the flush
+      item("m4", "chicken", new double[]{5.0, 0, 5.0}, new double[]{0.04, 0, 0.0}, 41, -1, 3.0f),   // the tile entity pass (a mob spawner), with c3's destroy
+      item("m5", "chicken", new double[]{1.0, 0, 5.0}, new double[]{0.0, 0, 0.04}, 47, -1, 1.5f),   // the network phase (a spawn egg), with i4's destroy
+      item("n1", "item", new double[]{3.0, 1.125, 3.0}, new double[]{0.02, 0, 0.01}, 34, -1, 0),     // a thrown item, network phase, with i1's destroy
+      item("n2", "arrow", new double[]{2.0, 2.0, 3.0}, new double[]{0.3, -0.03, 0.1}, 38, 55, 0),    // network phase, with s1's destroy
+    };
+    spawned[0].by = "c1"; spawned[1].by = "c2"; spawned[2].by = "c4";
+    spawned[4].net = true; spawned[5].net = true; spawned[6].net = true;
+    System.arraycopy(spawned, 0, mobs, base.length, spawned.length);
+    System.out.println(runX("mobSpawn", 1, 60, mobs, 9, 0, 0));
+    System.out.println(runX("mobSpawnLast", 65530, 60, mobs, 12, 0, 0));
+    // A horse's data watcher 16 (tame 2, saddled 4, chest 8, bred 16, eating 32, rearing 64, mouth 128) changes at scripted ticks: the entry sends an S1C (and its location) in the tracker update of that tick
+    int[] fl = new int[61];
+    for (int t = 0; t <= 60; t++) fl[t] = (t >= 6 ? 2 : 0) | (t >= 9 ? 4 : 0) | (t >= 14 && t < 22 ? 32 : 0) | (t >= 26 && t < 33 ? 64 : 0) | (t >= 30 && t < 40 ? 128 : 0) | (t >= 45 ? 16 : 0) | (t >= 52 ? 8 : 0);
+    Item[] hs = { item("c1", "chicken", new double[]{2.5, 0, 3.5}, new double[]{0.09, 0, 0.01}, 0, -1, 2.5f), item("h1", "horse", new double[]{3.5, 0, 2.5}, new double[]{0.03, 0, 0.02}, 0, -1, 0) };
+    hs[1].flags = fl;
+    Item late = item("h2", "horse", new double[]{5.5, 0, 4.5}, new double[]{0.0, 0, 0.0}, 20, -1, 0);
+    int[] fl2 = new int[61]; for (int t = 0; t <= 60; t++) fl2[t] = t >= 20 ? 2 | 4 : 0; fl2[24] |= 64; fl2[25] |= 64; late.flags = fl2; // spawned already tame and saddled; rears at 24 to 25
+    Item[] hm = {hs[0], hs[1], late};
+    System.out.println(runX("horseMeta", 1, 60, hm, 1, 0, 0));
+    System.out.println(runX("horseMetaLast", 65530, 60, hm, 2, 0, 0));
   }
 }
