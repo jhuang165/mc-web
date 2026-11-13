@@ -103,6 +103,7 @@ export class ServerMobs {
     this.pass = null;
     mobs.beforeMob = e => this.target(e);
     host.achievements?.watchMobs(mobs); // b60: killEnemy, snipeSkeleton, overkill for the attacker of the moment
+    host.stats?.watchMobs(mobs); // b63 mpstats: kills, damage dealt, animalsBred for the attacker of the moment
     mobs.mobStatus = (e, status) => this.status(e, status);
     // b61: EntityAIMate.spawnBaby credits the player who fed the parents (func_146083_cb): breedCow goes through the same watcher as a kill does, with `attacker` set for the call.
     const born = mobs.spawnBaby;

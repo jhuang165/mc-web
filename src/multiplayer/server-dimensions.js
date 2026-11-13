@@ -81,6 +81,7 @@ export class ServerDimensions {
     for (let i = 0; i < edits.length; i += 100000) world.restore(edits.slice(i, i + 100000));
     const n = { world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: inert(), overMobs: sim.mobs };
     n.items.joined = e => { e.eid = ++sim.nextItemId; };
+    sim.stats?.watchItems(n.items); // b63 mpstats: drops in the Nether count too
     buildNetherSystems(sim, n, source, saved); // b62: tiles, tile entities, redstone, containers, light, fluids, fire, trees, plants, falling, farming, weather
     if (!saved.tiles) applyPopulation(n, source); // a Nether nobody has saved yet: the fortress chests' loot and the blaze spawners
     const put = world.put.bind(world);

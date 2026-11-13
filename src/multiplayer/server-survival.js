@@ -43,12 +43,14 @@ export class ServerSurvival {
       finishPlayerMovement(p, moved);
       if (s.health <= 0) this.die(p);
     } else this.tickDeath(p);
+    if (s.broken) this.sim.stats?.broken(p, s.broken); // b63 mpstats: the break stat of a tool that ran out
     this.takeHurt(p); s.hurtSounds.length = 0; s.died = false; s.broken = 0; s.drowned = false; // client-only flags the dedicated server never plays
     return !!p.dead;
   }
   /** EntityPlayerMP.onDeath: the CombatTracker message goes to every player (ServerSocial.drain). */
   die(p) {
     p.dead = true; p.itemInUse = null; p.dig?.abort?.();
+    this.sim.stats?.death(p); // b63 mpstats: stat.deaths and the killed-by stat
     this.dropOnDeath(p);
     const component = deathComponent(p.survival.combat, p.name, { rawName: p.name });
     (this.sim.events ??= []).push({ type: 'death', id: p.id, component });

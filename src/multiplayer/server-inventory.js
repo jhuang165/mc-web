@@ -23,7 +23,7 @@ export class ServerInventory {
   constructor(sim) { this.sim = sim; }
   get enabled() { return this.sim.serverItems.survival; }
   win(p) {
-    if (!p.invWin) { const container = p.survival.openInventory(); container.onCraft = (stack) => this.sim.achievements?.onCrafted(p, stack); /* b60 lead: SlotCrafting.onCrafting (server-achievements.js) */ p.invWin = { container, last: null, pending: 0 }; p.invWin.last = this.snapshot(p); }
+    if (!p.invWin) { const container = p.survival.openInventory(); container.onCraft = (stack, n) => { this.sim.achievements?.onCrafted(p, stack); this.sim.stats?.crafted(p, stack, n); /* b63 mpstats */ }; /* b60 lead: SlotCrafting.onCrafting (server-achievements.js) */ p.invWin = { container, last: null, pending: 0 }; p.invWin.last = this.snapshot(p); }
     return p.invWin;
   }
   // What the client was last told about the slots this module owns: armour, grid and the cursor.

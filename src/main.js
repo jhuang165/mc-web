@@ -133,6 +133,7 @@ import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
 import { Scoreboard, scoreboardToJSON, scoreboardFromJSON } from "./scoreboard.js";
 import { ScoreboardLive, SidebarUi } from "./scoreboard-live.js";
+import { applyStatsMessage } from "./multiplayer/client-stats.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
 import { keyName as inventoryKeyName } from "./menu-screens.js";
@@ -606,6 +607,7 @@ const achievementToast = new AchievementToast({
 });
 // Statistics (stats.js): the per-world counters behind the Statistics screen and stats/<uuid>.json; awards in stats-live.js.
 const stats = new Stats(), statsLive = new StatsLive(stats);
+let statsWaiter = null; // b63 mpstats: the Statistics screen waiting for S37
 watchDrops(items, statsLive);
 // player-actions.js dispatch plus the use stat of a placed or applied item (ItemStack.tryPlaceItemIntoWorld).
 function dispatchPlayerAction(state, action, hooks) {
@@ -833,6 +835,7 @@ async function joinMultiplayer(settings) {
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
+    onStats: message => { applyStatsMessage(stats, message); const w = statsWaiter; statsWaiter = null; w?.(); }, // b63 mpstats: S37 fills the Statistics screen
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
     onDimRespawn: message => multiplayerDimension(client, settings, message), // b61 mpnether: S07 Respawn, the server moved this player to another dimension
@@ -919,6 +922,7 @@ const menuContext = {
   launch: openWorld,
   multiplayer: showMultiplayer,
   isRemote: () => !!multiplayer,
+  requestStats: (done) => { if (!multiplayer?.requestStats) return false; statsWaiter = done; multiplayer.requestStats(); return true; }, // b63 mpstats
   canSingleplayer: () => worldWriterAvailable,
   exportWorld: chooseExport,
   importWorld: () => $("#file-input").click(),

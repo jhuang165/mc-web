@@ -19,8 +19,8 @@ export function restoreReplica(snapshot) {
 const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {} } = {}) {
-    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {} } = {}) {
+    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -98,6 +98,7 @@ export class DedicatedClient {
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'projCollect') this.onDisp(message); // b61
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
+    if (message.type === 'stats') this.onStats(message); // b63 mpstats: S37
   }
   // C12 update sign: the four lines of a sign this player placed (the server checks it is the editor).
   updateSign(x, y, z, text) { this.send({ type: 'sign', x, y, z, text }); }
@@ -114,6 +115,7 @@ export class DedicatedClient {
   // C16 client status 0: perform respawn after a death.
   respawn() { this.send({ type: 'respawn' }); }
   dropHeld(all) { this.send({ type: 'achDrop', all: !!all }); } // b60: EntityPlayer.dropOneItem happens on the server
+  requestStats() { this.send({ type: 'requestStats' }); } // b63 mpstats: C16PacketClientStatus REQUEST_STATS (GuiStats opening)
   openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
   // C02 UseEntity, attack: the wire id of the mob (its S0F spawn); the server checks the reach and applies the held weapon's damage.
   attack(mob) { this.send({ type: 'attack', mob }); }
