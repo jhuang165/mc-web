@@ -67,7 +67,8 @@ function saveWalk(mobs, groups, frame = null) {
   for (const r of rows) { const k = `${r.cx},${r.cz}`; first.set(k, Math.min(first.get(k) ?? Infinity, born?.get(k) ?? r.seq)); r.chunk = k; r.list = moved?.get(r.e) ?? r.seq; }
   const carried = rows.filter((r) => carriesPlayer(r.e)), ranks = frame ? loadRanks(frame) : null;
   for (const r of carried) if (ranks && !ranks.has(r.chunk)) ranks.set(r.chunk, ranks.size); // b57so: the login spawns the mount into its chunk, which loads (and its other entities with it) after the view square
-  const place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : first.get(k)); // a chunk of the login frame goes before every other
+  const loads = mobs.chunkLoads?.map;
+  const place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : loads?.has(k) ? loads.get(k) - 5e8 : first.get(k)); // a chunk of the login frame goes before every other; then the chunks loaded since, in load order (b58so)
   rows.sort((a, b) => place(a.chunk) - place(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
   // b54so: the mount carrying the player is read from the player's file (Riding) and spawned after the chunks: last, in list order among such mounts
   const lost = lostMounts(carried, rows), gone = new Set(lost.map((r) => r.e));
@@ -81,6 +82,24 @@ function lostMounts(carried, rows) {
   const byEnt = new Map(rows.map((r) => [r.e, r])), out = new Set();
   for (const c of carried) for (let m = c.e.ridingEntity, seen = new Set([c.e]); m && !seen.has(m); m = m.ridingEntity) { seen.add(m); if (byEnt.has(m) && !carriesPlayer(m)) out.add(byEnt.get(m)); }
   return [...out];
+}
+
+/** b58so: the chunks the player's movement loads after the login, in load order (executed SavedOrderLoginProbe `b58so-move-*`: PlayerManager.updateMountedMovingPlayer creates a PlayerInstance for each
+ *  chunk of the new view square that was not watched, x outer, z inner, and each loads its chunk, so World.addLoadedEntities appends the chunk's entities to loadedEntityList in that order).
+ *  Called every tick with the player's position: the first call records the login square (x outer, z inner, as PlayerManager.addPlayer). A chunk that leaves the square keeps its place (the
+ *  entities it held stay in the port's lists) and is marked out: a return loads it again, at the end. */
+export function trackChunkLoads(mobs, player, view = mobs?.viewChunks) {
+  if (!mobs || !player || !finite(player.x) || !finite(player.z) || !Number.isInteger(view) || view < 1) return;
+  const cx = Math.trunc(player.x) >> 4, cz = Math.trunc(player.z) >> 4, st = (mobs.chunkLoads ??= { map: new Map(), out: new Set(), cx: null, cz: null, view: 0, n: 0 });
+  if (st.cx === cx && st.cz === cz && st.view === view) return;
+  const square = new Set();
+  for (let x = cx - view; x <= cx + view; x++) for (let z = cz - view; z <= cz + view; z++) {
+    const k = `${x},${z}`;
+    square.add(k);
+    if (!st.map.has(k) || st.out.has(k)) { st.map.set(k, ++st.n); st.out.delete(k); }
+  }
+  for (const k of st.map.keys()) if (!square.has(k)) st.out.add(k);
+  st.cx = cx; st.cz = cz; st.view = view;
 }
 
 // A cart, boat or mob the local player rides (minecarts.js / boats.js `rider`, entities.js serializeOne's playerRides rule).
@@ -161,3 +180,12 @@ export function restoreSavedOrder(mobs, groups) {
 
 /** The highest `ord` among saved records (the away run puts what it ran above the records it left alone). */
 export const topSavedOrder = (...lists) => lists.flat().reduce((m, r) => (finite(r?.ord) ? Math.max(m, r.ord) : m), -1);
+
+/** b58so: gives entities of a kind that joined the run after the load (the away run's falling blocks) the stamps of their records (one entity per record, in the loaded order). */
+export function restoreExtraOrder(mobs, live, records) {
+  if (!mobs?.walks?.size || !live?.length || live.length !== records?.length) return;
+  mobs.orderSeqs ??= new WeakMap();
+  let top = mobs.orderCount ?? 0;
+  live.forEach((e, i) => { if (!finite(records[i]?.ord)) return; const s = records[i].ord + 1; mobs.orderSeqs.set(e, s); top = Math.max(top, s); });
+  mobs.orderCount = top;
+}

@@ -13,7 +13,6 @@
 import { ensureUuid, isUuid } from "./entity-uuid.js";
 import { Minecarts } from "./minecarts.js";
 import { recordBirth } from "./tracker-birth.js";
-import { freeRider } from "./mob-riding.js";
 import { WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { blockCollisions } from "./block-collisions.js";
 import { entityWaterBox, waterAcceleration, inLava } from "./fluids.js";
@@ -81,10 +80,9 @@ export class Boats extends Minecarts {
   // EntityBoat.interactFirst: a rider that is not the clicker blocks it; the clicker mounts.
   mount(boat, rider, { sneaking = false } = {}) {
     if (boat.dead || sneaking || boat.rider || rider.vehicle) return false;
-    // b57so: EntityBoat.interactFirst refuses only a rider that is another player (bytecode-read; EntityMinecartEmpty refuses any rider). The click mounts, Entity.mountEntity leaves the
-    // mob's own link, and World.updateEntities then clears that stale pair at the mob's place (mount.riddenByEntity = null; mob.ridingEntity = null) and at the taker's next one: both end free
-    // within a pass or two. The port frees the mob at once and seats nobody.
-    if (boat.passenger) { freeRider(boat); Object.defineProperty(boat, "passenger", { value: null, writable: true, configurable: true, enumerable: false }); return false; }
+    // b57so: EntityBoat.interactFirst refuses only a rider that is another player (bytecode-read; EntityMinecartEmpty refuses any rider). The click mounts and Entity.mountEntity leaves the
+    // mob's own link. b58so: the player is seated; World.updateEntities then clears the stale pair at the mob's turn (mob-riding.js releaseStaleRiders) and the player is let go at his own
+    // turn, in the same pass or the next. `passenger` is the mob's side of the stale link and stays until that pass.
     boat.rider = rider; rider.vehicle = boat;
     this.updateRiderPosition(boat);
     return true;

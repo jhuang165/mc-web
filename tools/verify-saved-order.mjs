@@ -60,3 +60,11 @@ const reference5={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases5};
 await writeFile(path.join(root,'../public/research/saved-order5-reference.json'),JSON.stringify(reference5)+'\n');
 console.log(`${cases5.length} saved order 5 scenarios`);
+// Batch 58 (b58so): the chunks the player's movement loads after the login append to loadedEntityList in load order (PlayerManager.updateMountedMovingPlayer); replayed by src/savedorder6-b58.test.js.
+const cases6=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order6');
+assert.equal(cases6.length,4,'4 b58so scenarios');
+const reference6={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 58 b58so: SavedOrderLoginProbe, the b57so set-up without the spawn grid, then the real PlayerManager.updateMountedMovingPlayer (mq.d) after the player position is set to `move`: a PlayerInstance, which loads its chunk through the unchanged ChunkProviderServer, for each chunk of the new view square that is not watched (x outer, z inner). after: entity indices (x = chunk x * 16 + 1 + 0.5 * index) in loadedEntityList order. away-falling: nobody logged in, the spawn grid, EntityFallingBlock among the kinds.',
+ cases:cases6};
+await writeFile(path.join(root,'../public/research/saved-order6-reference.json'),JSON.stringify(reference6)+'\n');
+console.log(`${cases6.length} saved order 6 scenarios`);

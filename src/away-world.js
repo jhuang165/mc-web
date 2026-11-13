@@ -172,7 +172,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   };
 
   ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
-  if (ents) { ents.falling = falling; falling.joined = (e) => ents.mobs.joined(e, "falling"); } // falling blocks tick in the one entity walk (away-entities.js)
+  if (ents) { ents.attachFalling(falling, plan.falling ?? []); falling.joined = (e) => ents.mobs.joined(e, "falling"); } // falling blocks tick in the one entity walk (away-entities.js)
   // (an entry held back in an unloaded column does nothing for the rest of the run, so it does not keep the run going)
   const work = (list) => { for (const e of list) if (ticking(e.x, e.z)) return true; return false; };
   const idle = () => !work(fluids.pending.values()) && !work(fire.queue.heap) && !work(falling.pending.values()) && !work(live.tree) && !live.thisTick.length
@@ -217,7 +217,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const entityLists = ents?.finish() ?? null;
   return {
     entities: entityLists,
-    columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: falling.serialize(),
+    columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: entityLists?.falling ?? falling.serialize(), // b58so: the stamped records when the entity run held them
     editSequence: world.nextEditOrder, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
     ...cmds.result(),
     stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}), commands: cmds.stats, light: { emitters: light.emitters, floods: light.floods, floodMs: Math.round(light.floodMs) } },
