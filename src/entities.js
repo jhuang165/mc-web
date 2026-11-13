@@ -1590,7 +1590,7 @@ export class EntityWorld {
       this.emitLoot({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } }); // onDeathUpdate spawns the orbs before setDead splits a slime
     }
     if (isSlimeLike(e)) this.splitSlime(e, rand);
-    burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand); // draws g g g f f f x 20 on Entity.rand even without a client (onDeathUpdate's spawnParticle arguments)
+    burst(this.tracker?.clientIfTracked?.(e) ? null : this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand); // the visible poof is the client copy's (death-fx.js); the server side only draws // draws g g g f f f x 20 on Entity.rand even without a client (onDeathUpdate's spawnParticle arguments)
   }
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
@@ -2213,7 +2213,7 @@ export class EntityWorld {
     joint?.after?.(); this.jointRan = !!joint;
     // What the client copies did: the dragon's wing flap sound and its death puffs (the server's own particle accessor is a no-op)
     for (const x of this.tracker.takeFx()) {
-      if (x.particle) this.fx?.spawn(x.particle, x.x, x.y, x.z, 0, 0, 0);
+      if (x.particle) this.fx?.spawn(x.particle, x.x, x.y, x.z, x.vx ?? 0, x.vy ?? 0, x.vz ?? 0);
       else if (x.sound && !x.silent) this.clientSounds.push({ sound: x.sound, volume: x.volume, pitch: x.pitch, position: { x: x.x, y: x.y, z: x.z }, clientOnly: true });
     }
     // World.tick: villageCollectionObj.tick() before the entities.
