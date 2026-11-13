@@ -30,7 +30,7 @@ test('chest and hopper carts are placeable and dispensable', () => {
   const c = sv.spawnVehicle('chest_minecart', 65.5, 10, 70.5), h = sv.spawnVehicle('hopper_minecart', 66.5, 10, 70.5);
   assert.equal(c.type, 1); assert.equal(h.type, 5);
   assert.ok(s.dispense.vehicles.dispenseCart(1, 67.5, 10, 70.5) && s.dispense.vehicles.dispenseCart(5, 68.5, 10, 70.5));
-  const p = join(s, 'a', 1, 64.5, 70.5); p.survival.inventory.add(makeStack(ITEM_HOPPER_CART, 1)); p.yaw = 0; p.pitch = -1.5;
+  const p = join(s, 'a', 1, 64.5, 70.5); p.survival.inventory.main[p.survival.inventory.current] = makeStack(ITEM_HOPPER_CART, 1); p.yaw = 0; p.pitch = -1.5; // b62 lead: Creative keeps its starter hotbar now that the input mirror is retired (mpsmall2), so seed the held slot
   const n = sv.carts.carts.length; s.edit(p, true);
   assert.equal(sv.carts.carts.length, n + 1);
   assert.equal(sv.carts.carts.at(-1).type, 5);
