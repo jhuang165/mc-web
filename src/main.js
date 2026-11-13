@@ -1743,6 +1743,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     world.ocelotOnChest = (x, y, z) => mobs.ocelotSitsOn(x, y, z);
     // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
     mobs.wet = (e, height) => isWet(weather, world, e, height);
+    mobs.clientBoatBoxes = () => objectTracker.vehicleTargets().filter((t) => t.kind === "boat").map((t) => t.box); // b63: the boat copies' boxes for an enderman copy's teleport destination (copy-teleport.js)
     // World.isDaytime (skylightSubtracted < 4) and Chunk.canBlockSeeTheSky for the skeleton's
     // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
     mobs.isDaytime = () => !world.dimension && (scene.subtracted ?? 0) < 4;

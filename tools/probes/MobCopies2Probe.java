@@ -86,6 +86,22 @@ public class MobCopies2Probe {
       }
       MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
     }
+    { // b63 mobcopies3: ya.e `if (isWet() || isBurning())` on the copy. Entity.isBurning (sa.al) is `!immune && (fire > 0 || (isRemote && getFlag(0)))`: the client copy's burning is watcher 0 bit 0.
+      // burntp: a DRY enderman copy with watcher 0 = 1 on the watertp floor (only the burning branch can teleport it); 3 seeds, 100 ticks.
+      MobMoveProbe.ProbeWorld.exact = true; MobMoveProbe.step = 2;
+      for (long sd = 6700; sd < 6703; sd++) {
+        sv e = make("Enderman", sd, 10.5, 8.0, -5.5, false);
+        watch(e, 0, (byte) 1);
+        HorseProbe.out(head("burntp", "Enderman", sd, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 100, true) + "}");
+      }
+      MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
+      // wetscream: the wet branch also runs setScreaming(false) (watcher 18 = 0) before the `isScreaming && !isAggressive && nextInt(100) == 0` roll, so a screaming wet copy draws no nextInt(100) at all.
+      for (long sd = 6800; sd < 6803; sd++) {
+        sv e = make("Enderman", sd, 10.5, 8.0, -5.5, true);
+        watch(e, 18, (byte) 1);
+        HorseProbe.out(head("wetscream", "Enderman", sd, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 60, true) + "}");
+      }
+    }
     { // wither: spawn charge and armour
       long[] seeds = { 6201, 6202, 6203 }; int[] invul = { 100, 0, 100 }; float[] health = { 300f, 100f, 100f };
       for (int k = 0; k < 3; k++) {

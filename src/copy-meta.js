@@ -4,6 +4,8 @@
 //  - screaming (watcher 18, enderman): EntityEnderman.onLivingUpdate's `isScreaming && !isAggressive && nextInt(100) == 0` on the copy clears the copy's own flag; the server's
 //    flag is untouched and not resent, so the copy follows the packets, not the live flag (executed: MobCopies2Probe `scream`: nextInt(100) each tick until a hit, then none).
 //  - invul (watcher 20) and health (watcher 6), wither: the spawn charge's three "mobSpell" per tick and the armour's world-Random roll (xc.e, executed `wither`).
+//  - burning (watcher 0 bit 0, every mob; batch 63): Entity.isBurning on a client is `!isImmuneToFire && getFlag(0)` (the copy's own `fire` is zeroed every update). Only the enderman's
+//    `isWet() || isBurning()` teleport reads it (copy-teleport.js); the flames still draw from the live mob.
 //  - potion (watcher 7, the colour of the active effects, 0 = none) and invisible (watcher 0 bit 5): EntityLivingBase.updatePotionEffects' swirl draws on both sides (executed
 //    `potion`: nextBoolean, nextInt(5) when ambient or nextInt(15) when invisible, then three nextDouble on a hit; they follow the air and precede the living roll).
 // All draws only: the positions of the copy's particles are not made (the live path shows the visible ones).
@@ -21,6 +23,7 @@ export const clientWorldRandom = () => (clientWorld.rand ??= new JavaRandom(BigI
 export function copyMetaOf(e) {
   if (typeof e.health !== "number" || !e.type) return null;
   const m = { potion: e.effects?.length ? potionColor(e.effects) : 0, invisible: e.effects?.length ? isInvisible(e) : false };
+  m.burning = e.fire > 0; // batch 63: Entity.onEntityUpdate `setFlag(0, fire > 0)` on the server (bytecode-read); the copy reads it through isBurning (`isRemote && getFlag(0)`)
   if (e.type !== "squid") m.air = e.air ?? 300;
   if (e.type === "enderman") m.screaming = !!e.screaming;
   if (e.type === "wither") { m.invul = e.invul ?? 0; m.health = e.health; }
@@ -39,6 +42,7 @@ export function applyCopyMeta(c, p) {
   if (p.screaming !== undefined) c.screaming = !!p.screaming;
   if (p.invul !== undefined) c.invul = p.invul;
   if (p.potion !== undefined) c.potion = p.potion;
+  if (p.burning !== undefined) c.burning = !!p.burning;
   if (p.invisible !== undefined) c.invisible = !!p.invisible;
   if (p.ambient !== undefined) c.potionAmbient = !!p.ambient;
 }
