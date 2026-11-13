@@ -123,7 +123,7 @@ test("b55: the column mesh built from the predicted view equals the mesh of the 
 test("b55: main.js wiring, as written (the bytecode order: effects and overlay at once, server half in the queue)", () => {
   assert.match(main, /function predictBreak\(p\)/);
   assert.match(main, /const predicted = predictBreak\(p\);\n\s+pendingEdits\.push\(\{ fn: \(\) => \{\n\s+endPrediction\(predicted\);\n\s+muteBreakFx = !!predicted;/, "a queued break ends its overlay, then runs without its effects");
-  assert.match(main, /predicted: place && \(target \|\| tracedBucket\(heldId\(\)\)\) \? predictPlace\(\) : null/); // b57: a bucket click with only water in reach is predicted too
+  assert.match(main, /predicted: place && \(target \|\| tracedBucket\(heldId\(\)\) \|\| isThrowable\(heldId\(\)\) \|\| heldId\(\) === ITEM_EXP_BOTTLE\) \? predictPlace\(\) : null/); // b57: a bucket click with only water in reach is predicted too
   assert.match(main, /endPrediction\(q\.predicted\); mutePlaceSound = !!q\.predicted\?\.soundDone;/);
   assert.match(main, /target = raycast\(\n\s+clientWorld\(\),/, "the aim ray reads the client world");
   assert.match(main, /const state = \{ world: clientWorld\(\), position, previous/, "the client player's collision reads the client world");

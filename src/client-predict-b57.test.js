@@ -66,7 +66,7 @@ test("b57: bucket clicks reach the prediction with no block under the cursor (wa
   const chest = { block: [8, 34, 8], adjacent: [8, 35, 8] };
   assert.equal(useKind({ world: w, target: chest, heldId: 340, sneaking: false, aimed: false }), null);
   assert.equal(useKind({ world: w, target: chest, heldId: 340, sneaking: true, aimed: false }), "bucket", "sneaking skips the block's use");
-  assert.match(main, /dryBucket\(\{ world: seen, heldId: held \}, eyeRay\.origin, eyeRay\.dir\)/);
+  assert.match(main, /dryBucketUse\(\{ world: seen, heldId: held \}, eyeRay\.origin, eyeRay\.dir\)/);
   assert.match(main, /if \(place && \(target \|\| tracedBucket\(heldId\(\)\)\)\) return true;/, "a bucket click waits for the network tick like C08");
 });
 
@@ -103,7 +103,7 @@ test("b57: the click-time sounds: door, trapdoor and gate play aux effect 1003, 
   assert.equal(activateSound(97, () => 0.7).event, "random.door_close");
   assert.equal(activateSound(97, () => 0.2).volume, 1);
   for (const id of [fromOriginal(96, 0).id, fromOriginal(107, 0).id]) assert.ok(activateSound(id, () => 0.3).event.startsWith("random.door_"), `block ${id}`);
-  assert.deepEqual(activateSound(111), { event: "random.click", volume: 0.3, pitch: 0.6 });
+  assert.equal(activateSound(111), null, "b58 probe: a button's own click is silent on the client, the server's S29 plays it once");
   assert.equal(activateSound(112), null, "the repeater is silent");
   assert.equal(activateSound(108), null);
   assert.match(main, /const s = cells\.length \? activateSound\(seen\.get\(\.\.\.target\.block\)\) : null;/);

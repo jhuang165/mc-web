@@ -7,7 +7,7 @@
 // answers get/getMeta from the overlay; every mutator goes to the real world. An entry ends when its queued task starts (the server's own
 // change, or its refusal, then lands in the real world and the cell is rebuilt, which is the S23).
 import { collides, isLiquid, BED, TORCH, REDSTONE_TORCH, REDSTONE_TORCH_OFF, LADDER, SNOW_LAYER, REEDS, CACTUS, DOUBLE_PLANT, SAPLING, TALL_GRASS, FERN, PISTON_HEAD,
-  REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, LIGHT_PLATE, HEAVY_PLATE, isFlower } from './world.js';
+  REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, LIGHT_PLATE, HEAVY_PLATE, isFlower } from './world.js';
 import { ITEMS } from './survival.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable, doorSound } from './doors-panes.js';
@@ -98,7 +98,7 @@ export function dryPlace(state, request, hooks = {}) {
 // BlockX.onNeighborBlockChange on the CLIENT world for the cell (x, y, z), as the probe measured it (client-predict-reference.json, executed on the
 // native classes with isRemote set): blocks that lose their support or their other half set themselves to air. BlockRedstoneWire, BlockRailBase,
 // BlockTrapDoor and BlockBed's support check return early on the client (isRemote), falling blocks only schedule a tick: nothing for those.
-const REDSTONE_PARTS = new Set([REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, LIGHT_PLATE, HEAVY_PLATE]);
+const REDSTONE_PARTS = new Set([REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, LIGHT_PLATE, HEAVY_PLATE]);
 export function clientNeighbourChange(w, x, y, z) {
   const b = w.get(x, y, z);
   if (!b) return;
@@ -156,16 +156,20 @@ export function dryActivate(state, target) {
   if (isDoor(b)) activateDoor(scratch, x, y, z);
   else if (b === TRAPDOOR) scratch.put(x, y, z, b, world.getMeta(x, y, z) ^ 4);
   else if (b === FENCE_GATE) scratch.put(x, y, z, b, gateUseMeta(world.getMeta(x, y, z), Math.fround(180 - (state.yaw * 180) / Math.PI)));
-  else if (b === STONE_BUTTON) { const m = world.getMeta(x, y, z); if (!(m & 8)) scratch.put(x, y, z, b, m | 8); } // BlockButton.onBlockActivated has no isRemote guard: the pressed bit (probe: 77 meta 1 -> 9)
+  else if (b === STONE_BUTTON || b === WOODEN_BUTTON) { const m = world.getMeta(x, y, z); if (!(m & 8)) scratch.put(x, y, z, b, m | 8); } // BlockButton.onBlockActivated has no isRemote guard: the pressed bit (probe: 77 and 143 meta 1 -> 9)
+  else if (b === COMPARATOR || b === COMPARATOR_POWERED) { // BlockRedstoneComparator.onBlockActivated on the client (probe 149 / 150, 12 records): subtract mode (bit 4) set -> the mode and the lit bit clear (m4, m5, m12 -> m & 3); else 149 sets bit 4 (m0 -> 4, m8 -> 12) and 150 sets bits 4 and 8 (m0, m8 -> 12)
+    const m = world.getMeta(x, y, z);
+    scratch.put(x, y, z, b, m & 4 ? m & 3 : m | (b === COMPARATOR ? 4 : 12));
+  }
   else if (b === REPEATER) scratch.put(x, y, z, b, (world.getMeta(x, y, z) + 4) & 15); // BlockRedstoneRepeater: the delay steps by 4 and wraps at 16 (probe: 0->4 ... 12->0)
   else return null;
   return [...writes.values()];
 }
 // The sound the client plays at once for an activation (BlockDoor / BlockTrapDoor / BlockFenceGate: aux effect 1003, which the server sends to every player
-// but the clicker; BlockButton: playSoundEffect random.click 0.3 / 0.6, bytecode-read), or null. `random` is Math.random for the open/close pick.
+// but the clicker), or null. A button or comparator click is NOT heard at the click: the client's own playSoundEffect is silent (RenderGlobal.playSound is empty,
+// bytecode-read) and the sound comes once, from the server's S29 (client-predict-reference.json 'soundchain'). `random` is Math.random for the open/close pick.
 export function activateSound(block, random = Math.random) {
   if (isDoor(block) || block === TRAPDOOR || block === FENCE_GATE) return doorSound(random);
-  if (block === STONE_BUTTON) return { event: 'random.click', volume: 0.3, pitch: 0.6 };
   return null;
 }
 // ItemBucket.onItemRightClick on the client world (executed, client-predict-reference.json 'bucket' records): Item.getMovingObjectPositionFromPlayer traces 5.0
@@ -173,16 +177,53 @@ export function activateSound(block, random = Math.random) {
 // sets its liquid beside the traced face (the Nether refuses water). The swapped bucket in the hand is the inventory's business and is not drawn here.
 const SIDE_STEP = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
 export const tracedBucket = (id) => { const k = id ? ITEMS[id]?.bucket : null; return k === 'empty' || k === 'filled' ? k : null; };
-export function dryBucket(state, eye, dir) {
-  const { world } = state, kind = tracedBucket(state.heldId);
-  if (!kind || !eye || !dir) return [];
+// `dryBucketUse` is the whole client half: the cells, the Nether's fizz cell (the water is not placed there; the client shows its smoke at the click, the fizz sound
+// comes from the server's S29) and `took`, the liquid block an empty bucket removed.
+export function dryBucketUse(state, eye, dir) {
+  const { world } = state, kind = tracedBucket(state.heldId), out = { cells: [], fizz: null, took: 0, used: false };
+  if (!kind || !eye || !dir) return out;
   const hit = traceBucket(world, eye, dir, kind === 'empty');
-  if (!hit) return [];
+  if (!hit) return out;
   const [x, y, z] = hit.block;
-  if (kind === 'empty') return isLiquid(world.get(x, y, z)) && world.getMeta(x, y, z) === 0 ? [{ x, y, z, block: 0, meta: 0 }] : [];
+  if (kind === 'empty') {
+    if (isLiquid(world.get(x, y, z)) && world.getMeta(x, y, z) === 0) { out.cells = [{ x, y, z, block: 0, meta: 0 }]; out.took = world.get(x, y, z); out.used = true; }
+    return out;
+  }
   const { scratch, writes } = scratchWorld(world), [dx, dy, dz] = SIDE_STEP[hit.side];
-  if (!placeContainedLiquid(scratch, x + dx, y + dy, z + dz, ITEMS[state.heldId].contains, null)) return [];
-  return [...writes.values()].filter((c) => c.block !== world.get(c.x, c.y, c.z) || c.meta !== world.getMeta(c.x, c.y, c.z));
+  scratch.evaporated = (ex, ey, ez) => { out.fizz = [ex, ey, ez]; }; // recorded, never the real world's effect
+  out.used = placeContainedLiquid(scratch, x + dx, y + dy, z + dz, ITEMS[state.heldId].contains, null);
+  out.cells = out.used ? [...writes.values()].filter((c) => c.block !== world.get(c.x, c.y, c.z) || c.meta !== world.getMeta(c.x, c.y, c.z)) : [];
+  return out;
+}
+export const dryBucket = (state, eye, dir) => dryBucketUse(state, eye, dir).cells;
+
+// The client's own change of the held stack (probe: client-predict-reference.json 'use', 'bucket' and 'throw' records): ItemBlock.onItemUse, ItemReed, ItemSeeds and
+// ItemSnowball.onItemRightClick take one from the stack on the client too; a Creative controller restores it. An empty bucket that took a liquid becomes that liquid's
+// bucket when it was the only one in the stack; a full bucket that placed (or fizzed in the Nether) becomes an empty bucket. Returns { dCount, swap } or null.
+const EMPTY_BUCKET = 340;
+export const filledBucketOf = (block) => Object.values(ITEMS).find((i) => i?.bucket === 'filled' && i.contains === block)?.id ?? 0;
+export function heldPlan({ kind, stack, creative, placed = false, took = 0 }) {
+  if (!stack || creative || !(stack.count > 0)) return null;
+  if (kind === 'place' || kind === 'use' || kind === 'throw') return kind === 'throw' || placed ? { dCount: -1 } : null;
+  if (kind !== 'bucket') return null;
+  const k = tracedBucket(stack.id);
+  if (k === 'empty') { const to = took && stack.count === 1 ? filledBucketOf(took) : 0; return to ? { dCount: 0, swap: [stack.id, to] } : null; }
+  return k === 'filled' && placed ? { dCount: 0, swap: [stack.id, EMPTY_BUCKET] } : null;
+}
+// Applies a plan to the real stack object (in place, so every reader of the hotbar sees it) and returns the undo. The undo is relative (a later queued click's
+// own change stays), and a stack that dropped to nothing leaves its slot at once and is put back by the undo.
+export function applyHeldPlan(inventory, plan) {
+  const stack = inventory.held, slot = inventory.current;
+  if (!plan || !stack) return null;
+  const was = stack.id;
+  stack.count += plan.dCount;
+  if (plan.swap) stack.id = plan.swap[1];
+  if (stack.count <= 0) inventory.main[slot] = null;
+  return () => {
+    stack.count -= plan.dCount;
+    if (plan.swap && stack.id === plan.swap[1]) stack.id = was;
+    if (stack.count > 0 && inventory.main[slot] === null) inventory.main[slot] = stack;
+  };
 }
 
 // Item.onItemUse for the items placeHeldBlock does not handle (ItemCake via ItemReed, ItemSeeds, nether wart): the one cell they write.
@@ -219,7 +260,7 @@ export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
 export function useKind({ world, target, heldId, heldDamage = 0, sneaking, aimed }) {
   if (aimed) return null;
   const item = heldId ? ITEMS[heldId] : null, b = target ? world.get(...target.block) : 0;
-  if (target && (!sneaking || !item) && (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE || b === STONE_BUTTON || b === REPEATER)) return 'activate';
+  if (target && (!sneaking || !item) && (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE || b === STONE_BUTTON || b === WOODEN_BUTTON || b === REPEATER || b === COMPARATOR || b === COMPARATOR_POWERED)) return 'activate';
   if (tracedBucket(heldId)) return !target || sneaking || !activatesOnClick(b) ? 'bucket' : null; // the trace needs no block under the cursor (water)
   if (!target) return null;
   if (predictsPlacement({ world, target, heldId, sneaking, aimed }) || (PLACED_ITEMS.has(heldId) && (sneaking || !activatesOnClick(b)))) return 'place';

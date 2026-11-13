@@ -18,9 +18,14 @@ public class ClientPredictProbe {
     public int j(int x, int y, int z) { return 15; }
     public int k(int x, int y, int z) { return 15; }
     public boolean i(int x, int y, int z) { return true; }
-    public aor o(int x, int y, int z) { return null; }
     public void p(int x, int y, int z) {}
     public void g(int x, int y, int z) {}
+    Map<String, aor> tiles = new HashMap<>();
+    public aor o(int x, int y, int z) { return tiles.get(x + "," + y + "," + z); }
+    // World.playSoundEffect on this world: the sound with its volume and pitch (what the client plays at once)
+    public void a(double x, double y, double z, String s, float v, float p) { log.add("sound " + s + " " + v + " " + p); }
+    // World.spawnParticle: the particle name and the cell its position falls in (the fraction is Math.random, so only the cell is recorded)
+    public void a(String s, double x, double y, double z, double a, double b, double c) { log.add("particle " + s + " " + (int) Math.floor(x) + " " + (int) Math.floor(y) + " " + (int) Math.floor(z)); }
   }
 
   static CW world(int[][] setup) throws Exception {
@@ -33,6 +38,7 @@ public class ClientPredictProbe {
     MobMoveProbe.field(ahb.class, "E").setBoolean(w, true); // isRemote: the client world
     MobMoveProbe.set(w, "v", BedProbe.chunkProvider()); // a chunk provider that reports every chunk loaded (BlockTorch's support check asks)
     MobMoveProbe.set(w, "u", new ArrayList<Object>()); // World.worldAccesses: no listeners (the fizz sound and smoke of a Nether water bucket loop over it)
+    w.tiles = new HashMap<>();
     w.cells = new HashMap<>();
     w.spawned = new ArrayList<>();
     w.scheduled = new ArrayList<>();
@@ -108,14 +114,52 @@ public class ClientPredictProbe {
   }
 
   static void activating(String name, int[][] setup, int px, int py, int pz) throws Exception {
+    activatingX(name, setup, px, py, pz, new Object[0][], 0, 0, 0, false);
+  }
+
+  static String logJson(CW w) {
+    List<String> l = new ArrayList<>();
+    for (String e : w.log) if (e.startsWith("sound") || e.startsWith("aux") || e.startsWith("particle")) l.add(q(e));
+    return "[" + String.join(",", l) + "]";
+  }
+
+  // Block.onBlockActivated on the client world with optional tile entities ({x, y, z, Class}) and a held stack (item 0: empty hand).
+  // The record has the cells that differ, the sounds and aux effects the call logged (with volume and pitch) and the held stack afterwards.
+  static void activatingX(String name, int[][] setup, int px, int py, int pz, Object[][] tiles, int item, int damage, int count, boolean creative) throws Exception {
     CW w = world(setup);
+    for (Object[] t : tiles) w.tiles.put(t[0] + "," + t[1] + "," + t[2], (aor) PlantProbe.unsafe.allocateInstance((Class<?>) t[3]));
     Map<String, int[]> before = snapshot(w);
+    yx inv = ((yz) DoorPaneProbe.player).bm;
+    inv.a[inv.c] = item > 0 ? new add(adb.d(item), count, damage) : null;
+    MobMoveProbe.field(yw.class, "d").setBoolean(((yz) DoorPaneProbe.player).bE, creative);
     String err = "null", res = "null";
     try {
       aji b = w.a(px, py, pz);
       res = String.valueOf(b.a(w, px, py, pz, (yz) DoorPaneProbe.player, 1, 0.5f, 0.5f, 0.5f));
     } catch (Throwable t) { err = q(t.toString()); }
-    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+    add held = inv.a[inv.c];
+    String heldJson = held == null ? "[0,0]" : "[" + adb.b(held.b()) + "," + held.b + "]";
+    inv.a[inv.c] = null;
+    MobMoveProbe.field(yw.class, "d").setBoolean(((yz) DoorPaneProbe.player).bE, false);
+    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + ",\"held\":" + heldJson + "}");
+  }
+
+  // EntityPlayerSP.a(aor) after BlockCommandBlock.onBlockActivated: the command block's tile entity opens its screen on the client at once (no isRemote guard).
+  // The probe has no Minecraft instance or LWJGL, so an error raised below the EntityPlayerSP.a frame (loading or building the screen) is the proof that the call got there.
+  static void commandBlock(String name, boolean withTile) throws Exception {
+    CW w = world(s(c(8, 64, 8, 137, 0)));
+    if (withTile) w.tiles.put("8,64,8", (aor) PlantProbe.unsafe.allocateInstance(aox.class));
+    String res = "null", reached = "false", err = "null";
+    try {
+      res = String.valueOf(w.a(8, 64, 8).a(w, 8, 64, 8, (yz) DoorPaneProbe.player, 1, 0.5f, 0.5f, 0.5f));
+    } catch (Throwable t) {
+      // the screen's classes need LWJGL and netty, which the probe does not have: the error is raised below the EntityPlayerSP.a frame
+      boolean in = false;
+      for (StackTraceElement f : t.getStackTrace()) if (f.getClassName().equals("blk") && f.getMethodName().equals("a")) in = true;
+      reached = String.valueOf(in);
+      if (!reached.equals("true")) err = q(t.toString());
+    }
+    line("{\"case\":\"commandblock\",\"name\":" + q(name) + ",\"tile\":" + withTile + ",\"result\":" + res + ",\"openedScreen\":" + reached + ",\"error\":" + err + "}");
   }
 
   // ItemBucket.onItemRightClick (abo.a(add, ahb, yz), class abo) on the client world: Item.getMovingObjectPositionFromPlayer traces 5.0 blocks from the
@@ -123,6 +167,10 @@ public class ClientPredictProbe {
   // `eye` is the eye position, the player's feet are set 1.62 below it. pitch 90 looks straight down, yaw 0 looks along +z. `hell` sets
   // WorldProvider.isHellWorld (aqo.f), `creative` the capabilities flag. The result is the returned stack (item id, count) and the diff.
   static void bucket(String name, int item, int[][] setup, double ex, double ey, double ez, float pitch, float yaw, boolean hell, boolean creative) throws Exception {
+    bucketN(name, item, 1, setup, ex, ey, ez, pitch, yaw, hell, creative);
+  }
+
+  static void bucketN(String name, int item, int count, int[][] setup, double ex, double ey, double ez, float pitch, float yaw, boolean hell, boolean creative) throws Exception {
     CW w = world(setup);
     Map<String, int[]> before = snapshot(w);
     Object p = DoorPaneProbe.player;
@@ -141,16 +189,24 @@ public class ClientPredictProbe {
     int rid = -1, rcount = -1;
     try {
       adb it = adb.d(item);
-      add st = new add(it, 1, 0);
+      add st = new add(it, count, 0);
+      yx inv = ((yz) p).bm;
+      inv.a[inv.c] = st;
       add r = it.a(st, w, (yz) p);
       rid = adb.b(r.b()); rcount = r.b;
+      // PlayerControllerMP.sendUseItem (bytecode-read): a returned stack that is another object or has another size replaces the held slot (null at 0)
+      if (r != st || r.b != count) { inv.a[inv.c] = r.b == 0 ? null : r; }
     } catch (Throwable t) { err = q(t.toString()); }
+    List<String> invList = new ArrayList<>();
+    yx inv2 = ((yz) p).bm;
+    for (int i = 0; i < inv2.a.length; i++) if (inv2.a[i] != null) invList.add("[" + i + "," + adb.b(inv2.a[i].b()) + "," + inv2.a[i].b + "]");
+    java.util.Arrays.fill(inv2.a, null);
     MobMoveProbe.field(aqo.class, "f").setBoolean(provider, false);
     MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, false);
     MobMoveProbe.field(sa.class, "z").setFloat(p, 0f);
     MobMoveProbe.field(sa.class, "B").setFloat(p, 0f);
     MobMoveProbe.set(p, "s", X + 0.5); MobMoveProbe.set(p, "t", (double) Y); MobMoveProbe.set(p, "u", Z - 1.5);
-    line("{\"case\":\"bucket\",\"name\":" + q(name) + ",\"item\":" + item + ",\"eye\":[" + ex + "," + ey + "," + ez + "],\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"hell\":" + hell + ",\"creative\":" + creative + ",\"setup\":" + setupJson(setup) + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+    line("{\"case\":\"bucket\",\"name\":" + q(name) + ",\"item\":" + item + ",\"eye\":[" + ex + "," + ey + "," + ez + "],\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"hell\":" + hell + ",\"creative\":" + creative + ",\"count\":" + count + ",\"setup\":" + setupJson(setup) + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"inventory\":[" + String.join(",", invList) + "],\"log\":" + logJson(w) + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
   }
 
   static void buckets() throws Exception {
@@ -163,6 +219,11 @@ public class ClientPredictProbe {
     bucket("empty-reach-4.9", 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 69.9, 8.5, 90f, 0f, false, false);
     bucket("empty-reach-5.1", 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 70.1, 8.5, 90f, 0f, false, false);
     bucket("empty-side", 325, s(c(8, 64, 8, 9, 0)), 8.5, 64.5, 6.0, 0f, 0f, false, false);
+    // stacks: a lone bucket is replaced, a stack gives one and adds the filled bucket to the first free slot (ItemBucket.func_150910_a)
+    bucketN("empty-stack2-water", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    bucketN("empty-stack16-lava", 325, 16, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 11, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    bucketN("empty-stack2-creative", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, true);
+    bucketN("empty-stack2-miss", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
     // filled water (326) and lava (327): the cell beside the traced face, liquids and boxless blocks skipped by the trace
     for (int item : new int[] {326, 327}) {
       bucket("full" + item + "-top", item, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
@@ -173,6 +234,7 @@ public class ClientPredictProbe {
       bucket("full" + item + "-grass-replaced", item, s(c(8, 64, 8, 1, 0), c(8, 65, 8, 31, 1)), 8.5, 67.0, 8.5, 90f, 0f, false, false);
       bucket("full" + item + "-into-flowing", item, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 8, 3)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
       bucket("full" + item + "-into-source", item, s(c(8, 63, 8, 1, 0), c(8, 64, 8, item == 326 ? 9 : 11, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+      bucketN("full" + item + "-nether-water-x", item, 1, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, true, true);
       bucket("full" + item + "-nether", item, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, true, false);
       bucket("full" + item + "-reach-4.9", item, s(c(8, 64, 8, 1, 0)), 8.5, 69.9, 8.5, 90f, 0f, false, false);
       bucket("full" + item + "-reach-5.1", item, s(c(8, 64, 8, 1, 0)), 8.5, 70.1, 8.5, 90f, 0f, false, false);
@@ -299,6 +361,146 @@ public class ClientPredictProbe {
     activating("note", s(c(8, 64, 8, 25, 0)), 8, 64, 8);
     activating("anvil", s(c(8, 64, 8, 145, 0)), 8, 64, 8);
     activating("fence", s(c(8, 64, 8, 85, 0)), 8, 64, 8);
+    // BlockRedstoneComparator.onBlockActivated has no isRemote guard: the mode bit (4) toggles and random.click plays (0.3, pitch 0.55 into subtract else 0.5)
+    Object[] cmp = {8, 64, 8, aoz.class};
+    for (int m : new int[] {0, 1, 2, 3, 4, 5, 8, 12}) activatingX("comparator149-m" + m, s(c(8, 64, 8, 149, m)), 8, 64, 8, new Object[][] {cmp}, 0, 0, 0, false);
+    for (int m : new int[] {0, 4, 8, 12}) activatingX("comparator150-m" + m, s(c(8, 64, 8, 150, m)), 8, 64, 8, new Object[][] {cmp}, 0, 0, 0, false);
+    // the screens of tile entities open from the server's packet: every guard `if (world.isRemote) return true` leaves the client world untouched
+    int[][] stations = {{54, 0}, {146, 0}, {130, 0}, {61, 2}, {62, 2}, {23, 0}, {158, 0}, {154, 0}, {117, 0}, {116, 0}, {138, 0}, {58, 0}, {118, 0}, {118, 3}, {151, 0}, {122, 0}};
+    for (int[] t : stations) activating("station" + t[0] + "-m" + t[1], s(c(8, 64, 8, t[0], t[1])), 8, 64, 8);
+    activating("jukebox-empty", s(c(8, 64, 8, 84, 0)), 8, 64, 8);
+    activating("jukebox-disc", s(c(8, 64, 8, 84, 1)), 8, 64, 8);
+    activating("jukebox-disc-in-hand-absent", s(c(8, 64, 8, 25, 0)), 8, 64, 8);
+    commandBlock("commandblock-no-tile", false);
+    commandBlock("commandblock-tile", true);
+    // BlockFlowerPot.onBlockActivated has no isRemote guard either: a plant in the hand goes into the pot (damage -> metadata), one is taken outside Creative
+    Object[] pot = {8, 64, 8, apf.class};
+    for (int[] h : new int[][] {{38, 0, 1}, {37, 0, 2}, {6, 1, 1}, {6, 5, 1}, {81, 0, 1}, {39, 0, 1}, {40, 0, 3}, {31, 2, 1}, {32, 0, 1}, {1, 0, 1}, {6, 6, 1}})
+      activatingX("pot-hold" + h[0] + "-d" + h[1], s(c(8, 64, 8, 140, 0)), 8, 64, 8, new Object[][] {pot}, h[0], h[1], h[2], false);
+    activatingX("pot-hold38-creative", s(c(8, 64, 8, 140, 0)), 8, 64, 8, new Object[][] {pot}, 38, 0, 2, true);
+    activatingX("pot-empty-hand", s(c(8, 64, 8, 140, 0)), 8, 64, 8, new Object[][] {pot}, 0, 0, 0, false);
+    // the cauldron returns on the client, a button in the wooden family presses and clicks
+    activatingX("cauldron-water-bucket", s(c(8, 64, 8, 118, 0)), 8, 64, 8, new Object[0][], 326, 0, 1, false);
+  }
+
+  // Item.onItemRightClick on the client world (PlayerControllerMP.sendUseItem): what the thrown items do to the held stack before the server answers.
+  static void throwing(String name, int item, int damage, int count, boolean creative) throws Exception {
+    CW w = world(s());
+    Object p = DoorPaneProbe.player;
+    yx inv = ((yz) p).bm;
+    String err = "null";
+    int rid = -1, rcount = -1;
+    boolean same = false;
+    try {
+      adb it = adb.d(item);
+      add st = new add(it, count, damage);
+      inv.a[inv.c] = st;
+      MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, creative);
+      add r = it.a(st, w, (yz) p);
+      rid = adb.b(r.b()); rcount = r.b; same = r == st;
+    } catch (Throwable t) { err = q(t.toString()); }
+    MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, false);
+    inv.a[inv.c] = null;
+    line("{\"case\":\"throw\",\"name\":" + q(name) + ",\"item\":" + item + ",\"damage\":" + damage + ",\"count\":" + count + ",\"creative\":" + creative + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"sameStack\":" + same + ",\"spawned\":" + w.spawned.size() + ",\"log\":" + logJson(w) + ",\"error\":" + err + "}");
+  }
+
+  static void throwsAll() throws Exception {
+    for (int[] t : new int[][] {{332, 0}, {344, 0}, {368, 0}, {384, 0}, {373, 16384 + 16}}) {
+      throwing("throw" + t[0] + "-x5", t[0], t[1], 5, false);
+      throwing("throw" + t[0] + "-x1", t[0], t[1], 1, false);
+      throwing("throw" + t[0] + "-creative", t[0], t[1], 5, true);
+    }
+  }
+
+
+  // ---- the click sound reaching the clicker twice (World.playSoundEffect on the client world, then S29PacketSoundEffect from the server) ----
+  public static class Rec extends nh {
+    List<String> got = new ArrayList<>();
+    public Rec() { super(null, null, null); }
+    public void a(ft p) { got.add(p instanceof hc ? "S29 " + ((hc) p).c() + " " + ((hc) p).g() + " " + ((hc) p).h() : p.getClass().getName()); }
+  }
+
+  public static class Srv extends net.minecraft.server.MinecraftServer {
+    public Srv() { super(null, null); }
+    protected boolean e() { return false; }
+    public boolean h() { return false; }
+    public ahk i() { return null; }
+    public rd j() { return null; }
+    public boolean k() { return false; }
+    public int l() { return 0; }
+    public boolean m() { return false; }
+    public boolean X() { return false; }
+    public boolean ad() { return false; }
+    public String a(ahk g, boolean b) { return null; }
+  }
+
+  public static class Cfg extends oi { public Cfg() { super(null); } }
+
+  public static class Snd extends btp {
+    List<String> played = new ArrayList<>();
+    public Snd() { super(null, null); }
+    public void a(bst sound) { played.add("play " + sound.b().toString()); }
+  }
+
+  static mw serverPlayer(double x, double z, int dimension, Rec rec) throws Exception {
+    mw m = (mw) PlantProbe.unsafe.allocateInstance(mw.class);
+    MobMoveProbe.set(m, "s", x); MobMoveProbe.set(m, "t", 64.0); MobMoveProbe.set(m, "u", z);
+    MobMoveProbe.field(mw.class, "ap").setInt(m, dimension);
+    MobMoveProbe.set(m, "a", rec);
+    return m;
+  }
+
+  // WorldManager (mp, the server world's IWorldAccess) turns World.playSoundEffect into oi.sendToAllNear(null, ...): every player of the dimension within 16 blocks
+  // gets the S29, the one who clicked included. The packet is then handed to the client's NetHandlerPlayClient.a(hc), which plays it on the client world.
+  static void soundChain() throws Exception {
+    sun.misc.Unsafe u = PlantProbe.unsafe;
+    String setupErr = "null";
+    try { soundChainRun(); } catch (Throwable t) { line("{\"case\":\"soundchain\",\"name\":\"failed\",\"error\":" + q(t.toString()) + "}"); }
+  }
+
+  static void soundChainRun() throws Exception {
+    sun.misc.Unsafe u = PlantProbe.unsafe;
+    Srv server = (Srv) u.allocateInstance(Srv.class);
+    oi cfg = (oi) u.allocateInstance(Cfg.class);
+    List<Object> players = new ArrayList<>();
+    MobMoveProbe.set(cfg, "e", players);
+    MobMoveProbe.set(server, "u", cfg);
+    mt serverWorld = (mt) u.allocateInstance(mt.class);
+    MobMoveProbe.set(serverWorld, "t", u.allocateInstance(aqq.class));
+    mp manager = new mp(server, serverWorld);
+    List<Object> accesses = new ArrayList<>();
+    accesses.add(manager);
+    MobMoveProbe.set(serverWorld, "u", accesses);
+    Rec clicker = (Rec) u.allocateInstance(Rec.class), near = (Rec) u.allocateInstance(Rec.class), far = (Rec) u.allocateInstance(Rec.class), nether = (Rec) u.allocateInstance(Rec.class);
+    for (Rec r : new Rec[] {clicker, near, far, nether}) r.got = new ArrayList<>();
+    players.add(serverPlayer(8.5, 6.5, 0, clicker)); players.add(serverPlayer(10.0, 8.0, 0, near)); players.add(serverPlayer(108.5, 6.5, 0, far)); players.add(serverPlayer(8.5, 6.5, -1, nether));
+    ((ahb) serverWorld).a(8.5, 64.5, 8.5, "random.click", 0.3f, 0.6f);
+    ((ahb) serverWorld).a(8.5, 64.5, 8.5, "random.fizz", 0.5f, 2.6f);
+    // the client half: NetHandlerPlayClient.a(hc) -> WorldClient.playSound(..., false) -> SoundHandler.playSound, for the clicker's packets
+    Snd handler = (Snd) u.allocateInstance(Snd.class);
+    handler.played = new ArrayList<>();
+    String clientErr = "null";
+    int playedBefore = 0;
+    try {
+      bao mc = (bao) u.allocateInstance(bao.class);
+      MobMoveProbe.set(mc, "aw", handler);
+      bjf cw = (bjf) u.allocateInstance(bjf.class);
+      MobMoveProbe.set(cw, "L", mc);
+      MobMoveProbe.set(mc, "f", cw);
+      MobMoveProbe.set(mc, "i", DoorPaneProbe.player);
+      bjb net = (bjb) u.allocateInstance(bjb.class);
+      MobMoveProbe.set(net, "f", mc);
+      for (Object o : clicker.got) { } // the packets themselves were kept as text: rebuild them from the same arguments the server sent
+      net.a(new hc("random.click", 8.5, 64.5, 8.5, 0.3f, 0.6f));
+      net.a(new hc("random.fizz", 8.5, 64.5, 8.5, 0.5f, 2.6f));
+    } catch (Throwable t) { Throwable c = t; while (c.getCause() != null) c = c.getCause(); clientErr = q(t + " / " + c + " at " + (c.getStackTrace().length > 0 ? c.getStackTrace()[0] : "")); }
+    line("{\"case\":\"soundchain\",\"name\":\"click-and-fizz-to-all-near\",\"clicker\":" + jsonList(clicker.got) + ",\"near\":" + jsonList(near.got) + ",\"far\":" + jsonList(far.got) + ",\"otherDimension\":" + jsonList(nether.got) + ",\"clientPlays\":" + jsonList(handler.played) + ",\"error\":" + clientErr + "}");
+  }
+
+  static String jsonList(List<String> l) {
+    List<String> o = new ArrayList<>();
+    for (String e : l) o.add(q(e));
+    return "[" + String.join(",", o) + "]";
   }
 
   public static void main(String[] args) throws Exception {
@@ -310,5 +512,7 @@ public class ClientPredictProbe {
     activates();
     buckets();
     serverUses();
+    throwsAll();
+    soundChain();
   }
 }
