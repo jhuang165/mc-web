@@ -101,6 +101,7 @@ export class DedicatedClient {
   pickup(ids, fit) { this.send({ type: 'pickup', ids, ...(fit ? { fit } : {}) }); }
   // C16 client status 0: perform respawn after a death.
   respawn() { this.send({ type: 'respawn' }); }
+  dropHeld(all) { this.send({ type: 'achDrop', all: !!all }); } // b60: EntityPlayer.dropOneItem happens on the server
   openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
   // C02 UseEntity, attack: the wire id of the mob (its S0F spawn); the server checks the reach and applies the held weapon's damage.
   attack(mob) { this.send({ type: 'attack', mob }); }

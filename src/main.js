@@ -3515,6 +3515,7 @@ const pickItem = (block, meta = 0) => block === 139 ? 1139 : block === 177 || bl
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
   if (!s) return;
+  if (multiplayer) { multiplayer.dropHeld(all); return; } // b60: the server drops it (thrower name) and corrects the slot
   throwStacks([inv.decr(inv.current, all ? s.count : 1)]);
   eating = null;
   renderHotbar();

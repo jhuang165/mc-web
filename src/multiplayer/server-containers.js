@@ -39,7 +39,7 @@ export class ServerContainers {
     if (!activates) return false;
     const key = `${x},${y},${z}`, s = p.survival, w = this.sim.world;
     let container, kind, title, extra = {};
-    if (block === FURNACE) { container = s.openFurnace(key, () => {}); kind = 'furnace'; title = 'Furnace'; }
+    if (block === FURNACE) { container = s.openFurnace(key, stack => this.sim.achievements.onSmelted(p, stack)); kind = 'furnace'; title = 'Furnace'; }
     else if (block === ENDER_CHEST) { container = s.openEnderChest(w, x, y, z); kind = 'chest'; title = 'Ender Chest'; extra = { ender: true }; if (!container) return true; }
     else if (isChestBlock(block)) { container = s.openChest(w, x, y, z); kind = 'chest'; if (!container) return true; title = container.title; }
     else if (block === DISPENSER || block === DROPPER) {

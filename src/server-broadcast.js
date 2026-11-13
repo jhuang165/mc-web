@@ -62,6 +62,7 @@ const grayItalic = (c) => { c.style.color = "gray"; c.style.italic = true; retur
 export class ServerSocial {
   constructor({ simulation, deliver, ops = new Set() }) {
     Object.assign(this, { simulation, deliver, ops: new Set([...ops].map((n) => n.toLowerCase())), achievements: new Map() });
+    if (simulation.achievements) simulation.achievements.sink = this; // b60: the biome and beacon observers read the per-player Achievements (server-achievements.js)
   }
   idOf(name) { for (const [id, p] of this.simulation.players) if (p.name.toLowerCase() === String(name).toLowerCase()) return id; return undefined; }
   isOp(name) { return this.ops.has(String(name).toLowerCase()); }
@@ -95,6 +96,7 @@ export class ServerSocial {
     const events = this.simulation.events?.splice(0) ?? [];
     for (const e of events) {
       if (e.type === "death") this.death(e.id, e.component);
+      else if (e.type === "award") this.award(e.id, e.achievement); // server-achievements.js: crafted, smelted, thrown diamonds, mob kills
       else if (e.type === "pickup") { const a = pickedAchievement(e.item); if (a) this.award(e.id, a); } // EntityItem.onCollideWithPlayer (xk.b_)
     }
     return events.length;
