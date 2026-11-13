@@ -1,4 +1,5 @@
 import { refreshResources, onResourcesRefreshed } from "./resource-refresh.js"; // first: registers every pack-dependent texture as it loads
+import { heldLightCell } from "./held-light.js";
 import { isStemCake, popDrops } from './stems-cake.js';
 import { maxHealthOf } from "./mob-riding.js";
 import { hasVoidParticles } from "./void-fog.js";
@@ -4287,7 +4288,7 @@ function animate(now) {
     firstPerson.render(animate.pose, {
       // EntityRenderer.renderHand: first person only, and never while the player is sleeping.
       visible: thirdPersonView === 0 && !bedSleep.sleeping && !hideGUI && ["playing", "inventory", "paused"].includes(screen),
-      light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
+      light: scene.brightness(...heldLightCell(position, PHYSICS.eye, motion.drop(1))), // ItemRenderer: the player's tick posX/Y/Z, not the interpolated camera (held-light.js)
       view: scene.camera,
       time: elapsed,
       eating: eating && !eating.bow && !eating.block ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
