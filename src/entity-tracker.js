@@ -463,6 +463,8 @@ export class PlayerWatch {
 // The tracker of an EntityWorld: one entry and one client entity per mob. update() is EntityTracker.updateTrackedEntities followed by
 // the client tick (packets in order, then the interpolation step); a mob's client position before the tick's packets are applied is
 // what its status sounds use (clientPosition).
+// b61: the tick count a trip of `ticks` is run as (same phase, see idleCatchUp)
+export const reduceIdleTicks = (ticks) => (ticks > 482400 ? 1200 + ((ticks - 1200) % 481200) : ticks);
 export class MobTracker {
   // `order`: the HashSet of tracked entries. Natively one EntityTracker holds every entity (mobs and objects alike) in one HashSet, so the mob tracker and the object tracker of
   // a world can be given the same JavaHashSetOrder (`shareOrder`); each walks only its own entries, in the relative order of the one set.
@@ -684,9 +686,9 @@ export class MobTracker {
   }
   // Batch 59: `ticks` idle ticks in a row for entities that were loaded the whole time (the Overworld's spawn area while the player was in the Nether or End, dimension-live.js `awayIdle`).
   // Entities freeze after 1200 ticks (mt.h); the tracker periods are 3, 4, 5, 10, 20 and the forced teleport every 401st update (a counter that resets after passing 400), with the tracker's own tick counter (mod 1200) all dividing 481200, so a trip past 6.7 hours runs 1200 + (ticks - 1200) % 481200 ticks, the same phase.
-  idleCatchUp(mobs, size, ticks, joint = null) { // batch 60: `joint` as in idleUpdate: the object entries run the same ticks (away-track.js)
-    const n = ticks > 482400 ? 1200 + ((ticks - 1200) % 481200) : ticks;
-    for (let i = 0; i < n; i++) this.idleUpdate(mobs, size, joint);
+  idleCatchUp(mobs, size, ticks, joint = null, per = null) { // batch 60: `joint` as in idleUpdate: the object entries run the same ticks (away-track.js)
+    const n = reduceIdleTicks(ticks);
+    for (let i = 0; i < n; i++) { const t = per?.(i); if (t) this.idleUpdate(t.mobs, size, t.joint ?? joint); else this.idleUpdate(mobs, size, joint); } // b61: `per(i)` -> { mobs, joint } puts the entities in the state they had on tick i (away-trace.js)
   }
   idOf(e) { const id = e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; }
   serverTick(mobs, player, size) {

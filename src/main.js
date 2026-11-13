@@ -281,7 +281,7 @@ import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
-import { orderGroups, stampSavedOrder, restoreSavedOrder } from "./saved-order.js";
+import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists } from "./saved-order.js";
 import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
@@ -478,7 +478,7 @@ function bindObjectTracker() {
     return out;
   };
   // Batch 47: what the tracker follows besides the lists trackObjects passes: the live boats and carts, paintings and item frames, and the leash knots (a summoned knot stands on its floored tile)
-  objectTracker.hooks.extraLists = () => ({ boat: (boats?.carts ?? []).filter((b) => !b.dead), minecart: (minecarts?.carts ?? []).filter((m) => !m.dead), painting: (hanging?.pickable() ?? []).filter((e) => e.kind === "painting"), itemFrame: (hanging?.pickable() ?? []).filter((e) => e.kind !== "painting"), leashKnot: (mobs?.knotList ?? []).filter((k) => !k.dead) });
+  objectTracker.hooks.extraLists = () => liveLists(mobs, { boat: (boats?.carts ?? []).filter((b) => !b.dead), minecart: (minecarts?.carts ?? []).filter((m) => !m.dead), painting: (hanging?.pickable() ?? []).filter((e) => e.kind === "painting"), itemFrame: (hanging?.pickable() ?? []).filter((e) => e.kind !== "painting"), leashKnot: (mobs?.knotList ?? []).filter((k) => !k.dead) }); // b61: frozen entities are in no tracker
   objectTracker.hooks.ignite = (ref, fire) => { if (ref?.present !== undefined && ref.type) ref.fire = fire; }; // a client mob copy's Entity.fire (zeroed at its next update, entity-tracker.js)
   objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;
@@ -3013,7 +3013,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const trackLists = () => {
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
-    return lists;
+    return liveLists(mobs, lists); // b61: entities of unloaded chunks are in no tracker
   };
   const afterTrack = () => {
     for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17

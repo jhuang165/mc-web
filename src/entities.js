@@ -2114,7 +2114,7 @@ export class EntityWorld {
     if (ids && (fresh || ids.playerId === undefined)) ids.playerId = ids.take();
     if (ids && this.tracker) this.tracker.joinPlayer(ids.playerId);
   }
-  idleTrack(ticks, keep, joint = null) { this.tracker ??= new MobTracker(this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks, joint); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
+  idleTrack(ticks, keep, joint = null, per = null) { this.tracker ??= new MobTracker(this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks, joint, per); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
   leaveWorld(others = []) { this.tracker?.leaveWorld(others); } // a dimension change: the player leaves this world's tracker (entity-tracker.js leaveWorld)
   takeId(e) { if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); }
   // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
@@ -2214,7 +2214,7 @@ export class EntityWorld {
     if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
-    this.tracker.update(this.entities, player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }), joint);
+    this.tracker.update(liveOrder(this, this.entities), player, (m) => this.size(m), this.clientPhysics ??= Object.assign((c, m) => this.moveClient(c, m), { turn: (c, m) => this.clientAfterMove(c, m), pre: (c, m) => this.clientEnvironment(c, m) }), joint);
     joint?.after?.(); this.jointRan = !!joint;
     // What the client copies did: the dragon's wing flap sound and its death puffs (the server's own particle accessor is a no-op)
     for (const x of this.tracker.takeFx()) {
@@ -2448,7 +2448,7 @@ export class EntityWorld {
     p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
-    for (const o of this.entities) {
+    for (const o of liveOrder(this, this.entities)) { // b61: frozen entities are in no chunk list
       if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
       }
@@ -2486,7 +2486,7 @@ export class EntityWorld {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
-    for (const o of this.entities)
+    for (const o of liveOrder(this, this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
