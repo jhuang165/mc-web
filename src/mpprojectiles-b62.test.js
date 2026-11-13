@@ -58,7 +58,9 @@ test("an arrow of a player credits the shooter: a skeleton killed from 60 blocks
 });
 
 test("a skeleton on the server shoots a player in sight with a real arrow", () => {
-  const s = fixture(), p = join(s, "a", 1, 64.5, 70.5);
+  const s = fixture();
+  for (let x = 14; x <= 110; x++) for (let z = 20; z <= 110; z++) s.world.put(x, 16, z, 1, 0, false); // b62 lead: a roof, so the skeleton does not burn in daylight, flee and lose its target (made the test flaky)
+  const p = join(s, "a", 1, 64.5, 70.5);
   const sk = s.mobs.mobs.create("skeleton", 64.5, 10, 62.5); s.mobs.mobs.entities.push(sk);
   const h = p.survival.health; let shot = 0;
   for (let i = 0; i < 200; i++) { s.tick(); p.dispOut = null; p.itemsOut = null; shot = Math.max(shot, s.dispense.arrows.list.length); if (p.survival.health < h) break; }
