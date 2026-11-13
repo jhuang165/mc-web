@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 60 (2026-11-13, ten Sonnet tracks in `../wt60-<name>` on `batch60-<name>` (mphealth on `worktree-agent-ab2fb7a15a815d946`), cut from 94684b989, merged --no-ff on `batch60-lead`; shared track rules `../artifacts/b60-lead/track-rules.md`; lead note `b60-lead-track.md`; no browser checks by request):
+- 0.89.0, by track:
+  - mphealth: `multiplayer/client-health.js` (hurt sound, tilt, heart blink from `healthHurt`), `remote-death.js` (other players' corpse tilt and poof); death drops and XP at tick 20 in `server-survival.js`; `healthEffect` / `healthEffectEnd`; milk clears effects on the server.
+  - mpinventory: `multiplayer/server-inventory.js` / `client-inventory.js` run window 0 on the server (`invClick`, `invAck`, `invClose`; `invItems`, `invSet`, `invConfirm`, `invBroke`); armour saved; partial pickup fly-in.
+  - mpstations: `multiplayer/server-stations.js`: workbench, enchanting table (`stationEnchant`) and anvil (`stationItemName`) windows.
+  - mpcontainers2: `multiplayer/server-container-ticks.js`: hoppers and dispensers on the server, `contFurnaceLit`, trapped chest power, `contChest` lids from chunk data, smelting XP.
+  - mpmobs2: mob S29 sounds, `mobStatus` 2/3/18, kill XP, knockback on the server player, one spawn pass over all players' chunks, shared velocity flags; destroys one tick later.
+  - mpcommands2: `multiplayer/server-achievements.js` (`onCrafted`, `onSmelted`, `onPotionTaken`, kills, biomes, beacon); item `thrower` and diamondsToYou; `achDrop` Q-drops.
+  - awaytracker: `away-track.js` catches up the spawn area's objects with the mobs after a trip.
+  - mobsounds: `copy-talk.js` living-sound roll and per-tick draws on every living copy (`mobsounds-reference.json`).
+  - savedorder8: chunk unload queue (after the spawner, 100 per call, cancel on return); unloaded chunks' entities stop ticking and rejoin in order (`saved-order8-reference.json`).
+  - smallchecks2: `client-comparator.js` wires the comparator toggle with powered inputs (402 records); the F3+H suffix not italic; Java 8 HashMap effect order (`effects.ordered()`).
+- Lead fixes in the merge commits: awaytracker's `awayIdle` was a `launch` local read in `tickSurvival` (a ReferenceError every tick in single player), now module scope; the 2x2 grid, workbench and furnace takes award through `sim.achievements` (`b60-lead.test.js`); conflicts kept both sides.
+- Verification: see `b60-lead-track.md`. Pushed to github main by the lead.
+
 Batch 59 (2026-11-13, ten Sonnet tracks in `../wt59-<name>` on `batch59-<name>`, cut from dcde17ef4, merged --no-ff on `batch59-lead`; shared track rules `../artifacts/b59-lead/track-rules.md`; lead note `b59-lead-track.md`; no browser checks by request):
 - 0.88.0, by track:
   - mpstate: `multiplayer/server-survival.js` runs the single-player Survival rules per server player (fall, void, hunger, regeneration, eating, death with the CombatTracker component, respawn); `health` message on an S06 change; `--difficulty`.
