@@ -145,6 +145,7 @@ import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
+import { RemoteDispense } from "./multiplayer/client-dispense.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
@@ -629,7 +630,7 @@ function applyServerPlayerOp(message) {
   if (message.op === 'kill') serverDeathShown = true;
   applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
 }
-let multiplayer = null, remotePlayers = null, remoteMobs = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
+let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -687,6 +688,21 @@ function syncMultiplayerItems(list) {
   items.items = [...remoteItems.values()]; // collect filters the list; it is rebuilt from the map
   if (wanted.length) multiplayer.pickup(wanted.slice(0, 16), fits.slice(0, 16));
 }
+// Batch 61 (mpdispense): the arrows, thrown items, fireballs, rockets and primed TNT that the server's dispensers fired (multiplayer/client-dispense.js). The rows are drawn like the
+// local ones: scene.setArrows / setProjectiles each tick, primed TNT through the TNT renderer's list (see `tntRows`).
+function makeRemoteDispense() {
+  const play = (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch });
+  return new RemoteDispense({
+    sound: play,
+    explode: (x, y, z, size) => { scene.explosionParticles.burst(x, y, z, size, [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] }); play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
+    splash: (x, y, z, damage) => splashBreak(scene.fx, scene.fx.worldRandom, damage, x, y, z),
+    firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
+    spark: (...a) => fireworkFx.spawnSpark(...a),
+    poof: row => projectiles.clientImpact(row),
+  });
+}
+const tntRows = () => (remoteDispense?.primed.length ? [...primed, ...remoteDispense.primed] : primed);
+function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles); }
 // Experience orbs of the server (EntityXPOrb): plain objects the orb renderer reads (x, y, z, previous position, value, colour phase).
 function syncMultiplayerOrbs(list) {
   const seen = new Set();
@@ -803,7 +819,7 @@ const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
-    onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onBlocks: message => applyMultiplayerCells(message.changes),
+    onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onDisp: message => remoteDispense?.apply(message), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
     onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a) }); }, // 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
@@ -831,6 +847,7 @@ async function joinMultiplayer(settings) {
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
+    remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
@@ -1596,6 +1613,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
         firework: (stack, x, y, z, fx, fz) => { dispenseFirework(rockets, x, y, z, fx, fz, stack); saved = false; },
+        boat: (x, y, z) => { boats.spawnBoat({ x, y, z }, { born: true }); saved = false; }, // BehaviorDispenseBoat (b61): onto water in front
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
         setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
@@ -3631,7 +3649,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); if (remoteDispense) tickRemoteDispense(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
@@ -4415,7 +4433,7 @@ function animate(now) {
   enchantBookRenderer?.update(screen === "home" ? [] : [...enchantBooks.tiles.values()], world, position, partial);
   enchantExtras?.frame(partial);
   beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
-  tntRenderer?.update(screen === "home" ? [] : objectViews(objectTracker, primed, "tnt"), partial);
+  tntRenderer?.update(screen === "home" ? [] : objectViews(objectTracker, tntRows(), "tnt"), partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
@@ -4499,7 +4517,7 @@ function shadowCasters(partial) {
   for (const e of objectViews(objectTracker, items.items, "item"))
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   // RenderTNTPrimed: shadowSize 0.5 under the box (posY is its centre).
-  for (const e of objectViews(objectTracker, primed, "tnt")) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
+  for (const e of objectViews(objectTracker, tntRows(), "tnt")) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
   for (const o of objectViews(objectTracker, xpOrbs.orbs, "orb")) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   // A sleeper is rendered in first person too (RenderGlobal), so its shadow draws at the bed position in every view.

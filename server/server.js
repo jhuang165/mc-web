@@ -247,6 +247,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         for (const m of player.itemsOut ?? []) if (ws) send(ws, m); // b59: S2F slot corrections, S28 break effects, XP gains (server-items.js)
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
         if (player.mobPackets && ws) send(ws, { type: 'mobs', packets: player.mobPackets }); // S0F / S14..S19 / S13 of the mobs this player tracks (server-mobs.js)
+        for (const m of player.dispOut ?? []) if (ws) send(ws, m); // b61: dispEnts / dispFx of dispensed entities (server-dispense.js)
+        player.dispOut = null;
         player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null; player.itemsOut = null; player.mobPackets = null;
       }
     }
