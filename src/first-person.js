@@ -194,6 +194,38 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
   for (let k = 0; k < 2; k++) { const i = 12 + k, j = i + 2, ay = uv.getY(i), by = uv.getY(j); uv.setY(i, by); uv.setY(j, ay); }
   return g;
 }
+// ModelBox's six quads (bis, executed in model-faces-reference.json): each corner is [x, y, z] picks (1 or 2 for x1/x2 etc.) and [u, v] picks (0 or 1 for the
+// region's low or high edge); the regions are +x, -x, y1, y2, z1, z2 as in skinBox.
+const MODEL_QUADS = [
+  [[2, 1, 2, 1, 0], [2, 1, 1, 0, 0], [2, 2, 1, 0, 1], [2, 2, 2, 1, 1]],
+  [[1, 1, 1, 1, 0], [1, 1, 2, 0, 0], [1, 2, 2, 0, 1], [1, 2, 1, 1, 1]],
+  [[2, 1, 2, 1, 0], [1, 1, 2, 0, 0], [1, 1, 1, 0, 1], [2, 1, 1, 1, 1]],
+  [[2, 2, 1, 1, 1], [1, 2, 1, 0, 1], [1, 2, 2, 0, 0], [2, 2, 2, 1, 0]],
+  [[2, 1, 1, 1, 0], [1, 1, 1, 0, 0], [1, 2, 1, 0, 1], [2, 2, 1, 1, 1]],
+  [[1, 1, 2, 1, 0], [2, 1, 2, 0, 0], [2, 2, 2, 0, 1], [1, 2, 2, 1, 1]],
+];
+// The first-person arm's box in ModelBiped's own axes (x, y down to the fingertips, z; ItemRenderer draws the arm with no flip). skinBox is laid out
+// for the mob frame (x, -y, -z), so here every corner takes the uv of the native ModelBox vertex at the same model position (the executed quads,
+// heldrender-b63.test.js). The old per-face row flip left the side faces mirrored and the top, bottom, front and back regions swapped (Batch 63).
+export function firstPersonArmGeometry() {
+  const u = 40, v = 16, x = -3, y = -2, z = -2, w = 4, h = 12, d = 4, tw = 64, th = 32;
+  const g = skinBox(w, h, d, u, v, tw, th), pos = g.attributes.position, uv = g.attributes.uv, c = [x + w / 2, y + h / 2, z + d / 2];
+  const regions = [[u + d + w, v + d, d, h], [u, v + d, d, h], [u + d, v, w, d], [u + d + w, v, w, d], [u + d, v + d, w, h], [u + d + w + d, v + d, w, h]];
+  const key = (a, b, e) => [a, b, e].map((n) => Math.round(n * 1000) / 1000).join(",");
+  const wanted = new Map();
+  MODEL_QUADS.forEach((q, n) => {
+    for (const [px, py, pz, uu, vv] of q) {
+      const [rx, ry, rw, rh] = regions[n];
+      wanted.set(n + "|" + key(px === 1 ? x : x + w, py === 1 ? y : y + h, pz === 1 ? z : z + d), [(rx + uu * rw) / tw, 1 - (ry + vv * rh) / th]);
+    }
+  });
+  for (let f = 0; f < 6; f++) {
+    const idx = [0, 1, 2, 3].map((k) => f * 4 + k), corners = idx.map((i) => key(pos.getX(i) * 16 + c[0], pos.getY(i) * 16 + c[1], pos.getZ(i) * 16 + c[2]));
+    const n = MODEL_QUADS.findIndex((_, q) => corners.every((k) => wanted.has(q + "|" + k)));
+    idx.forEach((i, k) => { const t = wanted.get(n + "|" + corners[k]); uv.setXY(i, t[0], t[1]); });
+  }
+  return g;
+}
 // `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
 // The versioned url (a pack change re-requests it) or, for a pack-animated item strip, the current frame (item-animation.js).
 export function itemTexture(id, damage = 0, use = 0) {
@@ -278,10 +310,7 @@ export class FirstPerson {
     this.pivot.matrixAutoUpdate = false;
     this.scene.add(this.pivot);
     this.arm = new THREE.Group();
-    const armGeometry=skinBox(4,12,4,40,16,64,32),armUv=armGeometry.attributes.uv;
-    // ModelBiped's local +Y points from shoulder to fingertips. Its UV rows
-    // increase in that direction, unlike the world-space upright skin boxes.
-    for(const face of [0,1,4,5]){const top=armUv.getY(face*4),bottom=armUv.getY(face*4+2);for(let v=0;v<4;v++)armUv.setY(face*4+v,top+bottom-armUv.getY(face*4+v));}
+    const armGeometry=firstPersonArmGeometry();
     const armMesh=new THREE.Mesh(armGeometry,this.material({map:pixelTexture('/media/1.7.10/entity/steve.png')},true));
     armMesh.position.set(-1/16,4/16,0);this.arm.add(armMesh);this.arm.position.set(-5/16,2/16,0);this.arm.rotation.z=.1;
     this.pivot.add(this.arm);

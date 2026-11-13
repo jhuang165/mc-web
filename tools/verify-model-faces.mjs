@@ -14,7 +14,7 @@ const cp=[probe,classes].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(root,'probes/ModelFacesProbe.java')]);
 const {stdout}=await exec('java',['-Djava.awt.headless=true','-cp',cp,'ModelFacesProbe'],{maxBuffer:1<<24});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
-assert.equal(records.length,4);
+assert.equal(records.length,5);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={bhr:'ModelBase',bix:'ModelRenderer',bis:'ModelBox',bhv:'TexturedQuad',bii:'PositionTextureVertex'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),method:'ModelRenderer.addBox (unchanged) builds each ModelBox; the six quads are read by reflection in stored order. Vertices are model pixels with y down, uv in texels (u*textureWidth, v*textureHeight). Quad order: +x, -x, y1 (up on screen), y2 (down on screen), z1, z2. Only the abstract ModelBase is subclassed (texture size)',records};
