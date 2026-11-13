@@ -267,8 +267,8 @@ export const ENTITY_TYPES = {
   bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.699999988079071, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
-const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : e.type === "horse" ? horseHurtSoundName(e.horse?.type) : hurtSound(e.type));
-const deathOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.death : deathSound(e.type));
+export const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : e.type === "horse" ? horseHurtSoundName(e.horse?.type) : hurtSound(e.type));
+export const deathOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.death : deathSound(e.type));
 const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.type));
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 // EntityMob subclasses on EntityCreature.updateEntityActionState (td.bq), whose entityToAttack the port keeps in silverfishState(e).target.
@@ -1705,6 +1705,7 @@ export class EntityWorld {
     if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
     // The client's handleHealthUpdate(18) draws these on its own copy's Entity.rand, never on the server's: a separate stream here.
+    this.mobStatus?.(e,18); // a dedicated server sends S19 status 18 to the watchers (multiplayer/server-mobs.js)
     if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},FX_RANDOM,0.5);}
     return true;
   }

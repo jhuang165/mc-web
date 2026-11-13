@@ -423,6 +423,7 @@ export class DedicatedSimulation {
     this.containers.tick();
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
+      this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
       const moved = movePlayer(p, p.dead ? IDLE_INPUT : controls);
       const dead = this.serverSurvival.tick(p, moved); // Survival players: health, food, fall and void damage, death (server-survival.js)
       if (p.position.y < -64 && !dead && p.survival.creative) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
