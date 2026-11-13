@@ -23,7 +23,7 @@ export class RemoteMobs {
     this.rand = new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))); // the copies' Entity.rand for the heart and smoke bursts
     this.factory = new EntityWorld(world, [], Math.random, new EntityIds()); // stand-in records and the client movement code; it never ticks mobs
     const f = this.factory;
-    this.physics = Object.assign((c, m) => f.moveClient(c, m), { turn: (c, m) => f.clientAfterMove(c, m), pre: (c, m) => f.clientEnvironment(c, m) });
+    this.physics = Object.assign((c, m) => f.moveClient(c, m), { turn: (c, m) => f.clientAfterMove(c, m), pre: (c, m) => f.clientEnvironment(c, m), living: (c, m) => f.clientLiving(c, m) }); // b61 lead: the living roll moved out of clientEnvironment (mobcopies2)
     this.copies = new Map(); // wire id -> { client, mob }
     this.ctx = { clientOf: id => this.copies.get(id)?.client ?? null, holderOf: () => null }; // S1B(0): the vehicle named by wire id (a spider jockey's skeleton)
   }
