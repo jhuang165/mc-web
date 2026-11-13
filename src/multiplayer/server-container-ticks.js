@@ -3,8 +3,8 @@
 // TileEntityHopper.updateEntity, 8-tick cooldown), the dispense engine (dispense.js) installed on the server's LiveRedstone, and the trapped chest's
 // power (BlockChest type 1 canProvidePower, viewers -> weak power, chests-reference.json). Open windows already see slot changes because every window reads
 // the same tile arrays (ServerContainers.changes). Aux effects 1000/1001/1002/2000 of a dispense go out as `aux` messages (S28, WorldManager.a(yz,...):
-// sendToAllNear 64 blocks, bytecode-read). Dispenses that need entity systems the server lacks (arrows, potions, fireballs, fireworks, carts, TNT,
-// spawn eggs) put the stack back and send nothing, as away-world.js does.
+// sendToAllNear 64 blocks, bytecode-read). Batch 61: the entities a dispense creates live in server-dispense.js; only carts and boats (no server entity yet)
+// put the stack back and send nothing, as away-world.js does.
 import { Hoppers, hopperBehaviour } from '../hopper.js';
 import { installDispensers } from '../dispense.js';
 import { trappedPower, trappedStrongPower } from '../chest-blocks.js';
@@ -32,7 +32,7 @@ export class ContainerTicks {
       aux: (id, x, y, z, data) => this.buffer.push({ id, x, y, z, data: data | 0 }),
       rng: () => this.rand,
       spawnItem: (stack, x, y, z, mx, my, mz) => { sim.items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
-      arrow: stop, thrown: stop, fireball: stop, firework: stop, cart: stop, spawnTnt: stop, spawnEgg: stop,
+      ...sim.dispense.host(stop), // b61: arrows, thrown items, fireballs, fireworks, TNT, spawn eggs, armour (server-dispense.js); carts and boats stop until the vehicle track hooks in
       setLiquid: (x, y, z, id) => { sim.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
       setAir: (x, y, z) => { sim.world.set(x, y, z, 0, true, 0); },
       setFire: (x, y, z) => { sim.fire.ignite(x, y, z); },

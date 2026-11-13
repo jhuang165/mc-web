@@ -40,6 +40,7 @@ import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
+import { ServerDispense } from './server-dispense.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -126,6 +127,7 @@ export class DedicatedSimulation {
     });
     this.redstone.restore(saved.redstone);
     this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
+    this.dispense = new ServerDispense(this); // b61: what dispensers fire (arrows, potions, TNT...), sent to clients as dispEnts / dispFx
     this.containers.ticks = new ContainerTicks(this); // hoppers, dispensers, trapped chest power (server-container-ticks.js)
     this.world.blockLight = (x, y, z) => this.light.blockAt(x, y, z);
     this.world.fullLight = (x, y, z) => this.light.level(x, y, z, 0);
@@ -145,6 +147,8 @@ export class DedicatedSimulation {
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
+    this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 2: 'furnace_minecart', 3: 'tnt_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
+    this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
   }
   // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
@@ -474,8 +478,10 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) if (p.resendCells) {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
+    this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
     this.mobs.tick();
     this.vehicles.tick(); // b61
+    this.dispense.flush();
     for (const p of this.players.values()) this.serverItems.settle(p);
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();

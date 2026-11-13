@@ -1,7 +1,7 @@
 // Batch 60 (mpcontainers2): hoppers, dispensers, lit furnaces, trapped chests and chest descriptions on the dedicated simulation (no sockets).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { World } from "./world.js";
+import { World, WATER } from "./world.js";
 import { Survival } from "./survival.js";
 import { makeStack } from "./inventory.js";
 import { newChest } from "./chest.js";
@@ -95,11 +95,13 @@ test("a dispenser fires on redstone power: an item entity flies and S28 1000 and
   assert.deepEqual([aux[0].x, aux[0].y, aux[0].z], [64, 11, 62]);
 });
 
-test("a dropper's effects go only to players within 64 blocks; an arrow dispense the server cannot make leaves the stack", () => {
+test("a dropper's effects go only to players within 64 blocks; a boat dispense with no vehicle track leaves the stack (b61: arrows now fly, see mpdispense-b61.test.js)", () => {
   const s = fixture(), p = joined(s), far = joined(s, "Bob", 2);
   far.position.copy({ x: 0.5, y: 10, z: 64.5 });
+  s.dispense.vehicles = null; // b61 lead: the vehicle track is wired in the simulation; drop it to keep this test's fallback
   s.world.set(70, 11, 62, 115, true, 2);
-  s.tiles.dispensers["70,11,62"] = { items: [makeStack(320, 4), null, null, null, null, null, null, null, null] }; // arrows
+  s.tiles.dispensers["70,11,62"] = { items: [makeStack(495, 4), null, null, null, null, null, null, null, null] }; // boats onto water in front: the vehicle track's hook is absent
+  s.world.set(69, 11, 62, WATER); // the dispenser settles facing west (x = 71 is the world's solid edge), so the water goes there
   s.world.set(70, 11, 63, 123);
   for (let i = 0; i < 8; i++) s.tick();
   assert.equal(s.tiles.dispensers["70,11,62"].items[0].count, 4, "unsupported dispense puts the stack back");

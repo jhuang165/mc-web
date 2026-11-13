@@ -1,7 +1,8 @@
 // Minecraft Java 1.7.10 BlockDispenser (original 23, internal 115) and BlockDropper (original 158, internal 132): the redstone
 // trigger, TileEntityDispenser.func_146017_i slot choice / func_146019_a addItemStack, and the Bootstrap dispense registry for the
 // items this build has (BehaviorDefaultDispenseItem, arrows, eggs, snowballs, splash potions, minecarts, buckets, flint and steel,
-// bone meal, TNT, fire charges, Bottle o' Enchanting, fireworks, spawn eggs). Boats do not exist in this build.
+// bone meal, TNT, fire charges, Bottle o' Enchanting, fireworks, spawn eggs, boats, armour worn by an entity in front). Batch 61 (mpdispense) added
+// boats (la, bytecode-read) and armour (abc, ItemArmor's own behaviour, bytecode-read); both need an optional host callback and otherwise throw the item.
 // Native evidence: public/research/dispense-reference.json (tools/verify-dispense.mjs, tools/probes/DispenseProbe.java), replayed by
 // src/dispense.test.js. public/research/dispense.md says what is verified and what is approximated.
 //
@@ -14,6 +15,9 @@
 //   host.spawnEgg(stack, { x, y, z }, nextFloat) -> mob|null  BehaviorDispenseSpawnEgg (ItemMonsterPlacer.spawnCreature); nextFloat draws the yaw from the world Random
 //   host.cart(type, x, y, z)                      EntityMinecart (0) / EntityMinecartChest (1) at the native spawn doubles
 //   host.spawnTnt(x, y, z)                        EntityTNTPrimed at the cell centre (no ignite sound); host.igniteTnt via w.primeTnt
+//   host.boat(x, y, z)                            EntityBoat (la): the spawn doubles, boat in water (+1.0) or over water (+0.0); the cell test is the engine's
+//   host.armorType(stack) -> 0..3|undefined       ItemArmor.armorType (0 helmet .. 3 boots); host.equip(cell, stack, position) -> boolean puts one piece on an entity in the front cell
+//                                                  (position 4 - armorType, getArmorPosition); false (or no host.equip) throws the item instead
 //   host.setLiquid(x, y, z, originalId) / host.setAir(x, y, z) / host.breakBlock(x, y, z) optional world writers
 //   host.boneMeal(x, y, z) -> boolean             ItemDye.func_150919_a for blocks other than wheat, carrots and potatoes
 //   host.transfer()                               the inventory-transfer.js host for droppers (omit to always drop)
@@ -35,7 +39,7 @@ export const OPPOSITE = Object.freeze([1, 0, 3, 2, 5, 4]);
 // Internal item ids of this build.
 export const ITEM = Object.freeze({
   ARROW: 320, SNOWBALL: 312, EGG: 316, POTION: 385, MINECART: 366, CHEST_MINECART: 450, BUCKET: 340, WATER_BUCKET: 341,
-  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952, EXP_BOTTLE: 1951, SPAWN_EGG: 1950, FIREWORK: 2071, // firework rocket (fireworks.js ITEM_FIREWORK_ROCKET, original 401)
+  LAVA_BUCKET: 342, BOAT: 495, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952, EXP_BOTTLE: 1951, SPAWN_EGG: 1950, FIREWORK: 2071, // firework rocket (fireworks.js ITEM_FIREWORK_ROCKET, original 401)
 });
 export const SPLASH_BIT = 16384;
 const FLINT_MAX_DAMAGE = 64;
@@ -118,11 +122,12 @@ export class Dispensing {
       case ITEM.FLINT_AND_STEEL: return FLINT;
       case ITEM.DYE: return DYE;
       case ITEM.TNT: return TNT;
+      case ITEM.BOAT: return this.host.boat ? BOAT : DEFAULT; // a host without boats throws the item as before
       case ITEM.EXP_BOTTLE: return PROJECTILE.expBottle;
       case ITEM.SPAWN_EGG: return SPAWN_EGG;
       case ITEM.FIRE_CHARGE: return FIRE_CHARGE;
       case ITEM.FIREWORK: return FIREWORK;
-      default: return DEFAULT;
+      default: return this.host.armorType?.(stack) !== undefined ? ARMOR : DEFAULT;
     }
   }
 
@@ -238,6 +243,34 @@ const CART = {
     this.host.cart?.(stack.id === ITEM.CHEST_MINECART ? 1 : ({ 2090: 2, 2091: 3, 2092: 5, 2093: 6 })[stack.id] ?? 0, x + 0.5 + fx * 1.125, y + 0.5 + fy * 1.125 + d3, z + 0.5 + fz * 1.125, stack);
     stack.count--;
     return stack;
+  },
+};
+
+// BehaviorDispenseBoat (la, bytecode-read): spawn at centre + facing * 1.125F (float product) on every axis; water in the front cell lifts it 1.0, air over water 0.0,
+// anything else is the default throw. One boat is used up; the click is the default 1000 (la.a is not overridden).
+const WATERS = new Set([8, 9]);
+const BOAT = {
+  sound: click,
+  stack(w, x, y, z, facing, stack) {
+    const [fx, fy, fz] = FACING[facing], i = x + fx, j = y + fy, k = z + fz, block = w.getBlock(i, j, k);
+    let d3;
+    if (WATERS.has(block)) d3 = 1;
+    else if (block === 0 && WATERS.has(w.getBlock(i, j - 1, k))) d3 = 0;
+    else return this.dispense(w, x, y, z, facing, stack, DEFAULT);
+    const m = f(1.125);
+    this.host.boat?.(x + 0.5 + f(fx * m), y + 0.5 + f(fy * m) + d3, z + 0.5 + f(fz * m));
+    stack.count--;
+    return stack;
+  },
+};
+// ItemArmor.field_96605_cw (abc, bytecode-read): the first living entity in the front cell whose armour slot for the piece is empty (a player, or a mob that can pick up loot)
+// gets one copy of the piece (the stack's count 1, the mob's drop chance 2.0F); no such entity is the default throw. The cell box is [i, j, k, i + 1, j + 1, k + 1].
+const ARMOR = {
+  sound: click,
+  stack(w, x, y, z, facing, stack) {
+    const [fx, fy, fz] = FACING[facing], type = this.host.armorType?.(stack);
+    if (type !== undefined && this.host.equip?.([x + fx, y + fy, z + fz], one(stack), 4 - type)) { stack.count--; return stack; }
+    return DEFAULT.stack.call(this, w, x, y, z, facing, stack);
   },
 };
 
