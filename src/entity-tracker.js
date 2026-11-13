@@ -212,7 +212,7 @@ export class TrackerEntry {
           const vx = velocityInt(this.lastVX), vy = velocityInt(this.lastVY), vz = velocityInt(this.lastVZ), carried = this.object.data > 0;
           this.emit({ type: "spawn", ...this.object, id: e.id, x: e.tile ? e.tile[0] * 32 : floor(e.x * 32), y: e.tile ? e.tile[1] * 32 : floor(e.y * 32), z: e.tile ? e.tile[2] * 32 : floor(e.z * 32), yaw: angle(e.rotationYaw ?? 0), pitch: angle(e.rotationPitch ?? 0), vx: carried ? vx : 0, vy: carried ? vy : 0, vz: carried ? vz : 0 });
           if (this.velocity) this.emit({ type: "velocity", vx, vy, vz });
-        } else this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ), ...this.watched() });
+        } else { this.lastHead = angle(e.rotationYawHead ?? 0); this.emit({ type: "spawn", x: encodeAxis(this.size, e.x), y: encodeY(e.y), z: encodeAxis(this.size, e.z), yaw: byte(spawnAngle(e.rotationYaw ?? 0)), pitch: byte(spawnAngle(e.rotationPitch ?? 0)), head: byte(spawnAngle(e.rotationYawHead ?? 0)), vx: velocityInt(this.lastVX), vy: velocityInt(this.lastVY), vz: velocityInt(this.lastVZ), ...this.watched() }); } // the spawn packet's builder (my.c) takes the head angle it carries as the last one sent
         if (e.type === "bat") { this.lastHang = !!e.batHanging; this.emit({ type: "meta", batHanging: this.lastHang }); } // the spawn's S1C
         // after the spawn: S1B(0) for a rider and S1B(1) for a leashed mob (the periodic one in sendLocation still goes out at the entry's first tick)
         if (e.ridingEntity) this.emit({ type: "attach", mode: 0, entity: e, vehicle: e.ridingEntity });
@@ -640,6 +640,7 @@ export class MobTracker {
     if (!joining && this.spawnEarly) for (const [t, e] of fresh) if (this.spawnEarly(e)) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
     if (this.dying.length || o.dying.length) this.applyParts([[this, this.dying], [o, o.dying]]);
     const early = joining ? fresh.filter(([, e]) => this.beforePlayer(e)) : [], held = new Set(early.map(([, e]) => e));
+    if (joining) for (const t of [this, o]) for (const e of t.entries.keys()) held.add(e); // entries kept since before the join (`idleUpdate`): the join sends them all in set order
     for (const [t, e] of early) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height, true); }
     if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }
     if (held.size) for (const e of this.order.keys()) if (held.has(e)) { const t = this.entries.has(e) ? this : o, en = t.entries.get(e); en.entry.updatePlayerList(); t.flush(en); }
@@ -657,6 +658,27 @@ export class MobTracker {
     for (const [en, step] of copies) step(en);
     this.pruneDying(); o.pruneDying();
   }
+  // Batch 58 (executed: tracker-joint-reference.json dimAge cases, tag b58tp): a world nobody is in still ticks its EntityTracker (MinecraftServer.updateTimeLightAndEntities runs every WorldServer),
+  // so an entry's counters, last sent position and motion advance from its making. `idleUpdate` is that tick with no player: the entries are made and walked in set order, nothing is sent and no
+  // client copy exists. When the player later joins (`jointUpdate`), every entry already in the set is sent to it in the set's order, at the phase it has reached. `joint` as in jointUpdate.
+  idleUpdate(mobs, size, joint = null) {
+    const o = joint?.tracker, none = () => [0];
+    if (o) { o.shareOrder(this); o.beforePlayer = this.beforePlayer; o.ctx.world = joint.world; }
+    for (const t of o ? [this, o] : [this]) t.tick++;
+    const lists = [[this, mobs, size]];
+    if (o) lists.push([o, o.allOf(o.withExtra(joint.lists)), none]);
+    for (const [t, list, sz] of lists) {
+      t.sizeOf = sz;
+      const alive = new Set(list);
+      for (const e of [...t.entries.keys()]) if (!alive.has(e)) { t.entries.delete(e); t.forget(e); } // nobody is watching: no destroy to flush
+    }
+    const fresh = lists.flatMap(([t, list, sz]) => list.filter((e) => !t.entries.has(e)).map((e) => [t, e, sz]));
+    fresh.sort((a, b) => { const x = a[0].idOf(a[1]), y = b[0].idOf(b[1]); return x < y ? -1 : x > y ? 1 : 0; });
+    for (const [t, e, sz] of fresh) { const [width, height] = sz(e); t.entryOf(e, width, height, true); }
+    for (const e of this.order.keys()) { const t = this.entries.has(e) ? this : o?.entries.has(e) ? o : null; t?.stepEntry(e); }
+    for (const t of o ? [this, o] : [this]) for (const en of t.entries.values()) { en.entry.packets.length = 0; }
+  }
+  idOf(e) { const id = e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; }
   serverTick(mobs, player, size) {
     this.beginTick(mobs, player, size);
     if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }

@@ -40,7 +40,7 @@ function rig(playerId, tweak) {
   const r = { m, o, applied: [], who: new Map(), firstRow: new Map(), age: new Map() };
   for (const t of [m, o]) {
     const c = t.create.bind(t);
-    t.create = (...a) => { const en = c(...a); if (r.age.has(a[0])) en.entry.ticks = r.age.get(a[0]); r.firstRow.get(a[0])?.(); const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { r.applied.push(p); r.who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
+    t.create = (...a) => { const en = c(...a); if (r.age.has(a[0])) en.entry.ticks = r.age.get(a[0]); { const fr = r.firstRow.get(a[0]); if (fr) { const st = en.entry.tryStart.bind(en.entry); en.entry.tryStart = () => { en.entry.tryStart = st; st(); fr(); }; } } const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { r.applied.push(p); r.who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
   }
   return r;
 }
