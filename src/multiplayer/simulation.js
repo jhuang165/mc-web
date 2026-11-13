@@ -200,6 +200,11 @@ export class DedicatedSimulation {
     if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, attack: mob }); return true;
   }
+  // C02 UseEntity, interact (b61 animal-use.js): feed, breed, shear, milk, saddle, dye an animal; `claim` is the client's own prediction.
+  queueAnimUse(id, mob, claim) {
+    if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
+    this.actions.push({ id, animUse: mob, claim: claim === true }); return true;
+  }
   queueUse(id, active) {
     if (!this.players.has(id) || typeof active !== 'boolean' || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, use: active }); return true;
@@ -451,9 +456,11 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
+      if (animUse !== undefined) { this.mobs.interact(p, animUse, claim); continue; } // b61: C02 interact
+      if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
     }
     for (const p of this.players.values()) if (p.resendCells) {

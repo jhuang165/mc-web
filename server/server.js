@@ -191,6 +191,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse
         else if (m.type === 'respawn') simulation.serverSurvival.respawn(simulation.players.get(id)); // C16 client status 0, perform respawn
         else if (m.type === 'attack' && Number.isInteger(m.mob)) simulation.queueAttack(id, m.mob); // C02 UseEntity (attack) on a mob, the wire id of its S0F spawn
+        else if (m.type === 'animUse' && Number.isInteger(m.mob)) simulation.queueAnimUse(id, m.mob, m.claim); // b61: C02 UseEntity (interact) on an animal
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot

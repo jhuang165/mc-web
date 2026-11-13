@@ -109,6 +109,8 @@ export class DedicatedClient {
   openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
   // C02 UseEntity, attack: the wire id of the mob (its S0F spawn); the server checks the reach and applies the held weapon's damage.
   attack(mob) { this.send({ type: 'attack', mob }); }
+  // C02 UseEntity, interact (b61): feed / breed / shear / milk / saddle / dye an animal; `claim` is whether the client's own prediction handled the click.
+  animUse(mob, claim) { this.send({ type: 'animUse', mob, claim: !!claim }); }
   // C0D close window.
   // C0E click window: the slot, button and mode, the client's action number and the stack its own slotClick returned.
   clickWindow(windowId, slot, button, mode, action, item) { this.send({ type: 'clickWindow', windowId, slot, button, mode, action, item: item ?? null }); }

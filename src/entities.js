@@ -301,7 +301,7 @@ export function aiMoveSpeed(e, multiplier) {
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
 // Pigs use only carrots (ade.bF), including the carrot held by EntityAITempt.
-const BREED_ITEM = { pig: CARROT, mooshroom: 305, cow: 305, sheep: 305, chicken: 309 };
+export const BREED_ITEM = { pig: CARROT, mooshroom: 305, cow: 305, sheep: 305, chicken: 309 };
 export const EGG = 316;
 export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
@@ -1959,6 +1959,7 @@ export class EntityWorld {
       moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,{...base,width:base.width*scale,height:base.height*scale},forward);},
       wearHeld:(amount)=>this.wearStick?.(this.ai.survival,amount),
       eatGrass:(e)=>this.eatGrass(e),
+      mobStatus:(e,s)=>this.mobStatus?.(e,s), // b61: EntityAIEatGrass.startExecuting sends status 10 (dedicated server, multiplayer/server-mobs.js)
       attackPlayer:(e,survival)=>this.hitPlayer(e,survival),
       attackMob:(e,target)=>this.hitMob(e,target),
       difficulty:()=>this.difficulty,

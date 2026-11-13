@@ -610,6 +610,7 @@ class EatGrass extends Task {
   }
   startExecuting() {
     this.m.e.eatTimer = 40;
+    this.m.ai.deps.mobStatus?.(this.m.e, 10); // b61: World.setEntityState(10) makes the clients graze
     this.m.navigator.clearPathEntity();
   }
   resetTask() {

@@ -56,7 +56,9 @@ export class RemoteMobs {
       if (status === 2) mob.hurt = HURT_TICKS;
       const name = (status === 2 ? hurtOf : deathOf)(mob);
       if (name) this.fx.sound?.(name, at.x, at.y, at.z, soundVolume(mob.type), statusPitchRandom());
+    } else if (status === 10) { if (mob.type === 'sheep') mob.eatTimer = 40; // EntitySheep.handleHealthUpdate(10): sheepTimer = 40, the head graze
     } else if (status === 6 || status === 7 || status === 18) {
+      if (status === 18) mob.love = 600; // the copy knows it is in love (EntityAnimal.inLove is not watched; the client only hears status 18)
       const t = ENTITY_TYPES[mob.type] ?? { width: 0.6, height: 1.8 };
       burst({ spawn: (...a) => this.fx.particle?.(...a) }, status === 6 ? 'smoke' : 'heart', 7, { ...at, width: t.width, height: t.height }, this.rand, 0.5);
     }
@@ -70,6 +72,7 @@ export class RemoteMobs {
     mob.growingAge = s.baby ? -24000 : 0;
     mob.burn = s.burn ? 1 : 0;
     if (mob.type === 'sheep') { mob.color = s.color ?? 0; mob.sheared = !!s.sheared; }
+    if (mob.type === 'pig') mob.saddled = !!s.saddled;
     if (mob.type === 'creeper') { mob.fuseTime = s.fuse ?? 0; mob.lastActive = s.last ?? 0; mob.powered = !!s.powered; }
   }
   // One client tick (the game's 20 per second): every copy steps, then its stand-in follows it.
@@ -81,6 +84,8 @@ export class RemoteMobs {
       mob.x = client.x; mob.y = client.y; mob.z = client.z;
       for (const x of client.fx.splice(0)) if (x.particle) this.fx.particle?.(x.particle, x.x, x.y, x.z, x.vx ?? 0, x.vy ?? 0, x.vz ?? 0); // the death poof (death-fx.js)
       mob.age++;
+      if (mob.love > 0) mob.love--; // EntityAnimal.onLivingUpdate counts inLove down (adults only: a baby has none)
+      if (mob.eatTimer > 0) mob.eatTimer--; // EntitySheep.sheepTimer
       if (mob.hurt > 0) mob.hurt--;
       if (mob.health <= 0 && mob.death < DEATH_TICKS) mob.death++;
       this.factory.swingLimbs(mob);
