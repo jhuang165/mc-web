@@ -13,6 +13,7 @@
 import { mhSin, mhCos } from "./lighting.js";
 import { mountedOffset } from "./horse.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
+import { JavaRandom } from "./java-random.js";
 
 const f = Math.fround;
 const wrap = (v) => f(v % 360); // Java float %
@@ -77,8 +78,20 @@ export function stepHorseAnim(a) {
   if (flags & HORSE_MOUTH) { a.mouth = f(a.mouth + f(f(f(1 - a.mouth) * f(0.7)) + f(0.05))); if (a.mouth > 1) a.mouth = 1; }
   else { a.mouth = f(a.mouth + f(f(f(0 - a.mouth) * f(0.7)) - f(0.05))); if (a.mouth < 0) a.mouth = 0; }
 }
-// wi.e(), before EntityAnimal's: nextInt(200) == 0 starts the tail swish (wi.cR sets bp = 1); both sides draw it, from the entity's own Random.
+// wi.e(), before EntityAnimal's: nextInt(200) == 0 starts the tail swish (wi.cR sets bp = 1); both sides draw it, from the entity's own Random. Executed (horse-model-reference.json
+// `tail`: the real wi.h() on a client world double, a logging Random, 600 ticks): the roll is the second draw of a client tick (after EntityLiving's nextInt(1000) living-sound roll),
+// and the same tick's stepHorseAnim makes bp 2, then 3 .. 8, then 0.
 export function horseTailRoll(a, rand) { if (rand.nextInt(200) === 0) a.tail = 1; }
+// Entity.rand of a horse's client copy: its own unseeded Random (the entity-tracker.js copy has none for a horse, so it is made on the first tick; a replay may set c.rand first).
+export const copyRandom = (c) => (c.rand ??= new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))));
+// One client tick of the animation half of wi.h() on the copy `c` of a horse whose watcher 16 holds `flags`: the tail roll on the copy's own Random, then the counters.
+export function stepHorseCopy(c, flags) {
+  const a = (c.horse ??= newHorseAnim());
+  a.flags = flags;
+  horseTailRoll(a, copyRandom(c));
+  stepHorseAnim(a);
+  return a;
+}
 // wi.p / q / r (partial ticks) for the renderer: head lean, rearing amount, mouth openness.
 export const horseLean = (a, t) => f(a.prevHeadLean + f(f(a.headLean - a.prevHeadLean) * t));
 export const horseRear = (a, t) => f(a.prevRearAmount + f(f(a.rearAmount - a.prevRearAmount) * t));

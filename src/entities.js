@@ -1,5 +1,5 @@
 import { trackSections } from "./saved-order.js";
-import { steerHorseCopy, newHorseAnim, stepHorseAnim, horseFlagsOf } from "./horse-copy.js";
+import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseFlagsOf } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -2055,8 +2055,8 @@ export class EntityWorld {
   // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
   clientAfterMove(c, m) {
-    // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (horse-copy.js stepHorseAnim; the tail roll's draw on the copy's Random is not ported)
-    if (m.type === "horse") { const a = (c.horse ??= newHorseAnim()); a.flags = horseFlagsOf(m); stepHorseAnim(a); }
+    // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds, and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
+    if (m.type === "horse") stepHorseCopy(c, horseFlagsOf(m));
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
     clientBodyTurn(c);
@@ -2335,7 +2335,7 @@ export class EntityWorld {
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
-      if (e.type === "horse") entityRandom(e).nextInt(200); // EntityHorse.onLivingUpdate (wi.e): the tail roll comes before EntityAnimal.onLivingUpdate (the AI)
+      if (e.type === "horse" && entityRandom(e).nextInt(200) === 0) (e.horseAnim ??= newHorseAnim()).tail = 1; // EntityHorse.onLivingUpdate (wi.e): the tail roll (wi.cR starts bp) comes before EntityAnimal.onLivingUpdate (the AI); horseTick steps it
       if (e.ridingEntity) this.walk(e, t, 0, () => this.ridden(e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
