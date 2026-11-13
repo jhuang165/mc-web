@@ -19,13 +19,13 @@ import { drainKnockback } from '../player-knockback.js';
 import { findChunksForSpawning, chunkPairHash } from '../spawner-animals.js';
 import { skylightSubtracted, celestialAngle } from '../lighting.js';
 import { PEACEFUL } from '../difficulty.js';
-import { PHYSICS } from '../world.js';
+import { PHYSICS, raycast } from '../world.js';
 import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
-export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom']);
+export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton']); // b62: the Nether's kinds (Overworld spawn lists never name them)
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
@@ -114,9 +114,34 @@ export class ServerMobs {
     // b62: the puppy or kitten of a tamed parent belongs to the parent's owner (EntityTameable.func_152115_b(parent owner UUID)); puppyFields / kittenFields only copy the flag.
     const made = mobs.makeBaby;
     mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
+    this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
     this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
+  }
+  // b62: EntityFireball.onUpdate sweeps ONE player box here (`ai.player`, the view the last mob used). Before each ball updates the view nearest to the ball is chosen (the
+  // server world's getClosestPlayer-style aim), and a ball a player punched (`punchedBy`) is updated as that player's, so the kill goes to them (the `ghast` achievement).
+  fireballWatch() {
+    const fb = this.mobs.fireballs, tickOne = fb.tickOne.bind(fb), impact = fb.impact.bind(fb), ach = this.host.achievements;
+    fb.tickOne = b => { this.target(b); return tickOne(b); };
+    fb.impact = (b, hit) => {
+      const who = b.owner === 'player' ? b.punchedBy : null, v = who && this.views.get(who.id), was = ach?.attacker;
+      if (v) { this.use(v); if (ach) ach.attacker = who; }
+      try { return impact(b, hit); } finally { if (v && ach) ach.attacker = was; }
+    };
+  }
+  // b62: a left click at a ghast's fireball (EntityFireball.attackEntityFrom, ze.a): the ray of getMouseOver (3 blocks in Survival, 6 in Creative, nearer than the first block) picks the ball
+  // and the player's look deflects it; `punchedBy` makes the kill of a ghast with it theirs (the `ghast` achievement, fireballWatch). True when a ball was hit (the click is used up).
+  punchBall(p) {
+    const fb = this.mobs._fireballs;
+    if (!fb?.list.length || p.survival.health <= 0) return false;
+    const reach = p.survival.creative ? 6 : 3, eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
+    const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
+    const wall = raycast(this.host.world, eye, dir, p.survival.creative ? 5 : 4.5);
+    const hit = fb.pick(eye, dir, reach, wall ? wall.distance : reach);
+    if (!hit) return false;
+    hit.entity.punchedBy = p;
+    return fb.punch(hit.entity, [dir.x, dir.y, dir.z]);
   }
   // A player joins the world the mobs see.
   addPlayer(p) {

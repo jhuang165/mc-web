@@ -186,6 +186,7 @@ export class DedicatedSimulation {
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
     this.mobs.removePlayer(id);
+    this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
     player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}), ...this.dimensions.savedFields(p) }; }
@@ -334,7 +335,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p)); // b62: thrown items // b61: a boat is placed on water the block ray misses
+    if (!target) return place && ((!p.dimension && this.vehicles.useHeld(p, null)) || this.dispense.throwHeld(p)); // b62: thrown items; vehicles are Overworld only // b61: a boat is placed on water the block ray misses
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -354,7 +355,7 @@ export class DedicatedSimulation {
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     if (place && isFence(b) && !p.dimension && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
-    if (place && this.vehicles.useHeld(p, target)) return true; // b61: minecart on a rail, boat on water
+    if (place && !p.dimension && this.vehicles.useHeld(p, target)) return true; /* b62: vehicles are Overworld only */ // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
     if (id === WATER || id === LAVA) return false;
@@ -470,7 +471,7 @@ export class DedicatedSimulation {
       p.survival.time = this.time;
       if (p.swing) p.swing--;
       // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.
-      if (!p.survival.creative) { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }
+      if (!p.survival.creative) this.dimensions.within(p, () => { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }); // b62: a Nether player's delayed break runs in the Nether
       this.tickUse(p);
     }
     if (this.items.items.length) {
@@ -486,6 +487,7 @@ export class DedicatedSimulation {
       if (animUse !== undefined) { if (p.dimension) continue; /* b61 lead: the Nether has no mobs */ this.mobs.interact(p, animUse, claim); continue; } // b61: C02 interact
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
+        if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
         if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
       });
     }

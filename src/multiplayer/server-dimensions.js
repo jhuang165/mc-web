@@ -12,7 +12,7 @@
 //     Each player gets the tick message of their own dimension (`alt`), with only that dimension's players, items and cell changes.
 //   * Flint and steel lights fire on the server; BlockFire.onBlockAdded then tries the portal (NetherLive, the same rules as single player).
 //   * The `portal` achievement (pc.y, bytecode-read in EntityPlayerMP.travelToDimension) goes to a player on every trip that is not to or from the End.
-// Not here: Nether mobs (the Nether has none), fluids, fire spread, falling blocks, redstone, containers (no window opens there) and the End.
+// Batch 62 (mpnether2): the Nether's fluids, fire, random ticks, falling blocks, redstone, containers, mobs and saved state live in server-nether.js; the End is not connected.
 import { DimensionWorld } from '../dimension-world.js';
 import { javaSeed } from '../java-world.js';
 import { JavaRandom } from '../java-random.js';
@@ -35,6 +35,7 @@ import { describeTiles, describeCell } from '../tile-sync.js';
 import { PortalState, Teleporter, transferTarget, GAME_IDS, portalCooldown } from '../dimensions.js';
 import { encodeColumn, splitChanges } from './protocol.js';
 import { FiniteDimensionWorld, NETHER } from './client-dimensions.js';
+import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tickNether, applyPopulation } from './server-nether.js';
 
 const OVERWORLD = 0, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
@@ -78,9 +79,10 @@ export class ServerDimensions {
     }
     const saved = this.saved.nether ?? {}, edits = Array.isArray(saved.edits) ? saved.edits : [];
     for (let i = 0; i < edits.length; i += 100000) world.restore(edits.slice(i, i + 100000));
-    const n = this.nether = { world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), tiles: Object.fromEntries(TILE_KEYS.map(k => [k, {}])), xp: inert(), farming: inert(), trees: { random: sim.weather.random }, containers: inert(), redstone: inert() };
+    const n = { world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: inert(), overMobs: sim.mobs };
     n.items.joined = e => { e.eid = ++sim.nextItemId; };
-    n.tileEntities = { world, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons(), spawners: MobSpawners.fromJSON(), chests: n.tiles.chests, enders: n.tiles.enderTiles };
+    buildNetherSystems(sim, n, source, saved); // b62: tiles, tile entities, redstone, containers, light, fluids, fire, trees, plants, falling, farming, weather
+    if (!saved.tiles) applyPopulation(n, source); // a Nether nobody has saved yet: the fortress chests' loot and the blaze spawners
     const put = world.put.bind(world);
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
@@ -90,12 +92,14 @@ export class ServerDimensions {
     // The block rules that need no clock: neighbours dropping torches, doors, beds, rails and plants, and the portal itself.
     const drop = (...a) => sim.serverItems.stacksDrop(...a);
     for (const System of [Rails, Torches, Doors, Beds]) new System(world, { drop, apply: noop }).watch();
-    new Plants(world, { drop, broken: noop, apply: noop }).watch();
     new NetherLive(world, { random: sim.weather.random, apply: noop }).watch();
+    this.nether = n; // set before the inside build: ServerContainers.adopt and the mobs may call back
+    this.swap(n, () => buildNetherInside(sim, n, saved)); // systems that register on `sim.*` while they are built (dispensers, hoppers, the mobs)
+    sim.dispense?.adopt?.(n.dispense); // b62 lead: saved Nether arrows, balls and potions (the Overworld's stand-in lane) move to the Nether's own instance
     return n;
   }
   // The stand-ins `sim` reads while a Nether player's action runs (sim.world is the Overworld otherwise).
-  context(n) { return { world: n.world, items: n.items, changes: n.changes, farming: n.farming, trees: n.trees, containers: n.containers, redstone: n.redstone, tileEntities: n.tileEntities, dirtyTiles: n.dirtyTiles }; }
+  context(n) { return Object.fromEntries(NETHER_CONTEXT.map(key => [key, n[key]])); } // b62: + tiles, fluids, fire, falling, light, dispense, mobs
   swap(n, fn) {
     const sim = this.sim, context = this.context(n), keep = {}, xp = sim.serverItems.xp;
     for (const key of Object.keys(context)) { keep[key] = sim[key]; sim[key] = context[key]; }
@@ -127,12 +131,15 @@ export class ServerDimensions {
   adopt(p, saved) {
     if (saved?.dimension !== NETHER) return;
     p.world = this.ensureNether().world; p.dimension = NETHER; p.portal = new PortalState(); p.portal.timeUntilPortal = portalCooldown(true);
-    this.sim.mobs.removePlayer(p.id); // the Nether has no mobs, and the Overworld's must not target a player who is not there
+    const n = this.nether;
+    n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); // the Overworld's mobs must not target a player who is not there; the Nether's do
   }
+  // A player who disconnects leaves the Nether's mob view as well (simulation.removePlayer hook).
+  removePlayer(id) { this.nether?.mobs.removePlayer(id); }
   savedFields(p) { return p.dimension ? { dimension: p.dimension } : {}; }
   saveField() {
     const n = this.nether;
-    return n ? { dimensions: { nether: { edits: [...n.world.edits], signs: n.tileEntities.signs.toJSON(), skulls: n.tileEntities.skulls.toJSON() } } } : (this.saved.nether ? { dimensions: { nether: this.saved.nether } } : {});
+    return n ? { dimensions: { nether: { edits: [...n.world.edits], ...saveNether(n) } } } : (this.saved.nether ? { dimensions: { nether: this.saved.nether } } : {});
   }
   list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay })); }
   // The world snapshot a player in another dimension joins or arrives with (null for an Overworld player).
@@ -141,7 +148,7 @@ export class ServerDimensions {
     if (!p?.dimension) return null;
     const n = this.ensureNether(), sim = this.sim;
     return { gameMode: sim.gameMode, items: this.list(n.items), seed: n.world.seed, biome: n.world.biome, generationVersion: n.world.generationVersion, dimension: p.dimension,
-      time: sim.time, ticks: sim.ticks, columns: [...n.world.chunks.values()].map(encodeColumn), players: sim.presence(p.dimension), weather: this.clearWeather, redstone: { lit: [] }, contTiles: [] };
+      time: sim.time, ticks: sim.ticks, columns: [...n.world.chunks.values()].map(encodeColumn), players: sim.presence(p.dimension), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, contTiles: this.swap(n, () => n.containers.describeAll()) };
   }
   // ---- per tick ----
   afterTick(base) {
@@ -188,7 +195,7 @@ export class ServerDimensions {
     }
     // The player leaves the old dimension: the mob view goes (or comes back), and everything aimed at the old world is dropped.
     sim.vehicles?.dismount(p); // b61 lead: a rider leaves the vehicle (Entity.travelToDimension mounts nothing across)
-    if (to) sim.mobs.removePlayer(p.id); else { p.world = dest; sim.mobs.addPlayer(p); }
+    (from ? this.nether.mobs : this.nether?.overMobs ?? sim.mobs).removePlayer(p.id); (to ? this.nether.mobs : this.nether?.overMobs ?? sim.mobs).addPlayer(p); // b62: each dimension's mobs see only its own players
     p.world = dest; p.dimension = to;
     p.position.copy({ x: e.x, y: e.y, z: e.z }); p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); Object.assign(p, { fallDistance: 0, landedFall: 0, grounded: false });
@@ -205,12 +212,9 @@ export class ServerDimensions {
   flush(deliver) { for (const p of this.sim.players.values()) if (p.dimOut) { for (const m of p.dimOut) deliver(p.id, m); p.dimOut = null; } }
   // The Nether's items tick and its cell changes become a tick message (the same fields the Overworld's carries, without weather, redstone or XP).
   netherMessage(base) {
-    const sim = this.sim, n = this.nether, w = n.world;
-    if (n.items.items.length) {
-      n.items.tick(w);
-      if (n.items.items.length > 300) n.items.items.splice(0, n.items.items.length - 300);
-    }
-    n.items.sounds.length = 0;
+    const sim = this.sim, n = this.nether, w = n.world, here = [...sim.players.values()].filter(p => p.dimension === NETHER);
+    if (here.length) this.swap(n, () => tickNether(sim, n, here)); // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
+    else { n.changes.clear(); n.dirtyTiles.clear(); }
     const final = [...n.changes.values()].map(([x, y, z]) => [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
     n.changes.clear();
     let out;
@@ -228,7 +232,7 @@ export class ServerDimensions {
       n.dirtyTiles.clear();
       const list = this.list(n.items), items = !list.length && !n.itemsSent ? {} : { items: list };
       n.itemsSent = list.length;
-      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(NETHER), weather: this.clearWeather, redstone: { lit: [] }, ...items };
+      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(NETHER), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...n.containers.actionsField() };
     });
     return out;
   }

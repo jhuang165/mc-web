@@ -27,7 +27,9 @@ const f = Math.fround;
 export class ServerDispense {
   constructor(sim, saved = null) {
     this.sim = sim;
-    this.dim = 0; this.extra = new Map(); // b62: this object is the Overworld's lane (arrows, balls, potions); other dimensions get a lane object of the same shape (laneFor)
+    // b62: `dim` is the dimension whose players see and are hit by these entities; the Nether has its own instance (server-nether.js) whose own fields are the Nether's lane.
+    // `extra` holds a stand-in lane for a dimension with no instance yet (a saved Nether arrow before anyone went there): the Nether instance adopts it when it is built.
+    this.dim = 0; this.extra = new Map();
     this.arrows = new Arrows(Math.random);
     this.balls = new Projectiles(Math.random); // snowballs and eggs; the poof particles belong to the clients (disp replicas die -> clientImpact)
     this.balls.clientParticles = true;
@@ -40,7 +42,8 @@ export class ServerDispense {
     sim.redstone.hooks.primeTnt = (x, y, z) => this.prime(x + 0.5, y + 0.5, z + 0.5, true); // flint and steel on a TNT block (BlockTNT.func_150114_a)
     this.load(saved);
   }
-  get mobs() { return this.sim.mobs.mobs; } // the EntityWorld
+  get mobs() { return this.dim ? (this.sim.dimensions?.nether?.mobs?.mobs ?? this.sim.mobs.mobs) : this.sim.mobs.mobs; } // the EntityWorld of this instance's dimension
+  get world() { return this.dim ? (this.sim.dimensions?.nether?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
   get any() { return this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }
@@ -79,7 +82,7 @@ export class ServerDispense {
   // the player's armorInventory index `position - 1`. A mob needs canPickUpLoot, which no mob of the server has.
   equip([i, j, k], stack, position) {
     for (const p of this.sim.players.values()) {
-      if (p.dead || !p.survival) continue;
+      if (p.dead || !p.survival || (p.dimension | 0) !== this.dim) continue;
       const q = p.position, hw = f(PHYSICS.width / 2);
       if (!(q.x + hw > i && q.x - hw < i + 1 && q.y + PHYSICS.height > j && q.y < j + 1 && q.z + hw > k && q.z - hw < k + 1)) continue;
       const armor = p.survival.inventory.armor;
@@ -95,7 +98,9 @@ export class ServerDispense {
   // `mobs` is a stand-in with no mobs, which the potions' impact code needs). Every projectile sits in the lane of the dimension it was shot in.
   laneFor(dim) {
     dim |= 0;
-    if (!dim) return this;
+    if (dim === this.dim) return this;
+    const own = this.sim.dimensions?.nether?.dispense; // b62 lead: the dimension's own instance, once it is built
+    if (own && own !== this && (own.dim | 0) === dim) return own;
     let lane = this.extra.get(dim);
     if (!lane) {
       const sim = this.sim, balls = new Projectiles(Math.random);
@@ -106,7 +111,7 @@ export class ServerDispense {
     }
     return lane;
   }
-  potionsOf(lane) { return lane.potions ??= new WitchPotions(lane.dim ? lane.mobs : this.mobs); }
+  potionsOf(lane) { return lane.potions ??= new WitchPotions(lane.mobs); }
   playerByName(name) { for (const p of this.sim.players.values()) if (p.name === name) return p; return null; }
   // The server player who shot or threw `e` (an arrow's `owner`, a ball's `thrower`; a saved one is found again by name).
   ownerOf(e) {
@@ -117,7 +122,7 @@ export class ServerDispense {
   // The entity sweep targets of one lane: its mobs and the players of its dimension (a Creative player is `immune`: the arrow flies through). `ball` marks its thrower, who is
   // skipped for the first five ticks (EntityThrowable.onUpdate); a witch's potion skips the witch.
   targets(lane, ball = null, alive = false) {
-    const live = lane.dim ? [] : alive ? this.mobs.entities.filter(e => e.health > 0) : this.mobs.entities, // a dying mob is still collidable for arrows and balls
+    const live = alive ? lane.mobs.entities.filter(e => e.health > 0) : lane.mobs.entities, // a stand-in lane's mobs are none; // a dying mob is still collidable for arrows and balls
     out = mobTargets(live, null), f = Math.fround, hw = f(0.3);
     for (const p of this.sim.players.values()) {
       if (p.dead || !p.survival || p.survival.health <= 0 || (p.dimension | 0) !== lane.dim) continue;
@@ -152,7 +157,7 @@ export class ServerDispense {
   ballHit(mobs, e, ball) { return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? ball, ball); }
   // EntityEnderPearl.onImpact for a thrown pearl: the thrower (if online, alive and in this dimension) moves to the pearl, loses nothing but 5 fall damage and the fall distance.
   pearlImpact(lane, { pearl, hit }) {
-    const p = this.ownerOf(pearl), mobs = lane.dim ? lane.mobs : this.mobs, world = lane.dim ? lane.world : this.sim.world;
+    const p = this.ownerOf(pearl), mobs = lane.mobs, world = lane.world;
     const ok = p && !p.dead && (p.dimension | 0) === lane.dim;
     const owner = ok ? { kind: 'playerMP', connected: true, world, riding: !!p.mount, get fallDistance() { return p.fallDistance ?? 0; }, set fallDistance(v) { p.fallDistance = v; p.landedFall = 0; } } : null;
     impactEnderPearl(pearl, { world, owner, hit: hit?.survival ? null : hit }, {
@@ -180,7 +185,7 @@ export class ServerDispense {
     });
   }
   tickLane(lane) {
-    const dim = lane.dim, world = dim ? lane.world : this.sim.world, mobs = dim ? lane.mobs : this.mobs;
+    const dim = lane.dim, world = lane.world, mobs = lane.mobs;
     if (lane.balls.balls.length) {
       for (const b of [...lane.balls.balls]) this.credit(this.ownerOf(b), () => lane.balls.tickOne(world, b, this.targets(lane, b), (e, ball) => this.ballHit(mobs, e, ball), imp => this.pearlImpact(lane, imp)));
       lane.balls.reap();
@@ -192,7 +197,7 @@ export class ServerDispense {
     if (lane.potions?.projectiles.balls.length) this.tickPotions(lane);
     if (lane.arrows.list.length) {
       const arrows = lane.arrows, targets = arrowTargets(this.targets(lane), false);
-      const ctx = { targets, mobs: dim ? undefined : mobs, survival: null, player: null, igniteTnt: dim ? undefined : (x, y, z) => this.igniteBlockTnt(x, y, z), hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
+      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z) => this.igniteBlockTnt(x, y, z) : undefined, hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
       for (const a of [...arrows.list]) {
         if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
         this.credit(this.ownerOf(a), () => arrows.tickOne(world, a, ctx));
@@ -224,7 +229,7 @@ export class ServerDispense {
   // EntityPotion.onImpact / EntityExpBottle.onImpact. The splash on mobs is WitchPotions.impact (it also queues the loot events the mobs' drain turns into orbs);
   // the players in range take the same splashImpact steps (instant health or harm, then the timed effects). The glass break goes to the clients as `splash`.
   tickPotions(lane = this) {
-    const dim = lane.dim, mobs = dim ? lane.mobs : this.mobs, potions = this.potionsOf(lane), p = potions.projectiles, world = dim ? lane.world : mobs.world;
+    const dim = lane.dim, mobs = lane.mobs, potions = this.potionsOf(lane), p = potions.projectiles, world = lane.world;
     for (const ball of [...p.balls]) {
       p.tickOne(world, ball, this.targets(lane, ball, true));
       for (const ev of p.drain()) {
@@ -260,13 +265,13 @@ export class ServerDispense {
 
   // The snapshot of what `player` sees this tick: [] when nothing flies. Only the lane of the player's own dimension is sent.
   snapshot(player) {
-    const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0, lane = dim ? this.extra.get(dim) : this;
+    const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0, lane = dim === this.dim ? this : this.extra.get(dim);
     if (lane) {
       for (const a of lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0 });
       for (const b of lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z });
       for (const b of lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0 });
     }
-    if (dim) return out; // TNT, rockets and fireballs are the Overworld's
+    if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale });
@@ -278,7 +283,9 @@ export class ServerDispense {
     for (const lane of this.lanes) this.drainArrows(lane); // a skeleton's shot (made during the mobs' tick) is heard in the tick it was made
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
     for (const p of this.sim.players.values()) {
-      const dim = p.dimension | 0, ents = this.snapshot(p), events = fx.filter(e => (e.dim | 0) === dim && (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
+      const dim = p.dimension | 0;
+      if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)
+      const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
       const msgs = p.dispOut ??= [];
       if (ents.length || p.dispSeen) msgs.push({ type: 'dispEnts', ents });
       p.dispSeen = ents.length > 0;
@@ -291,8 +298,8 @@ export class ServerDispense {
   // ---- b62: saved with the world. Arrows (stuck ones too: Arrows.serialize), thrown balls and potions of every lane, each with its shooter's name (so a pearl or an arrow keeps
   // its owner across a restart while that player is online). Primed TNT, rockets and fireballs are not saved here.
   save() {
-    const lanes = {};
-    for (const lane of this.lanes) {
+    const lanes = {}, own = this.sim.dimensions?.nether?.dispense, all = own && own !== this ? [...this.lanes, own] : this.lanes; // b62 lead: the Nether instance's lane is saved here
+    for (const lane of all) {
       const arrows = lane.arrows.list.filter(a => !a.dead), balls = lane.balls.balls, potions = lane.potions?.projectiles.balls.filter(b => !b.dead) ?? [];
       if (!arrows.length && !balls.length && !potions.length) continue;
       const names = list => list.map(e => this.ownerOf(e)?.name ?? e.ownerName ?? null), tag = (rows, list) => rows.map((r, i) => { const n = names(list)[i]; return n ? { ...r, by: n } : r; });
@@ -304,7 +311,7 @@ export class ServerDispense {
     if (!saved || typeof saved !== 'object' || !saved.lanes) return;
     for (const [key, d] of Object.entries(saved.lanes)) {
       const dim = Number(key);
-      if (!(dim >= 0 && dim <= 1) || !d) continue; // the Overworld and the Nether
+      if (!(dim === 0 || dim === -1) || !d) continue; // the Overworld and the Nether (b62 lead: the Nether is -1)
       const lane = this.laneFor(dim), rows = Array.isArray(d.arrows) ? d.arrows : [], balls = Array.isArray(d.balls) ? d.balls : [], potions = Array.isArray(d.potions) ? d.potions : [];
       lane.arrows.load(rows); lane.balls.load(balls); this.potionsOf(lane).load(potions);
       const name = (row) => (typeof row?.by === 'string' && row.by.length <= 16 ? row.by : undefined);
@@ -314,4 +321,12 @@ export class ServerDispense {
     }
   }
 }
+// b62 lead: the dimension's instance (built with the Nether) takes over the stand-in lane a save left (`extra`).
+ServerDispense.prototype.adopt = function (inst) {
+  const dim = inst.dim | 0, lane = this.extra.get(dim);
+  if (!lane || inst === this) return;
+  this.extra.delete(dim);
+  inst.arrows.list.push(...lane.arrows.list); inst.balls.balls.push(...lane.balls.balls);
+  if (lane.potions) inst.potionsOf(inst).projectiles.balls.push(...lane.potions.projectiles.balls);
+};
 const laneBusy = lane => lane.arrows.list.length + lane.balls.balls.length + (lane.potions?.projectiles.balls.length ?? 0) > 0;
