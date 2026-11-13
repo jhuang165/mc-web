@@ -4,7 +4,7 @@
 // Executed (tracker-joint-reference.json b58tp dimAge cases, replayed by trackerphase-b58.test.js): mob and object entries made in an unwatched world run `idleUpdate` and are sent at the join in set order.
 import { inSpawnArea } from "./away-plan.js";
 import { reduceIdleTicks } from "./entity-tracker.js";
-import { bindTrace, applyTick, restoreFinal } from "./away-trace.js";
+import { bindTrace, applyTick, restoreFinal, ghostsAt } from "./away-trace.js";
 
 const posOf = (e) => (e.summoned ? [e.px, e.pz] : [e.x, e.z]);
 // Which entities were in the loaded area: their chunk (block x, z >> 4) is within the spawn square
@@ -28,9 +28,9 @@ export function awayCatchUp(mobs, o, lists, world, idle) {
       const per = (i) => { // the state of tick i; the entities born later are left out of this tick's lists
         const changed = applyTick(trace, i, absent);
         if (changed || first) { refresh(); first = false; }
-        return { mobs: mobs.entities.filter(cur), joint: { tracker: o, lists: kept, world } };
+        return { mobs: mobs.entities.filter(cur), joint: { tracker: o, lists: kept, world }, ghosts: ghostsAt(idle.trace, i) };
       };
-      try { mobs.idleTrack(n, keep, { tracker: o, lists: kept, world }, per); } finally { restoreFinal(trace); absent.clear(); refresh(); }
+      try { mobs.idleTrack(n, keep, { tracker: o, lists: kept, world }, per); } finally { restoreFinal(trace); absent.clear(); refresh(); mobs.tracker?.dropGhosts(); }
     }
     mobs.idleTrack(total - n, keep, { tracker: o, lists: kept, world });
   } finally { if (hook) o.hooks.extraLists = hook; }

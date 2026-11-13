@@ -7,6 +7,8 @@
 const NUM = ["x", "y", "z", "posY", "mx", "my", "mz", "vx", "vy", "vz", "yaw", "pitch", "rotationYaw", "rotationPitch", "rotationYawHead"];
 // Entity.addVelocity / setBeenAttacked set these and the TRACKER clears them (settle); the run has no tracker, so a flag only latches. A rise is counted and replayed once.
 const FLAGS = ["airBorne", "velocityChanged"];
+// The id the tracker hashes (Entity.getEntityId): a mob's "mob-N", an object's entityId or numeric id.
+const idNumber = (e) => { const id = e.entityId ?? e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : null; };
 export const RISE = "!"; // a replayed field named "!name" is a flag counter: the flag is set on the tick the counter rises
 
 export class AwayTrace {
@@ -17,10 +19,10 @@ export class AwayTrace {
     for (const e of this.lists()) {
       if (!e || typeof e !== "object") continue;
       let r = this.rows.get(e);
-      if (!r) this.rows.set(e, (r = { from: t, fields: NUM.filter((f) => Number.isFinite(e[f])), rise: [0, 0], was: [false, false], last: null, samples: [] }));
+      if (!r) this.rows.set(e, (r = { from: t, id: idNumber(e), fields: NUM.filter((f) => Number.isFinite(e[f])), rise: [0, 0], was: [false, false], last: null, samples: [] }));
       if (r.at === t) continue; // listed twice in one tick
       r.at = t;
-      FLAGS.forEach((f, i) => { const on = !!e[f]; if (on && !r.was[i]) r.rise[i]++; r.was[i] = on; });
+      FLAGS.forEach((f, i) => { if (e[f]) { r.rise[i]++; e[f] = false; } }); // the flag is cleared here as the tracker clears it after a send, so any flag seen is a new set // b62: the tracker clears the flag after each send, so a later rise counts again (nothing else in the run reads it)
       const v = r.fields.map((f) => e[f]);
       v.push(r.rise[0], r.rise[1]);
       if (r.last && v.every((x, i) => x === r.last[i])) continue;
@@ -37,7 +39,11 @@ export class AwayTrace {
       if (r.from === 0 && r.samples.length === stride) continue;
       rows.push({ ord: rec.ord, from: r.from, fields: [...r.fields, RISE + FLAGS[0], RISE + FLAGS[1]], data: Float64Array.from(r.samples) });
     }
-    return { n: this.n, rows };
+    // b62: an entity that was sampled but is not in the lists any more died (or left through a portal) in the run: natively the tracker held its entry until the tick it was removed, which
+    // grew the HashSet's table (the capacity never shrinks) and so changed the order of every entry after it. [id, first tracker tick, last tracker tick].
+    const alive = new Set(this.lists()), ghosts = [];
+    for (const [e, r] of this.rows) if (!alive.has(e) && Number.isInteger(r.id) && r.at !== undefined) ghosts.push([r.id, r.from, r.at]);
+    return { n: this.n, rows, ghosts };
   }
 }
 
@@ -72,5 +78,7 @@ export function applyTick(rows, i, absent) {
   }
   return changed;
 }
+// The ghosts' ids that the tracker still holds at tick `i` (died later than i, born at or before it).
+export const ghostsAt = (trace, i) => (trace?.ghosts ?? []).filter(([, from, to]) => from <= i && i <= to).map(([id]) => id);
 // Back to the state the entities have now (the end of the trace).
 export function restoreFinal(rows) { for (const r of rows) r.fields.forEach((f, k) => { r.e[f[0] === RISE ? f.slice(1) : f] = r.keep[k]; }); }
