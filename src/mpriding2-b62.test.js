@@ -146,3 +146,30 @@ test('a pig carrying a player that lands from more than 5 blocks awards flyPig',
   tick(s, 40);
   assert.ok((s.events ?? []).some(ev => ev.type === 'award' && ev.achievement === 'flyPig' && ev.id === 'a'), 'flyPig');
 });
+
+// ---- mob riders ----
+test('a fast empty cart picks up a mob and carries it; a chest cart does not', () => {
+  const s = pigFixture('creative'), p = join(s, 'a', 1, 30.5, 30.5);
+  for (let x = 60; x <= 80; x++) s.world.put(x, 10, 70, RAIL, 1, false);
+  const e = pig(s, 68.5, 70.5); e.saddled = false;
+  const cart = s.vehicles.spawnVehicle('minecart', 66.5, 10, 70.5), chest = s.vehicles.spawnVehicle('chest_minecart', 76.5, 10, 70.5);
+  cart.vx = 0.22; // slow enough to enter the 0.2 push margin before the pig's box stops it (the order is the single-player one: carts move, then the pushes)
+  tick(s, 12);
+  assert.ok(e.ridingEntity === cart, 'the pig sits in the cart');
+  const x0 = cart.x; tick(s, 5);
+  assert.ok(Math.abs(e.x - cart.x) < 1.5, 'it travels with the cart');
+  assert.ok(cart.x !== x0 || cart.vx !== 0);
+  const f2 = pig(s, 78.5, 70.5); chest.vx = 0.22; tick(s, 12);
+  assert.ok(!f2.ridingEntity, 'a chest cart never picks a mob up');
+});
+
+test('a spider jockey: the skeleton rides the spider on the server and both are sent', () => {
+  const s = pigFixture('creative'); join(s, 'a', 1);
+  const mobs = s.mobs.mobs, sp = mobs.create('spider', 66.5, 10, 64.5);
+  mobs.entities.push(sp);
+  mobs.spawnSpiderJockey(sp);
+  const sk = mobs.entities.find(e => e.type === 'skeleton');
+  assert.ok(sk && sk.ridingEntity === sp, 'skeleton rides the spider');
+  tick(s, 20);
+  assert.ok(Math.abs(sk.x - sp.x) < 0.5 && Math.abs(sk.z - sp.z) < 0.5 && sk.y > sp.y && sk.ridingEntity === sp, 'it sits on the spider');
+});

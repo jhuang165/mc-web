@@ -23,6 +23,7 @@ import { heldAttackDamage } from '../entities.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
+import { syncVehiclePassengers } from '../vehicle-riders.js';
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
@@ -226,10 +227,11 @@ export class ServerVehicles {
         p.velocity.x += vx; p.velocity.z += vz;
       }
       for (const b of this.boxesOfMobs()) {
-        const e = b.ref, [vx, vz] = system.pushEntity({ x: e.x, z: e.z }, b.bb); // no `type`: a cart never picks up a mob here (no mob riders are connected)
+        const e = b.ref, [vx, vz] = system.pushEntity(e, b.bb); // b62: the mob itself, so a fast empty cart picks it up (cartPicksUp; boats ignore it)
         e.vx = (e.vx ?? 0) + vx; e.vz = (e.vz ?? 0) + vz;
       }
     }
+    syncVehiclePassengers(this.carts.carts); syncVehiclePassengers(this.boats.carts); // b62: a passenger that left or died frees the vehicle's side
     for (const system of [this.carts, this.boats]) for (const d of system.drain()) if (d.stack) host.items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: d.motion });
     for (const p of host.players.values()) {
       const m = p.mount;
