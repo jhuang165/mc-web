@@ -239,6 +239,7 @@ export class ClientEntity {
     this.height = 0; // the client class's own size, kept by the tracker
     // Entity.rand of the client copy (unseeded in Java; the replay seeds it): the squid's rotation speed re-roll reads it
     this.rand = type === "squid" || type === "ender_dragon" || type === "ender_crystal" ? ClientEntity.makeRandom() : null;
+    this.crystalFire = null; // optional client block layer hook for the crystal copy (EntityEnderCrystal.onUpdate sets fire on the client world too)
     this.crystals = null; // the client dragon's world: () => the present crystal copies in the order getEntitiesWithinAABB walks them (MobTracker.clientTick)
     this.innerRotation = 0; this.age = 0; // EntityEnderCrystal.innerRotation (rand.nextInt(100000), then +1 a tick) and the beam's ticks
     this.squid = null; // EntitySquid's client fields (squidPitch ... tentacleAngle), set at spawn
@@ -306,7 +307,7 @@ export class ClientEntity {
     this.prevRotationYaw = this.rotationYaw; this.prevRotationPitch = this.rotationPitch;
     this.prevRenderYawOffset = this.renderYawOffset; this.prevRotationYawHead = this.rotationYawHead;
     if (this.type === "ender_dragon" && this.dragon) { this.dragonUpdate(); turn?.(this); return; }
-    if (this.type === "ender_crystal") { this.innerRotation++; this.age++; } // EntityEnderCrystal.onUpdate (++innerRotation) after the world's ++ticksExisted; its fire and watcher writes are not drawn
+    if (this.type === "ender_crystal") { this.innerRotation++; this.age++; this.crystalFire?.(this); } // EntityEnderCrystal.onUpdate (++innerRotation) after the world's ++ticksExisted; wz.h also sets fire on the client world: `crystalFire` is the optional client block layer hook (ender-crystal-mobs.js clientCrystalFire), unset until a layer is wired
     if (move && pre) pre(this);
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
