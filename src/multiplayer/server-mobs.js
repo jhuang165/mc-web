@@ -20,6 +20,7 @@ import { skylightSubtracted, celestialAngle } from '../lighting.js';
 import { PEACEFUL } from '../difficulty.js';
 import { PHYSICS } from '../world.js';
 import { makeStack } from '../inventory.js';
+import { serverAnimalUse } from './animal-use.js';
 
 export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider']);
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
@@ -53,6 +54,7 @@ export function mobState(e) {
   if (e.growingAge < 0) s.baby = 1;
   if (e.burn > 0 || e.fire > 0) s.burn = 1;
   if (e.type === 'sheep') { s.color = e.color ?? 0; if (e.sheared) s.sheared = 1; }
+  if (e.type === 'pig' && e.saddled) s.saddled = 1; // b61: the saddle on the model (set by the saddle item; riding is mpvehicles)
   if (e.type === 'creeper') { s.fuse = e.fuseTime ?? 0; s.last = e.lastActive ?? 0; if (e.powered) s.powered = 1; }
   return s;
 }
@@ -90,6 +92,13 @@ export class ServerMobs {
     mobs.beforeMob = e => this.target(e);
     host.achievements?.watchMobs(mobs); // b60: killEnemy, snipeSkeleton, overkill for the attacker of the moment
     mobs.mobStatus = (e, status) => this.status(e, status);
+    // b61: EntityAIMate.spawnBaby credits the player who fed the parents (func_146083_cb): breedCow goes through the same watcher as a kill does, with `attacker` set for the call.
+    const born = mobs.spawnBaby;
+    mobs.spawnBaby = function (a, b) {
+      const who = host.players?.get(a.breeder ?? b.breeder), ach = host.achievements, was = ach?.attacker;
+      if (who && ach) ach.attacker = who;
+      try { return born.call(this, a, b); } finally { if (ach) ach.attacker = was; }
+    };
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
   }
@@ -271,6 +280,19 @@ export class ServerMobs {
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     try { return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }); } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
+  }
+  // C02 UseEntity, interact (b61, animal-use.js): same reach as the attack; the server's own rules decide, `p.animHandled` tells the network tick to drop the click's item use.
+  interact(p, wireId, claim = false) {
+    const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
+    if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
+    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
+    if (dx * dx + dy * dy + dz * dz > 36) return false;
+    this.use(v);
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
+    if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
+    p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks
+    return done;
   }
   save() { return this.mobs.entities.filter(e => e.health > 0).map(e => this.mobs.serializeOne(e)); }
 }
