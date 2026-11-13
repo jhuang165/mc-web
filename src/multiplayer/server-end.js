@@ -33,7 +33,6 @@ import { buildNetherSystems, buildNetherInside, saveNether } from './server-neth
 
 export const DRAGON_ON_SERVER = false;
 const OVERWORLD = 0, SIZE = 128, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
-const inert = () => new Proxy({}, { get: (_, key) => key === 'litFurnaces' || key === 'lit' ? new Set() : key === 'observe' ? noop : () => false });
 const toLocal = (x, z) => [x + END_OFFSET.x, z + END_OFFSET.z];
 
 // The End's terrain into the finite world, shifted by END_OFFSET. A generated chunk holds (lx * 16 + lz) * 256 + y; a column of 256 cells moves as one run.
