@@ -1,3 +1,4 @@
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ringEntityActive } from './streaming-ticks.js';
 import { inLava, waterAcceleration } from './fluids.js';
 import { moveEntity, entityPushOut } from './entities.js';
@@ -77,7 +78,7 @@ export class ExperienceOrbs {
  explode(world,x,y,z,size,exploder=null){
   for(const o of this.orbs){
    if(!ringEntityActive(world,o))continue;
-   if(o.dead||o===exploder)continue;
+   if(o.dead||o===exploder||isFrozen(o))continue;
    const hit=explosionImpact(world,x,y,z,size,o.x,o.posY,o.z,o.posY,o.bb);
    if(!hit)continue;
    this.hurt(o,'explosion',hit.damage);
@@ -95,7 +96,7 @@ export class ExperienceOrbs {
   if(this.cooldown>0)this.cooldown--;
   const r=f(width)/2,a=[feet.x-r-1,feet.y-0.5,feet.z-r-1,feet.x+r+1,feet.y+f(height)+0.5,feet.z+r+1];
   for(const o of this.orbs){
-   if(o.dead||this.cooldown)continue;
+   if(o.dead||this.cooldown||isFrozen(o))continue;
    const b=o.bb;
    if(!(b[3]>a[0]&&b[0]<a[3]&&b[4]>a[1]&&b[1]<a[4]&&b[5]>a[2]&&b[2]<a[5]))continue;
    this.cooldown=2;

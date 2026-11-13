@@ -284,7 +284,7 @@ import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
-import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists } from "./saved-order.js";
+import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists, liveOrder } from "./saved-order.js";
 import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
@@ -3036,7 +3036,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
     // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
-    projectileTargets: () => [...mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
+    projectileTargets: () => [...mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
     projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
@@ -3060,7 +3060,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       else if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
     },
     handleEntityEvents,
-    arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative), ...hangingArrowTargets(hanging)],
+    arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height), survival.creative), ...hangingArrowTargets(hanging)],
       hanging, mobs, survival, player: position, igniteTnt: (x, y, z, placer) => {
         lightTnt(x, y, z, placer);
         if (world.set(x, y, z, 0)) scene.updateBlocks([[x, y, z, TNT, 0]]);
@@ -3123,7 +3123,7 @@ function fishingHost() {
     canLightningStrike: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z),
     canSeeSky: (x, y, z) => canSeeSky(world, x, y, z),
     sound: (name, volume, pitch, hook) => sounds.play(name, { volume, pitch, ...(hook ? { position: { x: hook.x, y: hook.y, z: hook.z } } : {}) }),
-    targets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
+    targets: () => mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height),
     hit: (e) => thrownHit(mobs, e, position),
     pull: (e, [dx, dy, dz]) => { if (Number.isFinite(e.vx)) { e.vx += dx; e.vy += dy; e.vz += dz; } },
     drop: (stack, x, y, z, motion) => items.spawn(stack, x, y, z, { motion }),

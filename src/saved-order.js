@@ -139,7 +139,7 @@ function freeze(mobs, keys) {
     if (!keys.has(k) || fz.set.has(e) || carriesPlayer(e)) continue;
     const mates = [e.ridingEntity, e.passenger].filter(Boolean);
     if (mates.some((m) => !keys.has(chunkKey(m)) || carriesPlayer(m))) continue;
-    fz.set.add(e);
+    fz.set.add(e); FROZEN.add(e);
     (fz.byChunk.get(k) ?? fz.byChunk.set(k, []).get(k)).push(e);
   }
 }
@@ -156,7 +156,7 @@ function thaw(mobs, keys) {
     const here = fz.byChunk.get(k);
     if (!here) continue;
     fz.byChunk.delete(k);
-    const part = here.filter((e) => { fz.set.delete(e); return !e.dead; }).map((e) => ({ e, chunk: k, sec: sectionOf(e), list: moved?.get(e) ?? seqs?.get(e) ?? 0 }));
+    const part = here.filter((e) => { fz.set.delete(e); FROZEN.delete(e); return !e.dead; }).map((e) => ({ e, chunk: k, sec: sectionOf(e), list: moved?.get(e) ?? seqs?.get(e) ?? 0 }));
     part.sort((a, b) => a.sec - b.sec || a.list - b.list);
     rows.push(...part);
     mobs.chunkBirth?.delete(k);
@@ -164,9 +164,16 @@ function thaw(mobs, keys) {
   if (!rows.length || !seqs) return;
   const byChunk = new Map();
   for (const r of rows) (byChunk.get(r.chunk) ?? byChunk.set(r.chunk, []).get(r.chunk)).push(r);
-  for (const part of byChunk.values()) for (const r of loadOrder(part)) { seqs.set(r.e, mobs.orderCount = (mobs.orderCount ?? 0) + 1); moved?.delete(r.e); mobs.sectionCells?.delete(r.e); renumber(mobs, r.e); }
+  for (const part of byChunk.values()) {
+    for (const r of loadOrder(part)) { seqs.set(r.e, mobs.orderCount = (mobs.orderCount ?? 0) + 1); moved?.delete(r.e); mobs.sectionCells?.delete(r.e); }
+    for (const r of createOrder(part)) renumber(mobs, r.e); // b62: the ids follow the reader's creation order, not the loaded list's
+  }
   mobs.entities.sort((a, b) => (seqs.get(a) ?? Infinity) - (seqs.get(b) ?? Infinity));
 }
+
+/** b62: every frozen entity of any kind (mobs, items, orbs, arrows, carts ...). The chunk-list queries (getEntitiesWithinAABB: arrows, explosions, pickups, merges, pushes, village counts) skip these. */
+const FROZEN = new WeakSet();
+export const isFrozen = (e) => FROZEN.has(e);
 
 /** b60so: the walk's list without the frozen entities (the entities of unloaded chunks are not in loadedEntityList). */
 export const liveOrder = (mobs, order) => (mobs?.frozen?.set.size ? order.filter((e) => !mobs.frozen.set.has(e)) : order);
@@ -207,6 +214,22 @@ function loadOrder(rows) {
   const out = [];
   for (const secs of chunks.values()) for (const list of secs) out.push(...list);
   return out.length === rows.length ? out : rows; // a mount whose rider is not in the walk (a ring) would be lost: keep the plain walk
+}
+
+/** b62 singleleft (executed SavedOrderLoginProbe `saved-order9`): AnvilChunkLoader creates the entities in the file's order (sections 0..15, each in list order); a rider is created first and then each mount
+ *  of its Riding chain (n, n + 1, ...), though the mount is filed in its own section: the cart of a cow in section 8 is in the loaded list before the orb of section 1 but has a higher id. */
+function createOrder(rows) {
+  const byEnt = new Map(rows.map((r) => [r.e, r])), mounted = new Set();
+  for (const r of rows) { const m = r.e.ridingEntity; if (m && m !== r.e && byEnt.has(m)) mounted.add(m); }
+  if (!mounted.size) return rows;
+  const out = [];
+  for (const r of rows) {
+    if (mounted.has(r.e)) continue;
+    out.push(r);
+    const seen = new Set([r.e]);
+    for (let m = r.e.ridingEntity; m && byEnt.has(m) && !seen.has(m); m = m.ridingEntity) { seen.add(m); out.push(byEnt.get(m)); }
+  }
+  return out.length === rows.length ? out : rows;
 }
 
 /** The chunk/section check of World.updateEntityWithOptionalForce, run for the entities in `order`: tickMobs calls it with one entity right after that entity's own update (b54so) (`start`: for the

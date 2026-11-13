@@ -1,3 +1,4 @@
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ringEntityActive } from './streaming-ticks.js';
 // EntityItem (xk) from the 1.7.10 JAR: 0.25 x 0.25 boxes with gravity 0.04,
 // 0.98 drag (block slipperiness x 0.98 on the ground), Entity.moveEntity
@@ -228,7 +229,7 @@ export class ItemEntities {
   // Explosion.doExplosionA: posY is the box centre, with inherited eye height 0.
   explode(world, x, y, z, size, exploder = null) {
     for (const e of this.items) {
-      if (e.dead || e === exploder) continue;
+      if (e.dead || e === exploder || isFrozen(e)) continue;
       const posY = e.y + W, hit = explosionImpact(world, x, y, z, size, e.x, posY, e.z, posY, this.box(e));
       if (!hit) continue;
       this.hurt(e, hit.damage);
@@ -293,7 +294,7 @@ export class ItemEntities {
       }
       const [a, b, c, d, g, h] = this.box(e);
       for (const o of this.remote ? [] : this.items) {
-        if (o === e || o.dead) continue;
+        if (o === e || o.dead || isFrozen(o)) continue;
         // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
         if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
         const [oa, ob, oc, od, og, oh] = this.box(o);
@@ -316,7 +317,7 @@ export class ItemEntities {
   collect(feet, width, height, add) {
     const r = width / 2 + 1, picked = [];
     for (const e of this.items) {
-      if (e.dead || e.delay > 0) continue;
+      if (e.dead || e.delay > 0 || isFrozen(e)) continue;
       const [a, b, c, d, g, h] = this.box(e);
       if (!(d > feet.x - r && a < feet.x + r && g > feet.y - 0.5 && b < feet.y + height + 0.5 && h > feet.z - r && c < feet.z + r)) continue;
       const before = e.stack.count;

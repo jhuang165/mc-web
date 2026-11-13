@@ -10,6 +10,7 @@
 // Boats reuse the Minecarts bookkeeping (a `carts` list, pickable(), drain(), boxes(), mount/dismount)
 // with an empty rail table. Like a cart, a boat keeps posY (the native field) and its box `bb`; `y` is the
 // box bottom. Riders use the same feet convention as carts (vehicle-simulation.js).
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ensureUuid, isUuid } from "./entity-uuid.js";
 import { Minecarts } from "./minecarts.js";
 import { recordBirth } from "./tracker-birth.js";
@@ -267,7 +268,7 @@ export class Boats extends Minecarts {
       }
     }
     if (boat.onGround) { boat.vx *= 0.5; boat.vy *= 0.5; boat.vz *= 0.5; }
-    this.move(world, boat, boat.vx, boat.vy, boat.vz, [...this.carts, ...entities]);
+    this.move(world, boat, boat.vx, boat.vy, boat.vz, [...this.carts.filter((c) => !isFrozen(c)), ...entities]);
     if (boat.collidedH && d10 > 0.2) {
       if (!boat.dead && !boat.remote) this.crashBreak(boat); // `!isRemote && !isDead`; neither branch drags the motion (executed: ride-crash-fast)
     } else { boat.vx *= 0.9900000095367432; boat.vy *= 0.949999988079071; boat.vz *= 0.9900000095367432; }
@@ -321,7 +322,7 @@ export class Boats extends Minecarts {
     const near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     let x = 0, z = 0;
     for (const boat of this.carts)
-      if (!boat.dead && intersects(boat.bb, near)) { const [ax, az] = this.collide(boat, entity); x += ax; z += az; }
+      if (!boat.dead && !isFrozen(boat) && intersects(boat.bb, near)) { const [ax, az] = this.collide(boat, entity); x += ax; z += az; }
     return [x, z];
   }
   hit(boat, amount, options) { return this.attack(boat, amount, options); }

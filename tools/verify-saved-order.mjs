@@ -85,3 +85,11 @@ const reference8={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases8};
 await writeFile(path.join(root,'../public/research/saved-order8-reference.json'),JSON.stringify(reference8)+'\n');
 console.log(`${cases8.length} saved order 8 scenarios`);
+// Batch 62 (b62so): ids of riders and mounts that sit in different sections of a reloaded chunk; replayed by src/singleleft-b62.test.js.
+const cases9=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order9');
+assert.equal(cases9.length,4,'4 b62so scenarios');
+const reference9={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 62 b62so: SavedOrderLoginProbe `ids` for a rider and its mount filed in different sections (the b60so queue-delay set-up: away, a tick later, back). The rider is created first (id n), its mount next (n + 1); the loaded list follows the sections.',
+ cases:cases9};
+await writeFile(path.join(root,'../public/research/saved-order9-reference.json'),JSON.stringify(reference9)+'\n');
+console.log(`${cases9.length} saved order 9 scenarios`);

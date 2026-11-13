@@ -1,6 +1,7 @@
 // Browser-independent ordering for the non-living entity segment of the live
 // player tick. Entity systems own their state; callers provide world-specific
 // targets and synchronous effects at the same points used by main.js.
+import { isFrozen } from "./saved-order.js"; // b62
 import { tickTnt, TNT_POWER } from "./explosion.js";
 import { hangingArrowTargets } from "./hanging.js";
 import { ringEntityActive } from './streaming-ticks.js';
@@ -106,7 +107,7 @@ function drainHanging({ hanging }, hooks) { if (hanging) for (const d of hanging
 
 // The carts and boats as the targets of a thrown potion or snowball's sweep (every collidable entity is a candidate there; the entity box is the cart's `bb`).
 // Paintings and item frames are collidable entities too (EntityThrowable's ray takes any canBeCollidedWith entity in the sweep box).
-export const vehicleTargets = ({ minecarts, boats, hanging }) => [...(minecarts?.carts ?? []), ...(boats?.carts ?? [])].filter((v) => !v.dead).map((v) => ({ ref: v, box: v.bb })).concat(hangingArrowTargets(hanging));
+export const vehicleTargets = ({ minecarts, boats, hanging }) => [...(minecarts?.carts ?? []), ...(boats?.carts ?? [])].filter((v) => !v.dead && !isFrozen(v)).map((v) => ({ ref: v, box: v.bb })).concat(hangingArrowTargets(hanging));
 // EntitySnowball / EntityEgg / EntityEnderPearl.onImpact on a vehicle or a hanging entity: attackEntityFrom(thrown snowball, 0), which wobbles a cart or boat (EntityMinecart / EntityBoat
 // .attackEntityFrom) without damage and breaks a painting or frame (a frame with an item loses only the item); `by` is the thrower when it is the player. The indirect thrown source's
 // entity is the thrower, so a Creative player's hit breaks the cart or boat outright (no drop) and a painting without a drop (executed: EntityListProbe pthrow-* records).

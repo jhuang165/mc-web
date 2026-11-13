@@ -1,6 +1,7 @@
 // Authoritative integrated-server explosion orchestration from main.js. This
 // module mutates world/entity state directly while leaving rendering, audio,
 // container presentation and UI notifications to synchronous hooks.
+import { isFrozen, liveOrder } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { explosionReaches } from "./ring-events.js";
 import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
@@ -18,7 +19,7 @@ import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, item
 // above 40 (a creative player's own explosion breaks it outright), then the knockback is added to its motion (vehicles are not EntityLivingBase: no Blast Protection).
 function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop) {
   for (const v of [...(system?.carts ?? [])]) {
-    if (v.dead || v === exploder) continue;
+    if (v.dead || v === exploder || isFrozen(v)) continue;
     const hit = explosionImpact(world, x, y, z, size, v.x, v.posY, v.z, v.posY, v.bb);
     if (!hit) continue;
     system.attack(v, hit.damage, { source: "explosion", creative });
@@ -75,7 +76,7 @@ export function explodeMobs(state, request) {
   const mobHits = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
-  for (const entity of [...(mobs?.entities ?? [])]) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
+  for (const entity of liveOrder(mobs, [...(mobs?.entities ?? [])])) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
     if (entity === exploder) continue;
     const type = ENTITY_TYPES[entity.type];
     if (!type) continue;
@@ -137,7 +138,7 @@ export function applyExplosion(state, request, hooks = {}) {
   explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore);
   const tntProcessed = [];
   for (const entity of primed) {
-    if (entity === exploder) continue;
+    if (entity === exploder || isFrozen(entity)) continue;
     explodeTnt(world, entity, x, y, z, size);
     tntProcessed.push(entity);
   }

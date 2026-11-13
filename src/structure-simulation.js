@@ -7,6 +7,7 @@
 // full loot every time. The records therefore become live state only once, when a world record has
 // no saved structure state yet (its first launch); afterwards the saved `spawners` / `minecarts`
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
+import { isFrozen, liveOrder } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
 import { Minecarts } from "./minecarts.js";
 import { CART_SUMMON, cartTypeOfSummon, summonCart } from "./cart-summon.js";
@@ -77,7 +78,7 @@ export function tickMinecartSimulation(state, hooks = {}) {
 // excludes it) and every living mob. `sized` boxes a mob.
 function vehicleBlockers(state) {
   const { mobs, position, width, height, alive = true, rider = null } = state;
-  const living = (mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
+  const living = liveOrder(mobs, mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
   const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
@@ -108,7 +109,7 @@ function pushAndDrain(state, hooks, system, mobsPushed = false) {
 }
 
 // The other vehicle list as blocking boxes: World.getCollidingBoundingBoxes adds getBoundingBox / getCollisionBox of every entity beside the mover, so a boat and a cart stop each other.
-const solidVehicles = (system) => (system?.carts ?? []).filter((v) => !v.dead).map((v) => ({ bb: v.bb, ref: v }));
+const solidVehicles = (system) => (system?.carts ?? []).filter((v) => !v.dead && !isFrozen(v)).map((v) => ({ bb: v.bb, ref: v }));
 
 /**
  * One minecart's update where the loaded-entity walk reaches it (entity-simulation.js entityWalkers): EntityMinecart.onUpdate among the entities
