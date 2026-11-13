@@ -2,6 +2,7 @@ import { ITEMS } from '../survival.js';
 import { PlayerInventory, copyStack, makeStack, sameStackItem } from '../inventory.js';
 import { ExperienceOrbs, Experience } from '../experience.js';
 import { PHYSICS } from '../world.js';
+import { ServerInventory } from './server-inventory.js';
 
 // Items, experience and inventory authority of a Survival dedicated server (batch 59).
 //
@@ -42,6 +43,7 @@ export class ServerItems {
     this.xp = new ExperienceOrbs(saved.xpOrbs);
     this.taken = []; // S0D collect item of this tick: { i, by }
     this.orbsSent = 0;
+    this.inv = new ServerInventory(sim); // b60: the player's own inventory window and tool breaks (server-inventory.js)
     sim.items.load(saved.items, s => reader.read(s), 0);
   }
   save() { return { items: this.sim.items.serialize(), xpOrbs: this.xp.serialize() }; }
@@ -85,8 +87,10 @@ export class ServerItems {
   }
   // End of a tick: every slot the server changed since the client last saw it becomes a correction.
   settle(p) {
+    this.inv.settle(p);
     const main = p.survival.inventory.main, changed = [];
     for (let i = 0; i < MAIN; i++) if (!sameSlot(main[i], p.seen[i])) { p.seen[i] = main[i] ? copyStack(main[i]) : null; p.slotSeq[i] = p.seq + 1; changed.push({ slot: i, stack: main[i] ? copyStack(main[i]) : null }); }
+    if (p.survival.broken) this.inv.broke(p, p.survival.broken);
     p.survival.broken = 0;
     if (changed.length) (p.itemsOut ??= []).push({ type: 'slot', seq: ++p.seq, slots: changed });
   }
@@ -118,7 +122,7 @@ export class ServerItems {
       (sim.events ??= []).push({ type: 'pickup', id: p.id, item: stack.id }); // the achievement triggers (server-broadcast.js pickedAchievement)
       sim.achievements.diamondsToYou(p, stack, e); // xk.b_: a diamond thrown by another online player awards the thrower (b60)
       stack.count -= n;
-      if (stack.count <= 0) this.taken.push({ i: e.eid, by: p.id });
+      this.taken.push({ i: e.eid, by: p.id, ...(stack.count > 0 ? { partial: true } : {}) }); // S0D goes out for a partial take too (EntityPlayer.onItemPickup runs after any addItemStackToInventory success)
       // EntityItem.onCollideWithPlayer: random.pop 0.2, pitch ((r - r) * 0.7 + 1) * 2, for everyone in range (the collector's client plays its own).
       sim.soundsOut.push({ name: 'random.pop', x: p.position.x, y: p.position.y, z: p.position.z, volume: f(0.2), pitch: f(f(f(f(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * f(0.7)) + 1) * 2), except: p.id });
       return true;

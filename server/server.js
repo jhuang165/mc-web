@@ -196,6 +196,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
         else if (m.type === 'achDrop') simulation.dropHeld(id, m.all === true); // b60: Q / Ctrl+Q, the item entity carries the thrower
         else if (m.type === 'openInventory') social.openInventory(id); // C16 status 2: Taking Inventory
+        else if (m.type === 'invClick') simulation.invClick(id, m); // b60: C0E window 0 (the player's inventory)
+        else if (m.type === 'invAck') simulation.invAck(id); // b60: C0F window 0
+        else if (m.type === 'invClose') simulation.invClose(id); // b60: C0D window 0
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'clickWindow') simulation.clickWindow(id, m); // C0E
         else if (m.type === 'windowInventory') simulation.windowInventory(id, m); // the client's 36 slots after S2D

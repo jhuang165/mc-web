@@ -208,6 +208,7 @@ import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
+import { wireInvClicks, applyInv } from "./multiplayer/client-inventory.js"; // b60: window 0
 import { buildWindow, wireClicks, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -777,7 +778,20 @@ function onMultiplayerWindow(m) {
   if (m.type === 'windowClose') { if (containerView?.container === mpWindow.container) { containerView.remote = null; resume(); } mpWindow = null; return; } // S2E
   if (containerView?.container === mpWindow.container) { applyWindow(m, mpWindow); refreshContainer(); }
 }
-const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb']);
+// b60 window 0 (client-inventory.js): S2F / S30 / S32 for the inventory screen and armour; `invBroke` is the breaker's own renderBrokenItemStack (sound, 5 crumbs).
+function onMultiplayerInventory(m) {
+  if (m.type === 'invBroke') {
+    if (!Number.isInteger(m.item)) return;
+    statsLive.broken(m.item);
+    sounds.play("random.break", { volume: 0.8, pitch: breakSoundPitch(weather.random) });
+    itemCrumbs(scene.fx, 5, "iconcrack_" + m.item, playerEye(), playerRandom);
+    return;
+  }
+  const r = applyInv(m, { inventory: survival.inventory, container: containerView?.remote?.inv ? containerView.container : null, client: multiplayer, mpInv });
+  if (r.hotbar) renderHotbar();
+  if (r.container && containerView?.remote?.inv) refreshContainer();
+}
+const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break']);
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
@@ -787,7 +801,7 @@ async function joinMultiplayer(settings) {
     onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); },
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
-    onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow,
+    onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
@@ -2087,6 +2101,7 @@ function inventory(station = false) {
   const container = station ? survival.openWorkbench() : survival.openInventory();
   container.onCraft = (stack, n) => { const id = craftedAchievement(stack?.id); if (id) achievements.trigger(id); statsLive.crafted(stack, n); };
   openContainer(container, station ? "workbench" : "inventory");
+  if (!station && multiplayer?.ready && active?.remote && !survival.creative) { containerView.remote = { client: multiplayer, inv: true }; wireInvClicks(container, multiplayer); } // b60: the server runs window 0's clicks
 }
 // GuiContainerCreative: tabs, the scrolling 9 x 5 item grid, search and the survival inventory tab.
 function openCreative() {
@@ -2346,12 +2361,13 @@ function closeContainer() {
   if (!containerView) return;
   const { container, kind, key, remote } = containerView;
   containerView = null;
-  remote?.client.closeWindow(); // C0D
+  if (remote?.inv) remote.client.invClose(); else remote?.client.closeWindow(); // C0D (b60: window 0 has its own message)
   if (kind === "chest") redstoneRuntime?.containerClosed(container.keys); else if (key) redstoneRuntime?.containerClosed([key]);
   const overlay = $("#modal");
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
   container.close();
   if (kind === "chest") redstoneRuntime?.chestViewersChanged(container.keys); // a trapped chest's power follows its viewers
+  if (remote?.inv) container.drops.length = 0; // b60: the server throws the cursor and the grid
   if (remote?.window) { container.drops.length = 0; mpWindow = null; } // the server throws the held stack (S2E / C0D)
   throwStacks(container.drops.splice(0));
   renderHotbar();
