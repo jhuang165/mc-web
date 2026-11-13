@@ -232,7 +232,7 @@ import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { createCrystalFireLayer } from "./crystal-fire-layer.js";
-import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, dryBucket, useKind, activateSound, tracedBucket, drawPrediction, revertPrediction as revertCells } from "./client-prediction.js";
+import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, dryBucketUse, heldPlan, applyHeldPlan, activatesOnClick, useKind, activateSound, tracedBucket, drawPrediction, revertPrediction as revertCells } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
@@ -1338,7 +1338,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
-    world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + 0.2, z + Math.random(), 0, 0, 0); };
+    world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); if (!muteFizzSmoke) for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + Math.random(), z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
     fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.load(record.fluidTicks);
@@ -1514,6 +1514,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
+    for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
     pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null; crystalFireLayer.forget();
     mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
@@ -3081,9 +3082,11 @@ function runPendingEdits() {
     for (const q of list) {
       if (q.fn) { q.fn(); continue; } // a C07 stop-digging / creative break queued by breakBlockPacket
       [aimedEntity, aimedCart, aimedHanging] = q.aimed; target = q.target;
-      endPrediction(q.predicted); mutePlaceSound = !!q.predicted?.soundDone;
-      try { edit(q.place); } finally { mutePlaceSound = false; }
+      endPrediction(q.predicted); mutePlaceSound = !!q.predicted?.soundDone; muteFizzSmoke = !!q.predicted?.smokeDone;
+      q.predicted?.undoHeld?.(); // the client's own held-stack change gives way to the server's (b58 prediction4)
+      try { edit(q.place); } finally { mutePlaceSound = false; muteFizzSmoke = false; }
       revertPrediction(q.predicted);
+      if (q.predicted?.undoHeld) renderHotbar();
     }
   } finally { runningEdits = false; [aimedEntity, aimedCart, aimedHanging] = was; target = wasTarget; }
 }
@@ -3129,7 +3132,7 @@ function breakBlockPacket(p, creative = false, accept = null) {
 // Batch 55 (instantbreak, client-prediction.js): PlayerControllerMP removes the block on the client world at once (onPlayerDestroyBlock: aux 2001, then setBlockToAir)
 // and ItemBlock.onItemUse places on it at once; the shared world keeps the server half in the network tick, so the client half is an overlay the renderer, the aim ray
 // and the client player's collision read until the queued task runs. The sound and particles play here, once, and the queued run skips them.
-let prediction = null, predictionToken = 0, muteBreakFx = false, mutePlaceSound = false;
+let prediction = null, predictionToken = 0, muteBreakFx = false, mutePlaceSound = false, muteFizzSmoke = false;
 function predictionLayer() {
   if (!prediction || prediction.world !== world) { prediction = createPrediction(world); }
   scene.predicted = prediction;
@@ -3150,24 +3153,32 @@ function predictBreak(p) {
 }
 // PlayerControllerMP.onPlayerRightClick on the client world: Block.onBlockActivated (door, trapdoor, gate toggle), else Item.onItemUse (ItemBlock, door item, cake, seeds...).
 function predictPlace() {
-  const held = heldId(), layer = predictionLayer(), seen = layer.read();
-  const kind = useKind({ world: seen, target, heldId: held, heldDamage: survival.held?.damage ?? 0, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging });
+  const held = heldId(), layer = predictionLayer(), seen = layer.read(), aimed = aimedEntity || aimedCart || aimedHanging;
+  let kind = useKind({ world: seen, target, heldId: held, heldDamage: survival.held?.damage ?? 0, sneaking: !!motion.sneaking, aimed });
+  // ItemSnowball / ItemEgg / ItemEnderPearl / ItemExpBottle.onItemRightClick take one from the client stack at once (the entity itself is the server's).
+  if (!kind && !aimed && (isThrowable(held) || held === ITEM_EXP_BOTTLE) && !(target && !motion.sneaking && activatesOnClick(seen.get(...target.block)))) kind = 'throw';
   if (!kind) return null;
   const state = { world: seen, survival, position, flowers: FLOWERS, yaw };
-  let soundDone = false, cells;
+  let soundDone = false, cells = [], smokeDone = false, bucket = null;
   if (kind === 'activate') {
     cells = dryActivate(state, target) ?? [];
-    const s = cells.length ? activateSound(seen.get(...target.block)) : null; // the door's aux effect 1003 and the button's click play at the click, not in the network tick
+    const s = cells.length ? activateSound(seen.get(...target.block)) : null; // the door's aux effect 1003 plays at the click; a button's click and a block's place sound do not (the client's own playSoundEffect is silent, the server's S29 plays them in the network tick; b58 probe)
     if (s) { soundDone = true; sounds?.play(s.event, { volume: s.volume, pitch: s.pitch, position: { x: target.block[0] + 0.5, y: target.block[1] + 0.5, z: target.block[2] + 0.5 } }); }
-  } else if (kind === 'bucket') cells = eyeRay ? dryBucket({ world: seen, heldId: held }, eyeRay.origin, eyeRay.dir) : [];
-  else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
-  else {
-    const out = dryPlace(state, { id: held, item: ITEMS[held], target }, { sound: (...a) => { soundDone = true; sound(...a); } });
+  } else if (kind === 'bucket') {
+    bucket = eyeRay ? dryBucketUse({ world: seen, heldId: held }, eyeRay.origin, eyeRay.dir) : null;
+    cells = bucket?.cells ?? [];
+    if (bucket?.fizz) { smokeDone = true; for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', bucket.fizz[0] + Math.random(), bucket.fizz[1] + Math.random(), bucket.fizz[2] + Math.random(), 0, 0, 0); } // the Nether's water: smoke at the click, the fizz comes with the server's S29
+  } else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
+  else if (kind === 'place') {
+    const out = dryPlace(state, { id: held, item: ITEMS[held], target }, {});
     cells = out.placed ? out.cells : [];
   }
-  if (!cells.length) return null;
-  const shown = showPrediction(cells.map((c) => [c.x, c.y, c.z, c.block, c.meta]));
-  return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone };
+  const plan = heldPlan({ kind, stack: survival.held, creative: survival.creative, placed: kind === 'bucket' ? !!bucket?.used : cells.length > 0, took: bucket?.took ?? 0 });
+  const undoHeld = applyHeldPlan(survival.inventory, plan);
+  if (undoHeld) renderHotbar();
+  if (!cells.length && !undoHeld && !smokeDone) return null;
+  const shown = cells.length ? showPrediction(cells.map((c) => [c.x, c.y, c.z, c.block, c.meta])) : null;
+  return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone, smokeDone, undoHeld };
 }
 function endPrediction(pred) { if (pred) for (const c of pred.cells) prediction?.clear(c.x, c.y, c.z, pred.token); }
 // S23 for a cell the server left as it was (a refusal): the chunk is meshed from the real world again.
@@ -3181,7 +3192,7 @@ function serverTask(fn) {
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
     if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
-    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && (target || tracedBucket(heldId())) ? predictPlace() : null });
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && (target || tracedBucket(heldId()) || isThrowable(heldId()) || heldId() === ITEM_EXP_BOTTLE) ? predictPlace() : null });
     return;
   }
   edit(place);
