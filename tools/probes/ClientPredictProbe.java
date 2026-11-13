@@ -102,15 +102,16 @@ public class ClientPredictProbe {
     Map<String, int[]> before = snapshot(w);
     MobMoveProbe.field(sa.class, "y").setFloat(DoorPaneProbe.player, yaw);
     String err = "null", res = "null";
-    int count = 0;
+    int count = 0, dmg = -1;
     try {
       adb it = adb.d(item);
       add st = new add(it, 3, damage);
       boolean r = it.a(st, (yz) DoorPaneProbe.player, w, px, py, pz, side, 0.5f, 0.5f, 0.5f);
       res = String.valueOf(r);
       count = st.b;
+      dmg = st.k(); // ItemStack.getItemDamage afterwards (ItemFlintAndSteel.damageItem runs on the client too)
     } catch (Throwable t) { err = q(t.toString()); }
-    line("{\"case\":\"use\",\"name\":" + q(name) + ",\"item\":" + item + ",\"damage\":" + damage + ",\"yaw\":" + yaw + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "," + side + "],\"result\":" + res + ",\"count\":" + count + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+    line("{\"case\":\"use\",\"itemDamage\":" + dmg + ",\"log\":" + logJson(w) + ",\"name\":" + q(name) + ",\"item\":" + item + ",\"damage\":" + damage + ",\"yaw\":" + yaw + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "," + side + "],\"result\":" + res + ",\"count\":" + count + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
   }
 
   static void activating(String name, int[][] setup, int px, int py, int pz) throws Exception {
@@ -137,11 +138,22 @@ public class ClientPredictProbe {
       aji b = w.a(px, py, pz);
       res = String.valueOf(b.a(w, px, py, pz, (yz) DoorPaneProbe.player, 1, 0.5f, 0.5f, 0.5f));
     } catch (Throwable t) { err = q(t.toString()); }
+    String potTile = "null";
+    for (Object[] t : tiles) if (t[3] == apf.class) { apf pt = (apf) w.tiles.get(t[0] + "," + t[1] + "," + t[2]); potTile = pt.a() == null ? "[0,0]" : "[" + adb.b(pt.a()) + "," + pt.b() + "]"; } // TileEntityFlowerPot item and data afterwards
     add held = inv.a[inv.c];
     String heldJson = held == null ? "[0,0]" : "[" + adb.b(held.b()) + "," + held.b + "]";
     inv.a[inv.c] = null;
     MobMoveProbe.field(yw.class, "d").setBoolean(((yz) DoorPaneProbe.player).bE, false);
-    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + ",\"held\":" + heldJson + "}");
+    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + ",\"potTile\":" + potTile + ",\"held\":" + heldJson + "}");
+  }
+
+  // Block.onBlockClicked (aji.a(ahb,III,yz)) on the client world: PlayerControllerMP.clickBlock calls it for a Survival dig start (bytecode-read, bje.b(IIII) offset 217).
+  static void blockClick(String name, int[][] setup, int x, int y, int z) throws Exception {
+    CW w = world(setup);
+    Map<String, int[]> before = snapshot(w);
+    String err = "null";
+    try { w.a(x, y, z).a(w, x, y, z, (yz) DoorPaneProbe.player); } catch (Throwable t) { err = q(t.toString()); }
+    line("{\"case\":\"blockclick\",\"name\":" + q(name) + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + "}");
   }
 
   // EntityPlayerSP.a(aor) after BlockCommandBlock.onBlockActivated: the command block's tile entity opens its screen on the client at once (no isRemote guard).
@@ -170,6 +182,7 @@ public class ClientPredictProbe {
     bucketN(name, item, 1, setup, ex, ey, ez, pitch, yaw, hell, creative);
   }
 
+  static boolean fillInventory = false;
   static void bucketN(String name, int item, int count, int[][] setup, double ex, double ey, double ez, float pitch, float yaw, boolean hell, boolean creative) throws Exception {
     CW w = world(setup);
     Map<String, int[]> before = snapshot(w);
@@ -191,7 +204,9 @@ public class ClientPredictProbe {
       adb it = adb.d(item);
       add st = new add(it, count, 0);
       yx inv = ((yz) p).bm;
+      if (fillInventory) for (int i = 0; i < inv.a.length; i++) inv.a[i] = new add(adb.d(3), 64, 0);
       inv.a[inv.c] = st;
+      MobMoveProbe.field(sa.class, "o").set(p, w); // the player's own world (a dropped item needs it)
       add r = it.a(st, w, (yz) p);
       rid = adb.b(r.b()); rcount = r.b;
       // PlayerControllerMP.sendUseItem (bytecode-read): a returned stack that is another object or has another size replaces the held slot (null at 0)
@@ -206,7 +221,7 @@ public class ClientPredictProbe {
     MobMoveProbe.field(sa.class, "z").setFloat(p, 0f);
     MobMoveProbe.field(sa.class, "B").setFloat(p, 0f);
     MobMoveProbe.set(p, "s", X + 0.5); MobMoveProbe.set(p, "t", (double) Y); MobMoveProbe.set(p, "u", Z - 1.5);
-    line("{\"case\":\"bucket\",\"name\":" + q(name) + ",\"item\":" + item + ",\"eye\":[" + ex + "," + ey + "," + ez + "],\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"hell\":" + hell + ",\"creative\":" + creative + ",\"count\":" + count + ",\"setup\":" + setupJson(setup) + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"inventory\":[" + String.join(",", invList) + "],\"log\":" + logJson(w) + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+    line("{\"case\":\"bucket\",\"name\":" + q(name) + ",\"item\":" + item + ",\"eye\":[" + ex + "," + ey + "," + ez + "],\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"hell\":" + hell + ",\"creative\":" + creative + ",\"count\":" + count + ",\"fullInventory\":" + fillInventory + ",\"spawned\":" + w.spawned.size() + ",\"setup\":" + setupJson(setup) + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"inventory\":[" + String.join(",", invList) + "],\"log\":" + logJson(w) + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
   }
 
   static void buckets() throws Exception {
@@ -223,6 +238,9 @@ public class ClientPredictProbe {
     bucketN("empty-stack2-water", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
     bucketN("empty-stack16-lava", 325, 16, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 11, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
     bucketN("empty-stack2-creative", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, true);
+    fillInventory = true; // every slot holds dirt: no free slot for the filled bucket
+    bucketN("empty-stack2-water-full-inventory", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    fillInventory = false;
     bucketN("empty-stack2-miss", 325, 2, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
     // filled water (326) and lava (327): the cell beside the traced face, liquids and boxless blocks skipped by the trace
     for (int item : new int[] {326, 327}) {
@@ -315,6 +333,27 @@ public class ClientPredictProbe {
     breaking("two-torches", s(c(8, 64, 8, 1, 0), c(8, 65, 8, 50, 5), c(9, 64, 8, 50, 1), c(7, 64, 8, 50, 2)), 8, 64, 8);
   }
 
+  static void fireCases() throws Exception {
+    // ItemFlintAndSteel.onItemUse (acw): the cell beside the face; air -> fire.ignite and setBlock fire; the stack is damaged either way
+    using("flint-top-stone", 259, 0, s(c(8, 63, 8, 1, 0)), 8, 63, 8, 1, 0f);
+    using("flint-side", 259, 0, s(c(8, 64, 8, 1, 0)), 8, 64, 8, 2, 0f);
+    using("flint-bottom", 259, 0, s(c(8, 66, 8, 1, 0)), 8, 66, 8, 0, 0f);
+    using("flint-top-planks", 259, 0, s(c(8, 63, 8, 5, 0)), 8, 63, 8, 1, 0f);
+    using("flint-top-netherrack", 259, 0, s(c(8, 63, 8, 87, 0)), 8, 63, 8, 1, 0f);
+    using("flint-into-water", 259, 0, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8, 63, 8, 1, 0f);
+    using("flint-unsupported-air", 259, 0, s(), 8, 64, 8, 1, 0f);
+    using("flint-damaged", 259, 30, s(c(8, 63, 8, 1, 0)), 8, 63, 8, 1, 0f);
+    // BlockFire.onNeighborBlockChange on the client world: a fire whose support is broken goes, one with a flammable neighbour stays
+    breaking("break-under-fire", s(c(8, 63, 8, 1, 0), c(8, 64, 8, 51, 0)), 8, 63, 8);
+    breaking("break-under-fire-flammable-side", s(c(8, 63, 8, 1, 0), c(8, 64, 8, 51, 0), c(9, 64, 8, 5, 0)), 8, 63, 8);
+    breaking("break-under-fire-flammable-above", s(c(8, 63, 8, 1, 0), c(8, 64, 8, 51, 0), c(8, 65, 8, 5, 0)), 8, 63, 8);
+    breaking("break-beside-fire-supported", s(c(8, 64, 8, 51, 0), c(9, 64, 8, 1, 0)), 9, 64, 8);
+    breaking("break-flammable-under-fire", s(c(8, 63, 8, 5, 0), c(8, 64, 8, 51, 0)), 8, 63, 8);
+    // BlockDragonEgg (122): onBlockActivated and onBlockClicked both run func_150018_e; on the client only the portal particles
+    activating("dragonegg-activate", s(c(8, 64, 8, 122, 0)), 8, 64, 8);
+    blockClick("dragonegg-click", s(c(8, 64, 8, 122, 0)), 8, 64, 8);
+  }
+
   static void uses() throws Exception {
     for (int id : new int[] {324, 330}) for (float yaw : new float[] {0, 90, 180, 270, -45}) using("door" + id + "-yaw" + (int) yaw, id, 0, s(), 8, 63, 8, 1, yaw);
     using("door324-side", 324, 0, s(), 8, 63, 8, 2, 0);
@@ -396,6 +435,7 @@ public class ClientPredictProbe {
       add st = new add(it, count, damage);
       inv.a[inv.c] = st;
       MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, creative);
+      MobMoveProbe.field(sa.class, "o").set(p, w);
       add r = it.a(st, w, (yz) p);
       rid = adb.b(r.b()); rcount = r.b; same = r == st;
     } catch (Throwable t) { err = q(t.toString()); }
@@ -405,6 +445,7 @@ public class ClientPredictProbe {
   }
 
   static void throwsAll() throws Exception {
+    throwing("drink373-x5", 373, 8197, 5, false); // a drinkable potion only starts the use animation
     for (int[] t : new int[][] {{332, 0}, {344, 0}, {368, 0}, {384, 0}, {373, 16384 + 16}}) {
       throwing("throw" + t[0] + "-x5", t[0], t[1], 5, false);
       throwing("throw" + t[0] + "-x1", t[0], t[1], 1, false);
@@ -504,7 +545,7 @@ public class ClientPredictProbe {
   }
 
   public static void main(String[] args) throws Exception {
-    aji.p(); adb.l();
+    aji.p(); adb.l(); alb.e(); // BlockFire.func_149843_e registers the flammable blocks (Bootstrap does it in the game)
     PlantProbe.unsafe = MobMoveProbe.unsafe();
     DoorPaneProbe.makePlayer();
     breaks();
@@ -513,6 +554,7 @@ public class ClientPredictProbe {
     buckets();
     serverUses();
     throwsAll();
+    fireCases();
     soundChain();
   }
 }

@@ -602,10 +602,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   const dug = [...target.block];
   const serverClicked = () => {
     const now = state.world.get(...dug);
-    if (now === DRAGON_EGG) hook('useDragonEgg', ...dug); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues
+    if (now === DRAGON_EGG) hook('useDragonEgg', ...dug, true); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues (the client half ran at the click, below)
     if (now === 177) hook('blockClicked', ...dug); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
     if (now === REDSTONE_ORE || now === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...dug); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
   };
+  if (block === DRAGON_EGG) hook('clientDragonEgg', ...dug); // PlayerControllerMP.clickBlock runs onBlockClicked on the client world at once (bje.b offset 217, probe 'dragonegg-click'): the portal particles
   if (block === DRAGON_EGG || block === 177 || block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hooks.serverTask ? hooks.serverTask(serverClicked) : serverClicked();
   // C07 status 0 also starts the server's own dig timer (ItemInWorldManager.initialDamage, b53 digfinish): in the network tick like the click above. An instant
   // break starts it too (initialDamage only; server-dig.js keeps the earlier cell).

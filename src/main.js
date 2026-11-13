@@ -212,7 +212,7 @@ import { drainKnockback } from "./player-knockback.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
-import { useDragonEgg } from "./dragon-egg-live.js";
+import { useDragonEgg, clientDragonEgg } from "./dragon-egg-live.js";
 import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll, JUMP_BOOST } from "./damage-fx.js";
@@ -235,7 +235,7 @@ import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { createCrystalFireLayer } from "./crystal-fire-layer.js";
-import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, dryBucketUse, heldPlan, applyHeldPlan, activatesOnClick, useKind, activateSound, tracedBucket, drawPrediction, revertPrediction as revertCells } from "./client-prediction.js";
+import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, dryBucketUse, heldPlan, applyHeldPlan, dryFlint, dryPot, throwsPotion, activatesOnClick, useKind, activateSound, tracedBucket, drawPrediction, revertPrediction as revertCells } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
@@ -2080,14 +2080,15 @@ const slotsHtml = (container) => {
   return `<div class="container-slots"><div class="container-draw" aria-hidden="true">${container.slots.map((slot, i) => `<div class="gui-slot" data-draw-slot="${i}"${hide(slot)} style="${at(slot)}"></div>`).join("")}</div>${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${hide(slot)} style="${at(slot)}"></button>`).join("")}</div>`;
 };
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
-function openCommandBlock(x, y, z, cartTile = null) {
-  if (!survival.creative || !commandHost.cheats) return;
+function openCommandBlock(x, y, z, cartTile = null, atClick = false) {
+  // The client opens GuiCommandBlock from its own tile whoever clicks (probe 'commandblock-tile', a Survival player); the server's MC|AdvCdm refuses a non-creative or non-op sender, so only `done` is gated.
+  if (!atClick && (!survival.creative || !commandHost.cheats)) return;
   const tile = cartTile ?? redstoneRuntime.commandBlocks.tile(x, y, z);
   screen = "inventory"; mining = null; mineHeld = false;
   document.exitPointerLock?.();
   gui.show(commandBlockScreen({
     command: tile.command, lastOutput: tile.lastOutput, // bfh shows func_145749_h whatever TrackOutput says
-    done: (command) => { tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
+    done: (command) => { if (!survival.creative || !commandHost.cheats) { resume(); return; } tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
     cancel: resume,
   }));
 }
@@ -3118,7 +3119,7 @@ function defersToNetworkTick(place) {
   if (pendingEdits.length) return true; // packets are handled in arrival order: nothing overtakes a queued action
   if (place && (target || tracedBucket(heldId()))) return true; // C08 on a block (and ItemBucket's own trace, which can hit water with no block target) (placement, doors, containers, item use): the client's own prediction is the swing and the GUI, which waits for the server anyway
   const h = heldId();
-  return place && (isThrowable(h) || h === BOAT_ITEM || h === ITEM_EXP_BOTTLE || h === ITEM_SPAWN_EGG);
+  return place && (isThrowable(h) || throwsPotion(h, survival.held?.damage) || h === BOAT_ITEM || h === ITEM_EXP_BOTTLE || h === ITEM_SPAWN_EGG);
 }
 function runPendingEdits() {
   if (!pendingEdits.length) return;
@@ -3129,9 +3130,9 @@ function runPendingEdits() {
     for (const q of list) {
       if (q.fn) { q.fn(); continue; } // a C07 stop-digging / creative break queued by breakBlockPacket
       [aimedEntity, aimedCart, aimedHanging] = q.aimed; target = q.target;
-      endPrediction(q.predicted); mutePlaceSound = !!q.predicted?.soundDone; muteFizzSmoke = !!q.predicted?.smokeDone;
+      endPrediction(q.predicted); mutePlaceSound = !!q.predicted?.soundDone; muteFizzSmoke = !!q.predicted?.smokeDone; eggClientDone = !!q.predicted?.eggDone;
       q.predicted?.undoHeld?.(); // the client's own held-stack change gives way to the server's (b58 prediction4)
-      try { edit(q.place); } finally { mutePlaceSound = false; muteFizzSmoke = false; }
+      try { edit(q.place); } finally { mutePlaceSound = false; muteFizzSmoke = false; eggClientDone = false; }
       revertPrediction(q.predicted);
       if (q.predicted?.undoHeld) renderHotbar();
     }
@@ -3182,6 +3183,7 @@ function breakBlockPacket(p, creative = false, accept = null) {
 // Batch 55 (instantbreak, client-prediction.js): PlayerControllerMP removes the block on the client world at once (onPlayerDestroyBlock: aux 2001, then setBlockToAir)
 // and ItemBlock.onItemUse places on it at once; the shared world keeps the server half in the network tick, so the client half is an overlay the renderer, the aim ray
 // and the client player's collision read until the queued task runs. The sound and particles play here, once, and the queued run skips them.
+let eggClientDone = false, eggClient = (p) => clientDragonEgg({ world, clientRandom: () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), spawnParticle: (...a) => scene.fx.spawn(...a) }, ...p);
 let prediction = null, predictionToken = 0, muteBreakFx = false, mutePlaceSound = false, muteFizzSmoke = false;
 function predictionLayer() {
   if (!prediction || prediction.world !== world) { prediction = createPrediction(world); }
@@ -3206,10 +3208,10 @@ function predictPlace() {
   const held = heldId(), layer = predictionLayer(), seen = layer.read(), aimed = aimedEntity || aimedCart || aimedHanging;
   let kind = useKind({ world: seen, target, heldId: held, heldDamage: survival.held?.damage ?? 0, sneaking: !!motion.sneaking, aimed });
   // ItemSnowball / ItemEgg / ItemEnderPearl / ItemExpBottle.onItemRightClick take one from the client stack at once (the entity itself is the server's).
-  if (!kind && !aimed && (isThrowable(held) || held === ITEM_EXP_BOTTLE) && !(target && !motion.sneaking && activatesOnClick(seen.get(...target.block)))) kind = 'throw';
+  if (!kind && !aimed && (isThrowable(held) || held === ITEM_EXP_BOTTLE || throwsPotion(held, survival.held?.damage)) && !(target && !motion.sneaking && activatesOnClick(seen.get(...target.block)))) kind = 'throw';
   if (!kind) return null;
   const state = { world: seen, survival, position, flowers: FLOWERS, yaw };
-  let soundDone = false, cells = [], smokeDone = false, bucket = null;
+  let soundDone = false, cells = [], smokeDone = false, bucket = null, eggDone = false, potContent = null;
   if (kind === 'activate') {
     cells = dryActivate(state, target) ?? [];
     const s = cells.length ? activateSound(seen.get(...target.block)) : null; // the door's aux effect 1003 plays at the click; a button's click and a block's place sound do not (the client's own playSoundEffect is silent, the server's S29 plays them in the network tick; b58 probe)
@@ -3218,17 +3220,24 @@ function predictPlace() {
     bucket = eyeRay ? dryBucketUse({ world: seen, heldId: held }, eyeRay.origin, eyeRay.dir) : null;
     cells = bucket?.cells ?? [];
     if (bucket?.fizz) { smokeDone = true; for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', bucket.fizz[0] + Math.random(), bucket.fizz[1] + Math.random(), bucket.fizz[2] + Math.random(), 0, 0, 0); } // the Nether's water: smoke at the click, the fizz comes with the server's S29
-  } else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
+  } else if (kind === 'egg') { eggClient(target.block); eggDone = true; // BlockDragonEgg.onBlockActivated on the client: the portal particles at the click, the egg moves with the server's half
+  } else if (kind === 'command') { if (screen === "playing") openCommandBlock(...target.block, null, true); return null; // BlockCommandBlock.onBlockActivated: the client opens its screen from its own tile at once, the server does nothing (probe 'commandblock-tile')
+  } else if (kind === 'pot') {
+    const pot = dryPot({ world: seen, heldId: held, heldDamage: survival.held?.damage ?? 0 }, target);
+    if (pot) { cells = [pot.cell]; potContent = pot.content; }
+  } else if (kind === 'flint') cells = dryFlint(state, target); // ItemFlintAndSteel.onItemUse sets fire on the client world (the ignite sound is the server's)
+  else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
   else if (kind === 'place') {
     const out = dryPlace(state, { id: held, item: ITEMS[held], target }, {});
     cells = out.placed ? out.cells : [];
   }
-  const plan = heldPlan({ kind, stack: survival.held, creative: survival.creative, placed: kind === 'bucket' ? !!bucket?.used : cells.length > 0, took: bucket?.took ?? 0 });
+  const plan = heldPlan({ kind, stack: survival.held, creative: survival.creative, placed: kind === 'bucket' ? !!bucket?.used : kind === 'flint' ? true : cells.length > 0, took: bucket?.took ?? 0 });
   const undoHeld = applyHeldPlan(survival.inventory, plan);
   if (undoHeld) renderHotbar();
-  if (!cells.length && !undoHeld && !smokeDone) return null;
+  if (!cells.length && !undoHeld && !smokeDone && !eggDone) return null;
   const shown = cells.length ? showPrediction(cells.map((c) => [c.x, c.y, c.z, c.block, c.meta])) : null;
-  return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone, smokeDone, undoHeld };
+  if (potContent) { layer.setPot(...target.block, potContent); scene.updateBlock(target.block[0], target.block[2], target.block[1]); } // the pot's plant is drawn from the view's pots
+  return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone, smokeDone, undoHeld, eggDone };
 }
 function endPrediction(pred) { if (pred) for (const c of pred.cells) prediction?.clear(c.x, c.y, c.z, pred.token); }
 // S23 for a cell the server left as it was (a refusal): the chunk is meshed from the real world again.
@@ -3242,7 +3251,7 @@ function serverTask(fn) {
 function clickEdit(place = false) {
   if (screen === "playing" && !multiplayer && defersToNetworkTick(place)) {
     if (!place) animation.swing(); // Minecraft.clickMouse swings at once; the server handles the attack in the network tick
-    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && (target || tracedBucket(heldId()) || isThrowable(heldId()) || heldId() === ITEM_EXP_BOTTLE) ? predictPlace() : null });
+    pendingEdits.push({ place, aimed: [aimedEntity, aimedCart, aimedHanging], target, predicted: place && (target || tracedBucket(heldId()) || isThrowable(heldId()) || heldId() === ITEM_EXP_BOTTLE || throwsPotion(heldId(), survival.held?.damage)) ? predictPlace() : null });
     return;
   }
   edit(place);
@@ -3345,7 +3354,8 @@ function edit(place = false) {
       saved = false;
       return true;
     },
-    useDragonEgg: (x, y, z) => { useDragonEgg({ world, serverRandom: () => scene.explosionParticles.worldRandom, clientRandom: () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), updateBlock: (i, j, k) => scene.updateBlock(i, k, j), spawnParticle: (...a) => scene.fx.spawn(...a) }, x, y, z); saved = false; return true; },
+    clientDragonEgg: (x, y, z) => { eggClient([x, y, z]); },
+    useDragonEgg: (x, y, z, skipClient = false) => { useDragonEgg({ world, serverRandom: () => scene.explosionParticles.worldRandom, clientRandom: () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), updateBlock: (i, j, k) => scene.updateBlock(i, k, j), spawnParticle: (...a) => scene.fx.spawn(...a) }, x, y, z, skipClient || eggClientDone); saved = false; return true; },
     touchRedstoneOre,
     blockClicked: (x, y, z) => { if (!survival.creative) { redstoneRuntime?.music.click(x, y, z); saved = false; } },
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },

@@ -51,7 +51,7 @@ test("b58: no click sound at the click: the client's own random.click is silent,
 
 test("b58: the held stack: one taken on a placement that happened, nothing on a refusal or in Creative (executed 'use' records)", () => {
   let checked = 0;
-  for (const r of records("use")) {
+  for (const r of records("use").filter((x) => x.item !== 259)) { // flint and steel is prediction5 (b59)
     const stack = { id: 1, count: 3, damage: 0 };
     const plan = heldPlan({ kind: "use", stack, creative: false, placed: r.diff.length > 0 });
     const was = stack.count;
@@ -64,7 +64,7 @@ test("b58: the held stack: one taken on a placement that happened, nothing on a 
 });
 
 test("b58: thrown items take one at once; a Creative controller restores it (executed 'throw' records)", () => {
-  for (const r of records("throw")) {
+  for (const r of records("throw").filter((x) => !/^drink/.test(x.name))) { // a drinkable potion only starts the animation (prediction5)
     const stack = { id: r.item, count: r.count, damage: 0 };
     const plan = heldPlan({ kind: "throw", stack, creative: r.creative });
     if (plan) stack.count += plan.dCount;
@@ -83,10 +83,10 @@ test("b58: bucket swaps: empty to the liquid's bucket when alone, full to empty 
     const out = dryBucketUse({ world: w, heldId: stack.id }, [r.eye[0], r.eye[1] + DY, r.eye[2]], d);
     const plan = heldPlan({ kind: "bucket", stack, creative: r.creative, placed: out.used, took: out.took });
     if (plan) { stack.count += plan.dCount; if (plan.swap) stack.id = plan.swap[1]; }
+    if (r.count > 1) assert.equal(stack.count, r.resultCount, `${r.name}: a stack gives one (b59 prediction5; the filled bucket goes to a free slot)`);
     if (r.count === 1 || r.creative || stack.id === BUCKET_PORT[r.item]) {
       if (r.count === 1) { assert.equal(stack.id, BUCKET_PORT[r.resultItem], `${r.name} item`); assert.equal(stack.count, r.resultCount, `${r.name} count`); }
     }
-    if (r.count > 1 && !r.creative && r.inventory.length > 1) assert.equal(stack.count, r.count, `${r.name}: a stack's own bucket count is left to the server (follow-up)`);
   }
   assert.equal(filledBucketOf(ITEMS[341].contains), 341); assert.equal(filledBucketOf(ITEMS[342].contains), 342);
 });
