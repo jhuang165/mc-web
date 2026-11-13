@@ -236,5 +236,6 @@ test("b61 lead: the simulation wires dispensed boats and carts to the vehicle tr
   const boats = s.vehicles.boats.carts.filter(b => !b.dead);
   assert.equal(boats.length, 1);
   assert.ok(Math.abs(boats[0].x - 64.5) < 0.5 && boats[0].z > 62.5 && boats[0].z < 64.2, "in front of the dispenser, on the water (it has drifted since the spawn; the spawn spot is pinned above)");
-  assert.equal(s.dispense.vehicles.dispenseCart(1, 64.5, 10.5, 62.5), false, "a chest cart has no server entity yet: the stack is kept");
+  assert.equal(s.dispense.vehicles.dispenseCart(1, 64.5, 10.5, 62.5), true, "b62: a chest cart is a server entity now");
+  assert.equal(s.dispense.vehicles.dispenseCart(6, 64.5, 10.5, 62.5), false, "the command block cart is still not connected: the stack is kept");
 });

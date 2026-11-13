@@ -1,4 +1,5 @@
 import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, raycast, collides } from '../world.js';
+import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
@@ -39,6 +40,7 @@ import { ServerAchievements } from './server-achievements.js';
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
+import { ServerLeads } from './server-leads.js'; // b62
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { ServerDispense } from './server-dispense.js';
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
@@ -148,6 +150,7 @@ export class DedicatedSimulation {
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
+    this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
     this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
     this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
     this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
@@ -350,6 +353,7 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
+    if (place && isFence(b) && !p.dimension && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
     if (place && this.vehicles.useHeld(p, target)) return true; // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)

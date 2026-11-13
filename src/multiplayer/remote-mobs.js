@@ -53,6 +53,7 @@ export class RemoteMobs {
   }
   // S1B(0) from the server (batch 61, mob on mob): the copy mounts the vehicle's copy (or gets off); the stand-in follows for the riding legs.
   attach(c, p) {
+    if (p.mode === 1) { c.mob.leadWire = p.holder ?? null; return; } // b62: S1B(1), the lead (remote-leads.js draws it)
     c.client.apply({ type: 'attach', mode: 0, vehicle: p.vehicle }, this.ctx);
     c.mob.ridingEntity = p.vehicle === null || p.vehicle === undefined ? null : this.copies.get(p.vehicle)?.mob ?? null;
   }

@@ -141,6 +141,8 @@ export class ServerMobs {
       const p = v.player.position, d = (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2;
       if (d < bd) { bd = d; best = v; }
     }
+    const held = e.leash?.holderId !== undefined ? this.host.leads.holder(e, this.views) : null; // b62: a led mob follows its holder (server-leads.js)
+    if (held) best = held;
     const rider = e.rider?.ref && this.views.get(e.rider.ref.id); // b62: a ridden pig reads its rider's keys and stick, not the nearest player's
     if (rider) best = rider;
     if (best) this.use(best);
@@ -262,12 +264,14 @@ export class ServerMobs {
     queue.sort((a, b) => a[0] - b[0]);
     for (const [, en, pk] of queue) {
       const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
-      if (pk.type === 'attach' && pk.mode !== 0) continue; // leads are not connected
+      if (pk.type === 'attach' && pk.mode === 1 && holder?.kind === 'mob') continue; // b62: a lead held by a mob (no server path); players and knots are forwarded below
+      if (pk.type === 'attach' && pk.mode !== 0 && pk.mode !== 1) continue;
       for (const w of en.entry.dest.get(pk) ?? []) {
         const v = byWatcher.get(w);
         if (!v) continue;
         const { out, later } = outs.get(v);
-        if (pk.type === 'attach') { if (vehicle === null || mobs.entities.includes(vehicle)) out.push({ ...rest, i, vehicle: vehicle ? num(vehicle) : null }); } // a mob on a mob (the spider jockey); other mounts belong to the vehicle track
+        if (pk.type === 'attach' && pk.mode === 1) out.push({ ...rest, i, holder: holder?.kind === 'player' ? { kind: 'player', id: e.leash?.holderId } : holder ?? null }); // b62: S1B(1) the lead, to every watcher
+        else if (pk.type === 'attach') { if (vehicle === null || mobs.entities.includes(vehicle)) out.push({ ...rest, i, vehicle: vehicle ? num(vehicle) : null }); } // a mob on a mob (the spider jockey); other mounts belong to the vehicle track
         else if (pk.type === 'spawn') { out.push({ ...rest, i, mob: e.type, ...mobState(e) }); v.known.set(e, stateOf(e)); }
         else if (pk.type === 'destroy') { later.push({ ...rest, i }); v.known.delete(e); } // S13 is flushed by the player's next update: one tick later than the rest (batch 52, bytecode-read)
         else out.push({ ...rest, i });
@@ -305,7 +309,7 @@ export class ServerMobs {
     const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
     if (dx * dx + dy * dy + dz * dz > 36) return false;
     this.use(v);
-    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
     p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks

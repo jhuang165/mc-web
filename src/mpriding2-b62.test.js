@@ -173,3 +173,67 @@ test('a spider jockey: the skeleton rides the spider on the server and both are 
   tick(s, 20);
   assert.ok(Math.abs(sk.x - sp.x) < 0.5 && Math.abs(sk.z - sp.z) < 0.5 && sk.y > sp.y && sk.ridingEntity === sp, 'it sits on the spider');
 });
+
+// ---- leads ----
+const LEAD = 2020;
+const mobPackets = p => { const out = p.mobPackets ?? []; p.mobPackets = null; return JSON.parse(JSON.stringify(out)); };
+test('C02 with a lead ties a cow to the clicking player; it follows that player, not the nearest one; the lead packet names the holder', () => {
+  const s = pigFixture(), a = join(s, 'a', 1, 64.5, 64.5), b = join(s, 'b', 2, 67.5, 64.5);
+  const cow = s.mobs.mobs.create('cow', 66.5, 10, 64.5); s.mobs.mobs.entities.push(cow);
+  s.tick(); mobPackets(a); mobPackets(b);
+  give(a, LEAD, 2);
+  s.queueAnimUse('a', wireId(cow), false); s.tick();
+  assert.equal(cow.leash?.holder, 'player'); assert.equal(cow.leash.holderId, 'a');
+  assert.equal(a.survival.inventory.main[0].count, 1, 'one lead used');
+  const att = mobPackets(b).find(m => m.type === 'attach' && m.mode === 1);
+  assert.ok(att && att.i === wireId(cow) && att.holder.kind === 'player' && att.holder.id === 'a', 'S1B(1) reaches every watcher');
+  // b stands closer to the cow; the lead still pulls toward a once the cow is more than 6 blocks from a
+  a.position.x = 56.5; a.position.z = 64.5; b.position.x = 66.5; b.position.z = 66.5;
+  tick(s, 40);
+  assert.ok(cow.leash && cow.x < 66, 'the cow is drawn toward its holder');
+  // the holder's click frees it and the lead drops
+  a.position.x = 62.5; give(a, 0, 0); a.survival.inventory.main[0] = null;
+  s.queueAnimUse('a', wireId(cow), false); s.tick();
+  assert.ok(!cow.leash, 'freed');
+  const off = mobPackets(b).find(m => m.type === 'attach' && m.mode === 1);
+  assert.ok(off && off.holder === null, 'the lead is off on the wire');
+});
+
+test('another player cannot take or free a lead; the holder leaving drops the lead', () => {
+  const s = pigFixture(), a = join(s, 'a', 1, 64.5, 64.5), b = join(s, 'b', 2, 67.5, 64.5);
+  const cow = s.mobs.mobs.create('cow', 66.5, 10, 64.5); s.mobs.mobs.entities.push(cow);
+  give(a, LEAD, 1); s.queueAnimUse('a', wireId(cow), false); s.tick();
+  assert.ok(cow.leash);
+  s.queueAnimUse('b', wireId(cow), false); s.tick();
+  assert.equal(cow.leash?.holderId, 'a', 'b cannot free it');
+  s.removePlayer?.('a'); tick(s, 3);
+  assert.ok(!cow.leash, 'the lead dropped when the holder left');
+});
+
+test('a lead on a fence: the holder\'s mob joins a knot; the knot holds without the player; breaking the knot frees the mob', () => {
+  const s = pigFixture(), a = join(s, 'a', 1, 64.5, 64.5);
+  const cow = s.mobs.mobs.create('cow', 66.5, 10, 64.5); s.mobs.mobs.entities.push(cow);
+  s.world.put(65, 10, 66, 60, 0, false); // fence
+  give(a, LEAD, 1); s.queueAnimUse('a', wireId(cow), false); s.tick();
+  assert.equal(cow.leash.holderId, 'a');
+  assert.ok(s.leads.fence(a, [65, 10, 66]), 'the fence click is taken');
+  assert.deepEqual(cow.leash.knot, { x: 65, y: 10, z: 66 });
+  assert.equal(s.mobs.mobs.knotList.length, 1);
+  a.position.x = 90.5; tick(s, 5);
+  assert.ok(cow.leash?.knot, 'the knot still holds');
+  s.mobs.mobs.knotKill(s.mobs.mobs.knotList[0]); tick(s, 3);
+  assert.ok(!cow.leash, 'knot gone, lead off');
+});
+
+test('client: S1B(1) packets become renderer views (own lead, another player\'s lead, a knot)', async () => {
+  const { leadViews } = await import('./multiplayer/remote-leads.js');
+  const mk = w => ({ health: 5, x: 1, y: 2, z: 3, leadWire: w });
+  const own = mk({ kind: 'player', id: 'me' }), other = mk({ kind: 'player', id: 'you' }), knot = mk({ kind: 'knot', x: 4, y: 5, z: 6 }), none = mk(null);
+  const out = leadViews([own, other, knot, none], 'me', id => (id === 'you' ? { x: 9, y: 10, z: 11 } : null));
+  assert.equal(out.mobs.filter(m => m.leash).length, 3);
+  assert.deepEqual(out.mobs.find(m => m.x === 1 && m.leash.holder === 'player').leash, { holder: 'player' });
+  const o = out.mobs.find(m => m.leash?.holderUuid); assert.ok(out.mobs.some(h => h.uuid === o.leash.holderUuid && h.x === 9));
+  assert.deepEqual(out.knots, [{ x: 4, y: 5, z: 6 }]);
+  assert.equal(out.mobs.find(m => m.leash?.knot).x, 1, 'the view reads the copy live');
+  assert.equal(leadViews([own], 'me', () => null).mobs[0], out.mobs.find(m => m.leash?.holder === 'player'), 'stable object per copy');
+});
