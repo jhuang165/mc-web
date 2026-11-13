@@ -42,9 +42,8 @@ test("solo records", () => {
     const gotSender = sender === "@" ? mine.sent.map(ser) : [];
     if (JSON.stringify(got) !== JSON.stringify(expectOut) || JSON.stringify(gotSender) !== JSON.stringify(expectSender)) bad.push([line, sender, expectOut, got, expectSender, gotSender]);
   }
-  // Open divergence, not explained by the bytecode read: from a command block, /tell with a radius selector that matches nobody (r=5, Alex 64 blocks away)
-  // printed commands.generic.player.notFound to the sender in the executed run (count 0), while @a[name=Bob], @a[m=1] and the other empty matches stayed silent.
-  // The port keeps the silent CommandHandler.a rule (selectsNobody).
-  assert.deepEqual(bad.map((b) => b[0] + " from " + b[1]), ["/tell @p[r=5] hi from @"]);
+  // /tell @p[r=5] from a command block (Alex 64 blocks away): an @p selector has count 1, so CommandHandler.a does not expand it and CommandMessage's getPlayer reports
+  // notFound (fixed in batch 57; was excluded here as an unexplained divergence).
+  assert.deepEqual(bad.map((b) => b[0] + " from " + b[1]), []);
   assert.ok(rows.length >= 150);
 });

@@ -77,8 +77,10 @@ import {createCommandRunner} from './commands.js';
 test('a selector at the username index that matches nobody runs nothing and prints nothing (CommandHandler.a); a literal wrong name still fails',()=>{
   const said=[],h={...host,print:t=>said.push(t),cheats:true,give:()=>{said.push('GIVEN');return {name:'x'};}};
   const run=createCommandRunner(h);
-  for(const line of ['give @p[r=1] diamond','give @p[m=0] diamond','/xp 5 @a[name=!Player]','tell @p[l=1] hi','gamemode 1 @p[m=0]','achievement give * @p[m=0]'])assert.equal(run.run(line),false,line);
+  // Only a selector with count != 1 (@a, c=0, c<0, c>1) is expanded by CommandHandler.a; @p/@r/c=1 reach the command's getPlayer (matchOnePlayer), which says notFound (batch 57, executed cmd-chat rows).
+  for(const line of ['give @a[r=1] diamond','give @a[m=0] diamond','/xp 5 @a[name=!Player]','tell @a[l=1] hi','gamemode 1 @a[m=0]','achievement give * @a[m=0]','give @p[c=2,m=0] diamond'])assert.equal(run.run(line),false,line);
   assert.deepEqual(said,[],'silent');
+  assert.equal(run.run('give @p[r=1] diamond'),false);assert.match(said.shift(),/cannot be found/);
   assert.equal(run.run('give Nobody diamond'),false);assert.match(said[0],/Player not found|player/i);
   said.length=0;assert.equal(run.run('give @p diamond'),true);assert.ok(said.includes('GIVEN'));
 });

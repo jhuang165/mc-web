@@ -113,6 +113,7 @@ import { deathComponent, chatTextComponent, senderComponent } from "./team-names
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
+import { achievementComponent } from "./chat-multi.js";
 import { Profiler } from "./profiler.js";
 import { HitboxRenderer, collectHitboxes, crashStep, crashReport, showCrashReport, KEY_C, KEY_F3, KEY_B, KEY_S, KEY_T } from "./debug-keys.js";
 import { DebugOverlay, selectSection, nativeYaw, readMemory, rendererStats, entityStats, columnStats, heightValue, floorD, WALK_SPEED, FLY_SPEED } from "./debug-overlay.js";
@@ -600,7 +601,7 @@ const achievements = new Achievements({
   onUnlock: (a) => {
     achievementToast.show(a);
     // StatisticsFile.func_150873_a: chat.type.achievement with StatBase.func_150955_j, whose hover shows the achievement.
-    printChat(translation("chat.type.achievement", senderComponent(scoreboard.formatName(PLAYER_NAME), PLAYER_NAME), statComponent(lookupStat("achievement." + a.id))));
+    printChat(achievementComponent(PLAYER_NAME, a.id, scoreboard.formatName(PLAYER_NAME)));
     saved = false;
   },
 });

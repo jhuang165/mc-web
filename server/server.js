@@ -9,6 +9,7 @@ import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
+import { serverChatCommand } from '../src/chat-multi.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -189,7 +190,14 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
           const r = chatPacket(chatSpam, Math.floor(Date.now() / 50), m.text, false);
-          if (r.deliver) broadcast({ type: 'chat', name: simulation.players.get(id).name, text: r.deliver });
+          if (r.deliver && r.deliver.startsWith('/')) {
+            // /tell, /me and the permission refusals through the shared command layer: each line goes to the named player only (src/chat-multi.js).
+            const roster = [...simulation.players.values()].map(p => ({ name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, mode: p.survival.mode === 'creative' ? 1 : 0 }));
+            for (const d of serverChatCommand(simulation.players.get(id).name, r.deliver, roster)) {
+              const target = [...simulation.players].find(([, p]) => p.name === d.to)?.[0];
+              if (target !== undefined && sockets.has(target)) send(sockets.get(target), { type: 'chat', name: '', text: d.text });
+            }
+          } else if (r.deliver) broadcast({ type: 'chat', name: simulation.players.get(id).name, text: r.deliver });
           if (r.kick) return ws.close(1008, r.kick);
         } else ws.close(1008, 'Unknown message');
       } catch (error) { send(ws, { type: 'error', text: error.message }); ws.close(1008, 'Request rejected'); }
