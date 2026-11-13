@@ -4,12 +4,11 @@ import { guiAnaglyph } from "./gui-anaglyph.js";
 import { createHorseRig } from "./horse-renderer.js";
 import { createLighting } from "./light-material.js";
 import { paperdollPose, paperdollMatrix, paperdollLights } from "./inventory-player.js";
-import { growthScale } from "./horse.js";
 
 // GuiScreenHorseInventory.func_146976_a (bft.a(FII)V, javap -c): after the horse.png quads it calls
 // GuiInventory.func_147046_a(guiLeft + 51, guiTop + 60, 17, guiLeft + 51 - mouseX, guiTop + 75 - 50 - mouseY, horse),
 // the same pose maths as the inventory player (inventory-player.js) with anchor (51, 60) and scale 17.
-// The model is drawn with the existing horse rig at rest (no limb swing, no rear/eat animation).
+// The model is drawn with the horse rig and ModelHorse.setLivingAnimations at rest (no limb swing, no rear/eat animation).
 export const HORSE_PREVIEW_LAYOUT = { x: 51, y: 60, scale: 17, lookX: 51, lookY: 25, width: 176, height: 166 };
 
 // The pose for a mouse position in GUI pixels from the screen's top left.
@@ -80,12 +79,11 @@ export class HorsePreviewView {
     this.holder.matrix.copy(paperdollMatrix(L, pose.tilt));
     this.holder.matrixWorldNeedsUpdate = true;
     // Saddle, chest bags, ears and armour follow the live record (the stacks change while the screen is open).
-    rig.custom?.(null, { horse: h });
+    // The head turns by rotationYawHead - renderYawOffset and the pose pitch (ModelHorse.setLivingAnimations clamps the turn to 20 degrees); a foal is scaled by the model itself.
+    rig.custom?.(null, { horse: h, growingAge: h.age ?? 0 }, { headYaw: pose.rotationYawHead - pose.renderYawOffset, headPitch: pose.rotationPitch, limbSwing: 0, limbSwingAmount: 0 }, 1, null);
     rig.root.position.set(0, rig.lift ?? 0, 0);
-    rig.root.scale.setScalar(growthScale(h.age ?? 0));
+    rig.root.scale.setScalar(rig.scale ?? 1);
     rig.root.rotation.set(0, -pose.renderYawOffset * RAD, 0);
-    // The head turns by rotationYawHead - renderYawOffset and the pose pitch, as in MobRenderer.update.
-    rig.neck.rotation.set(pose.rotationPitch * RAD, -(pose.rotationYawHead - pose.renderYawOffset) * RAD, 0);
     const lights = paperdollLights(L);
     for (const m of rig.materials) if (m.uniforms?.light0) { m.uniforms.light0.value = lights[0]; m.uniforms.light1.value = lights[1]; }
     this.renderer.render(this.scene, this.camera);

@@ -493,7 +493,7 @@ export class MobRenderer {
       } else r.root.visible = !invisible;
       // RendererLivingEntity's 1/128 lift, for rigs that do not carry it in a frame.
       r.root.position.set(pose.x, pose.y + (r.lift ?? 0), pose.z);
-      r.root.scale.setScalar((baby ? 0.5 : 1) * (r.scale ?? 1));
+      r.root.scale.setScalar((baby && !r.ownGrowth ? 0.5 : 1) * (r.scale ?? 1)); // a horse foal is scaled by its own model (horse-renderer.js, ModelHorse.render's ci())
       // Java yaw turns the opposite way to three.js, hence the sign.
       r.root.rotation.set(0, -pose.bodyYaw * RAD, pose.death * RAD);
       // A spawner's display mob (mob-spawner.js spawnerDisplayEntity): the
