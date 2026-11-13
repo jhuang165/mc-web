@@ -133,7 +133,7 @@ test("time, weather and toggledownfall use the native semantics", () => {
   assert.equal(g.survival.time, 1000);
   assert.deepEqual(g.run("/time add 500"), ["Added 500 to the time"]);
   assert.equal(g.survival.time, 1500);
-  assert.equal(g.run("/time")[0].startsWith("§cUsage: "), true);
+  assert.equal(g.run("/time")[0].startsWith("§c/time "), true);
   g.run("/weather thunder 100");
   assert.deepEqual([g.weather.raining, g.weather.thundering, g.weather.rainTime, g.weather.thunderTime], [true, true, 2000, 2000]);
   g.run("/weather rain 50");
@@ -226,7 +226,7 @@ test("setblock replaces, keeps and refuses outside the world; testforblock compa
 test("plain chat echoes as <Player> message and a bad usage is red", () => {
   const g = game({ allowCommands: true });
   assert.equal(chatLine("Player", "hello"), "<Player> hello");
-  assert.deepEqual(g.run("/give"), ["§cUsage: /give <player> <item> [amount] [data] [dataTag]"]);
+  assert.deepEqual(g.run("/give"), ["§c/give <player> <item> [amount] [data] [dataTag]"]);
 });
 
 test("/publish shares to LAN as survival without cheats; the LAN screen's Allow Cheats lets a cheatless world use commands", () => {
@@ -258,7 +258,7 @@ test("spawnpoint: 0 or 1 arguments use the target's position, exactly 4 take abs
   assert.match(g.run("/spawnpoint Player ~ 64 3")[0], /^§c'~' is not a valid number$/);
   assert.match(g.run("/spawnpoint Player 1.5 64 3")[0], /^§c'1\.5' is not a valid number$/);
   assert.match(g.run("/spawnpoint Player 1 300 3")[0], /^§c/);
-  assert.match(g.run("/spawnpoint Player 1 2")[0], /^§cUsage: \/spawnpoint/);
-  assert.match(g.run("/spawnpoint Player 1 2 3 4")[0], /^§cUsage: \/spawnpoint/);
+  assert.match(g.run("/spawnpoint Player 1 2")[0], /^§c\/spawnpoint/);
+  assert.match(g.run("/spawnpoint Player 1 2 3 4")[0], /^§c\/spawnpoint/);
   assert.deepEqual(g.active.playerSpawn, [5, 64, -3], "failed forms change nothing");
 });

@@ -78,7 +78,7 @@ test("/achievement give unlocks the locked parents first, * gives all, a plain s
   run.run("/achievement take achievement.diamonds");
   assert.equal(out.length, 4, "take (and any other first word) is silent in 1.7.10");
   run.run("/achievement give");
-  assert.equal(out.at(-1), "§cUsage: /achievement give <stat_name> [player]");
+  assert.equal(out.at(-1), "§c/achievement give <stat_name> [player]");
   run.run("/achievement give stat.jump Steve");
   assert.equal(out.at(-1), "§cThat player cannot be found");
   assert.deepEqual(run.complete("/achievement g"), ["give"]);
@@ -98,7 +98,7 @@ test("/tellraw prints the component, reports Gson errors and needs a player", ()
   run.run("/tellraw Steve hi");
   assert.equal(out.at(-1), "§cThat player cannot be found");
   run.run("/tellraw Player");
-  assert.equal(out.at(-1), "§cUsage: /tellraw <player> <raw json message>");
+  assert.equal(out.at(-1), "§c/tellraw <player> <raw json message>");
   for (const r of records("tellraw").filter((r) => r.outcome === "parse").slice(0, 20)) {
     run.run("/tellraw Player " + r.input);
     assert.equal(out.at(-1), "§c" + r.chat, r.input);
@@ -186,6 +186,6 @@ test("/debug start, stop and the not-started error", () => {
   assert.match(files[0][0], /^profile-results-\d{4}-\d\d-\d\d_\d\d\.\d\d\.\d\d\.txt$/);
   assert.match(files[0][1], /^---- Minecraft Profiler Results ----\n\/\/ .+\n\nTime span: \d+ ms\nTick span: 20 ticks\n/);
   run.run("/debug");
-  assert.equal(out.at(-1), "§cUsage: /debug <start|stop>");
+  assert.equal(out.at(-1), "§c/debug <start|stop>");
   assert.equal(tr("commands.debug.usage"), "/debug <start|stop>");
 });

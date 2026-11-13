@@ -32,7 +32,7 @@ function runScripts() {
   }
   return { boards, outputs };
 }
-const expected = (out) => out.map((e) => (e.t === "notify" ? "N:" + e.text : e.t === "chat" ? e.color + e.text : "§c" + e.text));
+const expected = (out) => out.map((e) => (e.t === "notify" ? "N:" + e.text : e.t === "chat" ? e.color + e.text : "§c" + (e.cls === "usage" ? e.text.replace(/^Usage: /, "") : e.text))); // the probe wrapped usage in commands.generic.usage itself; the executed CommandHandler (cmd-chat-reference.json) prints the bare usage
 const { boards, outputs } = runScripts();
 
 test("the probe ran every scripted line without a Java exception", () => {

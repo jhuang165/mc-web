@@ -26,7 +26,10 @@ function run(line, opts = {}) {
 }
 
 test("/say and /me: the sender's component and a word-sibling message (replayed)", () => {
-  same("sayWords", run("/say hi there").broadcast[0]);
+  // executed (cmd-chat-reference.json): CommandBroadcast passes the plain sender name, not the click component; the message siblings are the same
+  const say = run("/say hi there").broadcast[0];
+  assert.equal(say.args[0], "Steve");
+  assert.equal(serializeComponent(say.args[1]), '{"extra":["hi"," ","there"],"text":""}');
   same("emoteWords", run("/me waves hello").broadcast[0]);
 });
 
@@ -40,8 +43,8 @@ test("a command block's /say expands selectors to the player's name and has no c
 
 test("a selector that matches nobody is a player-not-found error", () => {
   assert.equal(run("/say @p[name=Nobody]").broadcast.length, 0);
-  // /me by a player keeps the word as typed
-  assert.equal(run("/me @p").broadcast[0].unformatted(), "* Steve @p");
+  // executed: /me expands selectors for a player sender too (cmd-chat-reference.json)
+  assert.equal(run("/me @p").broadcast[0].unformatted(), "* Steve Steve");
 });
 
 test("/tell: gray italic incoming for the target, outgoing for the sender (replayed)", () => {
