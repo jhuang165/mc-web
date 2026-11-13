@@ -1,0 +1,140 @@
+// Batch 63 mpend: the End on the dedicated multiplayer server.
+//
+// ServerDimensions (server-dimensions.js) owns the player's dimension, the world swap (`within` / `swap`), the trip (`arrive`) and the per-dimension tick message; it asks this module for
+// everything that is only the End's. What is here, and the evidence behind it:
+//   * The End world, built on first use: a finite 128 x 128 world (client-dimensions.js FiniteDimensionWorld, dimension 1) filled from the single-player End generator
+//     (DimensionWorld.endChunk: ChunkProviderEnd density, ores, spikes; end-reference.json evidence). The light volume of this port is a 128 x 128 grid, so the replica holds the window
+//     x -25..102, z -96..31 of the End, stored shifted by END_OFFSET: the native spawn platform (100, 49, 0) lies inside it.
+//   * Its systems are the Nether's (server-nether.js builds them for any dimension through `n.dim`): fluids, fire, falling blocks, random ticks, redstone, containers, light, projectiles and
+//     a second ServerMobs. The End's natural spawn list (BiomeGenEnd: enderman only, spawn-lists.js biome 9) comes from EntityWorld because the world's dimension is 1. Saved like the Nether.
+//   * Travel (ServerConfigurationManager.transferEntityToWorld, EntityPlayerMP.travelToDimension, bytecode-read in the earlier tracks and in dimensions.js):
+//       - ItemEnderEye.onItemUse on a frame without an eye sets the eye bit (flag 2), takes the eye outside Creative and runs the ring check; a complete ring of twelve eyed frames turns the
+//         nine interior cells into end portal (eye-of-ender.js useEyeOnFrame, executed against the original in eye-of-ender-reference.json).
+//       - BlockEndPortal.onEntityCollidedWithBlock sends a player that rides nothing to dimension 1 (or back to 0 from the End) at once: no portal timer and no creative shortcut.
+//       - To the End the Teleporter builds the 5 x 5 obsidian platform under three layers of air at the End's entrance (100, 50, 0) and the player stands on it, facing yaw 90.
+//       - From the End the player is respawned in the Overworld at their spawn point (bed or /spawnpoint) or the world spawn. Achievements (pc.C theEnd on entering, pc.D theEnd2 on the way
+//         back through the exit portal) follow the single-player trips (main.js: transit.exit gives theEnd2).
+//   * The exit portal: natively it exists only after the dragon dies. The dragon is not on the server yet, so the exit portal structure (EntityDragon.createEnderPortal, exit-portal.js, executed
+//     against the original) is built when the End is first made, so the End can be left and theEnd2 can be earned. Set DRAGON_ON_SERVER when the dragon arrives.
+//   * Not here: the dragon and the ender crystals, the credits screen, a flying eye of ender, End projectiles in the save, XP orbs (inert, as in the Nether).
+import { DimensionWorld } from '../dimension-world.js';
+import { Rails } from '../rails.js';
+import { Torches } from '../torches.js';
+import { Doors } from '../doors-panes.js';
+import { Beds } from '../bed.js';
+import { ItemEntities } from '../item-entities.js';
+import { fromOriginal } from '../block-registry.js';
+import { createExitPortal } from '../exit-portal.js';
+import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, useEyeOnFrame, hasEye } from '../eye-of-ender.js';
+import { GAME_IDS, transferTarget } from '../dimensions.js';
+import { FiniteDimensionWorld, END, END_OFFSET } from './client-dimensions.js';
+import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
+
+export const DRAGON_ON_SERVER = false;
+const OVERWORLD = 0, SIZE = 128, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
+const inert = () => new Proxy({}, { get: (_, key) => key === 'litFurnaces' || key === 'lit' ? new Set() : key === 'observe' ? noop : () => false });
+const toLocal = (x, z) => [x + END_OFFSET.x, z + END_OFFSET.z];
+
+// The End's terrain into the finite world, shifted by END_OFFSET. A generated chunk holds (lx * 16 + lz) * 256 + y; a column of 256 cells moves as one run.
+export function fillEnd(world, seed) {
+  const source = new DimensionWorld(seed, END);
+  for (let cx = Math.floor(-END_OFFSET.x / 16); cx <= Math.floor((SIZE - 1 - END_OFFSET.x) / 16); cx++) {
+    for (let cz = Math.floor(-END_OFFSET.z / 16); cz <= Math.floor((SIZE - 1 - END_OFFSET.z) / 16); cz++) {
+      const made = source.generateTerrainChunk(cx, cz);
+      for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
+        const [tx, tz] = toLocal(cx * 16 + lx, cz * 16 + lz);
+        if (tx < 0 || tx >= SIZE || tz < 0 || tz >= SIZE) continue;
+        const column = world.chunks.get(`${tx >> 4},${tz >> 4}`), from = (lx * 16 + lz) * 256, to = ((tx & 15) * 16 + (tz & 15)) * 256;
+        column.blocks.set(made.blocks.subarray(from, from + 256), to); column.meta.set(made.metadata.subarray(from, from + 256), to);
+      }
+    }
+  }
+}
+
+// EntityDragon.createEnderPortal on the End's world (original ids mapped to this port's blocks); the cells are edits of the world like any other.
+export function buildExitPortal(world, centerX = 0, centerZ = 0) {
+  const [cx, cz] = toLocal(centerX, centerZ);
+  createExitPortal({ setBlock(x, y, z, id) { const m = id === 0 ? { id: 0, meta: 0 } : fromOriginal(id, 0); if (m) world.set(x, y, z, m.id, true, m.meta); } }, cx, cz);
+}
+
+export class ServerEnd {
+  constructor(dims) { this.dims = dims; this.n = null; }
+  get active() { return !!this.n; }
+  // The End, built on first use (about a second once; the tick that needs it waits).
+  ensure() {
+    if (this.n) return this.n;
+    const dims = this.dims, sim = dims.sim, saved = dims.saved.end ?? {}, world = new FiniteDimensionWorld(sim.world.seed, END);
+    fillEnd(world, sim.world.seed);
+    buildExitPortal(world); // before the saved edits: an edit of a portal cell (broken, replaced) wins
+    const edits = Array.isArray(saved.edits) ? saved.edits : [];
+    for (let i = 0; i < edits.length; i += 100000) world.restore(edits.slice(i, i + 100000));
+    const n = { dim: END, world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: inert(), overMobs: dims.mobsOf(OVERWORLD) };
+    n.items.joined = e => { e.eid = ++sim.nextItemId; };
+    buildNetherSystems(sim, n, {}, saved); // the generic part of the Nether's systems (no fortress list: no `source.provider`)
+    const put = world.put.bind(world);
+    world.put = (x, y, z, b, m = 0, track = true) => {
+      const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
+      if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      return result;
+    };
+    const drop = (...a) => sim.serverItems.stacksDrop(...a);
+    for (const System of [Rails, Torches, Doors, Beds]) new System(world, { drop, apply: noop }).watch();
+    this.n = n;
+    dims.swap(n, () => buildNetherInside(sim, n, saved));
+    // The projectile instance reads its dimension's world and mobs through getters that name the Nether (server-dispense.js); the End's own are these.
+    Object.defineProperty(n.dispense, 'world', { get: () => n.world });
+    Object.defineProperty(n.dispense, 'mobs', { get: () => n.mobs.mobs });
+    return n;
+  }
+  // A player saved in the End comes back to it (ServerDimensions.adopt).
+  adopt(p) { const n = this.ensure(); p.world = n.world; p.dimension = END; n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); return n; }
+  // What the End adds to the save.
+  saveField() { const n = this.n; return n ? { edits: [...n.world.edits], ...saveNether(n) } : (this.dims.saved.end ?? null); }
+
+  // ---- travel ----
+  // BlockEndPortal.onEntityCollidedWithBlock: the player's box overlaps an end portal cell (Entity.doBlockCollisions: the box shrunk by 0.001). Returns true when a trip was made.
+  checkPortal(p) {
+    const w = p.world, at = p.position, hw = 0.3 - 0.001;
+    if (p.mount) return false; // ridingEntity == null && riddenByEntity == null
+    for (let x = Math.floor(at.x - hw); x <= Math.floor(at.x + hw); x++) for (let z = Math.floor(at.z - hw); z <= Math.floor(at.z + hw); z++) for (let y = Math.floor(at.y + 0.001); y <= Math.floor(at.y + 1.8 - 0.001); y++) {
+      if (w.get(x, y, z) !== END_PORTAL) continue;
+      if (p.dimension === END) return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p), exit: true });
+      return this.dims.arrive(p, END);
+    }
+    return false;
+  }
+  // The respawn after the End: the bed (or /spawnpoint) in the Overworld, else the world spawn.
+  exitSpot(p) {
+    if (p.spawnpoint) return { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 };
+    return this.dims.overworld.spawn();
+  }
+  // transferEntityToWorld into the End: the entity goes to the entrance (100, 50, 0) (in the window's coordinates) and the Teleporter builds the platform there, in the End's own context.
+  place(e, from, yaw) {
+    const tt = transferTarget(from, END, 0, 0, 0, yaw), [x, z] = toLocal(tt.x, tt.z);
+    Object.assign(e, { x, y: tt.y, z, yaw: tt.yaw });
+    this.dims.swap(this.ensure(), () => this.dims.teleporterFor(END).placeInPortal(e, e.x, e.y, e.z, e.yaw));
+  }
+  // EntityPlayerMP.travelToDimension: theEnd (pc.C) on entering the End, theEnd2 (pc.D) when the exit portal takes the player out. True when the trip was one of the End's (no `portal` award).
+  award(p, from, to, exit) {
+    if (to === END) { this.dims.sim.achievements.award(p, 'theEnd'); return true; }
+    if (from === END) { if (exit) this.dims.sim.achievements.award(p, 'theEnd2'); return true; }
+    return false;
+  }
+
+  // ---- items ----
+  // ItemEnderEye.onItemUse on the clicked cell (`target.block`) in the player's world (sim.world, swapped inside `within`): true when the click was an eye on a frame (used up either way).
+  useItem(p, target, id) {
+    if (id !== ITEM_EYE_OF_ENDER) return false;
+    const w = this.dims.sim.world, [x, y, z] = target.block;
+    if (w.get(x, y, z) !== END_PORTAL_FRAME) return false; // an eye aimed elsewhere flies to the nearest stronghold natively: not on the server yet
+    if (hasEye(w.getMeta(x, y, z))) return true;
+    if (!p.survival.creative && !p.survival.usable(id)) return true;
+    useEyeOnFrame(w, x, y, z, {
+      setMeta: (px, py, pz, meta) => { w.set(px, py, pz, END_PORTAL_FRAME, true, meta); },
+      set: (px, py, pz, block) => { w.set(px, py, pz, block, true, 0); },
+      particle: noop, // WorldServer drops particle calls (the clients draw their own)
+    }, p.rand);
+    if (!p.survival.creative) p.survival.take(id); // Creative keeps the stack (ItemInWorldManager restores it)
+    return true;
+  }
+}

@@ -35,9 +35,10 @@ import { describeTiles, describeCell } from '../tile-sync.js';
 import { PortalState, Teleporter, transferTarget, GAME_IDS, portalCooldown } from '../dimensions.js';
 import { encodeColumn, splitChanges } from './protocol.js';
 import { FiniteDimensionWorld, NETHER } from './client-dimensions.js';
+import { ServerEnd } from './server-end.js'; // b63 mpend: the End
 import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tickNether, applyPopulation } from './server-nether.js';
 
-const OVERWORLD = 0, MIDDLE = 64, MARGIN = 24, SIZE = 128;
+const OVERWORLD = 0, END = 1, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
 // Entity yaw: the game's radians (0 looks toward -z) <-> Minecraft degrees (0 looks toward +z); the same two lines as dimension-live.js.
 export const gameYaw = degrees => Math.PI - degrees * Math.PI / 180;
@@ -53,7 +54,8 @@ const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow',
 export class ServerDimensions {
   constructor(sim, saved = {}) {
     this.sim = sim; this.saved = saved ?? {}; this.nether = null; this.depth = 0; this.alt = {}; this.clearWeather = new Weather().save();
-    this.teleporters = new Map(); this.overworld = sim.world; // sim.world is swapped while a Nether player's action runs
+    this.teleporters = new Map(); this.overworld = sim.world; this.end = new ServerEnd(this); // b63 mpend: the End (server-end.js)
+    // sim.world is swapped while a Nether player's action runs
     // Overworld: a fire block lights a complete frame and a portal block without its frame goes (nether-portal-live.js, chained after Fire).
     new NetherLive(sim.world, { random: sim.weather.random, apply: noop }).watch();
     for (const name of ENTRY_POINTS) {
@@ -107,18 +109,23 @@ export class ServerDimensions {
     sim.serverItems.xp = n.xp; this.depth++;
     try { return fn(); } finally { this.depth--; sim.serverItems.xp = xp; for (const key of Object.keys(keep)) sim[key] = keep[key]; }
   }
+  // b63: the state object of a dimension (-1 the Nether, 1 the End), built on first use; the world and the Overworld mob view by dimension.
+  state(d) { return d === END ? this.end.ensure() : this.ensureNether(); }
+  worldOf(d) { return d ? this.state(d).world : this.overworld; }
+  mobsOf(d) { return d === END ? this.end.n.mobs : d ? this.nether.mobs : (this.nether?.overMobs ?? this.end.n?.overMobs ?? this.sim.mobs); }
   // Runs `fn` as the player's dimension: a Nether player's block edits, digs, drops and windows touch the Nether's world, items and tile entities.
   within(p, fn) {
     if (!p?.dimension || this.depth) return fn();
-    const n = this.ensureNether(), tiles = {};
+    const n = this.state(p.dimension), tiles = {};
     for (const key of TILE_KEYS) { tiles[key] = p.survival[key]; p.survival[key] = n.tiles[key]; } // chests, furnaces ... are keyed by cell only
     try { return this.swap(n, fn); } finally { for (const key of TILE_KEYS) p.survival[key] = tiles[key]; }
   }
   // ItemFlintAndSteel.onItemUse: the cell on the clicked face, if it is air and inside the build limits, takes a fire block; the tool wears (Survival).
   // The sound is the server's. Returns true when the held item was flint and steel (the click is used up either way).
   useItem(p, target, id) {
+    if (this.end.useItem(p, target, id)) return true; // b63 mpend: an eye of ender on an end portal frame
     if (ITEMS[id]?.kind !== 'flint_and_steel') return false;
-    const sim = this.sim, w = p.dimension ? this.nether.world : this.overworld, q = target.adjacent;
+    const sim = this.sim, w = this.worldOf(p.dimension), q = target.adjacent;
     if (!q || q[1] === 0 || q[1] >= 256 || !w.inside(...q)) return true;
     if (w.get(...q) === 0) {
       sim.soundsOut.push({ name: 'fire.ignite', x: q[0] + 0.5, y: q[1] + 0.5, z: q[2] + 0.5, volume: 1, pitch: Math.fround(Math.fround(sim.soundRand.nextFloat() * Math.fround(0.4)) + Math.fround(0.8)), except: null, dim: p.dimension | 0 });
@@ -130,24 +137,27 @@ export class ServerDimensions {
   // ---- joining, saving and describing ----
   // A player saved in the Nether comes back to it.
   adopt(p, saved) {
+    if (saved?.dimension === END) { this.end.adopt(p); p.portal = new PortalState(); p.portal.timeUntilPortal = portalCooldown(true); return; } // b63 mpend
     if (saved?.dimension !== NETHER) return;
     p.world = this.ensureNether().world; p.dimension = NETHER; p.portal = new PortalState(); p.portal.timeUntilPortal = portalCooldown(true);
     const n = this.nether;
     n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); // the Overworld's mobs must not target a player who is not there; the Nether's do
   }
   // A player who disconnects leaves the Nether's mob view as well (simulation.removePlayer hook).
-  removePlayer(id) { this.nether?.mobs.removePlayer(id); }
+  removePlayer(id) { this.nether?.mobs.removePlayer(id); this.end.n?.mobs.removePlayer(id); }
   savedFields(p) { return p.dimension ? { dimension: p.dimension } : {}; }
   saveField() {
-    const n = this.nether;
-    return n ? { dimensions: { nether: { edits: [...n.world.edits], ...saveNether(n) } } } : (this.saved.nether ? { dimensions: { nether: this.saved.nether } } : {});
+    const n = this.nether, out = {};
+    if (n) out.nether = { edits: [...n.world.edits], ...saveNether(n) }; else if (this.saved.nether) out.nether = this.saved.nether;
+    const end = this.end.saveField(); if (end) out.end = end; // b63 mpend
+    return Object.keys(out).length ? { dimensions: out } : {};
   }
   list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay })); }
   // The world snapshot a player in another dimension joins or arrives with (null for an Overworld player).
   snapshotFor(playerId) {
     const p = this.sim.players.get(playerId);
     if (!p?.dimension) return null;
-    const n = this.ensureNether(), sim = this.sim;
+    const n = this.state(p.dimension), sim = this.sim;
     return { gameMode: sim.gameMode, items: this.list(n.items), seed: n.world.seed, biome: n.world.biome, generationVersion: n.world.generationVersion, dimension: p.dimension,
       time: sim.time, ticks: sim.ticks, columns: [...n.world.chunks.values()].map(encodeColumn), players: sim.presence(p.dimension), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, contTiles: this.swap(n, () => n.containers.describeAll()) };
   }
@@ -158,9 +168,11 @@ export class ServerDimensions {
     for (const t of this.teleporters.values()) if (sim.ticks % 100 === 0) t.removeStale(sim.ticks);
     this.alt = {};
     if (this.nether) this.alt[NETHER] = this.netherMessage(base);
+    if (this.end.n) this.alt[END] = this.netherMessage(base, this.end.n, END); // b63 mpend
   }
   // BlockPortal.onEntityCollidedWithBlock (the box overlaps a portal block) and Entity.onEntityUpdate's timer; `p.previous` is the last tick's position.
   checkPortal(p) {
+    if (this.end.checkPortal(p)) return; // b63 mpend: BlockEndPortal
     const w = p.world, at = p.position, hw = 0.3 - 0.001;
     p.portal ??= new PortalState();
     let inside = false;
@@ -174,19 +186,20 @@ export class ServerDimensions {
   teleporterFor(dimension) {
     let t = this.teleporters.get(dimension);
     if (t) return t;
-    const sim = this.sim, w = dimension ? this.nether.world : this.overworld, seed = javaSeed(w.seed);
+    const sim = this.sim, w = this.worldOf(dimension), seed = javaSeed(w.seed);
     const adapter = { get: (x, y, z) => w.get(x, y, z), notify: noop, get time() { return sim.ticks; }, actualHeight: dimension ? 128 : 256, dimension, seed,
       set: (x, y, z, id, meta = 0, flags = 3) => { if (flags === 2) w.put(x, y, z, id, meta, true); else w.set(x, y, z, id, true, meta); } };
     this.teleporters.set(dimension, t = new Teleporter(adapter, { isSolid: solidId, random: new JavaRandom(seed) }));
     return t;
   }
   // The trip: the destination is built, the Teleporter places the player, and a `dimRespawn` is queued for the connection. `at` skips the search (a respawn).
-  arrive(p, to, { at = null } = {}) {
+  arrive(p, to, { at = null, exit = false } = {}) {
     const sim = this.sim, from = p.dimension | 0;
     if (to === from) return false;
-    const dest = to ? this.ensureNether().world : this.overworld;
+    const dest = this.worldOf(to);
     const e = { x: p.position.x, y: p.position.y, z: p.position.z, vx: 0, vy: 0, vz: 0, yaw: mcYaw(p.yaw), pitch: 0, teleportDirection: p.portal?.teleportDirection ?? 0 };
     if (at) Object.assign(e, { x: at.x, y: at.y, z: at.z });
+    else if (to === END) this.end.place(e, from, e.yaw); // b63 mpend: the platform at the End's entrance
     else {
       const tt = transferTarget(from, to, p.position.x - MIDDLE, p.position.y, p.position.z - MIDDLE, e.yaw);
       Object.assign(e, { x: clamp(tt.x + MIDDLE), y: tt.y, z: clamp(tt.z + MIDDLE), yaw: tt.yaw });
@@ -196,7 +209,7 @@ export class ServerDimensions {
     }
     // The player leaves the old dimension: the mob view goes (or comes back), and everything aimed at the old world is dropped.
     sim.vehicles?.dismount(p); // b61 lead: a rider leaves the vehicle (Entity.travelToDimension mounts nothing across)
-    (from ? this.nether.mobs : this.nether?.overMobs ?? sim.mobs).removePlayer(p.id); (to ? this.nether.mobs : this.nether?.overMobs ?? sim.mobs).addPlayer(p); // b62: each dimension's mobs see only its own players
+    this.mobsOf(from).removePlayer(p.id); this.mobsOf(to).addPlayer(p); // b62: each dimension's mobs see only its own players
     p.world = dest; p.dimension = to;
     p.position.copy({ x: e.x, y: e.y, z: e.z }); p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); Object.assign(p, { fallDistance: 0, landedFall: 0, grounded: false });
@@ -204,7 +217,7 @@ export class ServerDimensions {
     p.pitch = 0; p.itemInUse = null; p.dig.abort(); if (p.window) sim.closeWindow(p.id);
     p.blocks = p.resendCells = p.mobPackets = p.cracksOut = p.openSign = p.openBeacon = null;
     p.portal ??= new PortalState(); p.portal.timeUntilPortal = portalCooldown(true); p.portal.inPortal = false;
-    if (!at) sim.achievements.award(p, 'portal'); // pc.y: every trip that is not to or from the End (bytecode-read)
+    if (!this.end.award(p, from, to, exit) && !at) sim.achievements.award(p, 'portal'); // b63: theEnd / theEnd2 for the End's trips // pc.y: every trip that is not to or from the End (bytecode-read)
     sim.serverSurvival?.resendEffects(p); // b61 lead: ServerConfigurationManager.transferPlayerToDimension sends every active effect as S1D (mphealth2's burst)
     (p.dimOut ??= []).push({ type: 'dimRespawn', dimension: to, world: sim.snapshot(p.id), self: sim.savePlayer(p) });
     return true;
@@ -212,8 +225,8 @@ export class ServerDimensions {
   // Sent by the connection before the player's next tick message.
   flush(deliver) { for (const p of this.sim.players.values()) if (p.dimOut) { for (const m of p.dimOut) deliver(p.id, m); p.dimOut = null; } }
   // The Nether's items tick and its cell changes become a tick message (the same fields the Overworld's carries, without weather, redstone or XP).
-  netherMessage(base) {
-    const sim = this.sim, n = this.nether, w = n.world, here = [...sim.players.values()].filter(p => p.dimension === NETHER);
+  netherMessage(base, n = this.nether, dim = NETHER) {
+    const sim = this.sim, w = n.world, here = [...sim.players.values()].filter(p => p.dimension === dim);
     if (here.length) this.swap(n, () => tickNether(sim, n, here)); // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
     else { n.changes.clear(); n.dirtyTiles.clear(); }
     const final = [...n.changes.values()].map(([x, y, z]) => [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
@@ -233,7 +246,7 @@ export class ServerDimensions {
       n.dirtyTiles.clear();
       const list = this.list(n.items), items = !list.length && !n.itemsSent ? {} : { items: list };
       n.itemsSent = list.length;
-      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(NETHER), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...n.containers.actionsField() };
+      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(dim), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...n.containers.actionsField() };
     });
     return out;
   }
