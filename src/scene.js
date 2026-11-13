@@ -502,6 +502,7 @@ export class VoxelScene {
       if (blockTap !== undefined) world.blockTap = null;
       try {
         for (const { x, y, z } of cells) {
+          if (!world.isLoaded(x, z)) continue; // a ring column (no chunk): its reads go through the detached ringSink, and nothing here relights it (b57 lead fix: End crystal fire)
           const nb = view.get(x, y, z), nm = view.getMeta(x, y, z);
           if ((world.get(x, y, z) === nb && world.getMeta(x, y, z) === nm)) continue;
           swapped.push({ x, y, z, block: world.get(x, y, z), meta: world.getMeta(x, y, z), pot: world.pots?.get(`${x},${y},${z}`) });

@@ -215,7 +215,7 @@ test("EntityWorld: the crystal lights fire in the End only", () => {
   dry.tick({ x: 64, y: 0, z: 64 }, surv);
   end.tick({ x: 64, y: 0, z: 64 }, surv);
   assert.equal(dry.world.sets.length, 0);
-  assert.deepEqual(end.world.sets.map((s) => s[3]), [51]);
+  assert.deepEqual(end.world.sets.map((s) => s[3]), [45]); // the port fire id (original 51; port 51 is the cobweb, written raw before the b57 lead fix)
   assert.equal(end.entities[0].innerRotation, 8);
 });
 

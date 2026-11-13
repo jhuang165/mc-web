@@ -10,6 +10,7 @@ export const CRYSTAL_FIRE_TOKEN = -57; // the overlay token of these entries (cl
 export function createCrystalFireLayer(host) {
   const owned = new Set();
   const layer = {
+    ids: "port", // get and set speak port block ids (clientCrystalFire maps the rule's original fire id)
     get isEnd() { return host.world()?.isEnd === true; },
     get: (x, y, z) => host.seen().get(x, y, z),
     set(x, y, z, id) {

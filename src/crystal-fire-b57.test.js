@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import { createCrystalFireLayer, CRYSTAL_FIRE_TOKEN } from "./crystal-fire-layer.js";
 import { createPrediction } from "./client-prediction.js";
 import { MobTracker, ClientEntity } from "./entity-tracker.js";
-import { CRYSTAL_FIRE } from "./ender-crystal.js";
+import { CRYSTAL_FIRE as ORIGINAL_FIRE } from "./ender-crystal.js";
+import { portId } from "./ender-crystal-mobs.js";
+const CRYSTAL_FIRE = portId(ORIGINAL_FIRE); // the port world and overlay hold the port fire id (45)
 
 function setup(isEnd = true) {
   const blocks = new Map(), world = { isEnd, get: (x, y, z) => blocks.get(`${x},${y},${z}`) ?? 0, getMeta: () => 0, put(x, y, z, b) { blocks.set(`${x},${y},${z}`, b); } };
