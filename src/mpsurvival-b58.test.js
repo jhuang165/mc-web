@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
@@ -161,4 +161,12 @@ test('a client held click: progress per tick, status 2 at progress 1, the server
   assert.deepEqual(sent, [0, 2]);
   assert.ok(brokeAt >= Math.ceil(0.7 / rate) - 2 && brokeAt <= Math.ceil(1 / rate) + 2, 'broke between the 0.7 line and damage 1');
   assert.equal(state.cooldown, 5, 'PlayerControllerMP sets blockHitDelay 5 after the break');
+});
+
+test('main.js: the multiplayer branch of movementTick still ticks a Survival dig (lead fix; it returned before tickMining)', async () => {
+  const src = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('function movementTick('), src.indexOf('\n}\n', src.indexOf('function movementTick(')));
+  const branch = body.split('\n').find(l => /^\s*if \(multiplayer\) \{ sendMultiplayerInput/.test(l));
+  assert.ok(branch, 'the multiplayer branch exists');
+  assert.match(branch, /if \(!survival\.creative\) tickMining\(\); return;/);
 });
