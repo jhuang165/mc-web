@@ -36,7 +36,7 @@ const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count ===
 const sig = s => (s ? JSON.stringify(s) : '');
 
 export class ServerContainers {
-  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.lids = new Map(); this.actions = []; this.litFurnaces = new Set(); this.litSent = false; this.ticks = null; this.onFurnaceTake = (pl, stack) => sim.achievements?.onSmelted(pl, stack); /* b60 lead: SlotFurnace.onCrafting awards (server-achievements.js) */ this.stations = new ServerStations(sim); }
+  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.dim = 0; /* b62: 0 = Overworld, -1 = the Nether's own instance */ this.lids = new Map(); this.actions = []; this.litFurnaces = new Set(); this.litSent = false; this.ticks = null; this.onFurnaceTake = (pl, stack) => sim.achievements?.onSmelted(pl, stack); /* b60 lead: SlotFurnace.onCrafting awards (server-achievements.js) */ this.stations = new ServerStations(sim); }
   // b60: SlotFurnace.onCrafting for a stack taken from a furnace output slot: the crafted-item hook (`onFurnaceTake(p, stack, amount)`, for the smelting
   // achievement; this module does not award it) and the experience, rounded up by chance, spawned at the player (posY + 0.5, posZ + 0.5).
   smelted(p, stack, amount) {
@@ -174,7 +174,7 @@ export class ServerContainers {
       if (bits !== null || sim.world.getMeta(x, y, z) !== view.bottleBits()) sim.world.put(x, y, z, BREWING_STAND, view.bottleBits(), true);
     }
     for (const p of sim.players.values()) {
-      if (!p.window) continue;
+      if (!p.window || (p.dimension | 0) !== this.dim) continue; // b62: a window belongs to this dimension's instance
       if (!this.canInteract(p)) { this.close(p, true); continue; }
       if (p.window.pending && sim.ticks > p.window.pending) p.window.pending = 0;
       if (!p.window.ready) continue;
@@ -239,5 +239,5 @@ export class ServerContainers {
     for (const key of Object.keys(t.enderTiles)) { const [x, y, z] = key.split(',').map(Number); if (w.get(x, y, z) === ENDER_CHEST) list.push({ kind: 'contChest', x, y, z, ender: true }); }
     return list;
   }
-  closeAt(key) { for (const p of this.sim.players.values()) if (p.window && (p.window.key.join(',') === key || p.window.container.keys?.includes(key))) this.close(p, true); }
+  closeAt(key) { for (const p of this.sim.players.values()) if (p.window && (p.dimension | 0) === this.dim && (p.window.key.join(',') === key || p.window.container.keys?.includes(key))) this.close(p, true); }
 }

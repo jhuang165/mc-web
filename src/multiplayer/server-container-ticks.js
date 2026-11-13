@@ -15,7 +15,7 @@ import { JavaRandom } from '../java-random.js';
 const AUX_RANGE_SQ = 64 * 64;
 export class ContainerTicks {
   constructor(sim) {
-    this.sim = sim; this.buffer = []; this.unsupported = false;
+    this.sim = sim; this.dim = 0; /* b62: the dimension whose players hear aux events */ this.buffer = []; this.unsupported = false;
     this.rand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
     const tiles = () => sim.tiles, redstone = sim.redstone, live = redstone;
     this.hoppers = new Hoppers({
@@ -65,6 +65,7 @@ export class ContainerTicks {
   // S28 to every player within 64 blocks of the cell.
   flushAux() {
     for (const e of this.buffer.splice(0)) for (const p of this.sim.players.values()) {
+      if ((p.dimension | 0) !== this.dim) continue;
       const dx = e.x - p.position.x, dy = e.y - p.position.y, dz = e.z - p.position.z;
       if (dx * dx + dy * dy + dz * dz < AUX_RANGE_SQ) (p.itemsOut ??= []).push({ type: 'aux', events: [e] });
     }

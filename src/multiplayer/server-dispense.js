@@ -23,7 +23,7 @@ const f = Math.fround;
 
 export class ServerDispense {
   constructor(sim) {
-    this.sim = sim;
+    this.sim = sim; this.dim = 0; // b62: the dimension whose players see and are hit by these entities (the Nether has its own instance)
     this.arrows = new Arrows(Math.random);
     this.balls = new Projectiles(Math.random); // snowballs and eggs; the poof particles belong to the clients (disp replicas die -> clientImpact)
     this.balls.clientParticles = true;
@@ -73,7 +73,7 @@ export class ServerDispense {
   // the player's armorInventory index `position - 1`. A mob needs canPickUpLoot, which no mob of the server has.
   equip([i, j, k], stack, position) {
     for (const p of this.sim.players.values()) {
-      if (p.dead || !p.survival) continue;
+      if (p.dead || !p.survival || (p.dimension | 0) !== this.dim) continue;
       const q = p.position, hw = f(PHYSICS.width / 2);
       if (!(q.x + hw > i && q.x - hw < i + 1 && q.y + PHYSICS.height > j && q.y < j + 1 && q.z + hw > k && q.z - hw < k + 1)) continue;
       const armor = p.survival.inventory.armor;
@@ -136,7 +136,7 @@ export class ServerDispense {
   }
   splashPlayers({ x, y, z, damage, custom }) {
     const victims = [];
-    for (const pl of this.sim.players.values()) if (!pl.dead && pl.survival?.health > 0) victims.push({ x: pl.position.x, y: pl.position.y, z: pl.position.z, width: 0.6, height: 1.8, undead: false, ref: pl, direct: false });
+    for (const pl of this.sim.players.values()) if (!pl.dead && pl.survival?.health > 0 && (pl.dimension | 0) === this.dim) victims.push({ x: pl.position.x, y: pl.position.y, z: pl.position.z, width: 0.6, height: 1.8, undead: false, ref: pl, direct: false });
     for (const r of splashImpact(damage, { x, y, z }, victims, null, custom)) {
       const s = r.ref.survival;
       for (const step of r.steps) { // in effect order: a custom list can heal and harm
@@ -162,7 +162,8 @@ export class ServerDispense {
   flush() {
     const fx = this.fx.splice(0);
     for (const p of this.sim.players.values()) {
-      const ents = p.dimension ? [] : this.snapshot(p), events = p.dimension ? [] : fx.filter(e => (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
+      if ((p.dimension | 0) !== this.dim) continue; // b62: each dimension's instance serves its own players
+      const ents = this.snapshot(p), events = fx.filter(e => (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
       const msgs = p.dispOut ??= [];
       if (ents.length || p.dispSeen) msgs.push({ type: 'dispEnts', ents });
       p.dispSeen = ents.length > 0;

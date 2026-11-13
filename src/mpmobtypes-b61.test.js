@@ -85,8 +85,8 @@ test('natural spawning is no longer filtered to the old eight: a squid or a bat 
   for (const t of ['squid', 'bat', 'enderman', 'wolf', 'horse', 'slime', 'witch', 'ocelot', 'mooshroom']) add(s.mobs.mobs.create(t, 64.5, 10, 64.5));
   const types = new Set(s.mobs.mobs.entities.map(e => e.type));
   for (const t of ['squid', 'bat', 'enderman', 'wolf', 'horse', 'slime', 'witch', 'ocelot', 'mooshroom']) assert.ok(types.has(t), t);
-  add(s.mobs.mobs.create('ghast', 64.5, 10, 64.5));
-  assert.ok(!s.mobs.mobs.entities.some(e => e.type === 'ghast'), 'a kind without a copy is still refused');
+  add(s.mobs.mobs.create('silverfish', 64.5, 10, 64.5));
+  assert.ok(!s.mobs.mobs.entities.some(e => e.type === 'silverfish'), 'a kind without a copy is still refused');
 });
 
 test('a spider jockey: the skeleton rider is attached to the spider on the client', () => {
