@@ -91,6 +91,7 @@ public class SavedOrderLoginProbe {
     if (!noPlayer) { spawn.invoke(lw, player); manager.a(player); }
     if (!noPlayer && !Double.isNaN(moveX)) { player.s = moveX; player.u = moveZ; manager.d(player); }
     List<List<Integer>> steps = new ArrayList<>();
+    String idsBefore = recordSteps == null ? null : idList(lw, chunks); // b61 trackerorder: Entity.entityId (sa.y) of every entity of loadedEntityList as [index, id], before and after the path
     if (!noPlayer && path != null) for (int si = 0; si < path.length; si++) {
       double[] st = path[si];
       player.s = st[0]; player.u = st[1]; manager.d(player);
@@ -106,12 +107,20 @@ public class SavedOrderLoginProbe {
       PlayerStepProbe.field(sa.class, "Z").set(mount, new Random(7));
       mount.n = true; spawn.invoke(lw, mount); mount.n = false;
     }
+    String idsAfter = recordSteps == null ? null : idList(lw, chunks);
     List<Integer> after = new ArrayList<>();
     for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
     StringBuilder s = new StringBuilder("{\"case\":\"" + caseName + "\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
     for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
-    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append(path == null ? "" : "\"path\":" + Arrays.deepToString(path) + ",").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(recordSteps == null ? "" : ",\"mask\":" + Arrays.toString(unloadMask) + ",\"steps\":" + steps).append(",\"after\":").append(after).append("}");
+    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append(path == null ? "" : "\"path\":" + Arrays.deepToString(path) + ",").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(recordSteps == null ? "" : ",\"mask\":" + Arrays.toString(unloadMask) + ",\"steps\":" + steps + ",\"ids\":{\"before\":" + idsBefore + ",\"after\":" + idsAfter + "}").append(",\"after\":").append(after).append("}");
     System.out.println(s);
+  }
+
+  // [[index, entityId], ...] over World.loadedEntityList (players skipped), in list order
+  static String idList(Object lw, int[][] chunks) throws Exception {
+    StringBuilder b = new StringBuilder("[");
+    for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) if (!(o instanceof mw)) b.append(b.length() > 1 ? "," : "").append("[").append(SavedOrderProbe.index((sa) o, chunks)).append(",").append(((sa) o).y()).append("]");
+    return b.append("]").toString();
   }
 
   public static void main(String[] args) throws Throwable {

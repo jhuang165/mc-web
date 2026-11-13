@@ -164,12 +164,24 @@ function thaw(mobs, keys) {
   if (!rows.length || !seqs) return;
   const byChunk = new Map();
   for (const r of rows) (byChunk.get(r.chunk) ?? byChunk.set(r.chunk, []).get(r.chunk)).push(r);
-  for (const part of byChunk.values()) for (const r of loadOrder(part)) { seqs.set(r.e, mobs.orderCount = (mobs.orderCount ?? 0) + 1); moved?.delete(r.e); mobs.sectionCells?.delete(r.e); }
+  for (const part of byChunk.values()) for (const r of loadOrder(part)) { seqs.set(r.e, mobs.orderCount = (mobs.orderCount ?? 0) + 1); moved?.delete(r.e); mobs.sectionCells?.delete(r.e); renumber(mobs, r.e); }
   mobs.entities.sort((a, b) => (seqs.get(a) ?? Infinity) - (seqs.get(b) ?? Infinity));
 }
 
 /** b60so: the walk's list without the frozen entities (the entities of unloaded chunks are not in loadedEntityList). */
 export const liveOrder = (mobs, order) => (mobs?.frozen?.set.size ? order.filter((e) => !mobs.frozen.set.has(e)) : order);
+/** b61 trackerorder: the same for a `{ kind: [entities] }` map (the trackers' lists). An unloaded chunk's entities are in no tracker: World.unloadEntities -> onEntityRemoved -> EntityTracker.untrackEntity sends the destroy. */
+export const liveLists = (mobs, lists) => { if (!mobs?.frozen?.set.size) return lists; const out = {}; for (const k in lists) out[k] = liveOrder(mobs, lists[k]); return out; };
+
+/** b61 trackerorder (executed SavedOrderLoginProbe `ids`): a reloaded entity is a new Entity read from NBT (`nextEntityID++`), so it takes a new id, in the order the chunk read creates them. Mobs name theirs
+ *  "mob-N", the other kinds carry `entityId` or a numeric `id`; the entity's tracker entry went with the unload, so the new id is what the next entry (and its HashSet slot) sees. */
+function renumber(mobs, e) {
+  const ids = mobs.ids;
+  if (!ids || !e) return;
+  if (typeof e.id === "string" && /^mob-\d+$/.test(e.id)) e.id = "mob-" + ids.take();
+  else if (Number.isInteger(e.entityId)) e.entityId = ids.take();
+  else if (Number.isInteger(e.id)) e.id = ids.take();
+}
 
 /** b59so: ms.b's keep-loaded rule: a chunk whose centre is within 128 blocks of the spawn on both axes is not queued for unloading (Overworld-like providers only: pass null for the Nether and End). */
 export const nearSpawn = (spawn) => (finite(spawn?.x) && finite(spawn?.z) ? (cx, cz) => { const dx = cx * 16 + 8 - Math.floor(spawn.x), dz = cz * 16 + 8 - Math.floor(spawn.z); return dx >= -128 && dx <= 128 && dz >= -128 && dz <= 128; } : null);

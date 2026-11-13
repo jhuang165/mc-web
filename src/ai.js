@@ -27,6 +27,7 @@ import { isTamed as wolfTamed } from "./wolf.js";
 import { buildOcelotTasks, makeAvoid } from "./ocelot-ai.js";
 import { canDespawn as ocelotCanDespawn } from "./ocelot.js";
 import { INVISIBILITY } from "./mob-effects.js";
+import { liveOrder } from "./saved-order.js"; // b61: an unloaded chunk's entities are not in loadedEntityList
 import { CARROT_ON_A_STICK, controlState, controlShouldExecute, controlStart, controlReset, controlTick } from "./pig-saddle.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
@@ -1365,7 +1366,7 @@ export class MobAI {
     return this.ew.ring?.view ?? this.ew.world; // a stable object: navigators keep the world they were built with (headless ring view)
   }
   entities() {
-    return this.ew.entities;
+    return liveOrder(this.ew, this.ew.entities);
   }
   brain(e) {
     let b = this.brains.get(e);

@@ -34,6 +34,7 @@ import { copyStack } from "./inventory.js";
 import { EntityIds } from "./entity-ids.js";
 import { finishMinecartSimulation, finishBoatSimulation } from "./structure-simulation.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
+import { AwayTrace } from "./away-trace.js";
 import { orderGroups, stampSavedOrder, restoreSavedOrder, restoreExtraOrder, topSavedOrder } from "./saved-order.js";
 
 // Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
@@ -201,6 +202,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     try { return fn(); } finally { obj[key] = [...obj[key], ...frozen]; }
   };
   const stats = { held: 0 };
+  // b61 (away-trace.js): the tracker-visible state of every moving entity after each entity tick, so the return can replay the tracker's ticks
+  const trace = new AwayTrace(() => [...mobs.entities, ...items.items, ...xp.orbs, ...primed, ...arrows.list, ...projectiles.balls, ...(self.falling?.entities ?? []), ...minecarts.carts, ...boats.carts, ...rockets.rockets, ...mobs.potions.balls, ...(mobs._fireballs?.list ?? []), ...(mobs._skulls?.list ?? [])]);
   const primedList = { get list() { return primed; }, set list(v) { primed.splice(0, primed.length, ...v); } };
   const late = []; // spills after the gate: an item entity that would never tick, kept as a saved record
   let open = true;
@@ -253,6 +256,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       portalTravel("orb", xp, xp.orbs);
       tickNo++;
       clock++;
+      trace.sample();
     },
     close() { open = false; },
     park, stats,
@@ -264,7 +268,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize(),
         fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])], // b53so: stamped like the other records
         falling: self.falling?.serialize() ?? [] }; // b58so: the falling blocks are stamped like the rest (their records are returned in `falling`)
-      stampSavedOrder(mobs, orderGroups(savedSys, { ...savedLists({ ...run, rockets: run.rockets.rockets }), falling: run.falling }), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))),
+      const groups = orderGroups(savedSys, { ...savedLists({ ...run, rockets: run.rockets.rockets }), falling: run.falling }), pairs = groups.flatMap((g) => g.live.map((e, i) => [e, g.records[i]]));
+      stampSavedOrder(mobs, groups, 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))),
         mobs.loadFrame ?? (Array.isArray(plan.spawn) && plan.spawn.length >= 3 ? { spawn: plan.spawn, player: null, view: 0 } : null)); // b57so: nobody is logged in here: the Overworld's own spawn grid is all a reload has loaded
       return {
         drops: [...drops.rest, ...run.drops, ...late], xpOrbs: [...orbs.rest, ...run.xpOrbs],
@@ -278,7 +283,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         fireballs: [...fireList.filter((r) => !fireIn(r)), ...run.fireballs],
         falling: self.falling ? run.falling : null,
         hanging: [...hangSplit.rest, ...run.hanging],
-        portalTravel: travellers,
+        portalTravel: travellers, trace: trace.finish(pairs), // b61: the replay of the tracker's ticks (away-trace.js), keyed by the records' `ord`
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
           mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length, held: stats.held,
           // Batch 44: records outside the run (their column was not copied or the 32-block rule holds them): kept as saved, not ticked, so an entity absent from a delivery can be traced to it.

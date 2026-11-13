@@ -442,7 +442,7 @@ export class DimensionLive {
       if (r.columns.length) await this.writeColumns(root.id, r.columns);
       root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);
       this.awayLog = { ...r.stats, ticks };
-      this.awayIdle = { ticks: rawTicks, spawn: [...spawnOf(root)] }; // batch 59: the Overworld's spawn-area entities were tracked (silently) for every tick of the trip; takeIdle() hands it to the world's open once
+      this.awayIdle = { ticks: rawTicks, spawn: [...spawnOf(root)], trace: r.entities?.trace ?? null }; // batch 59: the Overworld's spawn-area entities were tracked (silently) for every tick of the trip; takeIdle() hands it to the world's open once
       this.host.dirty?.();
       return this.awayLog;
     } catch (error) { console.warn("away run failed:", error); return null; } finally { a.worker.terminate(); }
