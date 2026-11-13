@@ -31,6 +31,7 @@ import { createServerDig } from '../server-dig.js';
 import { eyeInWater } from '../fluids.js';
 import { playerMiningState } from '../enchantment-effects.js';
 import { BOW, canDraw } from '../bow.js';
+import { JavaRandom } from '../java-random.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -39,6 +40,12 @@ const SERVER_ITEMS = { spill: noop, dropBlock: noop, dropPlayer: noop }, SERVER_
 // EntityPlayer.itemInUse, by the held item's EnumAction: swords block (ItemSword, 72000 ticks), the bow draws until released, food eats and a milk bucket
 // drinks for 32 ticks (this build has no potion items). The pose a remote client draws comes from the held stack, as natively (the flag is only "using", watcher 0 bit 4).
 const MILK_BUCKET = 343, USE_TICKS = 32;
+// EntityPlayer.updateItemUse(stack, n) on the server: Entity.rand takes the crumb loop's three draws per crumb (the particles go nowhere on a WorldServer), then
+// food plays random.eat (volume 0.5 + 0.5 * nextInt(2), pitch (f - f) * 0.2 + 1) and a drink random.drink (world rand, pitch f * 0.1 + 0.9), both through
+// World.playSoundToNearExcept: S29 to every other player under 16 blocks (squared distance from the entity's feet to the other's posX/posY/posZ, posY being
+// feet + 1.62). ItemFood.onEaten then plays random.burp (0.5, world rand) with World.playSoundAtEntity, which reaches the eater too.
+const SOUND_RANGE = 16, EYE_OFFSET = 1.62;
+const seeded = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 const vector = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
 export function cleanHotbar(slots) {
   if (!Array.isArray(slots) || slots.length !== 9) return null;
@@ -70,6 +77,7 @@ export class DedicatedSimulation {
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
     this.actions = [];
+    this.soundRand = seeded(); this.soundsOut = []; // World.rand for the drink and burp pitch; sounds queued this tick
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
     // The tile entities the clients are told about (tile-sync.js); flower pots live on the world. Signs and skulls are placed by `edit`, a sign's
     // text comes in by `updateSign` (C12), a beacon's effects by `chooseBeacon` (MC|Beacon) and a spawner's mob by `setSpawnerEntity`; each
@@ -124,7 +132,7 @@ export class DedicatedSimulation {
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null,
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, rand: seeded(),
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.players.set(id, player);
     return player;
@@ -227,8 +235,34 @@ export class DedicatedSimulation {
     const use = p.itemInUse;
     if (!use) return;
     if ((p.survival.held?.id ?? 0) !== use.id) { p.itemInUse = null; return; }
-    if (use.bow) use.ticks++;
-    else if (!use.block && --use.ticks <= 0) p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
+    if (use.bow) { use.ticks++; return; }
+    if (use.block) return;
+    // EntityPlayer.onUpdate: updateItemUse(stack, 5) while the remaining count is 25 or less and a multiple of 4, then the count falls; at 0 onItemUseFinish
+    // runs updateItemUse(stack, 16) and the item's onEaten (the burp), then clears the item in use.
+    if (use.ticks <= 25 && use.ticks % 4 === 0) this.useSound(p, use, 5);
+    if (--use.ticks <= 0) {
+      this.useSound(p, use, 16);
+      if (use.id !== MILK_BUCKET) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
+      p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
+    }
+  }
+  useSound(p, use, n) {
+    const at = { x: p.position.x, y: p.position.y, z: p.position.z, except: p.id };
+    if (use.id === MILK_BUCKET) { this.soundsOut.push({ name: 'random.drink', ...at, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)) }); return; }
+    for (let i = 0; i < n * 3; i++) p.rand.nextFloat();
+    const volume = Math.fround(0.5 + Math.fround(0.5 * p.rand.nextInt(2))), a = p.rand.nextFloat(), b = p.rand.nextFloat();
+    this.soundsOut.push({ name: 'random.eat', ...at, volume, pitch: Math.fround(Math.fround(Math.fround(a - b) * Math.fround(0.2)) + 1) });
+  }
+  // WorldManager.playSound / playSoundToNearExcept -> ServerConfigurationManager.sendToAllNearExcept: the players (but `except`) whose posX/Y/Z is within the range.
+  deliverSounds() {
+    for (const s of this.soundsOut.splice(0)) {
+      const range = s.volume > 1 ? SOUND_RANGE * s.volume : SOUND_RANGE;
+      for (const o of this.players.values()) {
+        if (o.id === s.except) continue;
+        const dx = s.x - o.position.x, dy = s.y - (o.position.y + EYE_OFFSET), dz = s.z - o.position.z;
+        if (dx * dx + dy * dy + dz * dz < range * range) (o.soundsOut ??= []).push({ name: s.name, x: s.x, y: s.y, z: s.z, volume: s.volume, pitch: s.pitch });
+      }
+    }
   }
   edit(p, place) {
     // A Survival player breaks only through `dig` and its timer.
@@ -364,6 +398,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) if (p.resendCells) {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
+    this.deliverSounds();
     this.weather.tick(this.world);
     this.weather.drain();
     this.falling.tick();

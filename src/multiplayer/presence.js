@@ -3,6 +3,9 @@ import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
 import { skinCanvas } from '../skin.js';
 import { ITEMS } from '../survival.js';
 import { BOW } from '../bow.js';
+import { JavaRandom } from '../java-random.js';
+import { itemCrumbs } from '../fx.js';
+import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
 
 // EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
 // eating and drinking change no third-person pose.
@@ -52,13 +55,15 @@ export class RemotePlayers {
         const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 40;
         const texture = new THREE.CanvasTexture(canvas), material = new THREE.SpriteMaterial({ map: texture, depthTest: true });
         const label = new THREE.Sprite(material); label.scale.set(2.8, .4375, 1); label.position.y = 2.2; renderer.root.add(label);
-        entry = { body, renderer, label, texture, material, canvas, name: p.name, last: { ...p } }; this.entries.set(p.id, entry);
+        entry = { body, renderer, label, texture, material, canvas, name: p.name, last: { ...p }, use: createRemoteUse(), rand: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }; this.entries.set(p.id, entry);
         this.drawLabel(entry);
       }
       this.applySkin(entry.renderer, p.skin);
       if (entry.name !== p.name) { entry.name = p.name; this.drawLabel(entry); }
       entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0 });
       entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
+      // EntityOtherPlayerMP.onUpdate: the crumbs of eating run from the synced item-in-use flag (the sound comes from the server).
+      tickRemoteUse(entry.use, { using: !!p.using, held: p.held }, id => this.scene.fx && itemCrumbs(this.scene.fx, 5, 'iconcrack_' + id, remoteEye({ ...p, y: p.y - (p.ySize ?? 0) }), entry.rand));
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
   }

@@ -227,8 +227,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           send(ws, { type: 'beaconWindow', x: player.openBeacon[0], y: player.openBeacon[1], z: player.openBeacon[2], levels: t.levels, primary: t.primary, secondary: t.secondary, payment: t.payment ? { id: t.payment.id, damage: t.payment.damage ?? 0 } : null });
         }
         if (player.cracksOut && ws) send(ws, { type: 'crack', cracks: player.cracksOut }); // S25 block break animation of the other players (range 32)
+        if (player.soundsOut && ws) send(ws, { type: 'sound', sounds: player.soundsOut }); // S29 random.eat / random.drink / random.burp of other players (range 16)
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
-        player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null;
+        player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.soundsOut = null;
       }
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
