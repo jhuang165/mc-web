@@ -64,7 +64,7 @@ export class ServerContainers {
       container = new HopperContainer(s.inventory, tile, null); kind = 'hopper'; title = container.title;
     } else if (block === BREWING_STAND) {
       const tile = (s.brewing[key] ??= newBrewingTile());
-      container = new BrewingContainer(s.inventory, brewingView(tile), null); kind = 'brewing'; title = container.title;
+      container = new BrewingContainer(s.inventory, brewingView(tile), null); container.onPotionTaken = (st) => this.sim.achievements?.onPotionTaken(p, st); kind = 'brewing'; title = container.title;
     } else if (STATION_BLOCKS.has(block)) {
       const st = this.stations.open(p, block, x, y, z); // b60 (server-stations.js)
       ({ container, kind, title } = st); stationProps = st.props;

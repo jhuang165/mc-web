@@ -3456,8 +3456,7 @@ function edit(place = false) {
     openChest: (chest, key) => { openContainer(chest, "chest", key); redstoneRuntime?.chestViewersChanged(chest.keys); syncContainerState(); },
     openBrewing: (tile, key) => {
       const brewing = new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; });
-      // SlotBrewingStack.onPickupFromSlot: taking a potion from a bottle slot.
-      for (const slot of brewing.slots.slice(0, 3)) { const taken = slot.onPickup?.bind(slot); slot.onPickup = (s) => { if (s?.id === 385) achievements.trigger("potion"); return taken?.(s); }; }
+      brewing.onPotionTaken = () => achievements.trigger("potion"); // SlotBrewingStandPotion.onPickupFromSlot (damage > 0 checked in the container)
       openContainer(brewing, "brewing", key);
       syncContainerState();
     },
