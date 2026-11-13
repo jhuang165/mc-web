@@ -11,7 +11,8 @@
 //     the same generator's bridge). Its views are the Nether players only; it has its own SharedMobTracker, so a mob is tracked only to players of its dimension.
 //   * Persistence: the Nether's items, containers, beacons, spawners, scheduled ticks, crops, redstone and mobs are saved with the world (`saveField`).
 // Fortress chests and the blaze spawner of the throne room come from the generator's population records (DimensionWorld.netherChunk keeps them per chunk).
-// Not here: experience orbs (a mob kill or smelting in the Nether drops none), vehicles, the spawner's own spawning tick (the Overworld server has none either), the End.
+// Batch 63 (mpnether3): experience orbs (`n.xp` is a real ExperienceOrbs, ticked and sent like the Overworld's), spawner ticking (server-spawners.js), minecarts, boats, pig riding, leads and
+// animal clicks (server-nether-vehicles.js), and the Nether's mobs read the server difficulty (server-mobs.js tick). Not here: the End.
 import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
 import { Farming } from '../farming.js';
@@ -39,13 +40,15 @@ import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerProjectiles } from './server-projectiles.js';
 import { ServerMobs } from './server-mobs.js';
+import { buildNetherVehicles, viewNetherPlayers } from './server-nether-vehicles.js'; // b63: carts, boats, pig riding and leads
+import { tickSpawners, netherLight } from './server-spawners.js'; // b63: blaze spawners
 
 const NETHER = -1, noop = () => {};
 const reader = new PlayerInventory(ITEMS);
 // The tile stores a Survival keeps for the world (and saves); the player fields of its serialize() are not part of a dimension.
 const TILE_SAVE = ['furnaces', 'chests', 'dispensers', 'brewing', 'hoppers'];
 // What `sim.<key>` is while the Nether runs (the existing systems read these through `sim`).
-export const NETHER_CONTEXT = ['world', 'items', 'changes', 'farming', 'trees', 'containers', 'redstone', 'tileEntities', 'dirtyTiles', 'tiles', 'fluids', 'fire', 'falling', 'light', 'dispense', 'mobs'];
+export const NETHER_CONTEXT = ['world', 'items', 'changes', 'farming', 'trees', 'containers', 'redstone', 'tileEntities', 'dirtyTiles', 'tiles', 'fluids', 'fire', 'falling', 'light', 'dispense', 'mobs', 'vehicles', 'leads']; // b63: + vehicles, leads
 
 // DimensionWorld.netherChunk keeps the chests (with their loot) and spawners of each generated structure column; a fresh Nether takes them as tile entities.
 export function applyPopulation(n, source) {
@@ -72,7 +75,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.tileEntities = { world: w, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), chests: n.tiles.chests, enders: n.tiles.enderTiles };
   if (source.provider) w.fortressSpawns = (x, y, z) => fortressMonsterSpawnList(source.provider.bridge, (bx, by, bz) => (w.get(bx, by, bz) === NETHER_BRICK ? 112 : 0), x, y, z);
   n.redstone = new LiveRedstone(w, {
-    entitiesIn: box => [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
+    entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? n.vehicles?.cartsIn(box, mode) ?? [] : [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
     environment: () => ({ sky: 0, skylightSubtracted: 0, celestialAngle: 0, noSky: true }),
     skyLight: () => 0,
   });
@@ -108,6 +111,7 @@ export function buildNetherInside(sim, n, saved = {}) {
   n.mobs = new ServerMobs(host, Array.isArray(saved.mobs) ? saved.mobs : [], { naturalSpawning: n.overMobs.spawning });
   n.mobs.mobs.ignite = (x, y, z) => n.fire.ignite(x, y, z); // a fireball sets fire where it lands
   sim.mobs = n.mobs;
+  buildNetherVehicles(sim, n, saved.vehicles ?? null); // b63: after the mobs and the dispenser (a pig's seat, a dispenser's boat)
   if (saved.items) n.items.load(saved.items, s => reader.read(s), 0);
 }
 
@@ -119,7 +123,7 @@ export function saveNether(n) {
     tiles: picked, signs: n.tileEntities.signs.toJSON(), skulls: n.tileEntities.skulls.toJSON(),
     tileEntities: { beacons: n.tileEntities.beacons.toJSON(), spawners: n.tileEntities.spawners.toJSON() },
     items: n.items.serialize(), fluidTicks: n.fluids.save(), fireTicks: n.fire.save(), falling: n.falling.serialize(), fallingTicks: n.falling.save(),
-    farms: n.farming.serialize(), redstone: n.redstone.save(), mobs: n.mobs ? n.mobs.save() : [],
+    farms: n.farming.serialize(), redstone: n.redstone.save(), mobs: n.mobs ? n.mobs.save() : [], xpOrbs: n.xp.serialize(), vehicles: n.vehicles?.save(),
   };
 }
 
@@ -132,10 +136,13 @@ export function tickNether(sim, n, players) {
     if (n.items.items.length > 300) n.items.items.splice(0, n.items.items.length - 300);
   }
   n.items.sounds.length = 0;
-  n.mobs.mobs.difficulty = n.overMobs.mobs.difficulty;
+  sim.serverItems.tickOrbs(n.dim ?? NETHER); // b63: this dimension's orbs (sim.serverItems.xp is n.xp inside the swap) after the items, as the Overworld's tick
   n.mobs.mobs.cachedSpawnPoint ??= n.overMobs.mobs.cachedSpawnPoint; // SpawnerAnimals keeps 24 blocks from the OVERWORLD spawn in every dimension
   n.dispense.tick();
+  viewNetherPlayers(n, players); n.vehicles.riderInput(); // b63: a pig steers on this tick's keys
   n.mobs.tick();
+  n.vehicles.tick();
+  tickSpawners({ mobs: n.mobs, spawners: n.tileEntities.spawners, random: n.weather.random, players, light: netherLight(n), time: sim.time }); // b63: MobSpawnerBaseLogic (blaze spawners), after the entities
   n.dispense.flush();
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();

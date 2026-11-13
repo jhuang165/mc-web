@@ -43,7 +43,6 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
     this.survival = sim.gameMode === 'survival';
     this.xp = new ExperienceOrbs(saved.xpOrbs);
     this.taken = []; // S0D collect item of this tick: { i, by }
-    this.orbsSent = 0;
     this.inv = new ServerInventory(sim); // b60: the player's own inventory window and tool breaks (server-inventory.js)
     sim.items.load(saved.items, s => reader.read(s), 0);
   }
@@ -140,8 +139,9 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
   }
 
   // ---- experience orbs ----
-  tickOrbs() {
-    const sim = this.sim, players = [...sim.players.values()];
+  // b63 mpnether3: `dim` is the dimension whose orbs `this.xp` holds (the Nether's are swapped in by ServerDimensions.swap); only that dimension's players are targets and collectors.
+  tickOrbs(dim = 0) {
+    const sim = this.sim, players = [...sim.players.values()].filter(p => (p.dimension | 0) === dim);
     for (const o of this.xp.orbs) {
       let near = null, best = Infinity;
       for (const p of players) { const d = (o.x - p.position.x) ** 2 + (o.posY - p.position.y) ** 2 + (o.z - p.position.z) ** 2; if (d < best) { best = d; near = p.position; } }
@@ -155,14 +155,19 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
       p.xpCooldown = this.xp.cooldown;
       if (v > 0) { p.experience.add(v); (p.itemsOut ??= []).push({ type: 'playerOp', op: 'addExperience', args: [v] }); }
     }
-    for (const s of this.xp.sounds.splice(0)) if (s.name === 'random.orb') sim.soundsOut.push({ ...s, except: null });
+    for (const s of this.xp.sounds.splice(0)) if (s.name === 'random.orb') sim.soundsOut.push({ ...s, except: null, dim });
     sim.items.sounds.length = 0;
   }
   // `xp` rides in a tick while orbs exist, once more (empty) after; `taken` while a pickup happened this tick.
   tickFields() {
-    const out = {}, orbs = this.xp.orbs;
-    if (orbs.length || this.orbsSent) { this.orbsSent = orbs.length; out.xp = orbs.map(o => ({ i: o.id, x: o.x, y: o.y, z: o.z, v: o.value, c: o.color })); }
+    const out = this.xpField();
     if (this.taken.length) out.taken = this.taken.splice(0);
+    return out;
+  }
+  // b63 mpnether3: the orbs of `this.xp` (the current dimension's) for a tick message; what was last sent is kept on the orb set itself, one per dimension.
+  xpField() {
+    const out = {}, orbs = this.xp.orbs;
+    if (orbs.length || this.xp.orbsSent) { this.xp.orbsSent = orbs.length; out.xp = orbs.map(o => ({ i: o.id, x: o.x, y: o.y, z: o.z, v: o.value, c: o.color })); }
     return out;
   }
 }

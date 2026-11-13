@@ -246,6 +246,7 @@ export class ServerMobs {
   tick() {
     const { mobs, views } = this;
     if (!views.size) return;
+    if (Number.isInteger(this.host.difficulty)) mobs.difficulty = this.host.difficulty; // b63 mpnether3: every WorldServer reads the one server difficulty (/difficulty), the Nether's host is a view of `sim`
     let first = null;
     for (const v of views.values()) {
       const p = v.player;

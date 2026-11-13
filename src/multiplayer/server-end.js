@@ -16,13 +16,14 @@
 //         back through the exit portal) follow the single-player trips (main.js: transit.exit gives theEnd2).
 //   * The exit portal: natively it exists only after the dragon dies. The dragon is not on the server yet, so the exit portal structure (EntityDragon.createEnderPortal, exit-portal.js, executed
 //     against the original) is built when the End is first made, so the End can be left and theEnd2 can be earned. Set DRAGON_ON_SERVER when the dragon arrives.
-//   * Not here: the dragon and the ender crystals, the credits screen, a flying eye of ender, End projectiles in the save, XP orbs (inert, as in the Nether).
+//   * Not here: the dragon and the ender crystals, the credits screen, a flying eye of ender, End projectiles in the save. (XP orbs: since the b63 merge the End has its own, as the Nether.)
 import { DimensionWorld } from '../dimension-world.js';
 import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { ItemEntities } from '../item-entities.js';
+import { ExperienceOrbs } from '../experience.js'; // b63 lead: the End's own orbs (mpnether3's per-dimension orbs)
 import { fromOriginal } from '../block-registry.js';
 import { createExitPortal } from '../exit-portal.js';
 import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, useEyeOnFrame, hasEye } from '../eye-of-ender.js';
@@ -68,7 +69,7 @@ export class ServerEnd {
     buildExitPortal(world); // before the saved edits: an edit of a portal cell (broken, replaced) wins
     const edits = Array.isArray(saved.edits) ? saved.edits : [];
     for (let i = 0; i < edits.length; i += 100000) world.restore(edits.slice(i, i + 100000));
-    const n = { dim: END, world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: inert(), overMobs: dims.mobsOf(OVERWORLD) };
+    const n = { dim: END, world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: new ExperienceOrbs(saved.xpOrbs), taken: [], overMobs: dims.mobsOf(OVERWORLD) };
     n.items.joined = e => { e.eid = ++sim.nextItemId; };
     buildNetherSystems(sim, n, {}, saved); // the generic part of the Nether's systems (no fortress list: no `source.provider`)
     const put = world.put.bind(world);

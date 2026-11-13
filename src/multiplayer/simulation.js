@@ -45,6 +45,7 @@ import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
 import { ServerLeads } from './server-leads.js'; // b62
+import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
@@ -351,7 +352,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && ((!p.dimension && this.vehicles.useHeld(p, null)) || this.dispense.throwHeld(p)); // b62: thrown items; vehicles are Overworld only // b61: a boat is placed on water the block ray misses
+    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p)); // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -370,8 +371,8 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
-    if (place && isFence(b) && !p.dimension && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
-    if (place && !p.dimension && this.vehicles.useHeld(p, target)) return true; /* b62: vehicles are Overworld only */ // b61: minecart on a rail, boat on water
+    if (place && isFence(b) && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
+    if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
     if (id === WATER || id === LAVA) return false;
@@ -502,8 +503,8 @@ export class DedicatedSimulation {
     for (const { id, place, dig, use, attack, animUse, claim, veh, pvp } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
-      if (veh && !p.dimension) { this.vehicles.act(p, veh); continue; } // b61
-      if (animUse !== undefined) { if (p.dimension) continue; /* b61 lead: the Nether has no mobs */ this.mobs.interact(p, animUse, claim); continue; } // b61: C02 interact
+      if (veh) { this.dimensions.within(p, () => this.vehicles.act(p, veh)); continue; } // b61 (b63: a Nether rider uses the Nether's vehicles)
+      if (animUse !== undefined) { this.dimensions.within(p, () => this.mobs.interact(p, animUse, claim)); continue; } // b63: the Nether's animals (sim.mobs is that dimension's) // b61: C02 interact
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
         if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
@@ -518,6 +519,7 @@ export class DedicatedSimulation {
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();
     this.vehicles.tick(); // b61
+    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time }); // b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
     for (const p of this.players.values()) this.serverItems.settle(p);
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
