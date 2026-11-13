@@ -144,6 +144,7 @@ import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
+import { RemoteMobs } from "./multiplayer/remote-mobs.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
@@ -622,7 +623,7 @@ function applyServerPlayerOp(message) {
   if (message.op === 'kill') serverDeathShown = true;
   applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
 }
-let multiplayer = null, remotePlayers = null, worldWriterAvailable = false;
+let multiplayer = null, remotePlayers = null, remoteMobs = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -638,7 +639,7 @@ function showMultiplayer() {
     profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
 }
 function leaveMultiplayer() {
-  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear();
+  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); remoteMobs = null; aimedRemoteMob = null;
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
@@ -730,7 +731,7 @@ const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp']);
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
-    onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
+    onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
@@ -753,11 +754,12 @@ async function joinMultiplayer(settings) {
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
+    remoteMobs = new RemoteMobs(world);
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
-    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.');
+    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Containers and dimension travel are not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Containers and dimension travel are not connected yet.');
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
@@ -3261,7 +3263,7 @@ function multiplayerDigStart() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -3526,7 +3528,7 @@ async function spawnPosition() {
 }
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
@@ -4242,6 +4244,7 @@ function animate(now) {
       survival.creative ? 6 : 3,
       target?.distance ?? 6,
     );
+    aimedRemoteMob = remoteMobs ? remoteMobs.pick(aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6)) : null; // a server mob's client copy (the attack goes out as C02)
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
     aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c)); // Batch 49: the client copy's box, the live entity answers
     const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle, (c) => aimBox(objectTracker, c, rider.vehicle === c));
@@ -4297,7 +4300,7 @@ function animate(now) {
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (minecarts && screen !== "home") for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live)) if (c.type === 4 && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
   if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.gearViews(), { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: knotViews(objectTracker, mobs.knotList ?? []) }); // Batch 48: the knot copies
-  if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial,180 - yaw * 180 / Math.PI,(e) => mobs.clientPosition(e));
+  if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...(remoteMobs && screen !== "home" ? remoteMobs.list() : []), ...shown],dt,partial,180 - yaw * 180 / Math.PI,(e) => remoteMobs?.clientOf(e) ?? mobs.clientPosition(e));
   // Batch 48: drawn from the client copies (object-tracker.js vehicleViews / hangingViews); the boat or cart the client player rides keeps the live entity
   const drawn = (x, z) => !world.streaming || world.isLoaded(x, z), rides = (live) => rider.vehicle === live;
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : vehicleViews(objectTracker, minecarts.carts, rides, drawn), partial, world);
