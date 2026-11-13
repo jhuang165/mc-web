@@ -34,7 +34,7 @@ import { copyStack } from "./inventory.js";
 import { EntityIds } from "./entity-ids.js";
 import { finishMinecartSimulation, finishBoatSimulation } from "./structure-simulation.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
-import { orderGroups, stampSavedOrder, restoreSavedOrder, topSavedOrder } from "./saved-order.js";
+import { orderGroups, stampSavedOrder, restoreSavedOrder, restoreExtraOrder, topSavedOrder } from "./saved-order.js";
 
 // Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
 // A spawner cart only moves: MobSpawnerBaseLogic needs a player within 16 blocks, so nothing spawns with nobody there. The hopper cart
@@ -182,7 +182,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // b52so: the saved list order (src/saved-order.js): the run's entities take the places their records were stamped with, so the walk starts in the order a native chunk load gives.
   const savedLists = (inside) => ({ mobs: inside.mobs, drops: inside.drops, xpOrbs: inside.xpOrbs, tnt: inside.tnt, arrows: inside.arrows, projectiles: inside.projectiles, minecarts: { carts: inside.carts }, boats: inside.boats,
     hanging: inside.hanging, rockets: { rockets: inside.rockets }, potions: inside.potions, fireballs: inside.fireballs });
-  const savedSys = { mobs, items, xpOrbs: xp, primed, arrows, projectiles, minecarts, boats, hanging, rockets };
+  const savedSys = { mobs, items, xpOrbs: xp, primed, arrows, projectiles, minecarts, boats, hanging, rockets, get falling() { return self.falling; } }; // b58so: the falling blocks of the run (away-world.js attaches them) are in the walk too
   // EntityEnderPearl.onImpact (zm.a, bytecode-read): an entity hit takes thrown damage 0 from the thrower, 32 portal particles, and the teleport needs a
   // thrower that is an EntityPlayerMP in the pearl's own world (mw.o == this.o). The thrower is null (an unloaded save looks it up in a world with no
   // player) or the player in the Nether/End, so nothing teleports: the pearl just dies. The hit mob gets the same 0-damage hurt a snowball does.
@@ -262,8 +262,9 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       // b52so: the run's entities are stamped with their place in the native save walk, above the records the run left alone
       const run = { mobs: mobs.serialize(), drops: items.serialize(), xpOrbs: xp.serialize(), tnt: primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse })), arrows: arrows.serialize(), projectiles: projectiles.serialize(),
         carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize(),
-        fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])] }; // b53so: stamped like the other records
-      stampSavedOrder(mobs, orderGroups(savedSys, savedLists({ ...run, rockets: run.rockets.rockets })), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))),
+        fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])], // b53so: stamped like the other records
+        falling: self.falling?.serialize() ?? [] }; // b58so: the falling blocks are stamped like the rest (their records are returned in `falling`)
+      stampSavedOrder(mobs, orderGroups(savedSys, { ...savedLists({ ...run, rockets: run.rockets.rockets }), falling: run.falling }), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))),
         mobs.loadFrame ?? (Array.isArray(plan.spawn) && plan.spawn.length >= 3 ? { spawn: plan.spawn, player: null, view: 0 } : null)); // b57so: nobody is logged in here: the Overworld's own spawn grid is all a reload has loaded
       return {
         drops: [...drops.rest, ...run.drops, ...late], xpOrbs: [...orbs.rest, ...run.xpOrbs],
@@ -275,6 +276,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
         potions: [...potionSplit.rest, ...run.potions],
         rockets: e.rockets || rockets.rockets.length ? { ...(e.rockets ?? {}), ...run.rockets, rockets: [...rocketSplit.rest, ...run.rockets.rockets] } : null,
         fireballs: [...fireList.filter((r) => !fireIn(r)), ...run.fireballs],
+        falling: self.falling ? run.falling : null,
         hanging: [...hangSplit.rest, ...run.hanging],
         portalTravel: travellers,
         counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
@@ -311,5 +313,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const portals = new EntityPortals(), travellers = [];
   restoreSavedOrder(mobs, orderGroups(savedSys, savedLists({ mobs: mobSplit.inside, drops: drops.inside, xpOrbs: orbs.inside, tnt: tnt.inside, arrows: arrowSplit.inside, projectiles: ballSplit.inside, carts: carts.inside,
     boats: boatsSplit.inside, hanging: hangSplit.inside, rockets: rocketSplit.inside, potions: potionSplit.inside, fireballs: fireList.filter(fireIn) })));
+  // b58so: the run's falling blocks (away-world.js builds them from the plan's records after this system) take the places their records were stamped with.
+  self.attachFalling = (falling, records) => { self.falling = falling; restoreExtraOrder(mobs, falling.entities, records); };
   return self;
 }

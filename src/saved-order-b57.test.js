@@ -91,7 +91,7 @@ test("the Overworld's away stamp ranks the spawn grid from the plan (no player, 
   assert.deepEqual(got, c.after);
 });
 
-test("a mob in a boat the player clicks: the executed link stays stale, the port frees the mob and seats nobody", () => {
+test("a mob in a boat the player clicks: the executed link stays stale (the port seats the player, see savedorder6-b58.test.js)", () => {
   const stale = reference.find((r) => r.name === "b57so-stale-cow-in-cart");
   const count = (i) => stale.after.filter((v) => v === i).length;
   assert.equal(count(2), 2, "the cart is read twice natively: nested under the cow and from the player's Riding");
@@ -100,12 +100,8 @@ test("a mob in a boat the player clicks: the executed link stays stale, the port
   const boats = new Boats(), boat = boats.spawnBoat({ x: 0, y: 64, z: 0 }), cow = { type: "cow", x: 0, y: 64, z: 0 };
   mountEntity(cow, boat, () => 0.6); Object.defineProperty(boat, "passenger", { value: cow, writable: true, configurable: true, enumerable: false });
   const player = { player: true, x: 0, y: 64, z: 0 };
-  assert.equal(boats.mount(boat, player), false);
-  assert.equal(boat.rider, null);
-  assert.equal(player.vehicle ?? null, null);
-  assert.equal(boat.passenger, null);
-  assert.equal(cow.ridingEntity ?? null, null);
-  assert.equal(boats.mount(boat, player), true, "the freed boat takes the player");
+  assert.equal(boats.mount(boat, player), true, "b58so: the click seats the player");
+  assert.equal(boat.rider, player);
 });
 
 test("the carrier's chunk is loaded right after the view square, with the entities it holds (executed b57so-nether-mount)", () => {

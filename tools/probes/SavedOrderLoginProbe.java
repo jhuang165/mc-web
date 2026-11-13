@@ -17,6 +17,8 @@ public class SavedOrderLoginProbe {
   // b57so: caseName labels the records; skipGrid: no initialWorldChunkLoad (the Nether and End: MinecraftServer.g loads dimension 0 only); noPlayer: nobody logs in (the Overworld while the player is away)
   static String caseName = "saved-order4";
   static boolean skipGrid = false, noPlayer = false;
+  // b58so: after the login the player moves (PlayerManager.updateMountedMovingPlayer, mq.d: a PlayerInstance, which loads its chunk, for each chunk of the new view square that was not watched) to (moveX, moveZ); NaN: stays
+  static double moveX = Double.NaN, moveZ = Double.NaN;
   static Map<Long, dh> nbts;
   static aqk anvil;
   static Method reader, writer;
@@ -81,6 +83,7 @@ public class SavedOrderLoginProbe {
     // ServerConfigurationManager.playerLoggedIn: spawnEntityInWorld(player), then PlayerManager.addPlayer
     mw player = ChunkProviderProbe.player(77, px, pz);
     if (!noPlayer) { spawn.invoke(lw, player); manager.a(player); }
+    if (!noPlayer && !Double.isNaN(moveX)) { player.s = moveX; player.u = moveZ; manager.d(player); }
     if (riding != null && !noPlayer) { // initializeConnectionToPlayer, after playerLoggedIn
       sa mount = sg.a(riding, lw); // EntityList.createEntityFromNBT: the first Riding only
       PlayerStepProbe.field(sa.class, "Z").set(mount, new Random(7));
@@ -90,7 +93,7 @@ public class SavedOrderLoginProbe {
     for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
     StringBuilder s = new StringBuilder("{\"case\":\"" + caseName + "\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
     for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
-    s.append("],\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
+    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
     System.out.println(s);
   }
 
@@ -145,5 +148,26 @@ public class SavedOrderLoginProbe {
     login("b57so-high-mixed", grid, high2, 0, 0, 40.5, 8.5, 2, -1);
     // a high cart the player rides is read from the player's Riding, last
     login("b57so-high-mount", grid, new String[][] {SavedOrderProbe.S("item", 300, 0, -1), SavedOrderProbe.S("boat", 400, 1, -1), SavedOrderProbe.S("fall", 70, 0, -1), SavedOrderProbe.S("tnt", 260, 1, -1)}, 0, 0, 40.5, 8.5, 2, 1);
+    // b58so: scenarios 21 on. The player moves after the login: the chunks of the new view square load in x outer, z inner order and append to loadedEntityList (the chunks of the first
+    // square keep their places). No spawn grid (the Nether and End), so only the squares load. Chunks: first square (view 2 at chunk 2,0) x 0..4, z -2..2; moving to chunk 5,0: x 3..7.
+    caseName = "saved-order6";
+    skipGrid = true;
+    int[][] mv = {{1, 0}, {4, 2}, {5, 1}, {6, -2}, {7, 2}, {5, -2}, {3, 0}, {7, 0}};
+    String[][] mvSpecs = plain.apply(flat, new int[] {0, 1, 2, 3, 4, 5, 6, 7});
+    moveX = 5 * 16 + 4.5; moveZ = 8.5;
+    login("b58so-move-east", mv, mvSpecs, 0, 0, 40.5, 8.5, 2, -1);
+    login("b58so-move-east-sections", mv, plain.apply(new double[] {70, 5, 130, 20, 70, 130, 5, 70}, new int[] {7, 6, 5, 4, 3, 2, 1, 0}), 0, 0, 40.5, 8.5, 2, -1);
+    moveX = 2 * 16 + 4.5; moveZ = 3 * 16 + 4.5; // diagonal: z 1..5 and x 0..4 (the square overlaps the old one in z 1..2)
+    int[][] mv2 = {{0, 0}, {4, 2}, {2, 5}, {0, 3}, {4, 5}, {1, 4}, {3, 1}, {2, -2}};
+    login("b58so-move-diagonal", mv2, mvSpecs, 0, 0, 40.5, 8.5, 2, -1);
+    moveX = Double.NaN; moveZ = Double.NaN;
+    // falling blocks of the away run (nobody logged in, the Overworld's spawn grid): EntityFallingBlock is saved and read back like every other kind
+    skipGrid = false; noPlayer = true;
+    String[] fk = {"item", "fall", "cow", "fall", "orb", "fall", "item", "fall"};
+    double[] fy = {70, 5, 130, 20, 70, 260, 5, 70};
+    String[][] fall = new String[fk.length][];
+    for (int i = 0; i < fk.length; i++) fall[i] = SavedOrderProbe.S(fk[i], fy[i], new int[] {0, 0, 1, 1, 2, 3, 4, 2}[i], -1);
+    login("b58so-away-falling", grid, fall, 0, 0, 0, 0, 2, -1);
+    noPlayer = false;
   }
 }

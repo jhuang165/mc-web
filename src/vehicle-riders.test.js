@@ -4,7 +4,7 @@ import { JavaRandom } from "./lighting.js";
 import { EntityWorld } from "./entities.js";
 import { Boats } from "./boats.js";
 import { Minecarts } from "./minecarts.js";
-import { seatPosition } from "./mob-riding.js";
+import { seatPosition, releaseStaleRiders } from "./mob-riding.js";
 import { vehicleSeat, vehicleSize, isVehicle } from "./vehicle-seat.js";
 import { cartPicksUp, mountMobOnVehicle, linkVehicleRiders } from "./vehicle-riders.js";
 import { shadowQuads, SHADOWS } from "./shadows.js";
@@ -65,8 +65,12 @@ test("a mob rides a boat and a cart with the vehicle, and a dead vehicle frees i
   // b57so: EntityBoat.interactFirst refuses only another player as rider (bytecode-read): a click on a boat with a mob in it takes the boat over, and the stale pair is cleared within a pass (mob and taker free)
   const other = boats.spawnBoat({ x: 70.5, y: 1, z: 64.5, yaw: 0 }), zombie2 = spawn(w, "zombie", 70.5, 1, 64.5);
   assert.ok(mountMobOnVehicle(other, zombie2, heightOf(w)));
-  assert.equal(boats.mount(other, { vehicle: null }), false, "the stale pair is cleared: nobody sits");
+  const taker = { vehicle: null };
+  assert.equal(boats.mount(other, taker), true, "b58so: the click seats the taker; the stale pair is cleared at the mob's turn (savedorder6-b58.test.js)");
+  assert.equal(zombie2.ridingEntity, other);
+  releaseStaleRiders([zombie2], new Set(), () => true);
   assert.equal(zombie2.ridingEntity ?? null, null);
+  assert.equal(taker.vehicle, null);
   const p = { x: 64.5, y: 1, z: 70, health: 20 };
   for (let i = 0; i < 10; i++) {
     boat.x += 0.1; boat.px = boat.x - 0.1;

@@ -183,3 +183,23 @@ export function freeChickenNear(zombie, entities, size) {
   }
   return null;
 }
+
+// b58so: the stale link a player leaves on a boat that carried a mob (EntityBoat.interactFirst refuses only another player, so the click mounts: the boat's rider slot is the
+// player, the mob keeps ridingEntity = boat). World.updateEntities (ahb.h, bytecode-read) at the mob's turn: the mob's mount does not list it as rider, so
+// mount.riddenByEntity = null and mob.ridingEntity = null. That drops the seat the player holds on the boat; the player (in the same list) is let go by the same check at his own turn:
+// in the same pass when the mob is before him in the list, one pass later when he is before the mob. `pending` holds the boats whose seat the player still has this pass.
+export function releaseStaleRiders(entities, pending, mobBeforePlayer = () => true) {
+  for (const boat of pending) {
+    const p = boat.rider;
+    if (p && p.vehicle === boat) p.vehicle = null;
+    boat.rider = null;
+  }
+  pending.clear();
+  for (const e of entities) {
+    const m = e.ridingEntity;
+    if (!m || !isVehicle(m) || m.dead || !m.rider || m.passenger !== e) continue;
+    hide(e, "ridingEntity", null);
+    hide(m, "passenger", null);
+    if (mobBeforePlayer(e)) { if (m.rider.vehicle === m) m.rider.vehicle = null; m.rider = null; } else pending.add(m);
+  }
+}
