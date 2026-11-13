@@ -33,9 +33,9 @@ const {stdout}=await exec('java',['-cp',cp,'ChatRarityProbe'],{maxBuffer:1<<26})
 const lines=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 assert.equal(lines.length,1);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
-const names={add:'ItemStack',adb:'Item',adq:'EnumRarity',fq:'ChatComponentText',fn:'ChatStyle',fk:'IChatComponent$Serializer'};
+const names={add:'ItemStack',dh:'NBTTagCompound',dq:'NBTTagList',dx:'NBTTagString',dm:'NBTTagFloat',adb:'Item',adq:'EnumRarity',fq:'ChatComponentText',fn:'ChatStyle',fk:'IChatComponent$Serializer'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
- method:'Executed on the unchanged ItemStack (add) func_151000_E (E) and getRarity (w) over every registered item: rarity is [id, plain, plain diffs, ench-tag, ench diffs, StoredEnchantments, stored diffs] with diffs [[damage, rarity]] against damage 0 over 0..299 and the potion damages; rows are [name, fk.a JSON, getFormattedText, getUnformattedText, rarity, NBT string] for named stacks. EnumRarity names: common, uncommon, rare, epic.',
- rarity:lines[0].rarity,rows:lines[0].rows};
+ method:'Executed on the unchanged ItemStack (add) func_151000_E (E) and getRarity (w) over every registered item: rarity is [id, plain, plain diffs, ench-tag, ench diffs, StoredEnchantments, stored diffs] with diffs [[damage, rarity]] against damage 0 over 0..299 and the potion damages; rows are [name, fk.a JSON, getFormattedText, getUnformattedText, rarity, NBT string] for named stacks; nbt (b56) holds the same row shape for stacks with the port tag fields (nbt* names) and [name, NBTTagCompound.toString] for raw compounds (raw* names). EnumRarity names: common, uncommon, rare, epic.',
+ rarity:lines[0].rarity,rows:lines[0].rows,nbt:lines[0].nbt};
 await writeFile(path.join(root,'../public/research/chat-rarity-reference.json'),JSON.stringify(reference,null,1)+'\n');
-console.log(`${reference.rarity.length} items, ${reference.rows.length} rows`);
+console.log(`${reference.rarity.length} items, ${reference.rows.length} rows, ${reference.nbt.length} nbt rows`);
