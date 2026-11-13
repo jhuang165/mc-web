@@ -32,4 +32,9 @@ public class GL11 {
     log.add("draw " + mode + " " + count);
     if (drawHook != null) drawHook.run();
   }
+  // Batch 57 displaypixel: the lighting calls of RenderHelper.enableStandardItemLighting (bam.b()).
+  public static void glColorMaterial(int face, int mode) { log.add("colormaterial " + face + " " + mode); }
+  public static void glShadeModel(int mode) { log.add("shademodel " + mode); }
+  public static void glLight(int light, int pname, FloatBuffer b) { log.add("light " + light + " " + pname + " " + f(b.get(0)) + " " + f(b.get(1)) + " " + f(b.get(2)) + " " + f(b.get(3))); }
+  public static void glLightModel(int pname, FloatBuffer b) { log.add("lightmodel " + pname + " " + f(b.get(0)) + " " + f(b.get(1)) + " " + f(b.get(2)) + " " + f(b.get(3))); }
 }
