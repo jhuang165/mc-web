@@ -67,6 +67,7 @@ public class TrackerJointProbe {
   }
   static int idOf(Object p) throws Exception { return MobMoveProbe.field(p.getClass(), "a").getInt(p); }
   static String xtag = "b55dt";
+  static boolean b57 = false; // Batch 57 (b57ts): the second world ticks before the arrival
   static boolean metaValues = false; // Batch 56: S1C and S0F records carry their watcher (index, value) pairs only in the b56tm cases
   static String watchers(List<?> list) throws Exception {
     StringBuilder b = new StringBuilder();
@@ -303,6 +304,12 @@ public class TrackerJointProbe {
     List<Item> initial = new ArrayList<>();
     for (Item it : script) if (it.born == 0 && !it.inB) initial.add(it);
     Item pl = null;
+    // Batch 57 (b57ts): world B exists and ticks from the start (MinecraftServer.updateTimeLightAndEntities ticks every WorldServer, then its tracker, then the network tick that moves the player): its
+    // entities are created at tick 0 and run their updates and tracker updates every tick while nobody watches. Only B's entries are recorded after the arrival.
+    if (b57 && dimAt != 0) {
+      for (Item it : script) if (it.inB && it.born == 0) { it.e = make(it.kind, it.start); position(it, 0); b.list.add(it); b.tracker.a(it.e); idAdd(ids, it.name, it.e.y()); }
+      TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
+    }
     for (int k = 0; k <= initial.size(); k++) {
       if (k == playerAt) {
         p = newPlayer(net, a, counter); angler = p; // the player's id comes from the counter at its place
@@ -328,13 +335,14 @@ public class TrackerJointProbe {
       if (t == dimAt) { // ServerConfigurationManager.transferPlayerToDimension: out of A (untrackEntity), into B (addEntityToTracker)
         a.tracker.b((sa) pl.e); a.list.remove(pl); a.players.remove(pl.e);
         pending.clear(); TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
-        for (Item it : script) if (it.inB && it.born == 0) { it.e = make(it.kind, it.start); position(it, t - 1); b.list.add(it); b.tracker.a(it.e); idAdd(ids, it.name, it.e.y()); }
+        if (!b57) for (Item it : script) if (it.inB && it.born == 0) { it.e = make(it.kind, it.start); position(it, t - 1); b.list.add(it); b.tracker.a(it.e); idAdd(ids, it.name, it.e.y()); }
         TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
         MobMoveProbe.field(sa.class, "o").set(pl.e, b.tw);
         b.list.add(pl); b.players.add(pl.e); cur = b; b.tracker.a((sa) pl.e);
         flushTo(ev);
       }
       tickWorld(cur, t, script, cur == b, ev, ids);
+      if (b57 && dimAt != 0 && cur == a) { tickWorld(b, t, script, true, null, ids); } // the second world's tick, after the first one's, nobody watching
       out.append(t > 1 ? "," : "").append("[" + t + "," + ev + "]]");
     }
     StringBuilder meta = new StringBuilder("{"); boolean f = true;
@@ -500,5 +508,23 @@ public class TrackerJointProbe {
     Item[] hm = {hs[0], hs[1], late};
     System.out.println(runX("horseMeta", 1, 60, hm, 1, 0, 0));
     System.out.println(runX("horseMetaLast", 65530, 60, hm, 2, 0, 0));
+    // Batch 57 (b57ts): the dimension change with world B ticking from the start. B's entities are created with the world, move every tick, one is born before the arrival (a chicken at 12, an item
+    // thrown by the network at 20 that dies at 22) and the arrival itself comes with a spawn made by the network in the arrival tick (net, tick 24) and in the tick after (25) and an entity spawned in B's pass.
+    xtag = "b57ts"; metaValues = true; b57 = true;
+    Item[] dim2 = new Item[base.length + bs.length + 5];
+    System.arraycopy(base, 0, dim2, 0, base.length);
+    System.arraycopy(bs, 0, dim2, base.length, bs.length);
+    Item[] nb = {
+      item("nc1", "chicken", new double[]{2.0, 0, 5.0}, new double[]{0.04, 0, -0.03}, 12, -1, 1.5f),
+      item("ni1", "item", new double[]{4.0, 1.125, 2.0}, new double[]{0.02, 0, 0.03}, 20, 22, 0),
+      item("nc2", "chicken", new double[]{6.0, 0, 2.0}, new double[]{-0.05, 0, 0.02}, 24, -1, 2.5f),
+      item("ni2", "item", new double[]{3.5, 1.125, 4.0}, new double[]{0.0, 0, 0.05}, 25, -1, 0),
+      item("na1", "arrow", new double[]{2.0, 2.0, 2.0}, new double[]{0.3, -0.03, 0.1}, 23, -1, 0),
+    };
+    for (Item i : nb) i.inB = true;
+    nb[0].net = true; nb[2].net = true; nb[3].net = true;
+    System.arraycopy(nb, 0, dim2, base.length + bs.length, nb.length);
+    System.out.println(runX("dimTick", 1, 60, dim2, 9, 0, 24));
+    System.out.println(runX("dimTickLast", 65530, 60, dim2, 12, 0, 24));
   }
 }
