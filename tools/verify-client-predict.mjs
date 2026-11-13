@@ -17,21 +17,24 @@ assert.equal(createHash('sha1').update(await readFile(jar)).digest('hex'),'e80d9
 async function library(prefix){
  for(const p of (process.env.MC_PROBE_LIBS||'').split(path.delimiter).filter(Boolean))if(path.basename(p).startsWith(prefix))return p;
  for(const dir of [path.join(os.homedir(),'Library/Application Support/minecraft/libraries'),path.join(os.homedir(),'.minecraft/libraries'),path.join(os.homedir(),'.gradle/caches'),path.join(research,'libs-1.7.10')]){
-  if(!await exists(dir))continue;const {stdout}=await exec('find',[dir,'-name',prefix+'*.jar','-not','-name','*sources*'],{maxBuffer:1<<24}),hit=stdout.split('\n').filter(Boolean).sort()[0];if(hit)return hit;
+  if(!await exists(dir))continue;const {stdout}=await exec('find',[dir,'-name',prefix+'*.jar','-not','-name','*sources*'],{maxBuffer:1<<24}),hit=stdout.split('\n').filter(f=>/^\d/.test(path.basename(f).slice(prefix.length))).sort()[0];if(hit)return hit;
  }
  throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
-const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-'].map(library)),classes=path.join(out,'classes');
+const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','netty-buffer-','netty-common-','netty-transport-','netty-codec-','netty-handler-','netty-resolver-','gson-'].map(library)),classes=path.join(out,'classes');
 await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib; public class GameProfile {}\n');
+// Stubs only so that net.minecraft.client.Minecraft (bao) can be allocated without running its constructor (the sound chain record)
+const stubs=[['org/lwjgl/opengl','DisplayMode','public DisplayMode(int w,int h){}'],['org/lwjgl/opengl','OpenGLException'],['org/lwjgl','LWJGLException'],['com/mojang/authlib','GameProfileRepository'],['com/mojang/authlib/minecraft','MinecraftSessionService'],['com/mojang/authlib/yggdrasil','YggdrasilAuthenticationService']];
+for(const [pkg,name,body] of stubs){const ext=name.endsWith('Exception')?'RuntimeException':'';{await mkdir(path.join(probe,'stubs',pkg),{recursive:true});await writeFile(path.join(probe,'stubs',pkg,name+'.java'),`package ${pkg.replaceAll('/','.')}; public class ${name}${ext?' extends '+ext:''} {${body||''}}\n`);}}
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...['MobMoveProbe','PlantProbe','DoorPaneProbe','BedProbe','ClientPredictProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...stubs.map(([pkg,name])=>path.join(probe,'stubs',pkg,name+'.java')),...['MobMoveProbe','PlantProbe','DoorPaneProbe','BedProbe','ClientPredictProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout}=await exec('java',['-cp',cp,'ClientPredictProbe'],{maxBuffer:1<<28}),records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-const errors=records.filter(r=>r.error);
+const errors=records.filter(r=>r.error&&r.error!=='null');
 assert.deepEqual(errors.map(r=>r.case+':'+r.name+':'+r.error),[],'probe scenarios must not throw');
 const count=c=>records.filter(r=>r.case===c).length;
-assert.ok(count('break')===64&&count('use')===40&&count('activate')===30&&count('bucket')>=30&&count('serveruse')===4,'case counts '+JSON.stringify(records.reduce((a,r)=>(a[r.case]=(a[r.case]||0)+1,a),{})));
+assert.ok(count('break')===64&&count('use')===40&&count('activate')===75&&count('bucket')>=30&&count('serveruse')===4&&count('throw')===15&&count('commandblock')===2&&count('soundchain')===1,'case counts '+JSON.stringify(records.reduce((a,r)=>(a[r.case]=(a[r.case]||0)+1,a),{})));
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const classNames={bje:'PlayerControllerMP',ahb:'World',aji:'Block',adb:'Item',akn:'BlockDoor',ajh:'BlockBed',abg:'ItemBed',ach:'ItemDoor'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(classNames).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
