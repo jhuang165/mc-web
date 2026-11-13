@@ -21,7 +21,7 @@ await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
 await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib; public class GameProfile {}\n');
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...['MobMoveProbe','PlantProbe','PlayerStepProbe','XpOrbProbe','NbtProbe','MinecartProbe','HangingProbe','EntityListProbe','SavedOrderProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),...['MobMoveProbe','PlantProbe','PlayerStepProbe','XpOrbProbe','NbtProbe','MinecartProbe','HangingProbe','EntityListProbe','SavedOrderProbe','ChunkProviderProbe','SavedOrderLoginProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'SavedOrderProbe'],{maxBuffer:1<<26});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
 const cases=records.filter(r=>r.case==='saved-order'),cases2=records.filter(r=>r.case==='saved-order2'),cases3=records.filter(r=>r.case==='saved-order3');
@@ -43,3 +43,12 @@ const reference3={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases3};
 await writeFile(path.join(root,'../public/research/saved-order3-reference.json'),JSON.stringify(reference3)+'\n');
 console.log(`${cases3.length} saved order 3 scenarios`);
+// Batch 56 (b56so): the loaded-entity order of a native login (spawn grid, the player's chunk, the view square, the player's mount) and the chain below a mount that carries the player; replayed by src/saved-order4-b56.test.js.
+const login=await exec('java',['-cp',cp,'SavedOrderLoginProbe'],{maxBuffer:1<<26});
+const cases4=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
+assert.equal(cases4.length,10,'10 b56so scenarios');
+const reference4={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 56 b56so: SavedOrderLoginProbe. The unchanged ChunkProviderServer (ms) over a loader that reads each chunk with the real AnvilChunkLoader reader from NBT the real writer made, MinecraftServer.initialWorldChunkLoad (25 x 25 chunks round the spawn), then ServerConfigurationManager.playerLoggedIn: the real World.spawnEntityInWorld(EntityPlayerMP) (ahb.d), the real PlayerManager.addPlayer (mq.a), and the mount read from the first Riding compound (EntityList.createEntityFromNBT, forceSpawn, spawnEntityInWorld). The caller sequence is bytecode-read (oi.c(mw), oi initializeConnectionToPlayer). after: entity indices (x = chunk x * 16 + 1 + 0.5 * index; -1 the player) in loadedEntityList order.',
+ cases:cases4};
+await writeFile(path.join(root,'../public/research/saved-order4-reference.json'),JSON.stringify(reference4)+'\n');
+console.log(`${cases4.length} saved order 4 scenarios`);

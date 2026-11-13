@@ -11,7 +11,11 @@
 // that carries the player is not in a chunk at all natively (the player's NBT nests it under `Riding`, and the mount is skipped by the chunk writer because it is ridden): the
 // player's login reads it back, spawns it with forceSpawn after the chunks are loaded and mounts the player, so it is the last of the loaded list (carriesPlayer, last in saveWalk).
 // The browser keeps the mount's record in its own list (cart `rider: true`, mob `playerRides`) so older saves load unchanged; only the stamp follows the native shape.
-// Approximation: the chunks are taken in the order of their first joined entity (a native load follows the chunk provider's order).
+// Batch 56 (b56so, saved-order4-reference.json): the chunk order of a native reload is the login order (executed ChunkProviderServer, PlayerManager and a real World.spawnEntityInWorld): the
+// world's spawn grid (MinecraftServer.initialWorldChunkLoad, 25 x 25 chunks, x outer, z inner), then the player's own chunk (World.spawnEntityInWorld loads it first), then the view
+// square (PlayerManager.addPlayer, x outer, z inner; PlayerInstance loads each chunk), then the player's mount. `loadFrame` gives the frame (spawn, player, view distance); chunks outside it,
+// and every save without a frame, keep the approximation: the order of their first joined entity. A mount that carries the player takes its own Riding chain no further: the login reads the
+// first Riding compound only (sg.a does not read a nested Riding), so a mount of that mount is in no chunk and in no file: its record is dropped from the save (`lostMounts`).
 const SECTIONS = 16;
 const sectionOf = (e) => Math.min(SECTIONS - 1, Math.max(0, Math.floor((e.posY ?? e.y ?? 0) / 16)));
 const finite = (v) => Number.isFinite(v);
@@ -40,17 +44,41 @@ function ballGroup(mobs, records) {
   return live.length && live.length === mine.length ? [{ kind: "ball", live, records: mine }] : [];
 }
 
+// The place of each chunk in a native reload (above): the spawn grid, the player's chunk, the view square. `frame`: { spawn: [x, y, z] | null, player: { x, z } | null, view: chunks }.
+export function loadRanks(frame) {
+  const ranks = new Map(), add = (cx, cz) => { const k = `${cx},${cz}`; if (!ranks.has(k)) ranks.set(k, ranks.size); };
+  const spawn = frame?.spawn;
+  if (Array.isArray(spawn) && finite(spawn[0]) && finite(spawn[2])) for (let k = -192; k <= 192; k += 16) for (let l = -192; l <= 192; l += 16) add(Math.floor(Math.trunc(spawn[0] + k) / 16), Math.floor(Math.trunc(spawn[2] + l) / 16)); // MinecraftServer: (spawn + k) >> 4
+  const p = frame?.player;
+  if (p && finite(p.x) && finite(p.z)) {
+    const cx = Math.trunc(p.x) >> 4, cz = Math.trunc(p.z) >> 4, r = Number.isInteger(frame.view) && frame.view > 0 ? frame.view : 0;
+    add(cx, cz);
+    for (let x = cx - r; x <= cx + r; x++) for (let z = cz - r; z <= cz + r; z++) add(x, z);
+  }
+  return ranks;
+}
+
 // The native save walk of the groups' live entities: chunks (by their first entity in the loaded list), then section, then list order. Returns the entities in it.
-function saveWalk(mobs, groups) {
+function saveWalk(mobs, groups, frame = null) {
   mobs.withBalls?.(mobs.entities.slice()); // gives every walked entity its place in the loaded list (orderSeqs)
   const seqs = mobs.orderSeqs, rows = [];
   for (const { live, records } of groups) live.forEach((e, i) => rows.push({ e, record: records[i], seq: seqs?.get(e) ?? Infinity, sec: sectionOf(e), cx: Math.floor((e.x ?? 0) / 16), cz: Math.floor((e.z ?? 0) / 16) }));
   const first = new Map(), moved = mobs.sectionSeqs, born = mobs.chunkBirth; // born: the place of the first entity a chunk had in the passes seen (a mover joining it later does not lower it)
   for (const r of rows) { const k = `${r.cx},${r.cz}`; first.set(k, Math.min(first.get(k) ?? Infinity, born?.get(k) ?? r.seq)); r.chunk = k; r.list = moved?.get(r.e) ?? r.seq; }
-  rows.sort((a, b) => first.get(a.chunk) - first.get(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
+  const ranks = frame ? loadRanks(frame) : null, place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : first.get(k)); // a chunk of the login frame goes before every other
+  rows.sort((a, b) => place(a.chunk) - place(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
   // b54so: the mount carrying the player is read from the player's file (Riding) and spawned after the chunks: last, in list order among such mounts
-  const carried = rows.filter((r) => carriesPlayer(r.e)), rest = carried.length ? rows.filter((r) => !carriesPlayer(r.e)) : rows;
-  return [...loadOrder(rest), ...carried];
+  const carried = rows.filter((r) => carriesPlayer(r.e)), lost = lostMounts(carried, rows), gone = new Set(lost.map((r) => r.e));
+  const rest = carried.length ? rows.filter((r) => !carriesPlayer(r.e) && !gone.has(r.e)) : rows;
+  return { order: [...loadOrder(rest), ...carried], lost, carried };
+}
+
+// b56so: a mount that carries the player is the first Riding compound of the player's file; its own mount (a cart under the cow the player sits on, and so on up the chain) is nested one level
+// deeper and nothing reads it at login (executed: the player stand-in on a cow on a cart, the cart is in no loaded list). Natively that mount vanishes with the save: rows of the chain.
+function lostMounts(carried, rows) {
+  const byEnt = new Map(rows.map((r) => [r.e, r])), out = new Set();
+  for (const c of carried) for (let m = c.e.ridingEntity, seen = new Set([c.e]); m && !seen.has(m); m = m.ridingEntity) { seen.add(m); if (byEnt.has(m) && !carriesPlayer(m)) out.add(byEnt.get(m)); }
+  return [...out];
 }
 
 // A cart, boat or mob the local player rides (minecarts.js / boats.js `rider`, entities.js serializeOne's playerRides rule).
@@ -98,9 +126,13 @@ export function trackSections(mobs, order, start = false) {
 }
 
 /** Stamps `ord` on the saved records of the groups (their place in the native save walk); `base` shifts it above records stamped earlier. */
-export function stampSavedOrder(mobs, groups, base = 0) {
+export function stampSavedOrder(mobs, groups, base = 0, frame = mobs?.loadFrame ?? null) {
   if (!mobs?.walks?.size || !groups.length) return;
-  saveWalk(mobs, groups).forEach((r, i) => { r.record.ord = base + i; });
+  const { order, lost, carried } = saveWalk(mobs, groups, frame);
+  order.forEach((r, i) => { r.record.ord = base + i; });
+  // b56so: the chain below a mount that carries the player is not saved (the records only; the live entities stay until the page is reloaded), and the carrier no longer rides it.
+  for (const r of carried) if (lost.length) delete r.record.riding;
+  for (const r of lost) for (const g of groups) { const i = g.records.indexOf(r.record); if (i >= 0) g.records.splice(i, 1); }
 }
 
 /** After a load: gives the groups' entities the stamps of their records, so the walk runs them in the saved order. Records without a number are left to the usual place. */
