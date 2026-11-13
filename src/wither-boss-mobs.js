@@ -43,7 +43,7 @@ function levelEvent(m, id, x, y, z) {
       const px = p.x, py = p.y + (p.eyeHeight ?? 1.62), pz = p.z, dx = x - px, dy = y - py, dz = z - pz, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       at = d > 0 ? { x: px + dx / d * 2, y: py + dy / d * 2, z: pz + dz / d * 2 } : { x: px, y: py, z: pz };
     }
-    m.events.push({ sound: "mob.wither.spawn", volume: 1, pitch: 1, position: at });
+    m.events.push({ sound: "mob.wither.spawn", volume: 1, pitch: 1, position: at, aux: { id: 1013, x, y, z } }); // `aux`: the dedicated server sends the level event itself to every player (multiplayer/server-mobs.js)
     return;
   }
   m.events.push({ sound: id === 1014 ? "mob.wither.shoot" : "mob.zombie.woodbreak", volume: 2, pitch: pitchRoll(m.worldRandom), position: { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5, z: Math.floor(z) + 0.5 } });
@@ -135,7 +135,7 @@ function breakBlocks(m, e, rand) {
     if (id === 0 || WITHER_PROOF_INTERNAL.includes(id)) continue;
     const meta = w.getMeta ? w.getMeta(x, y, z) : 0;
     w.set(x, y, z, 0);
-    m.events.push({ blockEdit: [[x, y, z]], blockBreak: { x, y, z, block: id } });
+    m.events.push({ blockEdit: [[x, y, z]], blockBreak: { x, y, z, block: id, meta } });
     for (const d of explosionDrops(id, meta, x, y, z, 1, rand).items) m.events.push({ drop: d.id, count: 1, ...(d.damage ? { damage: d.damage } : {}), position: { x: d.x, y: d.y, z: d.z } });
     any = true;
   }

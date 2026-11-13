@@ -23,10 +23,11 @@ import { PHYSICS, raycast } from '../world.js';
 import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
 import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from './server-owners.js'; // b63
+import { installServerWither, boundedSkullResistance } from './server-wither.js'; // b63 mpwither
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
-export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton']); // b62: the Nether's kinds (Overworld spawn lists never name them)
+export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton', 'wither']); // b63: the wither (server-wither.js); b62: the Nether's kinds (Overworld spawn lists never name them)
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
@@ -68,6 +69,7 @@ export function mobState(e) {
   if (e.type === 'bat' && e.batHanging) s.hang = 1;
   if (e.type === 'sheep') { s.color = e.color ?? 0; if (e.sheared) s.sheared = 1; }
   if (e.type === 'pig' && e.saddled) s.saddled = 1; // b61: the saddle on the model (set by the saddle item; riding is mpvehicles)
+  if (e.type === 'wither') { const q = a => [a?.[0] ?? 0, a?.[1] ?? 0].map(v => Math.round(v * 2) / 2); s.hy = q(e.headYaw); s.hpi = q(e.headPitch); } // b63: the side heads' angles (watchers 17 / 18 name targets natively; the copy has no targets to turn to). Health and Invul travel in S1C (copy-meta.js)
   if (e.type === 'creeper') { s.fuse = e.fuseTime ?? 0; s.last = e.lastActive ?? 0; if (e.powered) s.powered = 1; }
   return s;
 }
@@ -117,6 +119,7 @@ export class ServerMobs {
     // b62: the puppy or kitten of a tamed parent belongs to the parent's owner (EntityTameable.func_152115_b(parent owner UUID)); puppyFields / kittenFields only copy the flag.
     const made = mobs.makeBaby;
     mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
+    installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
     this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
@@ -201,7 +204,7 @@ export class ServerMobs {
       this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null });
       for (const k of ['x', 'y', 'z']) v.player.velocity[k] += hit.push[k === 'x' ? 0 : k === 'y' ? 1 : 2];
     }
-    const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false });
+    const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, resistance: ev.blue ? boundedSkullResistance : undefined }); // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
   }
@@ -252,7 +255,7 @@ export class ServerMobs {
     }
     if (this.spawning) {
       this.spawnPass();
-      if (mobs.entities.length > MOB_LIMIT) mobs.entities.length = MOB_LIMIT;
+      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (mobs.entities[i].type !== 'wither') mobs.entities.splice(i, 1); // b63: the cap never cuts a wither just built
     }
     this.use(first);
     const lead = first.player.position;
@@ -260,8 +263,9 @@ export class ServerMobs {
     const statusSounds = mobs.clientSounds.splice(0); // taken first: drainMobEvents would play them as server sounds
     // The orbs of a kill (ExperienceOrbs of server-items.js), the server's own sounds (S29) and explosions; the clients' status sounds become S19 below.
     drainMobEvents({ mobs, xpOrbs: this.host.serverItems.xp, items: this.host.items }, {
-      explode: (x, y, z, size, opts) => this.explode({ x, y, z, size, source: opts?.exploder, smoking: opts?.smoking }),
-      sound: s => this.sound(s),
+      explode: (x, y, z, size, opts) => { this.explode({ x, y, z, size, source: opts?.exploder, smoking: opts?.smoking, blue: opts?.blue }); this.burst(x, y, z, size); },
+      sound: (s, ev) => this.sound(s, ev),
+      blockEdit: (cells, ev) => { if (ev?.blockBreak) this.eatGrass(ev.blockBreak); }, // b63: World.func_147480_a(x, y, z, true) plays aux 2001 (the wither's block sweep)
       eatGrass: g => this.eatGrass(g),
     });
     for (const c of statusSounds) this.noteStatus(c);
@@ -272,10 +276,21 @@ export class ServerMobs {
     return unionChunkOrder([...this.views.values()].map(({ player }) => [Math.floor(player.position.x / 16), Math.floor(player.position.z / 16)])).size;
   }
   // World.playSoundAtEntity on a WorldServer: S29 to every player within 16 blocks (16 * volume above 1), the hit player included (simulation.deliverSounds).
-  sound(s) {
+  sound(s, ev = null) {
+    if (ev?.aux) { this.broadcastAux(ev.aux); return; } // b63: World.playBroadcastSound (the wither's spawn, 1013) reaches every player, not the 16 blocks of a sound
     const at = s.position;
     if (!s.sound || !at || ![at.x, at.y, at.z].every(Number.isFinite)) return;
     this.host.soundsOut.push({ name: s.sound, x: at.x, y: at.y, z: at.z, volume: s.volume ?? 0.6, pitch: Number.isFinite(s.pitch) ? s.pitch : 1, except: null });
+  }
+  // b63: World.newExplosion's S27 and sound for a mob's blast: the clients' burst (dispFx explode, drawn like a TNT's) with the explosion sound, to this dimension's players within 160 blocks.
+  burst(x, y, z, size) {
+    if (!(size > 0)) return;
+    const d = this.host.dispense;
+    if (d) d.fx.push({ k: 'explode', x, y, z, size });
+  }
+  // b63: S28 with the broadcast flag, to every player of the server (WorldServer.func_82739_e: sendPacketToAllPlayers, recalled).
+  broadcastAux({ id, x, y, z, data = 0 }) {
+    for (const p of this.host.players?.values() ?? []) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id, x, y, z, data }] });
   }
   // b62: EntityAIEatGrass.updateTask -> World.playAuxSFX(2001, x, y, z, id) (grass block) or func_147480_a (tall grass, id + (meta << 12)): S28 to every player within 64 blocks, no
   // exception (bytecode-read, ud.e). The block change itself (EntityWorld.eatGrass edited the shared world) travels with the tick's changes.

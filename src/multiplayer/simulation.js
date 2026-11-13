@@ -39,6 +39,7 @@ import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
 import { ServerAchievements } from './server-achievements.js';
+import { ServerWither } from './server-wither.js'; // b63 mpwither
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
@@ -100,6 +101,7 @@ export class DedicatedSimulation {
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
+    this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
@@ -368,13 +370,13 @@ export class DedicatedSimulation {
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
-    // open-editor message; a head keeps its type and (on top of a block) its rotation. No wither is built here (no soul sand id is passed).
+    // open-editor message; a head keeps its type and (on top of a block) its rotation. b63: a completed T builds a wither (server-wither.js).
     if (id === ITEM_SIGN) {
       return placeSign({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, target }, { signs: this.tileEntities.signs,
         openEditor: tile => { tile.editor = p.id; p.openSign = [tile.x, tile.y, tile.z]; } }).placed;
     }
     if (id === ITEM_SKULL) {
-      return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, { skulls: this.tileEntities.skulls, difficulty: 0 }).placed;
+      return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, this.wither.hooks(p)).placed; // b63: soul sand and the difficulty are passed, so the T builds a wither (Overworld)
     }
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     const placed = placeHeldBlock(state, { id, item: ITEMS[id], target }, {

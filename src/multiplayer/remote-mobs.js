@@ -91,12 +91,14 @@ export class RemoteMobs {
     else if (mob.type === 'bat') mob.batHanging = !!s.hang;
     if (mob.type === 'sheep') { mob.color = s.color ?? 0; mob.sheared = !!s.sheared; }
     if (mob.type === 'pig') mob.saddled = !!s.saddled;
+    if (mob.type === 'wither') { if (s.hy) { mob.prevHeadYaw = [...(mob.headYaw ?? s.hy)]; mob.headYaw = [...s.hy]; } if (s.hpi) { mob.prevHeadPitch = [...(mob.headPitch ?? s.hpi)]; mob.headPitch = [...s.hpi]; } } // b63: the side heads' angles (wither-boss-renderer.js reads headYaw / headPitch)
     if (mob.type === 'creeper') { mob.fuseTime = s.fuse ?? 0; mob.lastActive = s.last ?? 0; mob.powered = !!s.powered; }
   }
   // One client tick (the game's 20 per second): every copy steps, then its stand-in follows it.
   tick() {
     for (const { client, mob } of this.copies.values()) {
       client.dead = mob.health <= 0;
+      if (mob.type === 'wither') { mob.invul = client.invul ?? 0; mob.renderYawOffset = client.renderYawOffset; if (client.health !== undefined && mob.health > 0) mob.health = client.health; } // b63: watchers 20 (Invul) and 6 (health) arrive in S0F / S1C (copy-meta.js); the boss bar reads the health; the model turns by the body yaw of the copy (animateWither reads e.renderYawOffset)
       const slime = mob.type === 'slime' || mob.type === 'magma_cube';
       if (slime) slimeSquishStart(mob); // EntitySlime.onUpdate runs on the client copy too: the squish and the landing particles (the sounds come from the server's S29)
       client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob), (c) => this.physics.living?.(c, mob)); // batch 61: the potion swirl and the living roll follow the death update (entities.js clientLiving)
