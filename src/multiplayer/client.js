@@ -16,8 +16,8 @@ export function restoreReplica(snapshot) {
 
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onSlot, onAux, onWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {} } = {}) {
+    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onSlot, onAux, onWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -54,6 +54,7 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
+    if (message.type === 'mobs') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
@@ -82,6 +83,7 @@ export class DedicatedClient {
     if (message.type === 'slot') this.onSlot(message);
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);
+    if (message.type === 'mobs') this.onMobs(message.packets);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
@@ -100,6 +102,8 @@ export class DedicatedClient {
   // C16 client status 0: perform respawn after a death.
   respawn() { this.send({ type: 'respawn' }); }
   openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
+  // C02 UseEntity, attack: the wire id of the mob (its S0F spawn); the server checks the reach and applies the held weapon's damage.
+  attack(mob) { this.send({ type: 'attack', mob }); }
   // C0D close window.
   // C0E click window: the slot, button and mode, the client's action number and the stack its own slotClick returned.
   clickWindow(windowId, slot, button, mode, action, item) { this.send({ type: 'clickWindow', windowId, slot, button, mode, action, item: item ?? null }); }

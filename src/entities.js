@@ -2250,6 +2250,7 @@ export class EntityWorld {
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); } // the player's place in the list: his mount no longer lists him
       clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
+      this.beforeMob?.(e); // host hook (multiplayer/server-mobs.js): the nearest of several players is the AI's player for this mob
       seat();
       sections();
       if (e.lateHook) { e.lateHook(); continue; }
@@ -2674,7 +2675,7 @@ export class EntityWorld {
     s.env.time = survival.time ?? 0;
     s.sub = skylightSubtracted(celestialAngle(s.env.time));
     s.player = player;
-    ctx.capChunks = ELIGIBLE_CHUNKS; // eligibleChunksForSpawning.size(): always the 17x17 window of the one player
+    ctx.capChunks = this.capChunks ?? ELIGIBLE_CHUNKS; // eligibleChunksForSpawning.size(): the 17x17 window of the one player (a host with several players sets `capChunks`)
     ctx.rand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     ctx.spawn = this.spawnPoint ? this.spawnPoint() : null;
     if (!this.spawnPoint && !world.dimension && world.spawn) {

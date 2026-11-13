@@ -36,6 +36,7 @@ import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
 import { ServerContainers } from './server-containers.js';
+import { ServerMobs } from './server-mobs.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -64,8 +65,8 @@ export function cleanHotbar(slots) {
 // One dedicated world, independent of all connected tabs. Finite terrain is an
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
-  constructor(saved = {}, { world = null, gameMode = 'creative', difficulty = 2 } = {}) {
-    this.difficulty = difficulty; this.serverSurvival = new ServerSurvival(this); // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
+  constructor(saved = {}, { world = null, gameMode = 'creative', ...options } = {}) {
+    this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
     this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
@@ -77,7 +78,7 @@ export class DedicatedSimulation {
     for (let i = 0; i < edits.length; i += 100000) this.world.restore(edits.slice(i, i + 100000));
     this.time = saved.time ?? 6000;
     // World state the operator commands change (src/servercommands-b59.js): game rules, difficulty, the mode a new player starts in.
-    this.gameRules = { ...(saved.gameRules ?? {}) }; if (Number.isInteger(saved.difficulty)) this.difficulty = saved.difficulty; // else the --difficulty option (mpstate) this.newPlayerMode = saved.newPlayerMode ?? null;
+    this.gameRules = { ...(saved.gameRules ?? {}) }; if (Number.isInteger(saved.difficulty)) this.difficulty = saved.difficulty; this.newPlayerMode = saved.newPlayerMode ?? null; // a saved difficulty wins over the --difficulty option
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
     // Item entities (EntityItem): a Survival break, drops from a container and the like. Each gets a wire id (`eid`); clients see them in `tick.items` and ask
@@ -136,7 +137,13 @@ export class DedicatedSimulation {
       if (result && (old !== b || meta !== m)) this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
       return result;
     };
+    // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
+    this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
   }
+  // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
+  // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
+  // the death is seen by ServerSurvival.tick. Lead fix at the b59 merge: the mpmobs no-op is replaced by the mpstate health.
+  damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
@@ -151,12 +158,14 @@ export class DedicatedSimulation {
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.serverItems.join(player, saved);
     this.players.set(id, player);
+    this.mobs.addPlayer(player);
     return player;
   }
   removePlayer(id) {
     const p = this.players.get(id);
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
+    this.mobs.removePlayer(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
     player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
@@ -180,6 +189,11 @@ export class DedicatedSimulation {
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, dig: status }); return true;
+  }
+  // C02 UseEntity, attack: the wire id of a mob (the server repeats the reach test and damages with the held weapon, server-mobs.js).
+  queueAttack(id, mob) {
+    if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
+    this.actions.push({ id, attack: mob }); return true;
   }
   queueUse(id, active) {
     if (!this.players.has(id) || typeof active !== 'boolean' || this.actions.filter(a => a.id === id).length >= 4) return false;
@@ -423,14 +437,15 @@ export class DedicatedSimulation {
       if (this.items.items.length > 300) this.items.items.splice(0, this.items.items.length - 300); // oldest first, a safety cap for one wire message
     }
     this.serverItems.tickOrbs();
-    for (const { id, place, dig, use } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
-      if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
+      if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
     }
     for (const p of this.players.values()) if (p.resendCells) {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
+    this.mobs.tick();
     for (const p of this.players.values()) this.serverItems.settle(p);
     this.deliverSounds();
     this.weather.tick(this.world);
@@ -480,7 +495,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(),
       tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
