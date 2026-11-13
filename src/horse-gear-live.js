@@ -232,6 +232,10 @@ export function installHorseGear(EntityWorld) {
     if (!e.leash) { this.leashRelease(e); return; }
     const h = this.leashHolder(e);
     if (h.away) return;
+    if (e.type === "horse" && e.horse?.eating) { // td.bL: wi.o(F) (executed, horse-sounds-reference.json `flags` leash): a lead longer than 6 stops the grass eating
+      const f = Math.fround, dx = f(h.x - e.x), dy = f(h.y - e.y), dz = f(h.z - e.z);
+      if (f(Math.sqrt(f(f(f(dx * dx) + f(dy * dy)) + f(dz * dz)))) > 6) { e.horse.eating = false; e.eatTicks = 0; }
+    }
     setHomeArea(e, Math.trunc(h.x), Math.trunc(h.y), Math.trunc(h.z), G.LEASH_HOME_RADIUS);
     e.leashHome = true;
     const sitting = (e.type === "wolf" || e.type === "ocelot") && e.sitting === true;

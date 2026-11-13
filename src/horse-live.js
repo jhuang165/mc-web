@@ -203,6 +203,11 @@ export function installHorse(EntityWorld) {
     if (e.horse) { e.horse.eating = false; e.eatTicks = 0; } // wi.p(true) calls o(false) (bytecode-read): rearing stops the eating
     if (sound) this.horseAngry(e);
   };
+  // wi.aT (the hurt sound getter, executed in horse-sounds-reference.json `flags`): cS() opens the mouth (bE = 1, flag 128), then nextInt(3) == 0 starts the rear (cU: bF = 1, p(true), which stops the eating).
+  proto.horseHurt = function (e, rand) {
+    e.mouthTicks = 1;
+    if (rand.nextInt(3) === 0) this.horseRear(e);
+  };
   proto.horseAngry = function (e) {
     e.mouthTicks = 1; // wi.cJ -> cv() -> cS(): the angry sound getter opens the mouth (bE = 1, flag 128)
     const sound = H.angrySound(e.horse.type);

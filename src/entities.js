@@ -1105,10 +1105,11 @@ export class EntityWorld {
     if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: statusPitchRandom() });
     if (e.health <= 0) {
       if (fresh) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) });
+      if (fresh && e.type === "horse") e.mouthTicks = 1; // wi.aU (the death sound getter) calls cS()
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) {
-      if (e.type === "horse" && rand.nextInt(3) === 0) this.horseRear(e); // EntityHorse.getHurtSound (wi.aT, bytecode-read): nextInt(3) first, 0 makes it rear (no sound of its own)
+      if (e.type === "horse") this.horseHurt(e, rand); // EntityHorse.getHurtSound (wi.aT): cS (mouth open), nextInt(3) first, 0 makes it rear (no sound of its own)
       this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
     }
     if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
@@ -2056,7 +2057,7 @@ export class EntityWorld {
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (the copy's own watcher 16, S0F / S1C through the tracker, entity-tracker.js, not the live horse's), and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
-    if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0);
+    if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0, { alive: m.health > 0, child: m.growingAge < 0, type: m.horse?.type });
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
     clientBodyTurn(c);

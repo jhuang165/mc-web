@@ -25,8 +25,13 @@ const {stdout}=await exec('java',['-cp',cp,'HorseCopyProbe'],{maxBuffer:1<<28});
 const lines=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 const pick=name=>lines.filter(l=>l.case===name);
 assert.equal(pick('steer').length,8);assert.equal(pick('rear').length,20);
+assert.equal(pick('sound').length,4);assert.ok(pick('flags').length>60);assert.equal(pick('graze').length,2,'graze rows (see stderr)');
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
  method:'Unchanged wi (EntityHorse) e(F,F) and ac() on a client world double (ahb.E true) with the HorseProbe rider double; src/horse-copy-b54.test.js replays it. steer: a horse the local player rides, per tick. rear: ac() with a rearing amount. The jump power of the steer case jumpPowerSet is written directly (wi.w(I), which only the server C0B handler calls).',
  steer:pick('steer'),rear:pick('rear')};
 await writeFile(path.join(root,'../public/research/horse-copy-reference.json'),JSON.stringify(reference)+'\n');
-console.log('horse copy reference: steer=8 rear=20');
+const sounds={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 57. Unchanged wi (EntityHorse). sound: wi.h() on a client world double (ahb.E true) with a logging Random as Entity.rand, 1500 ticks x 4 scenarios; each tick is [draws joined by space, optional sounds]. flags: the watcher-16 starters on a server world double (ahb.E false), one row each. graze: wi.e() on an all-grass server world, per tick [watcher bits, eating counter bD, draws]. src/horse-sounds-b57.test.js replays it.',
+ sound:pick('sound'),flags:pick('flags'),graze:pick('graze')};
+await writeFile(path.join(root,'../public/research/horse-sounds-reference.json'),JSON.stringify(sounds)+'\n');
+console.log('horse copy reference: steer=8 rear=20; horse sounds reference: sound=4 flags='+pick('flags').length+' graze='+pick('graze').length);
