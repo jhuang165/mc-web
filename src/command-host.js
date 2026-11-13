@@ -26,6 +26,7 @@ import { liveStackToNative } from "./anvil-container.js";
 import { beaconToNbt } from "./pyramid.js";
 import { PLAYER_NAME } from "./death-messages.js";
 import { LAN_NOTICE } from "./lan.js";
+import { profileOfSkullTile } from "./skull-profile.js";
 
 const unsupported = (text) => new CommandException("commands.generic.exception", [text], "unsupported");
 const enchantName = new Map(ENCHANTMENT_NAMES.map(([id, name]) => [id, name]));
@@ -230,7 +231,7 @@ export function createCommandHost(env) {
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       const key = `${x},${y},${z}`, stores = survival();
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
-      if (original === 144) SKULLS.create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), String(nbtGet(tag ?? new Map(), 'ExtraType', NBT.STRING, ''))); // TileEntitySkull (skull.js)
+      if (original === 144) SKULLS.create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), '', profileOfSkullTile(tag)); // TileEntitySkull (skull.js)
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
       if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (pyramid.js)
         const t = env.beaconTile(x, y, z);

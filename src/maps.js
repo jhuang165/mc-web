@@ -13,6 +13,14 @@ export const MAP_SIZE = 128, MAP_BYTES = MAP_SIZE * MAP_SIZE, MAX_SCALE = 4;
 export const DECORATION_PLAYER = 0, DECORATION_FRAME = 1, DECORATION_OFFMAP = 6;
 export const WILDCARD = 32767;
 
+// ItemMap.addInformation (adh.a(add, yz, List, boolean), bytecode-read and executed in ItemTags2Probe): only with F3+H (advanced tooltips). A map with no data
+// loaded shows "Unknown map"; otherwise "Scaling at 1:<1 << scale>" and "(Level <scale>/4)" (the literal 4, not MAX_SCALE read from data).
+export function mapTooltipLines(data, advanced) {
+  if (!advanced) return [];
+  if (!data) return ["Unknown map"];
+  return [`Scaling at 1:${1 << data.scale}`, `(Level ${data.scale}/4)`];
+}
+
 // ---- MapData (ayi) ----
 export function createMapData(id, { scale = 0, xCenter = 0, zCenter = 0, dimension = 0 } = {}) {
   return { id, scale, xCenter, zCenter, dimension, colors: new Int8Array(MAP_BYTES), decorations: new Map(), infos: new Map(), dirty: false, revision: 0 };

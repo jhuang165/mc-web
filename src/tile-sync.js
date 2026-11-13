@@ -6,7 +6,7 @@
 // cell of an S23/S22 update when the block has a tile entity (aji.u(), mr.b's other two branches). Executed with tools/probes/TileDescriptionProbe.java
 // against the unchanged jar (public/research/tile-description-reference.json): only six tile entity classes describe themselves,
 //   TileEntitySign (apm)            S33PacketUpdateSign (ii): x y z and the four lines
-//   TileEntitySkull (apn)           S35PacketUpdateTileEntity (gf) action 4: SkullType, Rot (+ ExtraType)
+//   TileEntitySkull (apn)           S35PacketUpdateTileEntity (gf) action 4: SkullType, Rot (+ the Owner profile)
 //   TileEntityMobSpawner (apj)      S35 action 1: the spawner NBT (EntityId, delays, counts, ranges, SpawnData)
 //   TileEntityBeacon (aoq)          S35 action 3: Primary, Secondary, Levels
 //   TileEntityCommandBlock (aox)    S35 action 2: Command, SuccessCount, CustomName, TrackOutput
@@ -34,7 +34,7 @@ const line = (s) => String(s ?? "").slice(0, MAX_LINE);
 export const TILE_ACTION = Object.freeze({ spawner: 1, command: 2, beacon: 3, skull: 4, pot: 5 });
 
 const signOf = (t) => ({ kind: "sign", x: t.x, y: t.y, z: t.z, text: Array.from({ length: SIGN_LINES }, (_, i) => line(t.text?.[i])) });
-const skullOf = (t) => ({ kind: "skull", action: TILE_ACTION.skull, x: t.x, y: t.y, z: t.z, type: t.type & 7, rot: t.rot & 15, owner: t.owner || "" });
+const skullOf = (t) => ({ kind: "skull", action: TILE_ACTION.skull, x: t.x, y: t.y, z: t.z, type: t.type & 7, rot: t.rot & 15, owner: t.owner || "", ...(t.profile ? { profile: t.profile } : {}) });
 const spawnerOf = (s) => ({ kind: "spawner", action: TILE_ACTION.spawner, x: s.x, y: s.y, z: s.z, nbt: spawnerJSON(s) });
 const beaconOf = (t) => ({ kind: "beacon", action: TILE_ACTION.beacon, x: t.x, y: t.y, z: t.z, primary: t.primary, secondary: t.secondary, levels: t.levels });
 // Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
@@ -97,7 +97,7 @@ export function applyTiles(list, stores) {
       tile.editable = false; // S33 func_145839... sets the lines and the tile is not editable on a client
       n++;
     } else if (t.kind === "skull" && block === SKULL && stores.skulls) {
-      stores.skulls.create(x, y, z, t.type | 0, t.rot | 0, typeof t.owner === "string" ? t.owner : "");
+      stores.skulls.create(x, y, z, t.type | 0, t.rot | 0, typeof t.owner === "string" ? t.owner : "", t.profile);
       n++;
     } else if (t.kind === "spawner" && block === MOB_SPAWNER && stores.spawners && t.nbt && typeof t.nbt === "object") {
       stores.spawners.add({ x, y, z, ...t.nbt });

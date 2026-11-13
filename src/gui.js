@@ -7,6 +7,7 @@ import {potionName,potionTooltip,getPotionEffects} from './potions.js';
 import {stackName} from './item-names.js';
 import {translate} from './lang.js';
 import {bookInfoLines} from './books.js';
+import {ITEM_FILLED_MAP,mapStore,mapTooltipLines} from './maps.js';
 const POTION_CLASS={'#aaaaaa':'gray','#ff5555':'red','#aa00aa':'purple','#5555ff':'blue'};
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
 export function pendingContainerStacks(view){
@@ -46,9 +47,12 @@ export function tooltipLines(item,stack,advanced=false){
  const lines=[{text:stackName(stack,{[stack.id]:item})}],attack=item.attack;
  if(potion)for(const l of potionTooltip(stack.damage|0,stackPotionEffects(stack)))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
+ else if(stack.id===ITEM_FILLED_MAP&&!advanced)lines[0].text+=` #${stack.damage|0}`; // ItemStack.getTooltip: an unnamed filled map shows its id (executed, item-tags2-reference.json)
  for(const text of fireworkLines(stack))lines.push({text,color:'gray'});
  // ItemEditableBook.addInformation: the gray "by <author>" line (the name is the title, see item-names.js).
  for(const text of bookInfoLines(stack))lines.push({text:text.slice(2),color:'gray'});
+ // ItemMap.addInformation (maps.js): the scale lines with F3+H; the map data is read, not created, as on a client world that has not received it yet.
+ if(stack.id===ITEM_FILLED_MAP)for(const text of mapTooltipLines(mapStore.get(stack.damage|0),advanced))lines.push({text,color:'gray'});
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
  const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;

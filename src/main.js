@@ -1463,7 +1463,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         arrow: (e) => { const a = arrows.make(e, e.rand, { shooter: null, pickup: 1 }); arrows.list.push(a); arrows.joined(a); },
         thrown: (kind, e) => {
           const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
-          if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; (mobs.potions?.projectiles ?? projectiles).balls.push(b); mobs.joined?.(b, "potion"); } // potions and bottles walk as "potion"
+          if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, ...(Array.isArray(e.custom) ? { custom: e.custom.map((x) => ({ ...x })) } : {}), owner: null }; (mobs.potions?.projectiles ?? projectiles).balls.push(b); mobs.joined?.(b, "potion"); } // potions and bottles walk as "potion"
           else { projectiles.balls.push(ball); projectiles.joined?.(ball); }
         },
         spawnEgg: (stack, at, roll) => { if (spawnEggMob({ mobs }, stack.damage, at, stack.displayName, roll)) saved = false; }, // BehaviorDispenseSpawnEgg

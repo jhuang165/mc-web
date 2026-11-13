@@ -192,8 +192,8 @@ const PROJECTILE = {
   arrow: projectile((host, e) => host.arrow?.(e), (r, x, y, z, v, i) => arrowHeading(r, x, y, z, v, i), PROJECTILE_VELOCITY, PROJECTILE_INACCURACY, 1002),
   egg: throwable("egg", PROJECTILE_VELOCITY, PROJECTILE_INACCURACY, 1002),
   snowball: throwable("snowball", PROJECTILE_VELOCITY, PROJECTILE_INACCURACY, 1002),
-  // The splash potion's anonymous subclass: velocity * 1.25F, inaccuracy * 0.5F.
-  potion: projectile((host, e, s) => host.thrown?.("potion", { ...e, damage: s.damage }, s), (r, x, y, z, v, i) => heading(r, x, y, z, v, i), f(PROJECTILE_VELOCITY * f(1.25)), f(PROJECTILE_INACCURACY * f(0.5)), 1002),
+  // The splash potion's anonymous subclass (kw, bytecode-read): new EntityPotion(world, x, y, z, stack.copy()), so its CustomPotionEffects fly along; velocity * 1.25F, inaccuracy * 0.5F.
+  potion: projectile((host, e, s) => host.thrown?.("potion", { ...e, damage: s.damage, ...(Array.isArray(s.customPotionEffects) ? { custom: s.customPotionEffects.map((x) => ({ ...x })) } : {}) }, s), (r, x, y, z, v, i) => heading(r, x, y, z, v, i), f(PROJECTILE_VELOCITY * f(1.25)), f(PROJECTILE_INACCURACY * f(0.5)), 1002),
   // BehaviorDispenseExpBottle (ku, bytecode-read): EntityExpBottle with the potion's velocity * 1.25F and inaccuracy * 0.5F.
   expBottle: projectile((host, e, s) => host.thrown?.("expBottle", e, s), (r, x, y, z, v, i) => heading(r, x, y, z, v, i), f(PROJECTILE_VELOCITY * f(1.25)), f(PROJECTILE_INACCURACY * f(0.5)), 1002),
 };

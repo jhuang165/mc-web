@@ -21,7 +21,7 @@ import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 // hooks. Random sources stay separate: Math.random drives gravel/crops/ore XP, while
 // the tree system's random stream drives leaf drops as it does in the browser.
 // BlockSkull.breakBlock: the item of the tile's SkullType (none in Creative, whose harvest sets metadata bit 8).
-const skullBreakDrops = (p, drops) => (drops ? skullDrops(SKULLS.tile(...p)?.type ?? 0) : []);
+const skullBreakDrops = (p, drops) => (drops ? skullDrops(SKULLS.tile(...p)?.type ?? 0, SKULLS.tile(...p)?.profile) : []);
 export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, trees, heldTool }, coords, {
   creative = false,
   random = Math.random,
@@ -120,6 +120,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
       d.id,
       d.count,
       d.damage ?? (d.id === block && block === QUARTZ_BLOCK ? quartzDropDamage(meta) : d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58 || block === 4 || block === 48 || block===5 || block===71) ? ((block===4||block===5||block===71)?meta&3:block===48?meta&7:meta) : 0),
+      undefined, d.tags, // BlockSkull's SkullOwner profile (skull.js)
     )), ...p);
     if (enchanted) { if (enchanted.xp) xpOrbs.spawn(enchanted.xp, { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 }); }
     else if (drop) xpOrbs.spawn(populationXp(block,random)||oreExperience(block, random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });

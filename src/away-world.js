@@ -129,7 +129,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       thrown: (kind, e) => {
         if (!ents) { unsupported.hit = true; return; }
         const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
-        if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, owner: null }; ents.mobs.potions.projectiles.balls.push(b); ents.mobs.joined(b, "potion"); } // as main.js: potions and bottles walk as "potion"
+        if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, ...(Array.isArray(e.custom) ? { custom: e.custom.map((x) => ({ ...x })) } : {}), owner: null }; ents.mobs.potions.projectiles.balls.push(b); ents.mobs.joined(b, "potion"); } // as main.js: potions and bottles walk as "potion"
         else { ents.projectiles.balls.push(ball); ents.projectiles.joined(ball); }
       },
       spawnEgg: (stack, at, roll) => { if (ents) spawnEggMob({ mobs: ents.mobs }, stack.damage, at, stack.displayName, roll); else unsupported.hit = true; }, // BehaviorDispenseSpawnEgg
