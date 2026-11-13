@@ -5,6 +5,7 @@ import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { useFlags } from './multiplayer/presence.js';
 import { bipedPose } from './player-renderer.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const input = (hotbar, extra = {}) => ({ type: 'input', controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: [...hotbar, ...Array(9 - hotbar.length).fill(null)], ...extra });
@@ -18,7 +19,7 @@ function fixture(gameMode) {
 function pair(gameMode, bobX = 66.5, hotbar = [{ id: 3 }]) {
   const s = fixture(gameMode), a = s.addPlayer('a', 'Alice', key(1)), b = s.addPlayer('b', 'Bob', key(2));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 }); b.position.copy({ x: bobX, y: 10, z: 64.5 });
-  s.input('a', input(hotbar)); s.input('b', input([]));
+  seed(s, 'a', input(hotbar)); s.input('b', input([]));
   s.world.set(64, 11, 61, 2); // dirt
   for (let i = 0; i < 3; i++) s.tick(); // the players settle onto the floor
   return { s, a, b };
@@ -86,12 +87,12 @@ test('S25 crack stages go to the other players within 32 blocks, never the digge
 test('an instant block breaks at the start and shows no crack; air under a start sends stage 10', () => {
   const { s, a, b } = pair('survival');
   s.world.set(64, 11, 61, 0); s.world.set(64, 10, 61, 44); // red flower, hardness 0, selectable only low in its cell: look a little down
-  s.input('a', input([{ id: 3 }], { pitch: -0.32 }));
+  seed(s, 'a', input([{ id: 3 }], { pitch: -0.32 }));
   drain(b);
   s.queueDig('a', 0); s.tick();
   assert.equal(s.world.get(64, 10, 61), 0);
   assert.deepEqual(drain(b), []);
-  s.input('a', input([{ id: 3 }])); s.world.set(64, 11, 60, 2);
+  seed(s, 'a', input([{ id: 3 }])); s.world.set(64, 11, 60, 2);
   s.queueDig('a', 0); s.tick();
   assert.deepEqual(drain(b).map(c => c.stage), [Math.trunc(Math.fround(Math.fround(s.digRate(a, [64, 11, 60])) * 10))], 'the ray passes the air to the next block');
 });
@@ -109,14 +110,14 @@ test('item in use: sword blocks, bow draws, held change clears, eating needs hun
   const using = () => s.presence().find(p => p.id === 'a').using;
   s.queueUse('a', true); s.tick();
   assert.equal(using(), true); assert.equal(a.itemInUse.block, true);
-  s.input('a', input([{ id: 115 }, { id: 127 }, { id: 200 }, { id: 320 }], { current: 1 })); s.tick();
+  seed(s, 'a', input([{ id: 115 }, { id: 127 }, { id: 200 }, { id: 320 }], { current: 1 })); s.tick();
   assert.equal(using(), false, 'a held item change clears the use');
   s.queueUse('a', true); s.tick();
   assert.equal(a.itemInUse.bow, true);
   for (let i = 0; i < 10; i++) s.tick();
   assert.ok(a.itemInUse.ticks >= 10);
   s.queueUse('a', false); s.tick(); assert.equal(using(), false);
-  s.input('a', input([{ id: 115 }, { id: 127 }, { id: 200 }, { id: 320 }], { current: 2 }));
+  seed(s, 'a', input([{ id: 115 }, { id: 127 }, { id: 200 }, { id: 320 }], { current: 2 }));
   s.queueUse('a', true); s.tick(); assert.equal(using(), false, 'a full player cannot eat');
   a.survival.food = 10;
   s.queueUse('a', true); s.tick(); assert.equal(using(), true);

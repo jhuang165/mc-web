@@ -92,7 +92,7 @@ export class ServerContainers {
     if (!win || m?.windowId !== win.id || win.ready || !Array.isArray(m.slots) || m.slots.length !== 36) return false;
     const stacks = m.slots.map(cleanStack);
     if (stacks.some(s => s === undefined)) return false;
-    for (let i = 0; i < 36; i++) p.survival.inventory.main[i] = stacks[i];
+    if (!this.sim.serverItems.authority(p)) for (let i = 0; i < 36; i++) p.survival.inventory.main[i] = stacks[i]; // b61: a Survival server inventory is not overwritten by the client's copy
     win.ready = true;
     this.sendAll(p); this.sendProps(p, true);
     return true;

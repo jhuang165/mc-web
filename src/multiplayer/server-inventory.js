@@ -6,10 +6,11 @@
 // refused plus the whole window (`invItems`, S30), after which further clicks are ignored until the client acks (`invAck`, C0F) or 100 ticks pass.
 // Server-made changes (armour wear from a hit, anything else) are diffed at the end of each tick and sent as `invSet` (S2F). C0D (`invClose`) runs
 // ContainerPlayer.onContainerClosed: the cursor and the crafting grid are thrown as items.
-// Wire names (all prefixed inv): out `invItems`, `invSet`, `invConfirm`, `invBroke`; in `invClick`, `invAck`, `invClose`.
+// Wire names (all prefixed inv): out `invItems`, `invSet`, `invConfirm`, `invBroke`; in `invClick`, `invAck`, `invClose`, `invCreative` (b61, C10).
 import { ITEMS } from '../survival.js';
 import { copyStack, OUTSIDE } from '../inventory.js';
 import { cleanStack, wireStack } from './server-containers.js';
+import { SpamCounter, creativeDrop } from '../server-handlers.js';
 
 const f = Math.fround;
 const PENDING_TICKS = 100, SLOTS = 45;
@@ -50,19 +51,15 @@ export class ServerInventory {
     const result = c.click(m.slot, m.button, m.mode);
     this.drain(p);
     if (same(claimed, result ? copyStack(result) : null)) {
+      // b61: detectAndSendChanges after an accepted click: the slots, armour, grid and cursor the click changed go out as S2F-like corrections
+      // (`slot` for main slots through ServerItems.settle, `invSet` for the rest) at the end of this tick, even when the client predicted the same, so a divergence is overwritten at once.
       this.out(p, { type: 'invConfirm', action: m.action, accepted: true });
-      this.adopted(p);
     } else {
       win.pending = this.sim.ticks + PENDING_TICKS;
       this.out(p, { type: 'invConfirm', action: m.action, accepted: false });
       this.resend(p);
     }
     return true;
-  }
-  // The client drew the click already: its slots count as told. The main slots the click changed are marked as seen (ServerItems.settle would send them as `slot`).
-  adopted(p) {
-    p.survival.inventory.main.forEach((s, i) => { p.seen[i] = s ? copyStack(s) : null; });
-    p.invWin.last = this.snapshot(p);
   }
   // S30: the whole window. Every main slot counts as corrected at this seq, so an input still in flight cannot undo it.
   resend(p) {
@@ -97,6 +94,33 @@ export class ServerInventory {
     if (now.cursor !== last.cursor) msg.cursor = wireStack(inv.cursor);
     p.invWin.last = now;
     if (armor.length || grid.length || 'cursor' in msg) { msg.seq = p.seq; this.out(p, msg); }
+  }
+
+  // ---- Creative inventory (C10 CPacketCreativeInventoryAction, `invCreative`) ----
+  // NetHandlerPlayServer.processCreativeInventoryAction (bytecode-read, nh.a(jm)): only for a Creative player. The stack is valid when null, or its item exists,
+  // damage >= 0 and 0 < size <= 64. Slot 1..44 (grid 1-4, armour 5-8, main 9-35, hotbar 36-44; not the result slot 0) with a valid stack: ContainerPlayer.putStackInSlot
+  // (null clears), then the container is told to send the change. Slot < 0 with a valid stack and the spam counter (field m) under 200: m += 20, then the stack is thrown
+  // (EntityPlayer.dropPlayerItemWithRandomChoice(stack, true); a null stack throws nothing) and the entity age is set to 4800 (xk.e, creative despawn time).
+  // Anything else is ignored. Returns true when the stack and slot were well formed.
+  creative(p, m) {
+    if (!p || p.dead || !p.survival.creative || !Number.isInteger(m?.slot)) return false;
+    const stack = cleanStack(m.item);
+    if (stack === undefined) return false; // not a valid stack: ignored
+    if (m.slot >= 1 && m.slot < SLOTS) {
+      const win = this.win(p);
+      win.container.slots[m.slot].put(stack);
+      // Creative's own client drew it: the echo of this slot is suppressed (the main slots are also mirrored beside this message).
+      if (m.slot >= 9) { const i = m.slot >= 36 ? m.slot - 36 : m.slot; p.seen[i] = stack ? copyStack(stack) : null; }
+      win.last = this.snapshot(p);
+      return true;
+    }
+    if (m.slot < 0) {
+      const counter = (p.dropSpam ??= new SpamCounter());
+      if (!creativeDrop(counter, this.sim.ticks, stack)) return true;
+      if (stack) { const e = this.sim.items.dropPlayer(copyStack(stack), p.position, p.yaw, p.pitch, true); if (e) e.age = 4800; } // scatter: dropPlayerItemWithRandomChoice(stack, true)
+      return true;
+    }
+    return true; // slot 0 or above 44: well formed, ignored
   }
 
   // ---- a broken tool ----

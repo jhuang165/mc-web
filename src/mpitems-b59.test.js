@@ -6,6 +6,7 @@ import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { inventoryFields, applySlots, pickupFit } from './multiplayer/server-items.js';
 import { PlayerInventory, makeStack } from './inventory.js';
 import { ITEMS } from './survival.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const stack = (id, count = 1, damage = 0) => ({ id, count, damage });
@@ -20,7 +21,7 @@ function fixture(gameMode = 'survival') {
 function setup(hotbar, block = 2, gameMode = 'survival') {
   const s = fixture(gameMode), a = s.addPlayer('a', 'Alice', key(1));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 });
-  s.input('a', input(hotbar));
+  seed(s, 'a', input(hotbar));
   if (block) s.world.set(64, 11, 61, block);
   for (let i = 0; i < 3; i++) s.tick();
   return { s, a };
@@ -38,13 +39,13 @@ test('placing spends the server stack and sends an S2F style correction the clie
   const m = slots(a)[0];
   assert.deepEqual([m.seq, m.slots[0].slot, m.slots[0].stack.count], [1, 0, 4]);
   // a stale input (count 5, sent before the client saw the correction) must not undo it
-  s.input('a', input([stack(3, 5)], { ack: 0 }));
+  seed(s, 'a', input([stack(3, 5)], { ack: 0 }));
   assert.equal(a.survival.inventory.main[0].count, 4);
   // the client applies the message, acknowledges and the server follows the client again
   const client = new PlayerInventory(ITEMS, [stack(3, 5)]), st = {};
   applySlots(client, m, st);
   assert.equal(client.main[0].count, 4); assert.equal(st.ack, 1);
-  s.input('a', input([stack(3, 2)], { ack: 1 }));
+  seed(s, 'a', input([stack(3, 2)], { ack: 1 }));
   assert.equal(a.survival.inventory.main[0].count, 2, 'an acknowledged slot is the client\'s again (inventory moves)');
 });
 
@@ -73,7 +74,7 @@ test('a break wears the held tool on the server and the damage goes back as a co
 test('the inventory beyond the hotbar is mirrored and saved with full tags', () => {
   const { s, a } = setup([], 0);
   const rest = Array(27).fill(null); rest[3] = { id: 3, count: 40, damage: 0 };
-  s.input('a', input([], { rest }));
+  seed(s, 'a', input([], { rest }));
   assert.equal(a.survival.inventory.main[12].count, 40);
   const saved = s.save().players.find(([k]) => k === key(1))?.[1] ?? (s.savePlayer(a));
   assert.equal(saved.player.slots[12].count, 40);
@@ -145,15 +146,21 @@ test('pickup: a partial fit takes part of the stack, the rest stays; a full take
   const { s, a } = setup([], 0);
   const b = s.addPlayer('b', 'Bob', key(2)); b.position.copy({ x: 64.5, y: 10, z: 64.5 });
   const e = s.items.spawn(stack(3, 10), 64.5, 10.5, 64.5, { motion: [0, 0, 0] });
-  const eid = e.eid;
+  const eid = e.eid, inv = a.survival.inventory;
+  for (let i = 0; i < 36; i++) inv.main[i] = stack(1, 64);
+  inv.main[5] = stack(3, 60); // b61: the server's own inventory decides the fit (4 of the 10)
   assert.equal(s.pickup('a', [eid], [4]), true);
   assert.deepEqual(a.collectedOut.map(t => t.count), [4]);
+  assert.equal(a.collectedOut[0].invAdded, true, 'the server added it; the client must not');
+  assert.equal(inv.main[5].count, 64);
   assert.equal(s.itemList()[0].stack.count, 6, 'the remainder stays on the ground');
   assert.deepEqual(s.serverItems.taken, [{ i: eid, by: 'a', partial: true }]); // b60: S0D goes out for a partial take too
   s.serverItems.taken.length = 0;
   assert.equal(s.pickup('a', [eid], [0]), true); assert.equal(a.collectedOut.length, 1, 'no room, nothing leaves');
+  inv.main[0] = null;
   s.pickup('a', [eid], [64]);
   assert.deepEqual(a.collectedOut.map(t => t.count), [4, 6]);
+  assert.equal(inv.main[0].count, 6);
   const t = s.tick();
   assert.deepEqual(t.taken, [{ i: eid, by: 'a' }]);
   assert.ok(b.soundsOut.some(x => x.name === 'random.pop' && x.volume === Math.fround(0.2)));

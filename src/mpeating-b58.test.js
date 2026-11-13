@@ -12,6 +12,7 @@ import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { createRemoteUse, tickRemoteUse, remoteEye, useAction } from './multiplayer/remote-eating.js';
 import { useFlags } from './multiplayer/presence.js';
 import { ITEMS } from './survival.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 
 const ref = JSON.parse(await readFile(new URL('../public/research/mpeating-reference.json', import.meta.url)));
 const use = ref.records.filter(r => r.case === 'use');
@@ -91,7 +92,7 @@ function pair(hotbar, bobX = 67.5) {
   world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
   const s = new DedicatedSimulation({}, { world, gameMode: 'survival' }), a = s.addPlayer('a', 'Alice', key(1)), b = s.addPlayer('b', 'Bob', key(2));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 }); b.position.copy({ x: bobX, y: 10, z: 64.5 });
-  s.input('a', { type: 'input', controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: [...hotbar, ...Array(9 - hotbar.length).fill(null)] });
+  seed(s, 'a', { type: 'input', controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: [...hotbar, ...Array(9 - hotbar.length).fill(null)] });
   s.input('b', { type: 'input', controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: Array(9).fill(null) });
   for (let i = 0; i < 3; i++) s.tick();
   a.survival.food = 10;

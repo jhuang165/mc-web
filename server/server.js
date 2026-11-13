@@ -199,6 +199,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'invClick') simulation.invClick(id, m); // b60: C0E window 0 (the player's inventory)
         else if (m.type === 'invAck') simulation.invAck(id); // b60: C0F window 0
         else if (m.type === 'invClose') simulation.invClose(id); // b60: C0D window 0
+        else if (m.type === 'invCreative') simulation.invCreative(id, m); // b61: C10 creative inventory slot (slot -1 drops)
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'clickWindow') simulation.clickWindow(id, m); // C0E
         else if (m.type === 'windowInventory') simulation.windowInventory(id, m); // the client's 36 slots after S2D

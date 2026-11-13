@@ -17,7 +17,8 @@ const reader = new PlayerInventory(ITEMS);
 export const sameSlot = (a, b) => (!a && !b) || (!!a && !!b && a.count === b.count && sameStackItem(a, b));
 
 // Client side: the fields an input message carries. `state` is a plain object kept by the caller ({ ack, lastRest, sentAt }).
-export function inventoryFields(inventory, state, tick = 0) {
+export function inventoryFields(inventory, state, tick = 0, authoritative = false) {
+  if (authoritative) return { ack: state.ack ?? 0 }; // b61: the server owns a Survival inventory; nothing is mirrored
   const wire = s => (s ? copyStack(s) : null), out = { hotbar: inventory.main.slice(0, 9).map(wire), ack: state.ack ?? 0 };
   const rest = JSON.stringify(inventory.main.slice(9, MAIN).map(wire));
   if (rest !== state.lastRest || tick - (state.sentAt ?? -1e9) >= 200) { out.rest = JSON.parse(rest); state.lastRest = rest; state.sentAt = tick; }
@@ -74,8 +75,12 @@ export class ServerItems {
     }
     return out;
   }
+  // b61: a Survival player's inventory is the server's alone (clicks, pickups, placing and wear all run here and come back as `slot` / `invSet`), so the client's
+  // hotbar / rest fields are ignored for it. Creative keeps the mirror: its screen edits (pick block, the item grid) still reach the server through it beside C10 (`invCreative`).
+  authority(p) { return this.survival && !p.survival.creative; }
   // `input`: false when the hotbar is malformed. Slots the server corrected after the client's ack keep the server's value.
-  adopt(p, message) {
+  adopt(p, message, force = false) { // `force`: tests seed a Survival inventory through the old mirror path
+    if (!force && (this.authority(p) || message.hotbar === undefined)) return true; // b61: no mirror (a Survival player, or a Creative client that sent no fields)
     const inv = p.survival.inventory, main = inv.main;
     const hot = this.parse(message.hotbar, 9, main.slice(0, 9));
     if (!hot) return false;
@@ -112,13 +117,17 @@ export class ServerItems {
   pickup(p, eids, fits) {
     const sim = this.sim;
     if (!p || p.dead || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
-    const room = new Map(), byStack = new Map();
+    const room = new Map(), byStack = new Map(), auth = this.authority(p);
     for (const e of sim.items.items) { const at = eids.indexOf(e.eid); if (at >= 0) { byStack.set(e.stack, e); room.set(e.eid, Number.isInteger(fits?.[at]) ? fits[at] : Infinity); } }
     if (!byStack.size) return false;
     sim.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => {
-      const e = byStack.get(stack), n = e ? Math.min(stack.count, room.get(e.eid)) : 0;
+      const e = byStack.get(stack);
+      let n = e ? Math.min(stack.count, room.get(e.eid)) : 0;
+      if (auth && e) { // b61: EntityItem.onCollideWithPlayer -> InventoryPlayer.addItemStackToInventory on the server's own inventory; the client's fit is only a hint
+        const left = copyStack(stack); p.survival.inventory.add(left); n = stack.count - left.count;
+      }
       if (!(n > 0)) return false;
-      (p.collectedOut ??= []).push(copyStack({ ...stack, count: n }));
+      (p.collectedOut ??= []).push(Object.assign(copyStack({ ...stack, count: n }), auth ? { invAdded: true } : {})); // `invAdded`: the slots follow as `slot`; the client must not add it again
       (sim.events ??= []).push({ type: 'pickup', id: p.id, item: stack.id }); // the achievement triggers (server-broadcast.js pickedAchievement)
       sim.achievements.diamondsToYou(p, stack, e); // xk.b_: a diamond thrown by another online player awards the thrower (b60)
       stack.count -= n;

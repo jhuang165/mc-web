@@ -13,6 +13,7 @@ import { IDLE_INPUT, PROTOCOL } from './multiplayer/protocol.js';
 import { ServerSocial } from './server-broadcast.js';
 import { serializeComponent } from './chat-component.js';
 import { createDedicatedServer } from '../server/server.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const token = 'test-only-not-a-deployed-server-key', origin = 'http://localhost:5179';
@@ -26,7 +27,7 @@ function fixture(opts = {}) {
 function joined(opts, hotbar = []) {
   const s = fixture(opts), a = s.addPlayer('a', 'Alice', key(1));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 });
-  s.input('a', input(hotbar));
+  seed(s, 'a', input(hotbar));
   for (let i = 0; i < 3; i++) s.tick();
   return { s, a };
 }
