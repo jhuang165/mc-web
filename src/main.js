@@ -265,7 +265,7 @@ import { Torches } from "./torches.js";
 import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "./redstone-blocks.js";
 import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { createRecordHud } from "./jukebox.js";
-import { discName } from "./note-jukebox-content.js";
+import { discName, isDisc } from "./note-jukebox-content.js";
 import { MusicTicker, ambientMusicType, recordSound } from "./music.js";
 import { MoodSound, moodLight } from "./cave-ambience.js";
 import { status as bossStatus } from "./boss-bar.js";
@@ -906,6 +906,13 @@ function applyMultiplayerTick(message) {
       splashBreak(scene.fx, scene.fx.worldRandom, event.damage & 32767, event.x, event.y, event.z); // a server splash potion's world event 2002
     } else if (event?.type === 'fx' && event.kind === 'particle' && typeof event.name === 'string') {
       scene.fx.spawn(event.name, event.x, event.y, event.z, event.vx, event.vy, event.vz); // an eye set in a portal frame
+    } else if (event?.type === 'fx' && event.kind === 'landingDust' && [event.x, event.y, event.z, event.data].every(Number.isInteger)) {
+      // A player's landing over 3 blocks on the server (RenderGlobal.playAuxSFX 2006, server-contacts.js landingHooks).
+      scene.particles.landingDust(world, event.x, event.y, event.z, Math.min(event.data, 64), [position.x, position.y + PHYSICS.eye, position.z]);
+    } else if (event?.type === 'record' && [event.x, event.y, event.z].every(Number.isInteger) && (event.item === null || isDisc(event.item))) {
+      // A server jukebox's record (RenderGlobal.playRecord through playAuxSFX 1005; null stops the one at x, y, z).
+      if (event.item) recordHud.show(event.item);
+      sounds.playRecord(event.item ? recordSound(discName(event.item), event.x, event.y, event.z) : null, event.x, event.y, event.z);
     } else if (event?.type === 'firework' && [event.x, event.y, event.z].every(Number.isFinite)) {
       // A server rocket's burst (EntityFireworkRocket.handleHealthUpdate 17 -> EntityFireworkStarterFX).
       fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];

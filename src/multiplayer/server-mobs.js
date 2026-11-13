@@ -30,6 +30,7 @@ import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
 import { mobBox } from '../mob-spawner.js';
 import { copyStack, makeStack } from '../inventory.js';
+import { watchMobContacts } from './server-contacts.js';
 
 const MOB_SPAWNER = 52;
 export const MOB_RANGE = 48; // blocks: the mobs a tab is told about (EntityTracker tracks most living entities to 80; 48 keeps a tick message small)
@@ -98,6 +99,7 @@ export class ServerMobs {
     ew.spawnPoint = () => { const s = sim.worldSpawn?.() ?? sim.world.spawn(); return { x: Math.floor(s.x), y: Math.floor(s.y), z: Math.floor(s.z) }; };
     ew.localDifficulty = (x, y, z) => localDifficulty(ew.difficulty, sim.time, 0, sim.world.isLoaded(x, z) && y >= 0 && y < sim.world.height);
     ew.shoot = (e, target, scale) => this.arrows.skeletonShoot(e, target, scale, ew.difficulty);
+    watchMobContacts(sim, ew); // redstone ore under a mob's steps, farmland under its landing (server-contacts.js)
     ew.loadTotalTime(Number.isSafeInteger(saved.totalTime) ? saved.totalTime : sim.ticks);
     // Ids stay unique across the kept columns: new mobs are numbered after every saved one.
     let next = Number.isSafeInteger(saved.nextId) ? saved.nextId : 1;

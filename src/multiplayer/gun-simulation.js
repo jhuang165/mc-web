@@ -16,6 +16,7 @@ import { makeStack } from '../inventory.js';
 import { movePlayer } from '../player-physics.js';
 import { drainKnockback } from '../player-knockback.js';
 import { finishPlayerMovement } from '../player-environment.js';
+import { stepPlayer, landingHooks } from './server-contacts.js';
 import { GUNS, AMMO, P320, AKM, M870 } from '../mods/guns/catalog.js';
 import { MELEE, gunSmithRecipes } from '../mods/guns/install.js';
 import { ATTACHMENTS, GUN_SMITH } from '../mods/guns/catalog.js';
@@ -394,9 +395,11 @@ export class GunSimulation extends DedicatedSimulation {
       drainKnockback(p.survival, p.velocity, p.position, this.random);
       // A ridden pig, horse, cart or boat takes the input instead (server-riding.js rideTick); sneak gets off.
       const from = { x: p.position.x, y: p.position.y, z: p.position.z };
-      const moved = rideTick(this, p, controls) ?? movePlayer(p, controls);
+      const riding = !!p.rider?.vehicle, moved = rideTick(this, p, controls) ?? movePlayer(p, controls);
       fallStat(p); // EntityPlayer.fall, before the landing resets the distance
-      finishPlayerMovement(p, moved);
+      // The landing's farmland, dust and fall sounds, then the steps, splash and redstone ore (server-contacts.js); a rider takes no steps.
+      finishPlayerMovement(p, moved, riding ? undefined : landingHooks(this, p));
+      if (!riding) stepPlayer(this, p, from, moved, !!p.inWater);
       if (p.position.y < -64) {
         if (p.survival.creative) { p.position.copy(this.spawnPoint()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
         else { p.survival.damage(1000, 'void'); p.lastHit = null; }

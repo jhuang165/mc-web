@@ -1,7 +1,7 @@
 import { World, PHYSICS, WATER, LAVA, raycast, collides } from '../world.js';
 import { Survival, ITEMS, burnTime } from '../survival.js';
-import { Hoppers, hopperBehaviour } from '../hopper.js';
-import { containerSlotsOf } from '../redstone-runtime.js';
+import { Hoppers } from '../hopper.js';
+import { containerSlotsOf, installSharedBehaviours, redstoneEntitiesIn } from '../redstone-runtime.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
 import { Farming } from '../farming.js';
@@ -16,6 +16,7 @@ import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { NetherLive } from '../nether-portal-live.js';
+import { PopulationBlocks } from '../population-blocks.js';
 import { solidTopSurface } from '../doors-panes.js';
 import { normalCube } from '../world.js';
 import { gameRule } from '../game-rules.js';
@@ -96,6 +97,10 @@ export class DedicatedSimulation {
     { const next = this.world.onChange; this.world.onChange = (x, y, z, old, now) => { next?.(x, y, z, old, now); for (const dy of [1, 0]) { const d = carpetNeighbourChange(this.world, x, y + dy, z); if (d) dropBlock([d], x, y + dy, z); } }; }
     new Doors(this.world, { drop: dropBlock, apply: noop }).watch();
     new Beds(this.world, { drop: dropBlock, apply: noop }).watch();
+    // The generated plants' support (flowers, tall grass, mushrooms, vines, cocoa, lily pads, flower pots), the mushrooms' spread,
+    // cocoa growth and redstone ore (lit by a touch, unlit by its random tick), as main.js runs them (population-blocks.js).
+    this.populationBlocks = new PopulationBlocks(this.world, { random: this.weather.random, drop: dropBlock, apply: noop }).watch();
+    this.world.populationBlocks = this.populationBlocks;
     // Nether portals (BlockFire.onBlockAdded lights a complete obsidian frame, a broken frame takes its portal down), the portal's
     // pig zombies (BlockPortal.updateTick, Overworld only) and nether wart (nether-portal-live.js).
     this.netherLive = new NetherLive(this.world, { random: this.weather.random, apply: noop, drop: dropBlock,
@@ -108,16 +113,27 @@ export class DedicatedSimulation {
       sound: (sound, x, y, z, volume, pitch) => { this.mobs?.sound({ sound, position: { x, y, z }, volume, pitch }); },
       // Block.dropBlockAsItem for what the engine breaks (a piston pushing a torch, a wire losing its support).
       drop: (x, y, z, d) => { this.play?.items.spawn(makeStack(d.id, d.count, d.damage || 0), x, y, z, { delay: 10 }); },
-      entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
+      // Plates, tripwire strings, detector rails and comparators over every server entity (redstone-runtime.js redstoneEntitiesIn),
+      // not only the players: mobs, dropped items, thrown things, arrows, orbs, primed TNT, minecarts, boats and falling blocks.
+      entitiesIn: redstoneEntitiesIn({
+        players: () => [...this.players.values()].filter(p => !p.dead).map(p => ({ position: p.position, width: PHYSICS.width, height: PHYSICS.height, player: true, living: true })),
+        mobs: () => this.mobs?.ew ?? null, items: () => this.play?.items.items ?? [],
+        thrown: () => [...(this.mobs?.projectiles.balls ?? []), ...(this.mobs?.ew.potions?.balls ?? [])],
+        arrows: () => this.mobs?.arrows.list ?? [], orbs: () => this.mobs?.orbs.orbs ?? [], primed: () => this.mobs?.primed ?? [],
+        minecarts: () => this.mobs?.minecarts ?? null, boats: () => this.mobs?.boats.carts ?? [], falling: () => this.falling.entities ?? [],
+      }),
       environment: () => ({ sky: this.world.hasNoSky ? 0 : 15, skylightSubtracted: this.darkness, celestialAngle: this.celestialAngle * Math.PI * 2, noSky: !!this.world.hasNoSky }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
       // Comparators read the shared tile inventories (redstone-runtime.js containerSlotsOf), as in the browser.
       containerSlots: containerSlotsOf(this.world, { chests: () => this.tiles.chests, furnaces: () => this.tiles.furnaces, dispensers: () => this.tiles.dispensers,
         hoppers: () => this.tiles.hoppers, brewing: () => this.tiles.brewing, maxStack: s => this.tiles.inventory.maxStack(s) }),
     });
-    this.redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
+    // The browser runtime's block behaviours (redstone-runtime.js installSharedBehaviours): fence gates and trapdoors, note blocks,
+    // jukeboxes, trapped chests (power from the chest's viewers), hoppers and the powered / detector / activator rails.
+    this.music = installSharedBehaviours(this.redstone, { chests: () => this.tiles.chests, music: this.musicHooks() });
     this.installDispensers();
     this.redstone.restore(saved.redstone);
+    this.music.restore(saved.music);
     this.pistons = installServerPistons(this); // entity pushes, moving-block collision, the tabs' moving tiles (server-pistons.js)
     // TileEntityHopper.updateEntity for every hopper in a ticking column (hopper.js), over the shared tile maps; a move tells the
     // comparators (RedstoneWorld.containerChanged). The gun server's dropped items are the ones a hopper sucks up (hopperItems); its
@@ -138,7 +154,9 @@ export class DedicatedSimulation {
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
-    this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.netherLive.randomTick(x, y, z, b);
+    // WorldServer.func_147456_g's random block ticks, in main.js's order; a tripwire hook or string runs its updateTick on the redstone.
+    this.weather.blockTick = (x, y, z, b) => this.populationBlocks.randomTick(x, y, z, b) || this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b)
+      || this.plants.randomTick(x, y, z, b) || this.netherLive.randomTick(x, y, z, b) || ((b === 113 || b === 114) && (this.redstone.randomTick(x, y, z), true));
     // Instance hook sees *every* write, including untracked and fluid/redstone
     // writes. Store only the final cell value per tick; never wrap World globally.
     const put = this.world.put.bind(this.world);
@@ -287,6 +305,16 @@ export class DedicatedSimulation {
       if (p.swing) p.swing--;
     }
   }
+  // The note blocks' particle, the jukeboxes' record (RenderGlobal.playRecord through playAuxSFX 1005, null stops it) and the
+  // ejected disc, for the players near (not 1.7.10 networking).
+  musicHooks() {
+    const near = (x, y, z, range, event) => { for (const p of this.players.values()) if ((p.position.x - x) ** 2 + (p.position.y - y) ** 2 + (p.position.z - z) ** 2 <= range * range) this.send?.(p, event); };
+    return {
+      particle: (name, x, y, z, vx, vy, vz) => near(x, y, z, 16, { type: 'fx', kind: 'particle', name, x, y, z, vx, vy, vz }),
+      play: (item, x, y, z) => near(x + 0.5, y + 0.5, z + 0.5, 64, { type: 'record', item: item ?? null, x, y, z }),
+      spawn: (stack, x, y, z) => { this.play?.items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }); },
+    };
+  }
   hopperItems() { return []; } // dropped items a hopper can pick up (the gun server's ItemEntities)
   // BlockDispenser (23) and BlockDropper (158) on the server's redstone (dispense.js), over the shared dispenser tiles. The entities
   // they shoot are the server's own (server-mobs.js: arrows, thrown things, fireballs, minecarts, rockets; server-play.js dropped
@@ -328,6 +356,8 @@ export class DedicatedSimulation {
     if (this.world.hasNoSky) this.weather.tickDimension(this.world); else this.weather.tick(this.world); // no weather in the Nether or the End
     this.weatherEvents(this.weather.drain(), this.weather.struck);
     this.falling.tick();
+    const carts = this.mobs?.minecarts; // a cart over a detector rail (BlockRailDetector.onEntityCollidedWithBlock)
+    if (carts && !carts.blockHook) carts.blockHook = (x, y, z) => this.redstone.collide(x, y, z);
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, hoppers: this.hoppers, redstone: this.redstone },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     this.pistons.tick(); // after the tile loop's pushes (piston-live.js contract)
@@ -356,6 +386,6 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), players: [...this.savedPlayers], ...(this.columns ? { claimed: this.world.saveClaimedColumns() } : {}) };
+      redstone: this.redstone.save(), music: this.music.save(), tiles: this.tiles.serialize(), players: [...this.savedPlayers], ...(this.columns ? { claimed: this.world.saveClaimedColumns() } : {}) };
   }
 }

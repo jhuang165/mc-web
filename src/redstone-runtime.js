@@ -68,68 +68,11 @@ export function containerSlotsOf(world, game) {
     return null;
   };
 }
-export function createRedstoneRuntime({ world, scene = null, game = {} }) {
-  const changes = [];
-  const flush = () => {
-    if (!changes.length) return;
-    const list = changes.splice(0);
-    scene?.updateBlocks?.(list);
-    game.markUnsaved?.();
-  };
-  // Minecarts (game.minecarts() -> Minecarts): "minecart" asks for EntityMinecart, "inventory" for the carts that are IInventory
-  // (chest carts, as { cart, signal } with Container.calcRedstoneFromInventory); "all" (pressure plates) includes every cart.
-  const cartsIn = (box, mode) => {
-    const mc = game.minecarts?.(), out = [];
-    for (const c of mc?.carts ?? []) {
-      if (c.dead || !c.bb || !inside(c.bb, box)) continue;
-      if (mode !== "inventory") out.push(c);
-      else if (c.type === 1 || c.type === 5) out.push({ cart: c, signal: mc.comparator(c) });
-    }
-    return out;
-  };
-  // Modes beyond the plates': "tripwire" (BlockTripWire.func_150140_e: all entities but EntityBat, whose class answers true to
-  // doesEntityNotTriggerPressurePlate) and "collider" (the entities that reach Entity.func_145775_I and so call
-  // onEntityCollidedWithBlock: not thrown snowballs/eggs/pearls/potions, not an arrow stuck in a block). Probed in
-  // tripwire-reference.json (tripwireEntities, collisionCallers).
-  const entitiesIn = (box, mode) => {
-    if (mode === "minecart" || mode === "inventory") return cartsIn(box, mode);
-    const tripwire = mode === "tripwire" || mode === "collider", collider = mode === "collider";
-    if (tripwire) mode = "all";
-    const out = [], p = game.player?.();
-    if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
-    const mobs = game.mobs?.();
-    for (const e of mobs?.entities ?? []) {
-      if (!(e.health > 0) || !ENTITY_TYPES[e.type] || (tripwire && e.type === "bat")) continue;
-      if (inside(pushBox(e, ...mobs.size(e)), box)) out.push(e);
-    }
-    if (mode !== "all") return out;
-    for (const e of game.items?.() ?? []) if (inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
-    if (tripwire && !collider)
-      for (const e of game.thrown?.() ?? []) if (!e.dead && inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
-    for (const e of game.arrows?.() ?? []) if (!e.dead && !(collider && e.inGround) && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
-    for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
-    for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
-    out.push(...cartsIn(box, "minecart"));
-    // EntityBoat and EntityFallingBlock (getEntitiesWithinAABB takes every entity; both reach func_145775_I through moveEntity,
-    // so they also count in "collider" mode). Probed: tripwire-reference.json boat-trips / falling-block-trips.
-    for (const b of game.boats?.() ?? []) if (!b.dead && b.bb && inside(b.bb, box)) out.push(b);
-    for (const e of game.falling?.() ?? []) if (!e.dead && inside([e.x - FALLING_HALF, e.y, e.z - FALLING_HALF, e.x + FALLING_HALF, e.y + FALLING_SIZE, e.z + FALLING_HALF], box)) out.push(e);
-    return out;
-  };
-  const containerSlots = containerSlotsOf(world, game);
-  const redstone = new LiveRedstone(world, {
-    changed: (x, y, z, old, now) => {
-      if (changes.length < 20000) changes.push([x, y, z, old ?? world.get(x, y, z), now ?? world.get(x, y, z)]);
-    },
-    sound: (name, x, y, z, volume, pitch) => game.sound?.(name, x, y, z, volume, pitch),
-    drop: (x, y, z, stack) => game.drop?.(x, y, z, stack),
-    primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
-    entitiesIn,
-    containerSlots,
-    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15, noSky: !!world.hasNoSky }), // BlockDaylightDetector.func_149957_e returns early where provider.hasNoSky (aqo.g)
-    skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
-  });
-  const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
+// The block behaviours LiveRedstone does not carry itself, shared by this runtime and the gun server (multiplayer/simulation.js):
+// fence gates and trapdoors, note blocks and jukeboxes (`game.music` hooks; their clicks come back as the returned `music`),
+// trapped chests (game.chests() viewer counts), hoppers and the powered, detector, activator and plain rails. `flush` runs
+// after a click's engine changes.
+export function installSharedBehaviours(redstone, game, flush = () => {}) {
   installShapedBlocks(redstone, trapdoorSupportOriginal(blockProperties())); // fence gates (107) and trapdoors (96): redstone opening, trapdoor support loss
   const noteBlocks = installNoteBlocks(redstone, { particle: (...a) => game.music?.particle?.(...a), changed: () => game.markUnsaved?.() });
   const jukeboxes = installJukeboxes(redstone, { play: (...a) => game.music?.play?.(...a), spawn: (...a) => game.music?.spawn?.(...a), changed: () => game.markUnsaved?.() });
@@ -160,6 +103,87 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   });
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
+  return music;
+}
+// TileEntityChest.func_145969_a / func_145976_d (a viewer opened or closed): notifyBlocksOfNeighborChange at the chest and at the block
+// beneath it, with the chest as the source (the probe's openLog/closeLog), so a trapped chest's power reaches its neighbours.
+export function notifyChestViewers(redstone, keys) {
+  for (const key of keys ?? []) {
+    const [x, y, z] = String(key).split(",").map(Number), id = redstone.getBlock(x, y, z);
+    if (id !== 146 && id !== 54) continue;
+    redstone.notifyBlocksOfNeighborChange(x, y, z, id);
+    redstone.notifyBlocksOfNeighborChange(x, y - 1, z, id);
+  }
+}
+// LiveRedstone's entitiesIn hook over the game's entity lists (`game`: player() or players() for several, mobs(), items(), thrown(),
+// arrows(), orbs(), primed(), minecarts(), boats(), falling()); the gun server uses it too (multiplayer/simulation.js).
+export function redstoneEntitiesIn(game) {
+  // Minecarts (game.minecarts() -> Minecarts): "minecart" asks for EntityMinecart, "inventory" for the carts that are IInventory
+  // (chest carts, as { cart, signal } with Container.calcRedstoneFromInventory); "all" (pressure plates) includes every cart.
+  const cartsIn = (box, mode) => {
+    const mc = game.minecarts?.(), out = [];
+    for (const c of mc?.carts ?? []) {
+      if (c.dead || !c.bb || !inside(c.bb, box)) continue;
+      if (mode !== "inventory") out.push(c);
+      else if (c.type === 1 || c.type === 5) out.push({ cart: c, signal: mc.comparator(c) });
+    }
+    return out;
+  };
+  // Modes beyond the plates': "tripwire" (BlockTripWire.func_150140_e: all entities but EntityBat, whose class answers true to
+  // doesEntityNotTriggerPressurePlate) and "collider" (the entities that reach Entity.func_145775_I and so call
+  // onEntityCollidedWithBlock: not thrown snowballs/eggs/pearls/potions, not an arrow stuck in a block). Probed in
+  // tripwire-reference.json (tripwireEntities, collisionCallers).
+  const entitiesIn = (box, mode) => {
+    if (mode === "minecart" || mode === "inventory") return cartsIn(box, mode);
+    const tripwire = mode === "tripwire" || mode === "collider", collider = mode === "collider";
+    if (tripwire) mode = "all";
+    const out = [];
+    for (const p of game.players ? game.players() : [game.player?.()]) if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
+    const mobs = game.mobs?.();
+    for (const e of mobs?.entities ?? []) {
+      if (!(e.health > 0) || !ENTITY_TYPES[e.type] || (tripwire && e.type === "bat")) continue;
+      if (inside(pushBox(e, ...mobs.size(e)), box)) out.push(e);
+    }
+    if (mode !== "all") return out;
+    for (const e of game.items?.() ?? []) if (inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
+    if (tripwire && !collider)
+      for (const e of game.thrown?.() ?? []) if (!e.dead && inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
+    for (const e of game.arrows?.() ?? []) if (!e.dead && !(collider && e.inGround) && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
+    for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
+    for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
+    out.push(...cartsIn(box, "minecart"));
+    // EntityBoat and EntityFallingBlock (getEntitiesWithinAABB takes every entity; both reach func_145775_I through moveEntity,
+    // so they also count in "collider" mode). Probed: tripwire-reference.json boat-trips / falling-block-trips.
+    for (const b of game.boats?.() ?? []) if (!b.dead && b.bb && inside(b.bb, box)) out.push(b);
+    for (const e of game.falling?.() ?? []) if (!e.dead && inside([e.x - FALLING_HALF, e.y, e.z - FALLING_HALF, e.x + FALLING_HALF, e.y + FALLING_SIZE, e.z + FALLING_HALF], box)) out.push(e);
+    return out;
+  };
+  return entitiesIn;
+}
+export function createRedstoneRuntime({ world, scene = null, game = {} }) {
+  const changes = [];
+  const flush = () => {
+    if (!changes.length) return;
+    const list = changes.splice(0);
+    scene?.updateBlocks?.(list);
+    game.markUnsaved?.();
+  };
+  const entitiesIn = redstoneEntitiesIn(game);
+  const containerSlots = containerSlotsOf(world, game);
+  const redstone = new LiveRedstone(world, {
+    changed: (x, y, z, old, now) => {
+      if (changes.length < 20000) changes.push([x, y, z, old ?? world.get(x, y, z), now ?? world.get(x, y, z)]);
+    },
+    sound: (name, x, y, z, volume, pitch) => game.sound?.(name, x, y, z, volume, pitch),
+    drop: (x, y, z, stack) => game.drop?.(x, y, z, stack),
+    primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
+    entitiesIn,
+    containerSlots,
+    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15, noSky: !!world.hasNoSky }), // BlockDaylightDetector.func_149957_e returns early where provider.hasNoSky (aqo.g)
+    skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
+  });
+  const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
+  const music = installSharedBehaviours(redstone, game, () => flush());
   // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
   // aux effects 1000 / 1001 (click) and 1002 (bow); the smoke particles (2000) are not drawn.
   const AUX_SOUNDS = { 1000: ["random.click", 1], 1001: ["random.click", 1.2], 1002: ["random.bow", 1.2] };
@@ -283,15 +307,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const key of keys ?? []) redstone.containerChanged(...String(key).split(",").map(Number));
     flush();
   };
-  // TileEntityChest.func_145969_a / func_145976_d (a viewer opened or closed): notifyBlocksOfNeighborChange at the chest and at the block
-  // beneath it, with the chest as the source (the probe's openLog/closeLog), so a trapped chest's power reaches its neighbours.
   const chestViewersChanged = (keys) => {
-    for (const key of keys ?? []) {
-      const [x, y, z] = String(key).split(",").map(Number), id = redstone.getBlock(x, y, z);
-      if (id !== 146 && id !== 54) continue;
-      redstone.notifyBlocksOfNeighborChange(x, y, z, id);
-      redstone.notifyBlocksOfNeighborChange(x, y - 1, z, id);
-    }
+    notifyChestViewers(redstone, keys);
     flush();
   };
   // WorldServer random tick of a tripwire hook or string (both Block.tickRandomly): updateTick, true when it was one of them.

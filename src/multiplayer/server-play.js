@@ -34,6 +34,9 @@ import { placeHeldMinecart } from '../vehicle-simulation.js';
 import { horseSeatsFor } from '../horse-live.js';
 import { useVehicle } from './server-riding.js';
 import { useRod } from './server-fishing.js';
+import { touchOre, particlesAt } from './server-contacts.js';
+import { useDragonEgg } from '../dragon-egg-live.js';
+import { notifyChestViewers } from '../redstone-runtime.js';
 import { HorseContainer, canInteract as horseReach } from '../horse-gear.js';
 import { PAINTING_ITEM, FRAME_ITEM } from '../hanging.js';
 import { ServerStations, STATION_KINDS } from './server-stations.js';
@@ -110,6 +113,7 @@ export class ServerPlay {
     p.window = null;
     w.container.close();
     w.container.chest?.closed?.();
+    if (w.kind === 'chest') notifyChestViewers(this.sim.redstone, w.container.keys); // a trapped chest's power follows its viewers
     this.throwDrops(p, w.container);
     // The comparators read the new contents (main.js closeContainer -> containerClosed); a cart's chest is no block.
     const keys = w.kind === 'chest' ? w.container.keys : ['furnace', 'dispenser', 'hopper', 'brewing'].includes(w.kind) ? [w.key] : null;
@@ -119,6 +123,7 @@ export class ServerPlay {
     this.closeWindow(p);
     this.windowCounter = this.windowCounter % 100 + 1; // EntityPlayerMP.getNextWindowId
     p.window = { id: this.windowCounter, kind, container, ...extra };
+    if (kind === 'chest') notifyChestViewers(this.sim.redstone, container.keys);
   }
   // EntityVillager.interact -> displayGUIMerchant: the villager takes this player as its customer; the offers go to the tab with the
   // window, and a trade's sounds and restock run on the server's villager.
@@ -302,7 +307,25 @@ export class ServerPlay {
         openDispenser: (tile, key, at, title) => this.open(p, 'dispenser', new DispenserContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at), title }),
         openHopper: (tile, key, at) => this.open(p, 'hopper', new HopperContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at) }),
         ...this.stations.hooks(this, p),
-        touchRedstoneOre: noop,
+        touchRedstoneOre: (x, y, z) => touchOre(sim, x, y, z), // BlockRedstoneOre.onBlockClicked / onBlockActivated (server-contacts.js)
+        // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated and BlockNote.onBlockClicked on the shared note blocks and
+        // jukeboxes (redstone-runtime.js installSharedBehaviours); the disc leaves the stack outside Creative, as main.js does.
+        useNoteJukebox: (x, y, z, held) => {
+          const r = sim.music?.use(x, y, z, held);
+          if (!r?.handled) return false;
+          if (r.consumed && !p.survival.creative) p.survival.take(held, 1);
+          return true;
+        },
+        blockClicked: (x, y, z) => { if (!p.survival.creative) sim.music?.click(x, y, z); },
+        // BlockDragonEgg.onBlockActivated / onBlockClicked (dragon-egg-live.js): the server moves the egg; the 128 portal particles
+        // (the client copy's, from its own random) go to the players near.
+        useDragonEgg: (x, y, z) => {
+          const list = [];
+          useDragonEgg({ world: sim.world, serverRandom: () => (this.eggRand ??= new JavaRandom(Math.floor(sim.random() * 2 ** 48))),
+            clientRandom: () => new JavaRandom(Math.floor(sim.random() * 2 ** 48)), updateBlock: noop, spawnParticle: (...q) => list.push(q) }, x, y, z);
+          particlesAt(sim, { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, list);
+          return true;
+        },
         useBed: (x, y, z) => sim.useBed?.(p, x, y, z), // BlockBed.onBlockActivated (server-beds.js)
         spawnWither: (x, y, z, yaw) => spawnWither(sim, x, y, z, yaw), // the T of soul sand under three wither skulls (skull.js)
         lightTnt: (x, y, z) => { sim.mobs?.prime(x, y, z, p); }, // ItemFlintAndSteel on TNT (BlockTNT.onBlockActivated); the edit removes the block
