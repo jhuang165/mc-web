@@ -16,6 +16,7 @@ import { batLivingSound } from "./squid-bat.js";
 import { slimeMakesLandSound } from "./slime.js";
 import { headParticleSpecs } from "./wither-boss.js";
 import { clientWorldRandom } from "./copy-meta.js";
+import { copyWetTeleport } from "./copy-teleport.js";
 
 const SLOW_TALKERS = new Set(["pig", "cow", "mooshroom", "sheep", "chicken", "wolf", "ocelot", "snow_golem", "iron_golem", "squid"]);
 export const talkInterval = (type) => (SLOW_TALKERS.has(type) ? 120 : type === "horse" ? 400 : 80);
@@ -39,11 +40,12 @@ export function copyLivingRoll(c, m, rand = deathRandom(c)) {
 
 // Batch 61: the part of onLivingUpdate that runs BEFORE its super call (the move): the enderman's portal particles and scream roll (ya.e: bytecode-read, `super` at the end) and
 // the blaze's sound roll and smoke. A splash inside the move (copy-water.js) therefore follows these draws (executed: MobCopies2Probe `water`, Enderman).
-export function copyLivingPre(c, m, rand = deathRandom(c)) {
+export function copyLivingPre(c, m, rand = deathRandom(c), world = null) {
   if (c.gone) return;
   switch (m.type) {
     case "enderman":
       for (let i = 0; i < 12; i++) rand.nextDouble();
+      if (world && c.inWater) copyWetTeleport(c, world, rand); // batch 62 (copy-teleport.js): isWet() -> teleportRandomly, before the scream roll (executed: MobCopies2Probe `watertp`)
       // ya.e: `isScreaming() && !isAggressive() && nextInt(100) == 0` clears the copy's watcher 18; the client's isAggressive is never set (server AI only).
       // The copy's flag is the one S1C / S0F gave it (copy-meta.js), not the live one: the server's flag is not resent when the copy clears its own.
       if (c.screaming && rand.nextInt(100) === 0) c.screaming = false;

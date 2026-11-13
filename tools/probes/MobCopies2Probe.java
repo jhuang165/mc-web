@@ -76,6 +76,16 @@ public class MobCopies2Probe {
       sv e = make(name, seed, 10.5, 8.0, -5.5, true);
       HorseProbe.out(head("water", name, seed, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 420, true) + "}");
     }
+    { // b62 singleleft: an enderman copy in water on a world where a teleport can succeed (exact floor boxes: the standing enderman's box does not meet the floor cell, so the destination test passes
+      // unless the target cell is water; and the floor stands at y 2 for z >= 2). EntityEnderman.onLivingUpdate (ya.e) wet branch: teleportRandomly = nextDouble, nextInt(64), nextDouble, then teleportTo's checks; a success moves the copy
+      // and spawns the 128 portal particles. Rows as `water`, with the position before each tick; 3 seeds (a fresh copy each) so several targets land inside and outside the pool.
+      MobMoveProbe.ProbeWorld.exact = true; MobMoveProbe.step = 2; // a floor at y 0..1 for z >= 2: teleportTo needs a solid block at y >= 0 under the target (its scan stops at y 0)
+      for (long sd = 6600; sd < 6603; sd++) {
+        sv e = make("Enderman", sd, 10.5, 8.0, -5.5, true);
+        HorseProbe.out(head("watertp", "Enderman", sd, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 160, true) + "}");
+      }
+      MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
+    }
     { // wither: spawn charge and armour
       long[] seeds = { 6201, 6202, 6203 }; int[] invul = { 100, 0, 100 }; float[] health = { 300f, 100f, 100f };
       for (int k = 0; k < 3; k++) {
