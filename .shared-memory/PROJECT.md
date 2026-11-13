@@ -113,6 +113,16 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 62 (2026-11-13, five Sonnet tracks in `../wt62-<name>` on `batch62-<name>`, cut from b5be6614f, merged --no-ff on `batch62-lead`; shared track rules `../artifacts/b62-lead/track-rules.md`; lead note `b62-lead-track.md`; no browser checks by request):
+- 0.91.0, by track:
+  - mpprojectiles: `multiplayer/server-projectiles.js` and a lane system in `server-dispense.js`: skeleton arrows, witch potions, players' bows (C07) and throws (snowball, egg, pearl, splash potion, XP bottle) hit mobs and players; snipeSkeleton; arrow pickup (`projCollect`); arrows, balls and potions in flight are saved.
+  - mpnether2: `multiplayer/server-nether.js`: the server Nether runs fluids, fire, falling blocks, random ticks, farming, redstone and container ticks; chests open there, with fortress loot and blaze spawners; its own mobs (pigman, ghast, magma cube, blaze, wither skeleton) and tracker; the ghast award from a punched fireball; the Nether's state is saved.
+  - mpriding2: `server-riding.js`, `server-leads.js`, `remote-leads.js`: chest and hopper carts (windows, hopper suction), powered, detector and activator rails on the server; pig riding with the carrot on a stick and flyPig; carts pick up mobs; leads and fence knots (S1B mode 1). Found wrong: activator rails do not eject riders in 1.7.10.
+  - mpsmall2: Creative inventory fully on C10 with pick block, the hotbar mirror retired; the window 0 result slot corrected; a dead player's window closed at respawn; taming status 6/7/18, owners bound to players and defended; sheep grass eating sends the block change and aux 2001.
+  - singleleft: frozen entities skipped by arrows, explosions, pickups, merges, pushes and village counts; rider and mount ids in native order (`saved-order9-reference.json`); the tracker replays flag re-rises, dead entities and hanging entities; enderman copies draw and make their water teleport (executed `MobCopies2Probe`).
+- Lead fixes in the merge commits: the Nether's dispense instance is a full `ServerProjectiles` that owns lane -1, so each player gets one snapshot of their own dimension; saved Nether projectiles load (dim -1 was rejected) and are adopted when the Nether is built; three flaky or merge-broken tests fixed (`b62-lead.test.js`); conflicts kept both sides.
+- Verification: see `b62-lead-track.md`. Pushed to github main by the lead.
+
 Batch 61 (2026-11-13, ten Sonnet tracks in `../wt61-<name>` on `batch61-<name>`, cut from 135158c42, merged --no-ff on `batch61-lead`; shared track rules `../artifacts/b61-lead/track-rules.md`; lead note `b61-lead-track.md`; no browser checks by request):
 - 0.90.0, by track:
   - mpdispense: `multiplayer/server-dispense.js` / `client-dispense.js`: server dispensers fire arrows, balls, potions, XP bottles, fire charges, fireworks, primed TNT, spawn eggs, buckets, flint and steel, bone meal, armour (`dispEnts`, `dispFx`).

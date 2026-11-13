@@ -2,6 +2,29 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 62
+
+Batch 62 covered these areas:
+- **Projectiles on a server.** One projectile system: skeletons shoot real arrows, witches throw potions, players draw and release bows (C07) and throw snowballs, eggs, pearls (teleport with 5 fall damage), splash potions and XP bottles. Arrows, balls and potions hit mobs and Survival players (Creative is immune), with knockback, Punch, flame, stuck-arrow counts and the shooter in the death message; snipeSkeleton is awarded at 50 blocks; ground arrows are picked up (`projCollect`); what is in flight is saved, the Nether's too.
+- **The Nether on a server.** Fluids with the Nether rules, persistent netherrack fire, falling blocks, random ticks, farming, redstone and container ticks run there while a player is in it. Chests open and save, with fortress loot and blaze spawners from population. A second mob list (pigman, ghast, magma cube, blaze, wither skeleton) is tracked only to Nether players, and a punched fireball awards ghast. Its tiles, items, beacons, spawners, scheduled ticks, crops, redstone and mobs are saved.
+- **Vehicles and leads.** Chest and hopper carts are placed, dispensed, opened as server windows and spill when broken, and the hopper cart sucks items; powered, detector and activator rails now run on the server. Saddled pigs are ridden and steered with the carrot on a stick (7 uses of wear), with flyPig. Fast empty carts pick up mobs. Leads tie mobs to players and fence knots, and clients draw the rope. Found wrong: activator rails do not eject riders in 1.7.10 (bytecode-read), and a saddled pig never mounted before, because the saddle was applied first.
+- **Inventory, health and animals.** Creative runs fully on C10 with pick block; the hotbar mirror is retired; the window 0 result slot is corrected; a window still open at respawn is closed. Taming sends status 6/7/18, the owner is the player, and a tamed wolf defends its owner; sheep grass eating sends the block change and aux 2001. Found wrong: the survival tab's "grid not sent" gap cannot happen.
+- **Saved order and tracker.** Frozen entities are skipped by arrows, explosions, pickups, merges, cart and boat pushes and village counts; a rider takes the first id and its mounts follow (executed `SavedOrderLoginProbe`, `saved-order9-reference.json`). The tracker replays airBorne and velocityChanged re-rises, keeps dead entities in HashSet order and samples hanging entities and knots.
+- **Mob copies.** An enderman copy in water draws its teleport attempt each tick and moves on success (executed `MobCopies2Probe`, 3 seeds). The wither's armour draws were already modelled.
+
+Still open from batch 62:
+- **Multiplayer.**
+  - Nether: no experience orbs, no spawner ticking, no vehicles or animal clicks there; Nether mobs use the Overworld's difficulty; no End, End portal or dragon (theEnd, theEnd2).
+  - Projectiles: no client bow-draw animation or FOV change; no pickup fly-in for `projCollect`; a player's potion kill credits nobody; primed TNT, rockets and fireballs are not saved; drinkable potions on the server were not checked; no PvP setting or player melee.
+  - Vehicles: third-person seat height for riders seen by others; the command-block cart; a second lead on a mob another player leads; mobs tied to a knot are only freed by breaking it.
+  - Achievements and stats: `animalsBred` (the server has no stats); spawnWither and killWither (no wither on the server).
+  - Wolves tamed in a single-player save have no owner key, so the nearest player counts as owner.
+  - Nothing of batch 59 to 62's multiplayer work was checked in a browser.
+- **Mob copies.** A burning enderman copy is not modelled (no fire flag); the teleport destination ignores other entities' boxes; copy particles and sounds are draws only.
+- **Tracker.** Dead entities' HashSet order rests on the batch 61 model and was not probed again.
+- **Effects.** The Java 7 order (ids 16 to 23) is simulated, not executed (no Java 7 runtime here).
+- **Rendering.** No native pixel capture.
+
 ## Done in batch 61
 
 Batch 61 covered these areas:
@@ -17,21 +40,7 @@ Batch 61 covered these areas:
 - **Mob copies' Random.** Water splash and drowning, the wither's charge particles, status-packet particles (zombie conversion, witch, wolf shake, love, villager, tamables) and the enderman's watcher 18 (executed `MobCopies2Probe`, 567 records). The live iron golem no longer drowns.
 - **Small checks.** Brewing-stand takes award `potion` only for a potion (damage > 0). Comparators read no item frames in 1.7.10 (bytecode-read `BlockRedstoneComparator`), so that gap was wrong.
 
-Still open from batch 61:
-- **Multiplayer.**
-  - Nether: no mobs, fluids, fire spread, falling blocks, redstone or random ticks; containers do not open there; Nether items, beacons and spawners are not saved; no End, End portal or dragon (theEnd, theEnd2).
-  - Vehicles: chest, hopper and command carts; detector rails; pig riding and flyPig; mob riders in vehicles; spider-jockey riding; third-person seat height.
-  - Projectiles: skeleton arrows and witch potions are not thrown on the server (snipeSkeleton depends on them); dispensed arrows and balls hit mobs, not players; dispensers do not pick arrows back up; nothing in flight is saved.
-  - Animals: leads (S1B, knots); taming status 6/7 wiring; the grass-eating block update; `animalsBred`.
-  - Inventory: Creative still mirrors the hotbar beside C10; pick block is not on C10; the window 0 result slot is not corrected.
-  - Health: a dead player's open chest or station window is kept after respawn.
-  - Achievements: ghast, spawnWither, killWither.
-  - Nothing of batch 59, 60 or 61's multiplayer work was checked in a browser.
-- **Tracker.** Entities that died during a trip are not replayed; airBorne / velocityChanged replay only on their first rise; hanging entities are not sampled.
-- **Saved order.** Frozen entities are still seen by arrows, explosions, item pickups and merges, cart and boat pushes and village searches; riders in different sections get ids in stamp order.
-- **Mob copies.** An enderman copy in water draws its teleport attempt each tick (not modelled); copy particle positions are not made, only draws; the wither's armour draws.
-- **Effects.** The Java 7 order (ids 16 to 23) is simulated, not executed (no Java 7 runtime here).
-- **Rendering.** No native pixel capture.
+Still open from batch 61: carried into the batch 62 list above, except the items batch 62 closed or found wrong.
 
 ## Done in batch 60
 
