@@ -317,6 +317,7 @@ export class ClientEntity {
     if (this.type === "ender_dragon" && this.dragon) { this.dragonUpdate(); turn?.(this); return; }
     if (this.type === "ender_crystal") { this.innerRotation++; this.age++; this.crystalFire?.(this); } // EntityEnderCrystal.onUpdate (++innerRotation) after the world's ++ticksExisted; wz.h also sets fire on the client world: `crystalFire` is the optional client block layer hook (ender-crystal-mobs.js clientCrystalFire), unset until a layer is wired
     if (move && pre) pre(this);
+    this.gone = this.deathDone; // copy-talk.js: a removed copy runs no onLivingUpdate draws
     copyDeathUpdate(this); // onEntityUpdate's onDeathUpdate (sv.aF), before onLivingUpdate's interpolation
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
