@@ -32,6 +32,7 @@ public class ClientPredictProbe {
     MobMoveProbe.field(ahb.class, "x").set(w, u.allocateInstance(ays.class));
     MobMoveProbe.field(ahb.class, "E").setBoolean(w, true); // isRemote: the client world
     MobMoveProbe.set(w, "v", BedProbe.chunkProvider()); // a chunk provider that reports every chunk loaded (BlockTorch's support check asks)
+    MobMoveProbe.set(w, "u", new ArrayList<Object>()); // World.worldAccesses: no listeners (the fizz sound and smoke of a Nether water bucket loop over it)
     w.cells = new HashMap<>();
     w.spawned = new ArrayList<>();
     w.scheduled = new ArrayList<>();
@@ -115,6 +116,85 @@ public class ClientPredictProbe {
       res = String.valueOf(b.a(w, px, py, pz, (yz) DoorPaneProbe.player, 1, 0.5f, 0.5f, 0.5f));
     } catch (Throwable t) { err = q(t.toString()); }
     line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+  }
+
+  // ItemBucket.onItemRightClick (abo.a(add, ahb, yz), class abo) on the client world: Item.getMovingObjectPositionFromPlayer traces 5.0 blocks from the
+  // eye (feet + 1.62 - yOffset) along the view, for an empty bucket stopping on liquids; the pick-up and the placement run for real on the isRemote world.
+  // `eye` is the eye position, the player's feet are set 1.62 below it. pitch 90 looks straight down, yaw 0 looks along +z. `hell` sets
+  // WorldProvider.isHellWorld (aqo.f), `creative` the capabilities flag. The result is the returned stack (item id, count) and the diff.
+  static void bucket(String name, int item, int[][] setup, double ex, double ey, double ez, float pitch, float yaw, boolean hell, boolean creative) throws Exception {
+    CW w = world(setup);
+    Map<String, int[]> before = snapshot(w);
+    Object p = DoorPaneProbe.player;
+    double[] pos = {ex, ey - 1.62, ez};
+    String[] pf = {"p", "s"}, qf = {"q", "t"}, rf = {"r", "u"};
+    for (String f : pf) MobMoveProbe.set(p, f, pos[0]);
+    for (String f : qf) MobMoveProbe.set(p, f, pos[1]);
+    for (String f : rf) MobMoveProbe.set(p, f, pos[2]);
+    for (String f : new String[] {"z", "B"}) MobMoveProbe.field(sa.class, f).setFloat(p, pitch);
+    for (String f : new String[] {"y", "A"}) MobMoveProbe.field(sa.class, f).setFloat(p, yaw);
+    MobMoveProbe.field(sa.class, "L").setFloat(p, 0f);
+    MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, creative);
+    Object provider = MobMoveProbe.field(ahb.class, "t").get(w);
+    MobMoveProbe.field(aqo.class, "f").setBoolean(provider, hell);
+    String err = "null";
+    int rid = -1, rcount = -1;
+    try {
+      adb it = adb.d(item);
+      add st = new add(it, 1, 0);
+      add r = it.a(st, w, (yz) p);
+      rid = adb.b(r.b()); rcount = r.b;
+    } catch (Throwable t) { err = q(t.toString()); }
+    MobMoveProbe.field(aqo.class, "f").setBoolean(provider, false);
+    MobMoveProbe.field(yw.class, "d").setBoolean(((yz) p).bE, false);
+    MobMoveProbe.field(sa.class, "z").setFloat(p, 0f);
+    MobMoveProbe.field(sa.class, "B").setFloat(p, 0f);
+    MobMoveProbe.set(p, "s", X + 0.5); MobMoveProbe.set(p, "t", (double) Y); MobMoveProbe.set(p, "u", Z - 1.5);
+    line("{\"case\":\"bucket\",\"name\":" + q(name) + ",\"item\":" + item + ",\"eye\":[" + ex + "," + ey + "," + ez + "],\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"hell\":" + hell + ",\"creative\":" + creative + ",\"setup\":" + setupJson(setup) + ",\"resultItem\":" + rid + ",\"resultCount\":" + rcount + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+  }
+
+  static void buckets() throws Exception {
+    // empty bucket (325): only a source of water or lava is picked up
+    for (int[] l : new int[][] {{8, 0}, {9, 0}, {10, 0}, {11, 0}, {9, 3}, {11, 5}})
+      bucket("empty-liquid" + l[0] + "-m" + l[1], 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, l[0], l[1])), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    bucket("empty-creative-water", 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, true);
+    bucket("empty-stone", 325, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    bucket("empty-air", 325, s(), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+    bucket("empty-reach-4.9", 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 69.9, 8.5, 90f, 0f, false, false);
+    bucket("empty-reach-5.1", 325, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 9, 0)), 8.5, 70.1, 8.5, 90f, 0f, false, false);
+    bucket("empty-side", 325, s(c(8, 64, 8, 9, 0)), 8.5, 64.5, 6.0, 0f, 0f, false, false);
+    // filled water (326) and lava (327): the cell beside the traced face, liquids and boxless blocks skipped by the trace
+    for (int item : new int[] {326, 327}) {
+      bucket("full" + item + "-top", item, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-top-creative", item, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, true);
+      bucket("full" + item + "-side", item, s(c(8, 64, 8, 1, 0)), 8.5, 64.5, 6.0, 0f, 0f, false, false);
+      bucket("full" + item + "-bottom", item, s(c(8, 64, 8, 1, 0)), 8.5, 62.0, 8.5, -90f, 0f, false, false);
+      bucket("full" + item + "-torch-replaced", item, s(c(8, 64, 8, 1, 0), c(8, 65, 8, 50, 5)), 8.5, 67.0, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-grass-replaced", item, s(c(8, 64, 8, 1, 0), c(8, 65, 8, 31, 1)), 8.5, 67.0, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-into-flowing", item, s(c(8, 63, 8, 1, 0), c(8, 64, 8, 8, 3)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-into-source", item, s(c(8, 63, 8, 1, 0), c(8, 64, 8, item == 326 ? 9 : 11, 0)), 8.5, 66.0, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-nether", item, s(c(8, 64, 8, 1, 0)), 8.5, 66.0, 8.5, 90f, 0f, true, false);
+      bucket("full" + item + "-reach-4.9", item, s(c(8, 64, 8, 1, 0)), 8.5, 69.9, 8.5, 90f, 0f, false, false);
+      bucket("full" + item + "-reach-5.1", item, s(c(8, 64, 8, 1, 0)), 8.5, 70.1, 8.5, 90f, 0f, false, false);
+    }
+  }
+
+  // The same ItemBed / ItemSign / ItemSkull.onItemUse on a SERVER world (isRemote false): proof that the early return on the client is the isRemote guard.
+  static void serverUses() throws Exception {
+    for (Object[] u : new Object[][] {{"bed", 355, 1}, {"sign-top", 323, 1}, {"sign-wall", 323, 3}, {"skull", 397, 1}}) {
+      CW w = world(s());
+      MobMoveProbe.field(ahb.class, "E").setBoolean(w, false);
+      Map<String, int[]> before = snapshot(w);
+      MobMoveProbe.field(sa.class, "y").setFloat(DoorPaneProbe.player, 0f);
+      String err = "null", res = "null";
+      try {
+        adb it = adb.d((Integer) u[1]);
+        add st = new add(it, 3, 0);
+        int side = (Integer) u[2];
+        res = String.valueOf(it.a(st, (yz) DoorPaneProbe.player, w, 8, side == 1 ? 63 : 64, 8, side, 0.5f, 0.5f, 0.5f));
+      } catch (Throwable t) { err = q(t.toString()); }
+      line("{\"case\":\"serveruse\",\"name\":" + q((String) u[0]) + ",\"item\":" + u[1] + ",\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + "}");
+    }
   }
 
   static void breaks() throws Exception {
@@ -228,5 +308,7 @@ public class ClientPredictProbe {
     breaks();
     uses();
     activates();
+    buckets();
+    serverUses();
   }
 }

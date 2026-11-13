@@ -10,7 +10,7 @@ import { collides, isLiquid, BED, TORCH, REDSTONE_TORCH, REDSTONE_TORCH_OFF, LAD
   REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, LIGHT_PLATE, HEAVY_PLATE, isFlower } from './world.js';
 import { ITEMS } from './survival.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
-import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable } from './doors-panes.js';
+import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable, doorSound } from './doors-panes.js';
 import { bedNeighbourChange } from './bed.js';
 import { torchSupported } from './torches.js';
 import { flowerCanStay, flowerGround } from './flowers.js';
@@ -34,6 +34,7 @@ import { ITEM_SKULL } from './skull.js';
 import { ITEM_CAKE } from './stems-cake.js';
 import { CAULDRON, FLOWER_POT, ITEM_CAULDRON, ITEM_FLOWER_POT } from './stone-utility.js';
 import { STATIONS } from './player-edit-simulation.js';
+import { traceBucket, placeContainedLiquid } from './buckets.js';
 
 const keyOf = (x, y, z) => `${x},${y},${z}`;
 
@@ -155,9 +156,35 @@ export function dryActivate(state, target) {
   if (isDoor(b)) activateDoor(scratch, x, y, z);
   else if (b === TRAPDOOR) scratch.put(x, y, z, b, world.getMeta(x, y, z) ^ 4);
   else if (b === FENCE_GATE) scratch.put(x, y, z, b, gateUseMeta(world.getMeta(x, y, z), Math.fround(180 - (state.yaw * 180) / Math.PI)));
+  else if (b === STONE_BUTTON) { const m = world.getMeta(x, y, z); if (!(m & 8)) scratch.put(x, y, z, b, m | 8); } // BlockButton.onBlockActivated has no isRemote guard: the pressed bit (probe: 77 meta 1 -> 9)
+  else if (b === REPEATER) scratch.put(x, y, z, b, (world.getMeta(x, y, z) + 4) & 15); // BlockRedstoneRepeater: the delay steps by 4 and wraps at 16 (probe: 0->4 ... 12->0)
   else return null;
   return [...writes.values()];
 }
+// The sound the client plays at once for an activation (BlockDoor / BlockTrapDoor / BlockFenceGate: aux effect 1003, which the server sends to every player
+// but the clicker; BlockButton: playSoundEffect random.click 0.3 / 0.6, bytecode-read), or null. `random` is Math.random for the open/close pick.
+export function activateSound(block, random = Math.random) {
+  if (isDoor(block) || block === TRAPDOOR || block === FENCE_GATE) return doorSound(random);
+  if (block === STONE_BUTTON) return { event: 'random.click', volume: 0.3, pitch: 0.6 };
+  return null;
+}
+// ItemBucket.onItemRightClick on the client world (executed, client-predict-reference.json 'bucket' records): Item.getMovingObjectPositionFromPlayer traces 5.0
+// blocks from the eye (liquids only for an empty bucket, boxless blocks skipped for a full one), an empty bucket removes a source of water or lava, a full one
+// sets its liquid beside the traced face (the Nether refuses water). The swapped bucket in the hand is the inventory's business and is not drawn here.
+const SIDE_STEP = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+export const tracedBucket = (id) => { const k = id ? ITEMS[id]?.bucket : null; return k === 'empty' || k === 'filled' ? k : null; };
+export function dryBucket(state, eye, dir) {
+  const { world } = state, kind = tracedBucket(state.heldId);
+  if (!kind || !eye || !dir) return [];
+  const hit = traceBucket(world, eye, dir, kind === 'empty');
+  if (!hit) return [];
+  const [x, y, z] = hit.block;
+  if (kind === 'empty') return isLiquid(world.get(x, y, z)) && world.getMeta(x, y, z) === 0 ? [{ x, y, z, block: 0, meta: 0 }] : [];
+  const { scratch, writes } = scratchWorld(world), [dx, dy, dz] = SIDE_STEP[hit.side];
+  if (!placeContainedLiquid(scratch, x + dx, y + dy, z + dz, ITEMS[state.heldId].contains, null)) return [];
+  return [...writes.values()].filter((c) => c.block !== world.get(c.x, c.y, c.z) || c.meta !== world.getMeta(c.x, c.y, c.z));
+}
+
 // Item.onItemUse for the items placeHeldBlock does not handle (ItemCake via ItemReed, ItemSeeds, nether wart): the one cell they write.
 // Bed, sign and skull items return early on the client (isRemote): not predicted.
 export function dryUse(state, request) {
@@ -186,12 +213,34 @@ export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
   return sneaking || !activatesOnClick(world.get(...target.block));
 }
 
-// What a right click on a block draws at once: 'activate' (door, trapdoor, gate toggle), 'place' (placeHeldBlock) or 'use' (cake, seeds, wart), else null.
-export function useKind({ world, target, heldId, sneaking, aimed }) {
-  if (aimed || !target) return null;
-  const b = world.get(...target.block), item = heldId ? ITEMS[heldId] : null;
-  if (!sneaking || !item) { if (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE) return 'activate'; }
+// What a right click on a block draws at once: 'activate' (door, trapdoor, gate toggle, button, repeater), 'bucket' (ItemBucket's own trace), 'place' (placeHeldBlock)
+// or 'use' (cake, seeds, wart), else null. Lead, bed, sign and skull draw no block on the client (client-predict-reference.json: isRemote returns), lever and
+// the other onBlockActivated that return early on the client are not drawn either.
+export function useKind({ world, target, heldId, heldDamage = 0, sneaking, aimed }) {
+  if (aimed) return null;
+  const item = heldId ? ITEMS[heldId] : null, b = target ? world.get(...target.block) : 0;
+  if (target && (!sneaking || !item) && (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE || b === STONE_BUTTON || b === REPEATER)) return 'activate';
+  if (tracedBucket(heldId)) return !target || sneaking || !activatesOnClick(b) ? 'bucket' : null; // the trace needs no block under the cursor (water)
+  if (!target) return null;
   if (predictsPlacement({ world, target, heldId, sneaking, aimed }) || (PLACED_ITEMS.has(heldId) && (sneaking || !activatesOnClick(b)))) return 'place';
+  if (heldId === ITEM_DYE && heldDamage === 3 && (sneaking || !activatesOnClick(b))) return 'place'; // cocoa beans on a jungle log (ItemDye.onItemUse, probe 'cocoa')
   if (!heldId || (!sneaking && activatesOnClick(b))) return null;
   return heldId === ITEM_CAKE || wartPlantedBy(heldId) || plantedBlock(heldId) ? 'use' : null;
+}
+const ITEM_DYE = 351;
+
+// The overlay's own bookkeeping, kept here so a test can drive the whole draw / refusal / revert cycle without main.js.
+// drawPrediction records `list` ([x, y, z, block, meta]) under `token` and draws it at once; revertPrediction is the refused click's S23: a cell the server left as it
+// was is rebuilt (and relit) from the real world.
+export function drawPrediction(layer, scene, token, list) {
+  const cells = [];
+  for (const [x, y, z, block, meta] of list) {
+    const was = { block: layer.world.get(x, y, z), meta: layer.world.getMeta(x, y, z) };
+    if (layer.set(x, y, z, block, meta, token)) cells.push({ x, y, z, was });
+  }
+  scene.showPredictedCells(cells); // one relight per cell and one mesh per touching column (scene.js)
+  return cells.length ? { token, cells } : null;
+}
+export function revertPrediction(world, scene, pred) {
+  if (pred) for (const c of pred.cells) if (world.get(c.x, c.y, c.z) === c.was.block && world.getMeta(c.x, c.y, c.z) === c.was.meta) scene.updateBlock(c.x, c.z, c.y);
 }

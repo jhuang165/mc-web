@@ -12,7 +12,7 @@ test("batch 51: a click on a block, and any click behind a queued action, waits 
   const body = fnBody("defersToNetworkTick");
   assert.match(body, /aimedEntity \|\| aimedCart \|\| aimedHanging\) return true/);
   assert.match(body, /pendingEdits\.length\) return true/);
-  assert.match(body, /place && target\) return true/);
+  assert.match(body, /place && \(target \|\| tracedBucket\(heldId\(\)\)\)\) return true/); // b57: a bucket's own trace waits too
   assert.ok(body.indexOf("pendingEdits.length") < body.indexOf("isThrowable"), "arrival order is checked before the item rules");
 });
 
