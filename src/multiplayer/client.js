@@ -120,6 +120,9 @@ export class DedicatedClient {
   invClick(slot, button, mode, action, item) { this.send({ type: 'invClick', slot, button, mode, action, item: item ?? null }); }
   invAck() { this.send({ type: 'invAck' }); }
   invClose() { this.send({ type: 'invClose' }); }
+  // b60: C11 EnchantItem (option 0..2) and the MC|ItemName payload of the open anvil.
+  stationEnchant(windowId, slot) { this.send({ type: 'stationEnchant', windowId, slot }); }
+  stationItemName(windowId, name) { this.send({ type: 'stationItemName', windowId, name }); }
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }
