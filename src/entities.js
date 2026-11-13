@@ -1,4 +1,4 @@
-import { trackSections, trackChunkLoads, nearSpawn } from "./saved-order.js";
+import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { copyLivingRoll, copyLivingUpdate } from "./copy-talk.js";
 import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
@@ -2203,7 +2203,7 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
-    trackChunkLoads(this, player, this.viewChunks, this.world.dimension ? null : nearSpawn(this.spawnPoint ? this.spawnPoint() : (this.cachedSpawnPoint ??= this.world.spawn?.()))); // b59so: unload rule; b58so: the chunks the player's movement loads, in load order (saved-order.js)
+    trackChunkLoads(this, player, this.viewChunks, this.world.dimension ? null : nearSpawn(this.spawnPoint ? this.spawnPoint() : (this.cachedSpawnPoint ??= this.world.spawn?.())), false); // b60so: the unload queue runs after the spawner pass (unloadQueued below); b59so: unload rule; b58so: the chunks the player's movement loads, in load order (saved-order.js)
     this.watching = player; // drainClientSounds: the one client (entity-tracker.js)
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
@@ -2234,6 +2234,7 @@ export class EntityWorld {
     if (this.worldTicks % 20 === 0) this.sweepFrozen(player);
     if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
+    unloadQueued(this); // b60so: WorldServer.tick: unloadQueuedChunks follows the spawner; the unloaded chunks' entities are out of the walk below (saved-order.js)
     releaseDead(this.entities);
     const seats = this.staleSeats ??= new Set(); let playerTurn = false; // b59so: the player seated in a boat he took from a mob is let go at his own turn (mob-riding.js)
     const peacefulGone = [];
@@ -2243,7 +2244,7 @@ export class EntityWorld {
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
-    const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
+    const order = this.tickOrder = liveOrder(this, this.withBalls(ridingOrder(this.entities.slice()))); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
@@ -2711,7 +2712,7 @@ export class EntityWorld {
       count: (name) => {
         let n = 0;
         // World.countEntities walks every loaded entity (ticking or not), so mobs frozen outside the ticking window count too.
-        for (const e of this.entities) if (!e.persistent && creatureTypeOf(e.type) === name) n++;
+        for (const e of this.entities) if (!e.persistent && creatureTypeOf(e.type) === name && !this.frozen?.set.has(e)) n++; // b60so: an unloaded chunk's entities are not in loadedEntityList
         return n;
       },
       chunkTop: (_cx, _cz, i) => (s.tops[i] >= 0 ? s.tops[i] : null),

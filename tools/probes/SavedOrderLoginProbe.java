@@ -23,6 +23,8 @@ public class SavedOrderLoginProbe {
   // entity lists to World.unloadEntities) and the removal World.updateEntities does (loadedEntityList.removeAll(unloadedEntityList)); chunks the player's square loads again are read from the saved NBT and append.
   static Boolean respawnOverride = null;
   static double[][] path = null; static boolean unloadAfterMove = false;
+  // b60so: unloadMask[i] false skips the unload after step i (the chunks stay queued); recordSteps adds `steps` (loadedEntityList indices after each step)
+  static boolean[] unloadMask = null; static boolean[] recordSteps = null;
   static Map<Long, dh> nbts;
   static aqk anvil;
   static Method reader, writer;
@@ -88,13 +90,16 @@ public class SavedOrderLoginProbe {
     mw player = ChunkProviderProbe.player(77, px, pz);
     if (!noPlayer) { spawn.invoke(lw, player); manager.a(player); }
     if (!noPlayer && !Double.isNaN(moveX)) { player.s = moveX; player.u = moveZ; manager.d(player); }
-    if (!noPlayer && path != null) for (double[] st : path) {
+    List<List<Integer>> steps = new ArrayList<>();
+    if (!noPlayer && path != null) for (int si = 0; si < path.length; si++) {
+      double[] st = path[si];
       player.s = st[0]; player.u = st[1]; manager.d(player);
-      if (unloadAfterMove) {
+      if (unloadAfterMove && (unloadMask == null || unloadMask[si])) {
         provider.d();
         List<?> un = (List<?>) MobMoveProbe.field(ahb.class, "f").get(lw), live = (List<?>) MobMoveProbe.field(ahb.class, "e").get(lw);
         live.removeAll(un); un.clear();
       }
+      if (recordSteps != null) { List<Integer> now = new ArrayList<>(); for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) now.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks)); steps.add(now); }
     }
     if (riding != null && !noPlayer) { // initializeConnectionToPlayer, after playerLoggedIn
       sa mount = sg.a(riding, lw); // EntityList.createEntityFromNBT: the first Riding only
@@ -105,7 +110,7 @@ public class SavedOrderLoginProbe {
     for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
     StringBuilder s = new StringBuilder("{\"case\":\"" + caseName + "\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
     for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
-    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append(path == null ? "" : "\"path\":" + Arrays.deepToString(path) + ",").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
+    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append(path == null ? "" : "\"path\":" + Arrays.deepToString(path) + ",").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(recordSteps == null ? "" : ",\"mask\":" + Arrays.toString(unloadMask) + ",\"steps\":" + steps).append(",\"after\":").append(after).append("}");
     System.out.println(s);
   }
 
@@ -193,6 +198,18 @@ public class SavedOrderLoginProbe {
     respawnOverride = Boolean.FALSE; // the Nether/End provider: every chunk the player leaves is queued
     login("b59so-away-back-nether", bk, back, 0, 0, 40.5, 8.5, 2, -1);
     respawnOverride = null;
-    path = null; unloadAfterMove = false;
+    // b60so: the unload queue. queue-cancel: the player steps away and back before ms.d runs (loadChunk, ms.c, takes the chunks off chunksToUnload); queue-delay: one tick queued, the next unloads;
+    // limit: view 6, a teleport queues 169 chunks and ms.d takes 100 per call (HashSet<Long> order), the second call the rest.
+    caseName = "saved-order8"; recordSteps = new boolean[0];
+    double farX = 12 * 16 + 4.5, back0 = 2 * 16 + 4.5;
+    path = new double[][] {{farX, 8.5}, {back0, 8.5}}; unloadMask = new boolean[] {false, true};
+    login("b60so-queue-cancel", bk, back, 1000, 0, 40.5, 8.5, 2, -1);
+    path = new double[][] {{farX, 8.5}, {farX + 1, 8.5}, {back0, 8.5}}; unloadMask = new boolean[] {false, true, true};
+    login("b60so-queue-delay", bk, back, 1000, 0, 40.5, 8.5, 2, -1);
+    int[][] wide = new int[12][]; for (int i = 0; i < 12; i++) wide[i] = new int[] {i - 3, i % 3 - 1};
+    double[] wy = new double[12]; int[] wc = new int[12]; for (int i = 0; i < 12; i++) { wy[i] = 70; wc[i] = i; }
+    path = new double[][] {{100 * 16 + 4.5, 8.5}, {100 * 16 + 5.5, 8.5}, {2 * 16 + 4.5, 8.5}}; unloadMask = new boolean[] {true, true, true};
+    login("b60so-limit", wide, plain.apply(wy, wc), 1000, 0, 40.5, 8.5, 6, -1);
+    path = null; unloadAfterMove = false; unloadMask = null; recordSteps = null;
   }
 }

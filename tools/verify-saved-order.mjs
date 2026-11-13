@@ -76,3 +76,12 @@ const reference7={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases7};
 await writeFile(path.join(root,'../public/research/saved-order7-reference.json'),JSON.stringify(reference7)+'\n');
 console.log(`${cases7.length} saved order 7 scenarios`);
+// Batch 60 (b60so): the unload queue. A chunk that comes back before ms.d runs is taken off chunksToUnload (ms.c), ms.d unloads at most 100 per call in HashSet<Long> order, and the entities of an
+// unloaded chunk are out of loadedEntityList until it reloads; replayed by src/savedorder8-b60.test.js. `steps`: loadedEntityList indices after each path step (after its ms.d when mask is true).
+const cases8=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order8');
+assert.equal(cases8.length,3,'3 b60so scenarios');
+const reference8={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 60 b60so: SavedOrderLoginProbe, the b59so set-up with a far spawn (nothing is near it), `mask` choosing which steps are followed by the real ChunkProviderServer.unloadQueuedChunks and the World.updateEntities removeAll. queue-cancel: away, back, then unload; queue-delay: away (queued only), a tick later unload, then back; limit: view 6, a teleport queues 169 chunks, ms.d takes 100 per call. Callers (WorldServer.tick: spawner, then unloadQueuedChunks; MinecraftServer: updateEntities after) bytecode-read.',
+ cases:cases8};
+await writeFile(path.join(root,'../public/research/saved-order8-reference.json'),JSON.stringify(reference8)+'\n');
+console.log(`${cases8.length} saved order 8 scenarios`);

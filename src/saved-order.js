@@ -16,6 +16,7 @@
 // square (PlayerManager.addPlayer, x outer, z inner; PlayerInstance loads each chunk), then the player's mount. `loadFrame` gives the frame (spawn, player, view distance); chunks outside it,
 // and every save without a frame, keep the approximation: the order of their first joined entity. A mount that carries the player takes its own Riding chain no further: the login reads the
 // first Riding compound only (sg.a does not read a nested Riding), so a mount of that mount is in no chunk and in no file: its record is dropped from the save (`lostMounts`).
+import { JavaHashSetOrder } from "./java-hashset-order.js";
 const SECTIONS = 16;
 const sectionOf = (e) => Math.min(SECTIONS - 1, Math.max(0, Math.floor((e.posY ?? e.y ?? 0) / 16)));
 const finite = (v) => Number.isFinite(v);
@@ -86,23 +87,89 @@ function lostMounts(carried, rows) {
 
 /** b58so: the chunks the player's movement loads after the login, in load order (executed SavedOrderLoginProbe `b58so-move-*`: PlayerManager.updateMountedMovingPlayer creates a PlayerInstance for each
  *  chunk of the new view square that was not watched, x outer, z inner, and each loads its chunk, so World.addLoadedEntities appends the chunk's entities to loadedEntityList in that order).
- *  Called every tick with the player's position: the first call records the login square (x outer, z inner, as PlayerManager.addPlayer). A chunk that leaves the square keeps its place (the
- *  entities it held stay in the port's lists) and is marked out: a return loads it again, at the end. */
-export function trackChunkLoads(mobs, player, view = mobs?.viewChunks, keeps = null) {
+ *  Called every tick with the player's position: the first call records the login square (x outer, z inner, as PlayerManager.addPlayer).
+ *  b60so: a chunk the square leaves is QUEUED (ChunkProviderServer.unloadChunksIfNotNearSpawn, ms.b: a HashSet<Long> of chunksToUnload, `queue`), in the order the move's removal loop meets it (the old
+ *  square, x outer, z inner, minus the new one). `unloadQueued` (WorldServer.tick: ms.d, up to 100 per call, in HashSet order) then unloads it: the chunk is marked `out` and its entities are
+ *  frozen (below). A chunk that comes back while still queued is taken off the queue by loadChunk (ms.c) and keeps its place; one already unloaded loads again, at the end, and its entities thaw.
+ *  `flush` (default): run `unloadQueued` at once, as the pre-b60 callers expect; EntityWorld.tickMobs passes false and calls it after the spawner pass, where WorldServer.tick does. */
+export function trackChunkLoads(mobs, player, view = mobs?.viewChunks, keeps = null, flush = true) {
   if (!mobs || !player || !finite(player.x) || !finite(player.z) || !Number.isInteger(view) || view < 1) return;
-  const cx = Math.trunc(player.x) >> 4, cz = Math.trunc(player.z) >> 4, st = (mobs.chunkLoads ??= { map: new Map(), out: new Set(), cx: null, cz: null, view: 0, n: 0 });
+  trackSquare(mobs, player, view, keeps);
+  if (flush) unloadQueued(mobs);
+}
+
+function trackSquare(mobs, player, view, keeps) {
+  const cx = Math.trunc(player.x) >> 4, cz = Math.trunc(player.z) >> 4, st = (mobs.chunkLoads ??= { map: new Map(), out: new Set(), queue: new JavaHashSetOrder(), cx: null, cz: null, view: 0, n: 0 });
   if (st.cx === cx && st.cz === cz && st.view === view) return;
-  const square = new Set();
+  const square = new Set(), reloaded = [];
   for (let x = cx - view; x <= cx + view; x++) for (let z = cz - view; z <= cz + view; z++) {
     const k = `${x},${z}`;
     square.add(k);
-    if (!st.map.has(k) || st.out.has(k)) { if (st.out.has(k)) (st.again ??= new Set()).add(k); st.map.set(k, ++st.n); st.out.delete(k); } // `again`: loaded a second time, after its first load was unloaded
+    if (st.queue.remove(k)) continue; // still queued: loadChunk (ms.c) takes it off chunksToUnload, nothing reloads
+    if (!st.map.has(k) || st.out.has(k)) { if (st.out.has(k)) { (st.again ??= new Set()).add(k); reloaded.push(k); } st.map.set(k, ++st.n); st.out.delete(k); } // `again`: loaded a second time, after its first load was unloaded
   }
-  // b59so: a chunk the square left is queued by ChunkProviderServer.unloadChunksIfNotNearSpawn (ms.b, bytecode-read) unless `keeps` says it is near the spawn of a respawn-capable world; the queue runs
-  // each tick (unloadQueuedChunks, up to 100), and World.updateEntities drops the chunk's entities from loadedEntityList, so a return loads it again (executed `b59so-away-back-*`). A kept chunk stays loaded.
-  for (const k of st.map.keys()) if (!square.has(k)) { const [x, z] = k.split(",").map(Number); if (!keeps?.(x, z)) st.out.add(k); }
+  // b59so / b60so: a chunk of the old square the new one lacks is queued by ms.b unless `keeps` says it is near the spawn of a respawn-capable world (executed `b59so-away-back-*`).
+  if (st.cx !== null) for (let x = st.cx - st.view; x <= st.cx + st.view; x++) for (let z = st.cz - st.view; z <= st.cz + st.view; z++) {
+    const k = `${x},${z}`;
+    if (!square.has(k) && !keeps?.(x, z) && !st.out.has(k)) st.queue.add(k, x ^ z); // Long.hashCode of (x, z) packed low / high is x ^ z
+  }
   st.cx = cx; st.cz = cz; st.view = view;
+  if (reloaded.length) thaw(mobs, reloaded);
 }
+
+/** b60so: ChunkProviderServer.unloadQueuedChunks (ms.d, bytecode-read): up to 100 queued chunks per call, taken from the front of the HashSet, unless level saving is disabled (not modelled).
+ *  WorldServer.tick calls it after the spawner pass; the entities of each unloaded chunk leave loadedEntityList at the start of the same server tick's updateEntities (executed b59so). */
+export function unloadQueued(mobs, limit = 100) {
+  const st = mobs?.chunkLoads;
+  if (!st?.queue?.size) return;
+  const keys = st.queue.keys().slice(0, limit);
+  for (const k of keys) { st.queue.remove(k); st.out.add(k); }
+  freeze(mobs, new Set(keys));
+}
+
+const loadedEntities = (m) => [...(m.entities ?? []), ...(m._fireballs?.list ?? []), ...[...(m.walks?.values() ?? [])].flatMap((w) => w.list())].filter((e) => e && !e.dead);
+const chunkKey = (e) => `${Math.floor((e.x ?? 0) / 16)},${Math.floor((e.z ?? 0) / 16)}`;
+
+/** b60so: Chunk.onChunkUnload -> World.unloadEntities: the chunk is saved with its entities (the port keeps their state in its own lists, which is the save) and they leave loadedEntityList:
+ *  they stop updating, count for nothing, and take no place in the walk. A mount and its rider freeze together or not at all; what carries the player never does. */
+function freeze(mobs, keys) {
+  const fz = (mobs.frozen ??= { set: new Set(), byChunk: new Map() });
+  for (const e of loadedEntities(mobs)) {
+    const k = chunkKey(e);
+    if (!keys.has(k) || fz.set.has(e) || carriesPlayer(e)) continue;
+    const mates = [e.ridingEntity, e.passenger].filter(Boolean);
+    if (mates.some((m) => !keys.has(chunkKey(m)) || carriesPlayer(m))) continue;
+    fz.set.add(e);
+    (fz.byChunk.get(k) ?? fz.byChunk.set(k, []).get(k)).push(e);
+  }
+}
+
+/** b60so: Chunk.onChunkLoad on a return: the chunk's saved entities are read back (AnvilChunkLoader: section 0..15, each in its list order, a rider with its mount) and appended to loadedEntityList in
+ *  the order the chunks load (`keys`). They take new places at the end and are filed fresh (no move since). */
+function thaw(mobs, keys) {
+  const fz = mobs.frozen;
+  if (!fz?.byChunk.size) return;
+  mobs.orderStamp?.();
+  mobs.withBalls?.(mobs.entities.slice());
+  const seqs = mobs.orderSeqs, moved = mobs.sectionSeqs, rows = [];
+  for (const k of keys) {
+    const here = fz.byChunk.get(k);
+    if (!here) continue;
+    fz.byChunk.delete(k);
+    const part = here.filter((e) => { fz.set.delete(e); return !e.dead; }).map((e) => ({ e, chunk: k, sec: sectionOf(e), list: moved?.get(e) ?? seqs?.get(e) ?? 0 }));
+    part.sort((a, b) => a.sec - b.sec || a.list - b.list);
+    rows.push(...part);
+    mobs.chunkBirth?.delete(k);
+  }
+  if (!rows.length || !seqs) return;
+  const byChunk = new Map();
+  for (const r of rows) (byChunk.get(r.chunk) ?? byChunk.set(r.chunk, []).get(r.chunk)).push(r);
+  for (const part of byChunk.values()) for (const r of loadOrder(part)) { seqs.set(r.e, mobs.orderCount = (mobs.orderCount ?? 0) + 1); moved?.delete(r.e); mobs.sectionCells?.delete(r.e); }
+  mobs.entities.sort((a, b) => (seqs.get(a) ?? Infinity) - (seqs.get(b) ?? Infinity));
+}
+
+/** b60so: the walk's list without the frozen entities (the entities of unloaded chunks are not in loadedEntityList). */
+export const liveOrder = (mobs, order) => (mobs?.frozen?.set.size ? order.filter((e) => !mobs.frozen.set.has(e)) : order);
 
 /** b59so: ms.b's keep-loaded rule: a chunk whose centre is within 128 blocks of the spawn on both axes is not queued for unloading (Overworld-like providers only: pass null for the Nether and End). */
 export const nearSpawn = (spawn) => (finite(spawn?.x) && finite(spawn?.z) ? (cx, cz) => { const dx = cx * 16 + 8 - Math.floor(spawn.x), dz = cz * 16 + 8 - Math.floor(spawn.z); return dx >= -128 && dx <= 128 && dz >= -128 && dz <= 128; } : null);
