@@ -14,6 +14,9 @@ public class SavedOrderLoginProbe {
     public void a(sa e) {} // onEntityAdded: the entity tracker is not part of the probe
     public void c() {} // updateAllPlayersSleepingFlag
   }
+  // b57so: caseName labels the records; skipGrid: no initialWorldChunkLoad (the Nether and End: MinecraftServer.g loads dimension 0 only); noPlayer: nobody logs in (the Overworld while the player is away)
+  static String caseName = "saved-order4";
+  static boolean skipGrid = false, noPlayer = false;
   static Map<Long, dh> nbts;
   static aqk anvil;
   static Method reader, writer;
@@ -74,19 +77,18 @@ public class SavedOrderLoginProbe {
     java.lang.invoke.MethodHandle spawn = java.lang.invoke.MethodHandles.privateLookupIn(WS2.class, java.lang.invoke.MethodHandles.lookup()).findSpecial(ahb.class, "d", java.lang.invoke.MethodType.methodType(boolean.class, sa.class), WS2.class);
     // MinecraftServer.initialWorldChunkLoad
     r sp = lw.K();
-    for (int k = -192; k <= 192; k += 16) for (int l = -192; l <= 192; l += 16) provider.c(sp.a + k >> 4, sp.c + l >> 4);
+    if (!skipGrid) for (int k = -192; k <= 192; k += 16) for (int l = -192; l <= 192; l += 16) provider.c(sp.a + k >> 4, sp.c + l >> 4);
     // ServerConfigurationManager.playerLoggedIn: spawnEntityInWorld(player), then PlayerManager.addPlayer
     mw player = ChunkProviderProbe.player(77, px, pz);
-    spawn.invoke(lw, player);
-    manager.a(player);
-    if (riding != null) { // initializeConnectionToPlayer, after playerLoggedIn
+    if (!noPlayer) { spawn.invoke(lw, player); manager.a(player); }
+    if (riding != null && !noPlayer) { // initializeConnectionToPlayer, after playerLoggedIn
       sa mount = sg.a(riding, lw); // EntityList.createEntityFromNBT: the first Riding only
       PlayerStepProbe.field(sa.class, "Z").set(mount, new Random(7));
       mount.n = true; spawn.invoke(lw, mount); mount.n = false;
     }
     List<Integer> after = new ArrayList<>();
     for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
-    StringBuilder s = new StringBuilder("{\"case\":\"saved-order4\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
+    StringBuilder s = new StringBuilder("{\"case\":\"" + caseName + "\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
     for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
     s.append("],\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
     System.out.println(s);
@@ -116,5 +118,32 @@ public class SavedOrderLoginProbe {
     login("b56so-stacked-chain", grid, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 2), SavedOrderProbe.S("cow", 70, 1, 3), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 1);
     // the same player on the cow that carries another rider's mount (a cow on a cow: the lower cow is lost too), and an unrelated mounted pair stays
     login("b56so-stacked-plus-pair", grid, new String[][] {SavedOrderProbe.S("cow", 70, 0, 1), SavedOrderProbe.S("cart", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 3), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 2);
+    // b57so: scenarios 11 on. The Nether and the End log in with no spawn grid (MinecraftServer.g loads dimension 0 only; bytecode-read), the Overworld while the player is away
+    // loads only its grid, a mob riding the mount the player then takes (EntityBoat.interactFirst lets a non-player rider be taken over; Entity.mountEntity leaves the old rider's link),
+    // and non-mob entities high above the world.
+    caseName = "saved-order5";
+    skipGrid = true;
+    double[] flat = {70, 70, 70, 70, 70, 70, 70, 70};
+    login("b57so-nether-no-grid", grid, plain.apply(flat, new int[] {0, 1, 2, 3, 4, 0, 1, 2}), 0, 0, 40.5, 8.5, 2, -1);
+    login("b57so-nether-far", far, plain.apply(flat, new int[] {0, 1, 2, 3, 4, 5, 0, 4}), 0, 0, 20 * 16 + 4.5, 8.5, 2, -1);
+    login("b57so-nether-view-one", grid, plain.apply(flat, new int[] {0, 1, 2, 3, 4, 0, 1, 2}), 0, 0, 40.5, 8.5, 1, -1);
+    login("b57so-nether-mount", grid, withCart, 0, 0, 40.5, 8.5, 2, 1);
+    skipGrid = false; noPlayer = true;
+    login("b57so-away-grid", grid, plain.apply(new double[] {70, 5, 130, 20, 70, 130, 5, 70}, new int[] {0, 0, 1, 1, 2, 2, 3, 4}), 0, 0, 0, 0, 2, -1);
+    login("b57so-away-far", far, plain.apply(flat, new int[] {0, 1, 2, 3, 4, 5, 0, 4}), 0, 0, 0, 0, 2, -1);
+    noPlayer = false;
+    // a cow in a cart, the player takes the cart: the cow keeps its link, is written with the cart nested, and the cart (ridden) is only in the player's Riding
+    login("b57so-stale-cow-in-cart", grid, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 2), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 2);
+    // non-mob entities high above the world, in a chunk of the grid and one section low: every kind is written and read back, filed in section 15 (y / 16 clamped), 0 for y < 0
+    String[] hk = {"item", "boat", "fall", "tnt", "arrow", "orb", "cart", "item", "boat", "fall", "tnt", "arrow"};
+    double[] hy = {300, 70, 256, 255.5, 400, 130, 1000, 5, 600, -20, 16, 4000};
+    String[][] high = new String[hk.length][];
+    for (int i = 0; i < hk.length; i++) high[i] = SavedOrderProbe.S(hk[i], hy[i], i < 6 ? 0 : 1, -1);
+    login("b57so-high-kinds", grid, high, 0, 0, 40.5, 8.5, 2, -1);
+    String[][] high2 = new String[hk.length][];
+    for (int i = 0; i < hk.length; i++) high2[i] = SavedOrderProbe.S(hk[i], hy[(i + 5) % hy.length], i % 3, -1);
+    login("b57so-high-mixed", grid, high2, 0, 0, 40.5, 8.5, 2, -1);
+    // a high cart the player rides is read from the player's Riding, last
+    login("b57so-high-mount", grid, new String[][] {SavedOrderProbe.S("item", 300, 0, -1), SavedOrderProbe.S("boat", 400, 1, -1), SavedOrderProbe.S("fall", 70, 0, -1), SavedOrderProbe.S("tnt", 260, 1, -1)}, 0, 0, 40.5, 8.5, 2, 1);
   }
 }
