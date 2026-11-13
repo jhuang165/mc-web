@@ -139,7 +139,8 @@ export class StreamingLight {
   }
   skyAt(x,y,z) { return this.inner.skyAt(x-this.x,y,z-this.z); }
   blockAt(x,y,z) { return this.inner.blockAt(x-this.x,y,z-this.z); }
-  packed(x,y,z) { return this.inner.packed(x-this.x,y,z-this.z); }
+  // The mesher calls here with its own `emissive` flag, which this proxy has always dropped (kept: the worker mesher and the page mesher must agree); only the entity path (mixed false) passes both flags through.
+  packed(x,y,z,emissive,mixed) { return mixed === false ? this.inner.packed(x-this.x,y,z-this.z,emissive,false) : this.inner.packed(x-this.x,y,z-this.z); }
   level(x,y,z,subtracted=0) { return this.inner.level(x-this.x,y,z-this.z,subtracted); }
   column(x,z) { this.inner.column(x-this.x,z-this.z); }
   box(box) { return box && {...box,x0:box.x0+this.x,x1:box.x1+this.x,z0:box.z0+this.z,z1:box.z1+this.z}; }

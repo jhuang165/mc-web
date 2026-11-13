@@ -328,9 +328,11 @@ export class LightVolume {
   // World.getLightBrightnessForSkyBlocks(x, y, z, lightValue of the block there). World.getSkyBlockTypeBrightness (ahb.a(ahn,III), bytecode and
   // light-float-reference.json) of a use-neighbour-brightness block takes the larger of the cells above, east, west, south and north (not below).
   // `emissive` false is the lightValue 0 of BlockLiquid.getMixedBrightnessForBlock (the cell's own emission is left out).
-  packed(x, y, z, emissive = true) {
+  // `mixed` false is World.getLightBrightnessForSkyBlocks(x, y, z, 0) taken directly (entities, particles, rain): the slab rule above belongs to Block.getMixedBrightnessForBlock only
+  // (executed, display-light-reference.json: an entity in a dark slab cell reads 0, not the cell below).
+  packed(x, y, z, emissive = true, mixed = true) {
     const p = cellPacked(this, x, y, z, emissive);
-    return p === 0 && isSlabBlock(this.world.get(x, y, z)) ? cellPacked(this, x, y - 1, z, emissive) : p;
+    return mixed && p === 0 && isSlabBlock(this.world.get(x, y, z)) ? cellPacked(this, x, y - 1, z, emissive) : p;
   }
   // World.getBlockLightValue: the larger of daylight-reduced sky and block light.
   level(x, y, z, subtracted = 0) {
