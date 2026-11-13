@@ -34,6 +34,7 @@ import { JavaRandom } from "./java-random.js";
 import { JavaHashSetOrder } from "./java-hashset-order.js";
 import { horseFlagsOf } from "./horse-copy.js";
 import { copyDeathUpdate } from "./death-fx.js";
+import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -110,6 +111,7 @@ export class TrackerEntry {
     this.lastAir = e.air ?? 300; // the squid's air (data watcher index 1) the client last got
     this.lastHorse = e.type === "horse" ? horseFlagsOf(e) : 0; // the horse's data watcher 16 (flag bits) the client last got
     this.lastLeash = ""; // the leash holder last sent in S1B(1) (a key of leashKey)
+    this.lastMeta = null; // batch 61: copy-meta.js watched values the client last got (set by watched() at the spawn)
   }
   emit(packet) { SEQ.set(packet, ++seqCounter); this.packets.push(packet); this.view.log?.(packet); } // to the client's queue (and a test log)
   send(packet) { if (this.tracked) this.emit(packet); }
@@ -185,6 +187,8 @@ export class TrackerEntry {
       if (e.type === "ender_dragon") meta.health = this.lastHealth = e.health; else meta.air = this.lastAir = e.air ?? 300;
       this.send(meta);
     }
+    // Batch 61: the other watched objects a copy draws from (air, potion colour, invisible, enderman scream, wither invul and health): one S1C for what changed
+    if (this.lastMeta) { const d = copyMetaDiff(this.lastMeta, e); if (d) this.send({ type: "meta", ...d }); }
     // Entity.velocityChanged (knockback): the motion goes out at once, to everyone tracking
     if (e.velocityChanged) { this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) }); e.velocityChanged = false; }
     this.ticks++;
@@ -192,10 +196,12 @@ export class TrackerEntry {
   // The data watcher values the S0F spawn packet carries for the mobs whose client copy reads one (S0F's metadata list, applied after the constructor)
   watched() {
     const e = this.e;
+    this.lastMeta = copyMetaOf(e) ?? {}; // batch 61: the S0F list also holds air, potion colour, scream and wither values
+    const meta = { ...this.lastMeta };
     if (e.type === "ender_dragon") return { health: this.lastHealth = e.health };
     if (e.type === "squid") return { air: this.lastAir = e.air ?? 300 };
-    if (e.type === "horse") return { horseFlags: this.lastHorse = horseFlagsOf(e) }; // the S0F's watcher list holds index 16 as it was at the spawn
-    return {};
+    if (e.type === "horse") return { ...meta, horseFlags: this.lastHorse = horseFlagsOf(e) }; // the S0F's watcher list holds index 16 as it was at the spawn
+    return meta;
   }
   updatePlayerList() { this.tryStart(); }
   // EntityTrackerEntry.tryStartWachingThis: the square test on lastScaledPosition / 32 with integer division
@@ -281,6 +287,8 @@ export class ClientEntity {
       if (p.health !== undefined) this.health = p.health;
       if (p.air !== undefined) this.air = p.air;
       if (p.horseFlags !== undefined) this.horseFlags = p.horseFlags;
+      applyCopyMeta(this, p);
+      if (p.air !== undefined) this.air = p.air;
       this.present = true; this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.x = this.tx = this.px = p.x / 32; this.y = this.ty = this.py = p.y / 32; this.z = this.tz = this.pz = p.z / 32; this.increments = 0;
       this.onGround = false;
@@ -308,6 +316,7 @@ export class ClientEntity {
       if (p.health !== undefined) this.health = p.health;
       if (p.air !== undefined) this.air = p.air;
       if (p.horseFlags !== undefined) this.horseFlags = p.horseFlags;
+      applyCopyMeta(this, p);
     }
     else if (p.type === "velocity") { this.vx = p.vx / 8000; this.vy = p.vy / 8000; this.vz = p.vz / 8000; }
     else if (p.type === "attach") {
@@ -319,7 +328,7 @@ export class ClientEntity {
   // Entity.onUpdate (previous position and angles), then EntityLivingBase.onLivingUpdate. `move(client)` is moveEntityWithHeading(0, 0) on the
   // client's world (null for mobs whose client class moves by its own code, which are interpolated only); `turn(client)` is the body turn
   // that EntityLivingBase.onUpdate runs after it; `pre(client)` is Entity.onEntityUpdate's water and lava check, before the motion.
-  step(move = null, turn = null, pre = null) {
+  step(move = null, turn = null, pre = null, living = null) {
     if (!this.present) return;
     this.px = this.x; this.py = this.y; this.pz = this.z;
     this.prevRotationYaw = this.rotationYaw; this.prevRotationPitch = this.rotationPitch;
@@ -329,6 +338,7 @@ export class ClientEntity {
     if (move && pre) pre(this);
     this.gone = this.deathDone; // copy-talk.js: a removed copy runs no onLivingUpdate draws
     copyDeathUpdate(this); // onEntityUpdate's onDeathUpdate (sv.aF), before onLivingUpdate's interpolation
+    if (move) living?.(this); // batch 61: then the potion swirl and the living roll (entities.js clientLiving)
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
       this.x += (this.tx - this.x) / n;
@@ -769,9 +779,9 @@ export class MobTracker {
     let crystals = null;
     const crystalCopies = () => crystals ??= [...this.clientList].filter((en) => en.live.type === "ender_crystal" && en.client.present).map((en) => en.client)
       .sort((a, b) => (floor(a.x / 16) - floor(b.x / 16)) || (floor(a.z / 16) - floor(b.z / 16)) || (floor(a.y / 16) - floor(b.y / 16)));
-    const hooks = (e) => e.type === "ender_crystal" ? [null, null, null] : physics && !CLIENT_PHYSICS_OFF.has(e.type)
-      ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e))]
-      : [null, physics?.turn && ((c) => physics.turn(c, e)), null];
+    const hooks = (e) => e.type === "ender_crystal" ? [null, null, null, null] : physics && !CLIENT_PHYSICS_OFF.has(e.type)
+      ? [(c) => physics(c, e), physics.turn && ((c) => physics.turn(c, e)), physics.pre && ((c) => physics.pre(c, e)), physics.living && ((c) => physics.living(c, e))]
+      : [null, physics?.turn && ((c) => physics.turn(c, e)), null, null];
     return (en) => {
       const e = en.live, c = en.client;
       if (!c.present) { this.clientList.delete(en); return; }

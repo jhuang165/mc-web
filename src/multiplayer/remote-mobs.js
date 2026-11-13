@@ -98,7 +98,7 @@ export class RemoteMobs {
       client.dead = mob.health <= 0;
       const slime = mob.type === 'slime' || mob.type === 'magma_cube';
       if (slime) slimeSquishStart(mob); // EntitySlime.onUpdate runs on the client copy too: the squish and the landing particles (the sounds come from the server's S29)
-      client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob));
+      client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob), (c) => this.physics.living?.(c, mob)); // batch 61: the potion swirl and the living roll follow the death update (entities.js clientLiving)
       mob.px = mob.x; mob.py = mob.y; mob.pz = mob.z;
       if (slime) { mob.onGround = client.onGround; slimeSquishEnd(mob, this.rand, (dx, dz) => this.fx.particle?.('slime', client.x + dx, client.y, client.z + dz, 0, 0, 0), () => {}); }
       mob.x = client.x; mob.y = client.y; mob.z = client.z;

@@ -33,7 +33,7 @@ export const visualRandom = (e) => {
 export const setVisualRandom = (e, rand) => VISUAL.set(e, rand);
 export function villagerParticles(m, name) {
   // EntityWorld.burst (entities.js owns the fx import; fx.js reaches back into entities.js).
-  m.ai.ew.villageBurst?.(name, m.e, { width: m.width, height: m.height }, visualRandom(m.e));
+  m.ai.ew.villageBurst?.(name, m.e, { width: m.width, height: m.height }, m.ai.ew.statusRand?.(m.e, visualRandom(m.e)) ?? visualRandom(m.e)); // batch 61: the copy's Random
 }
 // BiomeGenBase.canSpawnLightningBolt (ahu.e) at a column, as weather.js reads it (a snowy biome or one without rain
 // answers false); a world without biome data is Plains.

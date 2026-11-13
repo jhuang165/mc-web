@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { ClientEntity } from "./entity-tracker.js";
 import { JavaRandom } from "./java-random.js";
-import { copyLivingRoll, copyLivingUpdate, talkInterval } from "./copy-talk.js";
+import { copyLivingRoll, copyLivingUpdate, copyLivingPre, talkInterval } from "./copy-talk.js";
 import { EntityWorld } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/mobsounds-reference.json", import.meta.url), "utf8"));
@@ -47,9 +47,10 @@ for (const r of ref.mobs) {
     const c = copyOf(r), m = liveOf(r);
     c.batHanging = true; // EntityBat's constructor: setIsBatHanging(true); the spawn packet's S1C carries it
     r.ticks.forEach(([draws, , , onGround], i) => {
-      if (r.name === "Enderman" && draws.includes(" 100:")) m.screaming = true; // the probe's fall damage screamed the enderman at tick 55 (not recorded): the live flag stands in
+      if (r.name === "Enderman" && draws.includes(" 100:")) c.screaming = true; // the probe's fall damage screamed the enderman at tick 55 (not recorded): the S1C would carry it (batch 61: the copy follows the watcher, not the live flag)
       c.rand.log.length = 0;
       copyLivingRoll(c, m);
+      copyLivingPre(c, m); // batch 61: ya.e / the blaze's draws precede the move
       c.onGround = onGround; // the move (the copy's own physics) happens between the two; here it is the recorded result
       copyLivingUpdate(c, m);
       assert.equal(c.rand.log.join(" "), draws, `${r.name} tick ${i}`);
@@ -61,10 +62,10 @@ test("a dead copy draws no roll, a removed copy draws nothing from onLivingUpdat
   const c = new ClientEntity("mob"); c.rand = new Log(1);
   c.dead = true;
   assert.equal(copyLivingRoll(c, { type: "zombie" }), false);
-  copyLivingUpdate(c, { type: "enderman" });
+  copyLivingPre(c, { type: "enderman" });
   assert.equal(c.rand.log.length, 12); // a dying (not yet removed) enderman copy still spawns its portal particles
   c.rand.log.length = 0; c.gone = true;
-  copyLivingUpdate(c, { type: "enderman" });
+  copyLivingPre(c, { type: "enderman" });
   assert.equal(c.rand.log.length, 0);
 });
 
@@ -76,15 +77,17 @@ test("horse, squid, dragon and crystal copies are left to their own code", () =>
   }
 });
 
-test("EntityWorld wires it: clientEnvironment draws the roll, clientAfterMove the enderman particles, on the copy's own Random", () => {
+test("EntityWorld wires it: clientLiving draws the roll, clientAfterMove the enderman particles, on the copy's own Random", () => {
   const terrain = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
   const w = new EntityWorld(terrain, [{ id: "mob-1", type: "enderman", x: 64, y: 0, z: 64, health: 40 }], () => 0.5);
   const m = w.entities[0], c = new ClientEntity("enderman");
   c.present = true; c.x = 64; c.y = 0; c.z = 64; c.rand = new Log(5);
   w.clientEnvironment(c, m);
+  assert.equal(c.rand.log.length, 0); // batch 61: the roll follows the death update (clientLiving)
+  w.clientLiving(c, m);
   assert.equal(c.rand.log.length, 1);
   assert.match(c.rand.log[0], /^1000:/);
   c.rand.log.length = 0;
-  w.clientAfterMove(c, m);
+  w.moveClient(c, m); // batch 61: the enderman's draws precede the move
   assert.equal(c.rand.log.join(" "), "d d d d d d d d d d d d");
 });
