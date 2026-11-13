@@ -13,6 +13,13 @@ export function crystalUpdate(mobs, e) {
   });
 }
 
+// The crystal's client copy runs the same wz.h (no isRemote guard, bytecode-read): in a WorldProviderEnd client world it sets fire in the cell it
+// stands in with setBlock(x, y, z, fire) = flags 3, meta 0, on the client's chunks only. `layer` is the client block view { isEnd, get, set };
+// the copy's position is its client position (floor of x, y, z). No layer is wired in the browser yet (see end.md Gaps): this is the rule for it.
+export function clientCrystalFire(copy, layer) {
+  return crystalTick({ x: copy.x, y: copy.y, z: copy.z, innerRotation: 0 }, layer.isEnd === true, layer.get, layer.set);
+}
+
 // EntityEnderCrystal.attackEntityFrom (any damage source and amount). A killed crystal is setDead at
 // once and explodes with power 6 and fire (World.newExplosion(null, x, y, z, 6.0F, true, true)): no
 // exploder, so nearby crystals chain. Returns the attackEntityFrom result.
