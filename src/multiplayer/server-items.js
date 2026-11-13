@@ -111,7 +111,7 @@ export class ServerItems {
   // `fits[i]`: how many of item eids[i] the client's inventory takes (EntityItem.onCollideWithPlayer keeps the rest on the ground). Without it the whole stack goes.
   pickup(p, eids, fits) {
     const sim = this.sim;
-    if (!p || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
+    if (!p || p.dead || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
     const room = new Map(), byStack = new Map();
     for (const e of sim.items.items) { const at = eids.indexOf(e.eid); if (at >= 0) { byStack.set(e.stack, e); room.set(e.eid, Number.isInteger(fits?.[at]) ? fits[at] : Infinity); } }
     if (!byStack.size) return false;
@@ -140,6 +140,7 @@ export class ServerItems {
     }
     this.xp.reap();
     for (const p of players) {
+      if (p.dead) continue; // a dead player collects nothing (b60)
       this.xp.cooldown = p.xpCooldown;
       const v = this.xp.collect(p.position, PHYSICS.width, PHYSICS.height);
       p.xpCooldown = this.xp.cooldown;

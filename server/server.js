@@ -241,6 +241,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.cracksOut && ws) send(ws, { type: 'crack', cracks: player.cracksOut }); // S25 block break animation of the other players (range 32)
         for (const stack of player.collectedOut ?? []) if (ws) send(ws, { type: 'collect', stack }); // items picked up, added to the client's inventory
         if (player.soundsOut && ws) send(ws, { type: 'sound', sounds: player.soundsOut }); // S29 random.eat / random.drink / random.burp of other players (range 16)
+        for (const m of simulation.serverSurvival.outgoing(player)) if (ws) send(ws, m); // b60: S19 hurt / death, S1D / S1E effects (healthHurt, healthEffect, healthEffectEnd)
         const vitals = simulation.serverSurvival.status(player); if (vitals && ws) send(ws, vitals); // S06 update health (health, food, saturation) when one changed
         for (const m of player.itemsOut ?? []) if (ws) send(ws, m); // b59: S2F slot corrections, S28 break effects, XP gains (server-items.js)
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)

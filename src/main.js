@@ -149,6 +149,7 @@ import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { applyHealthMessage } from "./multiplayer/server-survival.js";
+import { applyHurtMessage, applyEffectMessage, applyEffectEnd, tickClientHealth } from "./multiplayer/client-health.js"; // b60
 import { inventoryFields, applySlots, pickupFit } from "./multiplayer/server-items.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { replayPlayerCommands } from "./away-commands.js";
@@ -804,6 +805,7 @@ async function joinMultiplayer(settings) {
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
+    onHealthFx: applyHealthFx,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
@@ -2699,6 +2701,13 @@ function playHurtSounds() {
   for (const name of survival.hurtSounds.splice(0))
     sounds.play(name, { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
 }
+// b60 S19 hurt / death and S1D / S1E effects from the dedicated server (multiplayer/client-health.js): sounds now, the hurt counters drive the camera tilt and heart blink.
+function applyHealthFx(m) {
+  if (m.type === 'healthHurt') { survival.hurtSounds.push(...applyHurtMessage(survival, experience, m)); playHurtSounds(); renderHotbar(); }
+  else if (m.type === 'healthEffect') applyEffectMessage(survival, m);
+  else applyEffectEnd(survival, m);
+  renderVitals();
+}
 function die() {
   if (screen === "dead") return;
   if (bedSleep.sleeping) bedWake(true, false, false);
@@ -2720,11 +2729,11 @@ function die() {
   mineHeld = false;
   // gamerule keepInventory: the inventory is not dropped and the experience is kept (EntityPlayerMP.clonePlayer copies both).
   const keep = !ruleOn(active, "keepInventory");
-  const stacks = keep && !multiplayer ? survival.inventory.takeAll() : []; // over a connection the server has no drops yet: the inventory stays
+  const stacks = keep && !multiplayer ? survival.inventory.takeAll() : []; // over a connection the server drops the items and the client's copy is emptied by healthHurt (client-health.js)
   // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
   for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
   // EntityLivingBase.onDeathUpdate (not overridden by EntityPlayer) leaves the orbs only while gamerule doMobLoot is true.
-  const deathScore=experience.score;if(keep){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
+  const deathScore=experience.score;if(keep&&!multiplayer){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
   gameOverScore = deathScore;
@@ -3613,6 +3622,7 @@ async function spawnPosition() {
 }
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
+  if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
   if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {

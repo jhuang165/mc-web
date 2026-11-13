@@ -280,7 +280,7 @@ export class DedicatedSimulation {
     if (--use.ticks <= 0) {
       this.useSound(p, use, 16);
       if (use.id !== MILK_BUCKET) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
-      if (use.id !== MILK_BUCKET) this.serverSurvival.finishEating(p, use.id);
+      if (use.id !== MILK_BUCKET) this.serverSurvival.finishEating(p, use.id); else this.serverSurvival.finishDrinking(p); // b60: milk uses a bucket and clears the effects
       p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
     }
   }
@@ -497,7 +497,7 @@ export class DedicatedSimulation {
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse })); }
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.dead ? { dead: true } : {}) })); }
   snapshot() { const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
   save() {
