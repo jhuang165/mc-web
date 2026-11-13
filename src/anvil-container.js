@@ -1,5 +1,6 @@
 // Live inventory adapter around the native-ID ContainerRepair rules in anvil.js.
 // The game stores item ids in its browser registry; the calculation module uses 1.7.10 ids.
+import { readItemTags } from './item-tags.js';
 import { updateRepairOutput as calculateRepair } from './anvil.js';
 import { Container, Slot, StackArray, copyStack, makeStack, sameStackItem } from './inventory.js';
 import { ORIGINAL_ITEMS, itemFromOriginal } from './region-import.js';
@@ -25,6 +26,7 @@ export function liveStackToNative(stack) {
   if (typeof stack.displayName === 'string') native.displayName = stack.displayName;
   if (typeof stack.unbreakable === 'boolean') native.unbreakable = stack.unbreakable;
   if (Number.isInteger(stack.color) && stack.color >= 0 && stack.color <= 0xFFFFFF) native.color = stack.color;
+  Object.assign(native, readItemTags(stack)); // lore, skull owner, custom potion effects, map_is_scaling (item-tags.js)
   return native;
 }
 
@@ -40,6 +42,7 @@ export function nativeStackToLive(stack) {
   if (typeof stack.displayName === 'string') metadata.displayName = stack.displayName;
   if (typeof stack.unbreakable === 'boolean') metadata.unbreakable = stack.unbreakable;
   if (Number.isInteger(stack.color) && stack.color >= 0 && stack.color <= 0xFFFFFF) metadata.color = stack.color;
+  Object.assign(metadata, readItemTags(stack));
   const isBook = mapped.id === ENCHANTED_BOOK_ITEM;
   return makeStack(mapped.id, stack.count ?? 1, mapped.damage, isBook ? (stack.storedEnchantments ?? []) : undefined, metadata);
 }

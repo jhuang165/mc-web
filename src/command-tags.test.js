@@ -24,7 +24,8 @@ test('give tags join all remaining arguments and preserve supported stack data, 
   assert.equal(stack.displayName, 'A sword');
   assert.deepEqual(stack.enchantments, [{ id: 16, lvl: 3 }]);
   assert.equal(stack.unbreakable, true); assert.equal(stack.repairCost, 7);
-  assert.match(out.lines[1], /^§7Not kept in this build: unused, display.Lore$/);
+  assert.deepEqual(stack.lore, ['hello']); // display.Lore is kept since batch 57 (item-tags.js)
+  assert.match(out.lines[1], /^§7Not kept in this build: unused$/);
   for (const tag of ['{bad', '[1,2]', '{a:[x,,y]}']) {
     const bad = g.run('/give @p diamond 1 0 ' + tag);
     assert.equal(bad.ok, true); assert.match(bad.lines[0], /^Data tag parsing failed:/);

@@ -1,3 +1,4 @@
+import { writeItemTags } from './item-tags.js';
 import { writeFireworkTags } from './fireworks-nbt.js';
 import { writeBookTags } from './books-nbt.js';
 import { saveEnderSlots } from './chest-blocks.js';
@@ -62,7 +63,7 @@ function stackNbt(s,slot,report,original=false) {
  if(typeof s.displayName==='string')display.Name=str(s.displayName);
  if(Number.isInteger(s.color)&&s.color>=0&&s.color<=0xffffff)display.color=int(s.color);
  if(Object.keys(display).length)tagEntries.display=comp(display);
- writeFireworkTags(s,tagEntries);writeBookTags(s,tagEntries);
+ writeFireworkTags(s,tagEntries);writeBookTags(s,tagEntries);writeItemTags(s,tagEntries);
  if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
  if(Object.keys(tagEntries).length)entry.tag=comp(tagEntries);
  return new Map(Object.entries(entry));

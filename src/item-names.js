@@ -10,9 +10,13 @@ import { ITEM_WRITTEN_BOOK, bookDisplayName } from './books.js';
 import { ITEM_KEYS, EGG_ENTITIES } from './item-keys-data.js';
 import { getPotionEffects, POTION_TYPES, isSplashDamage, potionPrefixKey } from './potions.js';
 import { lang } from './lang.js';
+import { stackPotionEffects, skullOwnerName } from './item-tags.js';
 
 // Browser potion item (original 373): the stack damage is the whole potion (ItemPotion.getItemStackDisplayName).
 const POTION_ITEM = 385;
+const ITEM_SKULL = 2050; // skull.js ITEM_SKULL (original 397)
+// ItemSkull.getItemStackDisplayName through the language table (item.skull.player.name), or undefined while English is selected.
+const localizedSkullOwner = (stack) => (lang.table?.['item.skull.player.name'] ? lang.table['item.skull.player.name'].replace('%s', stack.skullOwner).trim() : undefined);
 const SMALL = new Set(['of', 'and', 'with', 'the', 'in', 'on', 'a', 'an']);
 /** "Block of redstone" -> "Block of Redstone": capitalize each word like 1.7.10's lang strings (small words stay lower case). */
 export function titleCase(text) {
@@ -55,11 +59,11 @@ export function liveNativeName(liveId, damage = 0) {
 // names of ITEM_KEYS (tools/probes/ItemKeyProbe.java, public/research/item-keys-reference.json). English keeps the baked names above.
 const tr = (key) => lang.table?.[key]?.trim();
 /** ItemPotion.getItemStackDisplayName through the language table, or undefined while English is selected. */
-export function localizedPotionName(meta) {
+export function localizedPotionName(meta, effects = getPotionEffects(meta)) {
   if (!lang.table) return undefined;
   if (meta === 0) return tr('item.emptyPotion.name');
   const prefix = isSplashDamage(meta) ? lang.table['potion.prefix.grenade'] + ' ' : '';
-  const list = getPotionEffects(meta);
+  const list = effects;
   if (list && list.length) return prefix + lang.table[POTION_TYPES[list[0].id].key + '.postfix'];
   return tr(potionPrefixKey(meta)) + ' ' + tr('item.potion.name');
 }
@@ -90,7 +94,8 @@ export function stackName(stack, ITEMS) {
   if (!stack) return '';
   if (typeof stack.displayName === 'string') return stack.displayName;
   const item = ITEMS[stack.id];
-  if (stack.id === POTION_ITEM) return localizedPotionName(stack.damage | 0) ?? potionName(stack.damage | 0);
+  if (stack.id === POTION_ITEM) { const list = stackPotionEffects(stack); return localizedPotionName(stack.damage | 0, list) ?? potionName(stack.damage | 0, list); } // CustomPotionEffects override the damage value's effects
+  if (stack.id === ITEM_SKULL && skullOwnerName(stack)) return localizedSkullOwner(stack) ?? skullOwnerName(stack); // ItemSkull.getItemStackDisplayName
   if (stack.id === ITEM_WRITTEN_BOOK) return bookDisplayName(stack); // ItemEditableBook.getItemStackDisplayName: the title
   return localizedItemName(stack.id, stack.damage, !!item?.variants) ?? item?.variants?.[stack.damage | 0] ?? item?.name ?? '';
 }

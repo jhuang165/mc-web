@@ -211,11 +211,12 @@ export function applyIngredient(meta, s) {
 
 // --- Names and tooltips (ItemPotion.getItemStackDisplayName / addInformation; English lang strings of the 1.7.10 jar) -------------
 const L = { "potion.potency.1": "II", "potion.potency.2": "III", "potion.potency.3": "IV" };
-export function potionName(meta) {
+// `effects` is ItemPotion.getEffects(stack) when the stack carries CustomPotionEffects (item-tags.js stackPotionEffects), else omitted.
+export function potionName(meta, effects = getPotionEffects(meta)) {
   if (meta === 0) return "Water Bottle";
   let prefix = "";
   if (isSplashDamage(meta)) prefix = "Splash ";
-  const list = getPotionEffects(meta);
+  const list = effects;
   if (list && list.length) return prefix + POTION_TYPES[list[0].id].postfix;
   return PREFIX_NAMES[prefixIndex(meta)] + " Potion"; // effect-less splash bottles carry no "Splash" word
 }
@@ -228,9 +229,9 @@ export function durationString(ticks) {
 }
 const decimal = (x) => String(Number(x.toFixed(2))); // DecimalFormat("#.##")
 // Tooltip lines of a potion stack as { text, color } (the original's section-sign colours: gray 7, red c, purple 5, blue 9).
-export function potionTooltip(meta) {
+export function potionTooltip(meta, effects = getPotionEffects(meta)) {
   if (meta === 0) return []; // ItemPotion.addInformation returns early for the plain water bottle
-  const lines = [], list = getPotionEffects(meta), mods = [];
+  const lines = [], list = effects, mods = [];
   if (list && list.length) {
     for (const e of list) {
       const type = POTION_TYPES[e.id];

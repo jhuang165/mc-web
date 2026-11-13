@@ -1,3 +1,4 @@
+import { readItemTags } from './item-tags.js';
 import { isSupportedType } from "./cart-variants.js";
 import { readPlayerPortalState } from "./dimensions.js";
 import { Weather } from "./weather.js";
@@ -162,7 +163,7 @@ const SANITIZE = {
           ...(Number.isInteger(it.repairCost) ? { repairCost: it.repairCost } : {}),
           ...(typeof it.displayName === 'string' ? { displayName: it.displayName.slice(0, 32767) } : {}),
           ...(typeof it.unbreakable === 'boolean' ? { unbreakable: it.unbreakable } : {}),
-          ...(int(it.color) && it.color >= 0 && it.color <= 0xFFFFFF ? { color: it.color } : {}) })),
+          ...(int(it.color) && it.color >= 0 && it.color <= 0xFFFFFF ? { color: it.color } : {}), ...readItemTags(it) })),
     })) }
     : undefined,
 };

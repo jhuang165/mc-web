@@ -1,3 +1,4 @@
+import {stackPotionEffects,loreLines} from './item-tags.js';
 import {fireworkLines} from './fireworks.js';
 import {storedEnchantmentLines} from './enchanted-books.js';
 import {copyStack} from './inventory.js';
@@ -43,7 +44,7 @@ export function tooltipLines(item,stack,advanced=false){
  if(!item)return[];
  const named=typeof stack.displayName==='string',potion=stack.id===385;
  const lines=[{text:stackName(stack,{[stack.id]:item})}],attack=item.attack;
- if(potion)for(const l of potionTooltip(stack.damage|0))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
+ if(potion)for(const l of potionTooltip(stack.damage|0,stackPotionEffects(stack)))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
  for(const text of fireworkLines(stack))lines.push({text,color:'gray'});
  // ItemEditableBook.addInformation: the gray "by <author>" line (the name is the title, see item-names.js).
@@ -59,6 +60,9 @@ export function tooltipLines(item,stack,advanced=false){
  for(const text of storedEnchantmentLines(stack.enchantments))lines.push({text,color:'gray'});
  // ItemRecord: EnumRarity.rare (aqua name) and addInformation's item.record.<name>.desc line in gray.
  if(item.record){lines[0].color??='aqua';lines.push({text:item.description,color:'gray'});}
+ // ItemStack.getTooltip (executed, ItemTagsProbe): the enchantments, then the dyed line, then display.Lore (dark purple italic), then attribute modifiers.
+ if(Number.isInteger(stack.color)&&stack.color>=0&&stack.color<=0xffffff)lines.push(advanced?{text:`Color: #${stack.color.toString(16).toUpperCase()}`,color:'gray'}:{text:translate('item.dyed','Dyed'),color:'gray',italic:true});
+ for(const l of loreLines(stack))lines.push(l);
  if(attack)lines.push({text:''},{text:`+${attack} ${translate('attribute.name.generic.attackDamage','Attack Damage')}`,color:'blue'});
  if(stack.unbreakable)lines.push({text:translate('item.unbreakable','Unbreakable'),color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
@@ -69,7 +73,7 @@ export function tooltipLines(item,stack,advanced=false){
 // scroll of misc/enchanted_item_glint.png is approximated by a CSS animation, not replayed pixel for pixel.
 export function withGlint(iconHtml,stack,item){
  // ItemPotion.hasEffect: a potion with at least one effect glints.
- if(!stackHasEffect(stack,item)&&!(stack?.id===385&&getPotionEffects(stack.damage|0)?.length))return iconHtml;
+ if(!stackHasEffect(stack,item)&&!(stack?.id===385&&stackPotionEffects(stack)?.length))return iconHtml;
  const m=/src="([^"]+)"/.exec(iconHtml)||/--base:url\('([^']+)'\)/.exec(iconHtml);
  return iconHtml+(m?`<i class="enchant-glint" style="--glint-mask:url('${m[1]}')"></i>`:'');
 }

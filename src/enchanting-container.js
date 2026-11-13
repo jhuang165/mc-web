@@ -2,13 +2,14 @@
 // One item slot, three level options, then the 36 player slots. 1.7.10 has no lapis cost and no
 // per-player seed: the options come from the container's own Random (here the saved player
 // inventory JavaRandom) and are rerolled on every change of the item slot.
+import { hasItemTags } from './item-tags.js';
 import { EnchantingTable } from './enchantments.js';
 import { Container, Slot, StackArray, copyStack, makeStack } from './inventory.js';
 import { liveStackToNative, nativeStackToLive } from './anvil-container.js';
 import { ENCHANT_SLOT, ENCHANT_PLAYER_SLOTS, liveBookshelfWorld, liveBookshelfPower } from './enchanting-table.js';
 
 const hasTag = (s) => Array.isArray(s.enchantments) || Array.isArray(s.storedEnchantments) || !!s.stored?.length ||
-  Number.isFinite(s.repairCost) || typeof s.displayName === 'string' || typeof s.unbreakable === 'boolean';
+  Number.isFinite(s.repairCost) || typeof s.displayName === 'string' || typeof s.unbreakable === 'boolean' || hasItemTags(s);
 
 // The anonymous InventoryBasic in ContainerEnchantment: getInventoryStackLimit is 1, and
 // setInventorySlotContents cuts the very same stack object to that limit (the rest is lost).

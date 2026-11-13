@@ -19,6 +19,7 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
+import { readItemTagsNbt } from './item-tags.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
@@ -78,7 +79,7 @@ export function itemFromOriginal(id, damage = 0) {
 // Cached fromOriginal for every (id << 4 | meta) key; air with metadata 0 is always exact.
 const MAPPED = new Map();
 // ItemStack.stackTagCompound, as far as the browser stack carries it: ench, StoredEnchantments, RepairCost, display.Name,
-// display.color and Unbreakable. Returns the keys it could not keep ("display.Lore" for nested ones). Used by the Java
+// display.color, Unbreakable, display.Lore, SkullOwner, CustomPotionEffects and map_is_scaling. Returns the keys it could not keep (nested display ones). Used by the Java
 // import and by /give's data tag.
 export function readItemTag(stack, nbt) {
   const readEnchantments = (key) => {
@@ -98,9 +99,10 @@ export function readItemTag(stack, nbt) {
   if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
   const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
   if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
-  const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt)]);
+  const lost = [], recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt), ...readItemTagsNbt(stack, nbt, lost)]);
   const ignored = [...nbt.keys()].filter((key) => !recognized.has(key));
-  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color').map((key) => 'display.' + key));
+  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color' && !(key === 'Lore' && stack.lore)).map((key) => 'display.' + key));
+  ignored.push(...lost); // SkullOwner.<key> of a profile compound (item-tags.js)
   return ignored;
 }
 
