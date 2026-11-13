@@ -11,6 +11,7 @@
 // Frames holding a map are drawn like any other frame (maps are not implemented).
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
+import { SAMPLE_HEIGHT } from "./display-light.js";
 import { pixelTexture, itemTexture, drawCompassCell } from "./first-person.js";
 import { ITEM_COMPASS, itemFrameCompassFrame, compassWorld } from "./compass.js";
 import { compassFrameCount } from "./sprite-frames.js";
@@ -206,7 +207,7 @@ export class HangingRenderer {
         r.root.rotation.y = e.yaw * D;
         this.syncItem(r, e);
         if (r.item?.compass) this.syncCompass(r.item.compass, e);
-        const packed = this.view.brightness(e.x, e.y, e.z);
+        const packed = this.view.brightness(e.x, e.y + (e.bb[4] - e.bb[1]) * SAMPLE_HEIGHT, e.z); // Entity.getBrightnessForRender: posY (yOffset 0) + box height * 0.66 (executed rows in display-light-reference.json)
         for (const m of r.materials) m.setLight(packed);
         if (r.item?.surface) { r.item.surface.update(mapStore.get(r.item.map)); r.item.surface.setLight(packed); }
         else if (r.item) { r.item.pile.material.setLight(packed); r.item.pile.overlayMaterial?.setLight(packed); }

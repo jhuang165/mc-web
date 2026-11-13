@@ -11,7 +11,7 @@ import { crossedSquares, stemSmall } from "./render-vessels.js";
 import { hasColormaps, itemGrassColor, rgbFloats, PINE, BIRCH, FOLIAGE_BASIC } from "./biome-colors.js";
 
 const CROSS = new Set([6, 30, 31, 32, 37, 38, 39, 40, 83]), CROPS = new Set([59, 115, 141, 142]), STEMS = new Set([104, 105]), TORCHES = new Set([50, 75, 76]);
-const NOTHING = new Set([8, 9, 10, 11, 26, 27, 28, 34, 36, 51, 55, 63, 64, 65, 66, 68, 69, 71, 90, 93, 94, 101, 102, 106, 111, 117, 118, 119, 127, 131, 132, 140, 144, 149, 150, 157, 160, 175]);
+const NOTHING = new Set([8, 9, 10, 11, 26, 27, 28, 34, 36, 51, 55, 63, 64, 65, 66, 68, 69, 71, 93, 94, 101, 102, 106, 111, 117, 118, 119, 127, 131, 132, 140, 144, 149, 150, 157, 160, 175]);
 // RenderBlocks.renderBlockAsItem for the hopper (render type 38), EXECUTED (b53dq, display-quads-reference.json id 154): 17 quads, no rotation, at the block's 0..1 corner (the -0.5 translate is applied in displayQuads).
 // Each row: icon (0 hopper_outside, 1 hopper_top, 2 hopper_inside) then four vertices of x y z u v (icon fractions, v from the top): the bowl's underside and rim at 5/8..1, the four outer sides, the four inner walls, the floor, and the funnel box 0.25..0.75 (top at 0.623).
 const HOPPER_ICONS = ["hopper_outside", "hopper_top", "hopper_inside"];
@@ -36,7 +36,7 @@ const HOPPER_ROWS = [
 ];
 // "none" | "cross" | "crops" | "stem" | "torch" | "hopper" | "item" (the existing box / cube / chest paths) by ORIGINAL block id.
 export function displayShape(id) {
-  if (!id) return "none";
+  if (!id || id < 0 || id > 175 || (id >= 165 && id <= 169)) return "none"; // 1.7.10 has no block 165-169 or above 175: Block.getBlockById gives air, which draws nothing (b56dl sweep)
   if (NOTHING.has(id)) return "none";
   if (CROSS.has(id)) return "cross";
   if (CROPS.has(id)) return "crops";

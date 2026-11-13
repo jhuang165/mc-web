@@ -27,6 +27,7 @@ import { biomeFacts } from "./biomes.js";
 import { createBlockAtlas, blockTile, tileRect, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
+import { entityBrightness } from "./display-light.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, flatFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-render.js";
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
@@ -643,7 +644,11 @@ export class VoxelScene {
   reloadStrips() { return Promise.all(this.strips.map((s) => s.load().catch(() => {}))); }
   // Brightness for an entity or tile entity at a world position.
   brightness(x, y, z) {
-    return this.light ? this.light.packed(Math.floor(x), Math.floor(y), Math.floor(z)) : 15 << 20;
+    return this.light ? this.light.packed(Math.floor(x), Math.floor(y), Math.floor(z), false, false) : 15 << 20; // World.getLightBrightnessForSkyBlocks(x, y, z, 0): no own emission, no slab rule (display-light-reference.json)
+  }
+  // Entity.getBrightness (sa.d(F)) for an entity whose box bottom is `feetY` and height `height` (display-light.js): the brightness table entry of the cell's light level.
+  entityBrightness(x, feetY, z, height) {
+    return this.light ? entityBrightness((cx, cy, cz) => { const p = this.light.packed(cx, cy, cz, false, false); return Math.max((p >> 20) - this.subtracted, (p >> 4) & 15); }, BRIGHTNESS, x, feetY, z, height) : 1;
   }
   render(time, dt = 1 / 60) {
     // Strip animations come from the .png.mcmeta files (texture-animation.js): vanilla's reproduce the old hard-coded phases exactly.

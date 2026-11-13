@@ -19,6 +19,7 @@ import { CART_HEIGHT } from "./minecarts.js";
 import { DISPLAY } from "./cart-variants.js";
 import { CartBlockRenderer } from "./cart-block-renderer.js";
 import { displayShape, displayGeometry, displayTint, displayTerrain, displayTopTint } from "./cart-display-shape.js";
+import { entityPacked, shadeDisplay } from "./display-light.js";
 
 const D = Math.PI / 180;
 // ModelMinecart.a[0..5]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -89,7 +90,7 @@ export class MinecartRenderer {
     body.add(swell, cartModel(material, this.geometries));
     root.add(body);
     this.scene.add(root);
-    return { root, display, body, swell, white, materials: [material, ...materials], festive };
+    return { root, display, body, swell, white, materials: [material, ...materials], shaded: materials, festive };
   }
   // The watched display block: scale 0.75, raised offset / 16 (set every frame), renderBlockAsItem's turn about Y. Null for air or a block the port has no cell for.
   buildCustom(d, festive) {
@@ -111,7 +112,7 @@ export class MinecartRenderer {
       const material = entityMaterial(this.view.lighting, { map: displayTerrain(d.id) ? this.view.textures.terrain : this.view.textures.texture, side: THREE.DoubleSide, color: displayTint(d.id, d.data) }), g = displayGeometry(shape, cell);
       turn.rotation.y = 0; // renderBlockAsItem turns only types 0, 16, 22, 26, 31, 39
       turn.add(new THREE.Mesh(g, material));
-      return { group, materials: [material], geometries: [g] };
+      return { group, materials: [material], shaded: [material], geometries: [g] };
     }
     const map = displayTerrain(d.id) ? this.view.textures.terrain : this.view.textures.texture, material = entityMaterial(this.view.lighting, { map, color: displayTint(d.id, d.data) });
     const g = blockItemGeometry(cell.id, cell.meta, 1) ?? blockCubeGeometry(cell.id, cell.meta, 1), top = displayTopTint(d.id);
@@ -119,10 +120,10 @@ export class MinecartRenderer {
     if (top) { // the grass block: BoxGeometry group 2 is the +y face, drawn in getRenderColor; the rest white
       const topMaterial = entityMaterial(this.view.lighting, { map, color: top });
       turn.add(new THREE.Mesh(g, [material, material, topMaterial, material, material, material]));
-      return { group, materials: [material, topMaterial], geometries: [g] };
+      return { group, materials: [material, topMaterial], shaded: [material, topMaterial], geometries: [g] };
     }
     turn.add(new THREE.Mesh(g, material));
-    return { group, materials: [material], geometries: [g] };
+    return { group, materials: [material], shaded: [material], geometries: [g] };
   }
   dropCustom(r) {
     if (!r.custom) return;
@@ -165,9 +166,12 @@ export class MinecartRenderer {
       r.root.position.set(pose.x, pose.y, pose.z);
       r.root.rotation.set(pose.roll * D, (180 - pose.yaw) * D, -pose.pitch * D, "YZX");
       // Entity.getBrightnessForRender: 0.66 of the box height above its bottom.
-      const packed = this.view.brightness(cart.x, cart.bb[1] + CART_HEIGHT * 0.66, cart.z);
+      // RenderManager.renderEntityStatic draws a burning entity at 15728880; the display block's glColor also carries Entity.getBrightness (display-light.js).
+      const packed = entityPacked(this.view.brightness(cart.x, cart.bb[1] + CART_HEIGHT * 0.66, cart.z), cart.fire > 0), shade = this.view.entityBrightness?.(cart.x, cart.bb[1], cart.z, CART_HEIGHT) ?? 1;
       for (const m of r.materials) m.setLight(packed);
       for (const m of r.custom?.materials ?? []) m.setLight(packed);
+      for (const m of r.shaded ?? []) shadeDisplay(m, shade);
+      for (const m of r.custom?.shaded ?? []) shadeDisplay(m, shade);
     }
   }
   clear() {

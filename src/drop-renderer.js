@@ -4,6 +4,7 @@
 // one to five copies by stack size.
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
+import { SAMPLE_HEIGHT } from "./display-light.js";
 import { itemTexture, pixelTexture, glintMesh, blockItemGeometry, blockItemTurn, blockCubeGeometry } from "./first-person.js";
 import { itemFrameTag } from "./item-animation.js";
 import { stackHasEffect } from "./armor-enchantments.js";
@@ -20,6 +21,7 @@ import { blockCopyCount, spriteCopyCount, fancySpriteZ, flatSpriteOffsets } from
 // RenderItem (executed, drop-sprite.js): a block or the chest draws the block rule's copies, a fancy sprite item its own 1 to 4, a fast sprite the block rule's count.
 const copies = (n, sprite = false, flat = false) => (sprite && !flat ? spriteCopyCount(n) : blockCopyCount(n));
 
+const ITEM_HEIGHT = 0.25;
 export class DropRenderer {
   constructor(scene, view) {
     this.scene = scene;
@@ -112,14 +114,15 @@ export class DropRenderer {
     for (const material of owned) material.dispose();
   }
   // RenderItem.doRender: bob and spin from the entity's age and hover phase.
-  place(pile, x, y, z, age) {
+  // `at` is the entity's own box bottom: Entity.getBrightnessForRender reads its current position, not the interpolated or flying draw position (EntityPickupFX asks the item entity too).
+  place(pile, x, y, z, age, at = { x, y, z }) {
     pile.group.position.set(x, y + 0.125 + Math.sin(age / 10 + pile.hover) * 0.1 + 0.1, z);
     if (pile.flat) {
       // glRotatef(180 - playerViewY): the quad stays parallel to the view plane.
       const d = this.view.camera.getWorldDirection(new THREE.Vector3());
       for (const spinner of pile.spinners) spinner.rotation.y = Math.atan2(-d.x, -d.z);
     } else pile.spin.rotation.y = age / 20 + pile.hover;
-    const brightness = this.view.brightness(x, y + 0.17, z);
+    const brightness = this.view.brightness(at.x, at.y + ITEM_HEIGHT * SAMPLE_HEIGHT, at.z); // Entity.getBrightnessForRender: posY - yOffset + height * 0.66 of the 0.25 box (executed: the sampled cell changes at y 65.835, not 65.83)
     pile.material.setLight(brightness);
     pile.overlayMaterial?.setLight(brightness);
   }
@@ -146,7 +149,7 @@ export class DropRenderer {
         pile = this.build(stack, e.hover);
         this.piles.set(e, pile);
       }
-      this.place(pile, e.px + (e.x - e.px) * partial, e.py + (e.y - e.py) * partial, e.pz + (e.z - e.pz) * partial, e.age + partial);
+      this.place(pile, e.px + (e.x - e.px) * partial, e.py + (e.y - e.py) * partial, e.pz + (e.z - e.pz) * partial, e.age + partial, e);
     }
     for (const [e, pile] of this.piles)
       if (!seen.has(e)) {
@@ -162,7 +165,7 @@ export class DropRenderer {
       }
       t *= t;
       const e = fx.item, p = fx.target;
-      this.place(fx.pile, e.x + (p.x - e.x) * t, e.y + (p.y + 1.12 - e.y) * t, e.z + (p.z - e.z) * t, e.age + (ticks - fx.start));
+      this.place(fx.pile, e.x + (p.x - e.x) * t, e.y + (p.y + 1.12 - e.y) * t, e.z + (p.z - e.z) * t, e.age + (ticks - fx.start), e);
       return true;
     });
   }
