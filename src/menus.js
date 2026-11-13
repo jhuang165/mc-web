@@ -381,7 +381,13 @@ export function createMenus(gui, ctx) {
           achievements: ctx.achievements, icon: ctx.icon, hash: javaHash(PLAYER_NAME), back: ingameMenu, close, show,
           keyName: () => keyName(keyOf("key.inventory")), inventoryKey: () => keyOf("key.inventory"),
         })));
-        g.button(b.stats, t("gui.stats"), () => show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show })));
+        g.button(b.stats, t("gui.stats"), () => {
+          const open = () => show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show }));
+          // b63 mpstats: over a connection GuiStats first asks the server (C16 REQUEST_STATS) and shows "Downloading statistics" until S37 arrives.
+          let waiting = true;
+          const wait = { id: "stats-download", escape: () => { waiting = false; ingameMenu(); }, init(gg, w, h) { gg.text(t("multiplayer.downloadingStats"), Math.trunc(w / 2), Math.trunc(h / 2), { center: true }); } };
+          if (ctx.requestStats?.(() => { if (waiting) { waiting = false; open(); } })) { show(wait); setTimeout(() => { if (waiting) { waiting = false; open(); } }, 5000); } else open();
+        });
         // Browser addition in the row vanilla leaves empty: download the world.
         g.button(b.export, "Export World", () => ctx.exportWorld(), { enabled: !ctx.isRemote?.() });
       },

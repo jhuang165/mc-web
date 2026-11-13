@@ -36,7 +36,7 @@ const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count ===
 const sig = s => (s ? JSON.stringify(s) : '');
 
 export class ServerContainers {
-  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.dim = 0; /* b62: 0 = Overworld, -1 = the Nether's own instance */ this.lids = new Map(); this.actions = []; this.litFurnaces = new Set(); this.litSent = false; this.ticks = null; this.onFurnaceTake = (pl, stack) => sim.achievements?.onSmelted(pl, stack); /* b60 lead: SlotFurnace.onCrafting awards (server-achievements.js) */ this.stations = new ServerStations(sim); }
+  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.dim = 0; /* b62: 0 = Overworld, -1 = the Nether's own instance */ this.lids = new Map(); this.actions = []; this.litFurnaces = new Set(); this.litSent = false; this.ticks = null; this.onFurnaceTake = (pl, stack, n) => { sim.achievements?.onSmelted(pl, stack); sim.stats?.crafted(pl, stack, n); /* b63 mpstats */ }; /* b60 lead: SlotFurnace.onCrafting awards (server-achievements.js) */ this.stations = new ServerStations(sim); }
   // b60: SlotFurnace.onCrafting for a stack taken from a furnace output slot: the crafted-item hook (`onFurnaceTake(p, stack, amount)`, for the smelting
   // achievement; this module does not award it) and the experience, rounded up by chance, spawned at the player (posY + 0.5, posZ + 0.5).
   smelted(p, stack, amount) {

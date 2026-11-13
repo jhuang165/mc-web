@@ -24,7 +24,7 @@ export class ServerStations {
   constructor(sim) {
     this.sim = sim;
     // Called with (player, stack, count) after a take from a crafting result slot: the hook for crafting achievements and statistics.
-    this.onCrafted = (p, stack) => sim.achievements?.onCrafted(p, stack); // b60 lead: SlotCrafting.onCrafting awards (server-achievements.js)
+    this.onCrafted = (p, stack, n) => { sim.achievements?.onCrafted(p, stack); sim.stats?.crafted(p, stack, n); /* b63 mpstats */ }; // b60 lead: SlotCrafting.onCrafting awards (server-achievements.js)
   }
   // Builds the container for a right click on a station block. Returns { container, kind, title, props } or null for any other block.
   open(p, block, x, y, z) {

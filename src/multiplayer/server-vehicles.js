@@ -236,11 +236,12 @@ export class ServerVehicles {
     for (const p of host.players.values()) {
       const m = p.mount;
       if (!m) { host.achievements?.stopRiding(p); continue; }
-      if (m.mob) { if (!this.pigs.keeps(p)) this.dismount(p); else { this.pigs.follow(p); this.seat(p); } host.achievements?.stopRiding(p); continue; } // b62
+      if (m.mob) { if (!this.pigs.keeps(p)) this.dismount(p); else { this.pigs.follow(p); this.seat(p); host.stats?.mounted(p, m); /* b63 mpstats: pig distance */ } host.achievements?.stopRiding(p); continue; } // b62
       const v = this.find(m.key);
       if (!v) { this.dismount(p); continue; }
       this.systemOf(v).updateRiderPosition(v);
       this.seat(p);
+      host.stats?.mounted(p, m); // b63 mpstats: minecart / boat distance
       if (!m.boat) host.achievements?.onMinecart(p);
       else host.achievements?.stopRiding(p);
     }

@@ -3,6 +3,7 @@ import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
+import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { Farming } from '../farming.js';
 import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
@@ -95,6 +96,7 @@ export class DedicatedSimulation {
     this.items.joined = e => { e.eid = ++this.nextItemId; };
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
+    this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
@@ -173,6 +175,7 @@ export class DedicatedSimulation {
       input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, rand: seeded(),
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.serverItems.join(player, saved);
+    this.stats.join(player, saved); // b63 mpstats
     this.players.set(id, player);
     this.mobs.addPlayer(player);
     this.vehicles.addPlayer(player); // b61
@@ -183,13 +186,14 @@ export class DedicatedSimulation {
     const p = this.players.get(id);
     if (p) this.vehicles.removePlayer(p); // b61: a rider is let down before the position is saved
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
+    if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
     this.mobs.removePlayer(id);
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}), ...this.dimensions.savedFields(p) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}), ...this.dimensions.savedFields(p) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -243,7 +247,7 @@ export class DedicatedSimulation {
   }
   breakDug(p, cell) {
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: this.serverItems.xp, heldTool: p.survival.held?.id ?? 0 };
-    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative }));
+    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */ }));
   }
   // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
   // (squared distance from the player's feet below 1024), gets the stage. Stage -1 (or 10, an air cell) takes the crack away.
@@ -347,7 +351,7 @@ export class DedicatedSimulation {
     if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
-    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true }));
+    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */ }));
     // Block activations that don't open a GUI remain shared.
     const [x, y, z] = target.block, b = this.world.get(x, y, z);
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
@@ -369,13 +373,15 @@ export class DedicatedSimulation {
       return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, { skulls: this.tileEntities.skulls, difficulty: 0 }).placed;
     }
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
-    return placeHeldBlock(state, { id, item: ITEMS[id], target }, {
+    const placed = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
         // write, so the same collision test must cover every connected player.
         return collides(w, other.position.x, other.position.y, other.position.z);
       }),
     }).placed;
+    if (placed) this.stats.used(p, id); // b63 mpstats: ItemStack.tryPlaceItemIntoWorld, the use stat
+    return placed;
   }
   // Marks the tile entity at a cell for a description packet on the next tick (World.markBlockForUpdate on a tile edit).
   tileChanged(x, y, z) { this.dirtyTiles.add(`${x},${y},${z}`); }
@@ -466,6 +472,7 @@ export class DedicatedSimulation {
       this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
       const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
       const dead = this.dimensions.within(p, () => this.serverSurvival.tick(p, moved)); // b61: a Nether player's drops and void respawn use the Nether's world and items
+      this.stats.tick(p, moved); // b63 mpstats: play time, movement and landing stats
       // Survival players: health, food, fall and void damage, death (server-survival.js)
       if (p.position.y < -64 && !dead && p.survival.creative) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : p.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); } // b61: p.world, the Nether's spawn for a Nether player
       p.survival.time = this.time;
