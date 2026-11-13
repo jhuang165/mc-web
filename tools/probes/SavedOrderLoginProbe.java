@@ -1,0 +1,120 @@
+import java.io.*;
+import java.lang.reflect.*;
+import java.util.*;
+
+// Batch 56 (b56so): the order World.loadedEntityList takes at a native login. The unchanged ChunkProviderServer (ms) over an AnvilChunkLoader-reading loader (aqc double
+// whose a(world, x, z) hands back the chunk read by the real aqk reader from the chunk NBT the real aqk writer made), the unchanged MinecraftServer.initialWorldChunkLoad loop (25 x 25
+// chunks round the spawn, `prepare`), then the login of ServerConfigurationManager.playerLoggedIn: the real World.spawnEntityInWorld(player) (ahb.d, which loads the player's chunk
+// through getChunkFromChunkCoords and appends the player after that chunk's entities), the real PlayerManager.addPlayer (mq.a: x outer, z inner over the view square, each
+// PlayerInstance loading its chunk), and the mount read back from the player's Riding compound after the chunks (createEntityFromNBT of the first Riding only, forceSpawn,
+// spawnEntityInWorld). The player is the real EntityPlayerMP (allocated without a constructor); the mount's rider in the saving world is a cow stand-in (as b54so).
+// Each record: the entities by index (x = chunk x * 16 + 1 + 0.5 * index) in loadedEntityList order after the login, -1 for the player.
+public class SavedOrderLoginProbe {
+  public static class WS2 extends ChunkProviderProbe.WS {
+    public void a(sa e) {} // onEntityAdded: the entity tracker is not part of the probe
+    public void c() {} // updateAllPlayersSleepingFlag
+  }
+  static Map<Long, dh> nbts;
+  static aqk anvil;
+  static Method reader, writer;
+  public static class Loader2 implements aqc {
+    public apx a(ahb w, int x, int z) {
+      dh level = nbts.get(agu.a(x, z));
+      if (level == null) return null;
+      try { return (apx) reader.invoke(anvil, w, level); } catch (Exception e) { throw new RuntimeException(e); }
+    }
+    public void a(ahb w, apx c) {}
+    public void b(ahb w, apx c) {}
+    public void a() {}
+    public void b() {}
+  }
+  static void set(Class<?> c, Object o, String n, Object v) throws Exception { ChunkProviderProbe.setIn(c, o, n, v); }
+
+  // spec: kind, y, chunk (index), mount (index of the entity it rides, or -1). playerMount: the spec index the player rides (-1: none), saved in the player's Riding compound.
+  static void login(String name, int[][] chunks, String[][] specs, int spawnX, int spawnZ, double px, double pz, int view, int playerMount) throws Throwable {
+    SavedOrderProbe.SW w = SavedOrderProbe.world();
+    List<apx> made = new ArrayList<>();
+    for (int[] c : chunks) { apx ch = new apx(w, c[0], c[1]); made.add(ch); w.chunkMap.put(SavedOrderProbe.SW.key(c[0], c[1]), ch); }
+    List<sa> ents = new ArrayList<>();
+    for (int i = 0; i < specs.length; i++) {
+      int ci = Integer.parseInt(specs[i][2]);
+      sa e = SavedOrderProbe.make(w, specs[i][0], chunks[ci][0] * 16 + 1 + 0.5 * i, Double.parseDouble(specs[i][1]), chunks[ci][1] * 16 + 8.5);
+      made.get(ci).a(e);
+      ents.add(e);
+    }
+    for (int i = 0; i < specs.length; i++) { int m = Integer.parseInt(specs[i][3]); if (m >= 0) ents.get(i).a(ents.get(m)); }
+    sa stand = null;
+    if (playerMount >= 0) { stand = new wh(w); PlayerStepProbe.field(sa.class, "Z").set(stand, new Random(7)); stand.b(0, 0, 0); stand.a(ents.get(playerMount)); }
+    nbts = new HashMap<>();
+    anvil = new aqk(new File("unused-probe-path"));
+    writer = aqk.class.getDeclaredMethod("a", apx.class, ahb.class, dh.class); writer.setAccessible(true);
+    reader = aqk.class.getDeclaredMethod("a", ahb.class, dh.class); reader.setAccessible(true);
+    for (int ci = 0; ci < chunks.length; ci++) { dh level = new dh(); writer.invoke(anvil, made.get(ci), w, level); nbts.put(agu.a(chunks[ci][0], chunks[ci][1]), level); }
+    dh riding = null;
+    if (stand != null) { dh tag = new dh(); stand.e(tag); riding = tag.m("Riding"); }
+
+    // the login world: the unchanged ChunkProviderServer over the loader above
+    ChunkProviderProbe.setup(true, view, spawnX, spawnZ);
+    WS2 lw = (WS2) ChunkProviderProbe.unsafe.allocateInstance(WS2.class);
+    for (Field f : ahb.class.getDeclaredFields())
+      if (f.getType() == List.class && !Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(lw, new ArrayList<>()); }
+    ChunkProviderProbe.Provider p = new ChunkProviderProbe.Provider();
+    p.respawn = true; p.g = true; p.b = lw;
+    set(ahb.class, lw, "t", p);
+    set(ahb.class, lw, "x", ChunkProviderProbe.info);
+    ChunkProviderProbe.Gen gen = new ChunkProviderProbe.Gen(); gen.world = lw;
+    ms provider = new ms(lw, new Loader2(), gen);
+    set(ahb.class, lw, "v", provider);
+    set(mt.class, lw, "b", provider);
+    mq manager = (mq) ChunkProviderProbe.unsafe.allocateInstance(mq.class);
+    set(mq.class, manager, "b", lw); set(mq.class, manager, "c", new ArrayList<>()); set(mq.class, manager, "d", new qd()); set(mq.class, manager, "e", new ArrayList<>()); set(mq.class, manager, "f", new ArrayList<>());
+    set(mq.class, manager, "i", new int[][] {{1, 0}, {0, 1}, {-1, 0}, {0, -1}}); set(mq.class, manager, "g", view);
+    set(mt.class, lw, "L", manager);
+    MobMoveProbe.field(ahb.class, "E").setBoolean(lw, false);
+    java.lang.invoke.MethodHandle spawn = java.lang.invoke.MethodHandles.privateLookupIn(WS2.class, java.lang.invoke.MethodHandles.lookup()).findSpecial(ahb.class, "d", java.lang.invoke.MethodType.methodType(boolean.class, sa.class), WS2.class);
+    // MinecraftServer.initialWorldChunkLoad
+    r sp = lw.K();
+    for (int k = -192; k <= 192; k += 16) for (int l = -192; l <= 192; l += 16) provider.c(sp.a + k >> 4, sp.c + l >> 4);
+    // ServerConfigurationManager.playerLoggedIn: spawnEntityInWorld(player), then PlayerManager.addPlayer
+    mw player = ChunkProviderProbe.player(77, px, pz);
+    spawn.invoke(lw, player);
+    manager.a(player);
+    if (riding != null) { // initializeConnectionToPlayer, after playerLoggedIn
+      sa mount = sg.a(riding, lw); // EntityList.createEntityFromNBT: the first Riding only
+      PlayerStepProbe.field(sa.class, "Z").set(mount, new Random(7));
+      mount.n = true; spawn.invoke(lw, mount); mount.n = false;
+    }
+    List<Integer> after = new ArrayList<>();
+    for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
+    StringBuilder s = new StringBuilder("{\"case\":\"saved-order4\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
+    for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
+    s.append("],\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
+    System.out.println(s);
+  }
+
+  public static void main(String[] args) throws Throwable {
+    aji.p(); adb.l();
+    PlantProbe.unsafe = MobMoveProbe.unsafe();
+    ChunkProviderProbe.unsafe = MobMoveProbe.unsafe();
+    String[] k = {"item", "cow", "orb", "item", "cart", "orb", "cow", "arrow"};
+    java.util.function.BiFunction<double[], int[], String[][]> plain = (ys, ch) -> { String[][] out = new String[ys.length][]; for (int i = 0; i < ys.length; i++) out[i] = SavedOrderProbe.S(k[i % k.length], ys[i], ch[i], -1); return out; };
+    // entities in the spawn grid (spawn 0,0: chunks -12..12), the player inside it: grid order is x outer, z inner
+    int[][] grid = {{2, 0}, {-1, 0}, {0, 5}, {2, 3}, {-1, -4}};
+    login("b56so-grid-order", grid, plain.apply(new double[] {70, 70, 70, 70, 70, 70, 70, 70}, new int[] {0, 1, 2, 3, 4, 0, 1, 2}), 0, 0, 40.5, 8.5, 2, -1);
+    login("b56so-grid-sections", grid, plain.apply(new double[] {70, 5, 130, 20, 70, 130, 5, 70}, new int[] {0, 0, 1, 1, 2, 2, 3, 4}), 0, 0, 40.5, 8.5, 2, -1);
+    // the player far from the spawn: his chunk and the view square come after the grid; a chunk in neither is not loaded
+    int[][] far = {{21, 1}, {19, 3}, {3, 0}, {-30, 0}, {20, 0}, {22, 2}};
+    login("b56so-view-square", far, plain.apply(new double[] {70, 70, 70, 70, 70, 70, 70, 70}, new int[] {0, 1, 2, 3, 4, 5, 0, 4}), 0, 0, 20 * 16 + 4.5, 8.5, 2, -1);
+    login("b56so-view-one", far, plain.apply(new double[] {70, 70, 70, 70, 70, 70, 70, 70}, new int[] {0, 1, 2, 3, 4, 5, 0, 4}), 0, 0, 20 * 16 + 4.5, 8.5, 1, -1);
+    login("b56so-spawn-offset", far, plain.apply(new double[] {70, 70, 70, 70, 70, 70, 70, 70}, new int[] {0, 1, 2, 3, 4, 5, 0, 4}), 300, -50, 20 * 16 + 4.5, 8.5, 2, -1);
+    // the player's mount goes after every chunk: in a grid chunk, and in the player's own chunk
+    String[][] withCart = {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1), SavedOrderProbe.S("item", 5, 1, -1), SavedOrderProbe.S("cow", 70, 0, -1)};
+    login("b56so-mount-grid", grid, withCart, 0, 0, 40.5, 8.5, 2, 1);
+    login("b56so-mount-player-chunk", grid, new String[][] {SavedOrderProbe.S("item", 70, 1, -1), SavedOrderProbe.S("cart", 70, 0, -1), SavedOrderProbe.S("orb", 70, 0, -1), SavedOrderProbe.S("cow", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 1);
+    // stacked riders: the player sits on a cow that rides a cart. The chunk writer skips both (each is ridden); the login reads the cow only (the first Riding), so the cart is nowhere
+    login("b56so-stacked-cow-on-cart", grid, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 2), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1), SavedOrderProbe.S("item", 70, 3, -1)}, 0, 0, 40.5, 8.5, 2, 1);
+    login("b56so-stacked-chain", grid, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 2), SavedOrderProbe.S("cow", 70, 1, 3), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 1);
+    // the same player on the cow that carries another rider's mount (a cow on a cow: the lower cow is lost too), and an unrelated mounted pair stays
+    login("b56so-stacked-plus-pair", grid, new String[][] {SavedOrderProbe.S("cow", 70, 0, 1), SavedOrderProbe.S("cart", 70, 0, -1), SavedOrderProbe.S("cow", 70, 1, 3), SavedOrderProbe.S("cart", 70, 1, -1), SavedOrderProbe.S("orb", 70, 2, -1)}, 0, 0, 40.5, 8.5, 2, 2);
+  }
+}

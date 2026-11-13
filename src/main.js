@@ -1075,7 +1075,7 @@ function save() {
   // Boats and the mounted state: only written when a boat exists, so older saves stay byte-identical.
   if (boats?.carts.length) active.boats = boats.toJSON(); else delete active.boats;
   active.hanging = hanging.toJSON();
-  if (mobs) stampSavedOrder(mobs, orderGroups({ mobs, items, xpOrbs, primed, arrows, projectiles, falling, minecarts, boats, hanging, rockets }, active)); // b52so: each record's place in the native save walk (sections of each chunk)
+  if (mobs) stampSavedOrder(mobs, orderGroups({ mobs, items, xpOrbs, primed, arrows, projectiles, falling, minecarts, boats, hanging, rockets }, active), 0, { spawn: world.dimension ? null : active.worldSpawn, player: position, view: mobs.viewChunks }); // b52so: each record's place in the native save walk (sections of each chunk)
   if (signs.tiles.size) active.signs = signs.toJSON(); else delete active.signs;
   if (SKULLS.tiles.size) active.skulls = SKULLS.toJSON(); else delete active.skulls;
   if (beacons.tiles.size) active.beacons = beacons.toJSON(); else delete active.beacons;
