@@ -461,6 +461,7 @@ export class DedicatedSimulation {
     }
     this.mobs.tick();
     for (const p of this.players.values()) this.serverItems.settle(p);
+    for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();
     this.weather.tick(this.world);
     this.weather.drain();
@@ -501,7 +502,7 @@ export class DedicatedSimulation {
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.dead ? { dead: true } : {}) })); }
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}) })); } // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot() { const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
