@@ -7,7 +7,8 @@ import { CACTUS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./wor
 import { itemSpec, isGateItem, itemBlockId } from './item-boxes.js';
 import { STAIR_ITEM_BOXES } from './stairs.js';
 import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
-import { blockTile,tileRect } from "./block-textures.js";
+import { blockTile,tileRect,flatBlockTileUrl,tileName } from "./block-textures.js";
+import { flatBlockItem, HOPPER_BLOCK, HOPPER_ITEM_URL } from "./flat-block-items.js";
 import { entityMaterial, ITEM_LIGHTS, applySpriteTransform } from "./light-material.js";
 import { itemPasses } from "./item-passes.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
@@ -211,7 +212,11 @@ function itemTextureRaw(id, damage = 0, use = 0) {
   if(id===YELLOW_FLOWER)return "/media/1.7.10/blocks/flower_dandelion.png";
   if(id===RED_FLOWER)return "/media/1.7.10/blocks/flower_"+RED_FLOWERS[Math.max(0,Math.min(RED_FLOWERS.length-1,damage|0))].texture+".png";
   if(id===DYE)return "/media/1.7.10/items/dye_powder_"+DYES[Math.max(0,Math.min(15,damage|0))].texture+".png";
-  if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
+  if(id===20)return "/media/1.7.10/blocks/torch_on.png";
+  // Block items RenderItem draws as a flat sprite because their render type fails renderItemIn3d (flat-block-items.js): the item-atlas tile with its inventory tint.
+  const flat=flatBlockItem(id);
+  if(flat===HOPPER_BLOCK)return HOPPER_ITEM_URL;
+  if(flat)return flatBlockTileUrl(flat,damage)??"/media/1.7.10/blocks/"+tileName(blockTile(flat,flat===141?0:2,false,damage))+".png";
   if(id===51)return "/media/1.7.10/blocks/web.png";
   // BlockPane items are flat sprites of the side texture (ItemBlock icon of render types 18 and 41).
   if(id===99||id===1100)return "/media/1.7.10/blocks/"+(id===99?"iron_bars":"glass")+".png";

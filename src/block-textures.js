@@ -92,6 +92,11 @@ export const ATLAS_WIDTH=NATIVE_ATLAS_WIDTH,ATLAS_ROWS=Math.max(NATIVE_ATLAS_HEI
 export const tileOrigin=index=>TILE_ORIGINS[index];
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
+// Batch 57: the 16x16 item-atlas tile (tinted like the inventory icon) of a flat block item, as a PNG data URL, or null before the tiles load (flat-block-items.js).
+let flatTileImpl=null;
+export const flatBlockTileUrl=(id,damage=0)=>flatTileImpl?flatTileImpl(id,damage):null;
+export const tileName=index=>TILES[index];
+
 export const namedTile=tile;
 // `meta` selects wool colours, flower variants and root-crop growth textures.
 // `snowy` is true when the block above is a snow layer or snow block: BlockGrass then shows grass_side_snowed on its sides.
@@ -308,7 +313,8 @@ export function createBlockAtlas(){
  function icon(id,damage=0){const url=iconRaw(id,damage);return url+'#mcicon='+id+':'+damage+(canvas.__agDone===true&&!chestUrls.has(url)?':ag':'');}
  // Blocks whose item is a flat sprite in the inventory (RenderItem draws their icon texture, not a model): levers, plants, panes, rails, crops and so on.
 const SPRITE_ICON=new Set([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141]);
-const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id);
+const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===LILY_PAD||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id);
+flatTileImpl=(id,damage)=>{syncCanvases();const key='flat:'+id+':'+damage;if(icons.has(key))return icons.get(key);const l=exactLevels(false,TILES[blockTile(id,id===141?0:2,false,damage)],0);if(!l)return null;const url=pngDataUrl(encodePngStored(TILE_SIZE,TILE_SIZE,l[0]));icons.set(key,url);return url;};
 // A block item's box model (item-boxes.js itemSpec, or the unit cube) as a 64x64 icon at scale 4: executed boxes, renderItemIntoGUI's matrix, GL pixel-centre edges. null before the tiles load.
 function boxIcon(id,damage){
  const spec=itemSpec(id,damage,blockTile),texOf=new Map();let missing=false;

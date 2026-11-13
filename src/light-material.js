@@ -77,6 +77,9 @@ void main(){vec4 t=texture2D(map,vUv)${vertexAlpha ? "*vec4(1.,1.,1.,vShade.a)" 
   });
 }
 
+// Batch 57 (b57dp): fixed-function lighting with glColorMaterial(AMBIENT_AND_DIFFUSE) gives the vertex colour C * (0.4 + 0.6 * sum of the lights' N.L) clamped to 1 AFTER the glColor C
+// is multiplied in (executed RenderHelper calls: display-pixel-reference.json), so a tinted face lit above 1 reads min(1, C * lit), not C * min(1, lit). `vDiffuse` is the unclamped
+// factor (at most 1.37, capped at 2 so the unlit replacements in hanging-renderer.js and player-renderer.js still match) and the fragment clamps it with the tint.
 // Entities, tile entities and held items. `lightCoord` is per material (the
 // entity's brightness); `lights` are the item-light directions in the space
 // of modelMatrix (world space, or view space for the first-person scene).
@@ -97,13 +100,13 @@ export function entityMaterial(lighting, { map = null, color = null, alphaTest =
     uniforms,
     defines: map ? { USE_TEXTURE: "" } : {},
     vertexShader: `uniform vec3 light0,light1;uniform vec4 mapST;centroid varying vec2 vUv;varying float vDiffuse;varying float vFogDistance;
-void main(){vUv=uv*mapST.xy+mapST.zw;vec3 n=normalize(mat3(modelMatrix)*normal);vDiffuse=min(1.,.4+.6*(max(0.,dot(n,light0))+max(0.,dot(n,light1))));vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
+void main(){vUv=uv*mapST.xy+mapST.zw;vec3 n=normalize(mat3(modelMatrix)*normal);vDiffuse=min(2.,.4+.6*(max(0.,dot(n,light0))+max(0.,dot(n,light1))));vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
     fragmentShader: `uniform sampler2D map,lightmap;uniform vec3 tint;uniform vec4 overlay;uniform vec2 lightCoord;uniform float alphaTest;centroid varying vec2 vUv;varying float vDiffuse;${FOG_PARS}
 void main(){vec4 t=vec4(1.);
 #ifdef USE_TEXTURE
 t=texture2D(map,vUv);
 #endif
-if(t.a<=alphaTest)discard;vec3 c=t.rgb*tint*vDiffuse*texture2D(lightmap,(lightCoord+8.)/256.).rgb;c=mix(c,overlay.rgb,overlay.a);gl_FragColor=vec4(applyFog(c),${transparent ? "t.a" : "1."});}`,
+if(t.a<=alphaTest)discard;vec3 c=t.rgb*min(vec3(1.),tint*vDiffuse)*texture2D(lightmap,(lightCoord+8.)/256.).rgb;c=mix(c,overlay.rgb,overlay.a);gl_FragColor=vec4(applyFog(c),${transparent ? "t.a" : "1."});}`,
     transparent,
     side,
   });
