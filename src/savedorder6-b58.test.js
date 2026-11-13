@@ -56,7 +56,8 @@ test("falling blocks saved by the away run are stamped in the native order (exec
 });
 
 test("a reloaded away run keeps the falling blocks' places (the records' stamps are restored and stamped again)", () => {
-  const c = reference.find((r) => r.name === "b58so-away-falling");
+  const base = reference.find((r) => r.name === "b58so-away-falling");
+  const c = { ...base, chunks: base.chunks.map(([x, z]) => [x + 3, z]) }; // b59so: the cow sat at x -14, outside the bare test world's bounds; shifted east every chunk keeps its place in the order
   const ents = run({}, [0, 64, 0]);
   joinAll(ents, falls(ents), c);
   const rec = ents.finish();
@@ -64,7 +65,7 @@ test("a reloaded away run keeps the falling blocks' places (the records' stamps 
   again.attachFalling(f2, rec.falling);
   const rec2 = again.finish();
   assert.equal(rec2.falling.length, 4);
-  assert.deepEqual(order(rec2, c.chunks), c.after.filter((i) => i !== 2), "the cow (index 2) does not survive this harness's reload (the bare test world drops it); the rest keep their order");
+  assert.deepEqual(order(rec2, c.chunks), c.after, "every kind, the cow included, keeps its place across the reload");
 });
 
 for (const c of reference.filter((r) => r.move)) {
