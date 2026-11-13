@@ -42,6 +42,7 @@ import { tickTnt } from "./explosion.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { hangingGeometry, ARTS, FRAME_PIXELS } from "./hanging.js";
 import { takeBirth } from "./tracker-birth.js";
+import { landingEffects } from "./damage-fx.js";
 
 const f = Math.fround;
 const PI_D = 3.1415927410125732;
@@ -285,6 +286,16 @@ export class ObjectClient extends ClientEntity {
   // same keys drive); its position packets never correct it (the targets are read only in the interpolation branch). Boats.tickBoat runs it with `remote` set, as EntityBoat's
   // `!isRemote` guards decide (no break by collision or fall, no drops, no neighbour push, no lava or fire, wobble from the watcher), on the copy's own Entity.rand. Executed: the
   // `ride` records of boat-copy-reference.json (tools/probes/BoatCopyProbe.java); not run: other entities' boxes as obstacles, the rider's client-side fall call (only counted).
+  // The other entities of the client world for the ridden boat's move (Batch 57, executed ride2 records; bytecode-read ahb.a(Entity, AABB): per entity within 0.25 of the swept box, its
+  // getBoundingBox then `mover.getCollisionBox(it)`; EntityBoat.getCollisionBox(e) returns e.boundingBox, so every box counts, even items and the rider's own). The client mobs, carts, boats,
+  // dragon parts come from `hooks.clientTargets`; every object copy (boats, carts, hanging entities, items, orbs, arrows, falling blocks...) from the tracker's own list. Not the boat itself, nor the
+  // client player (the rider's box never clamps its own seat: executed, its overlap rules leave the move alone).
+  clientBlockers() {
+    const out = [];
+    for (const t of this.tracker.targets()) if (t.ref !== "player" && !(t.ref instanceof ObjectClient) && t.box) out.push({ bb: t.box, ref: t.ref });
+    for (const en of this.tracker.clientList ?? []) { const c = en.client; if (c !== this && c.present && c.spec) out.push({ bb: c.box(), ref: c }); }
+    return out;
+  }
   rides() { return !!this.live && !this.live.dead && !!this.tracker.hooks.rides?.(this.live); }
   rideBoat() {
     if (!this.rides()) { this.rb = null; return false; }
@@ -297,13 +308,16 @@ export class ObjectClient extends ClientEntity {
         collidedH: false, fallDistance: 0, inWeb: false, inWater: !!this.inWater, fire: 0, timeSinceHit: 0, damage: 0, forwardDir: 1, speed: 0.07, dead: false, height: BOAT_HEIGHT, wet: false, firstUpdate: this.firstUpdate !== false, random: this.sim.rand, falls: 0 };
       b.view = null;
     }
-    if (b.view?.base !== rider) { b.view = Object.create(rider); b.view.base = rider; b.view.fall = () => { b.falls++; }; } // the copy's rider call (EntityBoat.updateFallState -> Entity.fall) lands on the local player, whose damage is the server's
+    // the copy's rider call (EntityBoat.updateFallState -> Entity.fall) lands on the local player: EntityClientPlayerMP.attackEntityFrom is `return false` (the damage is the server's), but
+    // EntityPlayerSP.playSound plays at once, so the fall and step sounds are heard from the copy's landing (b.seat: where the rider stood, i.e. the previous tick's seat)
+    if (b.view?.base !== rider) { b.view = Object.create(rider); b.view.base = rider; b.view.fall = (d) => { b.falls++; this.tracker.hooks.riderFall?.(d, b.seat, this.world); }; }
+    b.seat = boatSeat(this);
     b.rider = b.view; b.random = this.sim.rand; b.inWater = !!this.inWater; b.firstUpdate = this.firstUpdate !== false;
     b.vx = this.vx; b.vy = this.vy; b.vz = this.vz; b.yaw = this.yaw; b.pitch = this.pitch;
     boats.setPosition(b, this.x, this.y, this.z);
     b.timeSinceHit = this.meta.get(17) | 0; b.damage = this.meta.get(19) ?? 0;
     const hooks = { splash: (_, vol, pitch) => this.tracker.sound("game.neutral.swim.splash", this.x, this.y, this.z, vol, pitch), clear: (x, y, z, block) => this.tracker.clientClear?.(x, y, z, block) };
-    const particles = boats.tickBoat(this.world, b, [], { ...hooks });
+    const particles = boats.tickBoat(this.world, b, this.clientBlockers(), { ...hooks });
     for (const q of particles) this.tracker.particle(q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
     this.x = b.x; this.y = b.posY; this.z = b.z; this.vx = b.vx; this.vy = b.vy; this.vz = b.vz; this.yaw = b.yaw; this.pitch = b.pitch;
     this.onGround = b.onGround; this.inWater = b.inWater; this.firstUpdate = false;
@@ -675,6 +689,13 @@ export function rideCopy(tracker, live) {
   return c?.present && (c.kind === "minecart" || c.kind === "boat") ? c : null; // Batch 56: the ridden boat's copy runs its own physics (rideBoat), so the seat follows it too
 }
 // Batch 56: the client player's feet on a boat copy (Entity.updateRiderPosition: 0.4 ahead along the copy's yaw, posY + getMountedYOffset). A copy has posY in `y`.
+// Batch 57: EntityLivingBase.fall for the client player a ridden boat's fall reaches (Entity.fall passes it to the rider): EntityPlayer.fall returns for a flying-capable (Creative) player,
+// then ceil(distance - 3 - Jump Boost level) > 0 plays "game.player.hurt.fall.small|big" (volume 1, pitch 1) at the feet and, over a block (not air) at floor(y - 0.2), its step sound at
+// volume * 0.5, pitch * 0.75, through EntityPlayerSP.playSound (World.playSound, heard). Executed (BoatCopyProbe ride2 `bx-fall-*`: the unchanged sv.b with that playSound).
+export function clientRiderFall(distance, seat, world, { creative = false, amplifier = -1 } = {}) {
+  if (creative || !(distance > 0)) return [];
+  return landingEffects(distance, { kind: "player", amplifier, blockUnder: world?.get?.(Math.floor(seat.x), Math.floor(seat.y - 0.20000000298023224), Math.floor(seat.z)) ?? 0 }).sounds;
+}
 export function boatSeat(c) { return SEAT.seat({ x: c.x, posY: c.y, z: c.z, yaw: c.yaw }); }
 const SEAT = new Boats();
 function laidOver(e) {

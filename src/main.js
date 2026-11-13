@@ -211,7 +211,7 @@ import { JavaRandom } from "./lighting.js";
 import { useDragonEgg } from "./dragon-egg-live.js";
 import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
-import { hurtCameraRoll } from "./damage-fx.js";
+import { hurtCameraRoll, JUMP_BOOST } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime, importedDimensionState } from "./world-import.js";
 import { collectBases, basesFromJson } from "./whole-save-json.js";
@@ -221,7 +221,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -441,6 +441,8 @@ let objectTracker = new ObjectTracker(10, Math.random, entityIds); // Batch 42: 
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
   objectTracker.hooks.rides = (live) => rider.vehicle === live; // Batch 51: the ridden boat's copy takes the live boat's state (batch 56: it runs its own physics, object-tracker.js rideBoat)
+  // Batch 57: the ridden boat copy's landing reaches the client player's own fall sounds (EntityPlayerSP.playSound); the damage is the server's (object-tracker.js clientRiderFall)
+  objectTracker.hooks.riderFall = (distance, seat, w) => { const jump = survival.effects?.get?.(JUMP_BOOST); for (const s of clientRiderFall(distance, seat, w, { creative: survival.creative, amplifier: jump ? jump.amplifier : -1 })) sounds?.play(s.name, { volume: s.volume, pitch: s.pitch }); };
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
   // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
   // Their sounds are logged (object-tracker.js `sound`) but not played: the client world's playSoundAtEntity reaches only RenderGlobal.playSound
