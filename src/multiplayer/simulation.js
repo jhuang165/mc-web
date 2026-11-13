@@ -35,6 +35,7 @@ import { playerMiningState } from '../enchantment-effects.js';
 import { BOW, canDraw } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
+import { ServerPvp } from './server-pvp.js'; // b63 mppvp
 import { ServerItems } from './server-items.js';
 import { ServerAchievements } from './server-achievements.js';
 import { ServerContainers } from './server-containers.js';
@@ -73,7 +74,7 @@ export function cleanHotbar(slots) {
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
   constructor(saved = {}, { world = null, gameMode = 'creative', ...options } = {}) {
-    this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
+    this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
     this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
@@ -159,7 +160,7 @@ export class DedicatedSimulation {
   // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
   // the death is seen by ServerSurvival.tick. Lead fix at the b59 merge: the mpmobs no-op is replaced by the mpstate health.
-  damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
+  damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; if (!this.pvpRules.allows(source?.from)) return false; /* b63 mppvp: EntityPlayerMP.canAttackPlayer (pvp=false) */ return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
@@ -215,6 +216,11 @@ export class DedicatedSimulation {
   queueAttack(id, mob) {
     if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, attack: mob }); return true;
+  }
+  // b63 mppvp: C02 UseEntity, attack on another player (the wire id is the player's id); the server repeats processUseEntity's reach test (server-pvp.js).
+  queuePvpAttack(id, target) {
+    if (!this.players.has(id) || typeof target !== 'string' || target.length > 64 || this.actions.filter(a => a.id === id).length >= 4) return false;
+    this.actions.push({ id, pvp: target }); return true;
   }
   // C02 UseEntity, interact (b61 animal-use.js): feed, breed, shear, milk, saddle, dye an animal; `claim` is the client's own prediction.
   queueAnimUse(id, mob, claim) {
@@ -480,7 +486,7 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack, animUse, claim, veh } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
       if (veh && !p.dimension) { this.vehicles.act(p, veh); continue; } // b61
@@ -488,7 +494,8 @@ export class DedicatedSimulation {
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
         if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
-        if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
+        // b63 mppvp: pvp = C02 attack on a player
+        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
       });
     }
     for (const p of this.players.values()) if (p.resendCells) {

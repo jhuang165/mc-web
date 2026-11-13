@@ -40,7 +40,7 @@ export class ServerSurvival {
     s.difficulty = this.sim.difficulty ?? NORMAL;
     if (!p.dead) {
       tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying }, moved, { tickWeather() {} });
-      finishPlayerMovement(p, moved);
+      finishPlayerMovement(p, moved); p.inWater = !!moved?.inWater; // b63 mppvp: the critical-hit test of a melee attack reads it
       if (s.health <= 0) this.die(p);
     } else this.tickDeath(p);
     this.takeHurt(p); s.hurtSounds.length = 0; s.died = false; s.broken = 0; s.drowned = false; // client-only flags the dedicated server never plays
@@ -51,7 +51,8 @@ export class ServerSurvival {
     p.dead = true; p.itemInUse = null; p.dig?.abort?.();
     this.dropOnDeath(p);
     const component = deathComponent(p.survival.combat, p.name, { rawName: p.name });
-    (this.sim.events ??= []).push({ type: 'death', id: p.id, component });
+    const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
+    (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
   }
   /** gamerule keepInventory (default false); the rule table keeps strings. */
   keepInventory() { return String(this.sim.gameRules?.keepInventory ?? 'false').toLowerCase() === 'true'; }

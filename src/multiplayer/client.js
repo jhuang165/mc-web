@@ -117,6 +117,8 @@ export class DedicatedClient {
   openInventory() { this.send({ type: 'openInventory' }); } // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
   // C02 UseEntity, attack: the wire id of the mob (its S0F spawn); the server checks the reach and applies the held weapon's damage.
   attack(mob) { this.send({ type: 'attack', mob }); }
+  // b63 mppvp: C02 attack on another player (their wire id); the server checks the reach and the pvp property.
+  attackPlayer(player) { this.send({ type: 'attackPlayer', player }); }
   // C02 UseEntity, interact (b61): feed / breed / shear / milk / saddle / dye an animal; `claim` is whether the client's own prediction handled the click.
   animUse(mob, claim) { this.send({ type: 'animUse', mob, claim: !!claim }); }
   // b61 C02 on a minecart or boat (key 'c<id>' / 'b<id>'): hit = attack, else interact (mount, fuel).
