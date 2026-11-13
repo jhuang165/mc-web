@@ -5,6 +5,9 @@
 // tile entity lives in `Skulls` (the way signs.js keeps text).
 import { signSolid, clickedFace } from './signs.js';
 import { doorRotationYaw } from './doors-panes.js';
+import { NBT } from './nbt.js';
+import { rawOf, tagOf } from './item-tags.js';
+import { profileToNbt, profileOfOwnerTag, profileFromName, cloneProfile } from './skull-profile.js';
 
 import { SKULL, skullBounds, installSkullBlocks } from './skull-bounds.js';
 export { SKULL, skullBounds, installSkullBlocks };
@@ -37,7 +40,21 @@ export function skullPose(meta, rot) {
 // ItemSkull.onItemUse: the rotation byte for a head set on top of a block (rotationYaw * 16 / 360 + 0.5, floored, & 15).
 export const skullRot = (yaw) => Math.floor((yaw * 16) / 360 + 0.5) & 15;
 // BlockSkull.breakBlock drops the item of the tile's type unless the metadata carries bit 8 (Creative harvest).
-export const skullDrops = (type) => [{ id: ITEM_SKULL, count: 1, damage: type | 0 }];
+// A player head (type 3) with a profile keeps it as the item's SkullOwner compound (BlockSkull.dropBlockAsItemWithChance, bytecode-read and executed).
+export function skullDrops(type, profile = null) {
+  const drop = { id: ITEM_SKULL, count: 1, damage: type | 0 };
+  if ((type | 0) === 3 && profile) {
+    drop.tags = { skullRaw: rawOf({ type: NBT.COMPOUND, value: profileToNbt(profile) }) };
+    if (typeof profile.name === 'string') drop.tags.skullOwner = profile.name;
+  }
+  return [drop];
+}
+// ItemSkull.onItemUse: the tile's profile from the stack's SkullOwner (a compound through NBTUtil.func_152459_a, a non-empty string as GameProfile(null, name)); only a player head has one.
+export function skullProfileOfStack(stack, damage = stack?.damage) {
+  if ((damage | 0) !== 3 || !stack) return null;
+  if (stack.skullRaw) { try { return profileOfOwnerTag(tagOf(stack.skullRaw)); } catch { return null; } }
+  return typeof stack.skullOwner === 'string' && stack.skullOwner.length > 0 ? profileFromName(stack.skullOwner) : null;
+}
 // Mob drops: EntitySkeleton/EntityZombie/EntityCreeper pass these damages to Item skull (combat.js hooks).
 export const SKULL_DAMAGE = Object.freeze({ skeleton: 0, wither: 1, zombie: 2, char: 3, creeper: 4 });
 
@@ -45,8 +62,10 @@ export class Skulls {
   constructor() { this.tiles = new Map(); }
   static key(x, y, z) { return `${x},${y},${z}`; }
   tile(x, y, z) { return this.tiles.get(Skulls.key(x, y, z)) ?? null; }
-  create(x, y, z, type = 0, rot = 0, owner = '') {
-    const tile = { x, y, z, type: type & 7, rot: rot & 15, owner: owner || '' };
+  // `profile` is the TileEntitySkull GameProfile (skull-profile.js); a bare `owner` name (ExtraType, old saves) becomes GameProfile(null, name).
+  create(x, y, z, type = 0, rot = 0, owner = '', profile = null) {
+    const p = profile && typeof profile === 'object' && Array.isArray(profile.properties) ? cloneProfile(profile) : owner ? profileFromName(String(owner)) : null;
+    const tile = { x, y, z, type: type & 7, rot: rot & 15, owner: (typeof p?.name === 'string' ? p.name : '') || '', ...(p ? { profile: p } : {}) };
     this.tiles.set(Skulls.key(x, y, z), tile);
     return tile;
   }
@@ -55,7 +74,7 @@ export class Skulls {
   toJSON() { return [...this.tiles.values()].map((t) => ({ ...t })); }
   static fromJSON(list) {
     const s = new Skulls();
-    for (const t of Array.isArray(list) ? list : []) if ([t?.x, t?.y, t?.z].every(Number.isInteger)) s.create(t.x, t.y, t.z, t.type, t.rot, t.owner);
+    for (const t of Array.isArray(list) ? list : []) if ([t?.x, t?.y, t?.z].every(Number.isInteger)) s.create(t.x, t.y, t.z, t.type, t.rot, t.owner, t.profile);
     return s;
   }
 }
@@ -96,7 +115,7 @@ export function tryBuildWither(world, skulls, x, y, z, { difficulty = 2, spawn, 
 
 // ItemSkull.onItemUse. `state` is {world, survival, yaw}; `request` {id, damage, target:{block, adjacent}}.
 // hooks: skulls (store), difficulty, spawnWither(x, y, z, yaw), soulSand (internal id), updateBlock, renderHotbar, markUnsaved, sound.
-export function placeSkull(state, { id, damage = 0, target }, hooks = {}) {
+export function placeSkull(state, { id, damage = 0, target, stack = null }, hooks = {}) {
   const { world, survival } = state, here = target.block, adjacent = target.adjacent;
   const result = (placed, reason, position = null, extra = {}) => ({ placed, reason, block: placed ? SKULL : null, position, ...extra });
   if (!adjacent) return result(false, 'skull-no-face');
@@ -109,7 +128,7 @@ export function placeSkull(state, { id, damage = 0, target }, hooks = {}) {
   // There is no canPlace or replaceable test: setBlock replaces whatever stands in the target cell.
   const rot = side === 1 ? skullRot(state.yawDegrees ?? doorRotationYaw(state.yaw ?? 0)) : 0, skulls = hooks.skulls ?? SKULLS;
   world.set(x, y, z, SKULL, true, side);
-  const tile = skulls.create(x, y, z, damage, rot);
+  const tile = skulls.create(x, y, z, damage, rot, '', skullProfileOfStack(stack, damage));
   const built = tryBuildWither(world, skulls, x, y, z, { difficulty: hooks.difficulty ?? 2, spawn: hooks.spawnWither, soulSand: hooks.soulSand });
   if (!survival.creative) survival.take(id);
   hooks.updateBlock?.(x, z, y);

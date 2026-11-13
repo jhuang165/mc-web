@@ -1,4 +1,4 @@
-import { readItemTags } from './item-tags.js';
+import { readItemTags, tagOf } from './item-tags.js';
 import { bindIds } from "./entity-ids.js";
 import { LastOutputError } from "./chat-component.js";
 import { ringEntityActive } from './streaming-ticks.js';
@@ -62,6 +62,11 @@ function originalOf(stack) {
   const o = REVERSE.get(stack.id);
   return o ? { id: o.id, damage: o.damage ?? stack.damage ?? 0 } : null;
 }
+// An src/nbt.js tag as this module's [type, value] form (lists [9, elementType, items], compounds [10, {key: [type, value]}]).
+function cartTag(t) {
+  const payload = (type, v) => type === 10 ? Object.fromEntries([...v].map(([k, c]) => [k, cartTag(c)])) : type === 9 ? [9, v.elementType, v.items.map((x) => payload(v.elementType, x))] : v;
+  return t.type === 9 ? payload(9, t.value) : [t.type, payload(t.type, t.value)];
+}
 function itemTagsNbt(stack) {
   const tag = {}, list = (entries) => [9, 10, entries.map((e) => ({ id: [2, e.id], lvl: [2, e.lvl] }))];
   if (Array.isArray(stack.enchantments)) tag.ench = list(stack.enchantments);
@@ -70,10 +75,10 @@ function itemTagsNbt(stack) {
   if (Number.isInteger(stack.repairCost)) tag.RepairCost = [3, stack.repairCost];
   const display = {};
   if (typeof stack.displayName === 'string') display.Name = [8, stack.displayName];
-  if (Array.isArray(stack.lore)) display.Lore = [9, 8, [...stack.lore]];
+  if (stack.loreRaw) display.Lore = cartTag(tagOf(stack.loreRaw)); else if (Array.isArray(stack.lore)) display.Lore = [9, 8, [...stack.lore]];
   if (Object.keys(display).length) tag.display = [10, display];
   if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = [1, stack.unbreakable ? 1 : 0];
-  if (typeof stack.skullOwner === 'string') tag.SkullOwner = [8, stack.skullOwner];
+  if (stack.skullRaw) tag.SkullOwner = cartTag(tagOf(stack.skullRaw)); else if (typeof stack.skullOwner === 'string') tag.SkullOwner = [8, stack.skullOwner];
   if (Array.isArray(stack.customPotionEffects)) tag.CustomPotionEffects = [9, 10, stack.customPotionEffects.map((e) => ({ Id: [1, e.id], Amplifier: [1, e.amplifier], Duration: [3, e.duration], Ambient: [1, e.ambient ? 1 : 0] }))];
   if (typeof stack.mapScaling === 'boolean') tag.map_is_scaling = [1, stack.mapScaling ? 1 : 0];
   return tag;

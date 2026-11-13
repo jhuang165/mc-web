@@ -537,7 +537,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     // ItemSkull.onItemUse (skull.js): any face but the bottom of a solid block; the Wither builds when its T completes.
     if (id === ITEM_SKULL) {
-      const placed = placeSkull({ world: state.world, survival: state.survival, yaw: state.yaw, yawDegrees: state.yawDegrees }, { id, damage: state.survival.held?.damage ?? 0, target }, {
+      const placed = placeSkull({ world: state.world, survival: state.survival, yaw: state.yaw, yawDegrees: state.yawDegrees }, { id, damage: state.survival.held?.damage ?? 0, target, stack: state.survival.held }, {
         skulls: state.skulls, difficulty: state.difficulty, soulSand: SOUL_SAND, spawnWither: hooks.spawnWither, updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
       });
       return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });

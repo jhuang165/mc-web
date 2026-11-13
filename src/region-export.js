@@ -1,4 +1,5 @@
 import { writeItemTags } from './item-tags.js';
+import { skullOwnerEntry } from './skull-profile.js';
 import { writeFireworkTags } from './fireworks-nbt.js';
 import { writeBookTags } from './books-nbt.js';
 import { saveEnderSlots } from './chest-blocks.js';
@@ -185,8 +186,8 @@ function payload(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz));
  // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
- // TileEntitySkull.writeToNBT: SkullType and Rot bytes, the ExtraType owner name (skull.js).
- for(const {value:e} of state.skulls??[])tiles.push(new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.type??0),Rot:byte(e.rot??0),ExtraType:str(e.owner??'')})));
+ // TileEntitySkull.writeToNBT (bytecode-read, item-tags2-reference.json): SkullType and Rot bytes and the Owner GameProfile compound; 1.7.10 writes no ExtraType (skull-profile.js).
+ for(const {value:e} of state.skulls??[]){const n=new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.type??0),Rot:byte(e.rot??0)}));const owner=skullOwnerEntry(e);if(owner)n.set('Owner',owner);tiles.push(n);}
  for(const {value:e} of state.beacons??[])tiles.push(new Map(Object.entries({id:str('Beacon'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}))); // pyramid.js
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z','SpawnData','SpawnPotentials'].includes(k))n[k]=typeof v==='string'?str(v):short(v);if(e.SpawnData||e.SpawnPotentials){const s=makeSpawner(0,0,0);readSpawnerNBT(s,e);const w=spawnerPairs(s);for(const k of ['SpawnData','SpawnPotentials'])if(w[k])n[k]=pairTag(w[k]);}tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).

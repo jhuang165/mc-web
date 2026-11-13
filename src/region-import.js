@@ -20,6 +20,7 @@ import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
 import { readItemTagsNbt } from './item-tags.js';
+import { profileOfSkullTile } from './skull-profile.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
@@ -101,11 +102,12 @@ export function readItemTag(stack, nbt) {
   if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
   const lost = [], recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt), ...readItemTagsNbt(stack, nbt, lost)]);
   const ignored = [...nbt.keys()].filter((key) => !recognized.has(key));
-  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color' && !(key === 'Lore' && stack.lore)).map((key) => 'display.' + key));
+  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color' && !(key === 'Lore' && (stack.lore || stack.loreRaw))).map((key) => 'display.' + key));
   ignored.push(...lost); // SkullOwner.<key> of a profile compound (item-tags.js)
   return ignored;
 }
 
+const skullProfileFields = (tile) => { const profile = profileOfSkullTile(tile); return profile ? { owner: profile.name ?? '', profile } : { owner: '' }; };
 // Shared TileEntity container readers for Java import and command data tags.
 export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, invalidSlot = () => {} } = {}) {
   const spec = { Chest: ['chests', 27, true], Trap: ['dispensers', 9, true], Dropper: ['dispensers', 9, true], Hopper: ['hoppers', 5, true], Cauldron: ['brewing', 4, true], Furnace: ['furnaces', 3, false] }[id];
@@ -568,8 +570,8 @@ export async function importJavaRegionArea(regions, options = {}) {
         const { record } = readJukeboxTile(tile);
         if (record) musicTiles.push({ kind: 'jukebox', x: lx, y, z: lz, record }); tally(tileConverted, id);
       } else if (inside && id === 'Skull' && block === 172) {
-        // TileEntitySkull.readFromNBT: SkullType (byte), Rot (byte), ExtraType (owner name, only for type 3).
-        skulls.push({ x: lx, y, z: lz, type: Math.max(0, Math.min(4, Number(get(tile, 'SkullType', NBT.BYTE, 0)) | 0)), rot: Number(get(tile, 'Rot', NBT.BYTE, 0)) & 15, owner: String(get(tile, 'ExtraType', NBT.STRING, '')) }); tally(tileConverted, id);
+        // TileEntitySkull.readFromNBT: SkullType (byte), Rot (byte), the Owner GameProfile compound or else an ExtraType name (skull-profile.js).
+        skulls.push({ x: lx, y, z: lz, type: Math.max(0, Math.min(4, Number(get(tile, 'SkullType', NBT.BYTE, 0)) | 0)), rot: Number(get(tile, 'Rot', NBT.BYTE, 0)) & 15, ...skullProfileFields(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Sign' && (block === 175 || block === 176)) {
         // TileEntitySign.readFromNBT: Text1-Text4, each cut to 15 characters; the loaded tile is not editable (signs.js).
         signs.push({ x: lx, y, z: lz, text: [1, 2, 3, 4].map(i => String(get(tile, `Text${i}`, NBT.STRING, '')).slice(0, 15)) }); tally(tileConverted, id);

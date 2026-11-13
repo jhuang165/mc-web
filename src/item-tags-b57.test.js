@@ -73,7 +73,7 @@ test("every executed tag row: name, tooltip, effects, glint, colour and NBT text
     }
     // NBTTagCompound.toString (Java HashMap key order) of the stack the port rebuilds from the same tag. Known gaps (see the track note): a Lore list that is not
     // strings, extra SkullOwner / effect fields and the malformed custom lists are not kept as raw NBT.
-    if (!/^(loreInts|loreString|loreTopLevel|skullOwnerCompound|skullOwnerInt|custom)/.test(row.name) || row.name === "customStrength") assert.equal(stackNbtText(stack), row.nbt, `${row.name} nbt`);
+    if (!/^(loreTopLevel|custom)/.test(row.name) || row.name === "customStrength") assert.equal(stackNbtText(stack), row.nbt, `${row.name} nbt`);
     checked++;
   }
   assert.ok(checked >= 46, `checked ${checked}`);
