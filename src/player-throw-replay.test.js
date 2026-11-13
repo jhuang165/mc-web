@@ -90,6 +90,7 @@ function system(actions, functions) {
   const position = { x: X + 0.5, y: FLOOR + 1, z: Z + 0.5, toArray() { return [this.x, this.y, this.z]; } };
   const editActionLog = [];
   const bindings = {
+    mutePlaceSound: false, // main.js: set while a predicted click's queued run replays (b57 prediction3)
     multiplayer: null, // this legacy singleplayer replay has no network connection
     screen: "playing", eating: null, mining: null, mineCooldown: 0, mineHeld: false, saved: true, grounded: true,
     fallDistance: 0, wasInWater: false, yaw: 0, pitch: Math.PI / 2, target: null, aimedEntity: null, eyeRay: null, survival,

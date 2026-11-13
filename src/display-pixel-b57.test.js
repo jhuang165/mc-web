@@ -13,7 +13,7 @@ import { flatBlockItem, HOPPER_ITEM_URL } from "./flat-block-items.js";
 import { ITEMS } from "./survival.js";
 import { ITEM_LIGHTS } from "./light-material.js";
 import { lightmap } from "./lighting.js";
-import { renderCases } from "./display-pixel-cases.js";
+import { renderCases } from "./display-light-cases.js";
 
 const read = async (n) => JSON.parse(await readFile(new URL("../public/research/" + n, import.meta.url), "utf8"));
 const ref = await read("display-pixel-reference.json"), render = (await read("display-pixel-render.json")).results;

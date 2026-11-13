@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
-import { renderCases } from "../src/display-pixel-cases.js";
+import { renderCases } from "../src/display-light-cases.js";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), ".."), port = Number(process.argv[2] || 5704), debugPort = port + 1000;
 const chromeBin = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
