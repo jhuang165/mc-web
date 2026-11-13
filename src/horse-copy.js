@@ -11,7 +11,7 @@
 //   jump is the first updateRiderPosition. Dismounting: yz.a(null) runs EntityLivingBase.dismountEntity (sv.m, server only), which puts the server player on the first
 //   clear spot beside the mount (or on top of it), S08 carries that spot to the client, so the client player jumps from the copy's seat to it. See dismountSpot in minecarts.js.
 import { mhSin, mhCos } from "./lighting.js";
-import { mountedOffset } from "./horse.js";
+import { mountedOffset, livingSound, SOUND_VOLUME, TALK_INTERVAL } from "./horse.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
 import { JavaRandom } from "./java-random.js";
 
@@ -84,11 +84,28 @@ export function stepHorseAnim(a) {
 export function horseTailRoll(a, rand) { if (rand.nextInt(200) === 0) a.tail = 1; }
 // Entity.rand of a horse's client copy: its own unseeded Random (the entity-tracker.js copy has none for a horse, so it is made on the first tick; a replay may set c.rand first).
 export const copyRandom = (c) => (c.rand ??= new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))));
-// One client tick of the animation half of wi.h() on the copy `c` of a horse whose watcher 16 holds `flags`: the tail roll on the copy's own Random, then the counters.
-export function stepHorseCopy(c, flags) {
+// EntityLiving.onEntityUpdate's living sound on the copy (Entity.onUpdate, before wi.e; the copy is a client entity, so it runs there too): an alive horse draws
+// rand.nextInt(1000) < livingSoundTime++; a hit sets livingSoundTime = -q() (400) and playLivingSound plays wi.t(): cS() (server only), nextInt(10) (the rear it may start is cU,
+// server only), the idle name, then playSound(name, bf() 0.8, bg()): two nextFloat draws, (r - r) * 0.2 + 1 (1.5 for a child). The client world's playSoundAtEntity reaches only
+// RenderGlobal.playSound, which is empty in 1.7.10, so nothing is heard: the draws and the sound record (`a.sound`, the last tick's) are all it does. Executed: horse-sounds-reference.json `sound`.
+export function horseCopyLivingSound(a, rand, live) {
+  const time = a.livingSoundTime ?? 0;
+  a.livingSoundTime = time + 1;
+  if (rand.nextInt(1000) >= time) return null;
+  a.livingSoundTime = -TALK_INTERVAL;
+  const out = livingSound(live.type ?? 0, rand);
+  const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (live.child ? f(1.5) : 1));
+  return (a.sound = { sound: out.sound, volume: f(SOUND_VOLUME), pitch });
+}
+// One client tick of wi.h() on the copy `c` of a horse whose watcher 16 holds `flags`: EntityLiving's living sound roll (alive horses only; `live` is { alive, child, type }), the tail
+// roll on the copy's own Random, then the counters.
+export function stepHorseCopy(c, flags, live = {}) {
   const a = (c.horse ??= newHorseAnim());
   a.flags = flags;
-  horseTailRoll(a, copyRandom(c));
+  a.sound = null;
+  const rand = copyRandom(c);
+  if (live.alive !== false) horseCopyLivingSound(a, rand, live);
+  horseTailRoll(a, rand);
   stepHorseAnim(a);
   return a;
 }

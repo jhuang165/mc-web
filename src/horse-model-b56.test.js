@@ -49,7 +49,7 @@ test("the copy draws nextInt(200) once per tick on its own Random and the tail c
   const seen = [];
   c.rand = { nextInt(n) { seen.push(n); return Number(script[seen.length - 1].split(":")[1]); } };
   rec.ticks.forEach((t, i) => {
-    const a = stepHorseCopy(c, 0);
+    const a = stepHorseCopy(c, 0, { alive: false }); // the living sound roll is checked in horse-sounds-b57.test.js; here only the tail roll is on the script
     assert.equal(seen.length, i + 1);
     assert.equal(a.tail, t.bp, `tick ${i}`);
     if (script[i] === "200:0") hits.add(i);
