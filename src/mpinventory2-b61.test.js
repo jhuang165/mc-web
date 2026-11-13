@@ -70,7 +70,7 @@ test('another server window (a chest): an accepted click sends setSlot for every
   assert.ok(open.length >= 1);
 });
 
-test('Survival: the hotbar and rest fields of an input are ignored; Creative still mirrors them', () => {
+test('Survival: the hotbar and rest fields of an input are ignored; Creative is ignored too (b62)', () => {
   const { s, p } = fixture();
   p.survival.inventory.main[0] = makeStack(3, 5);
   assert.equal(s.input(p.id, input({ hotbar: [wire(4, 64), ...Array(8).fill(null)] })), true);
@@ -79,10 +79,10 @@ test('Survival: the hotbar and rest fields of an input are ignored; Creative sti
   const c = fixture('survival', 'creative');
   assert.equal(c.p.survival.creative, true);
   assert.equal(c.s.input(c.p.id, input({ hotbar: [wire(4, 64), ...Array(8).fill(null)] })), true);
-  assert.equal(c.p.survival.inventory.main[0].id, 4, 'a Creative client is mirrored');
+  assert.notEqual(c.p.survival.inventory.main[0]?.id, 4, 'b62: a Creative client is not mirrored');
   const creativeWorld = fixture('creative');
   creativeWorld.s.input(creativeWorld.p.id, input({ hotbar: [wire(4, 64), ...Array(8).fill(null)] }));
-  assert.equal(creativeWorld.p.survival.inventory.main[0].id, 4, 'a Creative world keeps the mirror');
+  assert.notEqual(creativeWorld.p.survival.inventory.main[0]?.id, 4, 'b62: neither does a Creative world');
   assert.equal(c.s.serverItems instanceof ServerItems, true);
 });
 

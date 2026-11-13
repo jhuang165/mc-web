@@ -30,11 +30,13 @@ export function applyInv(m, { inventory, container, client, mpInv }) {
     (m.armor ?? []).forEach((s, i) => { if (i < 4) put(inventory.armor, i, s); });
     inventory.cursor = fromWire(m.cursor);
     setGrid((m.grid ?? []).map((stack, i) => ({ i, stack })));
+    if (container && 'result' in m) container.result.stack = fromWire(m.result);
     out.hotbar = out.container = true;
   } else if (m.type === 'invSet') {
     for (const e of m.armor ?? []) if (e.i >= 0 && e.i < 4) { inventory.armor[e.i] = fromWire(e.stack); out.container = true; }
     if (m.grid) setGrid(m.grid);
     if ('cursor' in m) { inventory.cursor = fromWire(m.cursor); out.container = true; }
+    if (container && 'result' in m) { container.result.stack = fromWire(m.result); out.container = true; } // b62: slot 0 correction (after the grid, which re-derives it)
   }
   if (Number.isInteger(m.seq)) mpInv.ack = Math.max(mpInv.ack ?? 0, m.seq);
   return out;
@@ -50,17 +52,30 @@ export function creativeSlots(inventory) {
   inventory.armor.slice(0, 4).forEach((s, a) => out.set(8 - a, sig(s)));
   return out;
 }
+// Runs `run` and sends C10 for every main / armour slot it changed. Returns what `run` returned.
+export function creativeDiff(inventory, client, run) {
+  const before = creativeSlots(inventory);
+  let result;
+  try { result = run(); } finally {
+    for (const [slot, g] of creativeSlots(inventory)) if (g !== before.get(slot)) client.invCreative(slot, wire(slot >= 36 ? inventory.main[slot - 36] : slot >= 9 ? inventory.main[slot] : inventory.armor[8 - slot]));
+  }
+  return result;
+}
 export function wireCreative(gui, inventory, client) {
   const send = gui.send.bind(gui);
   let depth = 0;
   gui.send = (...args) => {
     if (depth++) { try { return send(...args); } finally { depth--; } }
-    const before = creativeSlots(inventory);
     let result;
-    try { result = send(...args); } finally { depth--; }
-    const after = creativeSlots(inventory);
-    for (const [slot, g] of after) if (g !== before.get(slot)) client.invCreative(slot, wire(slot >= 36 ? inventory.main[slot - 36] : slot >= 9 ? inventory.main[slot] : inventory.armor[8 - slot]));
+    try { result = creativeDiff(inventory, client, () => send(...args)); } finally { depth--; }
     for (const d of gui.container.drops.splice(0)) client.invCreative(-1, wire(d)); // thrown by the server; no local item entity
     return result;
   };
+}
+// b62: Minecraft.func_147112_ai (middleClickMouse) in Creative: after InventoryPlayer.setCurrentItem it sends C10 for the hotbar slot 36 + currentItem
+// (bytecode-read: PlayerControllerMP.sendSlotPacket). The diff sends that slot (and any other slot the pick changed), so `current` and the stack agree on the server.
+export function creativePick(inventory, client, pick) {
+  const sent = [], spy = { invCreative: (slot, item) => { sent.push(slot); client.invCreative(slot, item); } };
+  creativeDiff(inventory, spy, pick);
+  if (!sent.includes(36 + inventory.current)) client.invCreative(36 + inventory.current, wire(inventory.main[inventory.current])); // native sends it even when nothing changed
 }

@@ -1945,10 +1945,11 @@ export class EntityWorld {
     let at=null;
     if(w.get(x,y,z)===39)at=[x,y,z,39];else if(w.get(x,y-1,z)===1)at=[x,y-1,z,1];
     if(at){
+      const meta=at[3]===39&&w.getMeta?w.getMeta(at[0],at[1],at[2]):0; // b62: level event 2001 carries id + (meta << 12); the grass block case sends the id alone
       // EntityAIEatGrass.updateTask: the block edit and event 2001 need gamerule mobGriefing; eatGrassBonus runs either way.
       if(gameRule("mobGriefing")){
         w.set?.(at[0],at[1],at[2],at[3]===39?0:2);
-        this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3]}});
+        this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3],meta}});
       }
       e.sheared=false;
       if(e.growingAge<0)e.growingAge=Math.min(0,e.growingAge+1200);
@@ -2992,7 +2993,7 @@ export class EntityWorld {
     // No target check here: a dead target ends through EntityAITarget.continueExecuting/resetTask in the 3-tick task update, as in 1.7.10.
     const shook = e.shaking;
     const out = updateWolf(e, { inWater: !!e.inWater, onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand });
-    if (!shook && e.shaking) this.copyState(e, 8); // setEntityState(8): the copy's shake starts
+    if (!shook && e.shaking) { this.copyState(e, 8); this.mobStatus?.(e, 8); /* b62 */ } // setEntityState(8): the copy's shake starts
     if (out.shakeSound) this.events.push({ sound: WOLF_SOUNDS.shake, volume: WOLF_SOUNDS.volume, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } });
     for (let i = 0; i < out.splashes; i++) {
       const dx = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5)), dz = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5));
@@ -3011,7 +3012,7 @@ export class EntityWorld {
     if (out.heal > 0 || out.status > 0) clearSpentStack(survival); // meat that heals, a bone that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
-    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
+    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); this.mobStatus?.(e, out.status); /* b62: S19 6 / 7 on a dedicated server */ } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the meat is used up; a puppy grows by a tenth
       // of its remaining time instead.
@@ -3019,6 +3020,7 @@ export class EntityWorld {
         e.love = 600;
         take(1);
         if (this.fx) burst(this.fx, "heart", 7, box, this.statusRand(e, FX_RANDOM), 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
+        this.mobStatus?.(e, 18); // b62: S19 18 on a dedicated server
       } else if (e.growingAge < 0) {
         take(1);
         e.growingAge = Math.min(0, e.growingAge + Math.trunc(f(f(-e.growingAge / 20) * f(0.1))) * 20);
@@ -3040,13 +3042,14 @@ export class EntityWorld {
     if (out.status > 0) clearSpentStack(survival); // a fish that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
-    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
+    if (out.status) { burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); this.copyState(e, out.status); this.mobStatus?.(e, out.status); /* b62: S19 6 / 7 on a dedicated server */ } // the server's own spawnParticle arguments (Entity.rand), then the copy's draws (batch 61)
     if (out.love) {
       // EntityAnimal.interact: an adult not in love is put in love and the fish is used up; a kitten gets nothing.
       if (e.growingAge === 0 && e.love <= 0) {
         e.love = 600;
         take(1);
         if (this.fx) burst(this.fx, "heart", 7, box, this.statusRand(e, FX_RANDOM), 0.5); // client copy's draws (setEntityState 18), not the server Entity.rand
+        this.mobStatus?.(e, 18); // b62: S19 18 on a dedicated server
       } else out.handled = false;
     }
     return out.handled || out.sitToggle;

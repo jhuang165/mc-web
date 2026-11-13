@@ -9,6 +9,8 @@ import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { DedicatedClient } from "./multiplayer/client.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { buildWindow, wireClicks, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
+import { ServerItems as MirrorItems } from './multiplayer/server-items.js';
+MirrorItems.prototype.mirror = true; // b62: these tests seed a Creative inventory through the retired hotbar mirror
 
 globalThis.WebSocket ??= { OPEN: 1 };
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;

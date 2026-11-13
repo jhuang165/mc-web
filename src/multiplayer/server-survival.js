@@ -150,6 +150,11 @@ export class ServerSurvival {
    * them, EntityPlayerSP.joinEntityItemWithWorld is empty). So "drop at death" was wrong; the respawn empties them without a drop. The server tick's invSet diff tells the client.
    */
   discardWindow(p) {
+    // b62: a chest or station window still open at the respawn (the client's death screen normally sends C0D first, see below) belongs to the replaced entity: its cursor and grid are lost,
+    // not thrown, and the window is closed (S2E) so the lid count and viewer sets let go. Bytecode-read: GuiContainer.updateScreen (bex.e) calls EntityPlayerSP.closeScreen (bjk.k: C0D
+    // for openContainer.windowId) as soon as the player is dead, and the server's C0D handler closes the container whatever the health, so the usual path (client closes, cursor thrown at death
+    // by Container.onContainerClosed) already exists via `closeWindow`; only a client that never sent it reaches this branch.
+    if (p.window) { const c = p.window.container; p.survival.inventory.cursor = null; c.close(); c.drops.length = 0; this.sim.containers.close(p, true); }
     const w = p.invWin;
     if (!w) return;
     p.survival.inventory.cursor = null;

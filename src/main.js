@@ -212,7 +212,7 @@ import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
-import { wireInvClicks, applyInv, wireCreative } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
+import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -655,7 +655,7 @@ function leaveMultiplayer() {
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
-  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, active?.mode === 'survival' && !survival.creative) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
+  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, true) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
 }
 // Cells from a tick (S22/S21 equivalents) or a placement resend (the clicker's two S23 packets).
 function applyMultiplayerCells(changes) {
@@ -3965,7 +3965,8 @@ function pickBlock() {
   const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
   const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
   if (id) {
-    survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
+    const doPick = () => survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
+    if (survival.creative && multiplayer?.ready && active?.remote) creativePick(survival.inventory, multiplayer, doPick); else doPick(); // b62: C10 for the picked hotbar slot
     mining = null;
     eating = null;
     renderHotbar();

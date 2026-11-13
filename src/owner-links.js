@@ -25,7 +25,8 @@ export const exportPlayerUuid = (record) => (isUuid(record?.playerUuid) ? record
 
 // getOwner() (EntityTameable.func_152113_b -> World.func_152378_a): the owner is found among the world's players by UUID, so an owned animal whose
 // OwnerUUID is a foreign string (kept as `ownerUuid`) has no owner in this one-player world: getOwner() is null (probed attributes3 `foreign`).
-export const ownerPresent = (e) => !!e?.owner && !(typeof e.ownerUuid === "string" && e.ownerUuid);
+// b62: a dedicated server stamps `ownerUuid` with the owner's resume key (each player owns their own animals) and sets `ownerHere` while that player is online (server-mobs.js `target`).
+export const ownerPresent = (e) => !!e?.owner && (!(typeof e.ownerUuid === "string" && e.ownerUuid) || e.ownerHere === true);
 // The OwnerUUID text compared by EntityAITarget.isSuitableTarget (equals on func_152113_b): "player" stands for the local player's own UUID.
 export const ownerKey = (e) => (typeof e.ownerUuid === "string" && e.ownerUuid ? e.ownerUuid : e.owner ? "player" : "");
 

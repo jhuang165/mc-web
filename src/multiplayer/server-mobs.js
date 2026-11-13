@@ -111,6 +111,9 @@ export class ServerMobs {
       if (who && ach) ach.attacker = who;
       try { return born.call(this, a, b); } finally { if (ach) ach.attacker = was; }
     };
+    // b62: the puppy or kitten of a tamed parent belongs to the parent's owner (EntityTameable.func_152115_b(parent owner UUID)); puppyFields / kittenFields only copy the flag.
+    const made = mobs.makeBaby;
+    mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
     this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
@@ -130,6 +133,8 @@ export class ServerMobs {
     // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
     const watcher = this.tracker.addWatcher(p.id, () => p.position);
     this.views.set(p.id, { player: p, view, survival, watcher, known: new Map(), destroys: [] });
+    // b62: the creature that hurts this player is what the player's tamed wolves hit back (Survival.damage -> onRevenge; ai.js playerHurtBy would write to whichever view is current).
+    p.survival.onRevenge = record => Object.assign(view, { hurtBy: record, hurtByTime: mobs.ai.clock });
   }
   removePlayer(id) { this.views.delete(id); this.tracker.removeWatcher(id); }
   // Survival.scaledDamage of a mob's hit: the host decides (the player-state track); true means the hit landed.
@@ -140,6 +145,14 @@ export class ServerMobs {
     for (const v of this.views.values()) {
       const p = v.player.position, d = (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2;
       if (d < bd) { bd = d; best = v; }
+    }
+    // b62: a tamed wolf or ocelot serves its own owner: the owner's view is the AI's player while that player is here (ownerHere, owner-links.js), so following, sitting, defending
+    // (EntityAIOwnerHurtByTarget / HurtTarget read the owner's view) and teleporting go to the owner and not to the nearest player. An owner who is offline: getOwner() is null.
+    if (e.ownerUuid && (e.type === 'wolf' || e.type === 'ocelot')) {
+      let own = null;
+      for (const v of this.views.values()) if (v.player.resumeKey === e.ownerUuid) own = v;
+      e.ownerHere = !!own;
+      if (own) best = own;
     }
     const held = e.leash?.holderId !== undefined ? this.host.leads.holder(e, this.views) : null; // b62: a led mob follows its holder (server-leads.js)
     if (held) best = held;
@@ -222,6 +235,7 @@ export class ServerMobs {
     drainMobEvents({ mobs, xpOrbs: this.host.serverItems.xp, items: this.host.items }, {
       explode: (x, y, z, size, opts) => this.explode({ x, y, z, size, source: opts?.exploder, smoking: opts?.smoking }),
       sound: s => this.sound(s),
+      eatGrass: g => this.eatGrass(g),
     });
     for (const c of statusSounds) this.noteStatus(c);
     this.track();
@@ -235,6 +249,14 @@ export class ServerMobs {
     const at = s.position;
     if (!s.sound || !at || ![at.x, at.y, at.z].every(Number.isFinite)) return;
     this.host.soundsOut.push({ name: s.sound, x: at.x, y: at.y, z: at.z, volume: s.volume ?? 0.6, pitch: Number.isFinite(s.pitch) ? s.pitch : 1, except: null });
+  }
+  // b62: EntityAIEatGrass.updateTask -> World.playAuxSFX(2001, x, y, z, id) (grass block) or func_147480_a (tall grass, id + (meta << 12)): S28 to every player within 64 blocks, no
+  // exception (bytecode-read, ud.e). The block change itself (EntityWorld.eatGrass edited the shared world) travels with the tick's changes.
+  eatGrass({ x, y, z, block, meta = 0 }) {
+    for (const v of this.views.values()) {
+      const p = v.player, dx = x - p.position.x, dy = y - p.position.y, dz = z - p.position.z;
+      if (dx * dx + dy * dy + dz * dz < 64 * 64) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id: 2001, x, y, z, data: block + ((meta | 0) << 12) }] });
+    }
   }
   // The status sounds of EntityLivingBase.attackEntityFrom / onDeath (clientSounds, played by each client copy) as S19 status 2 and 3.
   noteStatus(c) {
@@ -309,7 +331,11 @@ export class ServerMobs {
     const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
     if (dx * dx + dy * dy + dz * dz > 36) return false;
     this.use(v);
+    // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
+    const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
+    if (owned) mob.ownerHere = !!mob.ownerUuid && mob.ownerUuid === p.resumeKey;
     const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    if (owned && !was && mob.owner) { mob.ownerUuid = p.resumeKey; mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
     p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks

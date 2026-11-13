@@ -10,6 +10,8 @@ import { tickWorldSystems } from './world-tick.js';
 import { encodeColumn, decodeColumn, cleanInput, cleanLook, serverUrl, IDLE_INPUT, PROTOCOL } from './multiplayer/protocol.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { createDedicatedServer } from '../server/server.js';
+import { ServerItems as MirrorItems } from './multiplayer/server-items.js';
+MirrorItems.prototype.mirror = true; // b62: these tests seed a Creative inventory through the retired hotbar mirror
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const token = 'test-only-not-a-deployed-server-key';
