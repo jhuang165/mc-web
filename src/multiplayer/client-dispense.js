@@ -3,6 +3,7 @@
 // 'r' firework rocket. RemoteDispense keeps one stable row per id (the renderers key their meshes by the object), moves px/py/pz to the old position each tick, and drops the rows
 // the list no longer names; a snowball or egg that vanished plays its poof (Projectiles.clientImpact, EntityThrowable.onUpdate runs onImpact on the client too).
 // `dispFx` is the one-shot effects: explode, splash (potion or bottle glass), firework (burst), spark (rocket trail), sound. The hooks do the drawing and playing (main.js).
+import { GaussianRandom } from '../projectiles.js';
 const ARROW_FIELDS = ['yaw', 'pitch'];
 
 export class RemoteDispense {
@@ -12,6 +13,7 @@ export class RemoteDispense {
   apply(message) {
     if (message.type === 'dispEnts') this.ents(message.ents ?? []);
     else if (message.type === 'dispFx') this.events(message.events ?? []);
+    else if (message.type === 'projCollect') for (const t of message.taken ?? []) this.hooks.collect?.(t.i, t.by); // S0D for an arrow: the pop sound arrives as a dispFx sound
   }
   ents(list) {
     const seen = new Set(), next = { a: [], b: [], t: [] };
@@ -33,7 +35,7 @@ export class RemoteDispense {
     }
     for (const [key, row] of this.rows) if (!seen.has(key)) {
       this.rows.delete(key);
-      if (key[0] === 'b' && (row.kind === 'snowball' || row.kind === 'egg')) this.hooks.poof?.(row);
+      if (key[0] === 'b' && (row.kind === 'snowball' || row.kind === 'egg' || row.kind === 'enderPearl')) { row.rand ??= new GaussianRandom(Math.floor(Math.random() * 2 ** 48)); this.hooks.poof?.(row); }
     }
     this.arrows = next.a; this.balls = next.b; this.primed = next.t;
   }
@@ -50,4 +52,4 @@ export class RemoteDispense {
   }
 }
 // The sounds a server may ask for here (an arbitrary name from the wire is not played).
-const SOUNDS = new Set(['game.tnt.primed', 'fireworks.launch', 'fireworks.blast', 'fireworks.largeBlast', 'fireworks.twinkle', 'random.bowhit', 'random.bow', 'game.neutral.swim.splash', 'random.explode', 'random.click', 'damage.thorns']);
+const SOUNDS = new Set(['game.tnt.primed', 'fireworks.launch', 'fireworks.blast', 'fireworks.largeBlast', 'fireworks.twinkle', 'random.bowhit', 'random.bow', 'game.neutral.swim.splash', 'random.explode', 'random.click', 'damage.thorns', 'random.pop']);

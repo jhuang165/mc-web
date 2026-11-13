@@ -95,7 +95,7 @@ export class DedicatedClient {
     if (INV.has(message.type)) this.onInv(message);
     if (message.type === 'mobs') this.onMobs(message.packets);
     if (message.type === 'vehicles') this.onVehicles(message); // b61
-    if (message.type === 'dispEnts' || message.type === 'dispFx') this.onDisp(message); // b61
+    if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'projCollect') this.onDisp(message); // b61
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }

@@ -40,7 +40,7 @@ import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
-import { ServerDispense } from './server-dispense.js';
+import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
@@ -128,7 +128,7 @@ export class DedicatedSimulation {
     });
     this.redstone.restore(saved.redstone);
     this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
-    this.dispense = new ServerDispense(this); // b61: what dispensers fire (arrows, potions, TNT...), sent to clients as dispEnts / dispFx
+    this.dispense = new ServerProjectiles(this, saved.projectiles); // b61: what dispensers fire (arrows, potions, TNT...), sent to clients as dispEnts / dispFx
     this.containers.ticks = new ContainerTicks(this); // hoppers, dispensers, trapped chest power (server-container-ticks.js)
     this.world.blockLight = (x, y, z) => this.light.blockAt(x, y, z);
     this.world.fullLight = (x, y, z) => this.light.level(x, y, z, 0);
@@ -278,7 +278,7 @@ export class DedicatedSimulation {
   // EntityPlayer.itemInUse: the right button on a sword, bow, food or milk bucket starts it (ItemFood needs hunger, and a Creative player cannot
   // eat); releasing it ends it. A changed held item clears it (EntityPlayer.onUpdate), so does a finished eat or drink. Presence carries only the flag.
   handleUse(p, active) {
-    if (!active) { p.itemInUse = null; return true; }
+    if (!active) { if (p.itemInUse?.bow) this.dispense.shootBow(p, p.itemInUse.ticks); /* b62: C07 release */ p.itemInUse = null; return true; }
     if (p.itemInUse) return false;
     const held = p.survival.held, id = held?.id ?? 0, item = ITEMS[id];
     if (item?.kind === 'sword') p.itemInUse = { id, block: true };
@@ -329,7 +329,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && this.vehicles.useHeld(p, null); // b61: a boat is placed on water the block ray misses
+    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p)); // b62: thrown items // b61: a boat is placed on water the block ray misses
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -361,6 +361,7 @@ export class DedicatedSimulation {
     if (id === ITEM_SKULL) {
       return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, { skulls: this.tileEntities.skulls, difficulty: 0 }).placed;
     }
+    if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     return placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
@@ -539,7 +540,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
       tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }

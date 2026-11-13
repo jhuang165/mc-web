@@ -22,7 +22,7 @@ function fixture(gameMode = "survival") {
   s.containers.ticks.rand = new JavaRandom(7); // the dispenser's Random: aim noise and slot pick
   return s;
 }
-const join = (s, id, n, x = 64.5, z = 64.5) => { const p = s.addPlayer(id, id + "x", key(n)); p.position.copy({ x, y: 10, z }); p.previous.copy(p.position); s.input(id, input()); return p; };
+const join = (s, id, n, x = 70.5, z = 64.5) => { const p = s.addPlayer(id, id + "x", key(n)); p.position.copy({ x, y: 10, z }); p.previous.copy(p.position); s.input(id, input()); return p; };
 // A dispenser at (64, y, 62) facing south (+z) with `stack` in slot 0, switched on by a redstone block beside it.
 function load(s, stack, { y = 10, facing = 3, x = 64 } = {}) {
   s.world.set(x, y, 62, 115, true, facing);

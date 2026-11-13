@@ -312,7 +312,7 @@ export class Arrows {
     for (const t of ctx.targets || []) {
       if (!overlap(t.box, area)) continue;
       if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
-      if (t.ref === a.shooter && a.ticksInAir < 5) continue;
+      if ((t.ref === a.shooter || (a.owner && t.ref === a.owner)) && a.ticksInAir < 5) continue; // b62: `owner` is the server player who shot it (shooter stays "player" for the mobs' credit)
       const e = t.box, r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
       const d1 = Math.sqrt(dist2(start, r.vec));
@@ -425,6 +425,7 @@ export class Arrows {
   // attackEntityFrom. A mob's knockback comes from the shooter (the source's entity),
   // or from the arrow when there is none; a mob shot by a mob does not turn on the player.
   damageTarget(a, ref, dmg, ctx) {
+    if (ctx.hitPlayer) { const r = ctx.hitPlayer(a, ref, dmg); if (r !== undefined) return r; } // b62: the dedicated server's players (server-dispense.js); undefined = not a player
     if (ref === "player") {
       const survival = ctx.survival, shooter = a.shooter;
       if (!survival) return false;
@@ -447,7 +448,7 @@ export class Arrows {
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
     if (a.fire > 0 && ref.type !== "enderman") setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection; never on an enderman (offset 906: instanceof ya, bytecode-read)
-    const s = a.shooter, from = s === "player" ? ctx.player || a : s && typeof s === "object" ? s : a;
+    const s = a.shooter, from = s === "player" ? a.owner?.position ?? ctx.player ?? a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
     return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });
   }
