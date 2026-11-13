@@ -123,11 +123,18 @@ export const litFurnaceData = keys => Object.fromEntries((Array.isArray(keys) ? 
 // b60: S28 for a dispenser or dropper (RenderGlobal.playAuxSFX, bytecode-read): 1000 click, 1001 click at pitch 1.2, 1002 bow at pitch 1.2, all at volume 1
 // and the block's corner (x, y, z as ints, no +0.5); 2000 ten smoke puffs on the face the data names (data = dx + 1 + (dz + 1) * 3).
 // `play(name, x, y, z, volume, pitch)`, `smoke(x, y, z, vx, vy, vz)`; `random()` is the client world's Random (unseeded natively).
-export function dispenserAux(e, { play, smoke, random = Math.random }) {
+// b63: 1013 is the wither's spawn (a broadcast S28): RenderGlobal.playAuxSFX plays mob.wither.spawn at volume 1 two blocks from the listener towards the origin (the sound is heard
+// everywhere), as wither-boss-mobs.js levelEvent does in single player. `listener()` is the eye { x, y, z }.
+export function witherSpawnAt(listener, x, y, z) {
+  const dx = x - listener.x, dy = y - listener.y, dz = z - listener.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return d > 0 ? { x: listener.x + dx / d * 2, y: listener.y + dy / d * 2, z: listener.z + dz / d * 2 } : { x: listener.x, y: listener.y, z: listener.z };
+}
+export function dispenserAux(e, { play, smoke, random = Math.random, listener = null }) {
   if (![e?.id, e?.x, e?.y, e?.z, e?.data].every(Number.isInteger)) return false;
   if (e.id === 1000) play('random.click', e.x, e.y, e.z, 1, 1);
   else if (e.id === 1001) play('random.click', e.x, e.y, e.z, 1, 1.2);
   else if (e.id === 1002) play('random.bow', e.x, e.y, e.z, 1, 1.2);
+  else if (e.id === 1013) { if (!listener) return false; const at = witherSpawnAt(listener(), e.x, e.y, e.z); play('mob.wither.spawn', at.x, at.y, at.z, 1, 1); }
   else if (e.id === 2000) {
     const gauss = () => { let a, b, s; do { a = 2 * random() - 1; b = 2 * random() - 1; s = a * a + b * b; } while (s >= 1 || s === 0); return a * Math.sqrt(-2 * Math.log(s) / s); };
     const i = e.data % 3 - 1, k = Math.trunc(e.data / 3) % 3 - 1, cx = e.x + i * 0.6 + 0.5, cy = e.y + 0.5, cz = e.z + k * 0.6 + 0.5;

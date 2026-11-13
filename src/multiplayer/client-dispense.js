@@ -30,6 +30,7 @@ export class RemoteDispense {
       else {
         row.kind = d.k === 'r' ? 'firework' : d.kind; row.damage = d.damage ?? 0;
         if (d.scale !== undefined) { row.scale = d.scale; row.fullbright = true; } // a fire charge: RenderFireball scale, full brightness
+        if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
         next.b.push(row);
       }
     }
