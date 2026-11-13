@@ -1,5 +1,5 @@
 import { trackSections } from "./saved-order.js";
-import { steerHorseCopy, newHorseAnim, stepHorseAnim, horseFlagsOf } from "./horse-copy.js";
+import { steerHorseCopy, newHorseAnim, stepHorseAnim } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -2056,7 +2056,7 @@ export class EntityWorld {
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (horse-copy.js stepHorseAnim; the tail roll's draw on the copy's Random is not ported)
-    if (m.type === "horse") { const a = (c.horse ??= newHorseAnim()); a.flags = horseFlagsOf(m); stepHorseAnim(a); }
+    if (m.type === "horse") { const a = (c.horse ??= newHorseAnim()); a.flags = c.horseFlags ?? 0; stepHorseAnim(a); } // the copy's own watcher 16 (S0F / S1C through the tracker, entity-tracker.js), not the live horse's
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
     clientBodyTurn(c);
@@ -2121,9 +2121,25 @@ export class EntityWorld {
     if (!w) return;
     this.orderSeqs ??= new WeakMap();
     this.orderSeqs.set(e, this.orderStamp()); // World.spawnEntityInWorld: appended at the end of loadedEntityList
-    if (this.tickOrder && this.slot && this.beforePlayer(this.slot)) (this.earlySpawns ??= new WeakSet()).add(e); // made in the update of an entity before the player's slot: its spawn packet precedes the flush (entity-tracker.js jointUpdate)
+    if (this.spawnsEarly()) (this.earlySpawns ??= new WeakSet()).add(e); // its spawn packet precedes the flush (entity-tracker.js jointUpdate); see spawnsEarly
     if (this.tickOrder) { (this.walkOf ??= new WeakMap()).set(e, w); this.tickOrder.push(e); } // spawned in the pass: it updates in this pass
   }
+  // Batch 56 (executed: tracker-joint-reference.json mobSpawn cases). Where a spawn made now sends its packets against the player's destroy flush (EntityPlayerMP.onUpdate at its slot): a spawn
+  // sends at once (World.spawnEntityInWorld -> addEntityToTracker -> updatePlayerList), so it is EARLY (before the flush) when made in the update of an entity before the player's slot, and
+  // before the loop (SpawnerAnimals in WorldServer.tick) or in the network phase between ticks (a spawn egg, a thrown item, a drop from a dug block); LATE after the player's slot and in the
+  // tile entity pass (a mob spawner; `tilePass`, main.js). A world that has no player yet (its opening population) is not early.
+  spawnsEarly() {
+    if (this.playerStamp === undefined) return false;
+    if (this.tickOrder && this.slot) return this.beforePlayer(this.slot);
+    return !this.tilePass;
+  }
+  // Mobs have no spawn hook: a mob not seen before is a spawn made since the last call, early or late as `early` says. `spawnLen` makes the in-pass check one comparison.
+  noteMobSpawns(early) {
+    const seen = (this.spawnSeen ??= new WeakSet());
+    for (const e of this.entities) if (!seen.has(e)) { seen.add(e); if (early && this.playerStamp !== undefined) (this.earlySpawns ??= new WeakSet()).add(e); }
+    this.spawnLen = this.entities.length;
+  }
+  endTilePass() { this.tilePass = false; this.noteMobSpawns(false); }
   withBalls(order) {
     const balls = this._fireballs?.list, others = [];
     if (this.walks?.size) {
@@ -2181,6 +2197,7 @@ export class EntityWorld {
     this.tracker ??= new MobTracker(this.viewChunks);
     this.tracker.beforePlayer ??= (e) => this.beforePlayer(e);
     this.tracker.spawnEarly ??= (e) => !!this.earlySpawns?.has(e);
+    this.noteMobSpawns(this.playerStamp !== undefined); // mobs made since the last tick's tile pass: the network phase (the spawner pass reports its own through noteMobSpawns(false))
     if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
     if (this.viewChunks) this.tracker.viewChunks = this.viewChunks;
     const joint = this.walks?.size ? this.jointTracking?.() ?? null : null; // batch 51: the object tracker's entries walk in this one loop (main.js sets `jointTracking`)
@@ -2211,6 +2228,7 @@ export class EntityWorld {
     const seat = () => { if (rider?.ridingEntity) endRidden(rider, (m) => this.size(m)[1]); rider = null; };
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
+    this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
     const order = this.tickOrder = this.withBalls(ridingOrder(this.entities.slice())); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
@@ -2218,6 +2236,7 @@ export class EntityWorld {
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
     const sections = () => { if (prevEntity) trackSections(this, [prevEntity]); prevEntity = null; };
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
+      if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       seat();
       sections();
@@ -2372,11 +2391,13 @@ export class EntityWorld {
     sections(); // b53so / b54so: an entity that changed chunk or section joins the end of its new list right after its own update (saved-order.js)
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
+    if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot));
     this.tickOrder = null; this.slot = null;
     // EntityPlayerMP.onUpdateEntity (mw.i), in the network tick after the world's entities: EntityLivingBase.onLivingUpdate on the server's copy of the player (its motion
     // is only what mobs, hits and explosions gave it: snapped below 0.005, moved, then slowed by the ground friction) and, at its end, collideWithNearbyEntities: every mob beside
     // the moved box is pushed by (and pushes) the player (b46mp records).
-    this.afterEntities?.(); // World.updateEntities' tile entity pass (moving piston blocks push mobs and the copy: b48pp records), after every entity and before the network tick
+    this.tilePass = true; // b56tm: until the hook's network part (main.js tickServerDig -> endTilePass) a spawn is a tile entity pass spawn: late against the flush
+    try { this.afterEntities?.(); } finally { this.tilePass = false; } // World.updateEntities' tile entity pass (moving piston blocks push mobs and the copy: b48pp records), after every entity and before the network tick
     const p = this.ai.player;
     if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
       this.serverPlayerUpdate(p);
