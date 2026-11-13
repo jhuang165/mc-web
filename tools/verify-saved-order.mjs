@@ -68,3 +68,11 @@ const reference6={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218
  cases:cases6};
 await writeFile(path.join(root,'../public/research/saved-order6-reference.json'),JSON.stringify(reference6)+'\n');
 console.log(`${cases6.length} saved order 6 scenarios`);
+// Batch 59 (b59so): the player walks away and back with chunk unloading (ChunkProviderServer.unloadChunksIfNotNearSpawn, unloadQueuedChunks, World.updateEntities' removeAll); replayed by src/savedorder7-b59.test.js.
+const cases7=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order7');
+assert.equal(cases7.length,4,'4 b59so scenarios');
+const reference7={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 59 b59so: SavedOrderLoginProbe, the b58so set-up (no spawn grid), then the real PlayerManager.updateMountedMovingPlayer along `path` (far away, then back); after each step the real ChunkProviderServer.unloadQueuedChunks (ms.d: Chunk.onChunkUnload hands the entity lists to World.unloadEntities) and the removeAll World.updateEntities does. A chunk the player re-enters is read from its saved NBT and appends to loadedEntityList. Spawn rule (ms.b, bytecode-read): a chunk is queued when its centre is more than 128 blocks from the spawn on an axis, or always when the provider cannot respawn (nether case). after: entity indices in loadedEntityList order.',
+ cases:cases7};
+await writeFile(path.join(root,'../public/research/saved-order7-reference.json'),JSON.stringify(reference7)+'\n');
+console.log(`${cases7.length} saved order 7 scenarios`);

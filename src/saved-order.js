@@ -68,7 +68,7 @@ function saveWalk(mobs, groups, frame = null) {
   const carried = rows.filter((r) => carriesPlayer(r.e)), ranks = frame ? loadRanks(frame) : null;
   for (const r of carried) if (ranks && !ranks.has(r.chunk)) ranks.set(r.chunk, ranks.size); // b57so: the login spawns the mount into its chunk, which loads (and its other entities with it) after the view square
   const loads = mobs.chunkLoads?.map;
-  const place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : loads?.has(k) ? loads.get(k) - 5e8 : first.get(k)); // a chunk of the login frame goes before every other; then the chunks loaded since, in load order (b58so)
+  const place = (k) => (ranks?.has(k) && !mobs.chunkLoads?.again?.has(k) ? ranks.get(k) - 1e9 : loads?.has(k) ? loads.get(k) - 5e8 : first.get(k)); // a chunk of the login frame goes before every other; then the chunks loaded since, in load order (b58so)
   rows.sort((a, b) => place(a.chunk) - place(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
   // b54so: the mount carrying the player is read from the player's file (Riding) and spawned after the chunks: last, in list order among such mounts
   const lost = lostMounts(carried, rows), gone = new Set(lost.map((r) => r.e));
@@ -88,7 +88,7 @@ function lostMounts(carried, rows) {
  *  chunk of the new view square that was not watched, x outer, z inner, and each loads its chunk, so World.addLoadedEntities appends the chunk's entities to loadedEntityList in that order).
  *  Called every tick with the player's position: the first call records the login square (x outer, z inner, as PlayerManager.addPlayer). A chunk that leaves the square keeps its place (the
  *  entities it held stay in the port's lists) and is marked out: a return loads it again, at the end. */
-export function trackChunkLoads(mobs, player, view = mobs?.viewChunks) {
+export function trackChunkLoads(mobs, player, view = mobs?.viewChunks, keeps = null) {
   if (!mobs || !player || !finite(player.x) || !finite(player.z) || !Number.isInteger(view) || view < 1) return;
   const cx = Math.trunc(player.x) >> 4, cz = Math.trunc(player.z) >> 4, st = (mobs.chunkLoads ??= { map: new Map(), out: new Set(), cx: null, cz: null, view: 0, n: 0 });
   if (st.cx === cx && st.cz === cz && st.view === view) return;
@@ -96,11 +96,16 @@ export function trackChunkLoads(mobs, player, view = mobs?.viewChunks) {
   for (let x = cx - view; x <= cx + view; x++) for (let z = cz - view; z <= cz + view; z++) {
     const k = `${x},${z}`;
     square.add(k);
-    if (!st.map.has(k) || st.out.has(k)) { st.map.set(k, ++st.n); st.out.delete(k); }
+    if (!st.map.has(k) || st.out.has(k)) { if (st.out.has(k)) (st.again ??= new Set()).add(k); st.map.set(k, ++st.n); st.out.delete(k); } // `again`: loaded a second time, after its first load was unloaded
   }
-  for (const k of st.map.keys()) if (!square.has(k)) st.out.add(k);
+  // b59so: a chunk the square left is queued by ChunkProviderServer.unloadChunksIfNotNearSpawn (ms.b, bytecode-read) unless `keeps` says it is near the spawn of a respawn-capable world; the queue runs
+  // each tick (unloadQueuedChunks, up to 100), and World.updateEntities drops the chunk's entities from loadedEntityList, so a return loads it again (executed `b59so-away-back-*`). A kept chunk stays loaded.
+  for (const k of st.map.keys()) if (!square.has(k)) { const [x, z] = k.split(",").map(Number); if (!keeps?.(x, z)) st.out.add(k); }
   st.cx = cx; st.cz = cz; st.view = view;
 }
+
+/** b59so: ms.b's keep-loaded rule: a chunk whose centre is within 128 blocks of the spawn on both axes is not queued for unloading (Overworld-like providers only: pass null for the Nether and End). */
+export const nearSpawn = (spawn) => (finite(spawn?.x) && finite(spawn?.z) ? (cx, cz) => { const dx = cx * 16 + 8 - Math.floor(spawn.x), dz = cz * 16 + 8 - Math.floor(spawn.z); return dx >= -128 && dx <= 128 && dz >= -128 && dz <= 128; } : null);
 
 // A cart, boat or mob the local player rides (minecarts.js / boats.js `rider`, entities.js serializeOne's playerRides rule).
 const carriesPlayer = (e) => { const r = e?.rider; return !!r && !r.dead && (r.player === true || r.vehicle?.entity === e); };

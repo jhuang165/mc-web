@@ -203,3 +203,22 @@ export function releaseStaleRiders(entities, pending, mobBeforePlayer = () => tr
     if (mobBeforePlayer(e)) { if (m.rider.vehicle === m) m.rider.vehicle = null; m.rider = null; } else pending.add(m);
   }
 }
+
+// b59so: the same two steps at their exact turns (World.updateEntities, bytecode-read): `clearStaleRider(e, pending)` at the mob's own turn clears its stale pair and files the boat in `pending`;
+// `releaseSeats(pending)` at the taker's turn (the place of the player in the list) lets him go, so a mob before him frees him within the pass and one after him frees him in the next.
+export function clearStaleRider(e, pending) {
+  const m = e?.ridingEntity;
+  if (!m || !isVehicle(m) || m.dead || !m.rider || m.passenger !== e) return false;
+  hide(e, "ridingEntity", null);
+  hide(m, "passenger", null);
+  pending.add(m);
+  return true;
+}
+export function releaseSeats(pending) {
+  for (const boat of pending) {
+    const p = boat.rider;
+    if (p && p.vehicle === boat) p.vehicle = null;
+    boat.rider = null;
+  }
+  pending.clear();
+}

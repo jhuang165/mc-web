@@ -1,4 +1,4 @@
-import { trackSections, trackChunkLoads } from "./saved-order.js";
+import { trackSections, trackChunkLoads, nearSpawn } from "./saved-order.js";
 import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
@@ -62,7 +62,7 @@ import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
 import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
-import { mountEntity, releaseDead, releaseStaleRiders, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
+import { mountEntity, releaseDead, clearStaleRider, releaseSeats, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage, mobEffect, RESISTANCE, setMaxHealthHook } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
@@ -2198,7 +2198,7 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
-    trackChunkLoads(this, player); // b58so: the chunks the player's movement loads, in load order (saved-order.js)
+    trackChunkLoads(this, player, this.viewChunks, this.world.dimension ? null : nearSpawn(this.spawnPoint ? this.spawnPoint() : (this.cachedSpawnPoint ??= this.world.spawn?.()))); // b59so: unload rule; b58so: the chunks the player's movement loads, in load order (saved-order.js)
     this.watching = player; // drainClientSounds: the one client (entity-tracker.js)
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
@@ -2230,7 +2230,7 @@ export class EntityWorld {
     if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     releaseDead(this.entities);
-    releaseStaleRiders(this.entities, this.staleSeats ??= new Set(), (e) => this.beforePlayer(e)); // b58so: the player seated in a boat he took from a mob (mob-riding.js)
+    const seats = this.staleSeats ??= new Set(); let playerTurn = false; // b59so: the player seated in a boat he took from a mob is let go at his own turn (mob-riding.js)
     const peacefulGone = [];
     // Entity.updateRidden ends with updateRiderPosition: the seat is taken right after the rider's own update, before the next mob of the list moves (b36 records: a mob after the mount pushes the rider at its new seat).
     let rider = null;
@@ -2247,6 +2247,8 @@ export class EntityWorld {
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
+      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); } // the player's place in the list: his mount no longer lists him
+      clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
       seat();
       sections();
       if (e.lateHook) { e.lateHook(); continue; }
@@ -2394,6 +2396,7 @@ export class EntityWorld {
       this.turnBody(e);
       this.swingLimbs(e);
     }
+    if (!playerTurn) releaseSeats(seats); // the player's place is after every entity of this pass
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();

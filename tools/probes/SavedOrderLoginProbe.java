@@ -19,6 +19,10 @@ public class SavedOrderLoginProbe {
   static boolean skipGrid = false, noPlayer = false;
   // b58so: after the login the player moves (PlayerManager.updateMountedMovingPlayer, mq.d: a PlayerInstance, which loads its chunk, for each chunk of the new view square that was not watched) to (moveX, moveZ); NaN: stays
   static double moveX = Double.NaN, moveZ = Double.NaN;
+  // b59so: after the move the player walks on along `path` (x, z pairs); with unloadAfterMove each step is followed by ChunkProviderServer.unloadQueuedChunks (ms.d, up to 100 queued chunks: Chunk.onChunkUnload hands the
+  // entity lists to World.unloadEntities) and the removal World.updateEntities does (loadedEntityList.removeAll(unloadedEntityList)); chunks the player's square loads again are read from the saved NBT and append.
+  static Boolean respawnOverride = null;
+  static double[][] path = null; static boolean unloadAfterMove = false;
   static Map<Long, dh> nbts;
   static aqk anvil;
   static Method reader, writer;
@@ -64,7 +68,7 @@ public class SavedOrderLoginProbe {
     for (Field f : ahb.class.getDeclaredFields())
       if (f.getType() == List.class && !Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(lw, new ArrayList<>()); }
     ChunkProviderProbe.Provider p = new ChunkProviderProbe.Provider();
-    p.respawn = true; p.g = true; p.b = lw;
+    p.respawn = respawnOverride == null ? true : respawnOverride; p.g = true; p.b = lw;
     set(ahb.class, lw, "t", p);
     set(ahb.class, lw, "x", ChunkProviderProbe.info);
     ChunkProviderProbe.Gen gen = new ChunkProviderProbe.Gen(); gen.world = lw;
@@ -84,6 +88,14 @@ public class SavedOrderLoginProbe {
     mw player = ChunkProviderProbe.player(77, px, pz);
     if (!noPlayer) { spawn.invoke(lw, player); manager.a(player); }
     if (!noPlayer && !Double.isNaN(moveX)) { player.s = moveX; player.u = moveZ; manager.d(player); }
+    if (!noPlayer && path != null) for (double[] st : path) {
+      player.s = st[0]; player.u = st[1]; manager.d(player);
+      if (unloadAfterMove) {
+        provider.d();
+        List<?> un = (List<?>) MobMoveProbe.field(ahb.class, "f").get(lw), live = (List<?>) MobMoveProbe.field(ahb.class, "e").get(lw);
+        live.removeAll(un); un.clear();
+      }
+    }
     if (riding != null && !noPlayer) { // initializeConnectionToPlayer, after playerLoggedIn
       sa mount = sg.a(riding, lw); // EntityList.createEntityFromNBT: the first Riding only
       PlayerStepProbe.field(sa.class, "Z").set(mount, new Random(7));
@@ -93,7 +105,7 @@ public class SavedOrderLoginProbe {
     for (Object o : (List) MobMoveProbe.field(ahb.class, "e").get(lw)) after.add(o instanceof mw ? -1 : SavedOrderProbe.index((sa) o, chunks));
     StringBuilder s = new StringBuilder("{\"case\":\"" + caseName + "\",\"name\":\"" + name + "\",\"chunks\":" + Arrays.deepToString(chunks) + ",\"specs\":[");
     for (int i = 0; i < specs.length; i++) s.append(i == 0 ? "" : ",").append("[\"").append(specs[i][0]).append("\",").append(specs[i][1]).append(",").append(specs[i][2]).append(",").append(specs[i][3]).append("]");
-    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
+    s.append("],").append(Double.isNaN(moveX) ? "" : "\"move\":[" + moveX + "," + moveZ + "],").append(path == null ? "" : "\"path\":" + Arrays.deepToString(path) + ",").append("\"spawn\":[").append(spawnX).append(",").append(spawnZ).append("],\"player\":[").append(px).append(",").append(pz).append("],\"view\":").append(view).append(",\"playerMount\":").append(playerMount).append(",\"after\":").append(after).append("}");
     System.out.println(s);
   }
 
@@ -169,5 +181,18 @@ public class SavedOrderLoginProbe {
     for (int i = 0; i < fk.length; i++) fall[i] = SavedOrderProbe.S(fk[i], fy[i], new int[] {0, 0, 1, 1, 2, 3, 4, 2}[i], -1);
     login("b58so-away-falling", grid, fall, 0, 0, 0, 0, 2, -1);
     noPlayer = false;
+    // b59so: the player walks away and back. Spawn (170, 0): ChunkProviderServer.unloadChunksIfNotNearSpawn (ms.b, bytecode-read) queues a chunk of an Overworld-like world only when its centre is more than 128
+    // blocks from the spawn on an axis, so chunks 0..2 (centre x 8..40 < 42) unload and 3, 4 stay; the provider says canRespawnHere (the Nether and End always queue).
+    caseName = "saved-order7"; moveX = Double.NaN; moveZ = Double.NaN;
+    path = new double[][] {{12 * 16 + 4.5, 8.5}, {2 * 16 + 4.5, 8.5}}; unloadAfterMove = true;
+    String[][] back = plain.apply(flat, new int[] {0, 1, 2, 3, 4, 5, 6, 7});
+    int[][] bk = {{0, 0}, {1, 2}, {2, 1}, {3, -2}, {4, 2}, {4, -2}, {3, 0}, {2, 2}};
+    login("b59so-away-back-spawn", bk, back, 170, 0, 40.5, 8.5, 2, -1);
+    login("b59so-away-back-spawn-sections", bk, plain.apply(new double[] {70, 5, 130, 20, 70, 130, 5, 70}, new int[] {7, 6, 5, 4, 3, 2, 1, 0}), 170, 0, 40.5, 8.5, 2, -1);
+    login("b59so-away-back-nospawn", bk, back, 0, 0, 40.5, 8.5, 2, -1); // spawn (0, 0): every chunk of the square is within 128 blocks: none unloads
+    respawnOverride = Boolean.FALSE; // the Nether/End provider: every chunk the player leaves is queued
+    login("b59so-away-back-nether", bk, back, 0, 0, 40.5, 8.5, 2, -1);
+    respawnOverride = null;
+    path = null; unloadAfterMove = false;
   }
 }
