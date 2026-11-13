@@ -28,6 +28,15 @@ const MIN_SPEED = 0.07, MAX_SPEED = 0.35, BREAK_DAMAGE = 40;
 const intersects = (a, b) => b[3] > a[0] && b[0] < a[3] && b[4] > a[1] && b[1] < a[4] && b[5] > a[2] && b[2] < a[5];
 const wrap180 = (a) => { a %= 360; if (a >= 180) a -= 360; if (a < -180) a += 360; return a; };
 
+// BlockLilyPad.addCollisionBoxesToList adds nothing for an EntityBoat (bytecode-read, then executed: boat-copy-reference.json ride-clear-lilypads, where the boat sails through
+// the pads at the surface and clears them): a world view whose lily pad cells are not solid, for the boat's own collision list.
+const BOAT_WORLDS = new WeakMap();
+function boatWorld(world) {
+  let w = BOAT_WORLDS.get(world);
+  if (!w) { w = Object.create(world); w.solid = (x, y, z) => world.get(x, y, z) !== LILY_PAD && world.solid(x, y, z); BOAT_WORLDS.set(world, w); }
+  return w;
+}
+
 export class Boats extends Minecarts {
   constructor(options = {}) {
     super({ rails: {}, ...options });
@@ -61,8 +70,12 @@ export class Boats extends Minecarts {
   // the centre along the boat's yaw. Browser riders use feet, so the rider's getYOffset (yOffset - 0.5) is applied.
   updateRiderPosition(boat) {
     if (!boat.rider) return;
+    Object.assign(boat.rider, this.seat(boat));
+  }
+  // The rider's feet on a boat (or on a client copy: x, z, yaw and posY as fields) from updateRiderPosition.
+  seat(boat) {
     const a = boat.yaw * Math.PI / 180, d0 = Math.cos(a) * 0.4, d1 = Math.sin(a) * 0.4;
-    Object.assign(boat.rider, { x: boat.x + d0, y: boat.posY + this.getMountedYOffset() - 0.5, z: boat.z + d1 });
+    return { x: boat.x + d0, y: boat.posY + this.getMountedYOffset() - 0.5, z: boat.z + d1 };
   }
   // EntityBoat.interactFirst: a rider that is not the clicker blocks it; the clicker mounts.
   mount(boat, rider, { sneaking = false } = {}) {
@@ -75,7 +88,7 @@ export class Boats extends Minecarts {
   // World.getCollidingBoundingBoxes for a boat: as for a cart, plus the box of a snow layer (BlockSnow gives a flat layer a
   // zero-height box that still stops a boat dipping below it).
   boxes(world, boat, b, others) {
-    const out = super.boxes(world, boat, b, others);
+    const out = super.boxes(boatWorld(world), boat, b, others);
     for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
       for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
         for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
@@ -122,7 +135,7 @@ export class Boats extends Minecarts {
     if (odx !== dx) boat.vx = 0;
     if (ody !== dy) boat.vy = 0;
     if (odz !== dz) boat.vz = 0;
-    blockCollisions(world, bb, boat, { hurt: (source, n) => this.attack(boat, n, { source }), wet: boat.inWater });
+    blockCollisions(world, bb, boat, { hurt: (source, n) => (boat.remote ? true : this.attack(boat, n, { source })), wet: boat.inWater });
   }
   // EntityBoat.updateFallState: on landing above 3 blocks the boat falls (rider damage), breaks into planks and
   // sticks; otherwise a fall over anything but water accumulates.
@@ -131,7 +144,7 @@ export class Boats extends Minecarts {
     if (onGround) {
       if (boat.fallDistance > 3) {
         boat.rider?.fall?.(boat.fallDistance);
-        if (!boat.dead) this.crashBreak(boat);
+        if (!boat.dead && !boat.remote) this.crashBreak(boat); // EntityBoat.updateFallState: `!isRemote && !isDead` (executed, boat-copy-reference.json ride-fall-high)
         boat.fallDistance = 0;
       }
     } else if (world.get(bx, by - 1, bz) !== WATER && dy < 0) boat.fallDistance = f(boat.fallDistance - dy);
@@ -191,13 +204,19 @@ export class Boats extends Minecarts {
       if (!boat.inWater && !boat.firstUpdate) this.enterWater(boat, particles, hooks);
       boat.fallDistance = 0; boat.inWater = true; boat.fire = 0;
     } else boat.inWater = false;
-    if (inLava(world, boat.bb)) { this.attack(boat, 4, { source: "lava" }); boat.fire = 300; }
-    if (boat.fire > 0) { if (boat.fire % 20 === 0) this.attack(boat, 1, { source: "onFire" }); boat.fire--; }
+    // A client copy (boat.remote, batch 56): attackEntityFrom answers true without effect and Entity.onEntityUpdate zeroes the fire counter on a client world.
+    if (boat.remote) boat.fire = 0;
+    else {
+      if (inLava(world, boat.bb)) { this.attack(boat, 4, { source: "lava" }); boat.fire = 300; }
+      if (boat.fire > 0) { if (boat.fire % 20 === 0) this.attack(boat, 1, { source: "onFire" }); boat.fire--; }
+    }
     if (boat.posY < -64) { boat.dead = true; return particles; }
     boat.firstUpdate = false;
     if (boat.dead) return particles;
-    if (boat.timeSinceHit > 0) boat.timeSinceHit--;
-    if (boat.damage > 0) boat.damage = f(boat.damage - 1);
+    if (!boat.remote) { // a copy's wobble counters are its data watcher's (ObjectClient.stepWobble)
+      if (boat.timeSinceHit > 0) boat.timeSinceHit--;
+      if (boat.damage > 0) boat.damage = f(boat.damage - 1);
+    }
     boat.px = boat.x; boat.py = boat.posY; boat.pz = boat.z;
     const bb = boat.bb;
     let d0 = 0;
@@ -236,10 +255,18 @@ export class Boats extends Minecarts {
       boat.speed -= (boat.speed - MIN_SPEED) / 35;
       if (boat.speed < MIN_SPEED) boat.speed = MIN_SPEED;
     }
+    // Snow layers and lily pads at the four corners go BEFORE the move (xi.h order, bytecode-read and executed: boat-copy-reference.json ride-clear-lilypads), from the position the tick began with.
+    for (let l = 0; l < 4; l++) {
+      const bx = Math.floor(boat.x + ((l % 2) - 0.5) * 0.8), bz = Math.floor(boat.z + (Math.trunc(l / 2) - 0.5) * 0.8);
+      for (let k = 0; k < 2; k++) {
+        const by = Math.floor(boat.posY) + k, block = world.get(bx, by, bz);
+        if (block === SNOW_LAYER || block === LILY_PAD) { boat.collidedH = false; hooks.clear ? hooks.clear(bx, by, bz, block) : world.set(bx, by, bz, 0); }
+      }
+    }
     if (boat.onGround) { boat.vx *= 0.5; boat.vy *= 0.5; boat.vz *= 0.5; }
     this.move(world, boat, boat.vx, boat.vy, boat.vz, [...this.carts, ...entities]);
     if (boat.collidedH && d10 > 0.2) {
-      if (!boat.dead) this.crashBreak(boat);
+      if (!boat.dead && !boat.remote) this.crashBreak(boat); // `!isRemote && !isDead`; neither branch drags the motion (executed: ride-crash-fast)
     } else { boat.vx *= 0.9900000095367432; boat.vy *= 0.949999988079071; boat.vz *= 0.9900000095367432; }
     boat.pitch = 0;
     let d4 = boat.yaw;
@@ -250,17 +277,10 @@ export class Boats extends Minecarts {
     if (d7 < -20) d7 = -20;
     boat.yaw = f(f(boat.yaw + d7) % 360);
     boat.pitch = f(boat.pitch % 360);
-    // Boat-boat pushes (Entity.applyEntityCollision of the neighbour), then snow layers and lily pads at the four corners.
+    // Boat-boat pushes (Entity.applyEntityCollision of the neighbour).
     const near = [boat.bb[0] - 0.2, boat.bb[1], boat.bb[2] - 0.2, boat.bb[3] + 0.2, boat.bb[4], boat.bb[5] + 0.2];
-    for (const o of this.carts) if (o !== boat && !o.dead && intersects(o.bb, near)) this.collide(o, boat, true);
-    for (let l = 0; l < 4; l++) {
-      const bx = Math.floor(boat.x + ((l % 2) - 0.5) * 0.8), bz = Math.floor(boat.z + (Math.trunc(l / 2) - 0.5) * 0.8);
-      for (let k = 0; k < 2; k++) {
-        const by = Math.floor(boat.posY) + k, block = world.get(bx, by, bz);
-        if (block === SNOW_LAYER || block === LILY_PAD) hooks.clear ? hooks.clear(bx, by, bz, block) : world.set(bx, by, bz, 0);
-      }
-    }
-    if (rider?.dead) { rider.vehicle = null; boat.rider = null; }
+    if (!boat.remote) for (const o of this.carts) if (o !== boat && !o.dead && intersects(o.bb, near)) this.collide(o, boat, true); // the push of a neighbour is server side
+    if (rider?.dead && !boat.remote) { rider.vehicle = null; boat.rider = null; }
     return particles;
   }
   tick(world, { entities = [], hooks = {} } = {}) {
