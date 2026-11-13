@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 57 (2026-11-12, ten Sonnet tracks in `../wt57-<name>` on `batch57-<name>`, cut from 21c490724, merged --no-ff on `batch57-lead`; shared track rules `../artifacts/b57-lead/track-rules.md`; lead note `b57-lead-track.md`; the gun side runs separately):
+- 0.86.0, by track:
+  - boatcollide: `ObjectClient.rideBoat` passes `clientBlockers` (every other client entity's box) to the copy's move; `clientRiderFall` plays the rider's landing sounds (`boat-collide-reference.json`, 25 `bx-*` records).
+  - horsesounds: `stepHorseCopy(c, flags, live)` makes the living-sound draw; `horseHurt` opens the mouth; a lead over 6 stops grazing (`horse-sounds-reference.json`). The `bq` starters gap was wrong.
+  - crystalfire: `crystal-fire-layer.js` draws the crystal copy's fire on the prediction overlay through `MobTracker.newClient` / `EntityWorld.crystalFire`.
+  - displaypixel: `entityMaterial` clamps `min(1, tint * lit)`; `flat-block-items.js` from the executed render type sweep (`display-pixel-reference.json`); port pixel check `display-pixel-render.json`.
+  - itemtags: `item-tags.js` carries Lore, SkullOwner, CustomPotionEffects and map_is_scaling; executed `ItemTagsProbe` (48 tag rows, 342 splash rows).
+  - chatmulti: `command-selector.js` and `commands.js` over every player record; `chat-multi.js` (`serverChatCommand`, `achievementComponent`, `broadcastToAll`); 336 three-player cmd-chat rows replay.
+  - prediction3: `dryBucket`, `tracedBucket`, `activateSound`, buttons and repeaters, cocoa; `drawPrediction` / `revertPrediction` moved to `client-prediction.js`. Leads, beds, signs and skulls draw nothing natively.
+  - mpdig: `simulation.js` `gameMode: 'survival'` routes `dig` through the server dig timer; `crack` messages to other players within 32; `use` syncs the item-in-use pose.
+  - trackerspawn: `TrackerJointProbe` b57 mode ticks the second world; the early-spawn gap was wrong; no port change.
+  - savedorder5: no Nether/End spawn grid (gap wrong); `boats.mount` frees a mob rider; the mount's chunk ranks after the view square (`saved-order5-reference.json`).
+- Lead fixes: End crystals wrote the original fire id 51 raw (port 51 is the cobweb) and now light port fire; `showPredictedCells` skips ring columns (crash on a crystal in one); `display-pixel-cases.js` renamed `display-light-cases.js` (ad-blocker word); the throw replay binds `mutePlaceSound`.
+- Verification: see `b57-lead-track.md`. Pushed to github main by the lead.
+
 Batch 56 (2026-11-12, eight Sonnet tracks in `../wt56-<name>` on `batch56-<name>`, cut from 626a467c3, merged --no-ff on `batch56-lead`; lead note `b56-lead-track.md`; the gun side runs separately):
 - 0.85.0, by track:
   - dragondeath: dragon death records carry the XP orb spawn ticks and positions; the dragon egg has no living sound in 1.7.10 (gap corrected); `clientCrystalFire` in `ender-crystal-mobs.js` with a `ClientEntity.crystalFire` hook (not yet wired to a client block layer).
