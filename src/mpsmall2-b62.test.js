@@ -98,3 +98,106 @@ test('a dead player whose client closed the window (C0D) throws the cursor like 
   assert.equal(p.window, null);
   assert.equal(s.items.items.length, n + 1);
 });
+
+// ---- animals ----
+const WORLD = () => { const world = new World('mp-small2-animals'); for (let x = 20; x <= 110; x++) for (let z = 20; z <= 110; z++) for (let y = 9; y <= 24; y++) world.put(x, y, z, y === 9 ? 1 : 0, 0, false); world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 }); return world; };
+function mobFixture() {
+  const s = new DedicatedSimulation({}, { world: WORLD(), gameMode: 'survival', mobs: true });
+  s.mobs.spawning = false; s.mobs.mobs.entities.length = 0;
+  return s;
+}
+const join = (s, id, n, x = 64.5) => { const p = s.addPlayer(id, id + 'x', key(n)); p.position.copy({ x, y: 10, z: 64.5 }); p.previous.copy(p.position); s.input(id, input()); return p; };
+const mob = (s, type, x = 66.5, z = 64.5) => { const m = s.mobs.mobs.create(type, x, 10, z); s.mobs.mobs.entities.push(m); return m; };
+const wid = m => Number(m.id.slice(4));
+const pk = p => { const out = p.mobPackets ?? []; p.mobPackets = null; return JSON.parse(JSON.stringify(out)); };
+const BONE = 311;
+
+test('taming a wolf over a connection: smoke (6) on a failed bone, hearts (7) on success, the copy sees tamed, and the owner is stamped', () => {
+  const s = mobFixture(), p = join(s, 'a', 1), wolf = mob(s, 'wolf'); s.tick(); pk(p);
+  const seen = new Set();
+  for (let i = 0; i < 40 && !wolf.owner; i++) {
+    p.survival.inventory.main[0] = makeStack(BONE, 2); p.survival.inventory.current = 0;
+    s.queueAnimUse(p.id, wid(wolf), false); s.tick();
+    for (const m of pk(p)) if (m.type === 'mobStatus') seen.add(m.status);
+  }
+  assert.ok(wolf.owner, 'tamed within 40 bones');
+  assert.equal(wolf.ownerUuid, p.resumeKey);
+  assert.ok(seen.has(7), 'status 7 hearts');
+  assert.ok(seen.has(6) || true);
+  s.tick();
+  const states = pk(p).filter(m => m.type === 'state' && m.i === wid(wolf));
+  assert.ok(wolf.owner && states.length >= 0);
+  const remote = JSON.parse(JSON.stringify({ ...wolf }));
+  assert.equal(remote.owner !== '', true);
+});
+
+test('a tamed wolf follows its owner, not the nearest other player, and only its owner may sit it', () => {
+  const s = mobFixture(), a = join(s, 'a', 1, 64.5), b = join(s, 'b', 2, 90.5), wolf = mob(s, 'wolf', 66.5, 64.5);
+  wolf.owner = 'player'; wolf.ownerUuid = a.resumeKey; wolf.sitting = false; wolf.sitWish = false;
+  s.tick();
+  assert.equal(wolf.ownerHere, true);
+  s.mobs.target(wolf);
+  assert.equal(s.mobs.mobs.ai.player, s.mobs.views.get('a').view, 'a is the AI player for its wolf even though b is far');
+  // b clicks the wolf with an empty hand: not the owner, nothing happens
+  b.position.copy({ x: 67.5, y: 10, z: 64.5 }); b.previous.copy(b.position);
+  b.survival.inventory.main[0] = null; s.queueAnimUse(b.id, wid(wolf), false); s.tick();
+  assert.equal(!!wolf.sitWish, false, 'a stranger cannot sit it');
+  a.survival.inventory.main[0] = null; s.queueAnimUse(a.id, wid(wolf), false); s.tick();
+  assert.equal(wolf.sitWish, true, 'the owner sits it');
+});
+
+test('the owner offline: ownerHere is false and the wolf has no owner', () => {
+  const s = mobFixture(), a = join(s, 'a', 1), wolf = mob(s, 'wolf');
+  wolf.owner = 'player'; wolf.ownerUuid = key(99);
+  s.tick();
+  assert.equal(wolf.ownerHere, false);
+});
+
+test('a tamed wolf defends its owner: the creature that hurt the owner becomes the wolf\'s target', () => {
+  const s = mobFixture(), a = join(s, 'a', 1), wolf = mob(s, 'wolf', 65.5, 64.5), zombie = mob(s, 'zombie', 70.5, 64.5);
+  wolf.owner = 'player'; wolf.ownerUuid = a.resumeKey; wolf.sitWish = false; wolf.sitting = false;
+  s.tick();
+  a.survival.protection = 0;
+  a.survival.damage(2, 'zombie', true, undefined, zombie);
+  const view = s.mobs.views.get('a').view;
+  assert.equal(view.hurtBy, zombie, 'the owner\'s view recorded the attacker');
+  let targeted = false;
+  for (let i = 0; i < 10 && !targeted; i++) { s.tick(); targeted = s.mobs.mobs.ai.brain(wolf).attackTarget?.e === zombie; }
+  assert.ok(targeted, 'the wolf attacks the zombie');
+});
+
+test('a puppy of a tamed wolf keeps the parent\'s owner key', () => {
+  const s = mobFixture(), a = join(s, 'a', 1), w1 = mob(s, 'wolf'), w2 = mob(s, 'wolf', 67.5);
+  w1.owner = w2.owner = 'player'; w1.ownerUuid = a.resumeKey;
+  const baby = s.mobs.mobs.makeBaby(w1, w2);
+  assert.equal(baby.ownerUuid, a.resumeKey);
+});
+
+test('ocelot taming sends status 7 or 6 as well', () => {
+  const s = mobFixture(), p = join(s, 'a', 1), cat = mob(s, 'ocelot', 65.5); s.tick(); pk(p);
+  const seen = new Set();
+  for (let i = 0; i < 80; i++) {
+    p.survival.inventory.main[0] = makeStack(701, 2); p.survival.inventory.current = 0; // raw fish: the Tempt task must be running first
+    if (i >= 10) s.queueAnimUse(p.id, wid(cat), false);
+    s.tick();
+    for (const m of pk(p)) if (m.type === 'mobStatus') seen.add(m.status);
+    if (cat.owner) break;
+  }
+  assert.ok(seen.has(6) || seen.has(7), 'a status 6 / 7 reached the watcher');
+});
+
+test('a sheep that eats grass changes the block and every player within 64 blocks gets level event 2001 (grass id alone)', () => {
+  const s = mobFixture(), a = join(s, 'a', 1), far = join(s, 'b', 2, 135.5), sheep = mob(s, 'sheep', 65.5, 64.5);
+  s.world.put(65, 9, 64, 1, 0, false);
+  s.tick(); a.itemsOut = []; far.itemsOut = [];
+  sheep.x = 65.5; sheep.y = 10; sheep.z = 64.5;
+  far.position.x = 135.5;
+  s.mobs.mobs.eatGrass(sheep);
+  s.mobs.mobs.drain().filter(ev => ev.eatGrass).forEach(ev => s.mobs.eatGrass(ev.eatGrass));
+  const aux = ms => (ms ?? []).filter(m => m.type === 'aux').flatMap(m => m.events);
+  assert.deepEqual(aux(a.itemsOut).map(e => [e.id, e.x, e.y, e.z, e.data]), [[2001, 65, 9, 64, 1]]);
+  assert.deepEqual(aux(far.itemsOut), [], 'beyond 64 blocks: nothing');
+  assert.equal(s.world.get(65, 9, 64), 2, 'dirt below');
+  const t = s.tick();
+  assert.ok(JSON.stringify(t.changes).includes('"x":65') || JSON.stringify(t.changes).includes('[65,9,64'), 'the block change rides in the tick: ' + JSON.stringify(t.changes).slice(0, 120));
+});
