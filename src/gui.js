@@ -8,6 +8,7 @@ import {stackName} from './item-names.js';
 import {translate} from './lang.js';
 import {bookInfoLines} from './books.js';
 import {ITEM_FILLED_MAP,mapStore,mapTooltipLines} from './maps.js';
+import {advancedTitleSuffix} from './advanced-tooltip-id.js';
 const POTION_CLASS={'#aaaaaa':'gray','#ff5555':'red','#aa00aa':'purple','#5555ff':'blue'};
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
 export function pendingContainerStacks(view){
@@ -47,6 +48,7 @@ export function tooltipLines(item,stack,advanced=false){
  const lines=[{text:stackName(stack,{[stack.id]:item})}],attack=item.attack;
  if(potion)for(const l of potionTooltip(stack.damage|0,stackPotionEffects(stack)))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
+ if(advanced)lines[0].text+=advancedTitleSuffix(stack,lines[0].text.length>0); // ItemStack.getTooltip with F3+H: " (#0358/N)" (advanced-tooltip-id.js, executed b59)
  else if(stack.id===ITEM_FILLED_MAP&&!advanced)lines[0].text+=` #${stack.damage|0}`; // ItemStack.getTooltip: an unnamed filled map shows its id (executed, item-tags2-reference.json)
  for(const text of fireworkLines(stack))lines.push({text,color:'gray'});
  // ItemEditableBook.addInformation: the gray "by <author>" line (the name is the title, see item-names.js).
