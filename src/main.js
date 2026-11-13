@@ -800,7 +800,7 @@ function onMultiplayerInventory(m) {
   if (r.hotbar) renderHotbar();
   if (r.container && containerView?.remote?.inv) refreshContainer();
 }
-const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break']);
+const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die']); // b61: another player's hurt / death sound (S29)
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({

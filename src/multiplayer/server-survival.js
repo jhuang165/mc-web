@@ -19,7 +19,8 @@ const APPLE = 260, DEATH_XP_TICKS = 20;
 const finite = Number.isFinite;
 
 /** The vitals a saved player record carries (the Survival constructor reads them back on join). */
-export const vitalsOf = (s) => ({ health: s.health, food: s.food, saturation: s.saturation, exhaustion: s.exhaustion, timer: s.timer });
+// b61: `effects` is EntityLivingBase.writeEntityToNBT's ActiveEffects (Id, Amplifier, Duration, Ambient per effect, in HashMap order; Effects.serialize) and `absorption` is AbsorptionAmount.
+export const vitalsOf = (s) => ({ health: s.health, food: s.food, saturation: s.saturation, exhaustion: s.exhaustion, timer: s.timer, effects: s.effects.serialize(), absorption: s.absorption || 0 });
 
 export class ServerSurvival {
   constructor(simulation) { this.sim = simulation; }
@@ -73,11 +74,27 @@ export class ServerSurvival {
     p.deathXp = null;
     if (String(this.sim.gameRules?.doMobLoot ?? 'true').toLowerCase() === 'true' && d.value > 0) this.sim.serverItems.xp.spawn(d.value, p.position);
   }
-  /** S19 status 2 (a fresh hit) comes from the hurt sound Survival.damage queued; it is drained here since the tick clears them. Status 3 is set by dropOnDeath (EntityPlayerMP.onDeath). */
+  /**
+   * S19 status 2 (a fresh hit) comes from the hurt sound Survival.damage queued; it is drained here since the tick clears them. Status 3 is set by dropOnDeath (EntityPlayerMP.onDeath).
+   * b61: EntityLivingBase.attackEntityFrom (sv.a(ro, float), bytecode-read) also calls playSound(death sound if health <= 0, else hurt sound, volume 1, pitch (r - r) * 0.2 + 1); for a player
+   * that is World.playSoundToNearExcept(self), an S29 to everyone near but the victim (the victim hears its own client's status 2 sound, and EntityOtherPlayerMP plays none).
+   */
   takeHurt(p) {
-    const v = (p.vitals ??= { sent: null }), s = p.survival;
+    const v = (p.vitals ??= { sent: null }), s = p.survival, sim = this.sim;
     if (s.hurtSounds.includes('game.player.hurt')) v.hurt = true;
+    const name = s.hurtSounds.includes('game.player.die') ? 'game.player.die' : s.hurtSounds.includes('game.player.hurt') ? 'game.player.hurt' : null;
+    if (name && sim.soundRand && sim.soundsOut) sim.soundsOut.push({ name, x: p.position.x, y: p.position.y, z: p.position.z, volume: 1, pitch: Math.fround(Math.fround(Math.fround(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * Math.fround(0.2)) + 1), except: p.id });
     s.hurtSounds.length = 0; // taken: the dedicated server plays none itself
+  }
+  /**
+   * b61: the end of the simulation tick, after the mobs and the actions hit. A mob's blow lands after this player's own tick, so health <= 0 used to be seen one tick later (the die message
+   * and the drops were a tick late). Natively EntityLivingBase.attackEntityFrom calls onDeath at once; this runs the same death step in the tick of the hit and queues its hurt flag in time for the
+   * presence of this tick (other players' hurt tint).
+   */
+  settle(p) {
+    if (!this.managed(p) || !p.vitals || p.dead) return;
+    this.takeHurt(p);
+    if (p.survival.health <= 0) this.die(p);
   }
   /**
    * The health-side messages of a tick, in wire order. `healthHurt` is S19 (EntityTracker.func_151248_b sends it to the player too, bytecode-read mn.b -> my.b): `hurt` for status 2,
@@ -89,7 +106,7 @@ export class ServerSurvival {
     this.takeHurt(p);
     if (v.hurt || v.die) { out.push({ type: 'healthHurt', ...(v.hurt ? { hurt: true } : {}), ...(v.die ? { die: true, keep: !!v.keep } : {}) }); v.hurt = v.die = false; }
     const sent = (v.effects ??= new Map()), now = p.survival.effects.active;
-    for (const e of now.values()) {
+    for (const e of p.survival.effects.ordered()) { // HashMap order (the S1D burst at login walks getActivePotionEffects)
       const old = sent.get(e.id);
       if (!old || old.amplifier !== e.amplifier || !!old.ambient !== !!e.ambient || e.duration > old.duration || (e.duration !== old.duration && e.duration % 600 === 0)) out.push({ type: 'healthEffect', id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });
       sent.set(e.id, { amplifier: e.amplifier, duration: e.duration, ambient: e.ambient });
@@ -97,6 +114,12 @@ export class ServerSurvival {
     for (const id of [...sent.keys()]) if (!now.has(id)) { sent.delete(id); out.push({ type: 'healthEffectEnd', id }); }
     return out;
   }
+  /**
+   * S1D for every active effect again, in HashMap order. Bytecode-read (ServerConfigurationManager `oi`): the login handler (a(ej, mw)) and transferPlayerToDimension (a(mw, int)) each end with
+   * `for (PotionEffect e : player.getActivePotionEffects()) send S1D(id, e)`; respawnPlayer (a(mw, int, boolean)) sends none (the new EntityPlayerMP copies no effects). `outgoing` sends them on its
+   * next call: a new join has nothing sent yet, and a dimension change calls this.
+   */
+  resendEffects(p) { if (p?.vitals) p.vitals.effects = new Map(); }
   /** ItemBucketMilk.onEaten: one bucket is used up and clearActivePotions runs (also in Creative). */
   finishDrinking(p) { return !p.dead && finishDrinking(p.survival); }
   /** ItemFood.onEaten through ItemInWorldManager: the food and saturation the single-player rules give (Survival.eat), and the bowl/bottle containers. */
@@ -112,12 +135,26 @@ export class ServerSurvival {
     const s = p.survival, spawn = p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : this.sim.world.spawn(); // /spawnpoint (servercommands-b59)
     Object.assign(s, { health: 20, food: 20, saturation: 5, exhaustion: 0, timer: 0, air: 300, fire: 0, absorption: 0, hurtTicks: 0, hurtAmount: 0, protection: 60, combat: new CombatTracker(), lastDamage: '', lastSource: null, lastAttacker: null });
     s.effects = new Effects(); s.effects.player = s;
+    this.discardWindow(p); // the new EntityPlayerMP has a fresh ContainerPlayer: the cursor and the 2x2 grid of the dead one are gone, not thrown
     p.deathXp = null; if (!this.keepInventory()) p.experience = new Experience(); // clonePlayer keeps the inventory and XP only under keepInventory
     p.position.copy(spawn);
     p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { dead: false, fallDistance: 0, landedFall: 0, flying: false, grounded: false });
     return true;
+  }
+  /**
+   * b61, bytecode-read (1.7.10 jar): EntityPlayerMP.onDeath (mw.a(ro)) and EntityPlayer.onDeath only call InventoryPlayer.dropAllItems (main and armour slots); neither it nor respawnPlayer
+   * (oi.a(mw, int, boolean)) calls closeContainer (mw.m) or reads the cursor stack (InventoryPlayer.itemStack) or the crafting grid; clonePlayer copies the inventory only under keepInventory.
+   * The cursor stack and the 2x2 grid stay in the old player's container and are lost with it at the respawn (recalled: the client's own container close on the death screen never throws
+   * them, EntityPlayerSP.joinEntityItemWithWorld is empty). So "drop at death" was wrong; the respawn empties them without a drop. The server tick's invSet diff tells the client.
+   */
+  discardWindow(p) {
+    const w = p.invWin;
+    if (!w) return;
+    p.survival.inventory.cursor = null;
+    for (let i = 0; i < w.container.grid.size; i++) w.container.grid.takeOnClose(i);
+    w.container.updateResult?.();
   }
   /** The S06 message when health, food or "saturation is 0" changed since the last one (always on the first call), else null. */
   status(p) {
