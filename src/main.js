@@ -196,6 +196,7 @@ import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
 import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw, advanceWorldClock } from './dimension-live.js'; // Nether/End travel (dimensions track)
+import { inSpawnArea } from "./away-plan.js"; // batch 59: which mobs stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -1560,6 +1561,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
+    { const idle = !world.dimension && record.transit ? dims.takeIdle() : null; if (idle) mobs.idleTrack(idle.ticks, (e) => inSpawnArea(idle.spawn, Math.floor(e.x) >> 4, Math.floor(e.z) >> 4)); } // b59: the Overworld's spawn-area mobs kept their tracker phase while the player was in the Nether/End
     for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
     pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null; crystalFireLayer.forget();
     mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
