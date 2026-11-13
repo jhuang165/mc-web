@@ -73,6 +73,7 @@ export function cleanHotbar(slots) {
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
   constructor(saved = {}, { world = null, gameMode = 'creative', ...options } = {}) {
+    this.commandBlocks = options.commandBlocks === true || saved.commandBlocks === true; // b63: enable-command-block (default false, as the dedicated server); command block carts run only when set
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
@@ -148,7 +149,7 @@ export class DedicatedSimulation {
       return result;
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
-    this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
+    this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
     this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch

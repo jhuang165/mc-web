@@ -26,7 +26,7 @@ import { ServerRiding } from './server-riding.js';
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 
 const f = Math.fround;
-export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
+export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5, 6]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
 export const RANGE = 80; // EntityTracker range of a minecart and a boat
 const REACH_SQ = 36; // 6 blocks, as the mob attack
 export const keyOf = v => (v.boat ? 'b' : 'c') + v.id;
@@ -36,7 +36,7 @@ const r4 = v => Math.round(v * 1e4) / 1e4;
 export function vehicleState(v) {
   const s = { v: keyOf(v), x: r4(v.x), y: r4(v.posY), z: r4(v.z), yaw: r4(v.yaw), pitch: r4(v.pitch) };
   if (v.boat) { s.th = v.timeSinceHit; s.dm = r4(v.damage); s.fd = v.forwardDir; } else {
-    s.t = v.type; s.rl = v.rolling; s.rd = v.rollingDir; s.dm = r4(v.damage);
+    s.t = v.type; if (v.type === 6) s.cmd = v.command?.command ?? ''; s.rl = v.rolling; s.rd = v.rollingDir; s.dm = r4(v.damage);
     if (v.type === 2 && v.lit) s.lit = 1;
     if (v.type === 3 && v.fuse >= 0) s.fuse = v.fuse;
   }
@@ -51,12 +51,14 @@ export class ServerVehicles {
     this.carts = saved?.carts ? Minecarts.fromJSON(saved.carts, { ids }) : new Minecarts({ ids });
     this.boats = saved?.boats ? Boats.fromJSON(saved.boats, { ids }) : new Boats({ ids });
     for (const c of [...this.carts.carts, ...this.boats.carts]) c.restorePlayer = false; // nobody is aboard after a restart
+    this.cartCommands = []; // b63: command block carts an activator rail triggered this tick, run by ServerSocial.drain (server-cart-commands.js)
     this.cartHost = {
       explode: (cart, x, y, z, power) => host.mobs.explode({ x, y, z, size: power, source: null }),
       particle() {}, // WorldServer.spawnParticle sends nothing
       sound: (name, cart) => host.soundsOut.push({ name, x: cart.x, y: cart.posY, z: cart.z, volume: 1, pitch: 1, except: null }),
       get transfer() { return host.containers.ticks?.hoppers.host; }, // b62: a hopper cart sucks from the container or item above it (cart-hopper.js)
       changed: keys => host.containers.ticks?.changed(keys),
+      runCommand: cart => { this.cartCommands.push(cart); }, // b63: xn.a(x, y, z, powered) -> CommandBlockLogic.func_145755_a
     };
     this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
@@ -92,7 +94,7 @@ export class ServerVehicles {
   spawnVehicle(kind, x, y, z, { yaw = 0 } = {}) {
     if (![x, y, z].every(Number.isFinite)) return null;
     if (kind === 'boat') return this.boats.spawnBoat({ x, y, z, yaw }, { born: true });
-    const type = { minecart: 0, chest_minecart: 1, furnace_minecart: 2, tnt_minecart: 3, hopper_minecart: 5 }[kind];
+    const type = { minecart: 0, chest_minecart: 1, furnace_minecart: 2, tnt_minecart: 3, hopper_minecart: 5, command_minecart: 6 }[kind];
     return type === undefined ? null : this.carts.spawnCart(type, { x, y, z, items: [] }, { born: true });
   }
 

@@ -29,6 +29,7 @@ export class RemoteVehicles {
       c.target = s;
       const v = c.v;
       if (v.boat) { v.timeSinceHit = s.th ?? 0; v.damage = s.dm ?? 0; v.forwardDir = s.fd ?? 1; } else {
+        if (v.type === 6 && v.command && typeof s.cmd === 'string') v.command.command = s.cmd; // b63: watcher 23, what the command cart's GUI shows
         v.rolling = s.rl ?? 0; v.rollingDir = s.rd ?? 1; v.damage = s.dm ?? 0; v.lit = !!s.lit; v.fuse = s.fuse ?? -1;
       }
     }

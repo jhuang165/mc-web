@@ -21,6 +21,7 @@ import { stackName } from "./item-names.js";
 import { ITEMS } from "./survival.js";
 import { itemComponent } from "./item-component.js";
 import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
+import { runCartCommand, setCartCommand } from "./multiplayer/server-cart-commands.js"; // b63
 import { pickedAchievement } from "./achievements-live.js";
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
@@ -91,8 +92,11 @@ export class ServerSocial {
   /** C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT (nh.a(is)): the client opened its own survival inventory. */
   openInventory(id) { return this.simulation.players.has(id) && this.award(id, "openInventory"); }
   forget(id) { this.achievements.delete(id); }
+  /** MC|AdvCdm for a command block minecart (b63): a Creative operator sets its command. */
+  setCartCommand(id, key, command) { return setCartCommand(this, id, key, command); }
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
+    for (const cart of this.simulation.vehicles?.cartCommands?.splice(0) ?? []) if (!cart.dead) runCartCommand(this, cart, { commands: SERVER_COMMANDS, chatMessage }); // b63: command block carts that an activator rail triggered this tick
     const events = this.simulation.events?.splice(0) ?? [];
     for (const e of events) {
       if (e.type === "death") this.death(e.id, e.component);

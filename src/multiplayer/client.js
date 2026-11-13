@@ -121,6 +121,8 @@ export class DedicatedClient {
   animUse(mob, claim) { this.send({ type: 'animUse', mob, claim: !!claim }); }
   // b61 C02 on a minecart or boat (key 'c<id>' / 'b<id>'): hit = attack, else interact (mount, fuel).
   vehicle(v, hit) { this.send({ type: hit ? 'vehHit' : 'vehUse', v }); }
+  // b63 MC|AdvCdm (type 1) for a command block minecart: the GUI's Done. The server accepts a Creative operator on a server with enable-command-block.
+  vehCommand(v, command) { this.send({ type: 'vehCmd', v, command }); }
   // C0D close window.
   // C0E click window: the slot, button and mode, the client's action number and the stack its own slotClick returned.
   clickWindow(windowId, slot, button, mode, action, item) { this.send({ type: 'clickWindow', windowId, slot, button, mode, action, item: item ?? null }); }

@@ -2234,6 +2234,14 @@ function openCommandBlock(x, y, z, cartTile = null, atClick = false) {
     cancel: resume,
   }));
 }
+// b63: a command block minecart on the dedicated server. The copy carries the command (watcher 23); Done sends MC|AdvCdm (vehCmd), the server accepts only a Creative operator.
+function openMpCommandCart(aim) {
+  const tile = aim.vehicle?.command;
+  if (!tile || !multiplayer) return;
+  screen = "inventory"; mining = null; mineHeld = false;
+  document.exitPointerLock?.();
+  gui.show(commandBlockScreen({ command: tile.command, lastOutput: tile.lastOutput, done: (command) => { multiplayer?.vehCommand(aim.key, command); resume(); }, cancel: resume }));
+}
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
   mining = null;
@@ -3423,7 +3431,7 @@ function multiplayerDigStart() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {

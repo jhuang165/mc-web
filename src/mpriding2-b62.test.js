@@ -26,7 +26,7 @@ const tick = (s, n = 1) => { for (let i = 0; i < n; i++) s.tick(); };
 
 test('chest and hopper carts are placeable and dispensable', () => {
   const s = fixture(), sv = s.vehicles;
-  assert.deepEqual([...PLACEABLE_CARTS].sort(), [0, 1, 2, 3, 5]);
+  assert.deepEqual([...PLACEABLE_CARTS].sort(), [0, 1, 2, 3, 5, 6]);
   const c = sv.spawnVehicle('chest_minecart', 65.5, 10, 70.5), h = sv.spawnVehicle('hopper_minecart', 66.5, 10, 70.5);
   assert.equal(c.type, 1); assert.equal(h.type, 5);
   assert.ok(s.dispense.vehicles.dispenseCart(1, 67.5, 10, 70.5) && s.dispense.vehicles.dispenseCart(5, 68.5, 10, 70.5));

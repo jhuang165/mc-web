@@ -22,6 +22,7 @@ import { PEACEFUL } from '../difficulty.js';
 import { PHYSICS, raycast } from '../world.js';
 import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
+import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from './server-owners.js'; // b63
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
@@ -73,12 +74,13 @@ export function mobState(e) {
 
 export class ServerMobs {
   // `host` is the DedicatedSimulation: world, weather, light, items, `darkness`, `ticks`, `damagePlayer(player, amount, source)`.
-  constructor(host, saved = null, { naturalSpawning = true } = {}) {
+  constructor(host, saved = null, { naturalSpawning = true, legacyOwner = null } = {}) {
     this.host = host;
     const world = host.world;
     // undefined list: EntityWorld.seedAnimals, the opening animals of a finite world below generation 11; a saved list (even empty) is restored as it was
     const list = Array.isArray(saved) ? saved.filter(r => SUPPORTED.has(r?.type)) : undefined;
     const mobs = this.mobs = new EntityWorld(world, list, undefined, new EntityIds());
+    stampLegacy(mobs.entities, legacyOwner); // b63: wolves and ocelots tamed in a single-player save belong to the named player
     mobs.tracker = new IdleTracker();
     mobs.naturalSpawning = false; // run per player below (`spawn`)
     this.spawning = naturalSpawning;
@@ -173,9 +175,8 @@ export class ServerMobs {
     }
     // b62: a tamed wolf or ocelot serves its own owner: the owner's view is the AI's player while that player is here (ownerHere, owner-links.js), so following, sitting, defending
     // (EntityAIOwnerHurtByTarget / HurtTarget read the owner's view) and teleporting go to the owner and not to the nearest player. An owner who is offline: getOwner() is null.
-    if (e.ownerUuid && (e.type === 'wolf' || e.type === 'ocelot')) {
-      let own = null;
-      for (const v of this.views.values()) if (v.player.resumeKey === e.ownerUuid) own = v;
+    if (e.owner && (e.type === 'wolf' || e.type === 'ocelot')) { // b63: by key, name or legacy save (server-owners.js); a stale record is stamped for the nearest player
+      const own = resolveOwner(e, this.views, best);
       e.ownerHere = !!own;
       if (own) best = own;
     }
@@ -358,9 +359,9 @@ export class ServerMobs {
     this.use(v);
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
-    if (owned) mob.ownerHere = !!mob.ownerUuid && mob.ownerUuid === p.resumeKey;
+    if (owned) { if (unkeyed(mob)) stampOwner(mob, p); mob.ownerHere = ownedBy(mob, p); if (mob.ownerHere && mob.ownerUuid !== p.resumeKey) stampOwner(mob, p); } // b63: a legacy record is the clicker's (server-owners.js)
     const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
-    if (owned && !was && mob.owner) { mob.ownerUuid = p.resumeKey; mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
+    if (owned && !was && mob.owner) { stampOwner(mob, p); mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
     p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks
