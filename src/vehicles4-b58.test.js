@@ -195,7 +195,7 @@ for (const s of hs.status) test(`horse copy status ${s.name}: status 2 / 3 draws
   assert.equal(pitches, 6);
 });
 
-test("executed: a dead copy's deathTime 20 tick draws the poof particles (20 groups of gaussians and floats), which the port's copy does not make", () => {
+test("executed: a dead copy's deathTime 20 tick draws the poof particles (20 groups of gaussians and floats; batch 59 ports them, deathfx-b59.test.js)", () => {
   for (const s of hs.status) assert.ok(s.ticks[79][1].split(" ").filter((x) => x === "d").length >= 40, s.name);
 });
 

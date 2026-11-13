@@ -33,6 +33,7 @@ import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
 import { JavaHashSetOrder } from "./java-hashset-order.js";
 import { horseFlagsOf } from "./horse-copy.js";
+import { copyDeathUpdate } from "./death-fx.js";
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -240,7 +241,7 @@ export class ClientEntity {
     this.rotationYawHead = this.prevRotationYawHead = this.renderYawOffset = this.prevRenderYawOffset = 0;
     this.bodyTicks = 0; this.bodyHeadYaw = 0; // EntityBodyHelper's counters
     this.batHanging = false; // EntityBat's data watcher flag, from S1C
-    this.height = 0; // the client class's own size, kept by the tracker
+    this.height = 0; this.width = 0.6; this.deathTime = 0; this.deathDone = false; // the client class's own size, kept by the tracker; EntityLivingBase.deathTime (death-fx.js)
     // Entity.rand of the client copy (unseeded in Java; the replay seeds it): the squid's rotation speed re-roll reads it
     this.rand = type === "squid" || type === "ender_dragon" || type === "ender_crystal" ? ClientEntity.makeRandom() : null;
     this.crystalFire = null; // optional client block layer hook for the crystal copy (EntityEnderCrystal.onUpdate sets fire on the client world too)
@@ -316,6 +317,7 @@ export class ClientEntity {
     if (this.type === "ender_dragon" && this.dragon) { this.dragonUpdate(); turn?.(this); return; }
     if (this.type === "ender_crystal") { this.innerRotation++; this.age++; this.crystalFire?.(this); } // EntityEnderCrystal.onUpdate (++innerRotation) after the world's ++ticksExisted; wz.h also sets fire on the client world: `crystalFire` is the optional client block layer hook (ender-crystal-mobs.js clientCrystalFire), unset until a layer is wired
     if (move && pre) pre(this);
+    copyDeathUpdate(this); // onEntityUpdate's onDeathUpdate (sv.aF), before onLivingUpdate's interpolation
     if (this.increments > 0) {
       const n = this.increments, f = Math.fround;
       this.x += (this.tx - this.x) / n;
@@ -552,6 +554,7 @@ export class MobTracker {
       en = this.create(e, size);
       en.live = e;
       if (height !== undefined) en.client.height = height;
+      if (typeof size === "number") en.client.width = size;
       this.entries.set(e, en);
       this.order.add(e, this.hashId(en));
       if (this.view.player && !hold) { en.entry.updatePlayerList(); this.flush(en); } // EntityTracker.addEntityToTracker -> updatePlayerList at once (`hold`: the player is not in the world yet)
@@ -715,7 +718,7 @@ export class MobTracker {
   // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).
   stepEntry(e) {
     const en = this.entries.get(e);
-    en.client.height = this.sizeOf(e)[1];
+    [en.client.width, en.client.height] = this.sizeOf(e);
     const { airBorne, changed } = this.observe(e, en);
     en.entry.sendLocation(airBorne, changed);
     this.settle(e, en);
@@ -768,7 +771,7 @@ export class MobTracker {
       const rider = c.riddenBy;
       if (rider?.present) {
         if (rider.ridingEntity !== c) c.riddenBy = null;
-        else rider.stepRider(...hooks(this.liveOf(rider)));
+        else { const rl = this.liveOf(rider); rider.dead = rl.health <= 0; rider.stepRider(...hooks(rl)); }
       }
     };
   }

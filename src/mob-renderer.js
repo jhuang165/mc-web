@@ -57,6 +57,7 @@ export function clientAngles(e, c) {
   v.prevRenderYawOffset = c.prevRenderYawOffset; v.renderYawOffset = c.renderYawOffset;
   v.prevRotationYawHead = c.prevRotationYawHead; v.rotationYawHead = c.rotationYawHead;
   v.prevRotationPitch = c.prevRotationPitch; v.rotationPitch = c.rotationPitch;
+  if (c.deathTime > 0) v.death = c.deathTime; else delete v.death; // the corpse tilt reads the copy's own deathTime (death-fx.js)
   return v;
 }
 export class MobRenderer {
