@@ -2,6 +2,37 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 61
+
+Batch 61 covered these areas:
+- **Dispensers on a server.** Server dispensers fire arrows, eggs, snowballs, splash potions, XP bottles, fire charges and fireworks, prime TNT, hatch spawn eggs, and use buckets, flint and steel, bone meal and armour, with the single-player behaviours; boats and plain, furnace and TNT carts go to the server's vehicles. Clients draw them from `dispEnts` / `dispFx`.
+- **Animals over a connection.** C02 interact feeds, breeds, shears, milks, saddles and dyes animals with the single-player rules; breedCow goes to the feeder; sheep grazing reaches clients (status 10). The client predicts the click and the server settles it.
+- **Vehicles and riding.** Plain, furnace and TNT minecarts and boats are server entities: placed, ridden (use mounts, sneak dismounts, boats steer), seen seated by others, broken into items and saved; onARail is awarded (bytecode-read `yz.k`). A creative hit drops nothing natively.
+- **The Nether on a server.** A server Nether is built on first use; the portal timer (80 / 1) and the `Teleporter` move players, `dimRespawn` swaps the client's world, each player sees only their own dimension, flint and steel lights portals on the server, and the portal achievement, the player's dimension and the Nether's edits are saved.
+- **Multiplayer health.** Other players' hurt tint, limb swing and S29 hurt/die sounds; a mob kill's death goes out in the tick of the hit; effects are saved; the S1D burst walks `effects.ordered()` at login and after a trip. Found wrong: the client's `performEffect` changes nothing visible (`EntityPlayerSP.heal` is empty), and the cursor and 2x2 grid are lost at death, not dropped.
+- **Multiplayer inventory.** Accepted window 0 clicks get diffed slot corrections; Survival no longer mirrors the hotbar; Creative slots are C10 (`invCreative`) with the native drop limit; a partly taken stack is hidden on every client as natively (the tracker does not re-add it). Found wrong: no level-up sound on enchanting or the anvil, and the native anvil field is 40 characters.
+- **Mob types and tracker on a server.** Enderman, slime, witch, cave spider, squid, bat, wolf, ocelot, horse, mooshroom and zombie villagers run on the server and are drawn by clients; spider jockeys attach. One tracker entry per mob is shared by all watchers. Found wrong: a delayed kill credits the source of the killing blow, as before (bytecode-read).
+- **Tracker after a trip.** The away run's moving ticks are replayed into the tracker, and entities spawned during the trip get their own age.
+- **Saved order.** Frozen entities are invisible to the trackers, AI searches and collision pushes; reloaded entities take new ids in stamp order (executed `SavedOrderLoginProbe`).
+- **Mob copies' Random.** Water splash and drowning, the wither's charge particles, status-packet particles (zombie conversion, witch, wolf shake, love, villager, tamables) and the enderman's watcher 18 (executed `MobCopies2Probe`, 567 records). The live iron golem no longer drowns.
+- **Small checks.** Brewing-stand takes award `potion` only for a potion (damage > 0). Comparators read no item frames in 1.7.10 (bytecode-read `BlockRedstoneComparator`), so that gap was wrong.
+
+Still open from batch 61:
+- **Multiplayer.**
+  - Nether: no mobs, fluids, fire spread, falling blocks, redstone or random ticks; containers do not open there; Nether items, beacons and spawners are not saved; no End, End portal or dragon (theEnd, theEnd2).
+  - Vehicles: chest, hopper and command carts; detector rails; pig riding and flyPig; mob riders in vehicles; spider-jockey riding; third-person seat height.
+  - Projectiles: skeleton arrows and witch potions are not thrown on the server (snipeSkeleton depends on them); dispensed arrows and balls hit mobs, not players; dispensers do not pick arrows back up; nothing in flight is saved.
+  - Animals: leads (S1B, knots); taming status 6/7 wiring; the grass-eating block update; `animalsBred`.
+  - Inventory: Creative still mirrors the hotbar beside C10; pick block is not on C10; the window 0 result slot is not corrected.
+  - Health: a dead player's open chest or station window is kept after respawn.
+  - Achievements: ghast, spawnWither, killWither.
+  - Nothing of batch 59, 60 or 61's multiplayer work was checked in a browser.
+- **Tracker.** Entities that died during a trip are not replayed; airBorne / velocityChanged replay only on their first rise; hanging entities are not sampled.
+- **Saved order.** Frozen entities are still seen by arrows, explosions, item pickups and merges, cart and boat pushes and village searches; riders in different sections get ids in stamp order.
+- **Mob copies.** An enderman copy in water draws its teleport attempt each tick (not modelled); copy particle positions are not made, only draws; the wither's armour draws.
+- **Effects.** The Java 7 order (ids 16 to 23) is simulated, not executed (no Java 7 runtime here).
+- **Rendering.** No native pixel capture.
+
 ## Done in batch 60
 
 Batch 60 covered these areas:
@@ -16,22 +47,7 @@ Batch 60 covered these areas:
 - **Saved order.** Leaving chunks are queued and unloaded once per tick after the spawner, 100 per call, cancelled when the chunk returns; their entities stop ticking and counting and rejoin in native order (executed `SavedOrderLoginProbe` scenarios). The "same tick" part was half wrong: the timing already matched.
 - **Small checks.** The comparator toggle with powered inputs is predicted from the client world's own blocks (402 executed records). The F3+H suffix of a named stack is no longer italic (native `§oBob§r (#0035/5)`). Effects follow Java 8 HashMap order in the tick, the save and the inventory list.
 
-Still open from batch 60:
-- **Multiplayer.**
-  - Health: no remote hurt tint or limb swing; the client does not run `performEffect`; saved players carry no effects; a mob death sends the die message one tick late; the cursor and grid are not dropped at death.
-  - Inventory: accepted clicks send no S2F; the old hotbar mirror still runs beside the clicks; creative slots and pickups are client-first; a partly taken stack stays visible (native removes it on S0D).
-  - Stations: no enchant level-up sound; crafting statistics; the anvil field still takes 40 characters (the server ignores 31 to 40).
-  - Containers: dispensers fire no projectiles, minecarts, TNT or spawn eggs on the server; no hopper minecarts; structure chests get records on first use only; brewing-stand takes award no potion achievement (the container has no take hook).
-  - Mobs: no feeding, breeding, taming or shearing (no C02 interact), riding or leads; other mob types; each watcher's tracker keeps its own phase.
-  - Achievements: portal, theEnd, theEnd2, onARail, flyPig, breedCow, ghast, spawnWither, killWither; a delayed kill (fire, poison) is not credited.
-  - Login: no S1D effect burst (it should walk `effects.ordered()`).
-  - Nothing of batch 59's or batch 60's multiplayer work was checked in a browser.
-- **Tracker.** Entries are made at the trip's final state, not run through the away run's moving ticks (the last-sent state can be up to 4/32 block off); entities spawned during the trip get the whole trip's age.
-- **Mob copies.** Water splash and drowning draws, the wither's spawn-charge draws, status-packet particles (zombie-villager conversion, witch, wolf shake) are not aligned.
-- **Saved order.** Frozen entities are still seen by collisions, AI searches and the trackers near the edge; reloaded entities keep their ids (native gives new ids); the Java 6/7 HashMap order is not modelled.
-- **Effects.** The Java 7 order (ids 16 to 23) is reasoned, not executed.
-- **Items.** Comparators read no item frames.
-- **Rendering.** No native pixel capture.
+Still open from batch 60: carried into the batch 61 list above, except the items batch 61 closed or found wrong.
 
 ## Done in batch 59
 

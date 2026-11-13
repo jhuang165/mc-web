@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 61 (2026-11-13, ten Sonnet tracks in `../wt61-<name>` on `batch61-<name>`, cut from 135158c42, merged --no-ff on `batch61-lead`; shared track rules `../artifacts/b61-lead/track-rules.md`; lead note `b61-lead-track.md`; no browser checks by request):
+- 0.90.0, by track:
+  - mpdispense: `multiplayer/server-dispense.js` / `client-dispense.js`: server dispensers fire arrows, balls, potions, XP bottles, fire charges, fireworks, primed TNT, spawn eggs, buckets, flint and steel, bone meal, armour (`dispEnts`, `dispFx`).
+  - mpanimals: `multiplayer/animal-use.js`: C02 interact (`animUse`) feeds, breeds, shears, milks, saddles and dyes; breedCow to the feeder; sheep graze status 10; client prediction settled by the server.
+  - mpvehicles: `multiplayer/server-vehicles.js` / `remote-vehicles.js`: plain, furnace and TNT carts and boats placed, ridden, steered, broken and saved (`vehUse`, `vehHit`, `vehicles`, presence `riding`); onARail; `spawnVehicle`.
+  - mpnether: `multiplayer/server-dimensions.js` / `client-dimensions.js`: a lazily built server Nether, the portal timer and `Teleporter`, `dimRespawn`, per-dimension presence and ticks, server flint and steel, the portal achievement, saved dimension and Nether edits.
+  - mphealth2: `multiplayer/remote-hurt.js` (other players' tint and limb swing, S29 hurt/die); same-tick mob kills (`settle`); effects saved; the S1D burst at login (`resendEffects`); cursor and grid lost at respawn, not dropped.
+  - mpinventory2: diffed slot corrections after window 0 clicks; the Survival hotbar mirror retired; `invCreative` (C10 with the drop limit); partly taken stacks hidden on every client; client crafting stats.
+  - mpmobtypes: enderman, slime, witch, cave spider, squid, bat, wolf, ocelot, horse, mooshroom and zombie villagers on the server; `server-mob-entries.js` shares one tracker entry per mob.
+  - trackerorder: `away-trace.js` replays the away run's moving ticks into the tracker; frozen entities hidden from trackers, AI and pushes (`liveLists`); reloaded entities take new ids (executed `SavedOrderLoginProbe`).
+  - mobcopies2: `copy-water.js`, `copy-status.js`, `copy-meta.js`: copies' water splash and drowning, wither charge, status particles, enderman watcher 18 (executed `MobCopies2Probe`, 567 records).
+  - smallchecks3: brewing-stand takes award `potion` for damage > 0 (single player and server); comparators read no item frames in 1.7.10 (gap was wrong); Java 7 order simulated, not executed.
+- Lead fixes in the merge commits: dispensed boats and carts go to the vehicle track; a Nether trip dismounts and resends the S1D burst; Nether players get no Overworld vehicles, dispensed entities or animal clicks; the client resets vehicles and dispensed entities on `dimRespawn`; multiplayer mob copies keep the living roll (`b61-lead.test.js`); conflicts kept both sides.
+- Verification: see `b61-lead-track.md`. Pushed to github main by the lead.
+
 Batch 60 (2026-11-13, ten Sonnet tracks in `../wt60-<name>` on `batch60-<name>` (mphealth on `worktree-agent-ab2fb7a15a815d946`), cut from 94684b989, merged --no-ff on `batch60-lead`; shared track rules `../artifacts/b60-lead/track-rules.md`; lead note `b60-lead-track.md`; no browser checks by request):
 - 0.89.0, by track:
   - mphealth: `multiplayer/client-health.js` (hurt sound, tilt, heart blink from `healthHurt`), `remote-death.js` (other players' corpse tilt and poof); death drops and XP at tick 20 in `server-survival.js`; `healthEffect` / `healthEffectEnd`; milk clears effects on the server.
