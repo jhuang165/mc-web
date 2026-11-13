@@ -526,5 +526,20 @@ public class TrackerJointProbe {
     System.arraycopy(nb, 0, dim2, base.length + bs.length, nb.length);
     System.out.println(runX("dimTick", 1, 60, dim2, 9, 0, 24));
     System.out.println(runX("dimTickLast", 65530, 60, dim2, 12, 0, 24));
+    // Batch 58 (b58tp): the entry's age at the arrival. The same script, the player arriving at several ticks: B's entries (made with the world at 0, in B's pass, in the tile pass and by the network) have
+    // run since their making, so the phase of their updates (ticks % frequency, % 60), the last sent position and motion and the teleport count depend on the age, not on the arrival.
+    xtag = "b58tp";
+    for (int d : new int[]{5, 13, 30, 45, 59}) System.out.println(runX("dimAge" + d, 1, 60, dim2, 9, 0, d));
+    // A long stay: the arrival after 1195 ticks in B, across the forced teleport that an entry sends after 400 relative updates (a mob or vehicle updates every 3 ticks: the 401st at tick 1201)
+    Item[] aged = {
+      item("c1", "chicken", new double[]{2.5, 0, 3.5}, new double[]{0.001, 0, 0.0}, 0, -1, 0.0f),
+      item("lc", "chicken", new double[]{3.0, 0, 2.0}, new double[]{0.002, 0, 0.001}, 0, -1, 0.05f),
+      item("lb", "boat", new double[]{5.5, 0.0, 5.5}, new double[]{0.003, 0, 0.0}, 0, -1, 0.04f),
+      item("lk", "cart0", new double[]{6.5, 0.35, 4.5}, new double[]{0.0, 0, 0.003}, 0, -1, 0.02f),
+      item("li", "item", new double[]{2.5, 1.125, 3.5}, new double[]{0.001, 0, 0.002}, 0, -1, 0),
+      item("lo", "orb", new double[]{4.5, 1.0, 4.5}, new double[]{0.001, 0, 0.001}, 0, -1, 0),
+    };
+    for (int i = 1; i < aged.length; i++) aged[i].inB = true;
+    System.out.println(runX("dimAgeLong", 1, 1215, aged, 1, 0, 1195));
   }
 }

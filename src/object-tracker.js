@@ -461,6 +461,7 @@ export class ObjectClient extends ClientEntity {
 
 // The tracker of the non-mob entities of an EntityWorld. `update(lists, player, world)`: lists maps a kind to the live entities of that kind.
 export class ObjectTracker extends MobTracker {
+  idOf(e) { const id = e.entityId ?? e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; }
   // `ids`: the EntityIds counter of the world (entity-ids.js). Natively one counter numbers mobs and objects alike; with it an item, arrow or other object that has no id of
   // its own takes the next number of that counter when the tracker first sees it (spawn tick), else it counts on from 1 << 24 as before.
   constructor(viewChunks = 10, random = Math.random, ids = null) {

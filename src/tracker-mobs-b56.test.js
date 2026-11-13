@@ -44,7 +44,7 @@ function replay(name, tweak = null) {
   const applied = [], who = new Map(), firstRow = new Map();
   for (const t of [m, o]) {
     const c = t.create.bind(t);
-    t.create = (...a) => { const en = c(...a); firstRow.get(a[0])?.(); const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { applied.push(p); who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
+    t.create = (...a) => { const en = c(...a); { const fr = firstRow.get(a[0]); if (fr) { const st = en.entry.tryStart.bind(en.entry); en.entry.tryStart = () => { en.entry.tryStart = st; st(); fr(); }; } } const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { applied.push(p); who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
   }
   const specs = Object.entries(rec.inputs).map(([n, v]) => ({ name: n, id: rec.ids2[n], ...v, ...rec.meta[n] }));
   const byName = Object.fromEntries(specs.map((s) => [s.name, s]));

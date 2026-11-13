@@ -41,7 +41,7 @@ function rig(playerId, tweak) {
   const r = { m, o, applied: [], who: new Map(), firstRow: new Map() };
   for (const t of [m, o]) {
     const c = t.create.bind(t);
-    t.create = (...a) => { const en = c(...a); r.firstRow.get(a[0])?.(); const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { r.applied.push(p); r.who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
+    t.create = (...a) => { const en = c(...a); { const fr = r.firstRow.get(a[0]); if (fr) { const st = en.entry.tryStart.bind(en.entry); en.entry.tryStart = () => { en.entry.tryStart = st; st(); fr(); }; } } const ap = en.client.apply.bind(en.client); en.client.apply = (p, ctx) => { r.applied.push(p); r.who.set(p, en.entry.e.id); return ap(p, ctx); }; return en; };
   }
   return r;
 }
