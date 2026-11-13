@@ -1,5 +1,5 @@
 import { trackSections } from "./saved-order.js";
-import { steerHorseCopy } from "./horse-copy.js";
+import { steerHorseCopy, newHorseAnim, stepHorseAnim, horseFlagsOf } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -2055,6 +2055,8 @@ export class EntityWorld {
   // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
   clientAfterMove(c, m) {
+    // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (horse-copy.js stepHorseAnim; the tail roll's draw on the copy's Random is not ported)
+    if (m.type === "horse") { const a = (c.horse ??= newHorseAnim()); a.flags = horseFlagsOf(m); stepHorseAnim(a); }
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
     clientBodyTurn(c);
