@@ -122,7 +122,7 @@ export class DedicatedSimulation {
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
     this.redstone = new LiveRedstone(this.world, {
-      entitiesIn: box => [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
+      entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? this.vehicles?.cartsIn(box, mode) ?? [] : [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
     });
@@ -148,7 +148,8 @@ export class DedicatedSimulation {
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
-    this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 2: 'furnace_minecart', 3: 'tnt_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
+    this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
+    this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
     this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
     this.dimensions = new ServerDimensions(this, saved.dimensions); // b61 mpnether: after every system that watches the Overworld
   }

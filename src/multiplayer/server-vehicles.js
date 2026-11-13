@@ -21,9 +21,10 @@ import { PHYSICS } from '../world.js';
 import { moveInput } from '../player-movement.js';
 import { heldAttackDamage } from '../entities.js';
 import { pickMinecart } from '../structure-simulation.js';
+import { installPoweredRails } from '../powered-rails.js';
 
 const f = Math.fround;
-export const PLACEABLE_CARTS = new Set([0, 2, 3]); // plain, furnace and TNT carts; chest and hopper carts need a container window (not connected)
+export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
 export const RANGE = 80; // EntityTracker range of a minecart and a boat
 const REACH_SQ = 36; // 6 blocks, as the mob attack
 export const keyOf = v => (v.boat ? 'b' : 'c') + v.id;
@@ -52,8 +53,26 @@ export class ServerVehicles {
       explode: (cart, x, y, z, power) => host.mobs.explode({ x, y, z, size: power, source: null }),
       particle() {}, // WorldServer.spawnParticle sends nothing
       sound: (name, cart) => host.soundsOut.push({ name, x: cart.x, y: cart.posY, z: cart.z, volume: 1, pitch: 1, except: null }),
+      get transfer() { return host.containers.ticks?.hoppers.host; }, // b62: a hopper cart sucks from the container or item above it (cart-hopper.js)
+      changed: keys => host.containers.ticks?.changed(keys),
     };
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
+  }
+  // b62: the rail redstone (powered, detector and activator rails: powered-rails.js) and the detector rail's cart touch. The dedicated world never installed them before.
+  connect(redstone) {
+    installPoweredRails(redstone);
+    this.carts.blockHook = (x, y, z) => redstone.collide(x, y, z); // Entity.func_145775_I -> BlockRailDetector.onEntityCollidedWithBlock (the world's write hook sends the change)
+  }
+  // LiveRedstone `entitiesIn` modes "minecart" (EntityMinecart) and "inventory" (chest and hopper carts with their comparator signal, Container.calcRedstoneFromInventory).
+  cartsIn(box, mode) {
+    const out = [];
+    for (const c of this.carts.carts) {
+      const b = c.bb;
+      if (c.dead || !b || !(b[3] > box[0] && b[0] < box[3] && b[4] > box[1] && b[1] < box[4] && b[5] > box[2] && b[2] < box[5])) continue;
+      if (mode !== 'inventory') out.push(c);
+      else if (c.type === 1 || c.type === 5) out.push({ cart: c, signal: this.carts.comparator(c) });
+    }
+    return out;
   }
   get all() { return [...this.carts.carts, ...this.boats.carts]; }
   systemOf(v) { return v.boat ? this.boats : this.carts; }
@@ -65,12 +84,12 @@ export class ServerVehicles {
   addPlayer(p) { this.views.set(p.id, { known: new Map() }); }
   removePlayer(p) { this.dismount(p); this.views.delete(p.id); }
 
-  // A vehicle placed at a position by something other than a player (a dispenser, a command): kind 'minecart' | 'furnace_minecart' | 'tnt_minecart' | 'boat'.
+  // A vehicle placed at a position by something other than a player (a dispenser, a command): kind 'minecart' | 'chest_minecart' | 'furnace_minecart' | 'tnt_minecart' | 'hopper_minecart' | 'boat'.
   // Cart records are the rail cell centre as ItemMinecart makes them; a boat's `y` is its box bottom, as ItemBoat passes it. Returns the vehicle or null.
   spawnVehicle(kind, x, y, z, { yaw = 0 } = {}) {
     if (![x, y, z].every(Number.isFinite)) return null;
     if (kind === 'boat') return this.boats.spawnBoat({ x, y, z, yaw }, { born: true });
-    const type = { minecart: 0, furnace_minecart: 2, tnt_minecart: 3 }[kind];
+    const type = { minecart: 0, chest_minecart: 1, furnace_minecart: 2, tnt_minecart: 3, hopper_minecart: 5 }[kind];
     return type === undefined ? null : this.carts.spawnCart(type, { x, y, z, items: [] }, { born: true });
   }
 
@@ -112,7 +131,7 @@ export class ServerVehicles {
     return true;
   }
   act(p, { v: key, hit }) {
-    const v = this.find(key);
+    const host = this.host, v = this.find(key);
     if (!v || p.survival.health <= 0 || p.mount?.key === key) return false; // a rider cannot hit or use the vehicle it sits in
     const b = v.bb, dx = (b[0] + b[3]) / 2 - p.position.x, dy = (b[1] + b[4]) / 2 - (p.position.y + PHYSICS.eye), dz = (b[2] + b[5]) / 2 - p.position.z;
     if (dx * dx + dy * dy + dz * dz > REACH_SQ) return false;
@@ -130,7 +149,8 @@ export class ServerVehicles {
       v.pushX = v.x - p.position.x; v.pushZ = v.z - p.position.z; v.lit = v.fuel > 0;
       return true;
     }
-    if (!v.boat && v.type !== 0) return false; // chest, hopper and command carts open windows: not connected
+    if (!v.boat && (v.type === 1 || v.type === 5)) return host.containers.openCart(p, v, key); // b62: EntityMinecartContainer.interactFirst -> displayGUIChest (a hopper cart opens its hopper window)
+    if (!v.boat && v.type !== 0) return false; // the command block cart is not connected
     const rider = this.riderOf(p);
     if (!system.mount(v, rider, { sneaking: !!p.input?.sneak })) return false;
     p.mount = { key, boat: !!v.boat, rider };
