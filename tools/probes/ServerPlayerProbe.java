@@ -15,7 +15,11 @@ public class ServerPlayerProbe {
   public static class Net extends nh { // NetHandlerPlayServer.sendPacket: effect, health and velocity packets go nowhere
     Net() { super(null, null, null); }
     public void a(ft packet) {}
-    public void a(double x, double y, double z, float yaw, float pitch) {} // setPlayerLocation (a rider's mount packet)
+    public sa player; // batch 55: set by make(); NetHandlerPlayServer.setPlayerLocation moves the player (setPositionAndRotation) to the spot, so mw.setPositionAndUpdate of a dismount really lands it there
+    public void a(double x, double y, double z, float yaw, float pitch) { // setPlayerLocation (a rider's mount packet)
+      if (player == null) return;
+      try { MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(player, x, y, z); } catch (Exception e) { throw new RuntimeException(e); }
+    }
   }
   public static class Oi extends oi {
     Oi() { super(null); }
@@ -68,6 +72,7 @@ public class ServerPlayerProbe {
     MobMoveProbe.set(stage, "t", provider);
     PM p = new PM(server, stage, n);
     p.a = (nh) u.allocateInstance(Net.class);
+    ((Net) p.a).player = p;
     MobMoveProbe.set(p, "o", real); // Entity.worldObj
     p.c.a = real; // ItemInWorldManager.theWorld
     MobMoveProbe.field(mw.class, "bU").setInt(p, 0); // spawn protection ticks
