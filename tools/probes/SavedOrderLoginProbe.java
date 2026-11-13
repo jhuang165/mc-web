@@ -219,6 +219,15 @@ public class SavedOrderLoginProbe {
     double[] wy = new double[12]; int[] wc = new int[12]; for (int i = 0; i < 12; i++) { wy[i] = 70; wc[i] = i; }
     path = new double[][] {{100 * 16 + 4.5, 8.5}, {100 * 16 + 5.5, 8.5}, {2 * 16 + 4.5, 8.5}}; unloadMask = new boolean[] {true, true, true};
     login("b60so-limit", wide, plain.apply(wy, wc), 1000, 0, 40.5, 8.5, 6, -1);
+    // b62 singleleft: riders and mounts in different sections. A cow (y 130, section 8) rides a cart (y 5, section 0) in the same chunk; the chunk writer skips the ridden cart and nests it under the cow's Riding,
+    // the reader creates the cow (id n), then the cart (n + 1), and adds the cow to section 8 and the cart to section 0, so the loaded list has the cart first but the cow has the lower id. `ids` records both.
+    caseName = "saved-order9";
+    path = new double[][] {{100 * 16 + 4.5, 8.5}, {100 * 16 + 5.5, 8.5}, {2 * 16 + 4.5, 8.5}}; unloadMask = new boolean[] {true, true, true}; recordSteps = new boolean[0];
+    int[][] one = {{0, 0}, {1, 0}, {2, 0}};
+    login("b62so-rider-sections", one, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 130, 0, 2), SavedOrderProbe.S("cart", 5, 0, -1), SavedOrderProbe.S("orb", 20, 0, -1), SavedOrderProbe.S("cow", 70, 1, -1)}, 1000, 0, 40.5, 8.5, 2, -1);
+    login("b62so-rider-same-section", one, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 70, 0, 2), SavedOrderProbe.S("cart", 70, 0, -1), SavedOrderProbe.S("orb", 20, 0, -1), SavedOrderProbe.S("cow", 70, 1, -1)}, 1000, 0, 40.5, 8.5, 2, -1);
+    login("b62so-rider-low-over-high", one, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 5, 0, 2), SavedOrderProbe.S("cart", 130, 0, -1), SavedOrderProbe.S("orb", 20, 0, -1), SavedOrderProbe.S("cow", 70, 1, -1)}, 1000, 0, 40.5, 8.5, 2, -1);
+    login("b62so-chain-sections", one, new String[][] {SavedOrderProbe.S("item", 70, 0, -1), SavedOrderProbe.S("cow", 130, 0, 2), SavedOrderProbe.S("cow", 70, 0, 3), SavedOrderProbe.S("cart", 5, 0, -1), SavedOrderProbe.S("orb", 20, 0, -1)}, 1000, 0, 40.5, 8.5, 2, -1);
     path = null; unloadAfterMove = false; unloadMask = null; recordSteps = null;
   }
 }

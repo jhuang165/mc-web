@@ -2024,7 +2024,7 @@ export class EntityWorld {
   moveClient(c, m) {
     if (c.steered) { steerHorseCopy(c, this.riderLook?.()); return; } // wi.e(FF), the saddled horse the player rides: only the angles follow the rider; the motion is the server's (horse-copy.js)
     const [w, h] = this.size(m);
-    copyLivingPre(c, m); // batch 61: the enderman's and the blaze's draws that precede the move
+    copyLivingPre(c, m, undefined, this.world); // batch 61: the enderman's and the blaze's draws that precede the move (batch 62: and its wet teleport)
     c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
     // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's

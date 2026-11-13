@@ -1,3 +1,4 @@
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { readItemTags, tagOf } from './item-tags.js';
 import { bindIds } from "./entity-ids.js";
 import { LastOutputError } from "./chat-component.js";
@@ -452,7 +453,7 @@ export class Minecarts {
     if (cart.damage > 0) cart.damage = f(cart.damage - 1);
     cart.age = (cart.age | 0) + 1; // Entity.onEntityUpdate: ticksExisted++
     if (cart.posY < -64) this.setDead(cart);
-    const others = [...this.carts, ...entities];
+    const others = [...this.carts.filter((c) => !isFrozen(c)), ...entities];
     cart.vy -= GRAVITY;
     const bx = Math.floor(cart.x), bz = Math.floor(cart.z);
     let by = Math.floor(cart.posY);
@@ -554,7 +555,7 @@ export class Minecarts {
     const near = [box[0] - f(0.2), box[1], box[2] - f(0.2), box[3] + f(0.2), box[4], box[5] + f(0.2)];
     let x = 0, z = 0;
     for (const cart of this.carts)
-      if (!cart.dead && intersects(cart.bb, near)) {
+      if (!cart.dead && !isFrozen(cart) && intersects(cart.bb, near)) {
         const [ax, az] = this.collide(cart, entity);
         x += ax; z += az;
       }

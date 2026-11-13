@@ -1,3 +1,4 @@
+import { isFrozen } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { ringEntityActive } from './streaming-ticks.js';
 // ItemBow (abm), EntityArrow (zc) and the arrow half of EntitySkeleton (yl) from the
 // 1.7.10 JAR. Evidence, class digests and gaps: public/research/bows.md; the numbers
@@ -227,7 +228,7 @@ export class Arrows {
   // until its next onUpdate sees that the supporting block changed or disappeared.
   explode(world, x, y, z, size, exploder = null) {
     for (const a of this.list) {
-      if (a.dead || a === exploder) continue;
+      if (a.dead || a === exploder || isFrozen(a)) continue;
       const hit = explosionImpact(world, x, y, z, size, a.x, a.y, a.z, a.y, box(a));
       if (hit) { a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; }
     }
@@ -459,7 +460,7 @@ export class Arrows {
     const near = [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];
     let n = 0;
     for (const a of this.list) {
-      if (a.dead || !a.inGround || a.shake > 0 || !overlap(box(a), near)) continue;
+      if (a.dead || isFrozen(a) || !a.inGround || a.shake > 0 || !overlap(box(a), near)) continue;
       let ok = a.pickup === 1 || (a.pickup === 2 && survival.creative);
       if (a.pickup === 1 && !take(1)) ok = false;
       if (!ok) continue;

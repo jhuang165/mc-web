@@ -1,5 +1,6 @@
 // The world side of village.js: what VillageCollection and Village read from and do to the EntityWorld
 // (wc.A on the original World). Created lazily by EntityWorld.villages.
+import { liveOrder } from "./saved-order.js";
 import { VillageCollection } from "./village.js";
 import { WOODEN_DOOR, normalCube } from "./world.js";
 import { JavaRandom } from "./lighting.js";
@@ -35,7 +36,7 @@ export function createVillageHost(ew) {
     countEntities(kind, x0, y0, z0, x1, y1, z1) {
       const type = kind === "golem" ? "iron_golem" : "villager";
       let n = 0;
-      for (const e of ew.entities) {
+      for (const e of liveOrder(ew, ew.entities)) { // b62: frozen villagers and golems are in no chunk list
         if (e.type !== type || !(e.health > 0)) continue;
         const [w, h] = ew.size(e);
         if (e.x + w / 2 > x0 && e.x - w / 2 < x1 && e.y + h > y0 && e.y < y1 && e.z + w / 2 > z0 && e.z - w / 2 < z1) n++;

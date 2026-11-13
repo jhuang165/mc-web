@@ -14,6 +14,7 @@
 // from the minimum), which inverts the thickness axis (min > max). Every consumer therefore behaves as
 // Java does: only a block cell that contains the whole thickness blocks placement, and two hanging
 // entities never see each other as overlapping.
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { bindIds } from "./entity-ids.js";
 import { JavaRandom } from "./java-random.js";
 import { collisionBoxes } from "./world.js";
@@ -236,7 +237,7 @@ export class Hanging {
   explode(x, y, z, size) {
     const r = f(size) * 2, cube = [x - r - 1, y - r - 1, z - r - 1, x + r + 1, y + r + 1, z + r + 1];
     for (const e of [...this.entities]) {
-      if (e.dead || !intersects(cube, e.bb)) continue;
+      if (e.dead || isFrozen(e) || !intersects(cube, e.bb)) continue;
       const dist = Math.hypot(e.x - x, e.y - y, e.z - z);
       if (dist > r || dist === 0) continue;
       this.attack(e, null);
@@ -274,7 +275,7 @@ export class Hanging {
 }
 
 // EntityArrow targets: EntityHanging.canBeCollidedWith is true (the arrow grows the box by 0.3).
-export const hangingArrowTargets = (hanging) => (hanging?.pickable() ?? []).map((e) => ({ ref: e, box: e.bb }));
+export const hangingArrowTargets = (hanging) => (hanging?.pickable() ?? []).filter((e) => !isFrozen(e)).map((e) => ({ ref: e, box: e.bb }));
 
 // EntityRenderer.getMouseOver for hanging entities: the nearest one whose box, grown by the 0.1
 // collision border (which also un-inverts the thickness axis), the eye ray meets within `reach` and

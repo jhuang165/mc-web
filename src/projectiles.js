@@ -1,3 +1,4 @@
+import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ringEntityActive } from './streaming-ticks.js';
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
 // ItemSnowball (aed); EntityEgg (zl) and EntityEnderPearl (zm) share its flight
@@ -377,7 +378,7 @@ export class Projectiles {
   // EntityThrowable inherits zero eye height and ignores damage; explosions still add motion.
   explode(world, x, y, z, size, exploder = null) {
     for (const b of this.balls) {
-      if (b.dead || b === exploder) continue;
+      if (b.dead || b === exploder || isFrozen(b)) continue;
       const hit = explosionImpact(world, x, y, z, size, b.x, b.y, b.z, b.y,
         [b.x - HW, b.y, b.z - HW, b.x + HW, b.y + HEIGHT, b.z + HW]);
       if (hit) { b.mx += hit.push[0]; b.my += hit.push[1]; b.mz += hit.push[2]; }

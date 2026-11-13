@@ -46,8 +46,8 @@ function waterReplay(r) {
   const c = new ClientEntity(type); c.present = true; c.rand = new Log(r.seed); c.width = w; c.height = h; c.batHanging = true;
   const hooks = [(e) => P.moveClient.call(host, e, m), (e) => P.clientAfterMove.call(host, e, m), (e) => P.clientEnvironment.call(host, e, m), (e) => P.clientLiving.call(host, e, m)];
   let splashes = 0, bubbles = 0;
-  // An enderman copy in water also draws nextDouble, nextInt(64), nextDouble every tick (EntityEnderman.teleportRandomly after the wet damage): not modelled, so it is replayed up to the first wet tick
-  r.ticks.slice(0, r.name === "Enderman" ? 11 : r.ticks.length).forEach((t, i) => {
+  // An enderman copy in water also draws nextDouble, nextInt(64), nextDouble every tick (teleportRandomly): modelled since batch 62 (copy-teleport.js), so every tick is replayed
+  r.ticks.forEach((t, i) => {
     [c.x, c.y, c.z, c.vx, c.vy, c.vz] = t.pre; c.px = c.x; c.py = c.y; c.pz = c.z;
     c.rand.log.length = 0; c.dead = false;
     c.step(...hooks);
