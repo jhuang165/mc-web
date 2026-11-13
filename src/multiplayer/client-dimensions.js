@@ -7,7 +7,11 @@
 import { World, BLOCKS } from '../world.js';
 import { decodeColumn } from './protocol.js';
 
-export const NETHER = -1;
+export const NETHER = -1, END = 1;
+// Batch 63 mpend: the End. The finite world is 128 x 128 (the light volume is hard-wired to that grid), but the native End spawn platform (100, 49, 0) lies 100 blocks from the origin, so the
+// replica holds the window x -25..102, z -96..31 of the End: End coordinates (X, Z) are stored at (X + 25, Z + 96). The platform, the island's +x part and the origin (the exit portal) are inside.
+export const END_OFFSET = Object.freeze({ x: 25, z: 96 });
+export const END_BIOME = Object.freeze({ id: 9, name: 'Sky', rainfall: 0, snowy: false, temperature: 0.5, topBlock: 152 });
 export const NETHER_BIOME = Object.freeze({ id: 8, name: 'Hell', rainfall: 0, snowy: false, temperature: 2, topBlock: 150 });
 
 export class FiniteDimensionWorld extends World {
@@ -19,16 +23,18 @@ export class FiniteDimensionWorld extends World {
   // Called by World's constructor: the empty columns exist already; only the dimension's own rules are set (as DimensionWorld.generate does).
   generate() {
     this.dimension = FiniteDimensionWorld.pending;
-    this.isEnd = false; this.isHell = true; this.hasNoSky = true; // aqo.f / aqo.g: the Nether
+    const end = this.dimension === END; // b63: the End has no sky and no hell flag (BiomeGenEnd 'Sky', temperature 0.5)
+    this.isEnd = end; this.isHell = !end; this.hasNoSky = true; // aqo.f / aqo.g: the Nether (hell) or the End (no sky only)
     this.originX = this.originZ = 0;
-    this.biomeAt = () => NETHER_BIOME;
-    this.temperatureAt = () => 2;
-    this.seaLevel = 32;
+    this.biomeAt = () => (end ? END_BIOME : NETHER_BIOME);
+    this.temperatureAt = () => (end ? 0.5 : 2);
+    this.seaLevel = end ? 0 : 32;
   }
   // World.getActualHeight: 128 in the Nether; the build limit stays 256.
   get actualHeight() { return 128; }
   // A dry spot to stand on (DimensionWorld.spawn): the first safe netherrack floor near the middle of this finite world.
   spawn() {
+    if (this.dimension === END) return { x: 100.5 + END_OFFSET.x, y: 49.01, z: 0.5 + END_OFFSET.z }; // WorldProviderEnd entrance (100, 50, 0): the platform (dimension-world.js spawn)
     for (let r = 0; r < 64; r++) for (let x = 64 - r; x <= 64 + r; x++) for (const z of [64 - r, 64 + r]) {
       if (x < 0 || x > 127 || z < 0 || z > 127) continue;
       for (let y = 40; y < 120; y++) if (this.get(x, y, z) === 0 && this.get(x, y + 1, z) === 0 && this.solid(x, y - 1, z) && this.get(x, y - 1, z) !== 11) return { x: x + 0.5, y: y + 0.01, z: z + 0.5 };

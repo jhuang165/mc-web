@@ -862,7 +862,7 @@ async function joinMultiplayer(settings) {
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
-    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; the End is not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; the End is not connected yet.');
+    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).');
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);

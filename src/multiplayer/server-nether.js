@@ -70,18 +70,18 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.tiles = new Survival(saved.tiles ?? {}, 'creative');
   const te = saved.tileEntities ?? {};
   n.tileEntities = { world: w, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), chests: n.tiles.chests, enders: n.tiles.enderTiles };
-  w.fortressSpawns = (x, y, z) => fortressMonsterSpawnList(source.provider.bridge, (bx, by, bz) => (w.get(bx, by, bz) === NETHER_BRICK ? 112 : 0), x, y, z);
+  if (source.provider) w.fortressSpawns = (x, y, z) => fortressMonsterSpawnList(source.provider.bridge, (bx, by, bz) => (w.get(bx, by, bz) === NETHER_BRICK ? 112 : 0), x, y, z);
   n.redstone = new LiveRedstone(w, {
-    entitiesIn: box => [...sim.players.values()].filter(p => p.dimension === NETHER && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
+    entitiesIn: box => [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
     environment: () => ({ sky: 0, skylightSubtracted: 0, celestialAngle: 0, noSky: true }),
     skyLight: () => 0,
   });
   n.redstone.restore(saved.redstone);
-  n.containers = new ServerContainers(sim); n.containers.dim = NETHER;
+  n.containers = new ServerContainers(sim); n.containers.dim = n.dim ?? NETHER; // b63: the End is built by the same function with n.dim = 1
   n.light = new LightVolume(w, (x, y, z, b) => lightEmission(b, n.redstone.lit.has(`${x},${y},${z}`) || n.containers.litFurnaces.has(`${x},${y},${z}`)));
   w.blockLight = (x, y, z) => n.light.blockAt(x, y, z);
   w.fullLight = (x, y, z) => n.light.level(x, y, z, 0);
-  n.fluids = new Fluids(w, { random: n.weather.random, nether: true, skyless: true });
+  n.fluids = new Fluids(w, { random: n.weather.random, nether: (n.dim ?? NETHER) === NETHER, skyless: true });
   n.fluids.load(saved.fluidTicks);
   n.fire = new Fire(w, { weather: () => n.weather, stillLava: (x, y, z) => !n.fluids.pending.has(n.fluids.key(x, y, z, LAVA)) });
   n.fire.watch(); n.fire.sharedRandomTicks = true; n.fire.load(saved.fireTicks);
@@ -97,13 +97,13 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
 
 // Systems that need `sim.*` to be the Nether while they are built (ContainerTicks registers on sim.redstone, hoppers and dispensers read sim.tiles), and the mobs.
 export function buildNetherInside(sim, n, saved = {}) {
-  n.dispense = sim.dispense = new ServerProjectiles(sim); n.dispense.dim = NETHER; /* b62 lead: the full projectile system, so bows and throws work here */ // hooks THIS world's redstone (TNT primed by flint and steel)
-  n.containers.ticks = new ContainerTicks(sim); n.containers.ticks.dim = NETHER; // registers the hopper / dispenser / trapped chest behaviours on THIS redstone
+  n.dispense = sim.dispense = new ServerProjectiles(sim); n.dispense.dim = n.dim ?? NETHER; /* b62 lead: the full projectile system, so bows and throws work here */ // hooks THIS world's redstone (TNT primed by flint and steel)
+  n.containers.ticks = new ContainerTicks(sim); n.containers.ticks.dim = n.dim ?? NETHER; // registers the hopper / dispenser / trapped chest behaviours on THIS redstone
   // The mobs: a ServerMobs whose host is `sim` with the Nether's world, light, items, weather and sound tag (dimension -1) laid over it.
   const host = Object.create(sim, {
     world: { value: n.world }, light: { value: n.light }, items: { value: n.items }, weather: { value: n.weather }, darkness: { value: 0 },
     serverItems: { value: Object.create(sim.serverItems, { xp: { value: n.xp } }) },
-    soundsOut: { value: { push: s => sim.soundsOut.push({ ...s, dim: NETHER }) } },
+    soundsOut: { value: { push: s => sim.soundsOut.push({ ...s, dim: n.dim ?? NETHER }) } },
   });
   n.mobs = new ServerMobs(host, Array.isArray(saved.mobs) ? saved.mobs : [], { naturalSpawning: n.overMobs.spawning });
   n.mobs.mobs.ignite = (x, y, z) => n.fire.ignite(x, y, z); // a fireball sets fire where it lands
