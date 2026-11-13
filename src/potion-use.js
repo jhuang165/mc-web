@@ -4,7 +4,8 @@
 import { copyBucketTarget } from "./buckets-simulation.js";
 import { traceBucket, DRINK_TICKS } from "./buckets.js";
 import { makeStack } from "./inventory.js";
-import { getPotionEffects, isSplashDamage, ITEM_POTION, ITEM_GLASS_BOTTLE } from "./potions.js";
+import { isSplashDamage, ITEM_POTION, ITEM_GLASS_BOTTLE } from "./potions.js";
+import { stackPotionEffects } from "./item-tags.js";
 import { WATER } from "./world.js";
 
 export { ITEM_POTION, ITEM_GLASS_BOTTLE };
@@ -22,7 +23,7 @@ export function usePotion(state, hooks = {}) {
     const random = hooks.random ?? Math.random;
     if (!state.survival.creative) state.survival.take(ITEM_POTION);
     hooks.playSound?.("random.bow", { volume: 0.5, pitch: 0.4 / (random() * 0.4 + 0.8) });
-    state.mobs?.potions?.throwFromPlayer(state.position, state.yaw, state.pitch, damage);
+    state.mobs?.potions?.throwFromPlayer(state.position, state.yaw, state.pitch, damage, "potion", 0.5, held.customPotionEffects); // EntityPotion keeps the stack: CustomPotionEffects travel with it
     if (!state.survival.creative) { hooks.resetEquipped?.(); hooks.renderHotbar?.(); hooks.markUnsaved?.(); }
     return "throw";
   }
@@ -34,9 +35,9 @@ export function usePotion(state, hooks = {}) {
 export function finishPotion(player) {
   const inv = player.inventory, held = inv.held;
   if (!held || held.id !== ITEM_POTION) return false;
-  const damage = held.damage || 0;
+  const effects = stackPotionEffects(held); // ItemPotion.getEffects(stack): CustomPotionEffects override the damage value
   if (!player.creative && --held.count <= 0) inv.main[inv.current] = null;
-  for (const e of getPotionEffects(damage) ?? []) player.effects.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
+  for (const e of effects ?? []) player.effects.add({ id: e.id, duration: e.duration, amplifier: e.amplifier, ...(e.ambient ? { ambient: true } : {}) }); // new PotionEffect(effect) copies the ambient flag
   if (!player.creative) {
     if (!inv.main[inv.current]) inv.main[inv.current] = makeStack(ITEM_GLASS_BOTTLE);
     else { const s = makeStack(ITEM_GLASS_BOTTLE); inv.add(s); }
