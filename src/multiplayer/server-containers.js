@@ -12,6 +12,9 @@ import { DispenserContainer, DISPENSER_TITLE, DROPPER_TITLE, newDispenser } from
 import { HOPPER, HopperContainer, newHopperTile } from '../hopper.js';
 import { BREWING_STAND, brewingView, newBrewingTile } from '../brewing.js';
 import { BrewingContainer } from '../brewing-container.js';
+import { smeltExperience } from '../experience.js';
+import { settleFacing } from '../chest.js';
+import { newEnderTile } from '../chest-blocks.js';
 
 export const FURNACE = 14;
 const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color'];
@@ -32,14 +35,24 @@ const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count ===
 const sig = s => (s ? JSON.stringify(s) : '');
 
 export class ServerContainers {
-  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.lids = new Map(); this.actions = []; }
+  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.lids = new Map(); this.actions = []; this.litFurnaces = new Set(); this.litSent = false; this.ticks = null; this.onFurnaceTake = null; }
+  // b60: SlotFurnace.onCrafting for a stack taken from a furnace output slot: the crafted-item hook (`onFurnaceTake(p, stack, amount)`, for the smelting
+  // achievement; this module does not award it) and the experience, rounded up by chance, spawned at the player (posY + 0.5, posZ + 0.5).
+  smelted(p, stack, amount) {
+    this.onFurnaceTake?.(p, stack, amount);
+    if (p.survival.creative) return;
+    const f = smeltExperience(stack); let n = amount;
+    if (f === 0) n = 0;
+    else if (f < 1) { const raw = Math.fround(amount * f); n = Math.floor(raw); if (n < Math.ceil(raw) && Math.random() < raw - n) n++; }
+    this.sim.serverItems.xp.spawn(n, { x: p.position.x, y: p.position.y + 0.5, z: p.position.z + 0.5 });
+  }
   get tiles() { return this.sim.tiles; }
   // Called from DedicatedSimulation.edit for a right click on `block` (activates: not sneaking with an item in hand). True when the click was handled.
   use(p, x, y, z, block, activates) {
     if (!activates) return false;
     const key = `${x},${y},${z}`, s = p.survival, w = this.sim.world;
     let container, kind, title, extra = {};
-    if (block === FURNACE) { container = s.openFurnace(key, () => {}); kind = 'furnace'; title = 'Furnace'; }
+    if (block === FURNACE) { container = s.openFurnace(key, (st, n) => this.smelted(p, st, n)); kind = 'furnace'; title = 'Furnace'; }
     else if (block === ENDER_CHEST) { container = s.openEnderChest(w, x, y, z); kind = 'chest'; title = 'Ender Chest'; extra = { ender: true }; if (!container) return true; }
     else if (isChestBlock(block)) { container = s.openChest(w, x, y, z); kind = 'chest'; if (!container) return true; title = container.title; }
     else if (block === DISPENSER || block === DROPPER) {
@@ -57,6 +70,7 @@ export class ServerContainers {
     const id = (this.nextWindow % 100) + 1; this.nextWindow++;
     p.window = { id, kind, container, key: [x, y, z], block, last: [], cursor: '', props: [], pending: 0, ready: false };
     container.title = title;
+    this.syncLids();
     this.out(p, { type: 'openWindow', windowId: id, kind, title, x, y, z, size: container.slots.length, rows: container.rows, ...(kind === 'chest' ? { keys: container.keys } : {}), ...extra });
     return true;
   }
@@ -89,6 +103,7 @@ export class ServerContainers {
     if (claimed === undefined) return false;
     const result = c.click(m.slot, m.button, m.mode);
     this.drain(p);
+    this.ticks?.changed(c.keys ?? [win.key.join(',')]); // World.func_147453_f: comparators read the new contents
     if (same(claimed, result ? copyStack(result) : null)) {
       this.out(p, { type: 'confirmTransaction', windowId: win.id, action: m.action, accepted: true });
       this.changes(p);
@@ -134,6 +149,8 @@ export class ServerContainers {
     if (!win) return;
     p.window = null;
     win.container.close();
+    this.ticks?.changed(win.container.keys ?? [win.key.join(',')]);
+    this.syncLids();
     for (const s of win.container.drops.splice(0)) this.sim.items.dropPlayer(copyStack(s), p.position, p.yaw, p.pitch);
     if (notify) this.out(p, { type: 'windowClose', windowId: win.id });
   }
@@ -141,6 +158,7 @@ export class ServerContainers {
   tick() {
     const sim = this.sim;
     this.tiles.tickFurnaces();
+    this.lightFurnaces();
     for (const [key, data] of Object.entries(this.tiles.brewing)) {
       const [x, y, z] = key.split(',').map(Number);
       if (sim.world.get(x, y, z) !== BREWING_STAND) continue;
@@ -154,24 +172,64 @@ export class ServerContainers {
       if (!p.window.ready) continue;
       this.changes(p); this.sendProps(p, false);
     }
-    const seen = new Set();
-    for (const [key, c] of Object.entries(this.tiles.chests)) { seen.add(key); this.lid(key, c.users | 0, 'c', c.facing); }
-    for (const [key, t] of Object.entries(this.tiles.enderTiles)) { seen.add('e' + key); this.lid(key, t.users | 0, 'e', 0); }
+    this.syncLids();
+  }
+  syncLids() {
+    for (const [key, c] of Object.entries(this.tiles.chests)) this.lid(key, c.users | 0, 'c', c.facing);
+    for (const [key, t] of Object.entries(this.tiles.enderTiles)) this.lid(key, t.users | 0, 'e', 0);
+  }
+  // b60: BlockFurnace.func_149931_a swaps block 61 and 62 (and its light 13) when TileEntityFurnace's burn state flips. The port keeps one block id and a
+  // lit set: a flip rewrites the cell (the tick's change list relights it and sends the cell) and `contFurnaceLit` tells clients which furnaces burn.
+  lightFurnaces() {
+    const sim = this.sim, now = new Set();
+    for (const [key, f] of Object.entries(this.tiles.furnaces)) { const [x, y, z] = key.split(',').map(Number); if (f.burn > 0 && sim.world.get(x, y, z) === FURNACE) now.add(key); }
+    for (const key of new Set([...now, ...this.litFurnaces])) if (now.has(key) !== this.litFurnaces.has(key)) {
+      const [x, y, z] = key.split(',').map(Number);
+      sim.changes.set(key, [x, y, z, sim.world.get(x, y, z), sim.world.getMeta(x, y, z)]);
+    }
+    this.litFurnaces = now;
+  }
+  // The lit furnaces ride in every tick while any burn (and once empty after the last), like `items`.
+  furnaceField() {
+    if (!this.litFurnaces.size && !this.litSent) return {};
+    this.litSent = this.litFurnaces.size > 0;
+    return { contFurnaceLit: [...this.litFurnaces] };
   }
   lid(key, users, kind, facing) {
     const k = kind + key, old = this.lids.get(k) ?? 0;
     if (users === old) return;
     this.lids.set(k, users);
+    if (kind === 'c') this.ticks?.viewersChanged(key); // trapped chest: neighbours and the block beneath hear the new power
     this.actions.push({ key, ender: kind === 'e', users: Math.max(0, users), facing }); // S24 block action 1: the number of viewers
   }
-  actionsField() { const a = this.actions.splice(0); return a.length ? { blockActions: a } : {}; }
+  actionsField() { const a = this.actions.splice(0); return { ...(a.length ? { blockActions: a } : {}), ...this.furnaceField() }; }
   // A container block that is gone: its contents leave as items and any window on it closes (BlockContainer.breakBlock).
   reap(x, y, z, block) {
+    this.ensureChest(x, y, z, block);
     const key = `${x},${y},${z}`, t = this.tiles, spill = items => this.sim.items.spill(items.filter(Boolean).map(copyStack), x, y, z);
     const gone = (store, ok) => { const e = store[key]; if (e && !ok) { delete store[key]; spill(e.items); this.closeAt(key); } };
     gone(t.chests, isChestBlock(block)); gone(t.furnaces, block === FURNACE); gone(t.dispensers, block === DISPENSER || block === DROPPER);
     gone(t.hoppers, block === HOPPER); gone(t.brewing, block === BREWING_STAND);
     if (t.enderTiles[key] && block !== ENDER_CHEST) { delete t.enderTiles[key]; this.closeAt(key); }
+  }
+  // b60: a chest block with no tile record (a saved world's, or placed by a command) gets the facing onBlockAdded settles; the cell and its chest neighbours
+  // are described to the clients (`contChest`, tile-sync.js) so a never-opened chest is drawn with its closed lid.
+  ensureChest(x, y, z, block) {
+    const key = `${x},${y},${z}`, t = this.tiles;
+    if (block === ENDER_CHEST) { if (!t.enderTiles[key]) t.enderTiles[key] = newEnderTile(); }
+    else if (isChestBlock(block)) { if (!t.chests[key]) settleFacing(this.sim.world, t.chests, x, y, z); }
+    else return;
+    this.sim.tileChanged(x, y, z);
+    for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (this.sim.world.get(x + dx, y, z + dz) === block) this.sim.tileChanged(x + dx, y, z + dz);
+  }
+  // Saved chest blocks without a record (edits are `block | meta << 8`).
+  adopt() { for (const [key, v] of this.sim.world.edits) { const b = v & 255; if (b === ENDER_CHEST || isChestBlock(b)) this.ensureChest(...key.split(',').map(Number), b); } }
+  // Every chest and ender chest of the world as `contChest` descriptions, for the join snapshot.
+  describeAll() {
+    const w = this.sim.world, t = this.tiles, list = [];
+    for (const key of Object.keys(t.chests)) { const [x, y, z] = key.split(',').map(Number); if (isChestBlock(w.get(x, y, z))) list.push({ kind: 'contChest', x, y, z, facing: t.chests[key].facing }); }
+    for (const key of Object.keys(t.enderTiles)) { const [x, y, z] = key.split(',').map(Number); if (w.get(x, y, z) === ENDER_CHEST) list.push({ kind: 'contChest', x, y, z, ender: true }); }
+    return list;
   }
   closeAt(key) { for (const p of this.sim.players.values()) if (p.window && (p.window.key.join(',') === key || p.window.container.keys?.includes(key))) this.close(p, true); }
 }

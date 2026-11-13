@@ -36,6 +36,7 @@ import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
 import { ServerContainers } from './server-containers.js';
+import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
@@ -99,7 +100,7 @@ export class DedicatedSimulation {
     // marks its cell (`tileChanged`) and the next tick sends the description packet (S33 / S35) with the cell changes.
     this.dirtyTiles = new Set();
     const te = saved.tileEntities ?? {};
-    this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners) };
+    this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), chests: this.tiles.chests, enders: this.tiles.enderTiles }; // chests/enders: the contChest descriptions (tile-sync.js)
     this.weather = new Weather().restore(saved.weather).restoreSimulation(saved.worldRandom);
     this.farming = new Farming(this.world, saved.farms);
     this.fluids = new Fluids(this.world, { random: this.weather.random });
@@ -121,7 +122,8 @@ export class DedicatedSimulation {
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
     });
     this.redstone.restore(saved.redstone);
-    this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`)));
+    this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
+    this.containers.ticks = new ContainerTicks(this); // hoppers, dispensers, trapped chest power (server-container-ticks.js)
     this.world.blockLight = (x, y, z) => this.light.blockAt(x, y, z);
     this.world.fullLight = (x, y, z) => this.light.level(x, y, z, 0);
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
@@ -451,7 +453,7 @@ export class DedicatedSimulation {
     this.weather.tick(this.world);
     this.weather.drain();
     this.falling.tick();
-    tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
+    tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, hoppers: this.containers.ticks.hoppers },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     // TileEntityBeacon.updateEntity: every 80 world ticks the pyramid check, then the effects for the players in range (pyramid-live.js, the
     // singleplayer tick). Each grant also goes to that player as an S1D entity-effect message (`effectsOut`, delivered by the connection).
@@ -489,7 +491,7 @@ export class DedicatedSimulation {
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse })); }
   snapshot() { const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
-    time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
+    time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,

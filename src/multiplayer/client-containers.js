@@ -69,3 +69,24 @@ export function applyBlockActions(list, survival) {
     rec.users = a.users;
   }
 }
+// b60: the lit furnaces of a server tick (`contFurnaceLit`) as the data scene.setFurnaces reads (the block swap 61 / 62 and its light 13).
+export const litFurnaceData = keys => Object.fromEntries((Array.isArray(keys) ? keys : []).filter(k => typeof k === 'string').map(k => [k, { lit: true }]));
+// b60: S28 for a dispenser or dropper (RenderGlobal.playAuxSFX, bytecode-read): 1000 click, 1001 click at pitch 1.2, 1002 bow at pitch 1.2, all at volume 1
+// and the block's corner (x, y, z as ints, no +0.5); 2000 ten smoke puffs on the face the data names (data = dx + 1 + (dz + 1) * 3).
+// `play(name, x, y, z, volume, pitch)`, `smoke(x, y, z, vx, vy, vz)`; `random()` is the client world's Random (unseeded natively).
+export function dispenserAux(e, { play, smoke, random = Math.random }) {
+  if (![e?.id, e?.x, e?.y, e?.z, e?.data].every(Number.isInteger)) return false;
+  if (e.id === 1000) play('random.click', e.x, e.y, e.z, 1, 1);
+  else if (e.id === 1001) play('random.click', e.x, e.y, e.z, 1, 1.2);
+  else if (e.id === 1002) play('random.bow', e.x, e.y, e.z, 1, 1.2);
+  else if (e.id === 2000) {
+    const gauss = () => { let a, b, s; do { a = 2 * random() - 1; b = 2 * random() - 1; s = a * a + b * b; } while (s >= 1 || s === 0); return a * Math.sqrt(-2 * Math.log(s) / s); };
+    const i = e.data % 3 - 1, k = Math.trunc(e.data / 3) % 3 - 1, cx = e.x + i * 0.6 + 0.5, cy = e.y + 0.5, cz = e.z + k * 0.6 + 0.5;
+    for (let n = 0; n < 10; n++) {
+      const d = random() * 0.2 + 0.01;
+      const px = cx + i * 0.01 + (random() - 0.5) * k * 0.5, py = cy + (random() - 0.5) * 0.5, pz = cz + k * 0.01 + (random() - 0.5) * i * 0.5;
+      smoke(px, py, pz, i * d + gauss() * 0.01, -0.03 + gauss() * 0.01, k * d + gauss() * 0.01);
+    }
+  } else return false;
+  return true;
+}
