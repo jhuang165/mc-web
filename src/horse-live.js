@@ -95,6 +95,8 @@ export function horseSeats(mobs) {
       const vehicle = { horse: true, entity: e, get dead() { return e.health <= 0 || !mobs.entities.includes(e); } };
       Object.defineProperty(e, "rider", { value: rider, writable: true, configurable: true, enumerable: false });
       rider.vehicle = vehicle;
+      if (e.horse) { e.horse.eating = false; e.eatTicks = 0; } // wi.i(yz) (bytecode-read): o(false) and p(false) on mounting stop the grass eating and the rear
+      e.rearing = false; e.rearTicks = 0;
       rider.jumpCounter = 0;
       rider.jumpPower = 0;
       seats.updateRiderPosition(vehicle);
@@ -198,6 +200,7 @@ export function installHorse(EntityWorld) {
   proto.horseRear = function (e, sound = false) {
     e.rearing = true;
     e.rearTicks = 1; // makeHorseRear starts the counter at 1
+    if (e.horse) { e.horse.eating = false; e.eatTicks = 0; } // wi.p(true) calls o(false) (bytecode-read): rearing stops the eating
     if (sound) this.horseAngry(e);
   };
   proto.horseAngry = function (e) {
