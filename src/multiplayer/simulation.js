@@ -39,6 +39,7 @@ import { ServerAchievements } from './server-achievements.js';
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
+import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -143,6 +144,7 @@ export class DedicatedSimulation {
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false });
+    this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
   }
   // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
@@ -163,10 +165,12 @@ export class DedicatedSimulation {
     this.serverItems.join(player, saved);
     this.players.set(id, player);
     this.mobs.addPlayer(player);
+    this.vehicles.addPlayer(player); // b61
     return player;
   }
   removePlayer(id) {
     const p = this.players.get(id);
+    if (p) this.vehicles.removePlayer(p); // b61: a rider is let down before the position is saved
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
@@ -205,6 +209,7 @@ export class DedicatedSimulation {
     if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, animUse: mob, claim: claim === true }); return true;
   }
+  queueVehicle(id, m) { return this.vehicles.queue(id, m); } // b61: C02 on a minecart or boat (server-vehicles.js)
   queueUse(id, active) {
     if (!this.players.has(id) || typeof active !== 'boolean' || this.actions.filter(a => a.id === id).length >= 4) return false;
     this.actions.push({ id, use: active }); return true;
@@ -317,7 +322,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return false;
+    if (!target) return place && this.vehicles.useHeld(p, null); // b61: a boat is placed on water the block ray misses
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -336,6 +341,7 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
+    if (place && this.vehicles.useHeld(p, target)) return true; // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
@@ -441,7 +447,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
-      const moved = movePlayer(p, p.dead ? IDLE_INPUT : controls);
+      const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
       const dead = this.serverSurvival.tick(p, moved); // Survival players: health, food, fall and void damage, death (server-survival.js)
       if (p.position.y < -64 && !dead && p.survival.creative) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
       p.survival.time = this.time;
@@ -456,9 +462,10 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack, animUse, claim } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim, veh } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
+      if (veh) { this.vehicles.act(p, veh); continue; } // b61
       if (animUse !== undefined) { this.mobs.interact(p, animUse, claim); continue; } // b61: C02 interact
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
@@ -467,6 +474,7 @@ export class DedicatedSimulation {
       p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]); p.resendCells = null;
     }
     this.mobs.tick();
+    this.vehicles.tick(); // b61
     for (const p of this.players.values()) this.serverItems.settle(p);
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();
@@ -509,7 +517,7 @@ export class DedicatedSimulation {
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}) })); } // b61: `hurt` = S19 status 2 for the other players' copies
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}) })); } // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot() { const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
@@ -517,7 +525,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), vehicles: this.vehicles.save(),
       tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }

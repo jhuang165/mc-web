@@ -44,6 +44,15 @@ export class ServerAchievements {
     return false;
   }
 
+  // b61 mpvehicles (server-vehicles.js): EntityPlayer.addMovementStat for a player carried by a minecart (onARail at 1000 blocks from the first cell), and the start forgotten
+  // when the player rides nothing or a boat. `moved` guards the Math.round(distance * 100) > 0 test of yz.k (bytecode-read).
+  onMinecart(p) {
+    const a = this.sink?.achievementsOf(p.id), at = p.position, prev = p.previous;
+    if (!a || !(Math.hypot(at.x - prev.x, at.y - prev.y, at.z - prev.z) >= 0.005)) return false;
+    return a.rideMinecart(at.x, at.y, at.z);
+  }
+  stopRiding(p) { this.sink?.achievementsOf(p.id).stopRiding(); }
+
   // Per tick: exploreAllBiomes and fullBeacon need the per-player Achievements object, which ServerSocial owns (`sink`).
   tick() {
     const sim = this.sim, sink = this.sink;
