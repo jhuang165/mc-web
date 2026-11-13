@@ -15,8 +15,8 @@ export function restoreReplica(snapshot) {
 }
 
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -73,6 +73,7 @@ export class DedicatedClient {
     if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'effect') this.onEffect(message);
     if (message.type === 'beaconWindow') this.onBeaconWindow(message);
+    if (message.type === 'crack') this.onCrack(message);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
@@ -82,6 +83,10 @@ export class DedicatedClient {
   chooseBeacon(x, y, z, primary, secondary) { this.send({ type: 'beacon', x, y, z, primary, secondary }); }
   // The payment slot of the open beacon window: `item` is {id, damage} or null when the slot was emptied.
   setBeaconPayment(item) { this.send({ type: 'beaconPayment', item: item ? { id: item.id, damage: item.damage ?? 0 } : null }); }
+  // C07 status 0 (start), 1 (abort) or 2 (finish): the server aims the ray itself and runs its dig timer; a Creative player's start breaks at once.
+  dig(status) { this.send({ type: 'dig', status }); }
+  // The right button down / up on a usable item (sword, bow, food, potion): the server sets or clears EntityPlayer.itemInUse.
+  use(active) { this.send({ type: 'use', active }); }
   // C0D close window.
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }

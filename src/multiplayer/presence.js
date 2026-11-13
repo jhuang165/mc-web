@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
 import { skinCanvas } from '../skin.js';
+import { ITEMS } from '../survival.js';
+import { BOW } from '../bow.js';
+
+// EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
+// eating and drinking change no third-person pose.
+export const useFlags = p => ({ blocking: !!p.using && ITEMS[p.held?.id]?.kind === 'sword', aimedBow: !!p.using && p.held?.id === BOW });
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
@@ -60,7 +66,7 @@ export class RemotePlayers {
     const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
     for (const entry of this.entries.values()) {
       const p = entry.state;
-      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
+      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, ...useFlags(p), sneak: p.sneak, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
       entry.label.visible = !p.sneak;
     }
   }

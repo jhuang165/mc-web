@@ -42,7 +42,7 @@ export class WorldEffects {
   mobCrack(id, block, stage) {
     this.mobCracks ??= new Map();
     let mesh = this.mobCracks.get(id);
-    if (!block || stage < 0) {
+    if (!block || stage < 0 || stage > 9) { // RenderGlobal.destroBlockPartially: only stages 0-9 keep an entry
       if (mesh) {
         this.scene.remove(mesh);
         this.mobCracks.delete(id);
