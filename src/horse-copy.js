@@ -97,6 +97,17 @@ export function horseCopyLivingSound(a, rand, live) {
   const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (live.child ? f(1.5) : 1));
   return (a.sound = { sound: out.sound, volume: f(SOUND_VOLUME), pitch });
 }
+// Batch 58: the copy's entity status 2 (hurt) and 3 (death), sv.a(byte) [handleHealthUpdate] on the client copy, handled in the packet phase before the copy's own tick. Executed
+// (horse-status-reference.json `status`, the unchanged wi on a client world with a logging Random): status 2 evaluates aT() first, which draws nextInt(3) (cS and the rear cU are server
+// only), then playSound(name, bf() 0.8, (nextFloat - nextFloat) * 0.2 + 1): the pitch has no child term (bg() is not used). Status 3 (aU: no draw of its own) draws the two floats
+// the same way; the copy is dead afterwards (no living sound roll). All on the copy's own Random. Returns the pitch the client would play at; the sound is silent on the client.
+export function horseCopyStatus(c, status, rand = copyRandom(c)) {
+  if (status === 2) rand.nextInt(3);
+  else if (status !== 3) return null;
+  const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1);
+  if (status === 3) (c.horse ??= newHorseAnim()).dead = true;
+  return pitch;
+}
 // One client tick of wi.h() on the copy `c` of a horse whose watcher 16 holds `flags`: EntityLiving's living sound roll (alive horses only; `live` is { alive, child, type }), the tail
 // roll on the copy's own Random, then the counters.
 export function stepHorseCopy(c, flags, live = {}) {
@@ -104,7 +115,7 @@ export function stepHorseCopy(c, flags, live = {}) {
   a.flags = flags;
   a.sound = null;
   const rand = copyRandom(c);
-  if (live.alive !== false) horseCopyLivingSound(a, rand, live);
+  if (live.alive !== false && !a.dead) horseCopyLivingSound(a, rand, live);
   horseTailRoll(a, rand);
   stepHorseAnim(a);
   return a;

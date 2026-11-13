@@ -140,6 +140,28 @@ public class HorseCopyProbe {
       }
       HorseProbe.out("{\"case\":\"sound\",\"name\":\"" + s[0] + "\",\"seed\":" + s[3] + ",\"type\":" + s[1] + ",\"age\":" + e.d() + ",\"ticks\":[" + rows + "]}");
     }
+    // batch 58: the client copy's status 2 (hurt) and 3 (death), sv.a(byte) [handleHealthUpdate], applied between ticks as the packet phase does, before that tick's wi.h()
+    Object[][] st = { { "adult", 0, 0, 21L }, { "donkey", 1, 0, 22L }, { "zombie", 3, 0, 23L }, { "foal", 0, -24000, 24L }, { "skeleton", 4, 0, 25L } };
+    for (Object[] s : st) {
+      build(HorseProbe.World.class, true);
+      HorseProbe.clear();
+      wi e = HorseProbe.typed((Long) s[3], (Integer) s[1]);
+      if ((Integer) s[2] != 0) e.c((Integer) s[2]);
+      Log r = new Log((Long) s[3]); MobMoveProbe.set(e, "Z", r);
+      java.lang.reflect.Method h = MobMoveProbe.method(wi.class, "h");
+      StringBuilder rows = new StringBuilder();
+      int[] hurtAt = { 3, 4, 9, 30, 31 }; int deathAt = 60;
+      for (int i = 0; i < 90; i++) {
+        r.log.clear(); HorseProbe.World.sounds.clear();
+        int status = 0;
+        for (int k : hurtAt) if (i == k) status = 2;
+        if (i == deathAt) status = 3;
+        if (status != 0) e.a((byte) status);
+        h.invoke(e);
+        rows.append(i > 0 ? "," : "").append("[" + status + ",\"" + String.join(" ", r.log) + "\"," + list(new ArrayList<>(HorseProbe.World.sounds)) + "," + e.g() + "]");
+      }
+      HorseProbe.out("{\"case\":\"status\",\"name\":\"" + s[0] + "\",\"seed\":" + s[3] + ",\"type\":" + s[1] + ",\"age\":" + e.d() + ",\"ticks\":[" + rows + "]}");
+    }
     // batch 57: server flag starters
     build(HorseProbe.World.class, false);
     HorseProbe.player = HorseProbe.makePlayer(false);

@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import { ObjectTracker, ObjectClient, boatSeat, clientRiderFall } from "./object-tracker.js";
 import { JavaRandom } from "./java-random.js";
 import { WATER, solidBlock } from "./world.js";
+import { stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
+import { EntityWorld } from "./entities.js";
 import { movePlayer } from "./player-physics.js";
 import { playerFixture } from "./player-physics-fixture.js";
 
@@ -159,4 +161,94 @@ test("executed: the fall distance restarts at the dismount (a boat that fell for
   assert.deepEqual(names("dm-from-2-at-0"), []);
   assert.deepEqual(names("dm-never"), []);
   assert.ok(rec("dm-never").ticks.every((t) => t[1] === true) && num(rec("dm-never").ticks.at(-1)[0][3]) === 0, "riding keeps the fall distance at 0 (sv.ab)");
+});
+
+// ---- the horse copy's hurt and death status draws (horse-status-reference.json, executed wi on a client world) ----
+const hs = JSON.parse(await readFile(new URL("../public/research/horse-status-reference.json", import.meta.url), "utf8"));
+class Log extends JavaRandom {
+  log = [];
+  nextInt(n) { const v = super.nextInt(n); if (n !== undefined) this.log.push(`${n}:${v}`); return v; }
+  nextFloat() { this.log.push("f"); return super.nextFloat(); }
+}
+
+test("horse-status-reference is the executed record", () => {
+  assert.equal(hs.tag, "b58hs");
+  assert.equal(hs.status.length, 5);
+  assert.ok(hs.status.every((s) => s.ticks.length === 90));
+});
+
+for (const s of hs.status) test(`horse copy status ${s.name}: status 2 / 3 draws (nextInt(3), two floats), the pitch and the tick's other draws match the executed wi each tick`, () => {
+  const c = { rand: new Log(s.seed) };
+  let dead = false, pitches = 0;
+  s.ticks.forEach(([status, draws, played], i) => {
+    if (i >= 79) return; // deathTime 20 (tick 60 + 19): EntityLivingBase.onDeathUpdate's 20 poof particles draw gaussians and floats (executed, not ported)
+    c.rand.log.length = 0;
+    let pitch = null;
+    if (status) { pitch = horseCopyStatus(c, status); if (status === 3) dead = true; }
+    stepHorseCopy(c, 0, { alive: !dead, child: s.age < 0, type: s.type });
+    assert.equal(c.rand.log.join(" "), draws, `${s.name} tick ${i}`);
+    if (status) {
+      pitches++;
+      assert.equal(pitch, f(Number(played[0].split("|")[2])), `${s.name} tick ${i} pitch`);
+    }
+  });
+  assert.equal(pitches, 6);
+});
+
+test("executed: a dead copy's deathTime 20 tick draws the poof particles (20 groups of gaussians and floats), which the port's copy does not make", () => {
+  for (const s of hs.status) assert.ok(s.ticks[79][1].split(" ").filter((x) => x === "d").length >= 40, s.name);
+});
+
+test("EntityWorld: a hit on a horse with a client copy draws its status sounds on the copy's Random, not the generic one; without a copy the generic draw stays", () => {
+  const terrain = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
+  const make = () => { const w = new EntityWorld(terrain, [{ id: "mob-1", type: "horse", x: 64, y: 0, z: 64, health: 30, horse: { type: 0 } }], () => 0.5); w.entities[0].onGround = true; return w; };
+  const w = make(), e = w.entities[0], c = { rand: new Log(5) };
+  w.tracker = { clientIfTracked: (x) => (x === e ? c : null) };
+  w.attackEntityFrom(e, 1, { name: "generic" });
+  assert.deepEqual(c.rand.log.slice(0, 3), [c.rand.log[0], "f", "f"]);
+  assert.match(c.rand.log[0], /^3:/);
+  assert.equal(w.clientSounds.length, 1);
+  const none = make();
+  none.tracker = { clientIfTracked: () => null };
+  none.attackEntityFrom(none.entities[0], 1, { name: "generic" });
+  assert.equal(none.clientSounds.length, 1);
+  assert.ok(none.clientSounds[0].pitch >= 0.8 && none.clientSounds[0].pitch <= 1.2);
+});
+
+test("mutation check: a status draw without the nextInt(3) shifts the stream and fails the replay", () => {
+  const s = hs.status[0], c = { rand: new Log(s.seed) };
+  const [status, draws] = s.ticks[3];
+  for (let i = 0; i < 3; i++) stepHorseCopy(c, 0, { alive: true });
+  c.rand.log.length = 0;
+  c.rand.nextFloat(); c.rand.nextFloat(); // wrong: the hurt status without the nextInt(3)
+  stepHorseCopy(c, 0, { alive: true });
+  assert.equal(status, 2);
+  assert.notEqual(c.rand.log.join(" "), draws);
+});
+
+// ---- the flag metadata: when does the copy hold a flag the live horse set? ----
+test("horse flag metadata: a flag set on the live horse reaches the copy in the same tracker update (S1C in the entry's own update, executed horseMeta) and its animation starts that client tick; nothing is sent while the flags stand still", async () => {
+  const { MobTracker } = await import("./entity-tracker.js");
+  const terrain = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
+  const w = new EntityWorld(terrain, [], () => 0.5);
+  const horse = { type: "horse", id: "mob-1", uuid: "u1", x: 3.5, y: 0, z: 3.5, rotationYaw: 0, rotationPitch: 0, rotationYawHead: 0, health: 30, onGround: true, growingAge: 0, horse: { type: 0 }, mouthTicks: 0 };
+  const m = new MobTracker(10);
+  m.joinPlayer?.(1);
+  const player = { x: 0.5, y: 0, z: 0.5 }, size = () => [1.4, 1.6];
+  const physics = Object.assign((c, e) => {}, { turn: (c, e) => w.clientAfterMove(c, e) });
+  const tick = () => m.update([horse], player, size, physics);
+  for (let i = 0; i < 6; i++) tick();
+  const c = m.clientIfTracked(horse);
+  assert.ok(c, "the copy exists");
+  assert.equal(c.horseFlags & 128, 0);
+  assert.equal(c.horse.mouth, 0);
+  horse.mouthTicks = 1;
+  tick();
+  assert.equal(c.horseFlags & 128, 128, "S1C applied in the update the flag changed");
+  assert.ok(c.horse.mouth > 0, "the copy's mouth starts opening in that client tick");
+  const seen = c.horse.mouth;
+  horse.mouthTicks = 0;
+  tick();
+  assert.equal(c.horseFlags & 128, 0);
+  assert.ok(c.horse.mouth < seen);
 });

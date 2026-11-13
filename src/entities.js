@@ -1,5 +1,5 @@
 import { trackSections } from "./saved-order.js";
-import { steerHorseCopy, newHorseAnim, stepHorseCopy } from "./horse-copy.js";
+import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
@@ -1102,12 +1102,12 @@ export class EntityWorld {
     // by combat-reference.json. A fresh hit also sends status 2 to the clients (handleHealthUpdate: the hurt sound at
     // (r - r) * 0.2 + 1, no child pitch) and onDeath sends status 3 (the die sound the same way): the client's own
     // sounds go to `clientSounds`, so a fresh hit is heard twice in 1.7.10 (damage-fx.md).
-    if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: statusPitchRandom() });
+    if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: this.statusPitch(e, 2) });
     if (e.health <= 0) {
       if (fresh) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) });
       if (fresh && e.type === "horse") e.mouthTicks = 1; // wi.aU (the death sound getter) calls cS()
       this.onDeath(e, source);
-      if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
+      if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: this.statusPitch(e, 3) });
     } else if (fresh) {
       if (e.type === "horse") this.horseHurt(e, rand); // EntityHorse.getHurtSound (wi.aT): cS (mouth open), nextInt(3) first, 0 makes it rear (no sound of its own)
       this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
@@ -2055,6 +2055,11 @@ export class EntityWorld {
   }
   // The end of EntityLivingBase.onUpdate and what follows it in the client classes: the body turn, then EntityBat.onUpdate's tail (a hanging bat has
   // no motion and sits at floor(y) + 1 - height, a flying one damps its vertical motion by 0.6).
+  // Entity status 2 / 3 on the client (handleHealthUpdate): a horse's copy draws on its own Random (horse-copy.js horseCopyStatus, executed); other mobs and a horse with no copy keep the generic draw
+  statusPitch(e, status) {
+    const c = e.type === "horse" ? this.tracker?.clientIfTracked?.(e) : null;
+    return (c && horseCopyStatus(c, status)) ?? statusPitchRandom();
+  }
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (the copy's own watcher 16, S0F / S1C through the tracker, entity-tracker.js, not the live horse's), and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
     if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0, { alive: m.health > 0, child: m.growingAge < 0, type: m.horse?.type });
