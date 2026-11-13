@@ -9,6 +9,7 @@ import { NBT } from "./nbt.js";
 import { stringHash } from "./java-long.js";
 import { writeFireworkTags } from "./fireworks-nbt.js";
 import { writeBookTags } from "./books-nbt.js";
+import { writeItemTags } from "./item-tags.js";
 
 export const RARITY_COLOR = Object.freeze({ common: "white", uncommon: "yellow", rare: "aqua", epic: "light_purple" });
 const GOLDEN_APPLE = 322, ENCHANTED_BOOK = 403;
@@ -34,8 +35,8 @@ export function stackRarity(stack) {
 // region-export.js writes: ench, StoredEnchantments, RepairCost, display (Name, color), Unbreakable, Explosion, Fireworks, pages, author, title.
 // A compound prints "{" + key ":" value "," per entry in the iteration order of the native HashMap (Java 8+ order, see hashMapKeys), a list
 // "[" + index ":" value "," + "]", a byte "1b", a short "1s", an int bare, a long "1L", a float "1.0f", a double "1.0d", a string quoted with
-// no escaping, a byte array "[N bytes]" and an int array "[1,2,]". Not carried by the port (so never written): display.Lore, SkullOwner,
-// CustomPotionEffects, map tags.
+// no escaping, a byte array "[N bytes]" and an int array "[1,2,]". Batch 57 adds display.Lore, SkullOwner, CustomPotionEffects and map_is_scaling
+// (item-tags.js).
 const T = NBT;
 const tag = (type, value) => ({ type, value });
 const entryList = (values) => tag(T.LIST, { elementType: values.length ? T.COMPOUND : T.END, items: values.map((e) => new Map([["id", tag(T.SHORT, (e.id << 16) >> 16)], ["lvl", tag(T.SHORT, ((e.lvl ?? e.level) << 16) >> 16)]])) });
@@ -87,8 +88,10 @@ export function stackTagCompound(stack) {
   if (Number.isInteger(stack.color) && stack.color >= 0 && stack.color <= 0xffffff) display.set("color", tag(T.INT, stack.color));
   if (display.size) e.set("display", tag(T.COMPOUND, display));
   const entries = {};
+  if (e.has("display")) entries.display = e.get("display");
   writeFireworkTags(stack, entries);
   writeBookTags(stack, entries);
+  writeItemTags(stack, entries);
   for (const [k, v] of Object.entries(entries)) e.set(k, v);
   if (typeof stack.unbreakable === "boolean") e.set("Unbreakable", tag(T.BYTE, stack.unbreakable ? 1 : 0));
   return e.size ? tag(T.COMPOUND, e) : null;

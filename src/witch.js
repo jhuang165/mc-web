@@ -3,6 +3,7 @@
 // native-verified and what is approximated. entities.js, ai.js, combat.js and witch-potions.js call into this module; the splash potion
 // flight itself is projectiles.js (witch-potions.js).
 import { mhSin, mhCos } from "./lighting.js";
+import { getPotionEffects } from "./potions.js";
 const f = Math.fround;
 export const WITCH = Object.freeze({
   // EntityWitch.applyEntityAttributes: maxHealth 26 (EntityMob's 20 is replaced), movementSpeed 0.25; EntityMob adds attackDamage 2 (never used:
@@ -38,6 +39,8 @@ export const POTIONS = Object.freeze({
 });
 export const POTION_THROWN_DEFAULT = 32732;
 export const potionEffects = (damage) => POTIONS[damage] ?? [];
+// What a thrown potion applies: the witch table first, any other damage value (a player's splash potion) is PotionHelper.getEffects (potions.js).
+const thrownEffects = (damage) => POTIONS[damage] ?? (getPotionEffects(damage) ?? []).map((e) => [e.id, e.amplifier, e.duration]);
 export const isSplashPotion = (damage) => (damage & 16384) !== 0;
 export const SPLASH_EFFECT = { SLOWNESS: 2, WEAKNESS: 18, POISON: 19, HARM: 7, HEAL: 6 };
 
@@ -101,8 +104,9 @@ export function throwSpawn(witch, yawDegrees, eye) {
 // (int)(factor * (6 << amp) + 0.5) on a living target, healing (int)(factor * (4 << amp) + 0.5), the other way round for the undead.
 // Timed effects last (int)(factor * duration + 0.5) ticks and are skipped at 20 or less. `impact`: { x, y, z }; `targets`:
 // [{ x, y, z, width, height, undead, ref, direct }]. Returns [{ ref, hurt, heal, effects: [{ id, amplifier, duration }] }] in target order.
-export function splashImpact(damage, impact, targets, thrower = null) {
-  const effects = potionEffects(damage), out = [];
+export function splashImpact(damage, impact, targets, thrower = null, custom = undefined) {
+  // `custom`: the thrown stack's CustomPotionEffects (EntityPotion keeps the stack; ItemPotion.getEffects(stack) overrides the damage value), else the damage value's effects.
+  const effects = Array.isArray(custom) ? custom.map((e) => [e.id, e.amplifier, e.duration]) : thrownEffects(damage), out = [];
   if (!effects.length) return out;
   const hw = f(f(0.25) / 2), box = [impact.x - hw - 4, impact.y - 2, impact.z - hw - 4, impact.x + hw + 4, impact.y + f(0.25) + 2, impact.z + hw + 4];
   for (const t of targets) {
@@ -112,12 +116,12 @@ export function splashImpact(damage, impact, targets, thrower = null) {
     if (!(d2 < 16)) continue;
     let factor = 1 - Math.sqrt(d2) / 4;
     if (t.direct) factor = 1;
-    const r = { ref: t.ref, hurt: 0, heal: 0, effects: [], thrower };
+    const r = { ref: t.ref, hurt: 0, heal: 0, steps: [], effects: [], thrower }; // `steps`: the instant effects in the order Potion.affectEntity runs them (heal and harm interleave for a custom list)
     for (const [id, amplifier, duration] of effects) {
       if (id === SPLASH_EFFECT.HARM || id === SPLASH_EFFECT.HEAL) {
         const harms = id === SPLASH_EFFECT.HARM ? !t.undead : !!t.undead;
-        if (harms) r.hurt += Math.trunc(factor * (6 << amplifier) + 0.5);
-        else r.heal += Math.trunc(factor * (4 << amplifier) + 0.5);
+        if (harms) { const n = Math.trunc(factor * (6 << amplifier) + 0.5); r.hurt += n; r.steps.push({ hurt: n }); }
+        else { const n = Math.trunc(factor * (4 << amplifier) + 0.5); r.heal += n; r.steps.push({ heal: n }); }
       } else {
         const ticks = Math.trunc(factor * duration + 0.5);
         // EntityLivingBase.isPotionApplicable (`applicable`, mob-effects.js): the undead take neither regeneration (10) nor poison (19), a spider no poison.

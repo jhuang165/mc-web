@@ -6,6 +6,7 @@
 // Browser stack fields: `pages` (array of strings), `author`, `title` (strings). They ride on the stack object exactly like
 // `fireworks`/`explosion` do (inventory.makeStack metadata); books-nbt.js maps them to the pages/author/title NBT tags.
 import { getCharWidth } from './font-renderer.js';
+import { hasItemTags } from './item-tags.js';
 
 export const ITEM_WRITABLE_BOOK = 2110; // original 386
 export const ITEM_WRITTEN_BOOK = 2111; // original 387
@@ -32,7 +33,7 @@ export const javaTrim = (s) => s.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g,
 // ItemStack.hasTagCompound over the tag fields a browser stack can carry (display name, enchantments, book fields, ...).
 export const hasItemTag = (s) => !!s && (Array.isArray(s.pages) || typeof s.author === 'string' || typeof s.title === 'string' || typeof s.displayName === 'string'
   || Number.isFinite(s.repairCost) || Array.isArray(s.enchantments) || Array.isArray(s.storedEnchantments) || Array.isArray(s.stored) || typeof s.unbreakable === 'boolean'
-  || Number.isInteger(s.color) || !!s.fireworks || !!s.explosion);
+  || Number.isInteger(s.color) || !!s.fireworks || !!s.explosion || hasItemTags(s));
 
 // ChatAllowedCharacters.isAllowedCharacter (t.a): not the section sign, at least 32, not DEL.
 export const isAllowedCharacter = (c) => typeof c === 'string' && c.length === 1 && c !== '§' && c.charCodeAt(0) >= 32 && c !== '\u007f';

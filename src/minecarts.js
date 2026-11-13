@@ -1,3 +1,4 @@
+import { readItemTags } from './item-tags.js';
 import { bindIds } from "./entity-ids.js";
 import { LastOutputError } from "./chat-component.js";
 import { ringEntityActive } from './streaming-ticks.js';
@@ -67,8 +68,14 @@ function itemTagsNbt(stack) {
   const stored = stack.storedEnchantments ?? (stack.stored?.length ? stack.stored : undefined);
   if (Array.isArray(stored)) tag.StoredEnchantments = list(stored);
   if (Number.isInteger(stack.repairCost)) tag.RepairCost = [3, stack.repairCost];
-  if (typeof stack.displayName === 'string') tag.display = [10, { Name: [8, stack.displayName] }];
+  const display = {};
+  if (typeof stack.displayName === 'string') display.Name = [8, stack.displayName];
+  if (Array.isArray(stack.lore)) display.Lore = [9, 8, [...stack.lore]];
+  if (Object.keys(display).length) tag.display = [10, display];
   if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = [1, stack.unbreakable ? 1 : 0];
+  if (typeof stack.skullOwner === 'string') tag.SkullOwner = [8, stack.skullOwner];
+  if (Array.isArray(stack.customPotionEffects)) tag.CustomPotionEffects = [9, 10, stack.customPotionEffects.map((e) => ({ Id: [1, e.id], Amplifier: [1, e.amplifier], Duration: [3, e.duration], Ambient: [1, e.ambient ? 1 : 0] }))];
+  if (typeof stack.mapScaling === 'boolean') tag.map_is_scaling = [1, stack.mapScaling ? 1 : 0];
   return tag;
 }
 
@@ -198,7 +205,7 @@ export class Minecarts {
         ...(it.storedEnchantments ? { storedEnchantments: it.storedEnchantments } : {}),
         ...(it.repairCost !== undefined ? { repairCost: it.repairCost } : {}),
         ...(it.displayName !== undefined ? { displayName: it.displayName } : {}),
-        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}) });
+        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}), ...readItemTags(it) });
       cart.unmapped[slot] = null;
     } else {
       cart.slots[slot] = null;
@@ -207,7 +214,7 @@ export class Minecarts {
         ...(it.storedEnchantments ? { storedEnchantments: it.storedEnchantments } : {}),
         ...(it.repairCost !== undefined ? { repairCost: it.repairCost } : {}),
         ...(it.displayName !== undefined ? { displayName: it.displayName } : {}),
-        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}) });
+        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}), ...readItemTags(it) });
     }
   }
   // Entity.setPosition: the box from posY - yOffset.

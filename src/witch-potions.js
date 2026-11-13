@@ -2,6 +2,7 @@
 // EntityPotion that flies with the throwable flight of projectiles.js (gravity 0.05) and breaks on EntityPotion.onImpact (witch.js
 // splashImpact). Held apart from the player's own Projectiles; serialize()/load() save the potions in the air. main.js
 // creates one per world (`mobs.potions`), EntityWorld.tick calls tick(), the scene draws `balls`. See public/research/witch.md.
+import { readItemTags } from "./item-tags.js";
 import { Projectiles, heading, launch, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { addMobEffect, isUndeadMob, isPotionApplicable } from "./mob-effects.js";
@@ -38,9 +39,9 @@ export class WitchPotions {
   // ItemPotion.onItemRightClick: EntityPotion(world, player, damage): launched like a thrown snowball from the eye, 0.5 velocity, 1.0
   // inaccuracy, and the pitch offset -20 degrees of func_70183_g (so it flies higher than the view). `feet` is the player's position.
   // `kind` and `velocity` let ItemExpBottle's EntityExpBottle (velocity 0.7, spawn-eggs.js) use the same launch.
-  throwFromPlayer(feet, yaw, pitch, damage, kind = "potion", velocity = 0.5) {
+  throwFromPlayer(feet, yaw, pitch, damage, kind = "potion", velocity = 0.5, custom = undefined) {
     const rng = this.projectiles.rng(), h = launch(rng, feet, yaw, pitch, velocity, -20), // MathHelper's sine table, as EntityThrowable's constructor uses (executed: throw-launch records)
-      ball = { ...h, kind, damage, owner: "player", px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
+      ball = { ...h, kind, damage, ...(Array.isArray(custom) ? { custom: custom.map((e) => ({ ...e })) } : {}), owner: "player", px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
     this.mobs.joined?.(ball, "potion");
     return ball;
@@ -48,7 +49,7 @@ export class WitchPotions {
   // Browser snapshot of the potions in flight (like Projectiles.serialize): Pos, Motion, Rotation, the potion damage value, the flight age and
   // whether the local player threw it (a thrown-by-witch potion loses its owner, as an EntityPotion whose thrower did not load).
   serialize() {
-    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ticks: b.ticks | 0, ...(b.kind === "expBottle" ? { kind: "expBottle" } : {}), ...(b.owner === "player" ? { owner: "player" } : {}) }));
+    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ...(Array.isArray(b.custom) ? { custom: b.custom.map((e) => ({ ...e })) } : {}), ticks: b.ticks | 0, ...(b.kind === "expBottle" ? { kind: "expBottle" } : {}), ...(b.owner === "player" ? { owner: "player" } : {}) }));
   }
   load(list) {
     this.projectiles.balls.length = 0;
@@ -56,7 +57,7 @@ export class WitchPotions {
     for (const d of Array.isArray(list) ? list : []) {
       if (!d || ![d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) || !Number.isInteger(d.damage) || d.damage < 0) continue;
       const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0, rng = this.projectiles.rng();
-      this.projectiles.balls.push({ kind: d.kind === "expBottle" ? "expBottle" : "potion", damage: d.damage, owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
+      this.projectiles.balls.push({ kind: d.kind === "expBottle" ? "expBottle" : "potion", damage: d.damage, ...(Array.isArray(d.custom) ? { custom: readItemTags({ customPotionEffects: d.custom }).customPotionEffects } : {}), owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
         yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: Math.max(0, d.ticks | 0), rand: rng, random: rng, dead: false });
     }
   }
@@ -91,7 +92,7 @@ export class WitchPotions {
     events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }
   // EntityPotion.onImpact: effects on everything around, the glass sound (world event 2002).
-  impact({ x, y, z, damage, owner, hit }, player, survival) {
+  impact({ x, y, z, damage, owner, hit, custom }, player, survival) {
     const mobs = this.mobs, victims = [];
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
@@ -99,17 +100,21 @@ export class WitchPotions {
       victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: isUndeadMob(e), applicable: (id) => isPotionApplicable(e, id), ref: e, direct: hit === e });
     }
     if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: 0.6, height: 1.8, undead: false, ref: "player", direct: hit === "player" });
-    for (const r of splashImpact(damage, { x, y, z }, victims, owner)) {
+    for (const r of splashImpact(damage, { x, y, z }, victims, owner, custom)) {
       if (r.ref === "player") {
         // EntityPlayer: magic damage ignores armour; slowness/weakness/speed/strength live in status-effects.js and feed movement, FOV and melee damage (player-knockback.md).
-        if (r.hurt > 0) survival.damage(r.hurt, "magic", false, undefined, owner?.x !== undefined ? owner : undefined); // the thrower is the source entity
-        if (r.heal > 0) survival.heal?.(r.heal);
+        for (const s of r.steps) { // in effect order (a custom list can heal and harm)
+          if (s.hurt > 0) survival.damage(s.hurt, "magic", false, undefined, owner?.x !== undefined ? owner : undefined); // the thrower is the source entity
+          if (s.heal > 0) survival.heal?.(s.heal);
+        }
         for (const e of r.effects) survival.effects?.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
         continue;
       }
       const e = r.ref;
-      if (r.hurt > 0) mobs.attackEntityFrom(e, r.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : undefined, attacker: owner?.x !== undefined ? owner : null });
-      if (r.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + r.heal));
+      for (const s of r.steps) {
+        if (s.hurt > 0) mobs.attackEntityFrom(e, s.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : undefined, attacker: owner?.x !== undefined ? owner : null });
+        if (s.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + s.heal));
+      }
       for (const effect of r.effects) addMobEffect(e, effect.id, effect.duration, effect.amplifier);
     }
     // EntityPotion.onImpact: worldEvent 2002 at (Math.round x, y, z); the client plays the break particles (potion-fx.js splashBreak) and
