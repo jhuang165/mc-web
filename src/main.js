@@ -230,6 +230,7 @@ import { createServerDig } from "./server-dig.js";
 import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
+import { createCrystalFireLayer } from "./crystal-fire-layer.js";
 import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, useKind } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
@@ -1509,7 +1510,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
-    pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null;
+    pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null; crystalFireLayer.forget();
+    mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
@@ -3130,6 +3132,7 @@ function predictionLayer() {
   return prediction;
 }
 const clientWorld = () => (prediction && prediction.world === world ? prediction.read() : world);
+const crystalFireLayer = createCrystalFireLayer({ world: () => world, layer: predictionLayer, seen: clientWorld, scene: () => scene });
 function showPrediction(list) {
   const layer = predictionLayer(), token = ++predictionToken, cells = [];
   for (const [x, y, z, block, meta] of list) {
