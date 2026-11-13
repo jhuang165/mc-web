@@ -1506,6 +1506,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
     for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
+    mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
     pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null;

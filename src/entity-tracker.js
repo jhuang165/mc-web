@@ -512,6 +512,15 @@ export class MobTracker {
       en.entry.updatePlayerList(); t.flush(en);
     }
   }
+  // Batch 55 (bytecode-read call, executed set behaviour: cases dimension, dimensionLast): a dimension change takes the player out of this world. ServerConfigurationManager.transferPlayerToDimension ->
+  // World.removePlayerEntityDangerously -> EntityTracker.untrackEntity(player): every entry forgets the player (removePlayerFromTracker) and the player's own entry leaves the set; the client's
+  // world is replaced, so every copy goes. The player keeps its entity id; the new world's tracker (a new MobTracker, EntityTracker.addEntityToTracker for the player in `jointUpdate`) sends
+  // its own entries in its own set order at its first update. `others`: the trackers that share this set.
+  leaveWorld(others = []) {
+    for (const t of [this, ...others]) t.dropClients();
+    if (this.playerKey) this.order.remove(this.playerKey);
+    this.playerKey = null; this.pendingJoin = true; this.resendPending = false;
+  }
   // The client world is new: no copies, nothing queued, no attachments; the entries forget the old player (removePlayerFromTracker without a packet)
   dropClients() {
     for (const en of this.queued()) { en.entry.tracked = false; en.entry.packets = []; en.client.present = false; en.client.ridingEntity = null; en.client.riddenBy = null; if ("leash" in en.client) en.client.leash = null; }
@@ -608,7 +617,8 @@ export class MobTracker {
     if (this.resendPending) this.resendWorld([o]); // a respawn: the new client gets every entry again, in HashSet order, before this tick's new entities
     // The player's own update (EntityPlayerMP.onUpdate, the S13 flush) runs inside the world's entity loop, before the entities that spawn at its end are tracked: the destroys that are due
     // reach the client before this tick's spawn packets (executed order: tracker-joint-reference.json, a destroy and a spawn in one tick).
-    if (this.dying.length || o.dying.length) this.applyParts([[this, this.dying], [o, o.dying]]);
+    // Batch 55 (executed: cases earlySpawn, earlySpawnLast): a spawn made inside the loop by an entity BEFORE the player's slot (`spawnEarly(entity)`, EntityWorld.joined) sends its packets at
+    // the spawn (World.spawnEntityInWorld -> addEntityToTracker -> updatePlayerList), so it precedes the flush; the entities that spawn at or after the player's slot follow it.
     // the new entities enter in the order they were created, which is the order of their entity ids (EntityTracker.addEntityToTracker at spawn); an object that has no id yet takes
     // the next one at its first sight, after every id that exists
     const idOf = (t, e) => { const id = t === this ? e.id : e.entityId ?? e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; };
@@ -616,6 +626,8 @@ export class MobTracker {
     // Batch 53: at the player's join the entities the world already held (before the player in loadedEntityList) are in the set first, then the player's entry goes in and sends the lot
     // in the set's order (EntityTracker.addEntityToTracker for an EntityPlayerMP walks trackedEntities); the entities after the player enter one by one with their spawn packets.
     const joining = this.pendingJoin && this.playerId !== undefined && !!this.beforePlayer;
+    if (!joining && this.spawnEarly) for (const [t, e] of fresh) if (this.spawnEarly(e)) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
+    if (this.dying.length || o.dying.length) this.applyParts([[this, this.dying], [o, o.dying]]);
     const early = joining ? fresh.filter(([, e]) => this.beforePlayer(e)) : [], held = new Set(early.map(([, e]) => e));
     for (const [t, e] of early) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height, true); }
     if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }

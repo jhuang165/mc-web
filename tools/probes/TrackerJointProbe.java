@@ -22,7 +22,7 @@ public class TrackerJointProbe {
   static String num(double v) { return Double.toString(v); }
   static double d(Object o, String n) throws Exception { return MobMoveProbe.d(o, n); }
 
-  static class Item { String name, kind; sa e; double[] start, vel; int born, dies = -1; float yaw0, yawStep; boolean player; }
+  static class Item { String name, kind; sa e; double[] start, vel; int born, dies = -1; float yaw0, yawStep; boolean player; String by; boolean inB; }
 
   static sa make(String kind, double[] s) throws Exception {
     switch (kind) {
@@ -212,6 +212,117 @@ public class TrackerJointProbe {
     return b + "}";
   }
 
+
+  // ---- Batch 55 (b55dt): a respawn, a dimension change, and spawns made by an entity before the player's slot ----
+  // The same real EntityTracker (mn), now with up to two worlds, each its own mn and HashSet and loadedEntityList. `respawnAt` (tick, 0 = none): at the start of the tick the network thread respawns
+  // the player: the real mn.b(old player) (untrackEntity: removePlayerFromTracker for every entry, then the player's own entry leaves the set), a new EntityPlayerMP stand-in with a new entity
+  // id joins the END of loadedEntityList and the real mn.a(new player) sends it every entry in HashSet order. `dimAt` (tick, 0 = none): the same player object (same id) leaves world A through the
+  // real mn.b, joins the end of world B's list and the real mn.a(player) of B's tracker sends it B's entries in B's set order; world B's entities (Item.inB) are created and tracked at that
+  // moment (no player in B before, like the port's new EntityWorld), positioned at the state of the tick before. `Item.by` names the entity whose update spawns this one: the spawn happens in the
+  // list loop at the spawner's slot, so its packet is sent at once and precedes the destroy flush when the spawner is before the player's slot. Executed: mn, my, the entity classes. Bytecode-read
+  // stand-ins: ahb.updateEntities, the player's flush (mw.h), the ServerConfigurationManager respawn / transfer calls (only the mn calls they make are executed).
+  static class W { TrackerProbe.TW tw; List<Object> players = new ArrayList<>(); mn tracker; List<Item> list = new ArrayList<>(); }
+  static W newWorld() throws Exception {
+    W w = new W();
+    w.tw = (TrackerProbe.TW) U.allocateInstance(TrackerProbe.TW.class); w.tw.mq = (TrackerProbe.MQ) U.allocateInstance(TrackerProbe.MQ.class);
+    MobMoveProbe.field(ahb.class, "h").set(w.tw, w.players);
+    w.tracker = (mn) U.allocateInstance(mn.class);
+    MobMoveProbe.field(mn.class, "b").set(w.tracker, w.tw);
+    MobMoveProbe.field(mn.class, "c").set(w.tracker, new HashSet<my>());
+    MobMoveProbe.field(mn.class, "d").set(w.tracker, new pz());
+    MobMoveProbe.field(mn.class, "e").setInt(w.tracker, 144);
+    return w;
+  }
+  static TrackerProbe.PMP newPlayer(TrackerProbe.NH net, W w, Field counter) throws Exception {
+    TrackerProbe.PMP p = (TrackerProbe.PMP) U.allocateInstance(TrackerProbe.PMP.class); p.world = w.tw; p.a = net;
+    MobMoveProbe.field(mw.class, "f").set(p, new ArrayList<>());
+    MobMoveProbe.field(sa.class, "af").set(p, new te(p));
+    MobMoveProbe.field(sa.class, "as").set(p, se.b);
+    MobMoveProbe.field(sa.class, "o").set(p, w.tw);
+    TrackerProbe.set(p, "s", 0.5); TrackerProbe.set(p, "t", 0.0); TrackerProbe.set(p, "u", 0.5);
+    MobMoveProbe.field(sa.class, "c").setInt(p, counter.getInt(null)); counter.setInt(null, counter.getInt(null) + 1);
+    return p;
+  }
+  static Item playerItem(sa p) { Item pl = new Item(); pl.name = "player"; pl.kind = "player"; pl.player = true; pl.e = p; return pl; }
+  static void idAdd(StringBuilder ids, String name, int id) { ids.setLength(ids.length() - 1); ids.append(ids.length() > 1 ? "," : "").append("\"" + name + "\":" + id + "}"); }
+  // One world's tick (World.updateEntities then updateTrackedEntities); `ev` null = nobody is watching (the packets go nowhere)
+  static void tickWorld(W w, int t, Item[] script, boolean inB, StringBuilder ev, StringBuilder ids) throws Exception {
+    StringBuilder sink = new StringBuilder("["), out = ev != null ? ev : sink;
+    for (int i = 0; i < w.list.size(); i++) {
+      Item it = w.list.get(i);
+      if (it.player) {
+        if (!pending.isEmpty()) { for (Integer id : pending) out.append(out.length() > 1 ? "," : "").append("[\"destroy\"," + id + "]"); pending.clear(); }
+        continue;
+      }
+      position(it, t);
+      for (Item s : script) if (s.born == t && it.name.equals(s.by) && s.inB == inB) { // a spawn made in this entity's update: its packets go out at this slot
+        s.e = make(s.kind, s.start); position(s, t); w.list.add(s); w.tracker.a(s.e);
+        idAdd(ids, s.name, s.e.y()); flushTo(out);
+      }
+      if (it.dies == t) { w.tracker.b(it.e); w.list.remove(i--); for (Object q : TrackerProbe.queue) if (q instanceof Integer) pending.add((Integer) q); TrackerProbe.queue.clear(); TrackerProbe.sent.clear(); }
+    }
+    for (Item s : script) if (s.born == t && s.by == null && s.inB == inB) {
+      s.e = make(s.kind, s.start); position(s, t); w.list.add(s); w.tracker.a(s.e);
+      idAdd(ids, s.name, s.e.y()); flushTo(out);
+    }
+    w.tracker.a();
+    flushTo(out);
+    if (ev == null) pending.clear();
+  }
+  static String runX(String name, long counterStart, int ticks, Item[] script, int playerAt, int respawnAt, int dimAt) throws Exception {
+    server = (ChickenProbe.World) TrackerItemsProbe.world(TrackerItemsProbe.SW.class, false);
+    Field counter = null; for (Class<?> c = sa.class; counter == null; c = c.getSuperclass()) try { counter = c.getDeclaredField("b"); } catch (NoSuchFieldException x) {}
+    counter.setAccessible(true); counter.setInt(null, (int) counterStart);
+    TrackerProbe.queueDestroy = true; TrackerProbe.clientMode = false; TrackerProbe.chunkLoaded = true;
+    TrackerProbe.NH net = (TrackerProbe.NH) U.allocateInstance(TrackerProbe.NH.class);
+    TrackerProbe.watchX = 0; TrackerProbe.watchZ = 0; TrackerProbe.watchRadius = 10; TrackerProbe.watching = true;
+    W a = newWorld(), b = newWorld(), cur = a;
+    TrackerProbe.PMP p = null;
+    TrackerProbe.sent.clear(); TrackerProbe.queue.clear(); pending.clear();
+    StringBuilder ids = new StringBuilder("{}"), setup = new StringBuilder("[");
+    List<Item> initial = new ArrayList<>();
+    for (Item it : script) if (it.born == 0 && !it.inB) initial.add(it);
+    Item pl = null;
+    for (int k = 0; k <= initial.size(); k++) {
+      if (k == playerAt) {
+        p = newPlayer(net, a, counter); angler = p; // the player's id comes from the counter at its place
+        pl = playerItem(p); a.list.add(pl); a.players.add(p); a.tracker.a((sa) p);
+        idAdd(ids, "player", p.y()); flushSent(setup, 0);
+      }
+      if (k == initial.size()) break;
+      Item it = initial.get(k);
+      it.e = make(it.kind, it.start); position(it, 0);
+      a.list.add(it); a.tracker.a(it.e);
+      idAdd(ids, it.name, it.e.y()); flushSent(setup, 0);
+    }
+    StringBuilder out = new StringBuilder("{\"case\":\"" + name + "\",\"tag\":\"b55dt\",\"respawnAt\":" + respawnAt + ",\"dimAt\":" + dimAt + ",\"setup\":" + setup + "],\"ticks\":[");
+    for (int t = 1; t <= ticks; t++) {
+      StringBuilder ev = new StringBuilder("[");
+      if (t == respawnAt) { // the network thread: ServerConfigurationManager.respawnPlayer
+        a.tracker.b((sa) pl.e); a.list.remove(pl); a.players.remove(pl.e);
+        pending.clear(); TrackerProbe.queue.clear(); TrackerProbe.sent.clear(); // the old connection's queue goes with the old player
+        TrackerProbe.PMP np = newPlayer(net, a, counter);
+        pl = playerItem(np); a.list.add(pl); a.players.add(np); a.tracker.a((sa) np);
+        idAdd(ids, "player2", np.y()); flushTo(ev);
+      }
+      if (t == dimAt) { // ServerConfigurationManager.transferPlayerToDimension: out of A (untrackEntity), into B (addEntityToTracker)
+        a.tracker.b((sa) pl.e); a.list.remove(pl); a.players.remove(pl.e);
+        pending.clear(); TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
+        for (Item it : script) if (it.inB && it.born == 0) { it.e = make(it.kind, it.start); position(it, t - 1); b.list.add(it); b.tracker.a(it.e); idAdd(ids, it.name, it.e.y()); }
+        TrackerProbe.queue.clear(); TrackerProbe.sent.clear();
+        MobMoveProbe.field(sa.class, "o").set(pl.e, b.tw);
+        b.list.add(pl); b.players.add(pl.e); cur = b; b.tracker.a((sa) pl.e);
+        flushTo(ev);
+      }
+      tickWorld(cur, t, script, cur == b, ev, ids);
+      out.append(t > 1 ? "," : "").append("[" + t + "," + ev + "]]");
+    }
+    StringBuilder meta = new StringBuilder("{"); boolean f = true;
+    for (Item it : script) { meta.append(f ? "" : ",").append("\"" + it.name + "\":{\"by\":" + (it.by == null ? "null" : "\"" + it.by + "\"") + ",\"inB\":" + it.inB + "}"); f = false; }
+    out.append("],\"inputs\":" + inputs(script, ticks) + ",\"meta\":" + meta + "},\"ids2\":" + ids + ",\"ids\":" + ids + "}");
+    return out.toString();
+  }
+
   public static void main(String[] args) throws Exception {
     aji.p(); adb.l();
     U = MobMoveProbe.unsafe();
@@ -285,5 +396,60 @@ public class TrackerJointProbe {
     };
     System.out.println(run("extras", 1, 60, ext, 7));
     System.out.println(run("extrasLast", 65530, 60, ext, 8));
+
+    // Batch 55 (b55dt): a respawn, a dimension change, and spawns made before the player's slot (see runX). Player mid-list unless noted.
+    Item[] base = {
+      item("c1", "chicken", new double[]{2.5, 0, 3.5}, new double[]{0.09, 0, 0.01}, 0, -1, 2.5f),
+      item("i1", "item", new double[]{4.5, 1.125, 2.5}, new double[]{0.05, 0, 0.02}, 0, 34, 0),
+      item("c2", "chicken", new double[]{5.0, 0, 1.0}, new double[]{-0.07, 0, 0.03}, 0, -1, 3.0f),
+      item("a1", "arrow", new double[]{1.5, 2.0, 1.5}, new double[]{0.4, -0.05, 0.1}, 0, 31, 0),
+      item("b1", "boat", new double[]{5.5, 0.0, 5.5}, new double[]{0.12, 0, 0.06}, 0, 44, 3.0f),
+      item("i2", "item", new double[]{3.5, 1.125, 5.5}, new double[]{-0.04, 0, -0.03}, 0, -1, 0),
+      item("c3", "chicken", new double[]{6.5, 0, 6.5}, new double[]{0.0, 0, -0.1}, 0, 41, 1.5f),
+      item("p1", "painting", new double[]{4, 2, 6, 1}, z, 0, -1, 0),
+      item("s1", "snowball", new double[]{2.5, 1.5, 2.5}, new double[]{0.3, 0.05, -0.2}, 0, 38, 0),
+      item("o1", "orb", new double[]{5.5, 1.0, 5.5}, new double[]{0.02, 0, 0.02}, 0, -1, 0),
+      item("c4", "chicken", new double[]{7.5, 0, 2.5}, new double[]{-0.08, 0, 0.02}, 0, 52, 4.0f),
+      item("i4", "item", new double[]{1.5, 1.125, 7.5}, new double[]{0.03, 0, -0.05}, 0, 47, 0),
+      item("c5", "chicken", new double[]{3.5, 0, 3.0}, new double[]{0.1, 0, 0.05}, 12, -1, 2.0f),
+      item("i5", "item", new double[]{4.0, 1.125, 4.0}, new double[]{-0.06, 0, 0.04}, 14, 33, 0),
+      item("a2", "arrow", new double[]{2.5, 1.5, 6.5}, new double[]{0.35, -0.04, -0.1}, 18, 56, 0),
+      item("c6", "chicken", new double[]{6.0, 0, 3.5}, new double[]{-0.09, 0, -0.02}, 30, -1, 1.0f),
+      item("i6", "item", new double[]{2.0, 1.125, 3.0}, new double[]{0.02, 0, 0.03}, 40, -1, 0),
+    };
+    System.out.println(runX("respawn", 1, 60, base, 9, 26, 0));
+    System.out.println(runX("respawnLast", 65530, 60, base, 12, 26, 0));
+    // The dimension change: the player leaves world A at tick 24 and joins the END of world B's list; B's entities (inB) are created then, with ids after everything A has drawn
+    Item[] dim = new Item[base.length + 8];
+    System.arraycopy(base, 0, dim, 0, base.length);
+    Item[] bs = {
+      item("bc1", "chicken", new double[]{3.0, 0, 2.0}, new double[]{0.05, 0, 0.04}, 0, -1, 2.0f),
+      item("bi1", "item", new double[]{2.5, 1.125, 3.5}, new double[]{0.03, 0, -0.02}, 0, 36, 0),
+      item("bk1", "cart0", new double[]{6.5, 0.35, 4.5}, new double[]{0.1, 0, -0.04}, 0, -1, 2.0f),
+      item("bc2", "chicken", new double[]{5.5, 0, 6.0}, new double[]{-0.06, 0, -0.03}, 0, 50, 3.0f),
+      item("bo1", "orb", new double[]{4.5, 1.0, 4.5}, new double[]{0.02, 0, 0.02}, 0, -1, 0),
+      item("bf1", "frame", new double[]{6, 2, 3, 2}, z, 0, -1, 0),
+      item("bc3", "chicken", new double[]{1.5, 0, 5.5}, new double[]{0.07, 0, 0.0}, 31, -1, 1.0f),
+      item("bi2", "item", new double[]{3.0, 1.125, 3.0}, new double[]{-0.02, 0, 0.04}, 40, 55, 0),
+    };
+    for (Item i : bs) i.inB = true;
+    System.arraycopy(bs, 0, dim, base.length, bs.length);
+    System.out.println(runX("dimension", 1, 60, dim, 9, 0, 24));
+    System.out.println(runX("dimensionLast", 65530, 60, dim, 12, 0, 24));
+    // Spawns made in an entity's own update: the spawn goes out at the spawner's slot. Before the player's slot it precedes the same tick's destroy flush (i1 dies at 34, a1 at 31, c3 at 41, s1 at 38),
+    // after the player's slot it follows it.
+    Item[] early = new Item[base.length + 5];
+    System.arraycopy(base, 0, early, 0, base.length);
+    Item[] born = {
+      item("e1", "item", new double[]{3.0, 1.125, 2.0}, new double[]{0.04, 0, 0.01}, 31, -1, 0),   // by c1 (before the player), with a1's destroy in the tick
+      item("e2", "arrow", new double[]{2.0, 2.0, 2.0}, new double[]{0.3, -0.03, 0.1}, 34, 50, 0),  // by c2 (before), with i1
+      item("e3", "orb", new double[]{4.0, 1.0, 3.0}, new double[]{0.02, 0, 0.02}, 38, -1, 0),       // by c4 (after the player), with s1: after the flush
+      item("e4", "snowball", new double[]{5.0, 1.5, 2.0}, new double[]{0.2, 0.05, 0.1}, 41, 57, 0), // by c1 and c3 dies the same tick
+      item("e5", "item", new double[]{1.0, 1.125, 4.0}, new double[]{0.01, 0, 0.02}, 47, -1, 0),    // by c5 (after the player), with i4's destroy
+    };
+    born[0].by = "c1"; born[1].by = "c2"; born[2].by = "c4"; born[3].by = "c1"; born[4].by = "c5";
+    System.arraycopy(born, 0, early, base.length, born.length);
+    System.out.println(runX("earlySpawn", 1, 60, early, 9, 0, 0));
+    System.out.println(runX("earlySpawnLast", 65530, 60, early, 12, 0, 0));
   }
 }
