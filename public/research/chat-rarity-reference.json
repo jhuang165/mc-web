@@ -6,6 +6,22 @@
    "name": "ItemStack",
    "sha256": "64d2e44b4f07561c143cce29f5f570ce8abfb857cc4d6dc0c8f9cfd6c31ad37d"
   },
+  "dh": {
+   "name": "NBTTagCompound",
+   "sha256": "7153e0ab037fd41d499e34a3dcf472cab3d0b74eb79ef9c071261abba843aedd"
+  },
+  "dq": {
+   "name": "NBTTagList",
+   "sha256": "d7fad4cd2847367b5b726eaf2b71f69d1e0a3165c4123965156017820559143f"
+  },
+  "dx": {
+   "name": "NBTTagString",
+   "sha256": "04fec45aced248f9c155fffb91d1e706e88c6a9b16896c683347980ebb1dad90"
+  },
+  "dm": {
+   "name": "NBTTagFloat",
+   "sha256": "9fa6b6eb86c34dbe03a71a0d649ce5b31bc9d96b9180a764442077d7c9b5baea"
+  },
   "adb": {
    "name": "Item",
    "sha256": "855ce9ab7bc473abf443315d28ec8d02b4d0a4ed56d80e5ac31d6dc0813fce4b"
@@ -27,7 +43,7 @@
    "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
   }
  },
- "method": "Executed on the unchanged ItemStack (add) func_151000_E (E) and getRarity (w) over every registered item: rarity is [id, plain, plain diffs, ench-tag, ench diffs, StoredEnchantments, stored diffs] with diffs [[damage, rarity]] against damage 0 over 0..299 and the potion damages; rows are [name, fk.a JSON, getFormattedText, getUnformattedText, rarity, NBT string] for named stacks. EnumRarity names: common, uncommon, rare, epic.",
+ "method": "Executed on the unchanged ItemStack (add) func_151000_E (E) and getRarity (w) over every registered item: rarity is [id, plain, plain diffs, ench-tag, ench diffs, StoredEnchantments, stored diffs] with diffs [[damage, rarity]] against damage 0 over 0..299 and the potion damages; rows are [name, fk.a JSON, getFormattedText, getUnformattedText, rarity, NBT string] for named stacks; nbt (b56) holds the same row shape for stacks with the port tag fields (nbt* names) and [name, NBTTagCompound.toString] for raw compounds (raw* names). EnumRarity names: common, uncommon, rare, epic.",
  "rarity": [
   [
    1,
@@ -6644,6 +6660,100 @@
    "[Sting]",
    "Common",
    "{display:{Name:\"Sting\",},}"
+  ]
+ ],
+ "nbt": [
+  [
+   "nbtSwordRepair",
+   "{\"color\":\"aqua\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:276s,Count:1b,tag:{ench:[0:{lvl:1s,id:16s,},],RepairCost:5,Unbreakable:1b,display:{Name:\\\"Sting\\\",},},Damage:12s,}\"},\"extra\":[\"Sting\",\"]\"],\"text\":\"[\"}",
+   "§b[§r§bSting§r§b]§r",
+   "[Sting]",
+   "Rare",
+   "{id:276s,Count:1b,tag:{ench:[0:{lvl:1s,id:16s,},],RepairCost:5,Unbreakable:1b,display:{Name:\"Sting\",},},Damage:12s,}"
+  ],
+  [
+   "nbtLeatherColor",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:298s,Count:1b,tag:{display:{color:10511680,Name:\\\"Cap\\\",},},Damage:0s,}\"},\"extra\":[\"Cap\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fCap§r§f]§r",
+   "[Cap]",
+   "Common",
+   "{id:298s,Count:1b,tag:{display:{color:10511680,Name:\"Cap\",},},Damage:0s,}"
+  ],
+  [
+   "nbtWrittenBook",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:387s,Count:1b,tag:{pages:[0:\\\"a b\\\",1:\\\"second \\\"x\\\"\\\",],author:\\\"Alex\\\",title:\\\"Log\\\",},Damage:0s,}\"},\"extra\":[\"Log\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fLog§r§f]§r",
+   "[Log]",
+   "Common",
+   "{id:387s,Count:1b,tag:{pages:[0:\"a b\",1:\"second \"x\"\",],author:\"Alex\",title:\"Log\",},Damage:0s,}"
+  ],
+  [
+   "nbtWritableEmpty",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:386s,Count:1b,tag:{pages:[],},Damage:0s,}\"},\"extra\":[\"item.writingBook.name\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fitem.writingBook.name§r§f]§r",
+   "[item.writingBook.name]",
+   "Common",
+   "{id:386s,Count:1b,tag:{pages:[],},Damage:0s,}"
+  ],
+  [
+   "nbtStar",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:402s,Count:1b,tag:{Explosion:{Type:2b,Colors:[16711680,255,],Trail:0b,FadeColors:[65280,],Flicker:1b,},},Damage:0s,}\"},\"extra\":[\"item.fireworksCharge.name\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fitem.fireworksCharge.name§r§f]§r",
+   "[item.fireworksCharge.name]",
+   "Common",
+   "{id:402s,Count:1b,tag:{Explosion:{Type:2b,Colors:[16711680,255,],Trail:0b,FadeColors:[65280,],Flicker:1b,},},Damage:0s,}"
+  ],
+  [
+   "nbtStarEmpty",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:402s,Count:1b,tag:{Explosion:{Type:0b,Colors:[],Trail:1b,FadeColors:[],Flicker:0b,},display:{Name:\\\"Spark\\\",},},Damage:0s,}\"},\"extra\":[\"Spark\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fSpark§r§f]§r",
+   "[Spark]",
+   "Common",
+   "{id:402s,Count:1b,tag:{Explosion:{Type:0b,Colors:[],Trail:1b,FadeColors:[],Flicker:0b,},display:{Name:\"Spark\",},},Damage:0s,}"
+  ],
+  [
+   "nbtRocket",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:401s,Count:64b,tag:{Fireworks:{Flight:2b,Explosions:[0:{Type:4b,Colors:[1,],Trail:1b,FadeColors:[],Flicker:1b,},1:{Type:1b,Colors:[2,3,],Trail:0b,FadeColors:[4,],Flicker:0b,},],},},Damage:0s,}\"},\"extra\":[\"item.fireworks.name\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fitem.fireworks.name§r§f]§r",
+   "[item.fireworks.name]",
+   "Common",
+   "{id:401s,Count:64b,tag:{Fireworks:{Flight:2b,Explosions:[0:{Type:4b,Colors:[1,],Trail:1b,FadeColors:[],Flicker:1b,},1:{Type:1b,Colors:[2,3,],Trail:0b,FadeColors:[4,],Flicker:0b,},],},},Damage:0s,}"
+  ],
+  [
+   "nbtRocketEmpty",
+   "{\"color\":\"white\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:401s,Count:3b,tag:{Fireworks:{Flight:1b,Explosions:[],},},Damage:0s,}\"},\"extra\":[\"item.fireworks.name\",\"]\"],\"text\":\"[\"}",
+   "§f[§r§fitem.fireworks.name§r§f]§r",
+   "[item.fireworks.name]",
+   "Common",
+   "{id:401s,Count:3b,tag:{Fireworks:{Flight:1b,Explosions:[],},},Damage:0s,}"
+  ],
+  [
+   "nbtBookStored",
+   "{\"color\":\"yellow\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:403s,Count:1b,tag:{RepairCost:7,display:{Name:\\\"Tome\\\",},StoredEnchantments:[0:{lvl:3s,id:34s,},],},Damage:0s,}\"},\"extra\":[\"Tome\",\"]\"],\"text\":\"[\"}",
+   "§e[§r§eTome§r§e]§r",
+   "[Tome]",
+   "Uncommon",
+   "{id:403s,Count:1b,tag:{RepairCost:7,display:{Name:\"Tome\",},StoredEnchantments:[0:{lvl:3s,id:34s,},],},Damage:0s,}"
+  ],
+  [
+   "nbtAllKeys",
+   "{\"color\":\"aqua\",\"hoverEvent\":{\"action\":\"show_item\",\"value\":\"{id:276s,Count:1b,tag:{ench:[0:{lvl:4s,id:0s,},],RepairCost:31,Explosion:{Type:3b,Colors:[7,],Trail:1b,FadeColors:[8,],Flicker:1b,},pages:[0:\\\"p\\\",],Unbreakable:0b,author:\\\"A\\\",display:{color:1,Name:\\\"All\\\",},title:\\\"T\\\",},Damage:0s,}\"},\"extra\":[\"All\",\"]\"],\"text\":\"[\"}",
+   "§b[§r§bAll§r§b]§r",
+   "[All]",
+   "Rare",
+   "{id:276s,Count:1b,tag:{ench:[0:{lvl:4s,id:0s,},],RepairCost:31,Explosion:{Type:3b,Colors:[7,],Trail:1b,FadeColors:[8,],Flicker:1b,},pages:[0:\"p\",],Unbreakable:0b,author:\"A\",display:{color:1,Name:\"All\",},title:\"T\",},Damage:0s,}"
+  ],
+  [
+   "rawTypes",
+   "{b:-3b,dneg:-2.5d,d:0.1d,f:1.5f,ls:[0:\"x\",1:\"y\",],i:-70000,l:1099511627776L,fs:0.001f,str:\"hi \"q\"\",dbig:1.23456789E7d,s:-300s,fsmall:1.0E-4f,fbig:1.0E7f,lc:[0:[0:{lvl:2s,id:1s,},],],ia:[4,-5,],lf:[0:1.0f,1:1.0E10f,],ea:[],ba:[3 bytes],}"
+  ],
+  [
+   "rawMany13",
+   "{k0:0,k1:1,k2:2,k3:3,k4:4,k5:5,k11:11,k6:6,k10:10,k7:7,k8:8,k12:12,k9:9,}"
+  ],
+  [
+   "rawMany25",
+   "{key1:1s,key2:2s,key0:0s,key5:5s,key6:6s,key3:3s,key4:4s,key9:9s,key7:7s,key8:8s,key22:22s,key21:21s,key20:20s,key15:15s,key14:14s,key13:13s,key12:12s,key19:19s,key18:18s,key17:17s,key16:16s,key11:11s,key10:10s,key24:24s,key23:23s,}"
   ]
  ]
 }

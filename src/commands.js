@@ -150,9 +150,9 @@ export function createCommandRunner(host) {
   // The sender's / a player's func_145748_c_: a player's team-formatted name with its /msg click, a command block's plain name.
   const playerComponent = (n) => senderComponent(host.scoreboard?.formatName?.(n) ?? n, n);
   const senderOf = () => (host.isCommandBlock ? textComponent(name()) : playerComponent(name()));
-  // CommandBase.func_147176_a (source-recalled; the command classes are not in the client jar): an empty ChatComponentText with one sibling per word,
-  // joined by " " siblings; with selectors on, a word that is an @p/@a/@r token becomes the matched players' names joined by ", " (none: PlayerNotFoundException).
-  const messageComponent = (words, selectors) => {
+  // CommandBase.func_147176_a (bytecode-read and executed, cmd-chat-reference.json): an empty ChatComponentText with one sibling per word,
+  // joined by " " siblings; a word that is an @p/@a/@r token becomes the matched players' names (none: PlayerNotFoundException). /me, /say and /tell all pass true.
+  const messageComponent = (words, selectors = true) => {
     const root = textComponent("");
     words.forEach((w, i) => {
       if (i > 0) root.append(textComponent(" "));
@@ -241,19 +241,19 @@ export function createCommandRunner(host) {
     },
     me(a) {
       if (a.length < 1) usage("commands.me.usage");
-      const c = translation("chat.type.emote", senderOf(), messageComponent(a, !!host.isCommandBlock)); // selectors only for a non-player sender
+      const c = translation("chat.type.emote", senderOf(), messageComponent(a));
       (host.broadcast ?? say)(tr("chat.type.emote", name(), c.args[1].unformatted()), c);
     },
     say(a) {
-      if (a.length < 1) usage("commands.say.usage");
-      const c = translation("chat.type.announcement", senderOf(), messageComponent(a, true));
+      if (a.length < 1 || a[0].length < 1) usage("commands.say.usage"); // CommandBroadcast: args.length > 0 && args[0].length() > 0
+      const c = translation("chat.type.announcement", name(), messageComponent(a)); // the sender's plain getCommandSenderName, not its chat component
       (host.broadcast ?? say)(tr("chat.type.announcement", name(), c.args[1].unformatted()), c);
     },
     tell(a) {
       if (a.length < 2) usage("commands.message.usage");
       const target = player(a[0]);
       if (target === name()) throw new CommandException("commands.message.sameTarget");
-      const message = messageComponent(a.slice(1), !!host.isCommandBlock);
+      const message = messageComponent(a.slice(1));
       // CommandMessage: both are gray italic translations; the target gets the incoming one (the sender's component), the sender the outgoing one.
       const grey = (key, who) => { const c = translation(key, who, message); c.style.color = "gray"; c.style.italic = true; return c; };
       const incoming = grey("commands.message.display.incoming", senderOf()), outgoing = grey("commands.message.display.outgoing", playerComponent(target));
@@ -526,10 +526,10 @@ export function createCommandRunner(host) {
       if (typeof console !== "undefined") console.error(e);
       return;
     }
-    // CommandHandler.func_71556_a: a red ChatComponentTranslation(message, args); usage nests the usage translation as the argument.
+    // CommandHandler.a(ac, String) (bytecode-read, executed): processCommand sits in an inner catch of CommandException, so a usage error is the red usage translation itself;
+    // the commands.generic.usage wrapper only covers failures outside processCommand.
     const red = (c) => { c.style.color = "red"; return c; };
     if (e.kind === "unsupported") host.print("§c" + e.args[0], red(textComponent(e.args[0])));
-    else if (e.kind === "usage") host.print("§c" + tr("commands.generic.usage", tr(e.key, ...e.args)), red(translation("commands.generic.usage", translation(e.key, ...e.args))));
     else host.print("§c" + tr(e.key, ...e.args), red(translation(e.key, ...e.args)));
   }
   function run(text) {
