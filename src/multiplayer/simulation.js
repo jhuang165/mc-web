@@ -33,6 +33,7 @@ import { eyeInWater } from '../fluids.js';
 import { playerMiningState } from '../enchantment-effects.js';
 import { BOW, canDraw } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
+import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -62,7 +63,8 @@ export function cleanHotbar(slots) {
 // One dedicated world, independent of all connected tabs. Finite terrain is an
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
-  constructor(saved = {}, { world = null, gameMode = 'creative' } = {}) {
+  constructor(saved = {}, { world = null, gameMode = 'creative', difficulty = 2 } = {}) {
+    this.difficulty = difficulty; this.serverSurvival = new ServerSurvival(this); // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
     this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
@@ -150,7 +152,7 @@ export class DedicatedSimulation {
     this.players.delete(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, ...vitalsOf(p.survival) }, ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch), slots = cleanHotbar(message.hotbar);
     if (!p || !input || !look || !slots || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -265,6 +267,7 @@ export class DedicatedSimulation {
     if (--use.ticks <= 0) {
       this.useSound(p, use, 16);
       if (use.id !== MILK_BUCKET) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
+      if (use.id !== MILK_BUCKET) this.serverSurvival.finishEating(p, use.id);
       p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
     }
   }
@@ -404,8 +407,9 @@ export class DedicatedSimulation {
     this.ticks++; this.time++;
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
-      movePlayer(p, controls);
-      if (p.position.y < -64) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
+      const moved = movePlayer(p, p.dead ? IDLE_INPUT : controls);
+      const dead = this.serverSurvival.tick(p, moved); // Survival players: health, food, fall and void damage, death (server-survival.js)
+      if (p.position.y < -64 && !dead && p.survival.creative) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
       p.survival.time = this.time;
       if (p.swing) p.swing--;
       // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.
@@ -418,7 +422,7 @@ export class DedicatedSimulation {
     }
     for (const { id, place, dig, use } of this.actions.splice(0)) {
       const p = this.players.get(id);
-      if (!p) continue;
+      if (!p || p.dead) continue;
       if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
     }
     for (const p of this.players.values()) if (p.resendCells) {

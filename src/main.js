@@ -147,6 +147,7 @@ import { RemotePlayers } from "./multiplayer/presence.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
+import { applyHealthMessage } from "./multiplayer/server-survival.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { replayPlayerCommands } from "./away-commands.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -737,6 +738,7 @@ async function joinMultiplayer(settings) {
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
+    onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
   multiplayer = client;
@@ -2645,7 +2647,7 @@ function die() {
   mineHeld = false;
   // gamerule keepInventory: the inventory is not dropped and the experience is kept (EntityPlayerMP.clonePlayer copies both).
   const keep = !ruleOn(active, "keepInventory");
-  const stacks = keep ? survival.inventory.takeAll() : [];
+  const stacks = keep && !multiplayer ? survival.inventory.takeAll() : []; // over a connection the server has no drops yet: the inventory stays
   // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
   for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
   // EntityLivingBase.onDeathUpdate (not overridden by EntityPlayer) leaves the orbs only while gamerule doMobLoot is true.
@@ -2686,7 +2688,8 @@ async function respawnPlayer() {
       else { bedSleep.spawn = null; showChatLine(document, BED_TEXT.notValid); }
     } else if (active.playerSpawn) spawn = { x: active.playerSpawn[0] + 0.5, y: active.playerSpawn[1], z: active.playerSpawn[2] + 0.5 }; // /spawnpoint
     const time = survival.time;
-    const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
+    multiplayer?.respawn(); // C16 perform respawn; the server answers with the new health
+    const kept = (ruleOn(active, "keepInventory") || multiplayer) && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
     scoreboardLive.respawn(); // the new EntityPlayerMP re-sends its health criteria
     mobs?.playerJoined?.(true); // the new EntityPlayerMP takes a new entity id and joins the end of loadedEntityList (tracker-joint2-b53.test.js)
     survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);

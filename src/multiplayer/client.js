@@ -15,8 +15,8 @@ export function restoreReplica(snapshot) {
 }
 
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -53,7 +53,7 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
-    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
     const merged = this.pending ??= { cells: new Map(), tiles: new Map() };
@@ -77,6 +77,7 @@ export class DedicatedClient {
     if (message.type === 'collect') this.onCollect(message);
     if (message.type === 'playerOp') this.onPlayerOp(message);
     if (message.type === 'sound') this.onSound(message);
+    if (message.type === 'health') this.onHealth(message);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
@@ -92,6 +93,8 @@ export class DedicatedClient {
   use(active) { this.send({ type: 'use', active }); }
   // Item entities in reach with room in the inventory (Survival): the server repeats the pickup test and answers each one with a `collect` stack.
   pickup(ids) { this.send({ type: 'pickup', ids }); }
+  // C16 client status 0: perform respawn after a death.
+  respawn() { this.send({ type: 'respawn' }); }
   // C0D close window.
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }

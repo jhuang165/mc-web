@@ -89,7 +89,7 @@ export class ServerSocial {
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
     const events = this.simulation.events?.splice(0) ?? [];
-    for (const e of events) if (e.type === "death") this.death(e.id);
+    for (const e of events) if (e.type === "death") this.death(e.id, e.component);
     return events.length;
   }
 
