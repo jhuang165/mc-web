@@ -71,7 +71,7 @@ test("the port builds the same advanced titles", () => {
   assert.equal(tooltipLines(wool, stack(35, 14), false)[0].text, "Red Wool");
   const sword = tooltipLines({ name: "Iron Sword", attack: 6, durability: 250 }, { id: live(267), damage: 10 }, true).map((l) => l.text);
   assert.deepEqual(sword, ["Iron Sword (#0267)", "", "+6 Attack Damage", "Durability: 240 / 250"]);
-  assert.equal(tooltipLines(wool, { ...stack(35, 5), displayName: "Bob" }, true)[0].text, "Bob (#0035/5)");
+  assert.equal(tooltipLines(wool, { ...stack(35, 5), displayName: "Bob" }, true)[0].text, "Bob§r (#0035/5)");
 });
 
 test("effect order: Java 7 and Java 8 HashMap differ only for ids 16 and up in a 16-bucket table", () => {

@@ -128,7 +128,11 @@ public class ClientPredictProbe {
   // The record has the cells that differ, the sounds and aux effects the call logged (with volume and pitch) and the held stack afterwards.
   static void activatingX(String name, int[][] setup, int px, int py, int pz, Object[][] tiles, int item, int damage, int count, boolean creative) throws Exception {
     CW w = world(setup);
-    for (Object[] t : tiles) w.tiles.put(t[0] + "," + t[1] + "," + t[2], (aor) PlantProbe.unsafe.allocateInstance((Class<?>) t[3]));
+    for (Object[] t : tiles) {
+      aor made = (aor) PlantProbe.unsafe.allocateInstance((Class<?>) t[3]);
+      if (made instanceof aoz && t.length > 4) ((aoz) made).a((Integer) t[4]); // b60: the comparator tile's OutputSignal the client holds
+      w.tiles.put(t[0] + "," + t[1] + "," + t[2], made);
+    }
     Map<String, int[]> before = snapshot(w);
     yx inv = ((yz) DoorPaneProbe.player).bm;
     inv.a[inv.c] = item > 0 ? new add(adb.d(item), count, damage) : null;
@@ -140,11 +144,13 @@ public class ClientPredictProbe {
     } catch (Throwable t) { err = q(t.toString()); }
     String potTile = "null";
     for (Object[] t : tiles) if (t[3] == apf.class) { apf pt = (apf) w.tiles.get(t[0] + "," + t[1] + "," + t[2]); potTile = pt.a() == null ? "[0,0]" : "[" + adb.b(pt.a()) + "," + pt.b() + "]"; } // TileEntityFlowerPot item and data afterwards
+    String tileSignal = "null";
+    for (Object[] t : tiles) if (t[3] == aoz.class) tileSignal = "[" + (t.length > 4 ? t[4] : 0) + "," + ((aoz) w.tiles.get(t[0] + "," + t[1] + "," + t[2])).a() + "]";
     add held = inv.a[inv.c];
     String heldJson = held == null ? "[0,0]" : "[" + adb.b(held.b()) + "," + held.b + "]";
     inv.a[inv.c] = null;
     MobMoveProbe.field(yw.class, "d").setBoolean(((yz) DoorPaneProbe.player).bE, false);
-    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + ",\"potTile\":" + potTile + ",\"held\":" + heldJson + "}");
+    line("{\"case\":\"activate\",\"name\":" + q(name) + ",\"setup\":" + setupJson(setup) + ",\"at\":[" + px + "," + py + "," + pz + "],\"result\":" + res + ",\"error\":" + err + ",\"diff\":" + diff(before, w) + ",\"log\":" + logJson(w) + ",\"potTile\":" + potTile + ",\"tileSignal\":" + tileSignal + ",\"held\":" + heldJson + "}");
   }
 
   // Block.onBlockClicked (aji.a(ahb,III,yz)) on the client world: PlayerControllerMP.clickBlock calls it for a Survival dig start (bytecode-read, bje.b(IIII) offset 217).
@@ -404,6 +410,19 @@ public class ClientPredictProbe {
     Object[] cmp = {8, 64, 8, aoz.class};
     for (int m : new int[] {0, 1, 2, 3, 4, 5, 8, 12}) activatingX("comparator149-m" + m, s(c(8, 64, 8, 149, m)), 8, 64, 8, new Object[][] {cmp}, 0, 0, 0, false);
     for (int m : new int[] {0, 4, 8, 12}) activatingX("comparator150-m" + m, s(c(8, 64, 8, 150, m)), 8, 64, 8, new Object[][] {cmp}, 0, 0, 0, false);
+    // b60: a powered input. The comparator (facing +z when meta & 3 == 0: the rear input is at z + 1, sides at x +- 1) with a wire, a redstone block or a lever source, the tile output set to
+    // what the server settled on (the steady state) or left at 0; the client reads the powers from its own blocks.
+    int[][][] feeds = {
+      {c(8, 64, 9, 55, 12)}, {c(8, 64, 9, 55, 15)}, {c(8, 64, 9, 152, 0)}, {c(8, 64, 9, 55, 5)},
+      {c(8, 64, 9, 55, 12), c(7, 64, 8, 55, 9)}, {c(8, 64, 9, 55, 12), c(7, 64, 8, 55, 12)}, {c(8, 64, 9, 55, 5), c(9, 64, 8, 55, 9)},
+      {c(8, 64, 9, 55, 12), c(7, 64, 8, 152, 0)}, {c(8, 64, 9, 1, 0), c(8, 64, 10, 69, 9)}, {c(8, 64, 9, 1, 0), c(8, 64, 10, 55, 7)}, {c(8, 64, 9, 94, 0)}, {c(8, 64, 9, 76, 5)}};
+    int[] mets = {0, 4, 8, 12};
+    for (int f = 0; f < feeds.length; f++) for (int m : mets) for (int tile : new int[] {0, 7, 15}) {
+      int[][] setup = new int[feeds[f].length + 1][];
+      setup[0] = c(8, 64, 8, 149, m);
+      for (int i = 0; i < feeds[f].length; i++) setup[i + 1] = feeds[f][i];
+      activatingX("comparator-powered-f" + f + "-m" + m + "-t" + tile, setup, 8, 64, 8, new Object[][] {{8, 64, 8, aoz.class, tile}}, 0, 0, 0, false);
+    }
     // the screens of tile entities open from the server's packet: every guard `if (world.isRemote) return true` leaves the client world untouched
     int[][] stations = {{54, 0}, {146, 0}, {130, 0}, {61, 2}, {62, 2}, {23, 0}, {158, 0}, {154, 0}, {117, 0}, {116, 0}, {138, 0}, {58, 0}, {118, 0}, {118, 3}, {151, 0}, {122, 0}};
     for (int[] t : stations) activating("station" + t[0] + "-m" + t[1], s(c(8, 64, 8, t[0], t[1])), 8, 64, 8);

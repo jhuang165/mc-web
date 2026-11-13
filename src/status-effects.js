@@ -15,14 +15,26 @@ const FOOD_EFFECTS = {
   [PUFFERFISH]: [{ id: POISON, duration: 1200, amplifier: 3, chance: 1 }, { id: HUNGER, duration: 300, amplifier: 2, chance: 1 }, { id: 9, duration: 300, amplifier: 1, chance: 1 }],
 };
 
+// EntityLivingBase.activePotionsMap is a HashMap<Integer, PotionEffect>: getActivePotionEffects(), updatePotionEffects, the inventory list, the S1D burst at login and the
+// saved ActiveEffects all walk it in bucket order. Choice (b60): the Java 8 HashMap, the one the executed probes (mob-effects b54order) ran on. For ids 1..15 Java 6/7 give the
+// same order; they differ for ids 16..23 (their spread folds h>>>4, so 16<->17, 18<->19, 20<->21, 22<->23 swap buckets) and a new key joins the FRONT of a chain there.
+// The table is 16 buckets (id & 15), 32 once a 13th entry went in (never shrinks); a chain keeps insertion order (Java 8 appends and splits without reordering).
+export function effectsMapOrder(list, wide = false) {
+  const mask = wide || list.length > 12 ? 31 : 15;
+  return list.map((x, i) => [x, i]).sort((a, b) => (a[0].id & mask) - (b[0].id & mask) || a[1] - b[1]).map((x) => x[0]);
+}
+
 export class Effects {
   constructor(saved) {
     this.active = new Map();
     if (Array.isArray(saved)) for (const effect of saved) this.add(effect);
   }
   has(id) { return this.active.has(id); }
+  // The active effects in HashMap iteration order (see effectsMapOrder); `wide` remembers the table having grown past 12 entries.
+  ordered() { if (this.active.size > 12) this.wide = true; return effectsMapOrder([...this.active.values()], this.wide); }
   get(id) { return this.active.get(id); }
   add(effect) {
+    if (this.active.size > 12) this.wide = true;
     if (!effect || !POTION_TYPES[effect.id] || !Number.isFinite(effect.duration) || effect.duration < 1) return false;
     const next = {
       id: effect.id,
@@ -54,7 +66,7 @@ export class Effects {
   // duration counts down and a finished effect is removed (Absorption takes its amount back, Health Boost caps the health).
   tick(player) {
     this.player = player;
-    for (const effect of [...this.active.values()]) {
+    for (const effect of this.ordered()) {
       const amp = effect.amplifier;
       switch (effect.id) {
         case PT.HUNGER: player.exhaust(Math.fround(Math.fround(0.025) * (amp + 1))); break;
@@ -102,5 +114,5 @@ export class Effects {
     return Math.max(0, d); // RangedAttribute(attackDamage) has minimum 0 (probe: Weakness II or more on an empty hand is 0, not negative)
   }
   clear() { this.active.clear(); }
-  serialize() { return Array.from(this.active.values(), (effect) => ({ ...effect })); }
+  serialize() { return Array.from(this.ordered(), (effect) => ({ ...effect })); }
 }

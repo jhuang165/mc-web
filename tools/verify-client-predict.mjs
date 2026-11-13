@@ -34,7 +34,7 @@ const {stdout}=await exec('java',['-cp',cp,'ClientPredictProbe'],{maxBuffer:1<<2
 const errors=records.filter(r=>r.error&&r.error!=='null');
 assert.deepEqual(errors.map(r=>r.case+':'+r.name+':'+r.error),[],'probe scenarios must not throw');
 const count=c=>records.filter(r=>r.case===c).length;
-assert.ok(count('break')===69&&count('use')===48&&count('activate')===76&&count('bucket')>=31&&count('blockclick')===1&&count('serveruse')===4&&count('throw')===16&&count('commandblock')===2&&count('soundchain')===1,'case counts '+JSON.stringify(records.reduce((a,r)=>(a[r.case]=(a[r.case]||0)+1,a),{})));
+assert.ok(count('break')===69&&count('use')===48&&count('activate')===220&&count('bucket')>=31&&count('blockclick')===1&&count('serveruse')===4&&count('throw')===16&&count('commandblock')===2&&count('soundchain')===1,'case counts '+JSON.stringify(records.reduce((a,r)=>(a[r.case]=(a[r.case]||0)+1,a),{})));
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const classNames={bje:'PlayerControllerMP',ahb:'World',aji:'Block',adb:'Item',akn:'BlockDoor',ajh:'BlockBed',abg:'ItemBed',ach:'ItemDoor'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(classNames).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
