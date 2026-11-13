@@ -65,10 +65,12 @@ function saveWalk(mobs, groups, frame = null) {
   for (const { live, records } of groups) live.forEach((e, i) => rows.push({ e, record: records[i], seq: seqs?.get(e) ?? Infinity, sec: sectionOf(e), cx: Math.floor((e.x ?? 0) / 16), cz: Math.floor((e.z ?? 0) / 16) }));
   const first = new Map(), moved = mobs.sectionSeqs, born = mobs.chunkBirth; // born: the place of the first entity a chunk had in the passes seen (a mover joining it later does not lower it)
   for (const r of rows) { const k = `${r.cx},${r.cz}`; first.set(k, Math.min(first.get(k) ?? Infinity, born?.get(k) ?? r.seq)); r.chunk = k; r.list = moved?.get(r.e) ?? r.seq; }
-  const ranks = frame ? loadRanks(frame) : null, place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : first.get(k)); // a chunk of the login frame goes before every other
+  const carried = rows.filter((r) => carriesPlayer(r.e)), ranks = frame ? loadRanks(frame) : null;
+  for (const r of carried) if (ranks && !ranks.has(r.chunk)) ranks.set(r.chunk, ranks.size); // b57so: the login spawns the mount into its chunk, which loads (and its other entities with it) after the view square
+  const place = (k) => (ranks?.has(k) ? ranks.get(k) - 1e9 : first.get(k)); // a chunk of the login frame goes before every other
   rows.sort((a, b) => place(a.chunk) - place(b.chunk) || (a.chunk < b.chunk ? -1 : a.chunk > b.chunk ? 1 : 0) || a.sec - b.sec || a.list - b.list);
   // b54so: the mount carrying the player is read from the player's file (Riding) and spawned after the chunks: last, in list order among such mounts
-  const carried = rows.filter((r) => carriesPlayer(r.e)), lost = lostMounts(carried, rows), gone = new Set(lost.map((r) => r.e));
+  const lost = lostMounts(carried, rows), gone = new Set(lost.map((r) => r.e));
   const rest = carried.length ? rows.filter((r) => !carriesPlayer(r.e) && !gone.has(r.e)) : rows;
   return { order: [...loadOrder(rest), ...carried], lost, carried };
 }

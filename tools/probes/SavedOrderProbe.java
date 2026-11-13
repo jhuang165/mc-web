@@ -45,6 +45,8 @@ public class SavedOrderProbe {
       case "arrow": e = new zc(w, x, y, z); break;
       case "tnt": e = new xw(w, x, y, z, null); break;
       case "cow": e = new wh(w); break;
+      case "boat": e = new xi(w, x, y, z); break; // EntityBoat (b57so)
+      case "fall": e = new xj(w, x, y, z, aji.e(1)); break; // EntityFallingBlock of stone (b57so)
       case "cart": e = new xs(w, x, y, z); PlayerStepProbe.field(sa.class, "c").setInt(e, 1); break; // EntityMinecartEmpty (id set as EntityListProbe does)
       default: throw new RuntimeException(kind);
     }

@@ -263,7 +263,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       const run = { mobs: mobs.serialize(), drops: items.serialize(), xpOrbs: xp.serialize(), tnt: primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse })), arrows: arrows.serialize(), projectiles: projectiles.serialize(),
         carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize(),
         fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])] }; // b53so: stamped like the other records
-      stampSavedOrder(mobs, orderGroups(savedSys, savedLists({ ...run, rockets: run.rockets.rockets })), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))));
+      stampSavedOrder(mobs, orderGroups(savedSys, savedLists({ ...run, rockets: run.rockets.rockets })), 1 + topSavedOrder(drops.rest, orbs.rest, tnt.rest, carts.rest, boatsSplit.rest, mobSplit.rest, arrowSplit.rest, ballSplit.rest, potionSplit.rest, rocketSplit.rest, hangSplit.rest, fireList.filter((r) => !fireIn(r))),
+        mobs.loadFrame ?? (Array.isArray(plan.spawn) && plan.spawn.length >= 3 ? { spawn: plan.spawn, player: null, view: 0 } : null)); // b57so: nobody is logged in here: the Overworld's own spawn grid is all a reload has loaded
       return {
         drops: [...drops.rest, ...run.drops, ...late], xpOrbs: [...orbs.rest, ...run.xpOrbs],
         tnt: [...tnt.rest, ...run.tnt],

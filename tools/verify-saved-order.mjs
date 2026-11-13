@@ -45,10 +45,18 @@ await writeFile(path.join(root,'../public/research/saved-order3-reference.json')
 console.log(`${cases3.length} saved order 3 scenarios`);
 // Batch 56 (b56so): the loaded-entity order of a native login (spawn grid, the player's chunk, the view square, the player's mount) and the chain below a mount that carries the player; replayed by src/saved-order4-b56.test.js.
 const login=await exec('java',['-cp',cp,'SavedOrderLoginProbe'],{maxBuffer:1<<26});
-const cases4=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
+const cases4=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order4');
 assert.equal(cases4.length,10,'10 b56so scenarios');
 const reference4={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
  method:'Batch 56 b56so: SavedOrderLoginProbe. The unchanged ChunkProviderServer (ms) over a loader that reads each chunk with the real AnvilChunkLoader reader from NBT the real writer made, MinecraftServer.initialWorldChunkLoad (25 x 25 chunks round the spawn), then ServerConfigurationManager.playerLoggedIn: the real World.spawnEntityInWorld(EntityPlayerMP) (ahb.d), the real PlayerManager.addPlayer (mq.a), and the mount read from the first Riding compound (EntityList.createEntityFromNBT, forceSpawn, spawnEntityInWorld). The caller sequence is bytecode-read (oi.c(mw), oi initializeConnectionToPlayer). after: entity indices (x = chunk x * 16 + 1 + 0.5 * index; -1 the player) in loadedEntityList order.',
  cases:cases4};
 await writeFile(path.join(root,'../public/research/saved-order4-reference.json'),JSON.stringify(reference4)+'\n');
 console.log(`${cases4.length} saved order 4 scenarios`);
+// Batch 57 (b57so): the Nether and End logins (no spawn grid), the Overworld with nobody logged in, a mob riding the mount the player takes, and non-mob entities high above the world; replayed by src/saved-order-b57.test.js.
+const cases5=login.stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse).filter(r=>r.case==='saved-order5');
+assert.equal(cases5.length,10,'10 b57so scenarios');
+const reference5={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+ method:'Batch 57 b57so: SavedOrderLoginProbe, same set-up as b56so with three switches. nether: no initialWorldChunkLoad (MinecraftServer.g runs its loop for dimension 0 only: bytecode-read, the level index is 0 and never incremented), so only the player chunk and the view square load; away: the grid loads and nobody logs in; stale: a cow in a cart whose rider slot the player then takes (Entity.mountEntity does not clear the old rider link: bytecode-read; EntityBoat.interactFirst lets a non-player rider be taken over, EntityMinecartEmpty refuses): the writer saves the cow with the cart nested and skips the ridden cart, the login reads the player Riding too. high: EntityItem, EntityBoat, EntityFallingBlock, EntityTNTPrimed, EntityArrow, EntityXPOrb and EntityMinecartEmpty at y from -20 to 4000 through the real writer and reader. after: entity indices (x = chunk x * 16 + 1 + 0.5 * index; -1 the player) in loadedEntityList order.',
+ cases:cases5};
+await writeFile(path.join(root,'../public/research/saved-order5-reference.json'),JSON.stringify(reference5)+'\n');
+console.log(`${cases5.length} saved order 5 scenarios`);

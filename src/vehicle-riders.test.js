@@ -62,7 +62,11 @@ test("a mob rides a boat and a cart with the vehicle, and a dead vehicle frees i
   w.worldRandom = new JavaRandom(7);
   const boats = new Boats(), boat = boats.spawnBoat({ x: 64.5, y: 1, z: 64.5, yaw: 0 }), zombie = spawn(w, "zombie", 64.5, 1, 64.5);
   assert.ok(mountMobOnVehicle(boat, zombie, heightOf(w)));
-  assert.equal(boats.mount(boat, { vehicle: null }), false, "a player cannot board an occupied boat");
+  // b57so: EntityBoat.interactFirst refuses only another player as rider (bytecode-read): a click on a boat with a mob in it takes the boat over, and the stale pair is cleared within a pass (mob and taker free)
+  const other = boats.spawnBoat({ x: 70.5, y: 1, z: 64.5, yaw: 0 }), zombie2 = spawn(w, "zombie", 70.5, 1, 64.5);
+  assert.ok(mountMobOnVehicle(other, zombie2, heightOf(w)));
+  assert.equal(boats.mount(other, { vehicle: null }), false, "the stale pair is cleared: nobody sits");
+  assert.equal(zombie2.ridingEntity ?? null, null);
   const p = { x: 64.5, y: 1, z: 70, health: 20 };
   for (let i = 0; i < 10; i++) {
     boat.x += 0.1; boat.px = boat.x - 0.1;
