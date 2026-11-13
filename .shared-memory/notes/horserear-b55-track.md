@@ -15,5 +15,5 @@
 
 ## Follow-ups
 - Flags reach the copy from the live horse directly; the watcher's send delay (tracker metadata interval) is not modelled (entity-tracker.js is dimtracker's).
-- The tail roll (nextInt(200) on the copy's own Random) is not drawn on the copy, to keep its random stream unchanged; the tail counter bp therefore never starts on the copy. Neither the renderer nor the leg animation reads the new fields yet (horse-renderer.js still uses the live values).
+- The tail roll (nextInt(200) on the copy's own Random) is not drawn on the copy, to keep its random stream unchanged; the tail counter bp therefore never starts on the copy. No renderer reads the new fields yet: nothing outside horse-copy.js, entities.js and horse-live.js uses rearAmount, so the rearing pose is not drawn from them.
 - Rearing/eating flags set by the server for other causes (eating grass, bq counter starters) are not ported.
