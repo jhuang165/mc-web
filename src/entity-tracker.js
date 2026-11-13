@@ -683,9 +683,9 @@ export class MobTracker {
   }
   // Batch 59: `ticks` idle ticks in a row for entities that were loaded the whole time (the Overworld's spawn area while the player was in the Nether or End, dimension-live.js `awayIdle`).
   // Entities freeze after 1200 ticks (mt.h); the tracker periods are 3, 4, 5, 10, 20 and the forced teleport every 401st update (a counter that resets after passing 400), with the tracker's own tick counter (mod 1200) all dividing 481200, so a trip past 6.7 hours runs 1200 + (ticks - 1200) % 481200 ticks, the same phase.
-  idleCatchUp(mobs, size, ticks) {
+  idleCatchUp(mobs, size, ticks, joint = null) { // batch 60: `joint` as in idleUpdate: the object entries run the same ticks (away-track.js)
     const n = ticks > 482400 ? 1200 + ((ticks - 1200) % 481200) : ticks;
-    for (let i = 0; i < n; i++) this.idleUpdate(mobs, size);
+    for (let i = 0; i < n; i++) this.idleUpdate(mobs, size, joint);
   }
   idOf(e) { const id = e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; }
   serverTick(mobs, player, size) {

@@ -2110,7 +2110,7 @@ export class EntityWorld {
     if (ids && (fresh || ids.playerId === undefined)) ids.playerId = ids.take();
     if (ids && this.tracker) this.tracker.joinPlayer(ids.playerId);
   }
-  idleTrack(ticks, keep) { this.tracker ??= new MobTracker(this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
+  idleTrack(ticks, keep, joint = null) { this.tracker ??= new MobTracker(this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks, joint); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
   leaveWorld(others = []) { this.tracker?.leaveWorld(others); } // a dimension change: the player leaves this world's tracker (entity-tracker.js leaveWorld)
   takeId(e) { if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); }
   // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
