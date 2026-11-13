@@ -25,6 +25,8 @@ import { BEACON } from "./pyramid.js";
 import { MOB_SPAWNER, FLOWER_POT } from "./world.js";
 import { spawnerJSON } from "./mob-spawner.js";
 import { potContents, setPotContents } from "./stone-utility.js";
+import { isChestBlock, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
+import { newChest } from "./chest.js";
 
 export { SIGN_POST, WALL_SIGN };
 const cellIn = (t, cx, cz, mask) => (t.x >> 4) === cx && (t.z >> 4) === cz && (mask >> (t.y >> 4) & 1) === 1;
@@ -40,6 +42,15 @@ const beaconOf = (t) => ({ kind: "beacon", action: TILE_ACTION.beacon, x: t.x, y
 // Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
 const potOf = (world, x, y, z) => { const c = potContents(world, x, y, z); return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0 }; };
 
+// Batch 60 (mpcontainers2): the 1.7.10 client makes a TileEntityChest from the block alone (the chunk packet has no chest tile; facing is the block's
+// metadata), so a never-opened chest is drawn closed. This port keeps a chest's facing in its tile record rather than the metadata, so the server sends
+// that record as `contChest` ({ x, y, z, facing } or { ender: true }) for each chest block, and the replica makes the record the renderer draws.
+const chestOf = (stores, x, y, z, block) => {
+  if (block === ENDER_CHEST) return { kind: "contChest", x, y, z, ender: true };
+  const c = stores.chests?.[`${x},${y},${z}`];
+  return c ? { kind: "contChest", x, y, z, facing: c.facing } : null;
+};
+
 // The description of the one tile entity at a cell (PlayerInstance.sendChunkUpdate's changed-cell branch: getDescriptionPacket when the block has
 // a tile entity), or null when the block there has none, sends none, or has no record. Batch 43 (tileedits).
 export function describeCell(stores, x, y, z) {
@@ -49,6 +60,7 @@ export function describeCell(stores, x, y, z) {
   if (block === MOB_SPAWNER) { const t = stores.spawners?.get(x, y, z); return t ? spawnerOf(t) : null; }
   if (block === BEACON) { const t = stores.beacons?.get(x, y, z); return t ? beaconOf(t) : null; }
   if (block === FLOWER_POT) return potOf(world, x, y, z);
+  if (isChestBlock(block) || block === ENDER_CHEST) return chestOf(stores, x, y, z, block);
   return null;
 }
 
@@ -80,6 +92,14 @@ export function describeTiles(stores, cx, cz, mask) {
   for (const s of stores.spawners?.values() ?? []) if (cellIn(s, cx, cz, mask) && world.get(s.x, s.y, s.z) === MOB_SPAWNER) out.push(spawnerOf(s));
   for (const t of stores.beacons?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === BEACON) out.push(beaconOf(t));
   for (const [x, y, z] of potCells(world, cx, cz, mask)) out.push(potOf(world, x, y, z));
+  for (const key of Object.keys(stores.chests ?? {})) {
+    const [x, y, z] = key.split(",").map(Number);
+    if (cellIn({ x, y, z }, cx, cz, mask) && isChestBlock(world.get(x, y, z))) out.push(chestOf(stores, x, y, z, world.get(x, y, z)));
+  }
+  for (const key of Object.keys(stores.enders ?? {})) {
+    const [x, y, z] = key.split(",").map(Number);
+    if (cellIn({ x, y, z }, cx, cz, mask) && world.get(x, y, z) === ENDER_CHEST) out.push(chestOf(stores, x, y, z, ENDER_CHEST));
+  }
   return out;
 }
 
@@ -108,6 +128,13 @@ export function applyTiles(list, stores) {
       n++;
     } else if (t.kind === "pot" && block === FLOWER_POT) {
       setPotContents(world, x, y, z, t.id ? { id: t.id, damage: t.damage | 0 } : null);
+      n++;
+    } else if (t.kind === "contChest" && stores.chests && stores.enders) {
+      if (t.ender && block === ENDER_CHEST) (stores.enders[`${x},${y},${z}`] ??= newEnderTile());
+      else if (!t.ender && isChestBlock(block) && Number.isInteger(t.facing) && t.facing >= 2 && t.facing <= 5) {
+        const rec = (stores.chests[`${x},${y},${z}`] ??= newChest(t.facing));
+        rec.facing = t.facing;
+      } else continue;
       n++;
     }
   }

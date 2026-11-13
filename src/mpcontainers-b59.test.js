@@ -48,8 +48,9 @@ function session(s, p) {
   return st;
 }
 function open(s, p, st, x, y, z) {
-  s.input(p.id, hot()); s.queueEdit(p.id, { place: true }); s.tick();
+  s.input(p.id, hot()); s.queueEdit(p.id, { place: true }); const t = s.tick();
   st.pump(); st.deliver(); st.pump();
+  return t;
 }
 const tick = (s, p, st) => { s.tick(); st.pump(); st.deliver(); st.pump(); };
 const chestAt = (s, x = 64, y = 11, z = 62, block = 41) => { s.world.set(x, y, z, block); };
@@ -107,8 +108,7 @@ test("double chest opens as Large Chest with 54 slots and other chests are refus
 test("lid counts reach every player as block actions (S24) and fall back on close", () => {
   const s = fixture(), p = joined(s), st = session(s, p);
   chestAt(s);
-  open(s, p, st);
-  const t1 = s.tick();
+  const t1 = open(s, p, st); // b60: the S24 goes out in the tick of the click (it waited one tick before)
   assert.deepEqual(t1.blockActions?.map(a => [a.key, a.users, a.ender]), [["64,11,62", 1, false]]);
   const watcher = new Survival({}, "creative");
   applyBlockActions(t1.blockActions, watcher); assert.equal(watcher.chests["64,11,62"].users, 1);

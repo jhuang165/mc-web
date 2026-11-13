@@ -210,7 +210,7 @@ import { potionColor as damageColor, POTION_TYPES, durationString } from "./poti
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv } from "./multiplayer/client-inventory.js"; // b60: window 0
-import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
+import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -663,6 +663,7 @@ function applyMultiplayerCells(changes) {
 }
 // Item entities of a Survival server (EntityItem): one stable object per wire id so the drop renderer keeps its mesh; positions interpolate from the previous tick.
 // Pickup stays the server's call: the client names the items in reach that its inventory has room for, the server repeats the test and answers with a stack.
+let mpFurnaces = {}; // b60: the server's lit furnaces as scene.setFurnaces data
 const remoteItems = new Map(), requestedPickups = new Map(), mpInv = {}, remoteOrbs = new Map();
 function syncMultiplayerItems(list) {
   const seen = new Set();
@@ -718,7 +719,8 @@ function applyMultiplayerTick(message) {
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
   applyMultiplayerCells(message.changes);
   if (message.blockActions) applyBlockActions(message.blockActions, survival); // S24 chest lids of every viewer
-  if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners }); // the S33/S35 descriptions that follow a chunk resend
+  if (message.contFurnaceLit || Object.keys(mpFurnaces).length) mpFurnaces = litFurnaceData(message.contFurnaceLit); // b60: lit furnaces (block 62 and its light)
+  if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // the S33/S35 descriptions that follow a chunk resend
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
@@ -804,7 +806,7 @@ async function joinMultiplayer(settings) {
     onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
-    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); }, // 1020 / 1021: RenderGlobal.playAuxSFX anvil sounds
+    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a) }); }, // 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
@@ -830,6 +832,7 @@ async function joinMultiplayer(settings) {
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
+    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
@@ -1666,7 +1669,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.dimensionBlockLight = (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0;
     // Ocelot hooks (ocelot-ai.js, chest.js): the player's look for Tempt, chest and furnace state for OcelotSit, sitting cats on chests.
     mobs.playerLook = () => { const e = playerEye(); return { yaw: e.yaw, pitch: e.pitch }; };
-    mobs.ocelotBlocks = { chestUsers: (x, y, z) => survival.chests[`${x},${y},${z}`]?.users ?? 0, furnaceLit: (x, y, z) => (survival.furnaces[`${x},${y},${z}`]?.burn ?? 0) > 0 };
+    mobs.ocelotBlocks = { chestUsers: (x, y, z) => survival.chests[`${x},${y},${z}`]?.users ?? 0, contFurnaceLit: (x, y, z) => (survival.furnaces[`${x},${y},${z}`]?.burn ?? 0) > 0 };
     world.ocelotOnChest = (x, y, z) => mobs.ocelotSitsOn(x, y, z);
     // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
     mobs.wet = (e, height) => isWet(weather, world, e, height);
@@ -3670,7 +3673,7 @@ function movementTick(controls) {
   // GuiIngame.func_110326_a(I18n "mount.onboard" with the sneak key's display string, false) above the hotbar.
   if (rider.vehicle && rider.vehicle !== onboardVehicle) recordHud.message(translate("mount.onboard", "Press %1$s to dismount").replace("%1$s", keyDisplayString(binds.code("key.sneak")) ?? "null"));
   onboardVehicle = rider.vehicle ?? null;
-  scene.setFurnaces(survival.furnaces);
+  scene.setFurnaces(active?.remote ? mpFurnaces : survival.furnaces); // b60: a server's lit furnaces (contFurnaceLit) in multiplayer
   tickChests();
   enchantBooks.tick(world, [{ x: position.x, y: position.y, z: position.z }]); // TileEntityEnchantmentTable.updateEntity
   if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
