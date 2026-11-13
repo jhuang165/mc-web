@@ -14,7 +14,7 @@ import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits, listBaseColumns, readBaseColumns, readChunkColumns, writeChunkColumns } from "./world-storage.js";
 import { placeAwayDeath } from "./away-death.js";
-import { stateColumns, awayPlan, MAX_AWAY_TICKS } from "./away-plan.js";
+import { stateColumns, awayPlan, MAX_AWAY_TICKS, spawnOf } from "./away-plan.js";
 import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
@@ -397,6 +397,8 @@ export class DimensionLive {
     a.traceKey = key;
     if (states.length < TRACE_STATES) states.push([t, snap]); else states[states.length - 1] = [t, snap];
   }
+  // The tracker ticks the Overworld's spawn area ran while the player was away (entity-tracker.js idleCatchUp); read once by the world open that follows the return.
+  takeIdle() { const i = this.awayIdle ?? null; this.awayIdle = null; return i; }
   endAway() { try { this.away?.worker?.terminate(); } catch { /* already gone */ } this.away = null; }
   // The run for `ticks`; patches the root record (runtime and tile maps in place, drops appended) and stores the edited columns.
   async finishAway(root) {
@@ -440,6 +442,7 @@ export class DimensionLive {
       if (r.columns.length) await this.writeColumns(root.id, r.columns);
       root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);
       this.awayLog = { ...r.stats, ticks };
+      this.awayIdle = { ticks: rawTicks, spawn: [...spawnOf(root)] }; // batch 59: the Overworld's spawn-area entities were tracked (silently) for every tick of the trip; takeIdle() hands it to the world's open once
       this.host.dirty?.();
       return this.awayLog;
     } catch (error) { console.warn("away run failed:", error); return null; } finally { a.worker.terminate(); }
@@ -453,6 +456,7 @@ export class DimensionLive {
       await this.settle();
       this.peeks.clear();
       await h.save();
+      this.awayIdle = null;
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return false;
       if (exit) await h.showCredits?.();
