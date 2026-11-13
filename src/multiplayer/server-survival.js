@@ -12,6 +12,7 @@ import { deathComponent } from '../team-names.js';
 import { NORMAL } from '../difficulty.js';
 import { Experience } from '../experience.js';
 import { finishDrinking } from '../buckets.js';
+import { finishPotion } from '../potion-use.js';
 import { setClientHealth } from './client-health.js';
 
 const APPLE = 260, DEATH_XP_TICKS = 20;
@@ -121,7 +122,7 @@ export class ServerSurvival {
    */
   resendEffects(p) { if (p?.vitals) p.vitals.effects = new Map(); }
   /** ItemBucketMilk.onEaten: one bucket is used up and clearActivePotions runs (also in Creative). */
-  finishDrinking(p) { return !p.dead && finishDrinking(p.survival); }
+  finishDrinking(p) { return !p.dead && (finishPotion(p.survival) || finishDrinking(p.survival)); } // b63: ItemPotion.onEaten (effects, glass bottle, Creative keeps the stack) or milk
   /** ItemFood.onEaten through ItemInWorldManager: the food and saturation the single-player rules give (Survival.eat), and the bowl/bottle containers. */
   finishEating(p, itemId) {
     const s = p.survival, item = ITEMS[itemId];

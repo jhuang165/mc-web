@@ -92,7 +92,9 @@ export class WitchPotions {
     events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }
   // EntityPotion.onImpact: effects on everything around, the glass sound (world event 2002).
-  impact({ x, y, z, damage, owner, hit, custom }, player, survival) {
+  impact({ x, y, z, damage, owner, hit, custom }, player, survival, thrower = null) {
+    // b63 (mpprojectiles2): EntityPotion.onImpact -> causeIndirectMagicDamage(potion, getThrower()): a player's potion is a player hit (`player`: recentlyHit 100, so drops and kill XP follow); `thrower` (the server's player) also gives the knockback direction.
+    const byPlayer = owner === "player" || !!thrower;
     const mobs = this.mobs, victims = [];
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
@@ -112,7 +114,7 @@ export class WitchPotions {
       }
       const e = r.ref;
       for (const s of r.steps) {
-        if (s.hurt > 0) mobs.attackEntityFrom(e, s.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : undefined, attacker: owner?.x !== undefined ? owner : null });
+        if (s.hurt > 0) mobs.attackEntityFrom(e, s.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : thrower ? { x: thrower.x, z: thrower.z } : undefined, attacker: owner?.x !== undefined ? owner : null, ...(byPlayer ? { player: true, ...(thrower?.name ? { playerName: thrower.name } : {}) } : {}) });
         if (s.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + s.heal));
       }
       for (const effect of r.effects) addMobEffect(e, effect.id, effect.duration, effect.amplifier);

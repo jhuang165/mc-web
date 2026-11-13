@@ -134,6 +134,10 @@ export class DropRenderer {
     this.piles.delete(item);
     this.flying.push({ pile, item, target, start: null });
   }
+  // b63 (mpprojectiles2): EntityPickupFX for something that was never a drop here (an arrow a connected player took): builds the pile for `item.stack` and flies it to `target` like pickup().
+  flyIn(item, target) {
+    this.flying.push({ pile: this.build(item.stack, item.hover ?? 0), item, target, start: null });
+  }
   // `partial` is the fraction of the current tick; `ticks` a continuous clock.
   update(items, partial = 1, ticks = 0) {
     const seen = new Set();

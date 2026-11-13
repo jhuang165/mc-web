@@ -33,6 +33,7 @@ import { createServerDig } from '../server-dig.js';
 import { eyeInWater } from '../fluids.js';
 import { playerMiningState } from '../enchantment-effects.js';
 import { BOW, canDraw } from '../bow.js';
+import { ITEM_POTION, isSplashDamage } from '../potions.js'; // b63
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
@@ -51,6 +52,7 @@ const noop = () => {};
 // EntityPlayer.itemInUse, by the held item's EnumAction: swords block (ItemSword, 72000 ticks), the bow draws until released, food eats and a milk bucket
 // drinks for 32 ticks (this build has no potion items). The pose a remote client draws comes from the held stack, as natively (the flag is only "using", watcher 0 bit 4).
 const MILK_BUCKET = 343, USE_TICKS = 32;
+const isDrinkUse = (id) => id === MILK_BUCKET || id === ITEM_POTION; // b63 (mpprojectiles2): EnumAction.drink: milk and drinkable potions
 // EntityPlayer.updateItemUse(stack, n) on the server: Entity.rand takes the crumb loop's three draws per crumb (the particles go nowhere on a WorldServer), then
 // food plays random.eat (volume 0.5 + 0.5 * nextInt(2), pitch (f - f) * 0.2 + 1) and a drink random.drink (world rand, pitch f * 0.1 + 0.9), both through
 // World.playSoundToNearExcept: S29 to every other player under 16 blocks (squared distance from the entity's feet to the other's posX/posY/posZ, posY being
@@ -289,6 +291,7 @@ export class DedicatedSimulation {
     if (item?.kind === 'sword') p.itemInUse = { id, block: true };
     else if (id === BOW && canDraw(p.survival)) p.itemInUse = { id, bow: true, ticks: 0 };
     else if (id === MILK_BUCKET) p.itemInUse = { id, ticks: USE_TICKS };
+    else if (id === ITEM_POTION && !isSplashDamage(held.damage | 0)) p.itemInUse = { id, ticks: USE_TICKS }; // b63: ItemPotion.onItemRightClick, a drinkable bottle (a splash one is thrown by throwHeld); Creative may drink too
     else if (item?.food && !p.survival.creative && (p.survival.food < 20 || item.alwaysEdible)) p.itemInUse = { id, ticks: USE_TICKS };
     return !!p.itemInUse;
   }
@@ -303,14 +306,14 @@ export class DedicatedSimulation {
     if (use.ticks <= 25 && use.ticks % 4 === 0) this.useSound(p, use, 5);
     if (--use.ticks <= 0) {
       this.useSound(p, use, 16);
-      if (use.id !== MILK_BUCKET) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
-      if (use.id !== MILK_BUCKET) this.serverSurvival.finishEating(p, use.id); else this.serverSurvival.finishDrinking(p); // b60: milk uses a bucket and clears the effects
+      if (!isDrinkUse(use.id)) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
+      if (!isDrinkUse(use.id)) this.serverSurvival.finishEating(p, use.id); else this.serverSurvival.finishDrinking(p); // b63: finishDrinking also does ItemPotion.onEaten // b60: milk uses a bucket and clears the effects
       p.itemInUse = null; // the eat or drink completes; its food, potion and bottle effects are not modelled here
     }
   }
   useSound(p, use, n) {
     const at = { x: p.position.x, y: p.position.y, z: p.position.z, except: p.id };
-    if (use.id === MILK_BUCKET) { this.soundsOut.push({ name: 'random.drink', ...at, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)) }); return; }
+    if (isDrinkUse(use.id)) { this.soundsOut.push({ name: 'random.drink', ...at, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)) }); return; }
     for (let i = 0; i < n * 3; i++) p.rand.nextFloat();
     const volume = Math.fround(0.5 + Math.fround(0.5 * p.rand.nextInt(2))), a = p.rand.nextFloat(), b = p.rand.nextFloat();
     this.soundsOut.push({ name: 'random.eat', ...at, volume, pitch: Math.fround(Math.fround(Math.fround(a - b) * Math.fround(0.2)) + 1) });

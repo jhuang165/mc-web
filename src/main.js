@@ -189,7 +189,7 @@ import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
-import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
+import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW, BOW, canDraw } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater, viewpointBlock } from "./fluids.js";
 import { ScreenOverlays } from "./screen-overlays.js";
@@ -634,6 +634,7 @@ function applyServerPlayerOp(message) {
   applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
 }
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
+let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
 let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
@@ -704,6 +705,11 @@ function makeRemoteDispense() {
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),
     poof: row => projectiles.clientImpact(row),
+    // b63 (mpprojectiles2): S0D collect for an arrow: EntityPickupFX flies it to whoever took it (this player, or another one from the last player rows)
+    collect: (i, by, at) => {
+      const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by);
+      if (at && who) scene.drops.flyIn({ stack: { id: ARROW, count: 1, damage: 0 }, x: at.x, y: at.y, z: at.z, px: at.x, py: at.y, pz: at.z, age: 0, hover: 0 }, who);
+    },
   });
 }
 const tntRows = () => (remoteDispense?.primed.length ? [...primed, ...remoteDispense.primed] : primed);
@@ -765,6 +771,7 @@ function applyMultiplayerTick(message) {
   if (message.xp || remoteOrbs.size) syncMultiplayerOrbs(message.xp ?? []);
   if (message.items || remoteItems.size) syncMultiplayerItems(message.items ?? []);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
+  mpPlayerRows = message.players;
   remotePlayers?.sync(message.players, multiplayer.id);
 }
 // S36 open sign editor: the tile is the one the S33 description made (editable here, as the native client sets it); closing the editor sends C12.
@@ -3423,7 +3430,7 @@ function multiplayerDigStart() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) multiplayer.use(true); animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (heldId() === BOW && !eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true }; /* b63: the draw look and FOV from this player's own use state (the server decides the shot) */ } animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -3992,7 +3999,7 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") { multiplayer?.use(false); releaseBowUse(); eating = null; } // PlayerControllerMP.onStoppedUsingItem
+  else if (d === "key.use") { multiplayer?.use(false); if (!multiplayer) releaseBowUse(); /* b63: the server shoots a connected player's bow */ eating = null; } // PlayerControllerMP.onStoppedUsingItem
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
