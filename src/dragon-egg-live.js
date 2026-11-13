@@ -4,17 +4,22 @@
 // original. host: { world, serverRandom, clientRandom, updateBlock(x, y, z), spawnParticle(name, x, y, z, vx, vy, vz) }.
 import { DRAGON_EGG, teleportEgg } from "./dragon-egg.js";
 
-export function useDragonEgg(host, x, y, z) {
+// The client half alone (PlayerControllerMP runs onBlockActivated / onBlockClicked on its own world at the click: probe 'dragonegg-*', 128 portal particles, no block change).
+export function clientDragonEgg(host, x, y, z) {
   const { world } = host;
-  const isEgg = (i, j, k) => world.get(i, j, k) === DRAGON_EGG;
-  const meta = world.getMeta?.(x, y, z) ?? 0;
-  // Client branch first (the click is handled by the client before the server packet).
-  teleportEgg(x, y, z, host.clientRandom(), true, {
-    isEgg,
+  return teleportEgg(x, y, z, host.clientRandom(), true, {
+    isEgg: (i, j, k) => world.get(i, j, k) === DRAGON_EGG,
     isAir: (i, j, k) => world.get(i, j, k) === 0,
     place() {}, clear() {},
     particle: (name, ...v) => host.spawnParticle(name, ...v),
   });
+}
+// `skipClient`: the click already ran the client half (prediction5), so only the server's half runs now.
+export function useDragonEgg(host, x, y, z, skipClient = false) {
+  const { world } = host;
+  const isEgg = (i, j, k) => world.get(i, j, k) === DRAGON_EGG;
+  const meta = world.getMeta?.(x, y, z) ?? 0;
+  if (!skipClient) clientDragonEgg(host, x, y, z); // client branch first (the click is handled by the client before the server packet)
   return teleportEgg(x, y, z, host.serverRandom(), false, {
     isEgg,
     isAir: (i, j, k) => world.get(i, j, k) === 0,

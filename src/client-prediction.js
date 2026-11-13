@@ -7,7 +7,7 @@
 // answers get/getMeta from the overlay; every mutator goes to the real world. An entry ends when its queued task starts (the server's own
 // change, or its refusal, then lands in the real world and the cell is rebuilt, which is the S23).
 import { collides, isLiquid, BED, TORCH, REDSTONE_TORCH, REDSTONE_TORCH_OFF, LADDER, SNOW_LAYER, REEDS, CACTUS, DOUBLE_PLANT, SAPLING, TALL_GRASS, FERN, PISTON_HEAD,
-  REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, LIGHT_PLATE, HEAVY_PLATE, isFlower } from './world.js';
+  REPEATER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, LEVER, STONE_BUTTON, WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED, LIGHT_PLATE, HEAVY_PLATE, isFlower, FIRE, COMMAND_BLOCK } from './world.js';
 import { ITEMS } from './survival.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, isDoor, activateDoor, doorNeighbourChange, doorReplaceable, doorSound } from './doors-panes.js';
@@ -35,6 +35,11 @@ import { ITEM_CAKE } from './stems-cake.js';
 import { CAULDRON, FLOWER_POT, ITEM_CAULDRON, ITEM_FLOWER_POT } from './stone-utility.js';
 import { STATIONS } from './player-edit-simulation.js';
 import { traceBucket, placeContainedLiquid } from './buckets.js';
+import { canPlace as fireCanPlace } from './fire.js';
+import { potInsertion, potContents } from './stone-utility.js';
+import { makeStack } from './inventory.js';
+import { DRAGON_EGG } from './dragon-egg.js';
+import { isSplashDamage, ITEM_POTION } from './potions.js';
 
 const keyOf = (x, y, z) => `${x},${y},${z}`;
 
@@ -45,8 +50,11 @@ export function createPrediction(world) {
   view.getMeta = (x, y, z) => cells.get(keyOf(x, y, z))?.meta ?? world.getMeta(x, y, z);
   // A write through the view is the real write (the overlay never owns state).
   for (const m of ['set', 'put', 'setRaw']) if (typeof world[m] === 'function') view[m] = (...a) => world[m](...a);
+  // The plant of a flower pot lives outside the overlay (world.pots); a predicted pot content is kept per cell and the view's `pots` answers with it.
+  const pots = new Map();
+  Object.defineProperty(view, 'pots', { get: () => { if (!pots.size) return world.pots; const m = new Map(world.pots ?? []); for (const [k, v] of pots) m.set(k, v); return m; }, configurable: true });
   return {
-    world, cells, view,
+    world, cells, view, pots,
     get active() { return cells.size > 0; },
     // Records a predicted cell; returns false when it equals what the world has (nothing to show).
     // `token` names the queued task the entry belongs to; a later prediction of the same cell replaces it.
@@ -56,8 +64,10 @@ export function createPrediction(world) {
       return true;
     },
     // Ends an entry when its own task runs (a newer task's entry for the cell stays).
-    clear(x, y, z, token) { const e = cells.get(keyOf(x, y, z)); if (!e || (token !== undefined && e.token !== token)) return false; return cells.delete(keyOf(x, y, z)); },
-    clearAll() { const was = [...cells.values()]; cells.clear(); return was; },
+    clear(x, y, z, token) { const e = cells.get(keyOf(x, y, z)); if (!e || (token !== undefined && e.token !== token)) return false; pots.delete(keyOf(x, y, z)); return cells.delete(keyOf(x, y, z)); },
+    clearAll() { const was = [...cells.values()]; cells.clear(); pots.clear(); return was; },
+    // A predicted pot content ({ id, damage }) for a cell; it ends with the cell's entry. Returns false when the cell has no entry to hang it on.
+    setPot(x, y, z, content) { if (!cells.has(keyOf(x, y, z))) return false; pots.set(keyOf(x, y, z), { id: content.id, damage: content.damage | 0 }); return true; },
     // The world a client-side reader (aim, collision) sees.
     read() { return cells.size ? view : world; },
   };
@@ -118,6 +128,7 @@ export function clientNeighbourChange(w, x, y, z) {
   else if (b === SNOW_LAYER) { if (snowFalls(w, x, y, z)) w.set(x, y, z, 0); }
   else if (b === CARPET) { if (!carpetCanStay(w, x, y, z)) w.set(x, y, z, 0); }
   else if (isStemCake(b)) { if (popDrops(w, x, y, z) !== null) w.set(x, y, z, 0); }
+  else if (b === FIRE) { if (!fireCanPlace(w, x, y, z)) w.set(x, y, z, 0); } // BlockFire.onNeighborBlockChange (probe 'break-under-fire*': an unsupported fire goes, a flammable neighbour keeps it)
   else if (REDSTONE_PARTS.has(b)) { if (!redstoneSupported(w, b, x, y, z)) w.set(x, y, z, 0); }
 }
 const SIX = [[0, -1, 0], [0, 1, 0], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1]];
@@ -172,6 +183,26 @@ export function activateSound(block, random = Math.random) {
   if (isDoor(block) || block === TRAPDOOR || block === FENCE_GATE) return doorSound(random);
   return null;
 }
+// ItemFlintAndSteel.onItemUse on the client world (probe 'flint-*' records): the cell beside the face, when it is air, gets fire (the sound is the server's S29); BlockFire.onBlockAdded then
+// removes a fire with no solid top below and no flammable neighbour. The stack is damaged by 1 either way (outside Creative). Returns the cells that end up different.
+const FACE_STEP = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+export const isFlintAndSteel = (id) => !!id && ITEMS[id]?.kind === 'flint_and_steel';
+export function dryFlint(state, target) {
+  const { world } = state, q = target.adjacent ?? (target.face != null ? target.block.map((v, i) => v + FACE_STEP[target.face][i]) : null);
+  if (!q || q[1] <= 0 || q[1] >= (world.height === 256 ? 256 : (world.height ?? 256) - 1) || !world.inside(...q) || world.get(...q) !== 0) return [];
+  const { scratch, writes } = scratchWorld(world);
+  scratch.put(q[0], q[1], q[2], FIRE, 0);
+  if (!fireCanPlace(scratch, q[0], q[1], q[2])) return [];
+  return [...writes.values()];
+}
+// BlockFlowerPot.onBlockActivated on the client (probe 'pot-*': the client's tile takes the plant, the block metadata becomes the plant's damage, the stack loses one outside Creative).
+// Returns { cell, content } or null (a full pot, a non-plant: nothing changes).
+export function dryPot(state, target) {
+  const { world, heldId, heldDamage } = state, [x, y, z] = target.block;
+  if (!heldId || potContents(world, x, y, z)) return null;
+  const ins = potInsertion(heldId, heldDamage | 0);
+  return ins ? { cell: { x, y, z, block: FLOWER_POT, meta: ins.meta }, content: ins.content } : null;
+}
 // ItemBucket.onItemRightClick on the client world (executed, client-predict-reference.json 'bucket' records): Item.getMovingObjectPositionFromPlayer traces 5.0
 // blocks from the eye (liquids only for an empty bucket, boxless blocks skipped for a full one), an empty bucket removes a source of water or lava, a full one
 // sets its liquid beside the traced face (the Nether refuses water). The swapped bucket in the hand is the inventory's business and is not drawn here.
@@ -204,10 +235,16 @@ const EMPTY_BUCKET = 340;
 export const filledBucketOf = (block) => Object.values(ITEMS).find((i) => i?.bucket === 'filled' && i.contains === block)?.id ?? 0;
 export function heldPlan({ kind, stack, creative, placed = false, took = 0 }) {
   if (!stack || creative || !(stack.count > 0)) return null;
+  if (kind === 'flint') { const max = ITEMS[stack.id]?.durability || 0; return max && !stack.unbreakable && (stack.damage | 0) + 1 < max ? { dCount: 0, dDamage: 1 } : null; } // ItemStack.damageItem(1) on the client (a breaking tool is left to the server)
+  if (kind === 'pot') return placed ? { dCount: -1 } : null;
   if (kind === 'place' || kind === 'use' || kind === 'throw') return kind === 'throw' || placed ? { dCount: -1 } : null;
   if (kind !== 'bucket') return null;
   const k = tracedBucket(stack.id);
-  if (k === 'empty') { const to = took && stack.count === 1 ? filledBucketOf(took) : 0; return to ? { dCount: 0, swap: [stack.id, to] } : null; }
+  if (k === 'empty') { // a lone bucket becomes the filled one; a stack gives one and the filled bucket goes to the first free slot (probe 'empty-stack*'; with no free slot the client drops it, the entity is the server's)
+    const to = took ? filledBucketOf(took) : 0;
+    if (!to) return null;
+    return stack.count === 1 ? { dCount: 0, swap: [stack.id, to] } : { dCount: -1, give: to };
+  }
   return k === 'filled' && placed ? { dCount: 0, swap: [stack.id, EMPTY_BUCKET] } : null;
 }
 // Applies a plan to the real stack object (in place, so every reader of the hotbar sees it) and returns the undo. The undo is relative (a later queued click's
@@ -217,10 +254,20 @@ export function applyHeldPlan(inventory, plan) {
   if (!plan || !stack) return null;
   const was = stack.id;
   stack.count += plan.dCount;
+  if (plan.dDamage) stack.damage = (stack.damage | 0) + plan.dDamage;
   if (plan.swap) stack.id = plan.swap[1];
   if (stack.count <= 0) inventory.main[slot] = null;
+  let given = -1;
+  if (plan.give) { // InventoryPlayer.addItemStackToInventory of the filled bucket: the first free slot
+    const before = inventory.main.slice(), add = makeStack(plan.give);
+    inventory.add(add);
+    given = inventory.main.findIndex((m, i) => m && m !== before[i]);
+  }
+  const placed = given >= 0 ? inventory.main[given] : null;
   return () => {
+    if (placed && inventory.main[given] === placed) inventory.main[given] = null;
     stack.count -= plan.dCount;
+    if (plan.dDamage) stack.damage = (stack.damage | 0) - plan.dDamage;
     if (plan.swap && stack.id === plan.swap[1]) stack.id = was;
     if (stack.count > 0 && inventory.main[slot] === null) inventory.main[slot] = stack;
   };
@@ -260,6 +307,12 @@ export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
 export function useKind({ world, target, heldId, heldDamage = 0, sneaking, aimed }) {
   if (aimed) return null;
   const item = heldId ? ITEMS[heldId] : null, b = target ? world.get(...target.block) : 0;
+  if (target && (!sneaking || !item)) { // Block.onBlockActivated that acts on the client: the egg's particles, the command block's screen, a pot taking a plant
+    if (b === DRAGON_EGG) return 'egg';
+    if (b === COMMAND_BLOCK) return 'command';
+    if (b === FLOWER_POT && heldId && !potContents(world, ...target.block) && potInsertion(heldId, heldDamage | 0)) return 'pot';
+  }
+  if (target && isFlintAndSteel(heldId) && (sneaking || !activatesOnClick(b))) return 'flint';
   if (target && (!sneaking || !item) && (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE || b === STONE_BUTTON || b === WOODEN_BUTTON || b === REPEATER || b === COMPARATOR || b === COMPARATOR_POWERED)) return 'activate';
   if (tracedBucket(heldId)) return !target || sneaking || !activatesOnClick(b) ? 'bucket' : null; // the trace needs no block under the cursor (water)
   if (!target) return null;
@@ -285,3 +338,7 @@ export function drawPrediction(layer, scene, token, list) {
 export function revertPrediction(world, scene, pred) {
   if (pred) for (const c of pred.cells) if (world.get(c.x, c.y, c.z) === c.was.block && world.getMeta(c.x, c.y, c.z) === c.was.meta) scene.updateBlock(c.x, c.z, c.y);
 }
+
+// A splash potion is thrown like the other throwables (ItemPotion.onItemRightClick takes one from the client stack, the entity is the server's; probe 'throw373-*');
+// a drinkable potion only starts the use animation and keeps its count (probe 'drink373-x5').
+export const throwsPotion = (id, damage = 0) => id === ITEM_POTION && isSplashDamage(damage | 0);

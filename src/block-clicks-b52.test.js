@@ -39,7 +39,7 @@ test("b52: dig start with a serverTask hook queues the dragon egg, note and ore 
     assert.deepEqual(calls, [], `${hookName} waits for the network tick`);
     assert.equal(queue.length, 1);
     queue.shift()();
-    assert.deepEqual(calls, [[hookName, ...POS]], `${hookName} runs when the queue is replayed`);
+    assert.deepEqual(calls, [[hookName, ...POS, ...(block === DRAGON_EGG ? [true] : [])]], `${hookName} runs when the queue is replayed`); // b59: the egg's client half ran at the click ('clientDragonEgg'), so the queued call skips it
   }
 });
 
