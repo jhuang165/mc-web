@@ -1,4 +1,5 @@
 import { trackSections, trackChunkLoads, nearSpawn } from "./saved-order.js";
+import { copyLivingRoll, copyLivingUpdate } from "./copy-talk.js";
 import { steerHorseCopy, newHorseAnim, stepHorseCopy, horseCopyStatus } from "./horse-copy.js";
 import { EntityIds } from "./entity-ids.js";
 import { entityActive } from './streaming-ticks.js';
@@ -2047,6 +2048,7 @@ export class EntityWorld {
       livingSoundRoll(c, c.rand, SQUID.talkInterval);
       c.clientAir(this.clientSquidWet(c)); // EntityWaterMob.onEntityUpdate: ws.M() decides the air
     }
+    if (m.type !== "squid") copyLivingRoll(c, m); // batch 60 (copy-talk.js): the living sound roll of every other living copy, on its own Random
   }
   // ws.M() on the client entity: the water in its shrunk box pushes it along the flow (swimSquid record). Returns whether it is wet.
   clientSquidWet(c) {
@@ -2063,6 +2065,7 @@ export class EntityWorld {
   }
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (the copy's own watcher 16, S0F / S1C through the tracker, entity-tracker.js, not the live horse's), and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
+    copyLivingUpdate(c, m); // batch 60 (copy-talk.js): onLivingUpdate's particle draws (enderman, blaze, wither, slime landing)
     if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0, { alive: m.health > 0, child: m.growingAge < 0, type: m.horse?.type });
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
