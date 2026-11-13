@@ -4,7 +4,8 @@ import { skinCanvas } from '../skin.js';
 import { ITEMS } from '../survival.js';
 import { BOW } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
-import { itemCrumbs } from '../fx.js';
+import { itemCrumbs, burst } from '../fx.js';
+import { stepRemoteDeath } from './remote-death.js';
 import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
 
 // EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
@@ -59,6 +60,7 @@ export class RemotePlayers {
         this.drawLabel(entry);
       }
       this.applySkin(entry.renderer, p.skin);
+      { const d = stepRemoteDeath(entry, p.dead); if (d.burst && this.scene.fx) burst(this.scene.fx, 'explode', 20, { x: p.x, y: p.y - (p.ySize ?? 0), z: p.z, width: 0.6, height: 1.8 }, entry.rand); } // b60: S19 status 3 copy, 20 ticks of tilt then the poof
       if (entry.name !== p.name) { entry.name = p.name; this.drawLabel(entry); }
       entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0 });
       entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
@@ -71,8 +73,8 @@ export class RemotePlayers {
     const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
     for (const entry of this.entries.values()) {
       const p = entry.state;
-      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, ...useFlags(p), sneak: p.sneak, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
-      entry.label.visible = !p.sneak;
+      entry.renderer.update(entry.body, t, { visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, ...useFlags(p), sneak: p.sneak, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
+      entry.label.visible = !p.sneak && !entry.hidden;
     }
   }
   // Plain canvas text is only a name tag; untrusted names are never HTML.

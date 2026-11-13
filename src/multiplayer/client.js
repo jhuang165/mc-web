@@ -16,8 +16,8 @@ export function restoreReplica(snapshot) {
 
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {} } = {}) {
-    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onSlot, onAux, onWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {} } = {}) {
+    Object.assign(this, { onMobs, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -55,6 +55,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'mobs') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
+    if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
     if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
@@ -80,6 +81,7 @@ export class DedicatedClient {
     if (message.type === 'playerOp') this.onPlayerOp(message);
     if (message.type === 'sound') this.onSound(message);
     if (message.type === 'health') this.onHealth(message);
+    if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') this.onHealthFx(message);
     if (message.type === 'slot') this.onSlot(message);
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);
