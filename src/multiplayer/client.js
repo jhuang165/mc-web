@@ -15,8 +15,8 @@ export function restoreReplica(snapshot) {
 }
 
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onCollect = () => {}, onPlayerOp = () => {} } = {}) {
-    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {} } = {}) {
+    Object.assign(this, { onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -76,6 +76,7 @@ export class DedicatedClient {
     if (message.type === 'crack') this.onCrack(message);
     if (message.type === 'collect') this.onCollect(message);
     if (message.type === 'playerOp') this.onPlayerOp(message);
+    if (message.type === 'sound') this.onSound(message);
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
