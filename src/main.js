@@ -199,7 +199,7 @@ import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
 import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw, advanceWorldClock } from './dimension-live.js'; // Nether/End travel (dimensions track)
-import { inSpawnArea } from "./away-plan.js"; // batch 59: which mobs stayed loaded while the player was away
+import { awayCatchUp } from "./away-track.js"; // batch 60: the tracker ticks of the entities that stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -1414,6 +1414,7 @@ async function openWorld(record) {
   finally{openingWorld=false;tripLoading=false;warmer?.dispose();}
 }
 async function launch(record, prepared, { slice = false } = {}) {
+  let awayIdle = null;
   try {
     active = record;
     world = prepared;
@@ -1615,7 +1616,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.fx = scene.fx;
-    { const idle = !world.dimension && record.transit ? dims.takeIdle() : null; if (idle) mobs.idleTrack(idle.ticks, (e) => inSpawnArea(idle.spawn, Math.floor(e.x) >> 4, Math.floor(e.z) >> 4)); } // b59: the Overworld's spawn-area mobs kept their tracker phase while the player was in the Nether/End
+    awayIdle = !world.dimension && record.transit ? dims.takeIdle() : null; // b59/b60: the Overworld's spawn-area entities kept their tracker phase while the player was in the Nether/End (caught up below, once the object lists are loaded)
     for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
     pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null; crystalFireLayer.forget();
     mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
@@ -2986,6 +2987,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
   };
   // Batch 51: with the one list walk the object tracker's entries join the mob tracker's loop (EntityWorld.tickMobs, `jointTracking`), as EntityTracker walks mobs and objects together
+  if (mobs && awayIdle) { awayCatchUp(mobs, objectTracker, trackLists(), world, awayIdle); awayIdle = null; } // b60 (away-track.js): mobs and objects together
   if (mobs) mobs.jointTracking = () => world && screen !== "home" ? { tracker: objectTracker, lists: trackLists(), world, after: afterTrack } : null;
   const trackObjects = () => {
   if (world && screen !== "home") { // EntityTracker.updateTrackedEntities then the client's world tick for the non-mob entities
