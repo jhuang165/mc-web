@@ -15,31 +15,34 @@ const setup = (live, riding) => {
   return { t, c: [...t.entries.values()][0].client, log };
 };
 
-test("a ridden boat's copy splashes from the live boat's motion with the copy's own random, and follows the live state", () => {
-  const live = boatLive(), riding = { value: true }, { c, log } = setup(live, riding);
-  Object.assign(live, { x: 9.25, posY: 1.5, z: -3.5, vx: 0.3, vy: 0.01, vz: 0.1, yaw: 213.5, pitch: 0 });
-  c.stepVehicle(); // the copy has the live state from before: no splash yet, then it takes the new one
-  assert.equal(log.length, 0);
-  assert.deepEqual([c.x, c.y, c.z, c.vx, c.vy, c.vz, c.yaw], [9.25, 1.5, -3.5, 0.3, 0.01, 0.1, 213.5]);
-  const seed = 99; c.sim.rand = new JavaRandom(seed); const r = new JavaRandom(seed);
-  const d3 = Math.sqrt(0.3 * 0.3 + 0.1 * 0.1);
+test("a ridden boat's copy runs its own physics (batch 56): it does not take the live state, and splashes from its own motion and random", () => {
+  const world = { get: () => 0, getMeta: () => 0, meta: () => 0, solid: () => false, set() { return true; } };
+  const live = boatLive(), riding = { value: true }, { t, c, log } = setup(live, riding);
+  live.rider = { yaw: 0, moveForward: 0, moveStrafing: 0 };
+  c.world = world; c.firstUpdate = false;
+  Object.assign(live, { x: 90.25, posY: 11.5, z: -30.5, vx: 0.3 });
+  Object.assign(c, { x: 9.25, y: 1.5, z: -3.5, vx: 0.3, vy: 0, vz: 0.1, yaw: 213.5 });
+  c.sim.rand = new JavaRandom(99);
   c.stepVehicle();
-  assert.equal(log.length, Math.ceil(1 + d3 * 60));
-  const rad = 213.5 * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad);
-  for (const p of log) {
-    const d4 = f(f(r.nextFloat() * 2) - 1), d5 = (r.nextInt(2) * 2 - 1) * 0.7;
-    const want = r.nextBoolean() ? [9.25 - cs * d4 * 0.8 + sn * d5, 1.5 - 0.125, -3.5 - sn * d4 * 0.8 - cs * d5] : [9.25 + cs + sn * d4 * 0.7, 1.5 - 0.125, -3.5 + sn - cs * d4 * 0.7];
-    assert.deepEqual(p.slice(0, 4), ["splash", ...want]);
-    assert.deepEqual(p.slice(4), [0.3, 0.01, 0.1]);
-  }
-  assert.equal(c.sim.rand.nextInt(1000), r.nextInt(1000));
+  assert.ok(Math.abs(c.x - 9.25) < 1, `the copy moved on its own motion (x ${c.x}), not to the live ${live.x}`);
+  assert.ok(log.length > 0 && log.every((p) => p[0] === "splash"), "above 0.2625 blocks a tick it splashes");
 });
 
-test("a slow ridden boat does not splash, and the copy does not coast on its own", () => {
-  const live = boatLive({ vx: 0.2 }), riding = { value: true }, { c, log } = setup(live, riding);
-  c.stepVehicle(); c.stepVehicle();
+test("a slow ridden boat does not splash; a position packet within one block changes nothing, a far one only resets the motion", () => {
+  const world = { get: () => 0, getMeta: () => 0, meta: () => 0, solid: () => false, set() { return true; } };
+  const live = boatLive(), riding = { value: true }, { c, log } = setup(live, riding);
+  live.rider = { yaw: 0, moveForward: 0, moveStrafing: 0 };
+  c.world = world; c.firstUpdate = false;
+  c.setVelocity(0.1, 0, 0);
+  c.vx = 0.2; const x = c.x;
+  c.place(x + 0.5, c.y, c.z, 0, 0);
+  assert.equal(c.vx, 0.2, "near: ignored");
+  c.place(x + 3, c.y, c.z, 0, 0);
+  assert.equal(c.vx, 0.1, "far: the S12 motion again");
+  assert.equal(c.vt.inc, 3);
+  c.stepVehicle();
   assert.equal(log.length, 0);
-  assert.equal(c.x, 5.5, "no coast: the position is the live one");
+  assert.ok(c.x > x && c.x < x + 1, "it never interpolates to the packet: it coasts on its own physics");
 });
 
 test("an unridden boat copy still interpolates and coasts as before", () => {

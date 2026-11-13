@@ -221,7 +221,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy } from "./object-tracker.js";
+import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -440,7 +440,7 @@ let entityTick = null; // this tick's { state, hooks } for tickEntitySimulation,
 let objectTracker = new ObjectTracker(10, Math.random, entityIds); // Batch 42: the client view of items, orbs, arrows, thrown entities, falling blocks and TNT
 // Batch 44: the client copies spawn their own impact, trail, splash and rocket particles (object-tracker.js `hooks.particle`, `drainEvents`)
 function bindObjectTracker() {
-  objectTracker.hooks.rides = (live) => rider.vehicle === live; // Batch 51: the ridden boat's copy takes the live boat's state (object-tracker.js mirrorRidden)
+  objectTracker.hooks.rides = (live) => rider.vehicle === live; // Batch 51: the ridden boat's copy takes the live boat's state (batch 56: it runs its own physics, object-tracker.js rideBoat)
   objectTracker.hooks.particle = (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz);
   // Batch 45: the client copies' own sounds (impact, splash, step, rocket launch) and the entities their arrows and hooks search (the client mob copies and the player)
   // Their sounds are logged (object-tracker.js `sound`) but not played: the client world's playSoundAtEntity reaches only RenderGlobal.playSound
@@ -3025,8 +3025,9 @@ function seatOnCartCopy() {
     if (seat) { position.x = seat.x; position.y = seat.y; position.z = seat.z; }
     return;
   }
-  const c = live && !live.boat && !live.horse && rideCopy(objectTracker, live);
+  const c = live && !live.horse && rideCopy(objectTracker, live);
   if (!c) return;
+  if (c.kind === "boat") { const seat = boatSeat(c); position.x = seat.x; position.y = seat.y; position.z = seat.z; return; } // Batch 56: the boat copy runs its own physics from the rider's input
   position.x = c.x; position.y = c.y + minecarts.getMountedYOffset() - 0.5; position.z = c.z;
 }
 function applyVehicleState(state) {

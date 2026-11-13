@@ -75,12 +75,12 @@ test("the previous rotation is the last tick's", () => {
   assert.equal(v.prevYaw, before); assert.equal(v.yaw, c.yaw);
 });
 
-test("a boat the tracker follows that is out of range is not drawn; an untracked one and a ridden one use the live entity", () => {
+test("a boat the tracker follows that is out of range is not drawn; an untracked one uses the live entity, and a ridden one its copy (batch 56)", () => {
   const t = mk(), b = boat(), far = boat({ id: 8, x: 300, z: 300, px: 300, pz: 300 }), ridden = boat({ id: 10, x: 6, px: 6 });
   tick(t, { boat: [b, far, ridden] });
   const views = vehicleViews(t, [b, far, ridden], (e) => e === ridden);
   assert.equal(views.length, 2, "the far one has no copy");
-  assert.ok(views.includes(ridden), "the ridden boat is the live entity");
+  assert.ok(!views.includes(ridden), "the ridden boat is drawn from its copy");
   const fresh = boat({ id: 11 });
   assert.equal(vehicleView(t, fresh), fresh, "not tracked yet: live");
   assert.deepEqual(vehicleViews(t, [{ ...b, dead: true }]), []);
