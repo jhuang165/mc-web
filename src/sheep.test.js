@@ -117,7 +117,7 @@ test("a sheep eats grass in 40 ticks: dirt below, bare fleece grows back, and th
   assert.equal(e.eatTimer, 4);
   assert.deepEqual(edits, [[64, -1, 64, 2]]);
   assert.equal(e.sheared, false);
-  assert.deepEqual(w.drain().filter((x) => x.eatGrass), [{ eatGrass: { x: 64, y: -1, z: 64, block: 1 } }]);
+  assert.deepEqual(w.drain().filter((x) => x.eatGrass), [{ eatGrass: { x: 64, y: -1, z: 64, block: 1, meta: 0 } }]);
 });
 
 test("tall grass is destroyed instead of the dirt, a lamb grows 60 seconds, and panic interrupts grazing", () => {

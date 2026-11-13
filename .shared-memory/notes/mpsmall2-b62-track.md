@@ -20,7 +20,7 @@
 
 ## Verification
 - `node --test src/mpsmall2-b62.test.js`: 12 pass.
-- Targeted run of mp*, multiplayer*, dedicated*, server*, client*, tile-edits, wolf*, ocelot*, interchange*, enderman-wolf*, leash*, sheep*, entities*, ai*, creative*, b61*, entity-tracker*, inventory*, animal*, owner* test files: see the lead report for the count.
+- Targeted run of mp*, multiplayer*, dedicated*, server*, client*, tile-edits, wolf*, ocelot*, interchange*, enderman-wolf*, leash*, sheep*, entities*, ai*, creative*, b61*, entity-tracker*, inventory*, animal*, owner* test files: 579 tests in 49 files, all pass after the sheep.test.js event-shape update (meta added to the eatGrass event).
 - `node --check` on touched files; main.js scope: `creativePick` imported, `survival`, `multiplayer`, `active` are module scope names already used in `pickBlock`/`edit`.
 - `npm run build`. Full npm test not run (batch rule). No browser check (batch rule).
 
