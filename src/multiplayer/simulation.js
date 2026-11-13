@@ -35,6 +35,7 @@ import { BOW, canDraw } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
+import { ServerContainers } from './server-containers.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -91,6 +92,7 @@ export class DedicatedSimulation {
     this.actions = [];
     this.soundRand = seeded(); this.soundsOut = []; // World.rand for the drink and burp pitch; sounds queued this tick
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
+    this.containers = new ServerContainers(this); // chest, furnace, dispenser, hopper, brewing and ender chest windows (server-containers.js)
     // The tile entities the clients are told about (tile-sync.js); flower pots live on the world. Signs and skulls are placed by `edit`, a sign's
     // text comes in by `updateSign` (C12), a beacon's effects by `chooseBeacon` (MC|Beacon) and a spawner's mob by `setSpawnerEntity`; each
     // marks its cell (`tileChanged`) and the next tick sends the description packet (S33 / S35) with the cell changes.
@@ -157,11 +159,11 @@ export class DedicatedSimulation {
     this.players.delete(id);
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, ...vitalsOf(p.survival) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
-    if (!this.serverItems.adopt(p, message)) return false;
+    if (!p.window && !this.serverItems.adopt(p, message)) return false; // an open container window owns the server inventory (server-containers.js)
     Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
     p.survival.inventory.current = message.current;
     return true;
@@ -309,6 +311,7 @@ export class DedicatedSimulation {
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
+    if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     const id = state.heldTool;
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
@@ -368,7 +371,10 @@ export class DedicatedSimulation {
     return true;
   }
   // C0D close window.
-  closeWindow(id) { const p = this.players.get(id); if (p) p.beaconWindow = null; }
+  closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
+  clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
+  windowInventory(id, m) { const p = this.players.get(id); return !!p && this.containers.inventory(p, m); }
+  confirmTransaction(id, m) { const p = this.players.get(id); if (p) this.containers.confirm(p, m); } // C0F
   // The MC|Beacon custom payload (NetHandlerPlayServer): only while the player has a beacon window open at that cell and a payment sits in slot 0
   // (one item is consumed); each pick is checked against the pyramid level (applyBeaconPick).
   chooseBeacon(id, m) {
@@ -391,6 +397,7 @@ export class DedicatedSimulation {
   // A tile entity goes with its block (BlockContainer.breakBlock / World.removeTileEntity).
   dropTiles(x, y, z, block) {
     const t = this.tileEntities;
+    this.containers.reap(x, y, z, block);
     if (!isSign(block)) t.signs.remove(x, y, z);
     if (block !== SKULL) t.skulls.remove(x, y, z);
     if (block === BEACON) t.beacons.ensure(x, y, z); else t.beacons.remove(x, y, z); // BlockContainer.onBlockAdded makes the tile, a default one
@@ -399,6 +406,7 @@ export class DedicatedSimulation {
   tick() {
     const beforeLit = new Set(this.redstone.lit);
     this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle
+    this.containers.tick();
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       const moved = movePlayer(p, p.dead ? IDLE_INPUT : controls);
@@ -458,7 +466,7 @@ export class DedicatedSimulation {
       if (t) tiles.push(t);
     }
     this.dirtyTiles.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields() };
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }

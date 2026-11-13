@@ -195,6 +195,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
         else if (m.type === 'openInventory') social.openInventory(id); // C16 status 2: Taking Inventory
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
+        else if (m.type === 'clickWindow') simulation.clickWindow(id, m); // C0E
+        else if (m.type === 'windowInventory') simulation.windowInventory(id, m); // the client's 36 slots after S2D
+        else if (m.type === 'confirmTransaction') simulation.confirmTransaction(id, m); // C0F
         else if (m.type === 'chat' && typeof m.text === 'string') {
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
@@ -228,6 +231,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           const t = simulation.tileEntities.beacons.get(...player.openBeacon);
           send(ws, { type: 'beaconWindow', x: player.openBeacon[0], y: player.openBeacon[1], z: player.openBeacon[2], levels: t.levels, primary: t.primary, secondary: t.secondary, payment: t.payment ? { id: t.payment.id, damage: t.payment.damage ?? 0 } : null });
         }
+        for (const w of player.windowOut ?? []) if (ws) send(ws, w); // S2D / S30 / S2F / S32 / S31 / S2E
+        player.windowOut = null;
         if (player.cracksOut && ws) send(ws, { type: 'crack', cracks: player.cracksOut }); // S25 block break animation of the other players (range 32)
         for (const stack of player.collectedOut ?? []) if (ws) send(ws, { type: 'collect', stack }); // items picked up, added to the client's inventory
         if (player.soundsOut && ws) send(ws, { type: 'sound', sounds: player.soundsOut }); // S29 random.eat / random.drink / random.burp of other players (range 16)

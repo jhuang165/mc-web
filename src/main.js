@@ -207,6 +207,7 @@ import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
+import { buildWindow, wireClicks, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -713,6 +714,7 @@ function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
   applyMultiplayerCells(message.changes);
+  if (message.blockActions) applyBlockActions(message.blockActions, survival); // S24 chest lids of every viewer
   if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners }); // the S33/S35 descriptions that follow a chunk resend
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
@@ -753,6 +755,27 @@ function openMultiplayerBeacon({ x, y, z, levels, primary, secondary, payment })
   useBeacon(`${x},${y},${z}`);
   containerView.remote = { client: multiplayer, x, y, z, sent: payment?.id ?? null };
 }
+// S2D open window for a chest, furnace, dispenser, hopper, brewing stand or ender chest: the singleplayer container predicts the clicks (C0E), the
+// server answers with S30 / S2F / S32 / S31 (client-containers.js). Closing sends C0D through containerView.remote; the server throws the held stack.
+let mpWindow = null;
+function onMultiplayerWindow(m) {
+  const client = multiplayer;
+  if (!client?.ready || !active?.remote) return;
+  if (m.type === 'openWindow') {
+    if (screen !== 'playing') { client.closeWindow(); return; }
+    const built = buildWindow(m, { survival, world });
+    if (!built) { client.closeWindow(); return; }
+    openContainer(built.container, built.kind, built.key);
+    containerView.remote = { client, window: true };
+    wireClicks(built.container, client, m.windowId);
+    mpWindow = { ...built, windowId: m.windowId, survival, client };
+    client.windowInventory(m.windowId, inventoryWire(survival.inventory));
+    return;
+  }
+  if (!mpWindow || m.windowId !== mpWindow.windowId) return;
+  if (m.type === 'windowClose') { if (containerView?.container === mpWindow.container) { containerView.remote = null; resume(); } mpWindow = null; return; } // S2E
+  if (containerView?.container === mpWindow.container) { applyWindow(m, mpWindow); refreshContainer(); }
+}
 const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb']);
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
@@ -763,7 +786,7 @@ async function joinMultiplayer(settings) {
     onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); },
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
-    onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
+    onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
@@ -787,7 +810,7 @@ async function joinMultiplayer(settings) {
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
-    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.');
+    printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Mobs and dimension travel are not connected yet.' : 'Shared Creative world on ledoge0. World border: 128 × 128. Mobs and dimension travel are not connected yet.');
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
@@ -2326,6 +2349,7 @@ function closeContainer() {
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
   container.close();
   if (kind === "chest") redstoneRuntime?.chestViewersChanged(container.keys); // a trapped chest's power follows its viewers
+  if (remote?.window) { container.drops.length = 0; mpWindow = null; } // the server throws the held stack (S2E / C0D)
   throwStacks(container.drops.splice(0));
   renderHotbar();
   saved = false;
