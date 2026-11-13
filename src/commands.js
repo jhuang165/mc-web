@@ -1,4 +1,4 @@
-import { selectLocalPlayer, selectsNobody } from "./command-selector.js";
+import { selectLocalPlayer, selectPlayers, selectsNobody, expandsSelector, playerRecords, USERNAME_INDEX } from "./command-selector.js";
 // The singleplayer command layer of Minecraft Java 1.7.10: CommandHandler.executeCommand, the permission rule of
 // EntityPlayerMP.canCommandSenderUseCommand, CommandBase's argument parsers and the vanilla commands the port can honour.
 // Names, aliases, permission levels, usage keys, the registries and the en_US strings are generated into command-data.js by
@@ -158,9 +158,11 @@ export function createCommandRunner(host) {
       if (i > 0) root.append(textComponent(" "));
       let part = textComponent(w);
       if (selectors && /^@[parf](?:\[[\w=,!-]*\])?$/.test(w)) {
-        const hit = selectLocalPlayer(w, host);
-        if (hit == null) throw playerNotFound();
-        part = textComponent("").append(playerComponent(hit));
+        // CommandBase.func_147176_a: PlayerSelector.b joins every match with CommandBase.func_147177_a (", " between, " and " before the last; one match is itself).
+        const hits = selectPlayers(w, host);
+        if (!hits.length) throw playerNotFound();
+        part = textComponent("");
+        hits.forEach((h, k) => { if (k > 0) part.append(textComponent(k === hits.length - 1 ? " and " : ", ")); part.append(playerComponent(h)); }); // executed: one "" sibling list, no extra level
       }
       root.append(part);
     });
@@ -169,10 +171,19 @@ export function createCommandRunner(host) {
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
   // The ChatComponentTranslation(key, args) the native sender receives travels beside the text (a command block keeps it as LastOutput); a number argument is Double/Integer.toString.
   const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args), translation(key, ...args));
-  const player = (s) => {
+  // CommandBase.getPlayer: PlayerSelector.matchOnePlayer (exactly one match), else the online player of that name (ServerConfigurationManager.func_152612_a), else not found.
+  const anyPlayer = (s) => {
     const selected = selectLocalPlayer(s, host);
-    if (selected || s.toLowerCase() === playerName().toLowerCase()) return selected ?? playerName();
+    if (selected) return selected;
+    const online = playerRecords(host).find((r) => r.name.toLowerCase() === s.toLowerCase());
+    if (online) return online.name;
     throw playerNotFound();
+  };
+  // Only chat reaches another player in this build; the other commands change the local player's state, so a different online player is refused.
+  const player = (s) => {
+    const n = anyPlayer(s);
+    if (n.toLowerCase() !== playerName().toLowerCase()) throw new CommandException("commands.generic.exception", ["This command cannot target another player in this build"], "unsupported");
+    return n;
   };
   const targetArg = (a, i) => { if (a.length > i) return player(a[i]); if (host.isCommandBlock) throw playerNotFound(); return playerName(); };
   const gameMode = (s) => {
@@ -251,13 +262,13 @@ export function createCommandRunner(host) {
     },
     tell(a) {
       if (a.length < 2) usage("commands.message.usage");
-      const target = player(a[0]);
+      const target = anyPlayer(a[0]);
       if (target === name()) throw new CommandException("commands.message.sameTarget");
-      const message = messageComponent(a.slice(1));
+      const message = messageComponent(a.slice(1), !!host.isCommandBlock); // CommandMessage passes func_147176_a flag !(sender instanceof EntityPlayer) (executed, trio rows)
       // CommandMessage: both are gray italic translations; the target gets the incoming one (the sender's component), the sender the outgoing one.
       const grey = (key, who) => { const c = translation(key, who, message); c.style.color = "gray"; c.style.italic = true; return c; };
       const incoming = grey("commands.message.display.incoming", senderOf()), outgoing = grey("commands.message.display.outgoing", playerComponent(target));
-      host.broadcast?.(tr("commands.message.display.incoming", name(), message.unformatted()), incoming);
+      (host.deliver ? (t, c) => host.deliver(target, t, c) : host.broadcast)?.(tr("commands.message.display.incoming", name(), message.unformatted()), incoming);
       say(tr("commands.message.display.outgoing", target, message.unformatted()), outgoing);
     },
     seed() { feedback("commands.seed.success", String(host.seed())); },
@@ -544,6 +555,16 @@ export function createCommandRunner(host) {
       if (!allowed(command)) throw new CommandException("commands.generic.permission");
       if (UNSUPPORTED.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available in this build`], "unsupported");
       if (selectsNobody(command.name, parts, host)) return false; // CommandHandler.a: no matching player, no run, no message
+      const at = USERNAME_INDEX[command.name];
+      if (at !== undefined && parts[at] !== undefined && expandsSelector(parts[at])) {
+        // CommandHandler.a: the command runs once per matched player with the selector replaced by that player's name; each failure is reported on its own.
+        let ran = false;
+        for (const who of selectPlayers(parts[at], host)) {
+          const copy = [...parts]; copy[at] = who;
+          try { handlers[command.name](copy); ran = true; } catch (e) { fail(e); }
+        }
+        return ran;
+      }
       handlers[command.name](parts);
       return true;
     } catch (e) {

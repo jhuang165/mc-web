@@ -10,9 +10,20 @@ const POSITIONAL = ['x', 'y', 'z', 'r'];
 export const USERNAME_INDEX = { give: 0, clear: 0, effect: 0, enchant: 0, spawnpoint: 0, testfor: 0, tell: 0, tp: 0, tellraw: 0, gamemode: 1, xp: 1, playsound: 1, achievement: 2 };
 // CommandHandler.a with zero matches runs the command zero times and prints nothing; the count is 0. True when this command line is that case.
 // Only the @p, @a and @r tokens: ad.c answers null for the dead @f token, which the original does not handle.
+// CommandHandler.a only expands a selector (usernameIndex) when ad.a(String) says its count is not 1 (@a without c=1, c=0, c<0, c>1); an @p/@r/c=1 selector runs the command
+// once with the raw text and the command's own getPlayer (matchOnePlayer) decides: no match is commands.generic.player.notFound (executed, cmd-chat-reference.json
+// /tell @p[r=5] from a command block). So only the expanding selectors that match nobody are silent.
 export function selectsNobody(name, args, host) {
   const at = USERNAME_INDEX[name], text = at === undefined ? undefined : args[at];
-  return text !== undefined && /^@[par](?:\[[\w=,!-]*\])?$/.test(text) && !selectLocalPlayer(text, host);
+  return text !== undefined && expandsSelector(text) && selectPlayers(text, host).length === 0;
+}
+// ad.a(String): the token matches and its count (default 0 for @a, 1 for @p/@r; c= overrides) is not 1.
+export function expandsSelector(text) {
+  const match = /^@([par])(?:\[([\w=,!-]*)\])?$/.exec(text);
+  if (!match) return false;
+  const args = parseSelectorArguments(match[2]);
+  const count = args.has('c') ? parseIntWithDefault(args.get('c'), selectorDefaults(match[1]).c) : selectorDefaults(match[1]).c;
+  return count !== 1;
 }
 
 // MathHelper.parseIntWithDefault (qh.a): Integer.parseInt, any NumberFormatException gives the default.
@@ -67,13 +78,23 @@ function distanceSquared(a, b) {
 }
 const chunkCoordinates = (p) => ({ x: Math.floor(p.x), y: Math.floor(p.y + 0.5), z: Math.floor(p.z) });
 
-// Returns the local player's name when the selector picks them, null when it picks nobody (or is not a selector).
+// The players oi.a (ServerConfigurationManager.findPlayers) can see: host.players() (records { name, position(), mode, level, elsewhere }) in join order,
+// or just the local player the single-player host describes.
+export function playerRecords(host) {
+  if (host.players) return host.players();
+  const name = host.playerName ?? host.name ?? 'Player';
+  return [{ name, position: host.playerPosition ?? host.position, mode: host.playerMode?.() ?? 0, level: host.playerLevel?.() ?? 0, elsewhere: !!host.playerElsewhere }];
+}
+const entityDistanceSquared = (a, o) => (a.x - o.x) ** 2 + (a.y - o.y) ** 2 + (a.z - o.z) ** 2; // Entity.getDistanceSq(double...) against the integer origin
+
+// PlayerSelector.c + oi.a over every player record: the matching names in the native order (filters, nearest first by Entity.getDistanceSq from the origin,
+// reversed for a negative count, cut to |count|; @r shuffles and takes the first c). [] when the token matches nobody or is not a selector.
 // An @r with a negative count throws like subList(0, c) does natively (CommandHandler reports commands.generic.exception).
-export function selectLocalPlayer(text, host) {
+export function selectPlayers(text, host) {
   const match = TOKEN.exec(text);
-  if (!match) return null;
+  if (!match) return [];
   const token = match[1];
-  if (token === 'f') return null; // ad.c falls through to null for f
+  if (token === 'f') return []; // ad.c falls through to null for f
   const args = parseSelectorArguments(match[2]);
   const d = selectorDefaults(token);
   const num = (key, fallback) => (args.has(key) ? parseIntWithDefault(args.get(key), fallback) : fallback);
@@ -83,43 +104,63 @@ export function selectLocalPlayer(text, host) {
   const origin = chunkCoordinates(host.position());
   for (const axis of ['x', 'y', 'z']) if (args.has(axis)) origin[axis] = parseIntWithDefault(args.get(axis), origin[axis]);
   if (token === 'r' && count < 0) throw new RangeError(`toIndex = ${count}`);
-  // Away run (away-commands.js): the player is in another dimension. oi.a skips players whose world differs from the sender's, and ad.c passes the
-  // sender's world only when rm, r, x, y or z is given: those selectors find nobody, the others still find the player. Scoreboard filters cannot be read there.
-  if (host.playerElsewhere) {
-    if (['rm', 'r', 'x', 'y', 'z'].some(k => args.has(k))) return null;
-    if (args.has('team') || scores.size) host.awaySkip();
-  }
-  const name = host.playerName ?? host.name ?? 'Player';
-  const player = host.playerPosition ?? host.position;
   const board = host.scoreboard;
-  // oi.a: name, team, radius, scores, game mode, levels, in that order.
   const nameArg = args.get('name'), teamArg = args.get('team');
-  if (nameArg != null) {
-    const invert = nameArg.startsWith('!'), want = invert ? nameArg.slice(1) : nameArg;
-    if (invert === (want.toLowerCase() === name.toLowerCase())) return null;
+  const found = [];
+  let awaySkipped = false;
+  for (const rec of playerRecords(host)) {
+    // Away run (away-commands.js): the player is in another dimension. oi.a skips players whose world differs from the sender's, and ad.c passes the
+    // sender's world only when rm, r, x, y or z is given: those selectors find nobody, the others still find the player. Scoreboard filters cannot be read there.
+    if (rec.elsewhere) {
+      if (['rm', 'r', 'x', 'y', 'z'].some(k => args.has(k))) continue;
+      if ((args.has('team') || scores.size) && !awaySkipped) { awaySkipped = true; host.awaySkip(); }
+    }
+    const name = rec.name;
+    // oi.a: name, team, radius, scores, game mode, levels, in that order.
+    if (nameArg != null) {
+      const invert = nameArg.startsWith('!'), want = invert ? nameArg.slice(1) : nameArg;
+      if (invert === (want.toLowerCase() === name.toLowerCase())) continue;
+    }
+    if (teamArg != null) {
+      const invert = teamArg.startsWith('!'), want = invert ? teamArg.slice(1) : teamArg;
+      const has = board?.teamOf(name)?.name ?? '';
+      if (invert === (want.toLowerCase() === has.toLowerCase())) continue;
+    }
+    if (rm > 0 || r > 0) {
+      const distance = distanceSquared(origin, chunkCoordinates(rec.position()));
+      if (rm > 0 && distance < f32(Math.imul(rm, rm))) continue;
+      if (r > 0 && distance > f32(Math.imul(r, r))) continue;
+    }
+    // func_96457_a: score_<objective>=max and score_<objective>_min=min; a missing objective fails. Reading the score creates it, as natively.
+    let scoreOk = true;
+    for (const [key, want] of scores) {
+      const min = key.endsWith('_min') && key.length > 4;
+      const o = board?.objective(min ? key.slice(0, -4) : key);
+      if (!o) { scoreOk = false; break; }
+      const v = board.score(name, o).value;
+      if (min ? v < want : v > want) { scoreOk = false; break; }
+    }
+    if (!scoreOk) continue;
+    if (mode !== -1 && mode !== rec.mode) continue;
+    if (lm > 0 && rec.level < lm) continue;
+    if (rec.level > l) continue;
+    found.push(rec);
   }
-  if (teamArg != null) {
-    const invert = teamArg.startsWith('!'), want = invert ? teamArg.slice(1) : teamArg;
-    const has = board?.teamOf(name)?.name ?? '';
-    if (invert === (want.toLowerCase() === has.toLowerCase())) return null;
+  if (token === 'r') {
+    // Collections.shuffle (Fisher-Yates from the end), then subList(0, min(c, size)).
+    const rnd = host.random ?? Math.random;
+    for (let i = found.length; i > 1; i--) { const j = Math.floor(rnd() * i), t = found[i - 1]; found[i - 1] = found[j]; found[j] = t; }
+    return found.slice(0, Math.min(count, found.length)).map(rec => rec.name);
   }
-  if (rm > 0 || r > 0) {
-    const distance = distanceSquared(origin, chunkCoordinates(player()));
-    if (rm > 0 && distance < f32(Math.imul(rm, rm))) return null;
-    if (r > 0 && distance > f32(Math.imul(r, r))) return null;
-  }
-  // func_96457_a: score_<objective>=max and score_<objective>_min=min; a missing objective fails. Reading the score creates it, as natively.
-  for (const [key, want] of scores) {
-    const min = key.endsWith('_min') && key.length > 4;
-    const o = board?.objective(min ? key.slice(0, -4) : key);
-    if (!o) return null;
-    const v = board.score(name, o).value;
-    if (min ? v < want : v > want) return null;
-  }
-  const playerMode = host.playerMode?.() ?? 0, level = host.playerLevel?.() ?? 0;
-  if (mode !== -1 && mode !== playerMode) return null;
-  if (lm > 0 && level < lm) return null;
-  if (level > l) return null;
-  if (token === 'r' && count === 0) return null; // subList(0, 0)
-  return name;
+  found.sort((a, b) => entityDistanceSquared(a.position(), origin) - entityDistanceSquared(b.position(), origin)); // ln: a stable sort by distance
+  if (count < 0) found.reverse();
+  const limit = Math.abs(count);
+  return (limit > 0 ? found.slice(0, Math.min(limit, found.length)) : found).map(rec => rec.name);
+}
+
+// The single-player view: the local player's name when the selector picks exactly that player, null when it picks nobody.
+// With several players this is PlayerSelector.a (matchOnePlayer): the player only when exactly one matched.
+export function selectLocalPlayer(text, host) {
+  const names = selectPlayers(text, host);
+  return names.length === 1 ? names[0] : null;
 }
