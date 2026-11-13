@@ -116,6 +116,7 @@ export class ServerItems {
       if (!(n > 0)) return false;
       (p.collectedOut ??= []).push(copyStack({ ...stack, count: n }));
       (sim.events ??= []).push({ type: 'pickup', id: p.id, item: stack.id }); // the achievement triggers (server-broadcast.js pickedAchievement)
+      sim.achievements.diamondsToYou(p, stack, e); // xk.b_: a diamond thrown by another online player awards the thrower (b60)
       stack.count -= n;
       if (stack.count <= 0) this.taken.push({ i: e.eid, by: p.id });
       // EntityItem.onCollideWithPlayer: random.pop 0.2, pitch ((r - r) * 0.7 + 1) * 2, for everyone in range (the collector's client plays its own).

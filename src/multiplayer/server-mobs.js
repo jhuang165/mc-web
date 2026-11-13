@@ -63,6 +63,7 @@ export class ServerMobs {
     mobs.explodeInline = ev => this.explode(ev.explode);
     mobs.spawnLoot = events => { for (const ev of events) if (ev.drop) host.items.dropMob(ev.drop, ev.count, ev.position, ev.damage, ev); }; // experience orbs are not connected
     mobs.beforeMob = e => this.target(e);
+    host.achievements?.watchMobs(mobs); // b60: killEnemy, snipeSkeleton, overkill for the attacker of the moment
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known, spawner }
     this.probe = { x: 0, y: 0, z: 0 };
   }
@@ -187,7 +188,8 @@ export class ServerMobs {
     const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
     if (dx * dx + dy * dy + dz * dz > 36) return false; // 6 blocks, a little over the creative reach of 5
     this.use(v);
-    return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw });
+    if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
+    try { return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }); } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
   }
   save() { return this.mobs.entities.filter(e => e.health > 0).map(e => this.mobs.serializeOne(e)); }
 }

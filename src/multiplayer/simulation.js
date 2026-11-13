@@ -35,6 +35,7 @@ import { BOW, canDraw } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerItems } from './server-items.js';
+import { ServerAchievements } from './server-achievements.js';
 import { ServerContainers } from './server-containers.js';
 import { ServerMobs } from './server-mobs.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
@@ -87,6 +88,7 @@ export class DedicatedSimulation {
     this.nextItemId = 0; this.itemsSent = 0;
     this.items.joined = e => { e.eid = ++this.nextItemId; };
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
+    this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
@@ -385,6 +387,7 @@ export class DedicatedSimulation {
     return true;
   }
   // C0D close window.
+  dropHeld(id, all) { return this.achievements.dropThrown(this.players.get(id), !!all); } // b60 achDrop: Q / Ctrl+Q with the thrower name
   closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
   clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
   windowInventory(id, m) { const p = this.players.get(id); return !!p && this.containers.inventory(p, m); }
@@ -437,6 +440,7 @@ export class DedicatedSimulation {
       if (this.items.items.length > 300) this.items.items.splice(0, this.items.items.length - 300); // oldest first, a safety cap for one wire message
     }
     this.serverItems.tickOrbs();
+    this.achievements.tick(); // b60: biomes and beacons
     for (const { id, place, dig, use, attack } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;

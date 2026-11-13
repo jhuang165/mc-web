@@ -194,6 +194,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
+        else if (m.type === 'achDrop') simulation.dropHeld(id, m.all === true); // b60: Q / Ctrl+Q, the item entity carries the thrower
         else if (m.type === 'openInventory') social.openInventory(id); // C16 status 2: Taking Inventory
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'clickWindow') simulation.clickWindow(id, m); // C0E
