@@ -387,6 +387,8 @@ export class DedicatedSimulation {
   // C0D close window.
   closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
   clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
+  // b60 (server-stations.js): C11 EnchantItem and the MC|ItemName payload of the open station window.
+  station(id, m) { const p = this.players.get(id); return !!p && (m.type === 'stationEnchant' ? this.containers.stations.enchant(p, m) : m.type === 'stationItemName' && this.containers.stations.rename(p, m)); }
   windowInventory(id, m) { const p = this.players.get(id); return !!p && this.containers.inventory(p, m); }
   confirmTransaction(id, m) { const p = this.players.get(id); if (p) this.containers.confirm(p, m); } // C0F
   // The MC|Beacon custom payload (NetHandlerPlayServer): only while the player has a beacon window open at that cell and a payment sits in slot 0

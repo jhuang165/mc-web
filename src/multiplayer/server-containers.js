@@ -12,6 +12,7 @@ import { DispenserContainer, DISPENSER_TITLE, DROPPER_TITLE, newDispenser } from
 import { HOPPER, HopperContainer, newHopperTile } from '../hopper.js';
 import { BREWING_STAND, brewingView, newBrewingTile } from '../brewing.js';
 import { BrewingContainer } from '../brewing-container.js';
+import { ServerStations, STATION_BLOCKS } from './server-stations.js'; // b60: crafting table, enchanting table, anvil
 
 export const FURNACE = 14;
 const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color'];
@@ -32,13 +33,13 @@ const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count ===
 const sig = s => (s ? JSON.stringify(s) : '');
 
 export class ServerContainers {
-  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.lids = new Map(); this.actions = []; }
+  constructor(sim) { this.sim = sim; this.nextWindow = 0; this.lids = new Map(); this.actions = []; this.stations = new ServerStations(sim); }
   get tiles() { return this.sim.tiles; }
   // Called from DedicatedSimulation.edit for a right click on `block` (activates: not sneaking with an item in hand). True when the click was handled.
   use(p, x, y, z, block, activates) {
     if (!activates) return false;
     const key = `${x},${y},${z}`, s = p.survival, w = this.sim.world;
-    let container, kind, title, extra = {};
+    let container, kind, title, extra = {}, stationProps = null;
     if (block === FURNACE) { container = s.openFurnace(key, () => {}); kind = 'furnace'; title = 'Furnace'; }
     else if (block === ENDER_CHEST) { container = s.openEnderChest(w, x, y, z); kind = 'chest'; title = 'Ender Chest'; extra = { ender: true }; if (!container) return true; }
     else if (isChestBlock(block)) { container = s.openChest(w, x, y, z); kind = 'chest'; if (!container) return true; title = container.title; }
@@ -51,11 +52,14 @@ export class ServerContainers {
     } else if (block === BREWING_STAND) {
       const tile = (s.brewing[key] ??= newBrewingTile());
       container = new BrewingContainer(s.inventory, brewingView(tile), null); kind = 'brewing'; title = container.title;
+    } else if (STATION_BLOCKS.has(block)) {
+      const st = this.stations.open(p, block, x, y, z); // b60 (server-stations.js)
+      ({ container, kind, title } = st); stationProps = st.props;
     } else return false;
     this.close(p);
     s.inventory.cursor = null;
     const id = (this.nextWindow % 100) + 1; this.nextWindow++;
-    p.window = { id, kind, container, key: [x, y, z], block, last: [], cursor: '', props: [], pending: 0, ready: false };
+    p.window = { id, kind, container, key: [x, y, z], block, last: [], cursor: '', props: [], pending: 0, ready: false, stationProps };
     container.title = title;
     this.out(p, { type: 'openWindow', windowId: id, kind, title, x, y, z, size: container.slots.length, rows: container.rows, ...(kind === 'chest' ? { keys: container.keys } : {}), ...extra });
     return true;
@@ -91,7 +95,7 @@ export class ServerContainers {
     this.drain(p);
     if (same(claimed, result ? copyStack(result) : null)) {
       this.out(p, { type: 'confirmTransaction', windowId: win.id, action: m.action, accepted: true });
-      this.changes(p);
+      this.changes(p); this.sendProps(p, false); // b60: a station's costs change with the click (detectAndSendChanges sends S31 with the slots)
     } else {
       win.pending = this.sim.ticks + PENDING_TICKS;
       this.out(p, { type: 'confirmTransaction', windowId: win.id, action: m.action, accepted: false });
@@ -115,6 +119,7 @@ export class ServerContainers {
   props(win, s) {
     if (win.kind === 'furnace') { const f = s.furnace(win.key.join(',')); return [f.cook | 0, f.burn | 0, f.burnTotal | 0]; }
     if (win.kind === 'brewing') return [s.brewing[win.key.join(',')]?.brewTime | 0];
+    if (win.stationProps) return win.stationProps(); // enchanting costs (S31 0..2), anvil maximumCost (S31 0)
     return [];
   }
   sendProps(p, all) {
@@ -122,6 +127,8 @@ export class ServerContainers {
     now.forEach((v, i) => { if (all || win.props[i] !== v) this.out(p, { type: 'windowProperty', windowId: win.id, id: i, value: v }); });
     win.props = now;
   }
+  // After the server changed the open window itself (C11, MC|ItemName): the dropped stacks, then the changed slots and properties.
+  afterServerChange(p) { if (!p.window?.ready) return; this.drain(p); this.changes(p); this.sendProps(p, false); }
   canInteract(p) {
     const win = p.window, [x, y, z] = win.key, b = this.sim.world.get(x, y, z), ok = win.kind === 'chest' ? (win.container.keys ?? []).every(k => {
       const [a, c, d] = k.split(',').map(Number), bb = this.sim.world.get(a, c, d); return isChestBlock(bb) || bb === ENDER_CHEST;

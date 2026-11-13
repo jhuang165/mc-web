@@ -208,7 +208,7 @@ import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
-import { buildWindow, wireClicks, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
+import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -759,16 +759,21 @@ function openMultiplayerBeacon({ x, y, z, levels, primary, secondary, payment })
 // S2D open window for a chest, furnace, dispenser, hopper, brewing stand or ender chest: the singleplayer container predicts the clicks (C0E), the
 // server answers with S30 / S2F / S32 / S31 (client-containers.js). Closing sends C0D through containerView.remote; the server throws the held stack.
 let mpWindow = null;
+// b60 (client-containers.js buildStation): what the enchanting table and the anvil read from the game.
+const mpStation = { experienceLevel: () => experience.level, itemName: native => { const stack = nativeStackToLive(native); return stack ? stackName(stack, ITEMS) : ''; },
+  nameField: name => { const field = $('#anvil-name'); if (field) field.value = anvilName(name); } };
 function onMultiplayerWindow(m) {
   const client = multiplayer;
   if (!client?.ready || !active?.remote) return;
   if (m.type === 'openWindow') {
     if (screen !== 'playing') { client.closeWindow(); return; }
-    const built = buildWindow(m, { survival, world });
+    const built = buildWindow(m, { survival, world, station: mpStation });
     if (!built) { client.closeWindow(); return; }
     openContainer(built.container, built.kind, built.key);
     containerView.remote = { client, window: true };
     wireClicks(built.container, client, m.windowId);
+    wireStation(built.container, client, m.windowId, built.kind); // C11 / MC|ItemName
+    if (built.kind === 'anvil') { const field = $('#anvil-name'); field.oninput = () => { field.value = anvilName(field.value); built.container.setName(field.value); refreshContainer(); }; }
     mpWindow = { ...built, windowId: m.windowId, survival, client };
     client.windowInventory(m.windowId, inventoryWire(survival.inventory));
     return;
@@ -784,7 +789,7 @@ async function joinMultiplayer(settings) {
     onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
-    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); },
+    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); }, // 1020 / 1021: RenderGlobal.playAuxSFX anvil sounds
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow,

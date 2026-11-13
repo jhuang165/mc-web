@@ -198,6 +198,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'closeWindow') simulation.closeWindow(id); // C0D
         else if (m.type === 'clickWindow') simulation.clickWindow(id, m); // C0E
         else if (m.type === 'windowInventory') simulation.windowInventory(id, m); // the client's 36 slots after S2D
+        else if (m.type === 'stationEnchant' || m.type === 'stationItemName') simulation.station(id, m); // b60: C11 EnchantItem, MC|ItemName
         else if (m.type === 'confirmTransaction') simulation.confirmTransaction(id, m); // C0F
         else if (m.type === 'chat' && typeof m.text === 'string') {
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
