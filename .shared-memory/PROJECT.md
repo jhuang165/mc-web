@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 59 (2026-11-13, ten Sonnet tracks in `../wt59-<name>` on `batch59-<name>`, cut from dcde17ef4, merged --no-ff on `batch59-lead`; shared track rules `../artifacts/b59-lead/track-rules.md`; lead note `b59-lead-track.md`; no browser checks by request):
+- 0.88.0, by track:
+  - mpstate: `multiplayer/server-survival.js` runs the single-player Survival rules per server player (fall, void, hunger, regeneration, eating, death with the CombatTracker component, respawn); `health` message on an S06 change; `--difficulty`.
+  - mpitems: `multiplayer/server-items.js` mirrors 36 slots with counts and tags, numbered `slot` corrections with `ack`; XP orbs; Survival world-system drops; items and orbs saved; aux 2001 to others, fly-in and pop; partial pickups (`fit`). WebSocket maxPayload 32768.
+  - servercommands: `servercommands-b59.js` runs `/time`, `/weather`, `/toggledownfall`, `/difficulty`, `/gamerule`, `/defaultgamemode`, `/list`, `/tellraw` on the server; whole-inventory `/clear`; per-player `/spawnpoint`; `/enchant` on others; `openInventory` and pickup achievements.
+  - mpcontainers: `multiplayer/server-containers.js` / `client-containers.js` open chest, furnace, dispenser, dropper, hopper, brewing stand and ender chest windows (S2D, S30, C0E, S32, S2F, S31, C0D / S2E, S24 lids); furnaces and brewing stands tick on the server.
+  - mpmobs: `multiplayer/server-mobs.js` runs an `EntityWorld` on the dedicated world (nearest player per mob, natural spawning, eight mob types, saved), per-player `MobTracker` packets as `mobs`; `multiplayer/remote-mobs.js` draws the copies; C02 `attack`.
+  - prediction5: pots, bucket stacks, the command block screen, dragon egg particles, splash potion counts, unsupported fire and flint and steel predicted (`client-predict-reference.json`, 258 records).
+  - deathfx: `death-fx.js` gives mob copies deathTime, the tilt and the 20 poof particles (`deathfx-reference.json`).
+  - trackeridle: `EntityWorld.idleTrack` / `MobTracker.idleCatchUp` keep the Overworld spawn-area mobs' tracker phase across a trip; the Nether and End hold nothing while away.
+  - savedorder7: unloading renumbers only chunks over 128 blocks from the spawn (`saved-order7-reference.json`); `clearStaleRider` / `releaseSeats` at each turn.
+  - smallchecks: F3+H `(#id/damage)` titles (`advanced-tooltip-id.js`, `smallchecks-reference.json`); `comparator-toggle.js` holds the full toggle rule (not wired); sneak 0.08 confirmed.
+- Lead fixes in the merge commits: mpstate's `ate` field removed (the server inventory spends the food and corrects the slot, so the client took two); mob hits go through the player's real `Survival.scaledDamage` (`damagePlayer` was a no-op on both sides); `/spawnpoint` used by the Survival respawn; the saved difficulty wins over `--difficulty`; the item pickup event feeds the achievements; a window guard around `serverItems.adopt`.
+- Verification: see `b59-lead-track.md`. Pushed to github main by the lead.
+
 Batch 58 (2026-11-13, ten Sonnet tracks in `../wt58-<name>` on `batch58-<name>`, cut from a584b2389, merged --no-ff on `batch58-lead`; shared track rules `../artifacts/b58-lead/track-rules.md`; lead note `b58-lead-track.md`):
 - 0.87.0, by track:
   - mpsurvival: a Survival dedicated server (`--gamemode survival`) drops real item entities from `breakPlayerBlock`; the client digs with status 0/1/2 and the 5-tick delay, and picks items up (`pickup` / `collect`).

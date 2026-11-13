@@ -2,6 +2,36 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 59
+
+Batch 59 covered these areas:
+- **Survival state on the server.** A dedicated Survival server keeps each player's health, food, saturation and exhaustion with the single-player rules (fall and void damage, hunger by difficulty, regeneration, eating). It sends an S06-style `health` message when one changes (`EntityPlayerMP`, bytecode-read), opens the death screen at 0 and respawns on request; vitals are saved. A `--difficulty` option sets the difficulty.
+- **Items on the server.** The server mirrors all 36 main slots with real counts and tags; placing spends the stack and breaking wears the tool, sent back as numbered `slot` corrections the client acknowledges (S2F). Ores drop real XP orbs; leaf decay, plants, rails, torches, doors, beds and falling blocks drop real items in Survival; items and orbs are saved. Other players see the break effect (aux 2001 within 64, not to the breaker, bytecode-read) and the pickup fly-in, and hear the pop; a partial pickup takes what fits.
+- **Server world commands.** `/time`, `/weather`, `/toggledownfall`, `/difficulty`, `/gamerule` (with `doDaylightCycle`), `/defaultgamemode`, `/list` and `/tellraw` run on the server's world; `/clear` walks the whole inventory; `/spawnpoint` and `/enchant` work on other players. `openInventory` and the pickup achievements are server triggers (bytecode-read).
+- **Containers over a connection.** Chests, furnaces, dispensers and droppers, hoppers, brewing stands and ender chests open as server windows: S2D, S30, C0E clicks run by the server's `Container.click`, S32 accept or refuse, S2F, S31 progress bars, C0D / S2E. Lids animate for everyone (S24); furnaces and brewing stands tick on the server; ender chest contents are per player and saved.
+- **Mobs over a connection.** The server runs one `EntityWorld` for the dedicated world with the nearest player as each mob's player, spawns naturally and sends the mobs through each player's `MobTracker`; clients draw them with the mob renderer. Players attack mobs with the held weapon (C02); mob hits go through the player's real `Survival.scaledDamage` (lead fix at the merge). Pig, cow, sheep, chicken, zombie, skeleton, creeper and spider; mobs are saved.
+- **Client prediction, part 5.** Flower pots, empty-bucket stacks above 1, the command block screen at the click, the dragon egg's portal particles at the click and on a punch, splash potion counts, real fire losing its support after a predicted break, and flint and steel are predicted (`client-predict-reference.json`, 258 records).
+- **Mob copy deaths.** Client mob copies count deathTime, tilt and draw the 20 poof particles at 20 from their own Random (executed `DeathFxProbe`); the live mob no longer draws a second poof when a copy is tracked.
+- **Tracker while away.** The Overworld's spawn-area mobs keep their tracker phase across a Nether or End trip (`idleTrack`); the Nether and End keep nothing loaded without a player, so their arrival at age 0 is right (bytecode-read `ChunkProviderServer`).
+- **Saved order, part 7.** Chunk unloading renumbers only chunks more than 128 blocks from the spawn (executed, `saved-order7-reference.json`); the taken seat is freed at the mob's own turn and at the player's place in the list.
+- **Small checks.** F3+H item titles end with `(#0035/14)`-style ids (executed over all 315 items). The sneak 0.08 held-light drop is confirmed in bytecode. The comparator toggle was found wrong when leaving subtract mode with a powered input; the full rule is in `comparator-toggle.js`. Java 7 and 8 effect orders differ only for effect ids 16 and up.
+
+Still open from batch 59:
+- **Multiplayer.**
+  - Health: no hurt sound, tilt or heart blink on the client; no inventory or XP drop on death; eating's side effects (poison, milk) do not reach the client; dead players stay in the player list.
+  - Items: container clicks outside server windows, armour, the cursor and the crafting grid are not mirrored; a partial pickup shows no fly-in; the server does not tell a client its tool broke.
+  - Containers: hoppers and dispenser firing are not ticked on the server; lit furnace light is not synced; trapped chests give no power; anvil, enchanting, workbench and inventory windows are not connected; a chest never opened has no lid model until its first block action.
+  - Mobs: no mob sounds, particles, riding, leads or XP; other mob types; a mob's knockback on a player does not move the server player; two players' spawn passes can double-spawn animals; the first tracker clears knockback flags for the rest.
+  - Commands: `diamondsToYou` (items carry no thrower); crafting and smelting achievements stay client-side.
+  - Nothing of batch 59's multiplayer work was checked in a browser.
+- **Player actions.** The comparator toggle with a powered input is not wired into the prediction: the client world has no redstone state for the input powers.
+- **Tracker.** Only mobs are caught up while away (not items, arrows, carts, boats or hangings); a mob is caught up at its final state; a mob's age before the trip is not kept.
+- **Mob deaths.** Only the horse copy draws the living-sound roll, so other copies' Random streams are not aligned before death.
+- **Saved order.** Entities of an unloaded chunk are still kept and ticked; the unload queue runs in the tick the chunk leaves, not the next.
+- **Items.** A named stack's F3+H suffix is drawn italic.
+- **Rendering.** No native pixel capture.
+- **Damage and effects.** The Java 6/7 effect order is not chosen (ids 16 and up only).
+
 ## Done in batch 58
 
 Batch 58 covered these areas:
@@ -14,15 +44,7 @@ Batch 58 covered these areas:
 - **Vehicles and crystal fire.** The boat copy's walk order, the dismount fall and the cart rider's fall match executed records with no code change; the horse copy's hurt and death sounds draw from its own Random. The flag metadata delay was wrong (the S1C goes out in the same update). The crystal overlay fire ends when the real cell changes (WorldClient has no timeout); the 1.7.10 client never spreads fire (only WorldServer ticks blocks), so that gap was wrong.
 - **Tracker and saved order.** Tracker entries already alive in the other world keep their phase through a silent tick (executed for arrivals at several ages), but the game does not tick the other world while away yet. Taking a boat from a mob seats the player and frees the mob at its turn; falling blocks saved by the away run carry order stamps; chunks loaded after login rank in load order (executed `PlayerManager` moves).
 
-Still open from batch 58:
-- **Multiplayer.** The dedicated server keeps no Survival state (tool wear, hunger, health, XP orbs, placement spending the client's stack); world-system drops (leaf decay, plants, rails, falling blocks) are no-ops on the server and items are not saved; the breaker gets no break sound or particles and no pickup animation; eating changes no food on the server. Deaths only come from `/kill` and the void; achievements only from `/achievement`. `/clear` sees the hotbar only; `/time`, `/tellraw` and others are not available on the server; `/enchant` and `/spawnpoint` refuse other players. Survival digging over a connection was fixed after the browser check and is test-checked only.
-- **Vehicles.** A dead horse copy's 20 poof particles are not modelled. Client fire from other sources (flint and steel) is not modelled; a predicted break does not remove real fire that loses its support on the client view.
-- **Rendering.** No native pixel capture exists (no LWJGL natives or display here). The 0.08 sneak drop in the held light cell is recalled.
-- **Items.** Player heads draw the default skin (no skin fetch). The F3+H map title is not replayed.
-- **Player actions.** Flower pot contents, empty-bucket stacks above 1, the command block screen at the click, dragon egg particles and potion throws are not predicted. The comparator rule is executed but its bytecode was not read.
-- **Tracker.** `MobTracker.idleUpdate` has no caller: the other dimension is not ticked while the player is away.
-- **Damage and effects.** The effect order follows the Java 8+ HashMap; a Java 6/7 runtime orders buckets differently.
-- **Saved order.** Chunk unloading is not modelled for load ranks; the seated taker is freed at the start of the pass, not at his exact turn.
+Still open from batch 58: carried into the batch 59 list above, except the items batch 59 closed or found wrong.
 
 ## Done in batch 57
 
