@@ -485,12 +485,41 @@ export class VoxelScene {
       this.updateBlock(x, z, y);
     }
   }
-  // The client's predicted cell (client-prediction.js) is drawn at once: the chunk and its touching neighbours are meshed from the predicted view; the light volume
-  // is not changed (the server's own change relights when it lands).
-  showPredicted(x, z) {
-    const chunk = (v) => Math.floor(v / 16) * 16, keys = new Set([[x, z], [x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]].filter(([a, b]) => this.world.isLoaded(a, b)).map(([a, b]) => `${chunk(a)},${chunk(b)}`));
+  // The client's predicted cells (client-prediction.js) are drawn at once, relit and meshed once. A client world edit relights in the same call
+  // (World.setBlock -> updateAllLightTypes; bytecode-read), so each predicted cell is written to the real world for the length of one light update
+  // (put, no edit record, no onChange) and written back at once; the overlay owns the drawn state. Every touching column is meshed once even when several cells
+  // share it. The real landing relights again from the real world (updateBlock), and a refusal (revertPrediction -> updateBlock) restores the real light.
+  showPredictedCells(cells) {
+    if (!cells.length) return;
+    const chunk = (v) => Math.floor(v / 16) * 16, keys = new Set(), world = this.world, view = this.predicted?.active && this.predicted.world === world ? this.predicted.view : null;
+    for (const { x, z } of cells) for (const [a, b] of [[x, z], [x - 1, z], [x + 1, z], [x, z - 1], [x, z + 1]]) if (world.isLoaded(a, b)) keys.add(`${chunk(a)},${chunk(b)}`);
+    if (this.light && view && !world.ringSink) {
+      const swapped = [];
+      try {
+        for (const { x, y, z } of cells) {
+          const nb = view.get(x, y, z), nm = view.getMeta(x, y, z);
+          if ((world.get(x, y, z) === nb && world.getMeta(x, y, z) === nm)) continue;
+          swapped.push({ x, y, z, block: world.get(x, y, z), meta: world.getMeta(x, y, z), pot: world.pots?.get(`${x},${y},${z}`) });
+          world.put(x, y, z, nb, nm, false);
+        }
+        for (const c of swapped) {
+          const box = this.light.update(c.x, c.y, c.z, c.block);
+          this.predictedRelights = (this.predictedRelights || 0) + 1;
+          if (box)
+            for (let a = chunk(Math.max(world.minX, box.x0 - 1)); a <= chunk(Math.min(world.maxX - 1, box.x1 + 1)); a += 16)
+              for (let b = chunk(Math.max(world.minZ, box.z0 - 1)); b <= chunk(Math.min(world.maxZ - 1, box.z1 + 1)); b += 16) if (!keys.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
+        }
+      } finally {
+        for (let i = swapped.length - 1; i >= 0; i--) {
+          const c = swapped[i];
+          world.put(c.x, c.y, c.z, c.block, c.meta, false);
+          if (c.pot !== undefined) world.pots.set(`${c.x},${c.y},${c.z}`, c.pot);
+        }
+      }
+    }
     for (const k of keys) this.buildChunk(...k.split(",").map(Number));
   }
+  showPredicted(x, z) { this.showPredictedCells([{ x, z }]); }
   // Relights around an edit; the edited chunk and its touching neighbours
   // rebuild now, the rest of the changed light box over the next frames.
   updateBlock(x, z, y = 0) {

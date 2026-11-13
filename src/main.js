@@ -230,7 +230,7 @@ import { createServerDig } from "./server-dig.js";
 import { playerMiningState } from "./enchantment-effects.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
-import { createPrediction, dryPlace, predictsPlacement } from "./client-prediction.js";
+import { createPrediction, dryPlace, dryBreak, dryActivate, dryUse, useKind } from "./client-prediction.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
@@ -3134,24 +3134,34 @@ function showPrediction(list) {
     const was = { block: world.get(x, y, z), meta: world.getMeta(x, y, z) };
     if (layer.set(x, y, z, block, meta, token)) cells.push({ x, y, z, was });
   }
-  for (const c of cells) scene.showPredicted(c.x, c.z);
+  scene.showPredictedCells(cells); // one relight per cell and one mesh per touching column (client-prediction.js, scene.js)
   return cells.length ? { token, cells } : null;
 }
+// PlayerControllerMP.onPlayerDestroyBlock: the broken cell and what its neighbour chain removes on the client world at once (a door's or bed's other half, a double
+// plant's top, unsupported torches, plants, signs...), measured by the probe (client-predict-reference.json).
 function predictBreak(p) {
   const seen = predictionLayer().read(), block = seen.get(...p); // a cell an earlier queued break already cleared on the client is air
   if (!block) return null;
   const meta = seen.getMeta(...p), s = breakSound(block);
   sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 } });
   scene.particles.destroyBlock(world, ...p, block, meta);
-  return showPrediction([[p[0], p[1], p[2], 0, 0]]) ?? { token: 0, cells: [] };
+  return showPrediction(dryBreak({ world: seen }, p).cells.map((c) => [c.x, c.y, c.z, c.block, c.meta])) ?? { token: 0, cells: [] };
 }
+// PlayerControllerMP.onPlayerRightClick on the client world: Block.onBlockActivated (door, trapdoor, gate toggle), else Item.onItemUse (ItemBlock, door item, cake, seeds...).
 function predictPlace() {
-  const held = heldId(), layer = predictionLayer();
-  if (!predictsPlacement({ world: layer.read(), target, heldId: held, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging })) return null;
-  let soundDone = false;
-  const out = dryPlace({ world: layer.read(), survival, position, flowers: FLOWERS, yaw }, { id: held, item: ITEMS[held], target }, { sound: (...a) => { soundDone = true; sound(...a); } });
-  if (!out.placed) return null;
-  const shown = showPrediction(out.cells.map((c) => [c.x, c.y, c.z, c.block, c.meta]));
+  const held = heldId(), layer = predictionLayer(), seen = layer.read();
+  const kind = useKind({ world: seen, target, heldId: held, sneaking: !!motion.sneaking, aimed: aimedEntity || aimedCart || aimedHanging });
+  if (!kind) return null;
+  const state = { world: seen, survival, position, flowers: FLOWERS, yaw };
+  let soundDone = false, cells;
+  if (kind === 'activate') cells = dryActivate(state, target) ?? [];
+  else if (kind === 'use') cells = dryUse(state, { id: held, item: ITEMS[held], target });
+  else {
+    const out = dryPlace(state, { id: held, item: ITEMS[held], target }, { sound: (...a) => { soundDone = true; sound(...a); } });
+    cells = out.placed ? out.cells : [];
+  }
+  if (!cells.length) return null;
+  const shown = showPrediction(cells.map((c) => [c.x, c.y, c.z, c.block, c.meta]));
   return { token: shown?.token ?? 0, cells: shown?.cells ?? [], soundDone };
 }
 function endPrediction(pred) { if (pred) for (const c of pred.cells) prediction?.clear(c.x, c.y, c.z, pred.token); }
