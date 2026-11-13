@@ -3057,7 +3057,7 @@ export class EntityWorld {
   // BlockChest.o: whether a sitting ocelot lies on the chest at (x, y, z) (chest.js openChest asks through World.ocelotOnChest).
   ocelotSitsOn(x, y, z) {
     const w = ENTITY_TYPES.ocelot.width / 2, h = ENTITY_TYPES.ocelot.height;
-    return sitsOnChest(this.entities.filter((e) => e.type === "ocelot" && e.health > 0).map((e) => ({ sitting: e.sitting, minX: e.x - w, maxX: e.x + w, minY: e.y, maxY: e.y + h, minZ: e.z - w, maxZ: e.z + w })), x, y, z);
+    return sitsOnChest(this.entities.filter((e) => e.type === "ocelot").map((e) => ({ sitting: e.sitting, minX: e.x - w, maxX: e.x + w, minY: e.y, maxY: e.y + h, minZ: e.z - w, maxZ: e.z + w })), x, y, z);
   }
   // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
