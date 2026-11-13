@@ -151,13 +151,13 @@ test("meta: air, potion colour, scream and the wither's values reach the copy th
   const e = { type: "enderman", health: 40, air: 300, effects: [], screaming: false };
   const entry = new TrackerEntry(e, { range: 80 }, { player: null, watches: () => true });
   const spawn = entry.watched();
-  assert.deepEqual(spawn, { potion: 0, invisible: false, air: 300, screaming: false });
+  assert.deepEqual(spawn, { potion: 0, invisible: false, burning: false, air: 300, screaming: false }); // b63: burning (watcher 0 bit 0)
   assert.equal(copyMetaDiff(entry.lastMeta, e), null);
   e.screaming = true; e.air = 299;
   assert.deepEqual(copyMetaDiff(entry.lastMeta, e), { air: 299, screaming: true });
   assert.equal(copyMetaDiff(entry.lastMeta, e), null);
   const w = { type: "wither", health: 100, invul: 20 };
-  assert.deepEqual(copyMetaOf(w), { potion: 0, invisible: false, air: 300, invul: 20, health: 100 });
+  assert.deepEqual(copyMetaOf(w), { potion: 0, invisible: false, burning: false, air: 300, invul: 20, health: 100 });
   const squid = { type: "squid", health: 10, air: 200 };
   assert.equal("air" in copyMetaOf(squid), false, "the squid sends its own air");
   assert.equal(copyMetaOf({ type: "x" }), null);
