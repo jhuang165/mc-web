@@ -19,9 +19,18 @@ export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREAT
 export const INERT_EFFECTS = [3, 4, 8, 15, 16, 17, 21, 23];
 export const INSTANT_DAMAGE = 7, HEALTH_BOOST = 21;
 const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, INSTANT_DAMAGE, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER, RESISTANCE, ABSORPTION, ...INERT_EFFECTS]);
-// EntityLivingBase.isEntityUndead (sv.aR): zombies and zombie villagers, skeletons of both types, pigmen, the wither and the zombie and skeleton horses.
-const UNDEAD = new Set(["zombie", "skeleton", "wither_skeleton", "pigman", "wither"]);
-const isUndead = (e) => UNDEAD.has(e.type) || (e.type === "horse" && (e.horse?.type === 3 || e.horse?.type === 4));
+// EntityLivingBase.isEntityUndead (sv.aR) is getCreatureAttribute() == UNDEAD (sz.b). Executed (b55attr): zombie (zombie villagers included), skeleton of both types, pigman and the
+// wither report UNDEAD; the horse class has no override, so the zombie and skeleton horses (types 3 and 4) are UNDEFINED, as are the giant and every other kind. The
+// spiders (and the silverfish) are ARTHROPOD.
+const UNDEAD = new Set(["zombie", "zombie_villager", "skeleton", "wither_skeleton", "pigman", "zombie_pigman", "wither"]);
+export const isUndeadMob = (e) => UNDEAD.has(e.type);
+const isUndead = isUndeadMob;
+// EntityLivingBase.isPotionApplicable (sv.d(rw)): the undead refuse Regeneration (10) and Poison (19) (executed, b55attr); EntitySpider (yn, the cave spider too) overrides it to refuse
+// Poison (19) only and otherwise defers to the base rule (a spider is ARTHROPOD, so nothing else is refused).
+export function isPotionApplicable(e, id) {
+  if (e.type === "spider" || e.type === "cave_spider") return id !== POISON;
+  return !(isUndead(e) && (id === REGENERATION || id === POISON));
+}
 // The live maximum health with the effects counted (entities.js registers mob-riding.js maxHealthOf), for the clamp a health boost change makes.
 let maxHealthHook = null;
 export const setMaxHealthHook = (fn) => { maxHealthHook = fn; };
@@ -54,13 +63,17 @@ export function readMobEffects(saved) {
 export const mobEffect = (e, id) => e.effects?.find((x) => x.id === id) ?? null;
 // EntityLivingBase.addPotionEffect: PotionEffect.combine keeps the stronger amplifier, and the
 // longer duration at equal strength. The HashMap iterates small Integer keys in order.
-export function addMobEffect(e, id, duration = 2147483647, amplifier = 0) {
+export function addMobEffect(e, id, duration = 2147483647, amplifier = 0, ambient = false) {
   if (!MOB_EFFECTS.has(id)) return false;
   if (e.type === "wither") return false; // EntityWither.addPotionEffect (xc.c(rj)) is empty: the boss takes no effects
+  if (!isPotionApplicable(e, id)) return false; // sv.c(rw) returns first when isPotionApplicable (sv.d) refuses
   const list = (e.effects ??= []), old = list.find((x) => x.id === id);
-  if (!old) list.push({ id, duration, amplifier });
+  if (!old) list.push({ id, duration, amplifier, ...(ambient ? { ambient: true } : {}) });
+  // PotionEffect.combine (rw.a(rw), executed b55comb): a stronger amplifier replaces amplifier and duration (the old ambient flag stays); an equal amplifier takes a longer
+  // duration; otherwise (weaker, or equal and not longer) a non-ambient effect clears the old one's ambient flag.
   else if (amplifier > old.amplifier) Object.assign(old, { duration, amplifier });
   else if (amplifier === old.amplifier && duration > old.duration) old.duration = duration;
+  else if (!ambient && old.ambient) delete old.ambient;
   // PotionHealthBoost (rt): onNewPotionEffect adds the maxHealth modifier. Re-adding runs onChangedPotionEffect(effect, true): the modifier comes off, health is clamped to the
   // smaller maximum (rt.a), and the modifier goes on again with the combined amplifier, so a raised effect does not keep health above the old maximum.
   if (id === HEALTH_BOOST) {

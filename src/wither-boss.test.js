@@ -232,10 +232,10 @@ test("the Wither boss takes no effects (addPotionEffect is empty) and an effect 
   assert.ok(cow.health <= 0, "withered to death");
 });
 
-test("the Wither's target candidates skip undead (zombie/skeleton horses included, a giant is not undead) and follow the chunk/slice order", () => {
+test("the Wither's target candidates skip undead (a giant and the zombie/skeleton horses are not undead: executed b55attr) and follow the chunk/slice order", () => {
   assert.equal(witherIsUndead({ type: "zombie" }), true);
   assert.equal(witherIsUndead({ type: "wither_skeleton" }), true);
-  assert.equal(witherIsUndead({ type: "horse", horse: { type: 3 } }), true);
+  assert.equal(witherIsUndead({ type: "horse", horse: { type: 3 } }), false); // EntityHorse has no getCreatureAttribute override (mob-effects-reference.json b55attr)
   assert.equal(witherIsUndead({ type: "horse", horse: { type: 0 } }), false);
   assert.equal(witherIsUndead({ type: "giant" }), false);
   assert.equal(witherIsUndead({ type: "cow" }), false);

@@ -14,6 +14,12 @@ import java.util.*;
 //   b54hb     health boost (21) added with addPotionEffect (onNewPotionEffect applies the maxHealth modifier), re-added, put by a load, and ticked to its end:
 //             getMaxHealth and health after each step, and the Attributes the mob writes
 //   b54jump   EntityLivingBase.jump (sv.bj, yf.bj for the magma cube) with Jump Boost: motionY, and the fall damage a fall of each distance does
+//
+// Batch 55 (effects3):
+//   b55attr   per kind (EntityHorse by Type 0..4): getCreatureAttribute (sv.bd), isEntityUndead (sv.aR) and isPotionApplicable (sv.d(rw)) for ids 0..24
+//   b55comb   random sequences of addPotionEffect (sv.c(rw), PotionEffect.combine) with ambient flags on Pig (and Zombie / Spider / WitherBoss for the refusal rules):
+//             the effect rows [id, amplifier, duration, ambient] after every call
+//   b55inst   Potion.affectEntity (rv.a(thrower, target, amplifier, factor), the splash potion's instant branch, no thrower) on every kind
 public class MobEffects2Probe {
   static final sun.misc.Unsafe u;
   static { try { u = MobMoveProbe.unsafe(); } catch (Exception e) { throw new RuntimeException(e); } }
@@ -171,6 +177,49 @@ public class MobEffects2Probe {
     System.out.println(s.append("]}"));
   }
 
+
+  // ---- b55 (effects3)
+  static sa makeHorse(int type) throws Exception {
+    sa h = make("EntityHorse");
+    dh t = new dh();
+    h.c(t);
+    t.a("Type", type);
+    sa l = sg.a(t, W);
+    if (l == null) throw new IllegalStateException("horse not loaded");
+    return l;
+  }
+  static void attr(String label, sa m) throws Exception {
+    sv l = (sv) m;
+    StringBuilder s = new StringBuilder("{\"tag\":\"b55attr\",\"kind\":\"" + label + "\",\"attribute\":\"" + l.bd() + "\",\"undead\":" + l.aR() + ",\"applicable\":[");
+    for (int id = 0; id <= 24; id++) s.append(id == 0 ? "" : ",").append(l.d(new rw(id, 100, 0)) ? 1 : 0);
+    System.out.println(s.append("]}"));
+  }
+  static void comb(String kind, int seed) throws Exception {
+    Random r = new Random(seed);
+    sa m = make(kind);
+    StringBuilder s = new StringBuilder("{\"tag\":\"b55comb\",\"kind\":\"" + kind + "\",\"seed\":" + seed + ",\"ops\":[");
+    String err = "null";
+    try {
+      for (int i = 0; i < 14; i++) {
+        int id = kind.equals("Pig") ? 1 + r.nextInt(4) : new int[] { 10, 19, 1, 2 }[r.nextInt(4)];
+        if (id == 6 || id == 7) id = 1;
+        int amp = r.nextInt(3), dur = 1 + r.nextInt(6);
+        boolean amb = r.nextInt(2) == 0;
+        ((sv) m).c(new rw(id, dur, amp, amb));
+        s.append(i == 0 ? "" : ",").append("{\"add\":[").append(id).append(",").append(amp).append(",").append(dur).append(",").append(amb ? 1 : 0).append("],\"effects\":").append(effects(m)).append("}");
+        if (r.nextInt(4) == 0) { tick(m); s.append(",{\"tick\":1,\"effects\":").append(effects(m)).append("}"); }
+      }
+    } catch (Throwable x) { err = error(x); }
+    System.out.println(s.append("],\"error\":" + err + "}"));
+  }
+  static void affect(String label, sa make, int id, int amp, double factor, float health) throws Exception {
+    sv l = (sv) make;
+    l.g(health);
+    String err = "null";
+    try { rv.a[id].a(null, l, amp, factor); } catch (Throwable x) { err = error(x); }
+    System.out.println("{\"tag\":\"b55inst\",\"kind\":\"" + label + "\",\"id\":" + id + ",\"amp\":" + amp + ",\"factor\":" + factor + ",\"health0\":" + health + ",\"health\":" + l.aS() + ",\"error\":" + err + "}");
+  }
+
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
@@ -203,5 +252,12 @@ public class MobEffects2Probe {
     for (String k : new String[] { "Pig", "Zombie", "Villager", "Spider", "LavaSlime", "Wolf", "Ozelot", "Chicken", "Bat", "Cow", "Squid", "Blaze", "SnowMan" })
       for (int amp : new int[] { -1000, 0, 1, 2, 4, 126, -3 })
         try { jump(k, amp); } catch (Throwable x) { System.out.println("{\"tag\":\"b54jump\",\"kind\":\"" + k + "\",\"amp\":" + amp + ",\"error\":" + error(x) + "}"); }
+    String[] kinds = { "Creeper", "Skeleton", "Spider", "Giant", "Zombie", "Slime", "Ghast", "PigZombie", "Enderman", "CaveSpider", "Silverfish", "Blaze", "LavaSlime", "EnderDragon", "WitherBoss", "Bat", "Witch", "Pig", "Sheep", "Cow", "Chicken", "Squid", "Wolf", "MushroomCow", "SnowMan", "Ozelot", "VillagerGolem", "Villager" };
+    for (String k : kinds) try { attr(k, make(k)); } catch (Throwable x) { System.out.println("{\"tag\":\"b55attr\",\"kind\":\"" + k + "\",\"error\":" + error(x) + "}"); }
+    for (int t = 0; t <= 4; t++) try { attr("Horse" + t, makeHorse(t)); } catch (Throwable x) { System.out.println("{\"tag\":\"b55attr\",\"kind\":\"Horse" + t + "\",\"error\":" + error(x) + "}"); }
+    for (String k : new String[] { "Pig", "Zombie", "Spider", "CaveSpider", "Skeleton", "WitherBoss" }) for (int seed = 1; seed <= 12; seed++) try { comb(k, seed); } catch (Throwable x) { System.out.println("{\"tag\":\"b55comb\",\"kind\":\"" + k + "\",\"error\":" + error(x) + "}"); }
+    for (String k : new String[] { "Pig", "Zombie", "Skeleton", "PigZombie", "Spider", "WitherBoss", "Villager", "Giant", "Horse0", "Horse3", "Horse4" })
+      for (int id = 6; id <= 7; id++) for (int amp = 0; amp <= 2; amp++) for (double factor : new double[] { 1.0, 0.6, 0.13 }) for (float h : new float[] { 8f, 20f })
+        try { affect(k, k.startsWith("Horse") ? makeHorse(k.charAt(5) - '0') : make(k), id, amp, factor, h); } catch (Throwable x) { System.out.println("{\"tag\":\"b55inst\",\"kind\":\"" + k + "\",\"error\":" + error(x) + "}"); }
   }
 }

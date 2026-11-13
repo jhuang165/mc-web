@@ -189,9 +189,10 @@ function enchantedMiningState(survival, block, toolId, underwater, onGround) {
 
 // ---- attacking ------------------------------------------------------------
 
-// EntityLivingBase.getCreatureAttribute of this build's mobs (zombies and skeletons are undead,
-// spiders arthropods, everything else EnumCreatureAttribute.UNDEFINED).
-export const creatureAttribute = (type) => (type === "zombie" || type === "skeleton" || type === "wither_skeleton" ? "UNDEAD" : type === "spider" || type === "cave_spider" ? "ARTHROPOD" : "UNDEFINED");
+// EntityLivingBase.getCreatureAttribute of this build's mobs (executed, b55attr in mob-effects-reference.json): zombies, skeletons, pigmen and the wither are undead,
+// spiders, cave spiders and silverfish arthropods, everything else (the giant and the zombie and skeleton horses too) EnumCreatureAttribute.UNDEFINED.
+const UNDEAD_KINDS = new Set(["zombie", "zombie_villager", "skeleton", "wither_skeleton", "pigman", "zombie_pigman", "wither"]);
+export const creatureAttribute = (type) => (UNDEAD_KINDS.has(type) ? "UNDEAD" : type === "spider" || type === "cave_spider" || type === "silverfish" ? "ARTHROPOD" : "UNDEFINED");
 
 // What the held weapon adds to EntityPlayer.attackTargetEntityWithCurrentItem: Sharpness/Smite/Bane
 // damage (getEnchantmentModifierLiving), Knockback and Fire Aspect levels, and the Looting level.
