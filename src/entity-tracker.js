@@ -468,6 +468,7 @@ export class MobTracker {
     this.view = { player: null, watches: (cx, cz) => this.watch.watches(cx, cz), log: null };
     this.ctx = { clientOf: (live) => this.clientIfTracked(live), holderOf: (d) => this.holderClient(d) };
     this.entries = new Map();
+    this.crystalFire = null; // (copy) => void, EntityWorld.crystalFire forwarder
     this.pendingJoin = true; // the first update is the player's join (`joinPlayer`)
     this.order = order; // EntityTracker.trackedEntities: a HashSet whose iteration order is the walk order (java-hashset-order.js)
     // Batch 50: the client world's entity list (World.loadedEntityList of the client): a copy joins it when its spawn packet is applied and leaves with its destroy
@@ -557,11 +558,13 @@ export class MobTracker {
     }
     return en;
   }
+  // A crystal copy gets the client block layer hook (`crystalFire`, set by EntityWorld from main.js) as it spawns
+  newClient(type) { const c = new ClientEntity(type); if (type === "ender_crystal" && this.crystalFire) c.crystalFire = this.crystalFire; return c; }
   // The entry and the client entity of a new tracked entity (object-tracker.js overrides this for items, orbs and projectiles)
   create(e, size) {
     // EntityTracker.trackEntity: an ender crystal is tracked at 256 (clamped), every Integer.MAX_VALUE ticks, with no velocity (bytecode-read, mn.a(sa))
     const crystal = e.type === "ender_crystal";
-    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: new ClientEntity(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, horse: e.type === "horse" ? horseFlagsOf(e) : 0, wasGround: !!e.onGround };
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: this.newClient(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, horse: e.type === "horse" ? horseFlagsOf(e) : 0, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) {

@@ -2196,6 +2196,7 @@ export class EntityWorld {
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
     this.tracker ??= new MobTracker(this.viewChunks);
     this.tracker.beforePlayer ??= (e) => this.beforePlayer(e);
+    this.tracker.crystalFire ??= (c) => this.crystalFire?.(c); // client block layer hook (main.js, crystal-fire-layer.js)
     this.tracker.spawnEarly ??= (e) => !!this.earlySpawns?.has(e);
     this.noteMobSpawns(this.playerStamp !== undefined); // mobs made since the last tick's tile pass: the network phase (the spawner pass reports its own through noteMobSpawns(false))
     if (this.playerStamp === undefined) this.playerJoined(); // the player joins the list after what the world held when it opened
@@ -3072,6 +3073,7 @@ export class EntityWorld {
     this.clientSounds = [];
     if (!this.watching) return sounds;
     const tracker = (this.tracker ??= new MobTracker(this.viewChunks));
+    tracker.crystalFire ??= (c) => this.crystalFire?.(c);
     tracker.attach(this.watching);
     const out = [];
     for (const s of sounds) {
