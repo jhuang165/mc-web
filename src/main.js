@@ -144,7 +144,7 @@ import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
-import { RemoteMobs } from "./multiplayer/remote-mobs.js";
+import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
@@ -800,7 +800,7 @@ async function joinMultiplayer(settings) {
     onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
     onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); },
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
-    onSound: message => { for (const s of message.sounds ?? []) if (MP_SOUNDS.has(s.name) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
+    onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
@@ -821,7 +821,7 @@ async function joinMultiplayer(settings) {
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
-    remoteMobs = new RemoteMobs(world);
+    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
