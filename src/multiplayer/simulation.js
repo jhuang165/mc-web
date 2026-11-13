@@ -18,7 +18,8 @@ import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '
 import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
-import { makeStack } from '../inventory.js';
+import { makeStack, copyStack } from '../inventory.js';
+import { ItemEntities } from '../item-entities.js';
 import { serverClick } from '../server-handlers.js';
 import { Signs, ITEM_SIGN, SIGN_LINES, isSign, placeSign } from '../signs.js';
 import { Skulls, SKULL, ITEM_SKULL, placeSkull } from '../skull.js';
@@ -34,8 +35,8 @@ import { BOW, canDraw } from '../bow.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
-// What a server-side survival break needs from the world around it. The dedicated world has no item entities or experience orbs, so drops are not spawned.
-const SERVER_ITEMS = { spill: noop, dropBlock: noop, dropPlayer: noop }, SERVER_XP = { spawn: noop };
+// What a server-side survival break needs from the world around it. Item entities are real (`itemHost`); the dedicated world has no experience orbs.
+const SERVER_XP = { spawn: noop };
 // EntityPlayer.itemInUse, by the held item's EnumAction: swords block (ItemSword, 72000 ticks), the bow draws until released, food eats and a milk bucket
 // drinks for 32 ticks (this build has no potion items). The pose a remote client draws comes from the held stack, as natively (the flag is only "using", watcher 0 bit 4).
 const MILK_BUCKET = 343, USE_TICKS = 32;
@@ -67,6 +68,12 @@ export class DedicatedSimulation {
     this.time = saved.time ?? 6000;
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
+    // Item entities (EntityItem): a Survival break, drops from a container and the like. Each gets a wire id (`eid`); clients see them in `tick.items` and ask
+    // to collect them with `pickup` (the client's own inventory is the authority, as for the hotbar).
+    this.items = new ItemEntities();
+    this.nextItemId = 0; this.itemsSent = 0;
+    this.items.joined = e => { e.eid = ++this.nextItemId; };
+    this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
     this.actions = [];
@@ -148,6 +155,21 @@ export class DedicatedSimulation {
     if (!this.players.has(id) || this.actions.filter(a => a.id === id).length >= 4 || typeof message.place !== 'boolean') return false;
     this.actions.push({ id, place: message.place }); return true;
   }
+  // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
+  // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
+  pickup(id, eids) {
+    const p = this.players.get(id);
+    if (!p || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
+    const wanted = new Map();
+    for (const e of this.items.items) if (eids.includes(e.eid)) wanted.set(e.stack, e);
+    if (!wanted.size) return false;
+    this.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => {
+      if (!wanted.has(stack) || !(stack.count > 0)) return false;
+      (p.collectedOut ??= []).push(copyStack(stack)); stack.count = 0; return true;
+    });
+    return true;
+  }
+  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay })); }
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
@@ -173,7 +195,7 @@ export class DedicatedSimulation {
     return b ? playerMiningState(p.survival, b, p.survival.held?.id ?? 0, eyeInWater(this.world, p.position.x, p.position.y + PHYSICS.eye, p.position.z), p.grounded).progress : null;
   }
   breakDug(p, cell) {
-    const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: SERVER_ITEMS, xpOrbs: SERVER_XP, heldTool: p.survival.held?.id ?? 0 };
+    const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: SERVER_XP, heldTool: p.survival.held?.id ?? 0 };
     return breakPlayerBlock(state, cell, { creative: p.survival.creative });
   }
   // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
@@ -356,6 +378,10 @@ export class DedicatedSimulation {
       if (!p.survival.creative) { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }
       this.tickUse(p);
     }
+    if (this.items.items.length) {
+      this.items.tick(this.world);
+      if (this.items.items.length > 300) this.items.items.splice(0, this.items.items.length - 300); // oldest first, a safety cap for one wire message
+    }
     for (const { id, place, dig, use } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p) continue;
@@ -397,12 +423,14 @@ export class DedicatedSimulation {
       if (t) tiles.push(t);
     }
     this.dirtyTiles.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField() };
   }
+  // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
+  itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse })); }
-  snapshot() { const w = this.world; return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
+  snapshot() { const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
