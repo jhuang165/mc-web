@@ -131,7 +131,9 @@ test('eating an apple to the end adds 4 food and 4 * 0.3 * 2 saturation and repo
   assert.ok(Math.abs(a.survival.saturation - 2.4) < 1e-5);
   assert.equal(a.itemInUse, null);
   const m = s.serverSurvival.status(a);
-  assert.deepEqual([m.type, m.food, m.ate], ['health', 14, 200]);
+  assert.deepEqual([m.type, m.food, m.ate], ['health', 14, undefined]);
+  // lead fix (b59 merge with mpitems): the server's inventory spent the apple and corrects the client's slot; the S06 message carries no eaten item
+  assert.ok(a.itemsOut.some(o => o.type === 'slot' && o.slots.some(x => x.slot === 0 && (x.stack?.count ?? 0) === (a.survival.inventory.main[0]?.count ?? 0))));
   assert.equal(s.serverSurvival.status(a), null, 'sent once');
 });
 
@@ -150,11 +152,11 @@ test('vitals are saved and restored with the player record', () => {
   assert.deepEqual([back.health, back.food, back.saturation], [7, 9, 1.5]);
 });
 
-test('the client applies an S06 message to its Survival and reports a death and an eaten item', () => {
+test('the client applies an S06 message to its Survival and reports a death (lead fix: no eaten item)', () => {
   const sv = new Survival({}, 'survival');
   sv.inventory.main[0] = { id: 200, count: 3, damage: 0 }; sv.inventory.current = 0;
-  assert.deepEqual(applyHealthMessage(sv, { health: 6.5, food: 11, saturation: 3, ate: 200 }), { died: false, hotbar: true });
-  assert.deepEqual([sv.health, sv.food, sv.saturation, sv.inventory.main[0].count], [6.5, 11, 3, 2]);
+  assert.deepEqual(applyHealthMessage(sv, { health: 6.5, food: 11, saturation: 3, ate: 200 }), { died: false, hotbar: false });
+  assert.deepEqual([sv.health, sv.food, sv.saturation, sv.inventory.main[0].count], [6.5, 11, 3, 3], 'the client takes nothing: the slot correction does');
   assert.equal(applyHealthMessage(sv, { health: 0, food: 11, saturation: 3 }).died, true);
   assert.deepEqual(applyHealthMessage(sv, { health: NaN, food: 1, saturation: 1 }), { died: false, hotbar: false });
   assert.equal(sv.health, 0);

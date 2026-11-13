@@ -51,7 +51,6 @@ export class ServerSurvival {
     const s = p.survival, item = ITEMS[itemId];
     if (!item?.food || s.creative || p.dead) return false;
     if (!s.eat(itemId, () => p.rand.nextFloat())) return false;
-    p.vitals && (p.vitals.ate = itemId);
     return true;
   }
   /** C16 client status 0 (perform respawn): a dead player starts again at the world spawn with full vitals. */
@@ -71,17 +70,16 @@ export class ServerSurvival {
     if (!this.managed(p)) return null;
     const s = p.survival, v = (p.vitals ??= { sent: null }), now = { health: s.health, food: s.food, zero: s.saturation === 0 };
     const last = v.sent;
-    if (last && last.health === now.health && last.food === now.food && last.zero === now.zero && !v.ate) return null;
+    if (last && last.health === now.health && last.food === now.food && last.zero === now.zero) return null;
     v.sent = now;
-    const message = { type: 'health', health: s.health, food: s.food, saturation: s.saturation, ...(v.ate ? { ate: v.ate } : {}) };
-    v.ate = 0;
+    const message = { type: 'health', health: s.health, food: s.food, saturation: s.saturation };
     return message;
   }
 }
 
 /**
  * The client half: apply an S06-style message to the local Survival. Values are validated; health and food are clamped like the Survival
- * constructor. `ate` is the item id the server just finished eating: the client removes one (and returns the bowl) because its inventory is its own.
+ * constructor. The eaten stack is not in this message: the server's own inventory spends it and sends an S2F slot correction (server-items.js).
  * Returns { died, hotbar } so the caller can open the death screen and redraw.
  */
 export function applyHealthMessage(survival, m) {
@@ -90,10 +88,5 @@ export function applyHealthMessage(survival, m) {
   survival.food = Math.max(0, Math.min(20, Math.floor(m.food)));
   survival.saturation = Math.max(0, Math.min(survival.food, m.saturation));
   survival.syncedHealth = survival.health;
-  let hotbar = false;
-  if (Number.isInteger(m.ate) && ITEMS[m.ate]?.food && survival.take(m.ate)) {
-    if (ITEMS[m.ate].container) survival.inventory.add(makeStack(ITEMS[m.ate].container));
-    hotbar = true;
-  }
-  return { died: survival.health <= 0, hotbar };
+  return { died: survival.health <= 0, hotbar: false }; // the eaten stack comes back as an S2F slot correction (server-items.js)
 }
