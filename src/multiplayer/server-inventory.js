@@ -29,11 +29,11 @@ export class ServerInventory {
   // What the client was last told about the slots this module owns: armour, grid and the cursor.
   snapshot(p) {
     const inv = p.survival.inventory, c = p.invWin.container;
-    return { armor: inv.armor.map(sig), grid: c.grid.stacks.map(sig), cursor: sig(inv.cursor) };
+    return { armor: inv.armor.map(sig), grid: c.grid.stacks.map(sig), cursor: sig(inv.cursor), result: sig(c.result.stack) };
   }
   state(p, seq) {
     const inv = p.survival.inventory, c = p.invWin.container;
-    return { type: 'invItems', seq, main: inv.main.map(wireStack), armor: inv.armor.map(wireStack), grid: c.grid.stacks.map(wireStack), cursor: wireStack(inv.cursor) };
+    return { type: 'invItems', seq, main: inv.main.map(wireStack), armor: inv.armor.map(wireStack), grid: c.grid.stacks.map(wireStack), cursor: wireStack(inv.cursor), result: wireStack(c.result.stack) };
   }
   out(p, m) { (p.itemsOut ??= []).push(m); }
   drain(p) { for (const s of p.invWin.container.drops.splice(0)) this.sim.items.dropPlayer(copyStack(s), p.position, p.yaw, p.pitch); }
@@ -92,8 +92,10 @@ export class ServerInventory {
     if (armor.length) msg.armor = armor;
     if (grid.length) msg.grid = grid;
     if (now.cursor !== last.cursor) msg.cursor = wireStack(inv.cursor);
+    // b62: detectAndSendChanges includes slot 0 (the craft result): sent when it differs from what the client was last told (it is derived from the grid, so a divergence is rare).
+    if (now.result !== last.result) msg.result = wireStack(c.result.stack);
     p.invWin.last = now;
-    if (armor.length || grid.length || 'cursor' in msg) { msg.seq = p.seq; this.out(p, msg); }
+    if (armor.length || grid.length || 'cursor' in msg || 'result' in msg) { msg.seq = p.seq; this.out(p, msg); }
   }
 
   // ---- Creative inventory (C10 CPacketCreativeInventoryAction, `invCreative`) ----

@@ -37,7 +37,7 @@ export function pickupFit(inventory, stack) {
   return stack.count - left.count;
 }
 
-export class ServerItems {
+export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Creative hotbar / rest mirror; tests set ServerItems.prototype.mirror
   constructor(sim, saved = {}) {
     this.sim = sim;
     this.survival = sim.gameMode === 'survival';
@@ -77,10 +77,10 @@ export class ServerItems {
   }
   // b61: a Survival player's inventory is the server's alone (clicks, pickups, placing and wear all run here and come back as `slot` / `invSet`), so the client's
   // hotbar / rest fields are ignored for it. Creative keeps the mirror: its screen edits (pick block, the item grid) still reach the server through it beside C10 (`invCreative`).
-  authority(p) { return this.survival && !p.survival.creative; }
+  authority(p) { return !this.mirror || (this.survival && !p.survival.creative); } // b62: Creative is on C10 too (`invCreative`); the hotbar / rest mirror only runs when a test sets `mirror` (old tests seed a Creative inventory through `input({ hotbar })`)
   // `input`: false when the hotbar is malformed. Slots the server corrected after the client's ack keep the server's value.
   adopt(p, message, force = false) { // `force`: tests seed a Survival inventory through the old mirror path
-    if (!force && (this.authority(p) || message.hotbar === undefined)) return true; // b61: no mirror (a Survival player, or a Creative client that sent no fields)
+    if (!force && (this.authority(p) || message.hotbar === undefined)) return true; // b61: no mirror (every player since b62)
     const inv = p.survival.inventory, main = inv.main;
     const hot = this.parse(message.hotbar, 9, main.slice(0, 9));
     if (!hot) return false;

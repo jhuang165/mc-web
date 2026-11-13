@@ -12,6 +12,8 @@ import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { DedicatedClient } from "./multiplayer/client.js";
 import { expandChunks, IDLE_INPUT } from "./multiplayer/protocol.js";
 import { describeCell, describeTiles, applyTiles } from "./tile-sync.js";
+import { ServerItems as MirrorItems } from './multiplayer/server-items.js';
+MirrorItems.prototype.mirror = true; // b62: these tests seed a Creative inventory through the retired hotbar mirror
 
 const key = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
 const hot = (item) => ({ type: "input", controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: [item, ...Array(8).fill(null)] });
