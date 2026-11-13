@@ -3904,7 +3904,7 @@ function setupPointer() {
     const d = binds.set(mouseCode(e.button), true);
     if (d === "key.use") {
       useHold.press();
-      edit(true);
+      clickEdit(true); // the key.use path (bindingPressed): C08 waits for the network tick and the client world predicts the use at once (client-prediction.js)
       return;
     }
     if (d === "key.pickItem") {
