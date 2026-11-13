@@ -35,5 +35,7 @@ public class ModelFacesProbe {
     System.out.println(box("mirror", 64, 64, 10, 20, -1, -2, -3, 3, 5, 7, 0f, true));
     System.out.println(box("grown", 64, 32, 6, 4, 0, 0, 0, 8, 4, 2, 0.5f, false));
     System.out.println(box("wide", 256, 256, 112, 88, -4, 3, -9, 16, 6, 20, 0f, true));
+    // Batch 63: the player's right arm (ModelBiped bipedRightArm.addBox(-3, -2, -2, 4, 12, 4) at uv 40, 16 on steve.png), drawn by the first-person arm.
+    System.out.println(box("playerArm", 64, 32, 40, 16, -3, -2, -2, 4, 12, 4, 0f, false));
   }
 }

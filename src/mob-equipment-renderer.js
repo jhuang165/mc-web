@@ -43,7 +43,13 @@ export function followChildHeld(r) {
   const c = r.heldChild;
   if (!c) return;
   c.limb.updateMatrix();
-  c.follow.matrix.copy(CHILD_HELD).multiply(c.limb.matrix);
+  c.follow.matrix.copy(childHeldMatrix(c.limb.matrix, c.limb.parent?.position.y ?? 0));
+}
+
+// The child frame in front of the arm: the native prefix (0.625 down, tilt, half size) comes BEFORE the arm's postRender (executed, held-pose-reference.json).
+// `lift` is the frame's own height (RendererLivingEntity's 1/128): the rig root's 0.5 halves it, and the native frame is not scaled, so it is added once more.
+export function childHeldMatrix(limbMatrix, lift = 0) {
+  return new THREE.Matrix4().makeTranslation(0, lift, 0).multiply(CHILD_HELD).multiply(limbMatrix);
 }
 
 function dispose(r) {
