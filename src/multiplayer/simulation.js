@@ -406,6 +406,7 @@ export class DedicatedSimulation {
   invClick(id, m) { return this.serverItems.inv.click(this.players.get(id), m); }
   invAck(id) { this.serverItems.inv.ack(this.players.get(id)); }
   invClose(id) { this.serverItems.inv.close(this.players.get(id)); }
+  invCreative(id, m) { return this.serverItems.inv.creative(this.players.get(id), m); } // b61: C10 creative inventory slot / drop
   closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
   clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
   // b60 (server-stations.js): C11 EnchantItem and the MC|ItemName payload of the open station window.

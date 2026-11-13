@@ -125,6 +125,7 @@ export class DedicatedClient {
   invClick(slot, button, mode, action, item) { this.send({ type: 'invClick', slot, button, mode, action, item: item ?? null }); }
   invAck() { this.send({ type: 'invAck' }); }
   invClose() { this.send({ type: 'invClose' }); }
+  invCreative(slot, item) { this.send({ type: 'invCreative', slot, item: item ?? null }); } // b61: C10
   // b60: C11 EnchantItem (option 0..2) and the MC|ItemName payload of the open anvil.
   stationEnchant(windowId, slot) { this.send({ type: 'stationEnchant', windowId, slot }); }
   stationItemName(windowId, name) { this.send({ type: 'stationItemName', windowId, name }); }

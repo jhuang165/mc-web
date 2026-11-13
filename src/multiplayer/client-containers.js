@@ -20,7 +20,8 @@ export function inventoryWire(inv) {
   return inv.main.map(s => (s ? { id: s.id, count: s.count, damage: s.damage ?? 0 } : null));
 }
 // The local container for an S2D message, or null when this client cannot build it.
-export function buildWindow(m, { survival, world, station = {} }) {
+// `crafted(stack, count)`: the client's own statistics (StatList.objectCraftStats; the server keeps no statistics) for a crafting or furnace output take (b61).
+export function buildWindow(m, { survival, world, station = {}, crafted = null }) {
   const key = `${m.x},${m.y},${m.z}`, inv = survival.inventory;
   let container, kind = m.kind;
   if (kind === 'chest') container = m.ender ? survival.openEnderChest(world, m.x, m.y, m.z) : survival.openChest(world, m.x, m.y, m.z);
@@ -32,6 +33,8 @@ export function buildWindow(m, { survival, world, station = {} }) {
   else if (kind === 'enchanting' || kind === 'anvil') container = buildStation(kind, m, { survival, world, station });
   if (!container || container.slots.length !== m.size) return null;
   container.title = m.title;
+  if (crafted && kind === 'workbench') container.onCraft = crafted;
+  if (crafted && kind === 'furnace') container.slots[2].onSmelt = crafted; // SlotFurnace.onCrafting
   return { container, kind, key };
 }
 // Makes the container's clicks go to the server; nested clicks (shift-click repeats) and local drops stay local.

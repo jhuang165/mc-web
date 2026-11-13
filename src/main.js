@@ -211,7 +211,7 @@ import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
-import { wireInvClicks, applyInv } from "./multiplayer/client-inventory.js"; // b60: window 0
+import { wireInvClicks, applyInv, wireCreative } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -648,12 +648,12 @@ function showMultiplayer() {
     profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
 }
 function leaveMultiplayer() {
-  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; aimedRemoteMob = null;
+  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
-  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
+  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, active?.mode === 'survival' && !survival.creative) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
 }
 // Cells from a tick (S22/S21 equivalents) or a placement resend (the clicker's two S23 packets).
 function applyMultiplayerCells(changes) {
@@ -668,7 +668,7 @@ function applyMultiplayerCells(changes) {
 // Item entities of a Survival server (EntityItem): one stable object per wire id so the drop renderer keeps its mesh; positions interpolate from the previous tick.
 // Pickup stays the server's call: the client names the items in reach that its inventory has room for, the server repeats the test and answers with a stack.
 let mpFurnaces = {}; // b60: the server's lit furnaces as scene.setFurnaces data
-const remoteItems = new Map(), requestedPickups = new Map(), mpInv = {}, remoteOrbs = new Map();
+const remoteItems = new Map(), requestedPickups = new Map(), mpInv = {}, remoteOrbs = new Map(), takenDrops = new Set(); // b61: takenDrops: ids of stacks partly taken (NetHandlerPlayClient.handleCollectItem removed the entity and only a re-track re-adds it): not drawn, still collectable
 function syncMultiplayerItems(list) {
   const seen = new Set();
   for (const d of list) {
@@ -677,9 +677,9 @@ function syncMultiplayerItems(list) {
     if (!e) remoteItems.set(d.i, e = { px: d.x, py: d.y, pz: d.z, mx: 0, my: 0, mz: 0, dead: false });
     Object.assign(e, { px: e.x ?? d.x, py: e.y ?? d.y, pz: e.z ?? d.z, stack: d.stack, x: d.x, y: d.y, z: d.z, age: d.age, hover: d.hover, delay: d.delay, eid: d.i });
   }
-  for (const id of [...remoteItems.keys()]) if (!seen.has(id)) { remoteItems.delete(id); requestedPickups.delete(id); }
+  for (const id of [...remoteItems.keys()]) if (!seen.has(id)) { remoteItems.delete(id); requestedPickups.delete(id); takenDrops.delete(id); }
   items.items = [...remoteItems.values()];
-  scene.setDrops(items.items);
+  scene.setDrops(takenDrops.size ? items.items.filter(e => !takenDrops.has(e.eid)) : items.items);
   if (survival.creative || !multiplayer?.ready) return;
   const inv = survival.inventory, wanted = [], fits = [], byStack = new Map(items.items.map(e => [e.stack, e]));
   items.collect(position, PHYSICS.width, PHYSICS.height, stack => {
@@ -714,7 +714,7 @@ function collectMultiplayerStack(stack) {
   if (!stack || survival.creative) return;
   const pickedId = pickedAchievement(stack.id);
   if (pickedId) achievements.trigger(pickedId);
-  survival.inventory.add(copyStack(stack));
+  if (!stack.invAdded) survival.inventory.add(copyStack(stack)); // b61: a Survival server adds it itself and sends the slots (`slot`)
   sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
   renderHotbar();
 }
@@ -743,6 +743,7 @@ function applyMultiplayerTick(message) {
   for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
     const e = remoteItems.get(t.i), who = t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by);
     if (e && who) scene.drops.pickup(e, who);
+    if (e && t.partial) takenDrops.add(t.i); // b61: the remainder of a partly taken stack vanishes on every client, as natively
   }
   if (message.xp || remoteOrbs.size) syncMultiplayerOrbs(message.xp ?? []);
   if (message.items || remoteItems.size) syncMultiplayerItems(message.items ?? []);
@@ -776,7 +777,7 @@ function onMultiplayerWindow(m) {
   if (!client?.ready || !active?.remote) return;
   if (m.type === 'openWindow') {
     if (screen !== 'playing') { client.closeWindow(); return; }
-    const built = buildWindow(m, { survival, world, station: mpStation });
+    const built = buildWindow(m, { survival, world, station: mpStation, crafted: (stack, n) => statsLive.crafted(stack, n) });
     if (!built) { client.closeWindow(); return; }
     openContainer(built.container, built.kind, built.key);
     containerView.remote = { client, window: true };
@@ -2127,6 +2128,7 @@ function openCreative() {
     tick: () => tickCounter,
   });
   openContainer(gui.container, "creative", null, gui);
+  if (multiplayer?.ready && active?.remote) wireCreative(gui, survival.inventory, multiplayer); // b61: C10 invCreative for each changed slot and thrown stack
 }
 function tabIcon(t) {
   const i = t.icon;

@@ -142,7 +142,9 @@ test('a partial pickup reports taken with partial and leaves the rest', () => {
   const { s, p } = fixture();
   const e = s.items.spawn(makeStack(4, 10), 64.5, 10.2, 64.5, { delay: 0 });
   s.tick();
-  const item = s.items.items[0];
+  const item = s.items.items[0], inv = p.survival.inventory;
+  for (let i = 0; i < 36; i++) inv.main[i] = makeStack(1, 64);
+  inv.main[3] = makeStack(4, 60); // b61: the server's inventory takes 4 of the 10
   s.pickup(p.id, [item.eid], [4]);
   assert.equal(item.stack.count, 6);
   const t = s.serverItems.taken.find(x => x.i === item.eid);

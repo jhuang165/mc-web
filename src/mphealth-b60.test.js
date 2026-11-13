@@ -10,6 +10,7 @@ import { stepRemoteDeath } from './multiplayer/remote-death.js';
 import { heartsBlink } from './damage-hud.js';
 import { hurtCameraRoll } from './damage-fx.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const MILK = 343, SPIDER_EYE = 326, POISON = 19;
@@ -23,7 +24,7 @@ function fixture(opts = {}) {
 function joined(opts, hotbar = []) {
   const s = fixture(opts), a = s.addPlayer('a', 'Alice', key(1));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 });
-  s.input('a', input(hotbar));
+  seed(s, 'a', input(hotbar));
   for (let i = 0; i < 3; i++) s.tick();
   a.survival.protection = 0;
   return { s, a };
@@ -170,7 +171,7 @@ test('a dead player collects no XP orbs and cannot pick up items', () => {
 
 test('a player named Notch drops an apple on death even under keepInventory', () => {
   const s = fixture(), a = s.addPlayer('a', 'Notch', key(2));
-  a.position.copy({ x: 64.5, y: 10, z: 64.5 }); s.input('a', input()); run(s, 3);
+  a.position.copy({ x: 64.5, y: 10, z: 64.5 }); seed(s, 'a', input()); run(s, 3);
   s.gameRules.keepInventory = 'true'; a.survival.protection = 0;
   s.damagePlayer(a, 100, undefined); run(s, 1);
   assert.deepEqual(s.items.items.map(e => [e.stack.id, e.stack.count]), [[260, 1]]);

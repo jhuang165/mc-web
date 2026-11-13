@@ -39,3 +39,28 @@ export function applyInv(m, { inventory, container, client, mpInv }) {
   if (Number.isInteger(m.seq)) mpInv.ack = Math.max(mpInv.ack ?? 0, m.seq);
   return out;
 }
+// b61: Creative's own screen (GuiContainerCreative) on a server. Native sends C10 for each inventory slot the screen changed and for each stack thrown
+// (slot -1); the server checks and applies them (server-inventory.js `creative`). `gui.send` is the screen's handleMouseClick; nested calls count once.
+// Slots: main 0..8 is container slot 36..44, main 9..35 is 9..35, armour index a is slot 8 - a. Returns the C10 list the call produced (for tests).
+const sig = s => (s ? JSON.stringify(s) : '');
+const wire = s => (s ? JSON.parse(JSON.stringify(s)) : null);
+export function creativeSlots(inventory) {
+  const out = new Map();
+  inventory.main.slice(0, 36).forEach((s, i) => out.set(i < 9 ? 36 + i : i, sig(s)));
+  inventory.armor.slice(0, 4).forEach((s, a) => out.set(8 - a, sig(s)));
+  return out;
+}
+export function wireCreative(gui, inventory, client) {
+  const send = gui.send.bind(gui);
+  let depth = 0;
+  gui.send = (...args) => {
+    if (depth++) { try { return send(...args); } finally { depth--; } }
+    const before = creativeSlots(inventory);
+    let result;
+    try { result = send(...args); } finally { depth--; }
+    const after = creativeSlots(inventory);
+    for (const [slot, g] of after) if (g !== before.get(slot)) client.invCreative(slot, wire(slot >= 36 ? inventory.main[slot - 36] : slot >= 9 ? inventory.main[slot] : inventory.armor[8 - slot]));
+    for (const d of gui.container.drops.splice(0)) client.invCreative(-1, wire(d)); // thrown by the server; no local item entity
+    return result;
+  };
+}

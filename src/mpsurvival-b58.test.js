@@ -23,7 +23,7 @@ function fixture(gameMode = 'survival') {
 function setup(block, hotbar, gameMode) {
   const s = fixture(gameMode), a = s.addPlayer('a', 'Alice', key(1));
   a.position.copy({ x: 64.5, y: 10, z: 64.5 });
-  s.input('a', input(hotbar));
+  seed(s, 'a', input(hotbar));
   s.world.set(64, 11, 61, block);
   for (let i = 0; i < 3; i++) s.tick();
   return { s, a };
@@ -140,6 +140,7 @@ test('WebSocket path: dig messages break the block, the item shows in the tick, 
 // This replays that loop against the server timer with the client's per-tick rate (the same playerMiningState), then 5 ticks of hit delay.
 import { tickPlayerMining } from './player-mining.js';
 import { playerMiningState } from './enchantment-effects.js';
+const seed = (s, id, message) => { s.serverItems.adopt(s.players.get(id), message, true); return s.input(id, message); }; // b61: a Survival server ignores the client's hotbar mirror; tests seed the inventory
 test('a client held click: progress per tick, status 2 at progress 1, the server breaks, 5 tick delay, then the next block starts', () => {
   const { s, a } = setup(2, [{ id: 100 }], 'survival');
   const cell = [64, 11, 61], state = { playing: true, mineHeld: true, target: { block: cell, adjacent: [64, 11, 62] }, aimedEntity: false, mining: null, cooldown: 0,
