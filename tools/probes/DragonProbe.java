@@ -28,6 +28,8 @@ public class DragonProbe {
   public static class DW extends EndProbe.W {
     List<sa> ents = new ArrayList<>();
     boolean withParts = false;
+    int tick = 0;
+    List<String> orbAt = new ArrayList<>();
     List<String> parts = new ArrayList<>(), orbs = new ArrayList<>(), events = new ArrayList<>();
     public List b(sa ex, azt box) {
       List<sa> out = new ArrayList<>();
@@ -51,10 +53,10 @@ public class DragonProbe {
     }
     public void b(int type, int x, int y, int z, int data) { events.add("[" + type + "," + x + "," + y + "," + z + "," + data + "]"); }
     public boolean d(sa e) {
-      if (e instanceof sq) { orbs.add(Integer.toString(((sq) e).e())); return true; }
+      if (e instanceof sq) { orbs.add(Integer.toString(((sq) e).e())); orbAt.add("[" + tick + "," + ((sq) e).e() + "," + num(e.s) + "," + num(e.t) + "," + num(e.u) + "," + num(e.v) + "," + num(e.w) + "," + num(e.x) + "]"); return true; }
       return super.d(e);
     }
-    void clear() throws Exception { resetLogs(); parts.clear(); orbs.clear(); events.clear(); }
+    void clear() throws Exception { resetLogs(); parts.clear(); orbs.clear(); events.clear(); orbAt.clear(); tick = 0; }
   }
 
   static DW world() throws Exception {
@@ -62,7 +64,7 @@ public class DragonProbe {
     w.manager = new aie(ahu.x, 0.0F);
     w.spawned = new ArrayList<>(); w.explosions = new ArrayList<>(); w.blockLog = new StringBuilder();
     w.partDigest = MessageDigest.getInstance("SHA-1");
-    w.ents = new ArrayList<>(); w.parts = new ArrayList<>(); w.orbs = new ArrayList<>(); w.events = new ArrayList<>();
+    w.ents = new ArrayList<>(); w.parts = new ArrayList<>(); w.orbs = new ArrayList<>(); w.events = new ArrayList<>(); w.orbAt = new ArrayList<>();
     aji[] air = new aji[65536]; byte[] meta = new byte[65536];
     for (int cx = -7; cx <= 7; cx++) for (int cz = -7; cz <= 7; cz++) SpringProbe.chunk(w, cx, cz, air.clone(), meta.clone());
     for (int cx = -7; cx <= 7; cx++) for (int cz = -7; cz <= 7; cz++) {
@@ -325,6 +327,7 @@ public class DragonProbe {
       int particleStart = 0;
       StringBuilder pp = new StringBuilder();
       for (int t = 1; t <= 205; t++) {
+        w.tick = t;
         if (!d.K) {
           aF.invoke(d);
           d.e();
@@ -333,7 +336,7 @@ public class DragonProbe {
         if (t > 1) tr.append(',');
         tr.append("[" + t + "," + fd(xa.class, "bB").getInt(d) + "," + num(d.s) + "," + num(d.t) + "," + num(d.u) + "," + num(d.y) + "," + num(d.w) + "," + (d.K ? 1 : 0) + "," + n + "," + w.events.size() + "," + w.parts.size() + "," + EndProbe.countEntries(w.blockLog) + "]");
       }
-      System.out.println("{\"case\":\"death\",\"variant\":" + variant + ",\"start\":" + Arrays.toString(pos) + ",\"trace\":[" + tr + "],\"orbs\":[" + String.join(",", w.orbs) + "],\"events\":[" + String.join(",", w.events) + "],\"particles\":[" + String.join(",", w.parts) + "],"
+      System.out.println("{\"case\":\"death\",\"variant\":" + variant + ",\"start\":" + Arrays.toString(pos) + ",\"trace\":[" + tr + "],\"orbs\":[" + String.join(",", w.orbs) + "],\"orbAt\":[" + String.join(",", w.orbAt) + "],\"events\":[" + String.join(",", w.events) + "],\"particles\":[" + String.join(",", w.parts) + "],"
         + "\"portalWrites\":" + EndProbe.countEntries(w.blockLog) + ",\"portalSha1\":" + q(EndProbe.blockLogHash(w)) + ",\"portalFlagAfter\":" + fd(akt.class, "a").getBoolean(null) + "}");
     }
   }

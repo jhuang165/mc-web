@@ -63,12 +63,20 @@ test("death: 200 ticks, 12000 experience, exit portal, removal", () => {
   w.tick(p, s);
   d.health = 0;
   let xp = 0, sounds = [];
+  const orbPositions = [], y0 = d.y;
   for (let i = 0; i < 205; i++) {
     w.tick(p, s);
-    for (const ev of w.drain()) { if (ev.xp) xp += ev.xp; if (ev.sound === "mob.enderdragon.end") sounds.push(ev); }
+    for (const ev of w.drain()) { if (ev.xp) { xp += ev.xp; orbPositions.push({ tick: i + 1, ...ev.position }); } if (ev.sound === "mob.enderdragon.end") sounds.push(ev); }
   }
   assert.equal(xp, 12000);
   assert.equal(sounds.length, 1);
+  // b56: the death sound and the orbs sit at the dragon's place before that tick's 0.1 rise (executed DragonProbe death records)
+  assert.deepEqual(sounds[0].position, { x: Math.trunc(d.x), y: Math.trunc(y0), z: Math.trunc(d.z) });
+  assert.equal(orbPositions.length, 44);
+  for (const o of orbPositions) {
+    assert.equal(o.x, d.x); assert.equal(o.z, d.z);
+    assert.ok(Math.abs(o.y - (y0 + 0.10000000149011612 * (o.tick - 1))) < 1e-9, `orb at tick ${o.tick}`);
+  }
   assert.ok(!w.entities.includes(d));
   assert.ok([...cells.values()].includes(149), "end portal blocks placed");
 });

@@ -248,17 +248,18 @@ test("destroyBlocksInAABB removes everything but obsidian, end stone and bedrock
 test("death: 200 ticks rising and spinning, 12000 xp, world event 1018, then the exit portal", () => {
   assert.equal(DRAGON_XP_TOTAL, 12000);
   for (const r of by("death")) {
-    const orbs = [], events = [], parts = [];
-    let portal = null;
+    const orbs = [], events = [], parts = [], orbAt = [];
+    let portal = null, tickNow = 0;
     const { e, h } = dragon(r.start[0] + 0.5, 100, r.start[1] + 0.5, 30, 9, {
       particle: (n, x, y, z) => parts.push([n, x, y, z]),
     });
     for (let t = 0; t < 5; t++) dragonTick(e, h);
-    Object.assign(h, { orb: (n) => orbs.push(n), worldEvent: (...a) => events.push([...a, 0]), portal: (x, z) => { portal = [x, z]; } });
+    Object.assign(h, { orb: (n) => { orbs.push(n); orbAt.push([tickNow, n, e.x, e.y, e.z]); }, worldEvent: (...a) => events.push([...a, 0]), portal: (x, z) => { portal = [x, z]; } });
     parts.length = 0;
     e.health = 0;
     let dead = false;
     for (let t = 1; t <= 205; t++) {
+      tickNow = t;
       if (!dead) { dead = deathTick(e, h) || dead; dragonTick(e, h); }
       const [, bb, x, y, z, yaw, , k, n, ev, np] = r.trace[t - 1];
       assert.equal(e.dragon.deathTicks, bb, `t=${t}`);
@@ -269,6 +270,8 @@ test("death: 200 ticks rising and spinning, 12000 xp, world event 1018, then the
       assert.equal(parts.length, np);
     }
     assert.deepEqual(orbs, r.orbs);
+    // b56 (executed): each orb is spawned at the dragon's position before that tick's 0.1 rise; [tick, value, x, y, z] (the orb's own motion is its unseeded Random)
+    assert.deepEqual(orbAt, r.orbAt.map(([t, n, x, y, z]) => [t, n, x, y, z]));
     assert.equal(orbs.reduce((a, b) => a + b, 0), 12000);
     assert.deepEqual(events, r.events);
     assert.deepEqual(parts, r.particles);
