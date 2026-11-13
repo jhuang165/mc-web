@@ -9,7 +9,7 @@ import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
-import { serverChatCommand } from '../src/chat-multi.js';
+import { ServerSocial } from '../src/server-broadcast.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -20,7 +20,7 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
@@ -138,6 +138,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
   const broadcast = message => { let plain; for (const ws of sockets.values()) send(ws, ws.chunks || !message.chunks ? message : (plain ??= expandChunks(message))); };
+  // Chat, commands, death and achievement broadcasts (src/server-broadcast.js); `ops` names the players who may run commands.
+  const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
     let pathname;
@@ -171,7 +173,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           if (previous === undefined && sockets.size >= 8) return ws.close(1008, 'World is full (8 players)');
           if (previous !== undefined) {
             const old = sockets.get(previous);
-            simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
+            social.forget(previous); simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
             old.replaced = true; old.close(1008, 'You logged in from another location');
           }
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
@@ -192,14 +194,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
           const r = chatPacket(chatSpam, Math.floor(Date.now() / 50), m.text, false);
-          if (r.deliver && r.deliver.startsWith('/')) {
-            // /tell, /me and the permission refusals through the shared command layer: each line goes to the named player only (src/chat-multi.js).
-            const roster = [...simulation.players.values()].map(p => ({ name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, mode: p.survival.mode === 'creative' ? 1 : 0 }));
-            for (const d of serverChatCommand(simulation.players.get(id).name, r.deliver, roster)) {
-              const target = [...simulation.players].find(([, p]) => p.name === d.to)?.[0];
-              if (target !== undefined && sockets.has(target)) send(sockets.get(target), { type: 'chat', name: '', text: d.text });
-            }
-          } else if (r.deliver) broadcast({ type: 'chat', name: simulation.players.get(id).name, text: r.deliver });
+          if (r.deliver && r.deliver.startsWith('/')) social.command(id, r.deliver); // /tell, /me; operators also /give, /tp, /gamemode ... on named players
+          else if (r.deliver) social.chat(id, r.deliver);
           if (r.kick) return ws.close(1008, r.kick);
         } else ws.close(1008, 'Unknown message');
       } catch (error) { send(ws, { type: 'error', text: error.message }); ws.close(1008, 'Request rejected'); }
@@ -208,13 +204,14 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       clearTimeout(timer);
       if (!joined || ws.replaced) return;
       const name = simulation.players.get(id)?.name;
-      simulation.removePlayer(id); sockets.delete(id); owners.delete(id);
+      social.forget(id); simulation.removePlayer(id); sockets.delete(id); owners.delete(id);
       broadcast({ type: 'chat', name: '', text: `${name} left the game` });
     });
   });
   const tickTimer = setInterval(() => {
     try {
       broadcast(simulation.tick());
+      social.drain(); // death messages queued by the tick, to every player
       // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).
       // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.
       for (const [pid, player] of simulation.players) {
@@ -253,7 +250,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), argument = (key, fallback) => { const at = args.indexOf(key); return at < 0 ? fallback : args[at + 1]; };
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }

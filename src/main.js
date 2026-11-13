@@ -114,6 +114,8 @@ import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
 import { achievementComponent } from "./chat-multi.js";
+import { chatDisplay } from "./server-broadcast.js";
+import { applyPlayerOp } from "./player-op.js";
 import { Profiler } from "./profiler.js";
 import { HitboxRenderer, collectHitboxes, crashStep, crashReport, showCrashReport, KEY_C, KEY_F3, KEY_B, KEY_S, KEY_T } from "./debug-keys.js";
 import { DebugOverlay, selectSection, nativeYaw, readMemory, rendererStats, entityStats, columnStats, heightValue, floorD, WALK_SPEED, FLY_SPEED } from "./debug-overlay.js";
@@ -614,6 +616,11 @@ scoreboard.onChange = () => { saved = false; };
 
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
+let serverDeathShown = false; // the server broadcast this death (a /kill), so the client does not print it a second time
+function applyServerPlayerOp(message) {
+  if (message.op === 'kill') serverDeathShown = true;
+  applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
+}
 let multiplayer = null, remotePlayers = null, worldWriterAvailable = false;
 
 function multiplayerDefaults() {
@@ -691,7 +698,8 @@ async function joinMultiplayer(settings) {
     onTick: applyMultiplayerTick, onBlocks: message => applyMultiplayerCells(message.changes),
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon,
-    onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
+    onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
+    onPlayerOp: applyServerPlayerOp,
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
   multiplayer = client;
@@ -1781,7 +1789,8 @@ function chatSpamGate(text, deliver) {
 }
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text, PLAYER_NAME), 0, false); }),
+  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) multiplayer.send({ type: 'chat', text }); // the server runs "/" lines (permission text for non-operators)
+    else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text, PLAYER_NAME), 0, false); }),
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -2585,8 +2594,8 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && deathComponent(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName, selfStack: survival.held }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name, one component per argument (team-names.js)
-  survival.died = false;
+  const message = survival.died && !serverDeathShown && deathComponent(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName, selfStack: survival.held }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name, one component per argument (team-names.js)
+  survival.died = false; serverDeathShown = false;
   if (message) showChatLine(document, message);
   closeContainer();
   const reason = survival.lastDamage || "an accident";
