@@ -25,7 +25,7 @@ export function clientCrystalFire(copy, layer) {
 }
 
 // EntityEnderCrystal.attackEntityFrom (any damage source and amount). A killed crystal is setDead at
-// once and explodes with power 6 and fire (World.newExplosion(null, x, y, z, 6.0F, true, true)): no
+// once and explodes with power 6 (World.createExplosion(null, x, y, z, 6.0F, true) = newExplosion(..., flaming false, smoking true), bytecode-read b65: wz.a calls ahb.a(Lsa;DDDFZ)): no fire, no
 // exploder, so nearby crystals chain. Returns the attackEntityFrom result.
 export function crystalAttack(mobs, e) {
   const state = { health: e.health, dead: e.health <= 0 || e.death >= 20, invulnerable: false };
@@ -34,7 +34,7 @@ export function crystalAttack(mobs, e) {
   e.health = 0;
   e.death = 20; // removed by the end-of-tick filter, with no death animation
   e.crystalGone = true;
-  mobs.events.push({ explode: { x: e.x, y: e.y, z: e.z, size: CRYSTAL_EXPLOSION_POWER, source: null, smoking: true, flaming: true } });
+  mobs.events.push({ explode: { x: e.x, y: e.y, z: e.z, size: CRYSTAL_EXPLOSION_POWER, source: null, smoking: true, flaming: false } });
   return true;
 }
 export { CRYSTAL_FIRE };
