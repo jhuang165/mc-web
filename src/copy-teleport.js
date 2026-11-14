@@ -36,3 +36,6 @@ export function copyTeleportEnv(world, boatBoxes = null) {
 
 // One wet tick of the copy `c`: returns true when the copy moved.
 export const copyWetTeleport = (c, world, rand, boatBoxes = null) => teleportRandomly(c, copyTeleportEnv(world, boatBoxes), rand);
+// Batch 64 (executed: MobCopies2Probe rainfeet / rainhead / raindry): Entity.isWet (sa.L) is `inWater || world.canLightningStrikeAt(floor x, floor y, floor z) || world.canLightningStrikeAt(floor x, floor(y + height), floor z)`
+// on the copy's CLIENT world, so rain on the feet cell or the head cell makes a dry copy wet. `strike(x, y, z)` is that world's canLightningStrikeAt.
+export const copyRainWet = (c, strike) => !!(strike(Math.floor(c.x), Math.floor(c.y), Math.floor(c.z)) || strike(Math.floor(c.x), Math.floor(c.y + (c.height ?? 0)), Math.floor(c.z)));

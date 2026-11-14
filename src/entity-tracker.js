@@ -35,6 +35,7 @@ import { JavaHashSetOrder } from "./java-hashset-order.js";
 import { horseFlagsOf } from "./horse-copy.js";
 import { copyDeathUpdate } from "./death-fx.js";
 import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
+import { transientIds } from "./tracker-transient.js"; // b64: entities that spawned and died inside one tick
 
 export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
@@ -501,6 +502,7 @@ export class MobTracker {
     // while their destroy packet still waits in the player's queue (EntityPlayerMP.destroyedItemsNetCache): the client copy lives until it is flushed.
     this.clientList = new Set(); this.dying = [];
     this.surrogateId = 0;
+    this.born = []; // b64 (tracker-transient.js): entities spawned since the last tracker pass, to find the ones that died before it
     this.player = { initialised: false, x: 0, y: 0, z: 0 };
     this.tick = 0;
   }
@@ -670,7 +672,10 @@ export class MobTracker {
     for (const [t, e] of early) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height, true); }
     if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }
     if (held.size) for (const e of this.order.keys()) if (held.has(e)) { const t = this.entries.has(e) ? this : o, en = t.entries.get(e); en.entry.updatePlayerList(); t.flush(en); }
-    for (const [t, e] of fresh) if (!held.has(e)) { const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
+    // b64 (tracker-transient.js): an entity spawned and dead inside one tick was added to the native HashSet at its spawn and removed at its death; the table may have doubled between
+    const rest = fresh.filter(([, e]) => !held.has(e)), gone = transientIds(this.born.splice(0), [this, o], [mobs, all]);
+    if (gone.length) { for (const id of gone) rest.push([null, { id }]); rest.sort((a, b) => { const x = idOf(a[0] ?? o, a[1]), y = idOf(b[0] ?? o, b[1]); return x < y ? -1 : x > y ? 1 : 0; }); }
+    for (const [t, e] of rest) { if (!t) { this.order.add(e, e.id); this.order.remove(e); continue; } const [width, height] = (t === this ? size : none)(e); t.entryOf(e, width, height); }
     const keys = this.order.keys(), owner = (e) => this.entries.has(e) ? this : o.entries.has(e) ? o : null;
     for (const e of keys) owner(e)?.stepEntry(e);
     this.flagPlayer(player); o.flagPlayer(player);
@@ -689,6 +694,7 @@ export class MobTracker {
   // client copy exists. When the player later joins (`jointUpdate`), every entry already in the set is sent to it in the set's order, at the phase it has reached. `joint` as in jointUpdate.
   idleUpdate(mobs, size, joint = null, ghosts = null) {
     const o = joint?.tracker, none = () => [0];
+    this.born.length = 0; // the away run's spawns are the trace's business (ghosts)
     if (o) { o.shareOrder(this); o.beforePlayer = this.beforePlayer; o.ctx.world = joint.world; }
     for (const t of o ? [this, o] : [this]) t.tick++;
     const lists = [[this, mobs, size]];
@@ -748,6 +754,7 @@ export class MobTracker {
     // a mob the tracker has not seen enters it first (EntityTracker.addEntityToTracker at spawn: updatePlayerList at once), all of them before
     // any entry sends its location, so a rider's attach can reach the client before its mount exists (riderFirst)
     if (add) for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
+    if (add) for (const id of transientIds(this.born.splice(0), [this], [mobs])) { const k = { id }; this.order.add(k, id); this.order.remove(k); } // b64 (tracker-transient.js)
   }
   // Batch 49: native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id, bytecode-read; executed order in
   // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).

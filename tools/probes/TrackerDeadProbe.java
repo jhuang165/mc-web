@@ -77,6 +77,12 @@ public class TrackerDeadProbe {
     System.out.println(run("dying", 12, ent(3, 9, 18, 4, 35, 7, 2, 12, 19, 3, 51, 12, 1, 5, 20, 12, 36, 12, 5, 12, 6, 12, 7, 12, 8, 12, 9, 12), null));
     // an entity that dies in its first tick (never present after a tick) among 12 live ones: the 13th entry doubled the table (16 to 32) and the order of the ids above 15 changed for good
     System.out.println(run("transient12", 6, ent(1, 99, 17, 99, 2, 99, 18, 99, 3, 99, 19, 99, 4, 99, 20, 99, 5, 99, 21, 99, 6, 99, 22, 99), new long[][][] { null, null, null, null, null, null, null, null, null, null, null, { { 1, 33, 1 } } }));
+    // b64: the transient cases. transient11: 10 live + one transient never reaches the 13th entry, so nothing changes (negative control)
+    System.out.println(run("transient11", 4, ent(1, 99, 17, 99, 2, 99, 18, 99, 3, 99, 19, 99, 4, 99, 20, 99, 5, 99, 21, 99), new long[][][] { null, null, null, null, null, null, null, null, null, { { 1, 33, 1 } } }));
+    // transientTwo: 12 live, a transient in tick 1 (doubles the table) and another in tick 3 (table already 32: no change)
+    System.out.println(run("transientTwo", 6, ent(1, 99, 17, 99, 2, 99, 18, 99, 3, 99, 19, 99, 4, 99, 20, 99, 5, 99, 21, 99, 6, 99, 22, 99), new long[][][] { null, null, null, null, null, null, null, null, null, null, { { 1, 33, 1 } }, { { 3, 49, 1 } } }));
+    // transientMid: 11 live, then in tick 2 one entity spawns a persistent child (the 12th entry) and a transient (the 13th: the table doubles, without it it would not)
+    System.out.println(run("transientMid", 6, ent(1, 99, 17, 99, 2, 99, 18, 99, 3, 99, 19, 99, 4, 99, 20, 99, 5, 99, 21, 99, 6, 99), new long[][][] { { { 2, 40, 99 }, { 2, 33, 1 } }, null, null, null, null, null, null, null, null, null, null }));
     // spawn during the run: children appear in the same tick (appended to the list) and die later; one is still alive at the end
     System.out.println(run("spawned", 14, ent(40, 99, 41, 99, 42, 99), new long[][][] { { { 2, 43, 4 }, { 3, 60, 99 } }, { { 4, 44, 3 }, { 4, 77, 2 } }, null }));
     // wave: many entities spawn, then die in a different order (ids sharing buckets)
