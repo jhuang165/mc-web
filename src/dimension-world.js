@@ -176,15 +176,16 @@ export class DimensionWorld extends World {
   }
   // WorldGenSpikes' EntityEnderCrystal for every spike within `r` chunks of the origin. endChunk keeps only blocks (each
   // column is repopulated with its neighbours), so the crystals are collected once here when the dragon first spawns.
-  endCrystals(r = 10) { return drain(this.endCrystalSteps(r)); }
+  endCrystals(r = 10, within = null) { return drain(this.endCrystalSteps(r, within)); }
   // The same walk as a generator that yields after each chunk row, so a loading screen can run it in slices (it returns the crystals).
-  *endCrystalSteps(r = 10) {
+  // b64 mpdragon: `within` = { cx0, cx1, cz0, cz1 } skips the chunks outside it (every chunk is populated from its own seeded Random, so the others do not matter): the server End keeps a window.
+  *endCrystalSteps(r = 10, within = null) {
     if (this.dimension !== END) return [];
     const end = new EndWorld(0, new JavaRandom(1));
     end.terrain = this.endTerrain;
     try {
       for (let cx = -r; cx <= r; cx++) {
-        for (let cz = -r; cz <= r; cz++) { populateEndChunk(end, new JavaRandom(popSeed(this.javaSeed, cx, cz)), cx, cz); yield; }
+        for (let cz = -r; cz <= r; cz++) { if (within && (cx < within.cx0 || cx > within.cx1 || cz < within.cz0 || cz > within.cz1)) continue; populateEndChunk(end, new JavaRandom(popSeed(this.javaSeed, cx, cz)), cx, cz); yield; }
       }
     } catch (e) { console.warn(`end crystals skipped: ${e.message}`); return []; }
     return end.entities.filter((e) => e.type === "ender_crystal");

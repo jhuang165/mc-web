@@ -14,9 +14,8 @@
 //       - To the End the Teleporter builds the 5 x 5 obsidian platform under three layers of air at the End's entrance (100, 50, 0) and the player stands on it, facing yaw 90.
 //       - From the End the player is respawned in the Overworld at their spawn point (bed or /spawnpoint) or the world spawn. Achievements (pc.C theEnd on entering, pc.D theEnd2 on the way
 //         back through the exit portal) follow the single-player trips (main.js: transit.exit gives theEnd2).
-//   * The exit portal: natively it exists only after the dragon dies. The dragon is not on the server yet, so the exit portal structure (EntityDragon.createEnderPortal, exit-portal.js, executed
-//     against the original) is built when the End is first made, so the End can be left and theEnd2 can be earned. Set DRAGON_ON_SERVER when the dragon arrives.
-//   * Not here: the dragon and the ender crystals, the credits screen, a flying eye of ender, End projectiles in the save. (XP orbs: since the b63 merge the End has its own, as the Nether.)
+//   * The exit portal is the dying dragon's (server-dragon.js, dragon-mobs.js host.portal); the dragon and crystals are made with the End (b64 mpdragon). Leaving through it shows the credits.
+//   * Not here: a flying eye of ender, End projectiles in the save. (XP orbs: since the b63 merge the End has its own, as the Nether.)
 import { DimensionWorld } from '../dimension-world.js';
 import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
@@ -30,13 +29,13 @@ import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, useEyeOnFrame, hasEye } from '../e
 import { GAME_IDS, transferTarget } from '../dimensions.js';
 import { FiniteDimensionWorld, END, END_OFFSET } from './client-dimensions.js';
 import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
+import { setupEnd, dragonState } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
 
-export const DRAGON_ON_SERVER = false;
 const OVERWORLD = 0, SIZE = 128, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
 const toLocal = (x, z) => [x + END_OFFSET.x, z + END_OFFSET.z];
 
 // The End's terrain into the finite world, shifted by END_OFFSET. A generated chunk holds (lx * 16 + lz) * 256 + y; a column of 256 cells moves as one run.
-export function fillEnd(world, seed) {
+export function fillEnd(world, seed) { // returns the generator (its spikes' crystals are collected from it)
   const source = new DimensionWorld(seed, END);
   for (let cx = Math.floor(-END_OFFSET.x / 16); cx <= Math.floor((SIZE - 1 - END_OFFSET.x) / 16); cx++) {
     for (let cz = Math.floor(-END_OFFSET.z / 16); cz <= Math.floor((SIZE - 1 - END_OFFSET.z) / 16); cz++) {
@@ -49,6 +48,7 @@ export function fillEnd(world, seed) {
       }
     }
   }
+  return source;
 }
 
 // EntityDragon.createEnderPortal on the End's world (original ids mapped to this port's blocks); the cells are edits of the world like any other.
@@ -64,8 +64,10 @@ export class ServerEnd {
   ensure() {
     if (this.n) return this.n;
     const dims = this.dims, sim = dims.sim, saved = dims.saved.end ?? {}, world = new FiniteDimensionWorld(sim.world.seed, END);
-    fillEnd(world, sim.world.seed);
-    buildExitPortal(world); // before the saved edits: an edit of a portal cell (broken, replaced) wins
+    const source = fillEnd(world, sim.world.seed);
+    // b64 mpdragon: the exit portal is the dying dragon's (server-dragon.js); b63's stand-in built at the origin is gone. An End saved by b63 keeps that portal in its edits and has no
+    // `dragon` field: its fight counts as over.
+    const fresh = !dims.saved.end;
     const edits = Array.isArray(saved.edits) ? saved.edits : [];
     for (let i = 0; i < edits.length; i += 100000) world.restore(edits.slice(i, i + 100000));
     const n = { dim: END, world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: new ExperienceOrbs(saved.xpOrbs), taken: [], overMobs: dims.mobsOf(OVERWORLD) };
@@ -81,6 +83,7 @@ export class ServerEnd {
     for (const System of [Rails, Torches, Doors, Beds]) new System(world, { drop, apply: noop }).watch();
     this.n = n;
     dims.swap(n, () => buildNetherInside(sim, n, saved));
+    setupEnd(n, source, fresh); // b64 mpdragon: crystals and the dragon of a new End; the fight's centre and portal clamp for every End
     // The projectile instance reads its dimension's world and mobs through getters that name the Nether (server-dispense.js); the End's own are these.
     Object.defineProperty(n.dispense, 'world', { get: () => n.world });
     Object.defineProperty(n.dispense, 'mobs', { get: () => n.mobs.mobs });
@@ -89,7 +92,7 @@ export class ServerEnd {
   // A player saved in the End comes back to it (ServerDimensions.adopt).
   adopt(p) { const n = this.ensure(); p.world = n.world; p.dimension = END; n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); return n; }
   // What the End adds to the save.
-  saveField() { const n = this.n; return n ? { edits: [...n.world.edits], ...saveNether(n) } : (this.dims.saved.end ?? null); }
+  saveField() { const n = this.n; return n ? { edits: [...n.world.edits], ...saveNether(n), dragon: dragonState(n) } : (this.dims.saved.end ?? null); }
 
   // ---- travel ----
   // BlockEndPortal.onEntityCollidedWithBlock: the player's box overlaps an end portal cell (Entity.doBlockCollisions: the box shrunk by 0.001). Returns true when a trip was made.
@@ -98,11 +101,22 @@ export class ServerEnd {
     if (p.mount) return false; // ridingEntity == null && riddenByEntity == null
     for (let x = Math.floor(at.x - hw); x <= Math.floor(at.x + hw); x++) for (let z = Math.floor(at.z - hw); z <= Math.floor(at.z + hw); z++) for (let y = Math.floor(at.y + 0.001); y <= Math.floor(at.y + 1.8 - 0.001); y++) {
       if (w.get(x, y, z) !== END_PORTAL) continue;
-      if (p.dimension === END) return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p), exit: true });
+      if (p.dimension === END) return this.conquer(p);
       return this.dims.arrive(p, END);
     }
     return false;
   }
+  // b64 mpdragon: EntityPlayerMP.travelToDimension(1) inside the End (bytecode-read earlier, dimensions.js): theEnd2 (pc.D), S2B game state 4 (the credits) and the player waits in
+  // the End until the client's C16 perform respawn (`finishCredits`, through ServerSurvival.respawn). The message is `dragonCredits`; the client answers with its usual `respawn`.
+  // Natively every trip through the exit portal shows the credits (recalled: the first-time-only rule is a later version).
+  conquer(p) {
+    if (p.conquered) return true;
+    p.conquered = true;
+    this.dims.sim.achievements.award(p, 'theEnd2');
+    (p.dimOut ??= []).push({ type: 'dragonCredits', reason: 4 });
+    return true;
+  }
+  finishCredits(p) { p.conquered = false; return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p) }); }
   // The respawn after the End: the bed (or /spawnpoint) in the Overworld, else the world spawn.
   exitSpot(p) {
     if (p.spawnpoint) return { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 };

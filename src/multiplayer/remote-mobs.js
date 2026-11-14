@@ -36,6 +36,7 @@ export class RemoteMobs {
         mob.id = 'mob-' + p.i;
         this.state(mob, p); // first: a slime's size and a horse's type decide the box
         client.apply(p, this.ctx);
+        if (client.dragon) mob.dragon = client.dragon; // b64 mpdragon: the copy's own state (ring, wings, seven part boxes) is what the renderer and the aim read
         client.height = this.factory.size(mob)[1];
         this.copies.set(p.i, { client, mob });
         continue;
@@ -99,6 +100,8 @@ export class RemoteMobs {
     for (const { client, mob } of this.copies.values()) {
       client.dead = mob.health <= 0;
       if (mob.type === 'wither') { mob.invul = client.invul ?? 0; mob.renderYawOffset = client.renderYawOffset; if (client.health !== undefined && mob.health > 0) mob.health = client.health; } // b63: watchers 20 (Invul) and 6 (health) arrive in S0F / S1C (copy-meta.js); the boss bar reads the health; the model turns by the body yaw of the copy (animateWither reads e.renderYawOffset)
+      if (mob.type === 'ender_dragon') { if (client.health !== undefined && mob.health > 0) mob.health = client.health; } // b64 mpdragon: watcher 6 (S0F / S1C) feeds the boss bar and the death branch
+      else if (mob.type === 'ender_crystal') mob.innerRotation = client.innerRotation; // the copy's spin
       const slime = mob.type === 'slime' || mob.type === 'magma_cube';
       if (slime) slimeSquishStart(mob); // EntitySlime.onUpdate runs on the client copy too: the squish and the landing particles (the sounds come from the server's S29)
       client.step((c) => this.physics(c, mob), (c) => this.physics.turn(c, mob), (c) => this.physics.pre(c, mob), (c) => this.physics.living?.(c, mob)); // batch 61: the potion swirl and the living roll follow the death update (entities.js clientLiving)
@@ -110,7 +113,7 @@ export class RemoteMobs {
       if (mob.love > 0) mob.love--; // EntityAnimal.onLivingUpdate counts inLove down (adults only: a baby has none)
       if (mob.eatTimer > 0) mob.eatTimer--; // EntitySheep.sheepTimer
       if (mob.hurt > 0) mob.hurt--;
-      if (mob.health <= 0 && mob.death < DEATH_TICKS) mob.death++;
+      if (mob.health <= 0 && mob.death < DEATH_TICKS && mob.type !== 'ender_dragon') mob.death++; // the dragon dies by its own 200 tick sequence (dragon.js), it never lies down
       this.factory.swingLimbs(mob);
     }
   }

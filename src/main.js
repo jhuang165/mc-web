@@ -852,6 +852,7 @@ async function joinMultiplayer(settings) {
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
+  client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   multiplayer = client;
   try {
     const welcome = await client.connect({ url: settings.url, session: settings.session });
@@ -880,6 +881,15 @@ async function joinMultiplayer(settings) {
     if (active?.remote) leaveToTitle(false);
     throw error;
   }
+}
+// b64 mpdragon: the exit portal of the End. GuiWinGame shows the poem and credits, then the client asks to respawn (C16), which the server answers with the Overworld trip.
+async function multiplayerCredits(client) {
+  if (multiplayer !== client || screen === 'credits') return;
+  screen = 'credits'; keys.clear();
+  if (document.pointerLockElement) document.exitPointerLock();
+  await showEndCredits();
+  if (screen === 'credits') screen = 'playing';
+  if (multiplayer === client) client.respawn();
 }
 // b61 mpnether: S07 Respawn on the dedicated server. The server's `dimRespawn` carries the new world (Overworld or Nether columns) and this player's state;
 // the world is swapped as a portal trip does it (openWorld: the terrain screen, then launch). Messages that arrive meanwhile wait in the client's queue

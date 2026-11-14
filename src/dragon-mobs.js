@@ -52,12 +52,15 @@ export function dragonHit(origin, dir, e, reach) {
 // The world as dragon.js's host sees it. `ctx` = { player, survival } of the current tick.
 export function dragonHost(mobs, e, ctx = {}) {
   const world = mobs.world, edits = [], rand = rngOf(e), p = ctx.player, survival = ctx.survival;
+  // b64 mpdragon: the server hands every player of the dragon's world (`mobs.dragonViews`); single player has the one.
+  const viewsOf = () => mobs.dragonViews ? mobs.dragonViews() : p && survival ? [{ x: p.x, y: p.y, z: p.z, survival, push: (x, y, z) => mobs.events.push({ dragonPush: { x, y, z } }) }] : [];
   const boxOf = (o) => { const t = ENTITY_TYPES[o.type]; return [o.x - t.width / 2, o.y, o.z - t.width / 2, o.x + t.width / 2, o.y + t.height, o.z + t.width / 2]; };
   const at = { x: e.x, y: e.y, z: e.z };
   const host = {
     rand,
     edits,
-    get players() { return p && survival?.health > 0 ? [{ x: p.x, z: p.z, minY: p.y }] : []; },
+    center: mobs.dragonCenter, // undefined: (0, 0)
+    get players() { return viewsOf().filter((v) => v.survival?.health > 0).map((v) => ({ x: v.x, z: v.z, minY: v.y })); },
     crystals: (box) => mobs.entities.filter((c) => c.type === "ender_crystal" && meets(boxOf(c), box)).map((c) => ({ x: c.x, y: c.y, z: c.z, dead: c.health <= 0 || (c.death ?? 0) >= 20, entity: c })),
     living(box) {
       const out = [];
@@ -65,12 +68,13 @@ export function dragonHost(mobs, e, ctx = {}) {
         if (o === e || o.type === ENDER_DRAGON || o.type === "ender_crystal" || o.health <= 0 || !ENTITY_TYPES[o.type] || !meets(boxOf(o), box)) continue;
         out.push({ living: true, x: o.x, z: o.z, push: (x, y, z) => { o.vx += x; o.vy += y; o.vz += z; }, hurt: (d) => mobs.attackEntityFrom(o, d, { from: { x: e.x, z: e.z }, attacker: e, name: "mob" }) });
       }
-      if (p && survival && survival.health > 0 && meets([p.x - 0.3, p.y, p.z - 0.3, p.x + 0.3, p.y + 1.8, p.z + 0.3], box)) {
+      for (const v of viewsOf()) {
+        if (!(v.survival?.health > 0) || !meets([v.x - 0.3, v.y, v.z - 0.3, v.x + 0.3, v.y + 1.8, v.z + 0.3], box)) continue;
         out.push({
-          living: true, x: p.x, z: p.z,
-          // main.js does not consume `dragonPush` yet (see dragon.md): the player's velocity impulse.
-          push: (x, y, z) => mobs.events.push({ dragonPush: { x, y, z } }),
-          hurt: (d) => survival.scaledDamage(d, "the Ender Dragon", { source: "mob", from: e }),
+          living: true, x: v.x, z: v.z,
+          // single player's main.js consumes `dragonPush` (the player's velocity impulse); the server pushes the player's own velocity
+          push: v.push,
+          hurt: (d) => v.survival.scaledDamage(d, "the Ender Dragon", { source: "mob", from: e }),
         });
       }
       return out;
@@ -89,6 +93,7 @@ export function dragonHost(mobs, e, ctx = {}) {
     orb: (amount) => mobs.events.push({ xp: amount, position: at }),
     worldEvent: (id, x, y, z) => { if (id === DRAGON_SOUNDS.deathEvent) mobs.events.push({ sound: "mob.enderdragon.end", volume: DRAGON_SOUNDS.volume, pitch: 1, position: { x, y, z } }); },
     portal(x, z) {
+      if (mobs.dragonPortalAt) [x, z] = mobs.dragonPortalAt(x, z); // the server's End is a finite window: the portal must land inside it
       createExitPortal({
         setBlock(bx, by, bz, id) {
           const m = id === 0 ? { id: 0, meta: 0 } : fromOriginal(id, 0);
@@ -193,13 +198,14 @@ export function installDragonMobs(EntityWorld) {
 }
 
 // ChunkProviderEnd.populate (chunk 0,0): one dragon at (0, 128, 0) with a random heading, unless one lives already.
-export function spawnDragonIfAbsent(world, mobs, random = Math.random) {
+export function spawnDragonIfAbsent(world, mobs, random = Math.random, centre = { x: 0, z: 0 }) {
   if (mobs.entities.some((e) => e.type === ENDER_DRAGON && (e.health > 0 || !e.dragonGone))) return null;
-  const e = mobs.create(ENDER_DRAGON, 0, 128, 0);
+  const e = mobs.create(ENDER_DRAGON, centre.x, 128, centre.z); // b64: the server's End is stored shifted (END_OFFSET)
   const yaw = Math.fround(random() * 360);
   for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead"]) e[k] = yaw;
   e.yaw = (-yaw * Math.PI) / 180;
-  createDragonState(e);
+  const s = createDragonState(e);
+  s.tx = centre.x; s.tz = centre.z;
   mobs.entities.push(e);
   return e;
 }
