@@ -106,13 +106,13 @@ export function speedModifiers(e) {
   const slow = mobEffect(e, SLOWNESS);
   return [...(s ? [[0.20000000298023224 * (s.amplifier + 1), 2]] : []), ...(slow ? [[-0.15000000596046448 * (slow.amplifier + 1), 2]] : [])];
 }
-// Potion.damageBoost (PotionAttackDamage): attackDamage x (1 + 1.3 x (amplifier + 1)),
-// operation 2; EntityMob.attackEntityAsMob casts the value to float.
+// PotionAttackDamage (rs.a(int, tj), bytecode-read and executed b71, mob-weakness-reference.json): Strength (damageBoost) is attackDamage x (1 + 1.3 x (amplifier + 1)),
+// operation 2; Weakness (id 18) adds (float)(-0.5F x (amplifier + 1)), operation 0, before the multipliers. EntityMob.attackEntityAsMob casts the value to float.
 // `gear` is the held/worn items' attack modifiers (operation 0, applied live by EntityLivingBase.onUpdate and never saved: probed `weapon`
 // records); the mob's own saved attackDamage base and modifiers (an imported list, mob-attributes.js liveAttribute) count too.
 export function attackDamage(e, base, gear = 0) {
-  const s = mobEffect(e, STRENGTH);
-  return f(liveAttribute(e, "generic.attackDamage", base, [...(gear ? [[gear, 0]] : []), ...(s ? [[1.3 * (s.amplifier + 1), 2]] : [])]));
+  const s = mobEffect(e, STRENGTH), w = mobEffect(e, WEAKNESS);
+  return f(liveAttribute(e, "generic.attackDamage", base, [...(gear ? [[gear, 0]] : []), ...(w ? [[f(-0.5 * (w.amplifier + 1)), 0]] : []), ...(s ? [[1.3 * (s.amplifier + 1), 2]] : [])]));
 }
 
 // updatePotionEffects: each PotionEffect.onUpdate runs performEffect when Potion.isReady

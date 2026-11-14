@@ -150,3 +150,4 @@ The render constants are checked from the `bnf` and `bmp` bytecode, because the 
 - The thunder light branch is covered only by a unit test, not by a native scenario.
 - Boats and minecarts block a spawn only through the `extraCollision` hook.
 - SpawnData and SpawnPotentials (weighted entries, Properties overlay incl. Pos applied after the canSpawn check) are read, written and round-tripped through Anvil; see [spawner cart](spawner-cart.md). SpawnData `Riding` chains: Batch 68 (docs sweep): now ported (`spawnRidingChain`, `src/spawner-riding.js`).
+- Batch 71 (mobfixes71): `SPAWNER_ENTITY_IDS` gained `Squid`, `Bat`, `LavaSlime` and `Villager` (the villager follows EntityCreature.getCanSpawnHere: space checks only, bytecode-read); see [squid-bat](squid-bat.md). The display entity gives slimes and magma cubes size 1 and villagers profession 0 so the renderers have the fields they read.

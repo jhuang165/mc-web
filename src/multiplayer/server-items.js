@@ -142,11 +142,8 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
   // b63 mpnether3: `dim` is the dimension whose orbs `this.xp` holds (the Nether's are swapped in by ServerDimensions.swap); only that dimension's players are targets and collectors.
   tickOrbs(dim = 0) {
     const sim = this.sim, players = [...sim.players.values()].filter(p => (p.dimension | 0) === dim);
-    for (const o of this.xp.orbs) {
-      let near = null, best = Infinity;
-      for (const p of players) { const d = (o.x - p.position.x) ** 2 + (o.posY - p.position.y) ** 2 + (o.z - p.position.z) ** 2; if (d < best) { best = d; near = p.position; } }
-      this.xp.tickOne(sim.world, o, near);
-    }
+    const spots = players.map(p => p.position); // b71: the orb keeps its target player (experience.js `who`); no per-tick nearest pick here
+    for (const o of this.xp.orbs) this.xp.tickOne(sim.world, o, null, undefined, spots);
     this.xp.reap();
     for (const p of players) {
       if (p.dead) continue; // a dead player collects nothing (b60)
