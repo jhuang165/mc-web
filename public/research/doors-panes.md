@@ -16,7 +16,7 @@ Items: `ItemDoor` items 324 and 330 are internal items 470 and 471 (stack 1). To
 
 ## Limits
 
-- No live redstone: iron doors never open by hand and the `Doors` power hooks are inert without a power source.
-- The sound pitch of 1.5 for iron blocks is not reproduced; stained glass and panes are not in the port; no hopper support surface.
+- Batch 69 (docs sweep): redstone is live (`redstone.js`, `redstone-runtime.js`, see `redstone-live.md`); the placement hook handles doors (`placement.reason === "door"`). Iron doors still never open by hand, as natively.
+- The sound pitch of 1.5 for iron blocks is not reproduced; stained glass and panes were not in the port at the time (Batch 69 docs sweep: `STAINED_GLASS` and `STAINED_GLASS_PANE` are imported in `world.js` now, see `colored-blocks.md`); no hopper support surface.
 - Pane render geometry approximates `renderBlockPane` (UV and strip details); held and dropped panes are flat sprites.
 - No native GL capture comparison.

@@ -24,4 +24,4 @@ Zombie rarity and selection come from `javap -c -p sv yq`: `EntityLivingBase.onD
 
 ## Limits
 
-Farming retains its approximate hash-based random-tick sampling and light estimate; it does not yet use the shared `WorldServer` random-tick stream. No villages, natural crop patches, Fortune, golden carrots, carrot-on-a-stick riding, or trampling. Other crops and the broader status-effect system remain unfinished. No claim of full Java parity.
+Farming retains its approximate hash-based random-tick sampling and light estimate; it does not yet use the shared `WorldServer` random-tick stream. Batch 69 (docs sweep): trampling is ported (`farming.js` `trample`, the `onFallenUpon` roll with the mobGriefing check), the shared random-tick stream is used on the server (`farming.js` `randomTick`, see `farming.md`), golden carrots exist as a brewing ingredient (`brewing.js`) and the carrot on a stick is crafted (`pig-saddle`). Not re-checked: village crop patches, Fortune on crops (`crops.js` still says fortune 0). Other crops and the broader status-effect system remain unfinished. No claim of full Java parity.

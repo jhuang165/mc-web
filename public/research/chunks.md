@@ -26,6 +26,8 @@ All of them matched on the first run.
 
 ## Not done
 
+Batch 69 (docs sweep): this doc is the WORLD-01 to WORLD-02 history. Later work closed several of the "not done" lines: the Anvil region format is read and written (`src/region-file.js`, `region-import.js`, `region-export.js`, `chunk-nbt.md`), streaming exists (`src/streaming-generator.js`, `streaming.md`), and generation and population run per chunk (`gen-world.js`, `population-stage.js`). Which lines remain true (for example per-section tile entity lists) was not re-audited, so the lists are kept as written.
+
 - Light values are stored but not computed in chunks; height maps, precipitation heights and biomes stay at their constructor values.
 - No tile entities, entity lists, neighbour updates, block-added/removed hooks, scheduled or random ticks per section.
 - No chunk generation and no Anvil/NBT format. Loading and unloading are below (WORLD-02a).

@@ -183,11 +183,11 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
 
 ## Known gaps
 
-- The ocelot `EntityAIAvoidEntity` task is missing (there are no ocelots).
+- Batch 69 (docs sweep): ocelots exist and the creeper's `EntityAIAvoidEntity` ocelot task is ported (`src/ocelot-ai.js`, "creeper task 3: AvoidEntity ocelot 6 / 1.0 / 1.2", `ocelot.test.js`).
 - Missing TNT triggers and drops:
-  - redstone does not prime TNT;
-  - music-disc drops are not implemented.
-- Blast Protection is not implemented.
+  - Batch 69 (docs sweep): redstone primes TNT (`redstone.js` `primeTnt`, replayed in `redstone-live.test.js`);
+  - Batch 69 (docs sweep): the skeleton-kill creeper disc drop is implemented (`DISC_FIRST + nextInt(12)` in `combat.js`).
+- Batch 69 (docs sweep): Blast Protection is implemented (`blastProtectionKnockback` and `blastKnockback` in `armor-enchantments.js`, used by `explosion-simulation.js`; tests in `armor-enchantments.test.js`).
 - Fidelity limits:
   - `HashSet` bins never treeify, which the probe showed does not happen at these sizes;
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;

@@ -27,10 +27,9 @@ entries), the player name is "Player".
 ## Cheats
 
 World creation has Allow Cheats (GuiCreateWorld semantics from bytecode: off by default; switching the game mode sets it to creative on,
-survival off until the button has been pressed by hand). Stored as `allowCommands` in the world record. This build has no Hardcore mode,
-so the Hardcore-forces-off rule has nothing to apply to. With cheats off only help, me, tell/msg/w and seed work; every other command
+survival off until the button has been pressed by hand). Stored as `allowCommands` in the world record. Batch 69 (docs sweep): Hardcore mode exists now (`hardcore.md`), which is where the Hardcore-forces-off rule applies; the sentence "no Hardcore mode" is superseded. With cheats off only help, me, tell/msg/w and seed work; every other command
 answers `commands.generic.permission` in red (EntityPlayerMP.canCommandSenderUseCommand). With cheats on the op level is 4.
-A save without the flag reads as WorldInfo does: cheats on for a creative world, off for survival. Open to LAN applies the local game type/cheat/pause settings; browser socket hosting and Java multiplayer remain unsupported.
+A save without the flag reads as WorldInfo does: cheats on for a creative world, off for survival. Open to LAN applies the local game type/cheat/pause settings; browser socket hosting is not offered from the browser. Batch 69 (docs sweep): a dedicated multiplayer server exists (`server/server.js`, `src/multiplayer/`, op levels in `server-admin.js`), so "Java multiplayer remain unsupported" is only true for joining a real Java 1.7.10 server.
 
 ## Commands
 
@@ -44,8 +43,7 @@ Approximated:
 - Adventure mode uses the build's existing adventure restrictions; full adventure parity remains open.
 - /setworldspawn stores the point in the record but the world spawn search is unchanged.
 - /setblock destroy drops like a break with the held tool; supported tile data tags are applied.
-- /give and /summon accept supported data tags (below). /summon covers the entities the port has (pig, cow, sheep, chicken, zombie, spider, cave
-  spider, skeleton, creeper, villager, iron golem, silverfish, witch).
+- /give and /summon accept supported data tags (below). /summon covers the entities the port has (Batch 69 docs sweep: this first list is the early set; the full coverage, 55 of the 57 EntityList registrations, is stated further down).
 - /effect: instant health and harm apply directly; other effects use the port's Effects table.
 - /tp and the player-name arguments accept `@p`, `@a`, `@r` and the local player name; radius/name/mode/level filters apply to that one player.
 

@@ -101,6 +101,6 @@ F2 (`key.screenshot`) saves the canvas frame with the DOM GUI drawn over it (`sr
   - A lost pointer lock while the window keeps focus still opens the pause menu even with pauseOnLostFocus off. The browser needs a click to regain the lock.
   - The touch d-pad and Jump buttons hold their actions directly, whatever key those actions are bound to. Native 1.7.10 has no touch buttons.
 - Missing:
-  - 3D Anaglyph: enabled and saved as `anaglyph3d` ([post-shaders.md](post-shaders.md)); an approximation of the native texture conversion.
+  - 3D Anaglyph: enabled and saved as `anaglyph3d` ([post-shaders.md](post-shaders.md)); an approximation of the native texture conversion. Batch 69 (docs sweep): later batches use the native conversion formulas for textures and the GUI (`src/anaglyph.js`, `gui-anaglyph.js`, `anaglyph-gui2.test.js`; notes `anaglyph4-b30-track.md`), so "approximation" now means only that it cannot be compared against a native render here.
   - The stream actions (no Twitch stream). Hitbox line width is fixed at 1 px.
   - Touchscreen Mode stays disabled.

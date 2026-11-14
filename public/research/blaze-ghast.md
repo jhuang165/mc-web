@@ -19,8 +19,8 @@ Original classes: Blaze `xx`, Ghast `yd` (extends `sr`/EntityFlying), EntityFire
 
 ## Gaps
 
-- Natural spawning: ghasts from BiomeGenHell's list and blazes from the fortress list through the SpawnerAnimals port ([natural spawning](natural-spawning.md)); the Nether flow is not covered by a seeded replay. No achievements.
-- Fireballs are not saved and there is no /summon Fireball; fireball-versus-fireball collisions are not implemented.
+- Natural spawning: ghasts from BiomeGenHell's list and blazes from the fortress list through the SpawnerAnimals port ([natural spawning](natural-spawning.md)); the Nether flow is not covered by a seeded replay. Batch 69 (docs sweep): the blaze rod achievement exists (`achievements-live.js`, `ITEM.blazeRod`).
+- Batch 69 (docs sweep): fireballs are saved (`saved-order.js`, `_fireballs` in the mob save) and `/summon Fireball` and `SmallFireball` are covered (`summon-coverage.test.js`). Still open:  fireball-versus-fireball collisions are not implemented.
 - Ghast ground friction is approximated (0.546); a blaze or ghast fireball in flight and its impact on the player are not native evidence (the probe never ticks the spawned fireballs, only the launches are replayed). The blaze only targets the player (an attacking mob does not become its target).
 - Models, renderers, crackle and smoke, level-event sounds and the small-fireball block case were not run against the original.
 - The ghast render scale is a constant 4.5, assuming the client copy's attack counters never change.

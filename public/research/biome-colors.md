@@ -29,7 +29,7 @@ Rendering design: chunk meshes use a grayscale terrain atlas and per-vertex tint
 
 ## Gaps
 
-- Lily pad now emits only the top and underside quads (as `RenderBlocks.renderBlockLilyPad` does); its position-hash UV rotation is not ported.
+- Lily pad now emits only the top and underside quads (as `RenderBlocks.renderBlockLilyPad` does); its position-hash UV rotation is not ported. Batch 69 (docs sweep): the hash rotation is ported (`src/lily-pad.js`, `lilyPadRotation` used by `chunk-mesher.js` `lilyPad`; `biome-decoration-audit.md` records batch 17).
 - Double-plant item colour is unverified.
 - Fast-graphics overlay gating and rain splash/sound per column are read from bytecode, not probed.
 - Fog colour still uses the existing `fogColor` path with the viewer's temperature; the End draws its own sky.
