@@ -204,6 +204,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const stats = { held: 0 };
   // b61 (away-trace.js): the tracker-visible state of every moving entity after each entity tick, so the return can replay the tracker's ticks
   const trace = new AwayTrace(() => [...mobs.entities, ...items.items, ...xp.orbs, ...primed, ...arrows.list, ...projectiles.balls, ...(self.falling?.entities ?? []), ...minecarts.carts, ...boats.carts, ...rockets.rockets, ...mobs.potions.balls, ...(mobs._fireballs?.list ?? []), ...(mobs._skulls?.list ?? []), ...hanging.entities, ...(mobs.knotList ?? [])]); // b62: hanging entities and knots are sampled too (a broken one leaves its tracker entry)
+  mobs.traceBorn = trace.born; // b65: EntityWorld.joined / noteGoneMobs report spawns and removed mobs to the trace (transients)
   const primedList = { get list() { return primed; }, set list(v) { primed.splice(0, primed.length, ...v); } };
   const late = []; // spills after the gate: an item entity that would never tick, kept as a saved record
   let open = true;

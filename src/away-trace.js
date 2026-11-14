@@ -13,10 +13,11 @@ export const RISE = "!"; // a replayed field named "!name" is a flag counter: th
 
 export class AwayTrace {
   // `lists()`: every entity that can move in the run (one flat array, called once per sample)
-  constructor(lists) { this.lists = lists; this.rows = new Map(); this.n = 0; }
+  constructor(lists) { this.lists = lists; this.rows = new Map(); this.n = 0; this.born = []; this.transients = []; } // b65: `born` is the world's `traceBorn` (spawns and removed mobs since the last sample), `transients` [id, tick]
   sample() {
-    const t = this.n++;
-    for (const e of this.lists()) {
+    const t = this.n++, list = this.lists();
+    this.noteTransients(t, list);
+    for (const e of list) {
       if (!e || typeof e !== "object") continue;
       let r = this.rows.get(e);
       if (!r) this.rows.set(e, (r = { from: t, id: idNumber(e), fields: NUM.filter((f) => Number.isFinite(e[f])), rise: [0, 0], was: [false, false], last: null, samples: [] }));
@@ -27,6 +28,17 @@ export class AwayTrace {
       v.push(r.rise[0], r.rise[1]);
       if (r.last && v.every((x, i) => x === r.last[i])) continue;
       r.last = v; r.samples.push(t, ...v);
+    }
+  }
+  // b65 (trackertransient2): an entity that spawned and was removed inside tick `t` was never in a list at a sample, so it has no row and no ghost; natively it took a HashSet slot at its spawn and gave it
+  // back at its death (tracker-transient.js). It is kept as [id, tick] and replayed as an add and a remove in that tick (`transientsAt`, EntityTracker idleUpdate). Entities still alive are not transient.
+  noteTransients(t, list) {
+    if (!this.born.length) return;
+    const alive = new Set(list);
+    for (const e of this.born.splice(0)) {
+      if (!e || this.rows.has(e) || alive.has(e) || (e.dead !== true && e.transientGone !== true)) continue;
+      const id = idNumber(e);
+      if (id !== null && this.transients.length < 4096) this.transients.push([id, t]);
     }
   }
   // `pairs`: [[entity, saved record]] of the entities that are saved (a dead entity has no record and is not replayed). Rows that never change after tick 0 are not sent.
@@ -43,7 +55,7 @@ export class AwayTrace {
     // grew the HashSet's table (the capacity never shrinks) and so changed the order of every entry after it. [id, first tracker tick, last tracker tick].
     const alive = new Set(this.lists()), ghosts = [];
     for (const [e, r] of this.rows) if (!alive.has(e) && Number.isInteger(r.id) && r.at !== undefined) ghosts.push([r.id, r.from, r.at]);
-    return { n: this.n, rows, ghosts };
+    return { n: this.n, rows, ghosts, transients: this.transients };
   }
 }
 
@@ -80,5 +92,7 @@ export function applyTick(rows, i, absent) {
 }
 // The ghosts' ids that the tracker still holds at tick `i` (died later than i, born at or before it).
 export const ghostsAt = (trace, i) => (trace?.ghosts ?? []).filter(([, from, to]) => from <= i && i <= to).map(([id]) => id);
+// b65: the ids of the entities that were added and removed inside tick `i`.
+export const transientsAt = (trace, i) => (trace?.transients ?? []).filter(([, t]) => t === i).map(([id]) => id);
 // Back to the state the entities have now (the end of the trace).
 export function restoreFinal(rows) { for (const r of rows) r.fields.forEach((f, k) => { r.e[f[0] === RISE ? f.slice(1) : f] = r.keep[k]; }); }

@@ -253,7 +253,7 @@ export class ClientEntity {
   constructor(type = "") {
     this.type = type; this.present = false;
     this.x = this.y = this.z = 0; this.px = this.py = this.pz = 0; this.tx = this.ty = this.tz = 0;
-    this.vx = this.vy = this.vz = 0; this.onGround = false; this.increments = 0; this.sx = this.sy = this.sz = 0; this.pendingDestroy = 0;
+    this.vx = this.vy = this.vz = 0; this.onGround = false; this.fallDistance = 0; this.increments = 0; this.sx = this.sy = this.sz = 0; this.pendingDestroy = 0;
     this.rotationYaw = this.prevRotationYaw = this.rotationPitch = this.prevRotationPitch = this.tyaw = this.tpitch = 0;
     this.rotationYawHead = this.prevRotationYawHead = this.renderYawOffset = this.prevRenderYawOffset = 0;
     this.bodyTicks = 0; this.bodyHeadYaw = 0; // EntityBodyHelper's counters
@@ -692,7 +692,7 @@ export class MobTracker {
   // Batch 58 (executed: tracker-joint-reference.json dimAge cases, tag b58tp): a world nobody is in still ticks its EntityTracker (MinecraftServer.updateTimeLightAndEntities runs every WorldServer),
   // so an entry's counters, last sent position and motion advance from its making. `idleUpdate` is that tick with no player: the entries are made and walked in set order, nothing is sent and no
   // client copy exists. When the player later joins (`jointUpdate`), every entry already in the set is sent to it in the set's order, at the phase it has reached. `joint` as in jointUpdate.
-  idleUpdate(mobs, size, joint = null, ghosts = null) {
+  idleUpdate(mobs, size, joint = null, ghosts = null, transient = null) {
     const o = joint?.tracker, none = () => [0];
     this.born.length = 0; // the away run's spawns are the trace's business (ghosts)
     if (o) { o.shareOrder(this); o.beforePlayer = this.beforePlayer; o.ctx.world = joint.world; }
@@ -710,8 +710,9 @@ export class MobTracker {
     const ghostT = { idOf: (g) => g.id };
     const fresh = lists.flatMap(([t, list, sz]) => list.filter((e) => !t.entries.has(e)).map((e) => [t, e, sz]));
     for (const id of gone) if (!gk.has(id)) { const g = { ghost: true, id }; gk.set(id, g); fresh.push([ghostT, g, null]); }
+    for (const id of transient ?? []) fresh.push([ghostT, { ghost: true, id, once: true }, null]); // b65 (tracker-transient.js): added and removed inside this tick, among the tick's new entries
     fresh.sort((a, b) => { const x = a[0].idOf(a[1]), y = b[0].idOf(b[1]); return x < y ? -1 : x > y ? 1 : 0; });
-    for (const [t, e, sz] of fresh) { if (t === ghostT) { this.order.add(e, e.id); continue; } const [width, height] = sz(e); t.entryOf(e, width, height, true); }
+    for (const [t, e, sz] of fresh) { if (t === ghostT) { this.order.add(e, e.id); if (e.once) this.order.remove(e); continue; } const [width, height] = sz(e); t.entryOf(e, width, height, true); }
     for (const e of this.order.keys()) { const t = this.entries.has(e) ? this : o?.entries.has(e) ? o : null; t?.stepEntry(e); }
     for (const t of o ? [this, o] : [this]) for (const en of t.entries.values()) { en.entry.packets.length = 0; }
   }
@@ -719,7 +720,7 @@ export class MobTracker {
   // Entities freeze after 1200 ticks (mt.h); the tracker periods are 3, 4, 5, 10, 20 and the forced teleport every 401st update (a counter that resets after passing 400), with the tracker's own tick counter (mod 1200) all dividing 481200, so a trip past 6.7 hours runs 1200 + (ticks - 1200) % 481200 ticks, the same phase.
   idleCatchUp(mobs, size, ticks, joint = null, per = null) { // batch 60: `joint` as in idleUpdate: the object entries run the same ticks (away-track.js)
     const n = reduceIdleTicks(ticks);
-    for (let i = 0; i < n; i++) { const t = per?.(i); if (t) this.idleUpdate(t.mobs, size, t.joint ?? joint, t.ghosts); else this.idleUpdate(mobs, size, joint); } // b61: `per(i)` -> { mobs, joint } puts the entities in the state they had on tick i (away-trace.js)
+    for (let i = 0; i < n; i++) { const t = per?.(i); if (t) this.idleUpdate(t.mobs, size, t.joint ?? joint, t.ghosts, t.transient); else this.idleUpdate(mobs, size, joint); } // b61: `per(i)` -> { mobs, joint } puts the entities in the state they had on tick i (away-trace.js)
   }
   dropGhosts() { for (const k of this.ghostKeys?.values() ?? []) this.order.remove(k); this.ghostKeys?.clear(); } // b62: the trace's last tick is over
   idOf(e) { const id = e.id; const n = typeof id === "string" ? Number((/(\d+)$/.exec(id) ?? [])[1]) : id; return Number.isInteger(n) ? n : Infinity; }
