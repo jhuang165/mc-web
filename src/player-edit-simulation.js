@@ -8,7 +8,7 @@ import { FISHING_ROD } from './fishing-content.js';
 import { CARROT_ON_A_STICK, SADDLE } from './pig-saddle.js';
 import { plantedBlock } from './crops.js';
 import { NETHER_WART, ITEM_NETHER_WART } from './nether-wart.js';
-import { growGrass } from './flowers.js';
+import { useBoneMeal, sparkleHeight } from './bone-meal.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, eggOf } from './spawn-eggs.js';
@@ -479,22 +479,18 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     if (id === DYE && state.survival.held?.damage === 15) {
       if (!state.survival.creative && !state.survival.usable(id)) return act('bone-meal-no-item');
-      let used = false;
-      if (block === SAPLING) { state.trees.boneMeal(x, y, z); used = true; }
-      else if (block === 1) {
-        for (const q of growGrass(state.world, state.flowers, state.boneRandom, state.world.biome, x, y, z)) hook('updateBlock', q[0], q[2], q[1]);
-        used = true;
-      } else if (state.farming.fertilize(x, y, z)) {
-        hook('applyFarmUpdates', state.farming.drain());
-        used = true;
-      }
+      // bone-meal.js (b66): ItemDye.func_150919_a for every IGrowable (saplings, grass, crops, stems, mushrooms, tall grass, double plants, cocoa).
+      const grown = useBoneMeal({ world: state.world, trees: state.trees, farming: state.farming, flowers: state.flowers, grassRandom: state.boneRandom, items: state.items }, x, y, z);
+      for (const q of grown.changed) hook('updateBlock', q[0], q[2], q[1]);
+      if (grown.farm) hook('applyFarmUpdates', state.farming.drain());
+      const used = grown.used;
       if (used) {
         if (!state.survival.creative) state.survival.take(id); // the held stack, even at size 0 or below (neg-stacks-reference.json use boneMeal)
         hook('renderHotbar');
         // ItemDye (bone meal) plays no sound in 1.7.10: only level event 2005 (the sparkles below); verified in block-sounds-reference.json.
         hook('markUnsaved');
         const now = state.world.get(x, y, z);
-        hook('boneMealSparkles', now, x, y, z, now === SAPLING ? Math.fround(0.8) : isCrop(now) ? Math.fround(0.25) : 1, state.itemRand);
+        hook('boneMealSparkles', now, x, y, z, sparkleHeight(state.world, x, y, z), state.itemRand);
       }
       return act('use-bone-meal');
     }

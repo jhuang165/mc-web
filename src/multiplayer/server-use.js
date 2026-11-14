@@ -8,13 +8,23 @@ import { plantedBlock } from '../crops.js';
 import { NETHER_WART, ITEM_NETHER_WART } from '../nether-wart.js';
 import { SOUL_SAND } from '../nether-blocks.js';
 import { SAPLING, isCrop, DYE, FIRE, YELLOW_FLOWER, RED_FLOWER } from '../world.js';
-import { growGrass, JRandom } from '../flowers.js';
+import { JRandom } from '../flowers.js';
+import { useBoneMeal } from '../bone-meal.js';
 import { ITEM_SPAWN_EGG, ITEM_FIRE_CHARGE } from '../spawn-eggs.js';
 import { useEggOnBlock, eggMobType } from '../spawn-egg-use.js';
 import { ITEMS } from '../survival.js';
 import { SUPPORTED, MOB_LIMIT } from './server-mobs.js';
 
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER };
+
+// World.playAuxSFX(2005, x, y, z, 0) after ItemDye used the bone meal: S28 to every player of the dimension within 64 blocks (strict, the user included).
+function sparkles(sim, p, x, y, z) {
+  for (const o of sim.players.values()) {
+    if ((o.dimension | 0) !== (p.dimension | 0)) continue;
+    const dx = x - o.position.x, dy = y - o.position.y, dz = z - o.position.z;
+    if (dx * dx + dy * dy + dz * dz < 64 * 64) (o.itemsOut ??= []).push({ type: 'aux', events: [{ id: 2005, x, y, z, data: 0 }] });
+  }
+}
 
 export function useOnBlock(sim, p, target, id) {
   const s = p.survival, [x, y, z] = target.block, block = sim.world.get(x, y, z), item = ITEMS[id];
@@ -56,14 +66,14 @@ export function useOnBlock(sim, p, target, id) {
   }
   // ItemDye.onItemUse with bone meal (damage 15; ItemDye.func_150919_a, bytecode-read): true only on a block that can be fertilised (IGrowable.func_149851_a: a sapling and a
   // grass block always, a crop or stem below its last stage). The stack is spent and the use stat counted whether or not the growth roll then succeeds (a sapling's 45 %).
-  // Mushrooms, double plants and cocoa are not modelled on the server (the single-player bone meal does not do them either).
+  // b66 bonemeal2: bone-meal.js is the single-player module (mushrooms, tall grass, double plants and cocoa too); S28 2005 (ItemDye: playAuxSFX data 0) shows the sparkles.
   if (id === DYE && s.held?.damage === 15) {
     if (s.adventure || (!s.creative && !s.usable(id))) return false;
-    let grown = false;
-    if (block === SAPLING) { sim.trees.boneMeal(x, y, z); grown = true; }
-    else if (block === 1) { sim.boneRandom ??= new JRandom(Date.now()); growGrass(sim.world, FLOWERS, sim.boneRandom, sim.world.biome, x, y, z); grown = true; }
-    else if (sim.farming.fertilize(x, y, z)) { sim.farming.drain(); grown = true; }
-    if (!grown) return false;
+    sim.boneRandom ??= new JRandom(Date.now());
+    const grown = useBoneMeal({ world: sim.world, trees: sim.trees, farming: sim.farming, flowers: FLOWERS, grassRandom: sim.boneRandom, items: sim.items }, x, y, z);
+    if (grown.farm) sim.farming.drain();
+    if (!grown.used) return false;
+    sparkles(sim, p, x, y, z);
     if (!s.creative) s.take(id);
     return sim.stats.used(p, id), true;
   }
