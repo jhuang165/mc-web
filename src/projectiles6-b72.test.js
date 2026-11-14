@@ -86,3 +86,25 @@ test("Arrows.collect uses the player's trigger box (grown 1, 0.5, 1; riding unio
   }
   assert.ok(contested > 100 && riding > 100);
 });
+
+// The live paths use the order too: of two targets at one distance, the arrow takes the one the world lists first (chunk z -1 before chunk z 0), whatever the order of the
+// target list. Ground truth for the order itself is the executed ChunkOrderProbe above.
+test("an arrow's sweep takes the first entity in chunk order among equal distances", () => {
+  const worldAir = { get: () => 0, getMeta: () => 0, isLoaded: () => true };
+  for (const reversed of [false, true]) {
+    const A = { x: 3.5, y: 11.5, z: -0.05, health: 20 }, B = { x: 3.5, y: 11.5, z: 0.1, health: 20 }, hurt = [];
+    const arrows = new Arrows(() => 0.5), a = arrows.make({ x: 0.5, y: 12, z: 0.5, mx: 2.4, my: 0, mz: 0, yaw: 0, pitch: 0 }, new GaussianRandom(1), { shooter: "player" });
+    arrows.list.push(a);
+    const box = (r) => [r.x - 0.3, r.y, r.z - 0.3, r.x + 0.3, r.y + 1.8, r.z + 0.3], targets = [{ ref: A, box: box(A) }, { ref: B, box: box(B) }];
+    if (reversed) targets.reverse();
+    arrows.tick(worldAir, { targets, mobs: { entities: [A, B], damage: (e) => (hurt.push(e), true) } });
+    assert.deepEqual(hurt, [A], `reversed ${reversed}`);
+  }
+});
+
+test("orderTargets: a player joined first, a mover lands at the end of its new list, positions without a box are accepted", () => {
+  const p = { x: 5, y: 5, z: 5 }, m1 = { x: 6, y: 5, z: 5 }, m2 = { x: 7, y: 5, z: 5 }, cands = [m1, m2, p].map((k) => ({ key: k, pos: [k.x, k.y, k.z], player: k === p }));
+  assert.deepEqual(orderTargets(cands).map((c) => c.key), [p, m1, m2]);
+  m1.x = 20; // another chunk column: it sorts by chunk x now, and is stamped again
+  assert.deepEqual(orderTargets(cands.map((c) => ({ ...c, pos: [c.key.x, c.key.y, c.key.z] }))).map((c) => c.key), [p, m2, m1]);
+});

@@ -1,4 +1,5 @@
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
+import { orderTargets } from "./candidate-order.js"; // b72
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
 import { noteGoneMobs } from "./tracker-transient.js";
 import { copyWaterEnter, copyWaterAfterMove, copyBreathe } from "./copy-water.js"; // batch 61: the copies' water and air draws
@@ -1040,11 +1041,11 @@ export class EntityWorld {
   }
   pick(origin, dir, reach, wallDistance = reach) {
     let result = null;
-    for (const e of this.entities) {
-      if (e.health <= 0) continue;
+    const cands = [];
+    for (const e of this.entities) if (e.health > 0) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
+    for (const { key: e, c } of orderTargets(cands)) { // b72: the client world lists entities in chunk order, which decides equal distances (candidate-order.js)
       // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
       // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
-      const c = e.type === "ender_dragon" ? null : this.clientPosition(e);
       const box = c ? Object.assign(Object.create(e), { x: c.x, y: c.y, z: c.z }) : e;
       const distance = entityHit(origin, dir, box, Math.min(reach, wallDistance));
       if (distance !== null && (!result || distance < result.distance))

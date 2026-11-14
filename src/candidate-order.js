@@ -29,6 +29,7 @@ export const forgetEntity = (ref) => cellStore(ref).delete(ref);
 // The position natively stored for a target: the entity's own x and z when they agree with the box centre (a centre recomputed from the box can land on the other
 // side of a chunk border by one ulp), else the centre; the feet for y (`posY` overrides it for an entity whose yOffset is not 0).
 const posOf = (t) => {
+  if (t.pos) return t.pos; // a candidate without a box names its position
   const cx = (t.box[0] + t.box[3]) / 2, cz = (t.box[2] + t.box[5]) / 2, k = t.key ?? t.ref ?? t.target;
   const own = k !== null && typeof k === "object" && Number.isFinite(k.x) && Number.isFinite(k.z) && Math.abs(k.x - cx) < 1e-6 && Math.abs(k.z - cz) < 1e-6;
   return [own ? k.x : cx, t.posY ?? t.box[1], own ? k.z : cz];

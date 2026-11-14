@@ -76,8 +76,8 @@ function collectItems(state, hooks) {
 
 function collectArrows(state, hooks) {
   const { arrows, survival, position, width, height } = state, { arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
-  const { x, y, z } = position, half = width / 2;
-  const playerBox = [x - half, y, z - half, x + half, y + height, z + half];
+  const { x, y, z } = position, half = Math.fround(width) / 2; // b72: setSize(0.6F, 1.8F) keeps the floats (ChunkOrderProbe trigger scenes sit on the box edges)
+  const playerBox = [x - half, y, z - half, x + half, y + Math.fround(height), z + half];
   // b72: a living ridden entity (cart, boat or mount) widens the pickup box to the union (EntityPlayer.onLivingUpdate; executed in ArrowTriggerProbe)
   const v = state.rider?.vehicle, mob = v && !v.bb && state.mobs?.size ? state.mobs.size(v) : null;
   const ridingBox = !v || v.dead ? null : v.bb ?? (mob ? [v.x - mob[0] / 2, v.y, v.z - mob[0] / 2, v.x + mob[0] / 2, v.y + mob[1], v.z + mob[0] / 2] : null);

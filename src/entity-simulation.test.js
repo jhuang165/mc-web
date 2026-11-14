@@ -25,7 +25,8 @@ test("entity tick preserves the live item, pickup, projectile, hatch, mob-event 
       mobs: {},
       arrows: {
         tick(w, options) { assert.equal(w, world); assert.equal(options.marker, "arrow options"); calls.push("arrows.tick"); },
-        collect(box, survival) { assert.deepEqual(box, [1.7, 10, 2.7, 2.3, 11.8, 3.3]); assert.equal(survival, state.survival); calls.push("arrows.collect"); return true; },
+        // b72: the player box keeps the floats of setSize(0.6F, 1.8F)
+        collect(box, survival) { assert.deepEqual(box, [2 - Math.fround(0.6) / 2, 10, 3 - Math.fround(0.6) / 2, 2 + Math.fround(0.6) / 2, 10 + Math.fround(1.8), 3 + Math.fround(0.6) / 2]); assert.equal(survival, state.survival); calls.push("arrows.collect"); return true; },
       },
       survival: { health: 20, inventory: { add(stack) { calls.push("inventory.add"); return true; } } },
     };
