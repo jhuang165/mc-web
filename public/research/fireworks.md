@@ -24,8 +24,10 @@ EntityFireworkSparkFX `bkd`, EntityFireworkOverlayFX `bkc`, dispenser behaviour 
 
 - Skull shape: the skull item has no internal id until the wither track merges; call `registerSkullItem(id)` with it.
 - A star explosion with no Colors makes the original starter throw (probe `starterThrows`); the port skips it instead.
-- The rocket moves with the shared particle mover (`moveParticleEntity`), not the full entity mover. Probed rows match in the
-  open field; collisions with blocks are approximate.
+- The rocket moves with the shared particle mover (`moveParticleEntity`), which is `Entity.moveEntity` for a body with no step
+  height. Batch 68 executed it against blocks (`firework-collide-reference.json`, `FireworkCollideProbe`, 31 records: stone and
+  slab ceilings, a fence, a cobweb, walls, the void): all replay exactly. One real gap was the void (posY < -64 kills the rocket
+  in `Entity.onEntityUpdate`, no status 17), now fixed. Water flow and lava are not probed.
 - `ItemFirework.onItemUse` and the dispenser behaviour (aux 1002, spawn position) come from bytecode, not the probe.
 - A rocket without a star carrying an Explosion tag has no Flight NBT in the original (probe evidence); kept.
 - Sounds `fireworks.*` need the media importer (the regex now includes `fireworks/`); the importer was NOT run here, so the

@@ -110,6 +110,12 @@ public class EntityListProbe {
         if (s.length > 10) { PlayerStepProbe.field(sa.class, "Z").set(e, new Random(Long.parseLong(s[10]))); e.b(x, y, z); e.v = Double.parseDouble(s[4]); e.w = Double.parseDouble(s[5]); e.x = Double.parseDouble(s[6]); return e; } // a seeded Entity.rand (the egg's hatch roll)
         break;
       }
+      case "mthrow": { // batch 68 (projectiles3): the thrower is a living mob (the Cow shell: a witch or snow golem is an EntityLiving the same way), not a player; type as pthrow's (0 snowball, 1 egg, 2 pearl, 3 potion, 4 exp bottle)
+        Cow t = new Cow(w); t.b(0.0, 0.0, 0.0);
+        int type = Integer.parseInt(s[7]);
+        e = type == 0 ? new zj(w, t) : type == 1 ? new zl(w, t) : type == 2 ? new zm(w, t) : type == 4 ? new zn(w, t) : new zo(w, t, 32732);
+        break;
+      }
       case "skull": e = new zp(w, x, y, z, Double.parseDouble(s[4]), Double.parseDouble(s[5]), Double.parseDouble(s[6])); break; // EntityFireball(World, x, y, z, ax, ay, az): the aim normalised to 0.1, no noise
       default: throw new RuntimeException(s[0]);
     }
@@ -242,6 +248,7 @@ public class EntityListProbe {
   // type 4: an experience bottle. `seed` is the Entity.rand seed (Random(7) when omitted: the egg's hatch roll is false, 5)
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join, long seed) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join, "" + seed}; }
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join}; }
+  static String[] mthrow(double x, double y, double z, double vx, double vy, double vz, int type) { return new String[] {"mthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "0", "0"}; }
   static String[] frame(int tx, int ty, int tz, int dir, int counter, int join, int held) { return new String[] {"frame", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "" + counter, "" + join, "" + held}; }
   static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
   static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
