@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 68 (2026-11-14, ten Sonnet tracks in `../wt68-<name>` on `batch68-<name>`, cut from 979178105, merged --no-ff on `batch68-lead`; shared track rules `../artifacts/b68-lead/track-rules.md`; lead note `b68-lead-track.md`; no browser checks by request):
+- 0.97.0, by track:
+  - mpworldcmds: `multiplayer/server-worldcmds.js`: /setblock, /testforblock, /testfor, /setworldspawn (saved, new players and the compass), /playsound, /spreadplayers and /debug on the server; single player's /testfor (command blocks only, silent on success), /setworldspawn, /playsound and /spreadplayers corrected (bytecode-read).
+  - mpadmin: `multiplayer/server-admin.js`: /op, /deop, /kick, /ban, /ban-ip, /pardon, /pardon-ip, /banlist, /whitelist, /stop, /save-all, /save-on, /save-off, /setidletimeout; op levels (`opLevel`), join refusals with the native texts, lists saved under `admin` keyed by UUID; `MC_WEB_OP_LEVEL`, `MC_WEB_WHITELIST`.
+  - mppaintings: `multiplayer/server-hanging.js` / `client-hanging.js`: paintings, item frames and leash knots on the server (placing, random art, hits, drops, frame item and rotation, surface checks, blasts, thrown and shot hits, saved per dimension), `hset`/`hdel` in the `vehicles` message, `/summon` of the three kinds.
+  - summon2: `/summon` takes native coordinates (End origin, `~` from the sender's native position; `toLocal`/`toNative`), ignores the natural mob cap (`summonKeep`), tracker clamp `viewDistance*16-16` (`clampTrackRange`), revenge liveness checked in the victim's tick (`KillCredit.tick` at the top of `mobs.tick`).
+  - mpping: `multiplayer/server-ping.js` / `client-ping.js` / `server-list-gui.js`: keep-alive ping averaged `(ping*3 + elapsed)/4`, S38 tab updates, the Multiplayer server list with a pre-login status ping (MOTD, online/max, 1.7.10 / protocol 5), the 1.7.10 Disconnected screen (`disconnect.lost` / `connect.failed`, `gui.toMenu`); server `--motd`.
+  - chunkscan2: server farming rides the shared random ticks over the active chunk set (fire and saplings already did), Java 8 treeified HashSet bins (`java-hashmap-tree.js`, 11 executed `ActiveChunksProbe` cases), exact End origins for both windows.
+  - fixes68: a sleeper in a blast is 0.2 x 0.2 with eye posY + 1.62 (`sleeper-eye.js`), mob sight lines from the sleeper's eye; a TNT cart that never ticked explodes when struck; bone meal clicks draw from the world Random in single player and on the server. Found wrong: the bed blast itself already matched.
+  - projectiles3: `firework-collide-reference.json` (31 executed records: rockets use full moveEntity, the port matched) and the y < -64 kill; `entity-throw-mob-reference.json` (12): mob potions splash past frames, mob balls and a server player's pearl at frames match.
+  - pistons5: `piston-cart-reference.json` (9 executed scenarios): carts on rails already matched; riding players are pushed on their own and snap back; a pushed player's landing waits for the next tick's flush (server tick order).
+  - researchdocs: about 30 research docs corrected where later batches closed their gaps (dated "Batch 68 (docs sweep)" lines).
+- Lead joins: `server/server.js` keeps mpadmin's join refusal and idle kick beside mpping's status hook, keep-alive tick and `pings.leave`; `server-summon.js` keeps summon2's native coordinates and `SUMMON_HOSTS` with mppaintings' `hanging` host; the jack-o'-lantern golem build was already ported (`tryBuildGolem`), the docs claim corrected.
+- Open: "Still open from batch 68" in `public/research/remaining-gaps.md`.
+
 Batch 67 (2026-11-13, ten Sonnet tracks in `../wt67-<name>` on `batch67-<name>`, cut from 4f1a19470, merged --no-ff on `batch67-lead`; shared track rules `../artifacts/b67-lead/track-rules.md`; lead note `b67-lead-track.md`; no browser checks by request):
 - 0.96.0, by track:
   - boatstand: `setWorldEntityBoxes` in `entities.js` `collisionBoxes`, `registerBoatWorld` / `worldBoatBoxes` in `entity-collision.js`: server players and mobs stand on boats (single player already did).

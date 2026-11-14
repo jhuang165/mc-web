@@ -2,6 +2,36 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 68
+
+Batch 68 covered these areas:
+- **World commands on a server.** /setblock, /testforblock, /testfor, /setworldspawn, /playsound, /spreadplayers and /debug run in the sender's dimension; the world spawn is saved and used for new players and the compass. Found wrong: single player's /testfor printed on success and ran from chat (natively command blocks only, silent); single player's /setworldspawn, /playsound and /spreadplayers corrected.
+- **Server administration.** /op, /deop, /kick, /ban, /ban-ip, /pardon, /pardon-ip, /banlist, /whitelist, /stop, /save-all, /save-on, /save-off and /setidletimeout, op levels, and join refusals with the native texts; lists saved by UUID.
+- **Hanging entities on a server.** Paintings, item frames and leash knots: placing, random art, hits and drops, frame items and rotation, surface checks, blasts, thrown and shot hits, saved per dimension, and `/summon` of all three.
+- **`/summon` finished.** Native coordinates (the End window's origin), no natural mob cap, the tracker clamp of view distance x 16 - 16, revenge liveness checked in the victim's tick.
+- **Ping, server list and Disconnected screen.** Keep-alive ping and the Tab list bars, the Multiplayer server list with Add, Edit, Delete, Direct Connect and a status ping, and the 1.7.10 Disconnected screen.
+- **Server chunk activity, finished.** Farming rides the random ticks over active chunks; Java 8 tree bins and the End origins are exact (11 executed cases).
+- **Small fixes.** A sleeper's blast box and eye; a never-ticked TNT cart explodes when struck; bone meal clicks use the world Random. Found wrong: the bed blast already matched.
+- **Projectile evidence.** Fireworks collide like any moving entity (31 executed records; the port matched, the y < -64 kill added); mob potions pass frames, mob balls and a server player's pearl at frames match (12 records).
+- **Pistons and carts.** Carts on rails already matched (9 executed scenarios); riding players are pushed and snap back; push landings wait a tick as natively.
+- **Research docs.** About 30 linked docs corrected.
+
+Still open from batch 68:
+- **Multiplayer.**
+  - Server commands: /publish stays off; /debug files are kept in memory; the admin commands have no tab completion; `/whitelist reload` does nothing (the lists live in the save data); idle activity is approximated; the server's view distance is fixed at 10.
+  - `/summon`: coordinates inside a data tag (leash X/Y/Z, painting TileX) are not mapped to the End window; dispensers and spawn eggs still refuse at the mob limit.
+  - Hanging entities: no maps in frames (the server has no maps); pistons do not push or break hanging entities.
+  - Server list: no favicon option on the server; the "Pinging..." sprite only redraws when a result arrives; the list is seeded with the build's public server.
+  - Beds: block clicks and digs ray from y + 1.62 for a sleeper; mob distances to a sleeper use minY, not posY.
+  - Villages: the default server world (generation 9) has no generated villages.
+  - End: thin island tails past 128 blocks are cut on some seeds (a 336 window would cover 48 of 48 seeds; left for the user's decision).
+  - Not seen in a browser: the server list, Edit and Direct Connect screens and the Disconnected screen; ping bars; paintings, frames and knots over a connection; a long ban reason as the close reason; the compass at a new server spawn; /playsound on a client; a rider in a pushed cart; more than 80 mobs drawn. Still unseen from batch 67: a remote player on a boat or a moving block, the lying model, golem dust, silverfish puffs, crops changing near players, the connected bobber line, dispenser sparkles.
+- **Farming.** Single player still uses its hash scan (same mean rate, not the native draw order) and dries farmland anywhere in the world.
+- **Fireworks.** Rockets in flowing water or lava and against boat or cart boxes are unprobed.
+- **Research docs.** About 120 linked docs are not yet swept (chunks, generation, region import, particles, loading screens, streaming, natural spawning, controls, resource packs, post shaders and others).
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 67
 
 Batch 67 covered these areas:
@@ -15,23 +45,7 @@ Batch 67 covered these areas:
 - **`/summon` on the server**, square tracker ranges, and a revenge fallback that needs a live attacker.
 - **Catalogues.** Generator rows brought up to date.
 
-Still open from batch 67:
-- **Multiplayer.**
-  - `/summon`: coordinates are local (no End origin or Nether scaling); paintings, frames, leash knots, giants and mobs past the mob limit fail; the view-distance clamp is not modelled; the live-attacker check runs at the kill.
-  - Server commands still missing: setblock, testfor, testforblock, playsound, setworldspawn, spreadplayers, debug, op, kick, ban, whitelist, stop. No paintings or frames on the server; Tab ping is 0; no Multiplayer server list; the Disconnected screen's button label.
-  - Pistons: carts on rails and riders in a pushed cart are untested; push damage arrives one tick before native.
-  - Chunks: Java 8 tree bins with overlapping players; farming, fire and tree growth still scan on their own; the legacy End origin is approximate.
-  - Beds: the explode box follows 1.8; eye height 1.62 while lying.
-  - Lightning: a cart that never ticked does not explode.
-  - Villages: the default server world (generation 9) has no generated villages.
-  - End: thin island tails past 128 blocks are cut on some seeds (a 336 window would cover 48 of 48 seeds; left for the user's decision).
-  - Not seen in a browser: a remote player on a boat or carried by a moving block; the lying model after the body rise; golem dust, silverfish puffs and a boat breaking in a storm; a summoned entity on a client; crops and snow changing near players; the connected bobber line; dispenser sparkles. Still unseen from batch 66: villager skins and the merchant screen over a connection, moving pistons, bolts, the book screen, bed fade, huge mushrooms, a legacy End after its upgrade, shared atlas siblings.
-- **Bone meal.** The player's own click passes no world Random.
-- **Item frames.** A server player's pearl at a frame and witch potions at frames are unprobed.
-- **Fireworks.** Collisions are approximate.
-- **Research docs.** Some linked docs still state gaps closed since.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 67: carried into the batch 68 list above, except the items batch 68 closed or found wrong.
 
 ## Done in batch 66
 
