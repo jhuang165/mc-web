@@ -121,8 +121,7 @@ export class ServerEnd {
   finishCredits(p) { p.conquered = false; return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p) }); }
   // The respawn after the End: the bed (or /spawnpoint) in the Overworld, else the world spawn.
   exitSpot(p) {
-    if (p.spawnpoint) return { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 };
-    return this.dims.overworld.spawn();
+    return this.dims.sim.sleep.respawnPoint(p); // b66 mpsleep: the verified bed or /spawnpoint, else the world spawn
   }
   // transferEntityToWorld into the End: the entity goes to the entrance (100, 50, 0) (in the window's coordinates) and the Teleporter builds the platform there, in the End's own context.
   place(e, from, yaw) {

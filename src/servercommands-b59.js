@@ -62,7 +62,7 @@ export function worldHost(simulation) {
 /** The per-player part of /spawnpoint and /enchant over the record `p` of `simulation`; `op` sends a playerOp to that player. */
 export function playerHost(simulation, p, op) {
   return {
-    setSpawnpoint(x, y, z) { p.spawnpoint = [x, y, z]; },
+    setSpawnpoint(x, y, z) { p.spawnpoint = [x, y, z]; p.spawnForced = true; /* b66 mpsleep: /spawnpoint is forced */ },
     // CommandEnchant: the held stack; Enchantment.canApply, then canApplyTogether against each enchantment already on it. The server knows the held id
     // and damage; the client holds the real stack (its enchantments), applies it and drops a conflict it alone can see.
     enchant(id, level) {

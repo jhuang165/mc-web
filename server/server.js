@@ -191,6 +191,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         }
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
+        else if (m.type === 'sleepLeave') simulation.sleep.leave(id); // b66 mpsleep: C0B action 3, leave bed
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
         else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids, m.fit); // item entities the client reaches (Survival)
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse

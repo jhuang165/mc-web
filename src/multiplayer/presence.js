@@ -8,6 +8,7 @@ import { itemCrumbs, burst } from '../fx.js';
 import { stepRemoteDeath } from './remote-death.js';
 import { stepRemoteHurt } from './remote-hurt.js';
 import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
+import { remoteSleepPose } from './client-sleep.js'; // b66 mpsleep
 import { labelRows, paintTagRow, tagPlan, tagHeights, invisibleToViewer } from './remote-labels.js'; // b64 mpscoreboard, b65 mpinvis
 
 // EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
@@ -76,7 +77,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       const invisible = !!p.invisible, viewer = this.me?.name ?? null; // b65 mpinvis
-      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
+      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
       this.placeTags(entry, p, invisible, viewer);
     }
   }

@@ -1,5 +1,6 @@
 import { World, BLOCKS } from '../world.js';
 import { PROTOCOL, serverUrl, decodeColumn, expandChunks } from './protocol.js';
+import { SLEEP_TYPES } from './client-sleep.js'; // b66 mpsleep
 import { restoreDimensionReplica } from './client-dimensions.js'; // b61 mpnether: the Nether's finite world
 export { expandChunks };
 
@@ -59,6 +60,7 @@ export class DedicatedClient {
   buffer(message) {
     if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
     if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
+    if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
@@ -93,6 +95,7 @@ export class DedicatedClient {
     if (message.type === 'health') this.onHealth(message);
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') this.onHealthFx(message);
     if (message.type === 'slot') this.onSlot(message);
+    if (SLEEP_TYPES.has(message.type)) this.onSleep?.(message); // b66 mpsleep
     if (message.type === 'useDone') this.onUseDone?.(message); // b65 lead: S19 status 9
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);

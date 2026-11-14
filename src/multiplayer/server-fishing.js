@@ -39,7 +39,8 @@ export class ServerFishing {
       canSeeSky: (x, y, z) => canSeeSky(sim.world, x, y, z),
       // World.playSoundAtEntity: heard by everyone near, the angler included
       sound: (name, volume, pitch, hook) => sim.soundsOut.push({ name, ...(hook ? at(hook.x, hook.y, hook.z) : at(p.position.x, p.position.y, p.position.z)), volume, pitch, except: null, dim }),
-      targets: () => mobTargets(mobs?.entities ?? [], p.position, PHYSICS.width, PHYSICS.height),
+      targets: () => [...mobTargets(mobs?.entities ?? [], p.position, PHYSICS.width, PHYSICS.height), ...sim.sleep.fishTargets(p)], // b66 mpsleep: the other players are collidable too
+      hitPlayer: q => sim.sleep.fishHit(p, q), // b66 mpsleep: a zero-damage hit wakes a sleeper (EntityPlayer.attackEntityFrom)
       // EntityFishHook's collision calls attackEntityFrom(causeThrownDamage(hook, angler), 0): a mob takes the 0-damage hit and the angler is its attacker
       hit: e => { let hit = false; sim.dispense.credit(p, () => { hit = thrownHit(mobs, e, p.position); }); return hit; },
       pull: (e, [dx, dy, dz]) => { if (Number.isFinite(e.vx)) { e.vx += dx; e.vy += dy; e.vz += dz; } },
