@@ -151,6 +151,8 @@ export function armorPosition(s) {
   return isArmor(s.id) ? armorSlotOf(s.id) : HELD;
 }
 const hasTag = (s) => !!s.enchantments?.length;
+// b71: a head's SkullOwner (item-tags.js skullOwner / skullRaw) survives on a mob's helmet so RenderBiped can draw the player's skin.
+export const skullFields = (s) => ({ ...(typeof s?.skullOwner === "string" ? { skullOwner: s.skullOwner } : {}), ...(s?.skullRaw ? { skullRaw: structuredClone(s.skullRaw) } : {}) });
 // Whether the mob swaps its stack in `slot` for the candidate (the flag of EntityLiving.onLivingUpdate's loop).
 export function prefersPickup(slot, current, candidate) {
   if (!current) return true;
@@ -194,7 +196,7 @@ export function bowEffects(bow, wither = false) {
 // NBT: Equipment (five compounds, an empty one for a missing stack), DropChances and CanPickUpLoot.
 export function saveGear(gear) {
   return {
-    equipment: gear.equipment.map((s) => (s ? { id: s.id, count: s.count ?? 1, damage: s.damage ?? 0, ...(hasTag(s) ? { enchantments: s.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) } : null)),
+    equipment: gear.equipment.map((s) => (s ? { id: s.id, count: s.count ?? 1, damage: s.damage ?? 0, ...(hasTag(s) ? { enchantments: s.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}), ...skullFields(s) } : null)),
     dropChances: gear.dropChances.map(f),
     canPickUpLoot: !!gear.canPickUpLoot,
   };
@@ -207,7 +209,7 @@ export function readGear(saved) {
     const max = maxDamage(s.id);
     // ItemStack.loadItemStackFromNBT keeps Count 0 (a Thorns-broken piece; probed, zero-stacks-reference.json mobNbt).
     gear.equipment[i] = { id: s.id, count: Number.isFinite(s.count) ? Math.max(0, Math.min(64, s.count | 0)) : 1, damage: Math.max(0, Math.min(max || 32767, Number.isFinite(s.damage) ? s.damage | 0 : 0)),
-      ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: s.enchantments.filter((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)).map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
+      ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: s.enchantments.filter((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)).map((e) => ({ id: e.id, lvl: e.lvl })) } : {}), ...skullFields(s) };
   });
   if (Array.isArray(saved.dropChances)) saved.dropChances.slice(0, 5).forEach((c, i) => { if (Number.isFinite(c)) gear.dropChances[i] = f(c); });
   gear.canPickUpLoot = !!saved.canPickUpLoot;

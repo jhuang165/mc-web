@@ -1,6 +1,7 @@
 import { EntityFireRenderer } from "./entity-fire-renderer.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { headWearable, headItemMatrix } from "./wearable-heads.js";
+import { stackSkin, stackSkinKey } from "./skull-skins.js";
 import { ITEM_SKULL as SKULL_ITEM, SKULL_TEXTURES, skullTextureHeight } from "./skull.js";
 import * as THREE from "three";
 import { pixelTexture, itemTexture } from "./first-person.js";
@@ -490,7 +491,7 @@ export class PlayerRenderer {
   }
   // Stacks are ordered helmet..boots. Color participates in the cache key for redyeing.
   syncArmor(stacks) {
-    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}:${stackHasEffect(s, ITEMS[s?.id]) ? 1 : 0}:${s?.id === SKULL_ITEM ? s.damage | 0 : 0}`).join(",");
+    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}:${stackHasEffect(s, ITEMS[s?.id]) ? 1 : 0}:${s?.id === SKULL_ITEM ? s.damage | 0 : 0}${s?.id === SKULL_ITEM ? ":" + stackSkinKey(s) : ""}`).join(",");
     if (key === this.armorKey) return;
     this.armorKey = key;
     for (const n of this.armorNodes) n.parent?.remove(n);
@@ -528,7 +529,7 @@ export class PlayerRenderer {
     group.matrix.copy(headItemMatrix(stack.id));
     let mesh;
     if (stack.id === SKULL_ITEM) {
-      const type = (stack.damage | 0) in SKULL_TEXTURES ? stack.damage | 0 : 0, m = this.material({ map: pixelTexture(SKULL_TEXTURES[type]) });
+      const type = (stack.damage | 0) in SKULL_TEXTURES ? stack.damage | 0 : 0, m = this.material({ map: (type === 3 && stackSkin(stack)) || pixelTexture(SKULL_TEXTURES[type]) }); // b71: a SkullOwner head wears a known player's skin (skull-skins.js)
       // ModelSkeletonHead: one 8 x 8 x 8 box at uv (0, 0), 64 x 32 (zombie 64 x 64), hanging from the head pivot.
       mesh = new THREE.Mesh(modelBox(0, 0, -4, -8, -4, 8, 8, 8, 0, false, 64, skullTextureHeight(type)), m);
       this.armorMaterials.push(m);

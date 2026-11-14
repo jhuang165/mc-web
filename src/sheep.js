@@ -29,3 +29,19 @@ export function childColor(a, b, random = Math.random) {
   for (const [x, y, c] of MIXES) if ((a === x && b === y) || (a === y && b === x)) return c;
   return random() < 0.5 ? a : b;
 }
+
+// RenderSheep.shouldRenderPass (boq.a(wp, int, float), bytecode-read): a sheep whose custom name is exactly "jeb_" blends two consecutive
+// fleece colours instead of its own. i = ticksExisted / 25 + entityId (int); the colours are bp[i % 16] and bp[(i + 1) % 16]; the blend is
+// ((ticksExisted % 25) + partial) / 25, each channel c1 * (1 - t) + c2 * t in float arithmetic. Java's % of a negative entity id is negative (an
+// array index error natively); the port wraps it.
+export const JEB_NAME = "jeb_";
+export function jebFleece(ticksExisted, entityId, partial = 0) {
+  const ticks = ticksExisted | 0, i = Math.floor(ticks / 25) + (entityId | 0), n = FLEECE_COLORS.length;
+  const a = FLEECE_COLORS[((i % n) + n) % n], b = FLEECE_COLORS[(((i + 1) % n) + n) % n];
+  const t = f(f((ticks % 25) + f(partial)) / 25);
+  return [0, 1, 2].map((k) => f(f(a[k] * f(1 - t)) + f(b[k] * t)));
+}
+// A mob's numeric entity id: the digits of its "mob-N" id (the port's counter), or a number as given.
+export const sheepEntityId = (id) => (typeof id === "number" ? id : Number(String(id).match(/(\d+)$/)?.[1] ?? 0));
+// The tint of a sheep's fur pass: jeb_ rainbow (needs the custom name), else the fleece colour.
+export const sheepFurTint = (e, partial = 0) => (e.customName === JEB_NAME ? jebFleece(e.age, sheepEntityId(e.id), partial) : FLEECE_COLORS[e.color ?? 0]);

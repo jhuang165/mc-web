@@ -15,7 +15,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 import { GEAR_TYPES, defaultGear } from './mob-equipment-live.js';
-import { DEFAULT_DROP_CHANCE } from './mob-equipment.js';
+import { DEFAULT_DROP_CHANCE, skullFields } from './mob-equipment.js';
 
 export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal', Giant: 'giant' });
 // The mobs whose chunk NBT goes through the /summon reader (summonedMobRecord; EntityList.createEntityFromNBT is the same call for
@@ -127,7 +127,7 @@ export function mobGearNbtFields(tag, type, convertItem = () => null) {
       const c = equipment.elementType === NBT.COMPOUND ? equipment.items[i] : undefined, id = c && tagValue(c, 'id', NBT.SHORT);
       const live = id ? convertItem(c, { allowEmpty: true }) : null; // Count 0 (a Thorns-broken piece) is kept, zero-stacks-reference.json mobNbt
       if (!live) return null;
-      return { id, count: Math.max(0, Math.min(64, tagValue(c, 'Count', NBT.BYTE, 1))), damage: Math.max(0, tagValue(c, 'Damage', NBT.SHORT, 0)), ...(live.enchantments?.length ? { enchantments: live.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
+      return { id, count: Math.max(0, Math.min(64, tagValue(c, 'Count', NBT.BYTE, 1))), damage: Math.max(0, tagValue(c, 'Damage', NBT.SHORT, 0)), ...(live.enchantments?.length ? { enchantments: live.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}), ...skullFields(live) };
     });
   }
   const chances = tagValue(tag, 'DropChances', NBT.LIST);

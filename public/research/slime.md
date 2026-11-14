@@ -35,3 +35,4 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 - Particle offset uses Math.sin rather than MathHelper's table.
 - Size is capped at 127 on import; float box width differs by about 5e-8.
 - The renderer is not visually verified (no browser used).
+- Batch 71 (mobrender71, 2026-11-14): shadow line only. The shadow is now cast (`SHADOWS.slime`, `SHADOWS.magma_cube`), but at a constant 0.25, not `0.25 * size`: bytecode-read, `bot` (RenderSlime) and `boe` (RenderMagmaCube) have no `doRender` override and `bnn` passes `0.25F` to the constructors. The slime's size changes the shadow only through its height (`getShadowSize` = height / 2). This corrects the batch 70 line above.

@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { pixelTexture, skinBox } from "./first-person.js";
 import { SKULL, SKULL_TEXTURES, skullPose, skullTextureHeight } from "./skull.js";
+import { skinBook } from "./skull-skins.js";
 
 const D = Math.PI / 180, MAX_DISTANCE_SQUARED = 4096; // TileEntity.getMaxRenderDistanceSquared
 export class SkullRenderer {
@@ -14,14 +15,15 @@ export class SkullRenderer {
     if (!this.geometries.has(type)) this.geometries.set(type, skinBox(8, 8, 8, 0, 0, 64, skullTextureHeight(type)));
     return this.geometries.get(type);
   }
-  create(type) {
-    const root = new THREE.Group(), material = entityMaterial(this.view.lighting, { map: pixelTexture(SKULL_TEXTURES[type] ?? SKULL_TEXTURES[0]) });
+  // A player head's profile (TileEntitySkull) resolves to a held skin through skull-skins.js; no match keeps Steve.
+  create(type, skin = null) {
+    const root = new THREE.Group(), material = entityMaterial(this.view.lighting, { map: skin ?? pixelTexture(SKULL_TEXTURES[type] ?? SKULL_TEXTURES[0]) });
     const mesh = new THREE.Mesh(this.geometry(type), material);
     mesh.position.y = 4 / 16;
     mesh.rotation.y = Math.PI; // skinBox's front is +z; the model's front is -z
     root.add(mesh);
     this.scene.add(root);
-    return { root, material, type };
+    return { root, material, type, skin };
   }
   update(tiles, world, camera) {
     const seen = new Set();
@@ -31,8 +33,9 @@ export class SkullRenderer {
       if (dx * dx + dy * dy + dz * dz > MAX_DISTANCE_SQUARED) continue;
       seen.add(t);
       let r = this.records.get(t);
-      if (r && r.type !== t.type) { this.dispose(r); r = null; }
-      if (!r) { r = this.create(t.type); this.records.set(t, r); }
+      const skin = t.type === 3 ? skinBook.lookup(t.profile ?? t.owner) : null;
+      if (r && (r.type !== t.type || r.skin !== skin)) { this.dispose(r); r = null; }
+      if (!r) { r = this.create(t.type, skin); this.records.set(t, r); }
       const pose = skullPose(world.getMeta(t.x, t.y, t.z), t.rot);
       r.root.position.set(t.x + pose.t[0], t.y + pose.t[1], t.z + pose.t[2]);
       r.root.rotation.y = -pose.angle * D;

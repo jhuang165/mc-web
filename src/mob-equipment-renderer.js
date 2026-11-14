@@ -9,6 +9,8 @@ import { pixelTexture, itemTexture } from "./first-person.js";
 import { itemFrameTag } from "./item-animation.js";
 import { entityMaterial } from "./light-material.js";
 import { headItemMatrix } from "./wearable-heads.js";
+import { ITEM_SKULL, SKULL_TEXTURES, skullTextureHeight } from "./skull.js";
+import { stackSkin } from "./skull-skins.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { trackCubeUv, trackUv } from "./uv-rebake.js";
 import { toLiveStack, GEAR_TYPES } from "./mob-equipment-live.js";
@@ -72,7 +74,11 @@ export function syncMobEquipment(renderer, r, e) {
   if (!e.equipment || !GEAR_TYPES.has(e.type) || !r.neck || r.villager) return;
   // The held item (slot 0) also carries its animated icon frame (item-animation.js), so a frame change rebuilds the sprite only then.
   const heldStack = e.equipment[0], heldLive = heldStack ? toLiveStack(heldStack) : null;
-  const baby = e.growingAge < 0, key = (baby ? "b" : "") + e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}` : "0")).join(",") + (heldLive ? ":" + itemFrameTag(itemTexture(heldLive.id, heldLive.damage)) : "");
+  const baby = e.growingAge < 0;
+  let key = (baby ? "b" : "") + e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}${s.skullOwner ?? ""}` : "0")).join(",") + (heldLive ? ":" + itemFrameTag(itemTexture(heldLive.id, heldLive.damage)) : "");
+  // b71: a head's skin may load after the head was built, so the key also carries the skin that would be drawn.
+  const skullSkin = e.equipment[4] && toLiveStack(e.equipment[4])?.id === ITEM_SKULL ? stackSkin(toLiveStack(e.equipment[4])) : null;
+  key += skullSkin ? ":" + skullSkin.uuid : "";
   if (r.gearKey === key) return;
   r.gearKey = key;
   dispose(r);
@@ -103,6 +109,19 @@ export function syncMobEquipment(renderer, r, e) {
     };
     make(layer.url, layer.tint, 0);
     if (layer.overlay) make(layer.overlay, null, 1);
+  }
+  // A mob head (Items.skull) in the helmet slot: RenderBiped.renderEquippedItems (bnw.a) scales by 1.0625 (1, -1, -1) and calls TileEntitySkullRenderer
+  // with the stack's SkullOwner profile (bytecode-read); the box is ModelSkeletonHead on the head part's frame, as the player's (player-renderer.js attachHeadItem).
+  if (live[4]?.id === ITEM_SKULL && r.neck) {
+    const type = (live[4].damage | 0) in SKULL_TEXTURES ? live[4].damage | 0 : 0, map = (type === 3 && skullSkin) || pixelTexture(SKULL_TEXTURES[type]);
+    const mesh = new THREE.Mesh(modelBox(0, 0, -4, -8, -4, 8, 8, 8, 0, false, 64, skullTextureHeight(type)), material({ map })), group = new THREE.Group(), flip = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    group.matrix.copy(headItemMatrix(ITEM_SKULL));
+    flip.scale.set(1, -1, -1);
+    group.add(mesh);
+    flip.add(group);
+    r.neck.add(flip);
+    r.gearNodes.push(flip);
   }
   // A pumpkin or jack-o'-lantern on the head (RenderBiped.renderEquippedItems, block branch).
   const helmet = live[4], atlas = renderer.view.textures?.texture;
