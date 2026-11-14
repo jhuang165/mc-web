@@ -25,7 +25,7 @@ Frame `getTextureByXP` [sq.f] (thresholds 3, 7, 17, 37, 73, 149, 307, 617, 1237,
 
 ## Gaps
 
-- Mob AI is still the simplified one: `e.yaw` turns instantly and `rotationYawHead` equals it (no `EntityLookHelper` or `EntityMoveHelper` 30 degree turn limit), so the head only trails the body through `EntityBodyHelper`. Pitch is always zero.
+- Batch 69 (docs sweep): `ai.js` now ports `EntityMoveHelper`, `EntityLookHelper` (with `limitAngle`) and `EntityJumpHelper` (`MoveHelper` class, header of `ai.js`), so the turn-limit part of this line is stale for task-AI mobs; which mobs still use the instant-turn path was not audited. Older text: mob AI is still the simplified one: `e.yaw` turns instantly and `rotationYawHead` equals it (no `EntityLookHelper` or `EntityMoveHelper` 30 degree turn limit), so the head only trails the body through `EntityBodyHelper`. Pitch is always zero.
 - Mob walking speeds now come from the 1.7.10 movement model (see `mob-movement.md`); a wandering pig's `limbSwingAmount` settles near 0.54.
 - The zombie attack swing (`swingProgress` in `ModelZombie`) is not drawn, only the `ageInTicks` arm sway. The orb quad's 128 alpha is not applied.
 - `deathTime` starts at 1 on the killing blow rather than on the mob's next tick, so the fall begins at most one tick early.

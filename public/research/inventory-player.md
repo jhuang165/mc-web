@@ -13,7 +13,7 @@ Added in 0.42.0 by `src/inventory-player.js`. Parity is not claimed.
 
 ## Approximated or missing
 - Fire on the player now uses the alternating, narrowing Render.renderEntityOnFire quad stack and original animated textures (0.43.0). GUI billboard yaw is 180 independently of the mouse-driven body yaw. Geometry/constants are bytecode-derived; browser lighting/depth/animation timing is approximate.
-- Entity shadow from doRenderShadowAndFire: not drawn.
+- Batch 69 (docs sweep): `shadows.js` has a `player` shadow entry (size 0.5, opaque 1) for the world view; the GUI preview shadow was not re-checked. Older text: entity shadow from doRenderShadowAndFire: not drawn.
 - Stuck arrows, player fire and worn-armour enchant glint draw in both inventory views and third person. GUI shadow and cape remain missing.
 - Cape / deadmau5 ears remain absent. Armour glint uses native tint, 1/3 texture scale, ±30 degree passes and age-based scrolling (0.02/0.08 per tick before the 1/3 scale); browser UV/depth composition is approximate.
 - Hurt tint brightness uses the real player's world light as in RendererLivingEntity; depth precision, texture filtering and the canvas clip to the GUI rectangle (native draws over the whole screen) are not replayed exactly.

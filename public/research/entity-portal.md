@@ -21,7 +21,7 @@ Native evidence: `tools/probes/EntityPortalProbe.java` (run by `tools/verify-ent
 
 ## Gaps
 
-- Boats, minecarts, arrows and other projectiles, falling blocks, TNT, paintings, and anything not a mob/item/orb do not use portals.
+- Batch 69 (docs sweep): minecarts and boats travel through portals since batch 37 (`entity-portal.js` header, kinds `cart` and `boat`). Arrows and other projectiles, falling blocks, TNT and paintings still do not (not re-checked; native paintings do not travel either).
 - A traveller is lost if the page closes before its asynchronous arrival finishes (a few hundred ms), and unloaded dimensions are not simulated: a mob waits in the inbox until the player goes there.
 - The original has one persistent Teleporter Random per world; each target peek here seeds a new one, as the player path already does.
 - Overworld arrival height and portal search use terrain only (no population, structures or unsaved columns); the finite Overworld is approximated.

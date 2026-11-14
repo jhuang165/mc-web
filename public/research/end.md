@@ -13,7 +13,7 @@ Target is 1.7.10. Not full parity; the Ender Dragon, its healing beam and End tr
 - `src/ender-crystal-renderer.js`: RenderEnderCrystal rig (two glass cubes, inner cube, base, spin 3 deg per tick, bob). Derived from bytecode, not run.
 
 ## Gaps
-- No Ender Dragon, no healing beam, no End dimension or travel (the lead sets `world.isEnd`).
+- Batch 69 (docs sweep): this line is from the first crystal slice. The dragon (`dragon-mobs.js`, `dragon.md`), the End dimension and travel (`dimension-live.js`, `end-generator.js`, `exit-portal.js`) and the dedicated server End now exist; the crystal healing beam was not re-checked here.
 - Nothing browser-verified (no render check of the crystal).
 - Crystal `innerRotation` is not seeded; only its range is checked.
 - Vanilla world import does not list EnderCrystal (the importer defaults health to 20); saved game worlds round trip.

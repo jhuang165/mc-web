@@ -34,4 +34,4 @@ Potion.wither (id 20) now ticks on every non-player mob in `mob-effects.js`: `at
 
 ## Limits
 
-Other effects, potion items, brewing, effect particles, the inventory's effect list and its panel offset are unfinished. Existing simplified player hurt resistance and HUD damage animation remain. This is food-effect parity for the implemented foods, not a complete potion system.
+Batch 69 (docs sweep): potion items, brewing (`brewing.js`) and status effects (`status-effects.js`, `mob-effects.js`) exist; see `brewing.md` and the later sections of this doc. Older text: other effects, potion items, brewing, effect particles, the inventory's effect list and its panel offset are unfinished. Existing simplified player hurt resistance and HUD damage animation remain. This is food-effect parity for the implemented foods, not a complete potion system.

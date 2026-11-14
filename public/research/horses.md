@@ -17,6 +17,8 @@ Evidence: `tools/probes/HorseProbe.java` drives the unchanged obfuscated classes
 `src/horse.js` (rules), `src/horse-live.js` (engine wiring, riding), `src/horse-renderer.js`, tests.
 
 ## Gaps
+
+Batch 69 (docs sweep): the first three bullets below are from the first horse slice and are partly closed. The horse inventory screen exists (`horse-inventory.md`), leads and knots are live (`horse-gear-live.js`, `leash.md`), the jump bar is wired (`horse-gear-live.js` header: "leads and leash knots, name tags, the death drops of the horse inventory and the jump bar"), horse step and living sounds exist (`mob-steps.js` `horseStep`, `horse-sounds-b57.test.js`), and horse spawning is replayed (`horse-spawn-b45.test.js`). Not re-checked: skeleton and zombie horse natural spawning, horse armour in dungeon chests, the shadow entry, the XP formula.
 - Horse inventory GUI, armour and chest slot UI (equip from held item only), leads (item 420), mule breeding specifics.
 - Skeleton/zombie horse natural spawning, horse armour in dungeon chests.
 - HUD jump bar, horse step sounds, shadow entry.
