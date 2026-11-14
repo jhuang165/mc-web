@@ -110,10 +110,10 @@ test('villages of generated structures give a fresh world its villagers, once', 
   assert.equal(generatedVillagers({ ...world, generationVersion: 9 }, {}).length, 0);
 });
 
-test('the villager click hook is a stub the merchant track fills', () => {
+test('the villager click goes through the villagerUse hook (mptrade installs the merchant window there)', () => {
   const s = fixture(), p = join(s), v = mob(s, 'villager');
   s.tick();
-  assert.equal(s.mobs.villagerUse, null);
+  assert.equal(typeof s.mobs.villagerUse, 'function', 'b66 lead: installTrade fills the hook');
   let seen = null;
   s.mobs.villagerUse = (q, m) => { seen = [q, m]; return true; };
   s.queueAnimUse(p.id, wire(v), false); s.tick();
