@@ -99,7 +99,7 @@ function system(actions, functions) {
     heldId: () => bindings.compiled.read().survival.held?.id || 0,
     world, position, velocity: { x: 0, y: 0, z: 0 }, motion: { sneaking: false, sprinting: false }, mobs,
     signs: null, farming: { observe() {}, drain: () => [] }, trees: {}, fire: {}, fluids, items, projectiles, arrows,
-    FLOWERS: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom: new JavaRandom(1), itemRand: new JavaRandom(2),
+    FLOWERS: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom: new JavaRandom(1), itemRand: new JavaRandom(2), weather: { random: new JavaRandom(3) }, // b68 lead: fixes68 passes weather.random as worldRand
     serverAcceptsClick: () => true, // server-handlers.test.js covers the C08/C07/C02 gate
     applyHangingEdit: () => false, hanging: null, aimedHanging: null, spawnHangingDrops: () => {}, // paintings and frames: hanging.test.js
     objectTracker: null, objectViews: (_tracker, list) => list, // main.js draws arrows at their client positions (object-tracker.js); no client entities here
