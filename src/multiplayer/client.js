@@ -1,5 +1,6 @@
 import { World, BLOCKS } from '../world.js';
 import { PROTOCOL, serverUrl, decodeColumn, expandChunks } from './protocol.js';
+import { ClientPings } from './client-ping.js'; // b68 mpping
 import { SLEEP_TYPES } from './client-sleep.js'; // b66 mpsleep
 import { restoreDimensionReplica } from './client-dimensions.js'; // b61 mpnether: the Nether's finite world
 export { expandChunks };
@@ -20,6 +21,7 @@ export function restoreReplica(snapshot) {
 const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose', 'tradeList']);
 export class DedicatedClient {
+  pings = new ClientPings(); // b68 mpping: S38 ping per player name
   constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {}, onScoreboard = () => {} } = {}) {
     Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onScoreboard, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
@@ -41,6 +43,7 @@ export class DedicatedClient {
             resolve(message); return;
           }
           if (message.type === 'error') throw new Error(message.text);
+          if (this.pings.handle(message, m => this.send(m))) return; // b68 mpping: answer keep-alives at once (also while terrain loads); S38 items
           if (!this.ready) this.buffer(message);
           else this.apply(message);
         } catch (error) { reject(error); this.onClose(error.message); this.close(); }
