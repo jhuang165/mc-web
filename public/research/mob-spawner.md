@@ -142,12 +142,11 @@ The render constants are checked from the `bnf` and `bmp` bytecode, because the 
 
 ## Gaps
 
-- `SpawnPotentials` and `SpawnData` are not supported, including their weighted roll and custom NBT. No generator here writes them.
-- A spawner can only spawn entity types the port has: `CaveSpider`, `Spider`, `Zombie`, `Skeleton`, `Creeper`, `Pig`, `Cow`, `Sheep` and `Chicken`.
+- Batch 68 (docs sweep): `SpawnPotentials` and `SpawnData` are supported (weighted roll in `resetTimer`, `src/mob-spawner.js`; see the last Gaps line and `spawner-cart.md`), and spawnable types are now every key of `SPAWNER_ENTITY_IDS` in `src/mob-spawner.js` (Enderman, Wolf, Ozelot, Silverfish, Witch and more), not only the nine originally listed.
 - `createMob` refuses a mob beyond the 40-mob save cap. The attempt's rolls are still spent, but nothing spawns.
 - If no `ctx.blockEvent` is supplied, the client delay reset is applied in the same tick. The original sends it with about one tick of latency.
 - Spider and chicken jockeys now spawn through `onSpawnWithEgg`, natural and spawner alike; see [mob-riding](mob-riding.md).
 - The display mob's random head yaw is not reproduced. In the original it is `Math.random() * 2π` degrees.
 - The thunder light branch is covered only by a unit test, not by a native scenario.
 - Boats and minecarts block a spawn only through the `extraCollision` hook.
-- SpawnData and SpawnPotentials (weighted entries, Properties overlay incl. Pos applied after the canSpawn check) are read, written and round-tripped through Anvil; see [spawner cart](spawner-cart.md). SpawnData `Riding` chains are not ported.
+- SpawnData and SpawnPotentials (weighted entries, Properties overlay incl. Pos applied after the canSpawn check) are read, written and round-tripped through Anvil; see [spawner cart](spawner-cart.md). SpawnData `Riding` chains: Batch 68 (docs sweep): now ported (`spawnRidingChain`, `src/spawner-riding.js`).

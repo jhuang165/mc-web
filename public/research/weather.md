@@ -61,7 +61,7 @@ Evidence key: **probe** = replayed against the original classes in `weather-refe
 - **Damage ticks.** Damage and ignition are applied on each tick the bolt flashes (`Weather.struck`), through this build's existing `hazard`/`damage` paths and their invulnerability rules. The original code path was not probed.
 - **Sounds.** Thunder plays once. Single-player 1.7.10 plays it twice (the server-side bolt and the client copy). `random.explode` is present in the audio manifest and plays at the bolt position. Thunder is played without a position at volume 1 (vanilla uses volume 10000, so it is audible at any distance).
 - **Splash collision** is simplified to the precipitation surface of the column the particle is in, rather than `EntityFX.moveEntity` against block boxes; the lava smoke variant is not ported.
-- **Fast graphics** variant (radius 5, half density) is not ported; fancy only.
+- **Fast graphics** variant: Batch 68 (docs sweep): now ported (radius 5, halved splash, `weather.js` uses the fancy flag; see `src/render-settings.test.js` "fast graphics").
 - **Lightning bolt fog.** The bolt is drawn unfogged. In vanilla the fixed-function fog applies.
 - **Active chunk radius.** `WorldServer` uses the server view distance (10 chunks by default); it is clipped to this 8 x 8 chunk world, so every chunk is eligible. Each chunk rolls once per tick as in the original.
 - **Beds, spawning and mob behaviour** that depend on weather (sleeping through thunder, `isDaytime` for spawn rules) are not ported. Zombies use this build's existing night window plus the wetness check.
