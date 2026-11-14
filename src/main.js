@@ -21,6 +21,7 @@ import "./container-ui.css";
 import "./menu-screens.css";
 import { Gui, textHtml } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
+import { SpCapeStore, applyLocalCape, capeTexture, chooseCapeFile } from "./sp-cape.js"; // b72 spcapes
 import { commandBlockScreen } from "./command-block-screen.js";
 import { folderName, LANG, t as langT } from "./menu-screens.js";
 import { initResourcePacks } from "./resource-packs.js";
@@ -663,6 +664,7 @@ let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
 let remotePistons = null; // b66 mppistons: the dedicated world's moving piston blocks (multiplayer/client-pistons.js)
+const spCapeStore = new SpCapeStore(localStorage); // b72 spcapes
 let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, remoteLightning = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
@@ -1017,6 +1019,7 @@ const menuContext = {
   resume,
   goHome,
   toggleFullscreen,
+  chooseCape: () => chooseCapeFile(spCapeStore), clearCape: () => spCapeStore.clear(), hasCape: () => !!spCapeStore.get(), // b72 spcapes: offline cape
   // GuiOptions "Super Secret Settings...": EntityRenderer.activateNextShader plus a random animals/blocks/mobs/players/weather sound.
   superSecret: () => {
     scene?.post.activateNextShader();
@@ -4614,6 +4617,7 @@ function animate(now) {
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   remotePistons?.frame(partial); // b66 mppistons: after the local (empty) list, the server's moving blocks
   recordHud.frame(partial);
+  if (!multiplayer) applyLocalCape(playerRenderer, spCapeStore, capeTexture); // b72 spcapes: offline cape; the account's cape wins online
   playerRenderer?.update(playerBody, partial, {
     // RenderGlobal draws the view entity in first person too while it is sleeping (isPlayerSleeping).
     // The death screen keeps drawing the dying model until onDeathUpdate's setDead at deathTime 20 removes the entity.

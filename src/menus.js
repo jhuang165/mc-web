@@ -451,6 +451,7 @@ export function createMenus(gui, ctx) {
 
   // --- ScreenChatOptions ---
   function chatOptionsScreen(parent) {
+    let note = ""; // b72 spcapes
     return {
       id: "chat-options",
       escape: close,
@@ -461,6 +462,13 @@ export function createMenus(gui, ctx) {
         for (const [o, r] of L.options) optionWidget(g, o, r);
         // SHOW_CAPE is a GuiOptionButton; there are no skins or capes here, so it is drawn disabled (value ON, the default).
         optionWidget(g, "SHOW_CAPE", L.cape);
+        // b72 spcapes: offline cape source (a 64 x 32 PNG kept in this browser); not a 1.7.10 widget, placed right of Show Cape.
+        if (ctx.chooseCape) {
+          const cx = L.cape.x + 156, cy = L.cape.y;
+          g.button({ x: cx, y: cy, w: 74, h: 20 }, "Cape File...", async () => { note = (await ctx.chooseCape()) || note; g.build(); });
+          g.button({ x: cx + 76, y: cy, w: 74, h: 20 }, "No Cape", () => { ctx.clearCape(); note = "Cape removed."; g.build(); }, { enabled: !!ctx.hasCape?.() });
+          if (note) g.text(note, cx, cy + 24, { color: 0xaaaaaa });
+        }
         g.button(L.buttons.done, t("gui.done"), () => { ctx.saveOptions(); show(parent); });
       },
     };

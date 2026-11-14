@@ -18,6 +18,13 @@ export function pngSize(bytes) {
   if (u32(8) !== 13 || String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR") return null;
   return { width: u32(16), height: u32(20) };
 }
+// b72 spcapes: the one cape check, shared by the server (accounts.setCape) and the single-player store. Returns null when fine, else { status, message }.
+export function capePngError(bytes) {
+  if (!bytes || bytes.length > MAX_CAPE_BYTES) return { status: 413, message: 'Capes must be at most 16 KB.' };
+  const size = pngSize(bytes);
+  if (!size || size.width !== CAPE_WIDTH || size.height !== CAPE_HEIGHT) return { status: 400, message: 'Upload a 64 × 32 PNG cape.' };
+  return null;
+}
 export const acceptedSkinSize = (width, height) => width === 64 && (height === 32 || height === 64);
 
 // ImageBufferDownload.setAreaOpaque / setAreaTransparent on RGBA bytes, in place.
