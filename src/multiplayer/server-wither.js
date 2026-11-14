@@ -31,10 +31,11 @@ export const boundedSkullResistance = id => skullResistance(true, WITHER_PROOF_I
 
 export class ServerWither {
   constructor(sim) { this.sim = sim; }
-  // The `hooks` of placeSkull for player `p`'s click. A Nether player builds no wither here (the Overworld only; the Nether's skull store is not the dimension's).
-  hooks(p) {
+  // The `hooks` of placeSkull for a player's click. b64: any dimension builds one (BlockSkull.func_149965_a has no dimension test): inside `dimensions.within` `sim.tileEntities` and `sim.mobs`
+  // are the player's dimension's, so the skull store, the world and the new mob are that dimension's own and only its players track it. Peaceful (the one server difficulty) still refuses.
+  hooks() {
     const sim = this.sim;
-    return { skulls: sim.tileEntities.skulls, difficulty: p.dimension ? 0 : sim.difficulty, soulSand: SOUL_SAND, spawnWither: (x, y, z, yaw) => this.spawn(x, y, z, yaw) };
+    return { skulls: sim.tileEntities.skulls, difficulty: sim.difficulty, soulSand: SOUL_SAND, spawnWither: (x, y, z, yaw) => this.spawn(x, y, z, yaw) };
   }
   place(p, target) {
     const sim = this.sim;
@@ -51,7 +52,14 @@ export class ServerWither {
 // Called once by ServerMobs' constructor (every dimension's instance).
 export function installServerWither(sm) {
   const { mobs, host } = sm, skulls = mobs.skulls, tickOne = skulls.tickOne.bind(skulls);
-  skulls.tickOne = b => { sm.target(b); return tickOne(b); }; // the sweep tests the player nearest to the skull (EntityFireball.onUpdate: every player's box in the world)
+  skulls.tickOne = b => { sm.target(b); return tickOne(b); }; // the AI's player is the one nearest to the skull; the sweep itself lists every player (below)
+  // b64 (EntityWither.updateAITasks: getEntitiesWithinAABB; EntityFireball.onUpdate: getEntitiesWithinAABBExcludingEntity): every player of this dimension is a candidate for a head's
+  // target and for a flying ball's sweep. The sweep reports the view it hit; the impact then runs as that player's (damage, effect and kill are theirs).
+  const everyone = () => [...sm.views.values()].map(v => v.view);
+  mobs.witherPlayers = everyone;
+  mobs.sweepPlayers = everyone;
+  const impact = skulls.impact.bind(skulls);
+  skulls.impact = (b, hit) => { sm.useHit(hit); return impact(b, hit); };
   const dead = mobs.onDeath;
   mobs.onDeath = function (e, source) {
     const r = dead.call(this, e, source);

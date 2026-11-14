@@ -322,7 +322,7 @@ export class ServerDispense {
   // the server read one format. Null when there is nothing to write.
   extrasOut() {
     const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
-      fireballs = (this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs)?._fireballs?.serialize(this.dim) ?? [], out = {};
+      own = this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs, fireballs = [...(own?._fireballs?.serialize(this.dim) ?? []), ...(own?._skulls?.serialize(this.dim) ?? [])], out = {}; // b64: wither skulls (kind witherSkull) ride the same list, as the browser save's `active.fireballs`; dimState covers the Nether and the End (mpend2)
     if (tnt.length) out.tnt = tnt;
     if (rockets) out.rockets = rockets;
     if (fireballs.length) out.fireballs = fireballs;
@@ -351,6 +351,7 @@ export class ServerDispense {
     if (!mobs) return;
     this.pendingFireballs = null;
     mobs.fireballs.load(list, this.dim);
+    mobs.skulls.load(list, this.dim); // b64: EntityWitherSkull saves the fireball fields only (the blue flag is the port's own record, as in the browser save)
   }
   load(saved) {
     if (!saved || typeof saved !== 'object' || !saved.lanes) return;

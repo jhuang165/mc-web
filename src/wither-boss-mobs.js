@@ -46,7 +46,8 @@ function levelEvent(m, id, x, y, z) {
     m.events.push({ sound: "mob.wither.spawn", volume: 1, pitch: 1, position: at, aux: { id: 1013, x, y, z } }); // `aux`: the dedicated server sends the level event itself to every player (multiplayer/server-mobs.js)
     return;
   }
-  m.events.push({ sound: id === 1014 ? "mob.wither.shoot" : "mob.zombie.woodbreak", volume: 2, pitch: pitchRoll(m.worldRandom), position: { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5, z: Math.floor(z) + 0.5 } });
+  // b64 `aux.local`: World.playAuxSFX (a WorldManager S28 to the players within 64 blocks in this dimension, bytecode-read mp.a(yz,IIIII)), not a sound packet; the cell is (int) pos (d2i)
+  m.events.push({ sound: id === 1014 ? "mob.wither.shoot" : "mob.zombie.woodbreak", volume: 2, pitch: pitchRoll(m.worldRandom), position: { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5, z: Math.floor(z) + 0.5 }, aux: { id, x: Math.floor(x), y: Math.floor(y), z: Math.floor(z), local: true } });
 }
 
 // EntityWither.getLivingSound: mob.wither.idle at the mob interval of 80.
@@ -105,14 +106,14 @@ export function witherAITick(brain) {
     if (step.heal) e.health = Math.min(WITHER.maxHealth, f(e.health + step.heal));
     return;
   }
-  const p = m.ai.player, h = (o) => (o === p ? p : m.ai.brain(o));
+  const p = m.ai.player, players = m.witherPlayers ? m.witherPlayers() : [p], h = (o) => (o.isPlayer ? o : m.ai.brain(o)); // b64: the server passes every player of the dimension (each is a candidate of getEntitiesWithinAABB)
   headPass(s, rand, ticks, {
     pos: e, difficulty: m.difficulty ?? 2,
     // World.getEntitiesWithinAABB(EntityLivingBase, box.expand(20, 8, 20), xd): living, not undead, the player included, in chunk/slice order
     pool: () => {
       const near = [];
       for (const o of m.entities) if (o !== e && o.health > 0 && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
-      if (p?.alive && brain.ai.overlaps(brain, p, 20, 8, 20)) near.push(p);
+      for (const q of players) if (q?.alive && brain.ai.overlaps(brain, q, 20, 8, 20)) near.push(q);
       return nativeOrder(near).map(h);
     },
     alive: (c) => c.alive, near: (c) => brain.distSq(c) <= 900, sees: (c) => brain.canSee(c), isPlayer: (c) => !!c.isPlayer, creative: (c) => !!c.creative,

@@ -134,6 +134,7 @@ export class ServerMobs {
     const fb = this.mobs.fireballs, tickOne = fb.tickOne.bind(fb), impact = fb.impact.bind(fb), ach = this.host.achievements;
     fb.tickOne = b => { this.target(b); return tickOne(b); };
     fb.impact = (b, hit) => {
+      this.useHit(hit); // b64: the player the sweep found is the one hurt
       const who = b.owner === 'player' ? b.punchedBy : null, v = who && this.views.get(who.id), was = ach?.attacker;
       if (v) { this.use(v); if (ach) ach.attacker = who; }
       try { return impact(b, hit); } finally { if (v && ach) ach.attacker = was; }
@@ -192,6 +193,12 @@ export class ServerMobs {
     const rider = e.rider?.ref && this.views.get(e.rider.ref.id); // b62: a ridden pig reads its rider's keys and stick, not the nearest player's
     if (rider) best = rider;
     if (best) this.use(best);
+  }
+  // b64: a sweep hit on a player's view (Fireballs.sweep with `sweepPlayers`): that player becomes the AI's player for the impact.
+  useHit(hit) {
+    const view = hit?.entity?.view;
+    if (!view) return;
+    for (const v of this.views.values()) if (v.view === view) { this.use(v); return; }
   }
   use(v) { this.mobs.ai.player = v.view; this.mobs.ai.survival = v.survival; }
   // Explosion.doExplosionA for the dedicated world: the mobs, every player in reach, then the blocks.
@@ -281,6 +288,7 @@ export class ServerMobs {
   }
   // World.playSoundAtEntity on a WorldServer: S29 to every player within 16 blocks (16 * volume above 1), the hit player included (simulation.deliverSounds).
   sound(s, ev = null) {
+    if (ev?.aux?.local) { this.nearAux(ev.aux); return; } // b64: 1012 / 1014 are World.playAuxSFX: S28 within 64 blocks of this dimension's players, not an S29 sound
     if (ev?.aux) { this.broadcastAux(ev.aux); return; } // b63: World.playBroadcastSound (the wither's spawn, 1013) reaches every player, not the 16 blocks of a sound
     const at = s.position;
     if (!s.sound || !at || ![at.x, at.y, at.z].every(Number.isFinite)) return;
@@ -295,6 +303,14 @@ export class ServerMobs {
   // b63: S28 with the broadcast flag, to every player of the server (WorldServer.func_82739_e: sendPacketToAllPlayers, recalled).
   broadcastAux({ id, x, y, z, data = 0 }) {
     for (const p of this.host.players?.values() ?? []) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id, x, y, z, data }] });
+  }
+  // b64: World.playAuxSFX(null, id, x, y, z, data): WorldManager.playAuxSFX -> sendToAllNearExcept(null, x, y, z, 64.0, dimension, S28) (bytecode-read, mp.a(yz,IIIII)): the players of THIS
+  // dimension (`views`) within 64 blocks in all three axes (strict), nobody excluded.
+  nearAux({ id, x, y, z, data = 0 }) {
+    for (const v of this.views.values()) {
+      const p = v.player, dx = x - p.position.x, dy = y - p.position.y, dz = z - p.position.z;
+      if (dx * dx + dy * dy + dz * dz < 64 * 64) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id, x, y, z, data }] });
+    }
   }
   // b62: EntityAIEatGrass.updateTask -> World.playAuxSFX(2001, x, y, z, id) (grass block) or func_147480_a (tall grass, id + (meta << 12)): S28 to every player within 64 blocks, no
   // exception (bytecode-read, ud.e). The block change itself (EntityWorld.eatGrass edited the shared world) travels with the tick's changes.

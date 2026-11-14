@@ -64,8 +64,8 @@ test("on Peaceful no wither is built, and a Nether player never builds one", () 
   buildT(s, p);
   assert.equal(withers(s).length, 0);
   assert.equal(s.world.get(62, 12, 64), SKULL, "the skulls stay");
-  const hooks = fixture().wither.hooks({ dimension: -1 });
-  assert.equal(hooks.difficulty, 0);
+  // b64: a Nether player builds one too (mpwither-b64.test.js); the hook carries the server difficulty in every dimension
+  assert.equal(s.wither.hooks({ dimension: -1 }).difficulty, 0);
 });
 
 test("spawnWither goes to the players within 50 blocks of the box, not to a farther one", () => {

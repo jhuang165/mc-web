@@ -134,6 +134,7 @@ export function dispenserAux(e, { play, smoke, random = Math.random, listener = 
   if (e.id === 1000) play('random.click', e.x, e.y, e.z, 1, 1);
   else if (e.id === 1001) play('random.click', e.x, e.y, e.z, 1, 1.2);
   else if (e.id === 1002) play('random.bow', e.x, e.y, e.z, 1, 1.2);
+  else if (e.id === 1012 || e.id === 1014) play(e.id === 1014 ? 'mob.wither.shoot' : 'mob.zombie.woodbreak', e.x + 0.5, e.y + 0.5, e.z + 0.5, 2, (random() - random()) * 0.2 + 1); // b64: RenderGlobal.playAuxSFX (bytecode-read): volume 2, pitch (r - r) * 0.2 + 1
   else if (e.id === 1013) { if (!listener) return false; const at = witherSpawnAt(listener(), e.x, e.y, e.z); play('mob.wither.spawn', at.x, at.y, at.z, 1, 1); }
   else if (e.id === 2000) {
     const gauss = () => { let a, b, s; do { a = 2 * random() - 1; b = 2 * random() - 1; s = a * a + b * b; } while (s >= 1 || s === 0); return a * Math.sqrt(-2 * Math.log(s) / s); };
