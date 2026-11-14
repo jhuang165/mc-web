@@ -22,6 +22,7 @@ import { readBookNbt } from './books-nbt.js';
 import { readItemTagsNbt } from './item-tags.js';
 import { profileOfSkullTile } from './skull-profile.js';
 import { NBT } from './nbt.js';
+import { potFromNbt } from './stone-utility.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
 import { TRAPPED_CHEST, ENDER_CHEST, isChestBlock } from './chest-blocks.js';
@@ -411,7 +412,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
   const commandBlocks = [], musicTiles = [];
-  const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
+  const pots = [], signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
@@ -560,6 +561,13 @@ export async function importJavaRegionArea(regions, options = {}) {
         tally(tileConverted, id);
       } else if (inside && id === 'Airportal' && block === 149) {
         tally(tileConverted, id); // TileEntityEndPortal has no saved fields
+      } else if (inside && id === 'FlowerPot' && block === fromOriginal(140, 0)?.id) {
+        // TileEntityFlowerPot.readFromNBT: Item (int id) and Data (int); a plant the port cannot draw leaves the pot empty (stone-utility.js potFromNbt).
+        const content = potFromNbt({ Item: get(tile, 'Item', NBT.INT, 0), Data: get(tile, 'Data', NBT.INT, 0) });
+        if (content) pots.push({ x: lx, y, z: lz, id: content.id, damage: content.damage });
+        tally(tileConverted, id);
+      } else if (inside && ((id === 'DLDetector' && block === fromOriginal(151, 0)?.id) || (id === 'EnchantTable' && block === fromOriginal(116, 0)?.id))) {
+        tally(tileConverted, id); // no saved state in the port: the sensor power is recomputed, a table's CustomName has no storage
       } else if (inside && id === 'EnderChest' && block === ENDER_CHEST) {
         tally(tileConverted, id); // no saved data: the lid state is runtime, the inventory is the player's EnderItems
       } else if (inside && id === 'Control' && block === 139) {
@@ -767,7 +775,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers, hoppers, brewing },
-    pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
+    pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(pots.length ? { pots } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
     ...tickRecordFields(tickList, litRepeaters, comparatorSignals, Number.isSafeInteger(level?.time) && level.time >= 0 ? level.time : 0),
     ...(spawners.length ? { spawners } : {}),
