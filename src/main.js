@@ -907,7 +907,7 @@ async function joinMultiplayer(settings) {
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
     remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats) }; // b61
-    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
+    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ }); // b60: status sounds, death poof, hearts
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
     remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
@@ -954,7 +954,7 @@ async function multiplayerDimension(client, settings, m) {
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
-    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) });
+    remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
     remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
     client.start();
@@ -2964,7 +2964,7 @@ function tickWeather() {
     for (const e of weather.drain()) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
     return;
   }
-  tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
+  tickWeatherSimulation({ world, weather, mobs, survival, things: () => ({ items, orbs: xpOrbs, minecarts, boats, hanging, arrows }) }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
     // Thunder is volume 10000 in vanilla: gain 1, and a LINEAR distance of 160000 blocks (SoundManager.playSound), so the

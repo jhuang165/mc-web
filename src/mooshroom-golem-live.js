@@ -40,8 +40,9 @@ export class GolemBalls {
     if (ball.dead) return;
     const targets = mobTargets(mobs.entities.filter((e) => e.health > 0), null);
     for (const t of targets) if (t.ref.type === "snow_golem") t.thrower = true;
+    if (this.playerTargets) targets.push(...this.playerTargets()); // b67: the dedicated server's players stop a ball (hook; single player's player is not listed)
     targets.push(...extra); // the carts and boats (entity-simulation.js vehicleTargets)
-    p.tickOne(mobs.world, ball, targets, (ref, b) => { if (typeof ref?.type === "string") thrownHit(mobs, ref, b.owner ?? ref, b); else if (ref) vehicleHit(ref); });
+    p.tickOne(mobs.world, ball, targets, (ref, b) => { if (ref?.survival) return; /* EntitySnowball.onImpact hits a player for 0: EntityPlayer.attackEntityFrom returns false (yz.a, bytecode-read), the ball is still consumed */ if (typeof ref?.type === "string") thrownHit(mobs, ref, b.owner ?? ref, b); else if (ref) vehicleHit(ref); });
     p.drain();
   }
   reap() { this.projectiles.reap(); }

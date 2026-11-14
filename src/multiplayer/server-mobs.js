@@ -227,6 +227,7 @@ export class ServerMobs {
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three
     for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
+    for (const at of out.released) this.mobs.spawnSilverfishAt?.(...at); // b67: BlockSilverfish.dropBlockAsItemWithChance in doExplosionB (explosion.js released)
   }
   // The one SpawnerAnimals pass of the world tick (WorldServer.tick: aho.a(world, hostile, peaceful, totalTime % 400 == 0)): the chunks of every player, the cap
   // `max * size / 256` of the union's size, and "a player within 24 blocks" (World.getClosestPlayer, posY is the eye) from any player.

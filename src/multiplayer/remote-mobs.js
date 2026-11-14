@@ -10,7 +10,7 @@ import { JavaRandom } from '../java-random.js';
 import { ClientEntity } from '../entity-tracker.js';
 import { EntityIds } from '../entity-ids.js';
 import { slimeFields, slimeSquishStart, slimeSquishEnd } from '../slime.js';
-import { golemStatus, golemTick } from './client-golems.js'; // b66 mpgolems
+import { golemStatus, golemTick, golemDust } from './client-golems.js'; // b66 mpgolems
 
 // The sound names the server's S29 may carry for the mobs (WorldServer.playSoundAtEntity: living, hurt, death, step, the creeper's fuse and blast, the skeleton's bow, the egg's plop).
 export const isMobSound = name => typeof name === 'string' && /^(mob\.[a-z.]+|creeper\.primed|random\.(explode|bow|pop|eat|burp)|step\.[a-z]+)$/.test(name);
@@ -116,6 +116,7 @@ export class RemoteMobs {
       if (mob.love > 0) mob.love--; // EntityAnimal.onLivingUpdate counts inLove down (adults only: a baby has none)
       if (mob.eatTimer > 0) mob.eatTimer--; // EntitySheep.sheepTimer
       golemTick(mob); // b66: EntityIronGolem attackTimer / holdRoseTick
+      if (mob.type === 'iron_golem') { const d = golemDust(client, mob, this.rand, (x, y, z) => { const id = this.world.get(x, y, z); return id ? { id, meta: this.world.getMeta?.(x, y, z) ?? 0 } : null; }); if (d) this.fx.blockParticle?.(d.id, d.meta, d.x, d.y, d.z, d.vx, d.vy, d.vz); } // b67: the walking dust (client-golems.js)
       if (mob.hurt > 0) mob.hurt--;
       if (mob.health <= 0 && mob.death < DEATH_TICKS && mob.type !== 'ender_dragon') mob.death++; // the dragon dies by its own 200 tick sequence (dragon.js), it never lies down
       this.factory.swingLimbs(mob);

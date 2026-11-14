@@ -71,5 +71,15 @@ export function installServerGolems(sm, limit) {
     seen.set(e, { attackTimer: e.attackTimer, holdRose: e.holdRose });
     return r;
   };
+  // b67: a snowball meets a player (Entity.canBeCollidedWith) and is consumed; the hit does 0 damage and, since EntityPlayer.attackEntityFrom returns false at 0 (yz.a, bytecode-read), no knockback.
+  mobs.golemBalls.playerTargets = () => {
+    const hw = Math.fround(0.3), out = [];
+    for (const v of sm.views.values()) {
+      const p = v.player;
+      if (!p?.survival || p.dead || p.survival.health <= 0) continue;
+      out.push({ ref: p, box: [p.position.x - hw, p.position.y, p.position.z - hw, p.position.x + hw, p.position.y + Math.fround(1.8), p.position.z + hw] });
+    }
+    return out;
+  };
   mobs.golemBalls.projectiles.clientParticles = true; // the poof of a snowball is the clients' (they see the ball vanish: dispense snapshot)
 }

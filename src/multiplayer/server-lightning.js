@@ -13,7 +13,7 @@
 //     Wire: { type: 'boltSpawn', i, x, y, z } on `p.dispOut` for each Overworld player within 512 blocks. The client makes its own bolt (client-lightning.js), which flashes the sky and plays
 //     ambient.weather.thunder (volume 10000) and random.explode (2) at the bolt, so the server sends no sound packet for them.
 import { strikeBox, overlaps, entityBox, struckByLightning } from '../weather.js';
-import { strikeMobs } from '../weather-simulation.js';
+import { strikeMobs, strikeThings } from '../weather-simulation.js';
 import { PHYSICS } from '../world.js';
 
 export const BOLT_NEAR = 512;
@@ -43,8 +43,7 @@ export class ServerLightning {
   strike(b) {
     const sim = this.sim, box = strikeBox(b);
     strikeMobs(sim.mobs.mobs, b);
-    for (const e of sim.items.items) if (!e.dead && overlaps(sim.items.box(e), box)) sim.items.hurt(e, 5); // EntityItem.attackEntityFrom(inFire, 5): health 5
-    for (const o of sim.serverItems.xp.orbs) if (!o.dead && overlaps([o.x - 0.25, o.posY - 0.25, o.z - 0.25, o.x + 0.25, o.posY + 0.25, o.z + 0.25], box)) sim.serverItems.xp.hurt(o, 'inFire', 5);
+    strikeThings({ items: sim.items, orbs: sim.serverItems.xp, minecarts: sim.vehicles.carts, boats: sim.vehicles.boats, arrows: sim.dispense.arrows }, b); // b67: items, orbs, carts, boats, arrows (weather-simulation.js)
     for (const p of sim.players.values()) {
       const s = p.survival;
       if (p.dimension | 0 || p.dead || s.creative || s.health <= 0 || !overlaps(entityBox(p.position, PHYSICS.width, PHYSICS.height), box)) continue;
