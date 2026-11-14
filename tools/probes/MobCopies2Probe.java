@@ -15,6 +15,9 @@ public class MobCopies2Probe {
   public static class PW extends HorseProbe.World {
     static List<String> particles = new ArrayList<>();
     static boolean pool = false;
+    static int rainMinY = Integer.MAX_VALUE; // b64: ahb.y = canLightningStrikeAt on this client world: true at y >= rainMinY (an open column from there up); `strikes` logs the asked cells
+    static List<String> strikes = new ArrayList<>();
+    public boolean y(int x, int y, int z) { strikes.add(x + "," + y + "," + z); return y >= rainMinY; }
     boolean in(int x, int y, int z) { return pool && x >= 7 && x <= 13 && z >= -9 && z <= -3 && y >= 0 && y <= 4; }
     public aji a(int x, int y, int z) { return in(x, y, z) ? aji.e(9) : super.a(x, y, z); }
     public int e(int x, int y, int z) { return 0; }
@@ -29,6 +32,7 @@ public class MobCopies2Probe {
   static final int[] STATUSES = { 1, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22 };
   static HorseCopyProbe.Log wr;
   static sv make(String name, long seed, double x, double y, double z, boolean pool) throws Exception {
+    PW.rainMinY = Integer.MAX_VALUE; PW.strikes.clear();
     PW.pool = pool; MobMoveProbe.ProbeWorld.water = pool; // the real World.handleMaterialAcceleration
     HorseCopyProbe.build(PW.class, true);
     HorseProbe.clear(); PW.particles.clear();
@@ -101,6 +105,19 @@ public class MobCopies2Probe {
         watch(e, 18, (byte) 1);
         HorseProbe.out(head("wetscream", "Enderman", sd, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 60, true) + "}");
       }
+    }
+    { // b64 trackertransient: Entity.isWet (sa.L) on the copy asks the CLIENT world's canLightningStrikeAt (ahb.y, rain strength > 0.2, sky, biome) at the feet cell and at floor(posY + height), so rain
+      // makes a dry enderman copy take the ya.e wet branch. The world's y(III) is overridden (true for y >= rainMinY); the executed Entity.isWet asks it, `asked` is the list of cells it asked on tick 1.
+      // rainfeet: rain at every y; rainhead: only from y 2 up (the feet cell at y 0 is dry, the head cell floor(posY + 2.9) = 2 is rained on); raindry: rain nowhere (control, the strike test is asked, answers no).
+      MobMoveProbe.ProbeWorld.exact = true; MobMoveProbe.step = 2;
+      String[] kinds = { "rainfeet", "rainhead", "raindry" }; int[] minY = { -64, 2, 99 };
+      for (int k = 0; k < 3; k++) for (long sd = 6900 + 10 * k; sd < 6903 + 10 * k; sd++) {
+        sv e = make("Enderman", sd, 10.5, k >= 1 ? 0.0 : 8.0, -5.5, false); // rainhead and raindry start on the ground (feet cell y 0): a fall would hurt the copy, which sets its scream flag (Enderman.attackEntityFrom)
+        PW.rainMinY = minY[k];
+        String body = ticks(e, 60, true);
+        HorseProbe.out(head(kinds[k], "Enderman", sd, e) + ",\"rainMinY\":" + minY[k] + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + ",\"asked\":" + HorseCopyProbe.list(new ArrayList<>(PW.strikes.subList(0, Math.min(8, PW.strikes.size())))) + "," + body + "}");
+      }
+      MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
     }
     { // wither: spawn charge and armour
       long[] seeds = { 6201, 6202, 6203 }; int[] invul = { 100, 0, 100 }; float[] health = { 300f, 100f, 100f };

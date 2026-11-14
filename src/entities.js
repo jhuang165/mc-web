@@ -2025,7 +2025,7 @@ export class EntityWorld {
   moveClient(c, m) {
     if (c.steered) { steerHorseCopy(c, this.riderLook?.()); return; } // wi.e(FF), the saddled horse the player rides: only the angles follow the rider; the motion is the server's (horse-copy.js)
     const [w, h] = this.size(m);
-    copyLivingPre(c, m, undefined, this.world, this.clientBoatBoxes); // b63: `clientBoatBoxes` (main.js) = the boat copies' boxes for the teleport destination; batch 61: the enderman's and the blaze's draws that precede the move (batch 62: and its wet teleport)
+    copyLivingPre(c, m, undefined, this.world, this.clientBoatBoxes, this.clientRained); // b64: `clientRained` (main.js) = the client world's canLightningStrikeAt, for isWet in the rain; b63: `clientBoatBoxes` (main.js) = the boat copies' boxes for the teleport destination; batch 61: the enderman's and the blaze's draws that precede the move (batch 62: and its wet teleport)
     c.stepHeight = m.stepHeight; c.aiMoveSpeed = 0;
     c.clientUnloaded = this.world.isLoaded ? !this.world.isLoaded(c.x, c.z) : false;
     // EntityFlying.moveEntityWithHeading (the ghast, no forward or strafe): moveEntity, then 0.8 in water, else 0.91 (0.546 on the ground); EntitySquid's
@@ -2147,6 +2147,7 @@ export class EntityWorld {
   // `joined` when it spawned, or is placed after the mobs known so far when it has none (a saved one, or a spawn site that does not report).
   joined(e, kind) {
     EntityWorld.prototype.takeId.call(this, e); // Entity.<init>: nextEntityID++ (an item, arrow, thrown entity, TNT, falling block or rocket takes its number at its creation)
+    this.tracker?.born.length < 4096 && this.tracker.born.push(e); // b64 (tracker-transient.js): a spawn that is dead before the tracker's next pass still took a slot in the HashSet
     const w = this.walks?.get(kind);
     if (!w) return;
     this.orderSeqs ??= new WeakMap();

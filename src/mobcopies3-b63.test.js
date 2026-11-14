@@ -45,7 +45,7 @@ function replay(c) {
   return walked;
 }
 
-for (const c of ref.cases.filter((x) => x.case !== "transient12")) {
+for (const c of ref.cases.filter((x) => !x.case.startsWith("transient"))) {
   test(`dead entities: ${c.case} keeps the executed HashSet order after every tick (World.updateEntities removes the dead entity before the tracker pass)`, () => {
     const walked = replay(c);
     const lt = lifetimes(c);
@@ -59,7 +59,7 @@ for (const c of ref.cases.filter((x) => x.case !== "transient12")) {
 
 // A transient entity (spawned and dead inside one tick) is in no sample, so the worker's trace has no ghost for it. Natively its entry still doubled the table (13 > 12). Found, not fixed:
 // the worker has no spawn hook per subsystem. The executed history is replayed through the set model to show that the native order needs that add and remove.
-test("transient entity (spawned and removed in one tick): the executed order needs its add and remove; the ghost model cannot see it (known gap)", () => {
+test("transient entity (spawned and removed in one tick): the executed order needs its add and remove; the AWAY ghost model cannot see it (the live tracker does since b64, trackertransient-b64.test.js)", () => {
   const c = ref.cases.find((x) => x.case === "transient12");
   const withIt = new JavaHashSetOrder("java8"), without = new JavaHashSetOrder("java8");
   for (const [id] of c.initial) { withIt.add(id, id); without.add(id, id); }
