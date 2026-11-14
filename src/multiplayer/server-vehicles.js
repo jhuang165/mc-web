@@ -12,6 +12,7 @@
 // Riding: C02 interact mounts (Minecarts.mount / Boats.mount, refused while sneaking or occupied); the player's position is the seat, taken from the vehicle after its tick;
 // sneaking dismounts (Minecarts.dismount, EntityLivingBase.dismountEntity); a boat reads the rider's forward/strafe input and yaw, a cart takes none. onARail runs through
 // `sim.achievements` (Achievements.rideMinecart, EntityPlayer.addMovementStat, bytecode-read yz.k: any EntityMinecart, only when the player moved).
+import { serverRiderFall } from './server-rider-fall.js';
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
 import { registerBoatWorld, worldBoatBoxes } from '../entity-collision.js';
@@ -174,9 +175,17 @@ export class ServerVehicles {
   riderOf(p) {
     return p.mount?.rider ?? { player: true, ref: p, x: p.position.x, y: p.position.y, z: p.position.z, yaw: 0, moveForward: 0, moveStrafing: 0, fallDistance: 0, vehicle: null,
       width: f(PHYSICS.width), height: f(PHYSICS.height), dead: false,
-      fall: distance => { if (!p.survival.creative && p.survival.health > 0 && distance > 3) p.survival.damage(Math.ceil(distance - 3), 'a fall'); } };
+      fall: serverRiderFall(this.host, p) }; // b73 mpriders73: EntityLivingBase.fall with Jump Boost and the fall sounds
   }
   riding(p) { return !!p.mount; }
+  // b73 mpriders73: the box of what the player rides (a boat, a cart or a mob), for EntityPlayer.onLivingUpdate's pickup box; null when not riding or it is dead.
+  ridingBox(p) {
+    const m = p.mount;
+    if (!m) return null;
+    if (m.mob) { if (m.mob.health <= 0) return null; const [w, h] = this.host.mobs.mobs.size(m.mob); return [m.mob.x - w / 2, m.mob.y, m.mob.z - w / 2, m.mob.x + w / 2, m.mob.y + h, m.mob.z + w / 2]; }
+    const v = this.find(m.key);
+    return v && !v.dead ? v.bb ?? null : null;
+  }
   // The player is where the seat is. Entity.updateRiderPosition: the system puts the rider record there, the player follows it.
   seat(p) {
     const r = p.mount.rider, pos = p.position;

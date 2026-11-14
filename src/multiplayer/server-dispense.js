@@ -225,7 +225,7 @@ export class ServerDispense {
     for (const p of this.sim.players.values()) {
       if (p.dead || !p.survival || p.survival.health <= 0 || (p.dimension | 0) !== lane.dim || !lane.arrows.list.some(a => a.inGround)) continue;
       const hw = q(0.3), at = p.position, was = lane.arrows.list.filter(a => !a.dead);
-      if (!lane.arrows.collect([at.x - hw, at.y, at.z - hw, at.x + hw, at.y + q(1.8), at.z + hw], p.survival)) continue;
+      if (!lane.arrows.collect([at.x - hw, at.y, at.z - hw, at.x + hw, at.y + q(1.8), at.z + hw], p.survival, undefined, (lane.dim ? this.dimState(lane.dim)?.vehicles : this.sim.vehicles)?.ridingBox?.(p) ?? null)) continue; // b73 mpriders73: the ridden box widens the pickup box
       for (const a of was) if (a.dead) (this.collected ??= []).push({ i: this.id(a), by: p.id, dim: lane.dim, x: a.x, y: a.y, z: a.z });
     }
   }
