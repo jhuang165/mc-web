@@ -14,12 +14,13 @@
 // `sim.achievements` (Achievements.rideMinecart, EntityPlayer.addMovementStat, bytecode-read yz.k: any EntityMinecart, only when the player moved).
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
+import { registerBoatWorld, worldBoatBoxes } from '../entity-collision.js';
 import { EntityIds } from '../entity-ids.js';
 import { placeHeldMinecart } from '../vehicle-simulation.js';
 import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
 import { moveInput } from '../player-movement.js';
-import { heldAttackDamage } from '../entities.js';
+import { heldAttackDamage, setWorldEntityBoxes } from '../entities.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
@@ -60,6 +61,7 @@ export class ServerVehicles {
       changed: keys => host.containers.ticks?.changed(keys),
       runCommand: cart => { this.cartCommands.push(cart); }, // b63: xn.a(x, y, z, powered) -> CommandBlockLogic.func_145755_a
     };
+    registerBoatWorld(host.world, this.boats); setWorldEntityBoxes(worldBoatBoxes); // b67 boatstand: players and mobs stand on and bump into this world's boats (World.getCollidingBoundingBoxes)
     this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
   }

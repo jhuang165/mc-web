@@ -365,10 +365,14 @@ const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
 // provider; it is only asked for a moving entity `e`, never for the spawn checks.
 let entityBoxes = null;
 export const setEntityBoxes = (fn) => { entityBoxes = fn; };
+// b67 boatstand: a second, separate provider (box, mover, world) -> boxes; the dedicated server installs one that looks the boats up by world.
+let worldEntityBoxes = null;
+export const setWorldEntityBoxes = (fn) => { worldEntityBoxes = fn; };
 // BlockPistonMoving.getCollisionBoundingBoxFromPool boxes (moving-boxes.js, piston-live.js collisionBoxes), set by redstone-runtime.js.
 export { setMovingBoxes };
 function collisionBoxes(world, b, e) {
   const out = entityBoxes && e ? entityBoxes(b, e) : [];
+  if (worldEntityBoxes && e) out.push(...worldEntityBoxes(b, e, world));
   out.push(...movingBoxes(b));
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
