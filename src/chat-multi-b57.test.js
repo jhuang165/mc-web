@@ -88,7 +88,7 @@ test("/tell by name reaches an online player, an absent one is not found", () =>
 test("/give style commands refuse another online player instead of acting on the local one", () => {
   const w = world();
   w.run("Alex", "/testfor Bob");
-  assert.match(ser(w.log.Alex[0]), /another player/);
+  assert.match(ser(w.log.Alex[0]), /commands.testfor.failed/); // CommandTestFor: a player never runs it (b68)
 });
 
 test("death and achievement broadcast to every player", () => {

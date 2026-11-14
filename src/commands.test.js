@@ -248,7 +248,7 @@ test("summon failures and tag errors are plain feedback; testfor finds the local
   assert.deepEqual(g.run("/summon Pig ~ 300 ~ {bad"), [tr("commands.summon.outOfWorld")]);
   assert.deepEqual(g.run("/summon Dragon"), [tr("commands.summon.failed")]);
   assert.ok(!g.run("/give @p diamond 1 0 {bad")[0].startsWith("§c"));
-  assert.deepEqual(g.run("/testfor @p"), [tr("commands.testfor.success", "Player")]);
+  assert.deepEqual(g.run("/testfor @p"), [tr("commands.testfor.failed")].map((t) => "§c" + t)); // CommandTestFor: only a command block may run it (bytecode-read b68)
 });
 
 test("spawnpoint: 0 or 1 arguments use the target's position, exactly 4 take absolute integers (CommandSetSpawnpoint bp.b)", () => {

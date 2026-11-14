@@ -397,11 +397,16 @@ export function createCommandRunner(host) {
       host.setSpawnpoint(x, y, z);
       feedback("commands.spawnpoint.success", target, x, y, z);
     },
+    // CommandSetDefaultSpawnpoint (bn, bytecode-read b68): three arguments are plain integers (CommandBase.parseIntBounded: no "~", x and z within 30000000, y 0..256), none
+    // is the sender player's own block (getPlayerCoordinates: floor x, floor(y + 0.5), floor z) and a sender that is no player (a command block) is "player not found".
     setworldspawn(a) {
-      const here = pos();
-      let x = Math.floor(here.x), y = Math.floor(here.y), z = Math.floor(here.z);
-      if (a.length === 3) { x = Math.floor(parseCoordinate(here.x, a[0])); y = Math.floor(parseCoordinate(here.y, a[1], 0, 256)); z = Math.floor(parseCoordinate(here.z, a[2])); }
-      else if (a.length !== 0) usage("commands.setworldspawn.usage");
+      let x, y, z;
+      if (a.length === 3) { x = parseIntBounded(a[0], -30000000, 30000000); y = parseIntBounded(a[1], 0, 256); z = parseIntBounded(a[2], -30000000, 30000000); }
+      else if (a.length === 0) {
+        if (host.isCommandBlock) throw playerNotFound();
+        const here = pos();
+        x = Math.floor(here.x); y = Math.floor(here.y + 0.5); z = Math.floor(here.z);
+      } else usage("commands.setworldspawn.usage");
       host.setWorldSpawn(x, y, z);
       feedback("commands.setworldspawn.success", x, y, z);
     },
@@ -512,14 +517,34 @@ export function createCommandRunner(host) {
       }
       feedback("commands.testforblock.success", x, y, z);
     },
-    testfor(a) { if (!a.length) usage("commands.testfor.usage"); const target = player(a[0]); feedback("commands.testfor.success", target); },
+    // CommandTestFor (by, bytecode-read b68): exactly one argument, only a command block may run it ("commands.testfor.failed"), the player is looked up (selector or name)
+    // and nothing is said: the success is the run itself (the 1.7.10 lang has no commands.testfor.success).
+    testfor(a) {
+      if (a.length !== 1) usage("commands.testfor.usage");
+      if (!host.isCommandBlock) throw new CommandException("commands.testfor.failed");
+      player(a[0]);
+    },
+    // CommandPlaySound (bf, bytecode-read b68): the target is the player (name or selector), the default position is the target's own block (getPlayerCoordinates), the range is
+    // 16 blocks, volume * 16 above volume 1. A target farther than that hears nothing unless the minimum volume (argument 8, 0..1) is above 0: then the sound plays at that volume
+    // 2 blocks from the player in the sound's direction (the S29 packet is sent either way, so the client does its own attenuation).
     playsound(a) {
       if (a.length < 2) usage("commands.playsound.usage");
       const target = player(a[1]);
-      const here = pos();
-      const x = a.length >= 5 ? parseCoordinate(here.x, a[2]) : here.x, y = a.length >= 5 ? parseCoordinate(here.y, a[3], 0, 0) : here.y, z = a.length >= 5 ? parseCoordinate(here.z, a[4]) : here.z;
-      const volume = a.length >= 6 ? parseDoubleBounded(a[5], 0, 3.4028234663852886e38) : 1, pitch = a.length >= 7 ? parseDoubleBounded(a[6], 0, 2) : 1;
-      host.playSound?.(a[0], x, y, z, volume, pitch);
+      const at = host.positionOf?.(target) ?? host.position(), base = { x: Math.floor(at.x), y: Math.floor(at.y + 0.5), z: Math.floor(at.z) };
+      let i = 2, x = base.x, y = base.y, z = base.z, volume = 1, pitch = 1, minimum = 0;
+      if (a.length > i) x = parseCoordinate(base.x, a[i++]);
+      if (a.length > i) y = parseCoordinate(base.y, a[i++], 0, 0);
+      if (a.length > i) z = parseCoordinate(base.z, a[i++]);
+      if (a.length > i) volume = parseDoubleBounded(a[i++], 0, 3.4028234663852886e38);
+      if (a.length > i) pitch = parseDoubleBounded(a[i++], 0, 2);
+      if (a.length > i) minimum = parseDoubleBounded(a[i++], 0, 1);
+      const range = volume > 1 ? volume * 16 : 16;
+      const dx = x - at.x, dy = y - at.y, dz = z - at.z, far = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (far > range) {
+        if (!(minimum > 0)) throw new CommandException("commands.playsound.playerTooFar", [target]);
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        host.playSound?.(a[0], d > 0 ? at.x + dx / d * 2 : at.x, d > 0 ? at.y + dy / d * 2 : at.y, d > 0 ? at.z + dz / d * 2 : at.z, minimum, pitch, target);
+      } else host.playSound?.(a[0], x, y, z, volume, pitch, target);
       feedback("commands.playsound.success", a[0], target);
     },
   };
@@ -532,6 +557,7 @@ export function createCommandRunner(host) {
   // /tellraw, /achievement, /spreadplayers and /debug (commands-extra.js).
   const extra = createExtraCommands({
     host, player, targetArg, usage, CommandException, parseCoordinate, parseBoolean, JavaRandom,
+    selectAll: (s) => (expandsSelector(s) ? selectPlayers(s, host) : null), // b68: /spreadplayers takes @a (ad.c: every match) beside names
     parseDoubleMin: (s, min) => parseDoubleBounded(s, min, Number.MAX_VALUE),
   });
   Object.assign(handlers, extra.handlers);

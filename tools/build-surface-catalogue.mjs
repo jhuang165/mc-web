@@ -25,8 +25,8 @@ const CMD_PARTIAL = {
   kill: 'kills the sender as in 1.7.10', toggledownfall: '', weather: 'CommandWeather timers', xp: 'L suffix, local player',
   tp: 'selectors resolve to the local player', give: 'supported item data tags only', effect: 'effects limited to the port\'s Effects table',
   enchant: 'local player', me: '', seed: '', help: 'paged, 7 per page', tell: 'local player only', say: '',
-  spawnpoint: '', setworldspawn: 'stored in the world record; spawn search unchanged', gamerule: 'all nine defaults plus custom keys',
-  clear: 'local player', testfor: 'local player', playsound: '', summon: `all ${Object.keys(SUMMONABLE).length} concrete EntityList registrations are /summon types (SUMMONABLE: mobs, carts, End crystal, items, orbs, TNT, falling blocks, boats, hanging entities, projectiles); unsupported tag keys are reported as ignored`,
+  spawnpoint: '', setworldspawn: 'integer coordinates, y + 0.5 as natively; stored in the world record; spawn search unchanged', gamerule: 'all nine defaults plus custom keys',
+  clear: 'local player', testfor: 'command-block only, silent on success, as natively', playsound: '', summon: `all ${Object.keys(SUMMONABLE).length} concrete EntityList registrations are /summon types (SUMMONABLE: mobs, carts, End crystal, items, orbs, TNT, falling blocks, boats, hanging entities, projectiles); unsupported tag keys are reported as ignored`,
   setblock: 'supported tile data tags only', testforblock: 'typed subset comparison', publish: 'LAN settings only, no browser socket hosting',
 };
 // Batch 13 commands: documented in commands-b13.md, with probe evidence in commands-b13-reference.json / scoreboard-reference.json.
@@ -38,7 +38,7 @@ const CMD_B13 = {
   scoreboard: 'objectives/players/teams output, state and data/scoreboard.dat probed (scoreboard-reference.json); sidebar, Tab score, team chat prefix; belowName has no other players to show',
 };
 // The repo's dedicated server (src/server-broadcast.js SERVER_COMMANDS, batches 59-67) runs a subset over named players: operators only for the world
-// and player commands; /summon joined in batch 67 (server-summon.js); /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers, /debug and /publish are not on it.
+// and player commands; /summon joined in batch 67 (server-summon.js); /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers and /debug joined in batch 68 (server-worldcmds.js); /publish is not on it.
 const serverNote = name => SERVER_COMMANDS.has(name) ? '; also on the dedicated server (named players, src/server-broadcast.js)' : '; not on the dedicated server';
 const commandStatus = c => {
   if (c.scope === 'dedicated') return SERVER_COMMANDS.has(c.name) ? 'Partial; dedicated-server command, not registered in the integrated server; implemented on the repo\'s dedicated server (src/server-broadcast.js)' : 'Out of scope; dedicated-server only, not registered in the integrated server, and not implemented on the repo\'s dedicated server either (not in SERVER_COMMANDS)';

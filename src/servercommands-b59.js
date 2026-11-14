@@ -15,8 +15,9 @@ import { setGameRuleSource } from "./game-rules.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
 import { ENCHANTMENT_NAMES } from "./command-data.js";
+import { WORLD_COMMANDS } from "./multiplayer/server-worldcmds.js";
 
-export const SERVER_WORLD_COMMANDS = ["time", "weather", "toggledownfall", "difficulty", "gamerule", "defaultgamemode", "list", "tellraw", "spawnpoint", "enchant"];
+export const SERVER_WORLD_COMMANDS = ["time", "weather", "toggledownfall", "difficulty", "gamerule", "defaultgamemode", "list", "tellraw", "spawnpoint", "enchant", ...WORLD_COMMANDS /* b68 mpworldcmds: setblock, testforblock, testfor, setworldspawn, playsound, spreadplayers, debug */];
 export const MAX_PLAYERS = 20; // server.properties max-players default of the dedicated server
 
 const enchantName = new Map(ENCHANTMENT_NAMES.map(([id, name]) => [id, name]));

@@ -163,7 +163,7 @@ export function createExtraCommands(ctx) {
   const tellSender = (component) => (host.isCommandBlock ? host.print(component.formatted(), component) : host.print(component)); // ICommandSender.addChatMessage
   const notify = (key, ...args) => send(translation(key, ...args)); // CommandBase.func_152373_a: the sender's plain copy
   const profiler = host.profiler ?? (host.profiler = new Profiler());
-  const debugState = { startMs: 0, startTicks: 0 };
+  const debugState = host.debugState ?? { startMs: 0, startTicks: 0 }; // b68: a server host keeps it between commands
 
   const handlers = {
     // CommandMessageRaw: the JSON is the rest of the line joined with spaces; Gson's JsonParseException becomes
@@ -209,7 +209,8 @@ export function createExtraCommands(ctx) {
       const distance = ctx.parseDoubleMin(a[i++], 0), range = ctx.parseDoubleMin(a[i++], distance + 1);
       const teams = ctx.parseBoolean(a[i++]);
       const targets = [];
-      while (i < a.length) targets.push(player(a[i++]));
+      // ad.b / ad.c: a selector argument adds every player it matches (none: player not found); a name is looked up on the server (b68: @a here too).
+      while (i < a.length) { const many = ctx.selectAll?.(a[i]); if (many) { if (!many.length) throw new CommandException("commands.generic.player.notFound", [], "player"); targets.push(...many); i++; } else targets.push(player(a[i++])); }
       if (!targets.length) throw new CommandException("commands.generic.player.notFound", [], "player");
       const kind = teams ? "teams" : "players";
       tellSender(translation("commands.spreadplayers.spreading." + kind, targets.length, javaDouble(range), javaDouble(x), javaDouble(z), javaDouble(distance)));
@@ -230,7 +231,8 @@ export function createExtraCommands(ctx) {
         let p;
         if (teams) { const team = host.teamOf?.(t) ?? null; if (!byTeam.has(team)) byTeam.set(team, ps[n++]); p = byTeam.get(team); }
         else p = ps[n++];
-        host.teleport(Math.fround(Math.floor(p.x) + 0.5), host.topY ? host.topY(p.x, p.z) : 257, Math.floor(p.z) + 0.5);
+        const to = [Math.fround(Math.floor(p.x) + 0.5), host.topY ? host.topY(p.x, p.z) : 257, Math.floor(p.z) + 0.5];
+        if (host.teleportPlayer) host.teleportPlayer(t, ...to); else host.teleport(...to); // b68: a server moves the named player, not the sender
         let m = Number.MAX_VALUE;
         for (const q of ps) if (q !== p) m = Math.min(m, p.distance(q));
         total += m;
