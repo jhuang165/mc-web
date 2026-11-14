@@ -94,10 +94,14 @@ export function setTerrainSizes(known=new Map(),opts={}){
  const next=terrainLayout(TILES,map,{maxSize:maxTexture,mip:mipSetting});
  knownSizes=map;
  const changed=!sameLayout(layout,next);
- if(changed){layout=next;TILE_ORIGINS=next.origins;TILE_SIZES=next.sizes;ATLAS_WIDTH=next.width;ATLAS_HEIGHT=next.height;ATLAS_ROWS=ATLAS_HEIGHT/16;NATIVE_RECTS.length=0;layoutVersion++;}
+ if(changed){layout=next;TILE_ORIGINS=next.origins;TILE_SIZES=next.sizes;ATLAS_WIDTH=next.width;ATLAS_HEIGHT=next.height;ATLAS_ROWS=ATLAS_HEIGHT/16;NATIVE_RECTS.length=0;layoutVersion++;for(const f of[...relayoutListeners])f(layoutVersion);}
  return changed;
 }
 // The current layout, for the mesh workers (src/mesh-pool.js posts it, mesh-worker.js applies it) and for tests.
+// Everything that bakes tileRect uvs into a geometry or a cache (uv-rebake.js) learns of a new layout here, synchronously, before the atlas pixels are redrawn.
+const relayoutListeners=new Set();
+export const onTerrainRelayout=fn=>{relayoutListeners.add(fn);return()=>relayoutListeners.delete(fn);};
+export const terrainLayoutVersion=()=>layoutVersion;
 export const terrainLayoutState=()=>({version:layoutVersion,sizes:nonVanillaSizes(knownSizes),maxSize:maxTexture,mip:mipSetting});
 // Mipmap levels the atlas supports: the setting capped by the smallest sprite (TextureMap.loadTextureAtlas).
 export const terrainMipCap=()=>layout.mipCap;
@@ -105,9 +109,6 @@ export const terrainLayoutInfo=()=>layout;
 export const tileOrigin=index=>TILE_ORIGINS[index];
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
-// Batch 57: the 16x16 item-atlas tile (tinted like the inventory icon) of a flat block item, as a PNG data URL, or null before the tiles load (flat-block-items.js).
-let flatTileImpl=null;
-export const flatBlockTileUrl=(id,damage=0)=>flatTileImpl?flatTileImpl(id,damage):null;
 export const tileName=index=>TILES[index];
 
 export const namedTile=tile;
@@ -332,7 +333,6 @@ export function createBlockAtlas(){
  // Blocks whose item is a flat sprite in the inventory (RenderItem draws their icon texture, not a model): levers, plants, panes, rails, crops and so on.
 const SPRITE_ICON=new Set([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141]);
 const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===LILY_PAD||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id);
-flatTileImpl=(id,damage)=>{syncCanvases();const key='flat:'+id+':'+damage;if(icons.has(key))return icons.get(key);const l=exactLevels(false,TILES[blockTile(id,id===141?0:2,false,damage)],0);if(!l)return null;const S=tsz(TILES[blockTile(id,id===141?0:2,false,damage)]),url=pngDataUrl(encodePngStored(S,S,l[0]));icons.set(key,url);return url;};
 // A block item's box model (item-boxes.js itemSpec, or the unit cube) as a 64x64 icon at scale 4: executed boxes, renderItemIntoGUI's matrix, GL pixel-centre edges. null before the tiles load.
 function boxIcon(id,damage){
  const spec=itemSpec(id,damage,blockTile),texOf=new Map();let missing=false;

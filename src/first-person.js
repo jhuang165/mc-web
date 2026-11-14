@@ -8,6 +8,7 @@ import { itemSpec, isGateItem, itemBlockId } from './item-boxes.js';
 import { STAIR_ITEM_BOXES } from './stairs.js';
 import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
 import { blockTile,tileRect,tileName } from "./block-textures.js";
+import { trackCubeUv,trackUvArray } from "./uv-rebake.js";
 import { flatBlockItem, HOPPER_BLOCK, HOPPER_ITEM_URL } from "./flat-block-items.js";
 import { entityMaterial, ITEM_LIGHTS, liveSpriteTransform } from "./light-material.js";
 import { itemPasses } from "./item-passes.js";
@@ -50,20 +51,20 @@ export function blockCubeGeometry(id,damage=0,scale=1){
  const b=itemBlockId(id);if(b===DISPENSER||b===DROPPER)damage=3;else if(isPistonBase(b))damage=1;
  id=b>0&&b<256?b:id;
  const g=new THREE.BoxGeometry(scale,scale,scale),uv=g.attributes.uv;
- for(let f=0;f<6;f++){const r=tileRect(blockTile(id,f,false,damage));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);}
+ // trackCubeUv: the uvs follow a new terrain layout after a resource pack switch (uv-rebake.js)
  // renderFaceYNeg runs the bottom texture's v along +z (the executed record), the opposite of BoxGeometry's -y face.
- for(const i of[12,13]){const a=uv.getY(i),b=uv.getY(i+2);uv.setY(i,b);uv.setY(i+2,a);}
+ trackCubeUv(g,f=>blockTile(id,f,false,damage),undefined,()=>{for(const i of[12,13]){const a=uv.getY(i),b=uv.getY(i+2);uv.setY(i,b);uv.setY(i+2,a);}});
  return g;
 }
 // The cactus item (CACTUS_ITEM_QUADS: full top and bottom, sides inset 1/16), at `scale` of a block.
 export function cactusItemGeometry(scale=1){
- const positions=[],uvs=[],indices=[];
- for(const [fi,quad] of CACTUS_ITEM_QUADS){
-  const r=tileRect(blockTile(CACTUS,fi)),base=positions.length/3;
-  for(const [x,y,z,s,t] of quad){positions.push((x-.5)*scale,(y-.5)*scale,(z-.5)*scale);uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}
+ const positions=[],indices=[],uvsOf=()=>{const uvs=[];for(const [fi,quad] of CACTUS_ITEM_QUADS){const r=tileRect(blockTile(CACTUS,fi));for(const [,,,s,t] of quad)uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}return uvs;};
+ for(const [,quad] of CACTUS_ITEM_QUADS){
+  const base=positions.length/3;
+  for(const [x,y,z] of quad)positions.push((x-.5)*scale,(y-.5)*scale,(z-.5)*scale);
   indices.push(base,base+1,base+2,base,base+2,base+3);
  }
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return trackUvArray(g,uvsOf);
 }
 // RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
 export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
@@ -72,13 +73,17 @@ export function gateItemGeometry(id=1167,scale=1){return boxItemGeometry(GATE_IT
 export { isGateItem };
 // Every box with its six faces, the texture cropped to the face's extent as renderFaceXPos... do (itemBoxUv, executed in item-render-reference.json); `uvOf(fi,p,box)` replaces it (the anvil's turned faces).
 export function boxItemGeometry(boxes,tileOf,scale=1,uvOf=itemBoxUv){
- const positions=[],uvs=[],indices=[];
+ const positions=[],indices=[],uvsOf=()=>{const uvs=[];
+  for(const [bk,box] of boxes.entries()){const [x0,y0,z0,x1,y1,z1]=box;for(let fi=0;fi<BLOCK_FACES.length;fi++){
+   const face=BLOCK_FACES[fi],r=tileRect(tileOf(fi,bk));
+   for(let i=0;i<4;i++){const v=face.v[i],p=[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0],[s,t]=uvOf(fi,p,box);uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}
+  }}return uvs;};
  for(const [bk,box] of boxes.entries()){const [x0,y0,z0,x1,y1,z1]=box;for(let fi=0;fi<BLOCK_FACES.length;fi++){
-  const face=BLOCK_FACES[fi],tile=tileOf(fi,bk),r=tileRect(tile),base=positions.length/3;
-  for(let i=0;i<4;i++){const v=face.v[i],p=[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0],[s,t]=uvOf(fi,p,box);positions.push((p[0]-.5)*scale,(p[1]-.5)*scale,(p[2]-.5)*scale);uvs.push(r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t);}
+  const face=BLOCK_FACES[fi],base=positions.length/3;
+  for(let i=0;i<4;i++){const v=face.v[i],p=[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0];positions.push((p[0]-.5)*scale,(p[1]-.5)*scale,(p[2]-.5)*scale);}
   indices.push(base,base+1,base+2,base,base+2,base+3);
  }}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return trackUvArray(g,uvsOf);
 }
 // RenderItem.renderEffect / ItemRenderer glint (ItemStack.hasEffect): the item's geometry again, with
 // misc/enchanted_item_glint.png added over its opaque pixels (the original redraws with depth func EQUAL and the

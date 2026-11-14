@@ -10,6 +10,7 @@ import { itemFrameTag } from "./item-animation.js";
 import { entityMaterial } from "./light-material.js";
 import { headItemMatrix } from "./wearable-heads.js";
 import { blockTile, tileRect } from "./block-textures.js";
+import { trackCubeUv, trackUv } from "./uv-rebake.js";
 import { toLiveStack, GEAR_TYPES } from "./mob-equipment-live.js";
 import { heldSprite, heldBlock } from "./held-sprite.js";
 
@@ -106,11 +107,7 @@ export function syncMobEquipment(renderer, r, e) {
   // A pumpkin or jack-o'-lantern on the head (RenderBiped.renderEquippedItems, block branch).
   const helmet = live[4], atlas = renderer.view.textures?.texture;
   if (helmet && atlas && !armorLayer(helmet.id, 0) && !itemTexture(helmet.id, 0)) {
-    const g = new THREE.BoxGeometry(1, 1, 1), uv = g.attributes.uv;
-    for (let face = 0; face < 6; face++) {
-      const t = tileRect(blockTile(helmet.id, face));
-      uv.setXY(face * 4, t.u0, t.v1); uv.setXY(face * 4 + 1, t.u1, t.v1); uv.setXY(face * 4 + 2, t.u0, t.v0); uv.setXY(face * 4 + 3, t.u1, t.v0);
-    }
+    const g = trackCubeUv(new THREE.BoxGeometry(1, 1, 1), (face) => blockTile(helmet.id, face));
     const mesh = new THREE.Mesh(g, material({ map: atlas })), group = new THREE.Group(), flip = new THREE.Group();
     mesh.rotation.y = Math.PI / 2;
     group.matrixAutoUpdate = false;

@@ -17,6 +17,7 @@ import { ITEM_COMPASS, itemFrameCompassFrame, compassWorld } from "./compass.js"
 import { compassFrameCount } from "./sprite-frames.js";
 import { itemFrameTag } from "./item-animation.js";
 import { blockTile, tileRect } from "./block-textures.js";
+import { trackCubeUv, trackUv } from "./uv-rebake.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ARTS, DIR_X, DIR_Z } from "./hanging.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
@@ -96,20 +97,14 @@ export class HangingRenderer {
   createFrame() {
     const root = new THREE.Group(), turn = new THREE.Group(), materials = [], geometries = [];
     turn.rotation.y = Math.PI / 2; // renderBlockAsItem
-    const planks = tileRect(blockTile(PLANKS, 0, false, BIRCH));
+    const plankTile = blockTile(PLANKS, 0, false, BIRCH);
     const plankMaterial = entityMaterial(this.view.lighting, { map: this.view.textures.texture, side: THREE.DoubleSide }),
       backMaterial = entityMaterial(this.view.lighting, { map: this.background, side: THREE.DoubleSide });
     materials.push(plankMaterial, backMaterial);
     for (const part of FRAME_PARTS) {
       const [x0, y0, z0, x1, y1, z1] = part.bounds, g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0);
       if (!part.back) {
-        const uv = g.attributes.uv;
-        for (let f = 0; f < 6; f++) {
-          uv.setXY(f * 4, planks.u0, planks.v1);
-          uv.setXY(f * 4 + 1, planks.u1, planks.v1);
-          uv.setXY(f * 4 + 2, planks.u0, planks.v0);
-          uv.setXY(f * 4 + 3, planks.u1, planks.v0);
-        }
+        trackCubeUv(g, () => plankTile); // every face the birch planks tile, rebaked on a relayout
       }
       const mesh = new THREE.Mesh(g, part.back ? backMaterial : plankMaterial);
       mesh.position.set((x0 + x1) / 2 - 0.5, (y0 + y1) / 2 - 0.5, (z0 + z1) / 2 - 0.5);

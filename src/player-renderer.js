@@ -9,6 +9,7 @@ import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { entityMaterial } from "./light-material.js";
 import { ITEMS, ARMOR_MATERIALS } from "./survival.js";
 import { blockTile, tileRect } from "./block-textures.js";
+import { trackCubeUv, trackUv } from "./uv-rebake.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { mobPose, wrapDegrees, nearAngle } from "./entities.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
@@ -507,11 +508,7 @@ export class PlayerRenderer {
       mesh = new THREE.Mesh(modelBox(0, 0, -4, -8, -4, 8, 8, 8, 0, false, 64, skullTextureHeight(type)), m);
       this.armorMaterials.push(m);
     } else {
-      const g = new THREE.BoxGeometry(1, 1, 1), uv = g.attributes.uv;
-      for (let face = 0; face < 6; face++) {
-        const r = tileRect(blockTile(stack.id, face));
-        uv.setXY(face * 4, r.u0, r.v1); uv.setXY(face * 4 + 1, r.u1, r.v1); uv.setXY(face * 4 + 2, r.u0, r.v0); uv.setXY(face * 4 + 3, r.u1, r.v0);
-      }
+      const g = trackCubeUv(new THREE.BoxGeometry(1, 1, 1), (face) => blockTile(stack.id, face));
       const m = this.material({ map: this.atlas });
       mesh = new THREE.Mesh(g, m);
       mesh.rotation.y = Math.PI / 2; // as the held block cube
@@ -563,14 +560,7 @@ export class PlayerRenderer {
       mesh = new THREE.Mesh((this.heldGeometry = blockItemGeometry(id)), this.heldMaterial);
       mesh.rotation.y = blockItemTurn(id);
     } else {
-      const g = (this.heldGeometry = new THREE.BoxGeometry(1, 1, 1)), uv = g.attributes.uv;
-      for (let face = 0; face < 6; face++) {
-        const r = tileRect(blockTile(id, face));
-        uv.setXY(face * 4, r.u0, r.v1);
-        uv.setXY(face * 4 + 1, r.u1, r.v1);
-        uv.setXY(face * 4 + 2, r.u0, r.v0);
-        uv.setXY(face * 4 + 3, r.u1, r.v0);
-      }
+      const g = (this.heldGeometry = trackCubeUv(new THREE.BoxGeometry(1, 1, 1), (face) => blockTile(id, face)));
       this.heldMaterial = this.material({ map: this.atlas });
       mesh = new THREE.Mesh(g, this.heldMaterial);
       mesh.rotation.y = Math.PI / 2;

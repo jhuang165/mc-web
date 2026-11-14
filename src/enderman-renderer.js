@@ -8,6 +8,7 @@ import { entityMaterial } from "./light-material.js";
 import { mhCos, mhSin } from "./lighting.js";
 import { fromOriginal } from "./block-registry.js";
 import { blockTile, tileRect } from "./block-textures.js";
+import { trackCubeUv, trackUv } from "./uv-rebake.js";
 
 const f = Math.fround;
 const clamp = (v) => (v > 0.4 ? 0.4 : v < -0.4 ? -0.4 : v);
@@ -81,11 +82,7 @@ function setHeld(r, renderer, e, material) {
   for (const child of st.held.children.splice(0)) child.geometry.dispose();
   const cell = e.carried ? fromOriginal(e.carried, e.carriedData || 0) : null;
   if (!cell) return;
-  const g = new THREE.BoxGeometry(1, 1, 1), uv = g.attributes.uv;
-  for (let face = 0; face < 6; face++) {
-    const t = tileRect(blockTile(cell.id, face, false, cell.meta || 0), 0);
-    uv.setXY(face * 4, t.u0, t.v1); uv.setXY(face * 4 + 1, t.u1, t.v1); uv.setXY(face * 4 + 2, t.u0, t.v0); uv.setXY(face * 4 + 3, t.u1, t.v0);
-  }
+  const g = trackCubeUv(new THREE.BoxGeometry(1, 1, 1), (face) => blockTile(cell.id, face, false, cell.meta || 0), 0);
   st.held.add(new THREE.Mesh(g, material));
 }
 

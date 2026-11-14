@@ -19,6 +19,7 @@ import { NATIVE_BLOCK_SPRITES, NATIVE_ATLAS_WIDTH, NATIVE_ATLAS_HEIGHT } from ".
 import { stitch } from "./stitcher.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned, unversioned } from "./media-version.js";
+import { tileByName, TILE_ORIGINS, TILE_SIZES, ATLAS_WIDTH, ATLAS_HEIGHT, spriteUv, onTerrainRelayout } from "./block-textures.js";
 
 const F = Math.fround, INSET = 0.009999999776482582;
 const KINDS = {
@@ -65,10 +66,48 @@ export const blockSpriteName = (url) => spriteName("blocks", url);
 // The uv of a sprite in the sheet as it is laid out now (the vanilla layout until a pack with other sprite sizes is seen).
 export function itemSpriteUv(name) { return sheetUv("items", name); }
 export function blockSpriteUv(name) { return sheetUv("blocks", name); }
-function sheetUv(kind, name) { const a = sheets[kind], l = a ? a.layout : sheetLayout(kind); return spriteUvOf(l.cells.get(name), l); }
+function sheetUv(kind, name) {
+  if (kind === "blocks" && terrainTile(name) >= 0) { const i = terrainTile(name), [x, y] = TILE_ORIGINS[i]; return spriteUv(x, y, TILE_SIZES[i], TILE_SIZES[i], ATLAS_WIDTH, ATLAS_HEIGHT); }
+  const a = sheets[kind], l = a ? a.layout : sheetLayout(kind); return spriteUvOf(l.cells.get(name), l);
+}
 // The same rectangle as a uv transform of three's flipped textures.
 export function itemSpriteTransform(name) { return transformOf(itemSpriteUv(name)); }
 export function blockSpriteTransform(name) { return transformOf(blockSpriteUv(name)); }
+
+// One blocks map (batch 66): natively the item renderer reads the same TextureMap of blocks (TextureMap.locationBlocksTexture) as the chunks. Once the scene binds its terrain atlas
+// (bindTerrainAtlas, scene.js), a block sprite takes its cell from that atlas as laid out by terrain-layout.js (block-textures.js tileRect / TILE_ORIGINS), HD sizes included, and its
+// texture is a sibling of the terrain DataTexture that shares its Source (one upload) and mirrors its filters and mip levels. The grey `terrain` atlas is the right one: tints are
+// the item pass colour (item-passes.js). Without a bound atlas (tests, no DOM) the sheet below stitches its own blocks cells as before.
+let terrainAtlas = null, terrainSubscribed = false;
+const terrainEntries = new Map();
+const terrainTile = (name) => (terrainAtlas ? tileByName(name) : -1);
+const MIRRORED = ["mipmaps", "minFilter", "magFilter", "anisotropy", "generateMipmaps", "flipY", "format", "type", "unpackAlignment", "colorSpace"];
+function terrainSt(name) { const i = tileByName(name), [x, y] = TILE_ORIGINS[i], S = TILE_SIZES[i], u = spriteUv(x, y, S, S, ATLAS_WIDTH, ATLAS_HEIGHT); return transformOf(u); }
+function terrainSibling(name) {
+  const tex = new THREE.DataTexture(null, 1, 1);
+  tex.source = terrainAtlas.terrain.source;
+  for (const k of MIRRORED) Object.defineProperty(tex, k, { get: () => terrainAtlas.terrain[k], set() {}, configurable: true });
+  tex.userData.st = new THREE.Vector4(...terrainSt(name));
+  tex.userData.itemSprite = name;
+  tex.userData.terrainSibling = true;
+  tex.needsUpdate = true;
+  terrainEntries.set(name, tex);
+  return tex;
+}
+// Called by the scene with its createBlockAtlas() result. Rebinding (a second scene) moves the siblings to the new atlas.
+export function bindTerrainAtlas(atlas) {
+  const previous = terrainAtlas;
+  terrainAtlas = atlas;
+  if (!terrainSubscribed) {
+    terrainSubscribed = true;
+    onTerrainRelayout(() => { for (const [name, tex] of terrainEntries) tex.userData.st.set(...terrainSt(name)); });
+  }
+  if (previous && previous !== atlas) for (const tex of terrainEntries.values()) { tex.source = atlas.terrain.source; tex.needsUpdate = true; }
+  // The terrain texture is disposed when the atlas is resized or its mip chain changes (immutable GL storage): the siblings share its GL texture, so they go with it.
+  atlas.terrain.addEventListener("dispose", () => { for (const tex of terrainEntries.values()) tex.dispose(); });
+}
+export const terrainSiblingCount = () => terrainEntries.size;
+export const isTerrainSprite = (tex) => !!tex?.userData?.terrainSibling;
 
 const sheets = { items: null, blocks: null };
 function getSheet(kind) {
@@ -118,6 +157,7 @@ function request(a, e, gen) {
   return new Promise((resolve) => { const done = () => resolve(); img.addEventListener("load", done); img.addEventListener("error", done); });
 }
 function sheetTexture(kind, name) {
+  if (kind === "blocks" && terrainTile(name) >= 0) return terrainEntries.get(name) ?? terrainSibling(name);
   if (typeof globalThis.document?.createElement !== "function") return null; // tests may stub a partial document
   const a = getSheet(kind);
   let e = a.entries.get(name);
