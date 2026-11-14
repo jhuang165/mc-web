@@ -21,6 +21,7 @@ export function tickRocket(r, world, rand, { remote = false, server = true } = {
   const out = { launch: false, spark: null, explode: null };
   r.px = r.x; r.py = r.y; r.pz = r.z;
   r.prevPitch = r.pitch; r.prevYaw = r.yaw; // Entity.onEntityUpdate
+  if (r.y < -64) r.dead = true; // ... and its void test (posY < -64: kill(), tested before the move): the rest of the update still runs, no status 17 (executed, firework-collide-reference.json)
   r.mx *= 1.15; r.mz *= 1.15; r.my += 0.04;
   moveParticleEntity(world, r, r.mx, r.my, r.mz);
   const speed = f(Math.sqrt(r.mx * r.mx + r.mz * r.mz));

@@ -40,7 +40,7 @@ export function replayEntityList(c, onBoom = null, without = null) {
   const items = new ItemEntities(rand), arrows = new Arrows(), xpOrbs = new ExperienceOrbs([], rand), primed = [], booms = [], extras = [];
   const minecarts = new Minecarts(), boats = new Boats(), hanging = new Hanging({ random: () => new JavaRandom(1) });
   ew.potions = new WitchPotions(ew, rand);
-  if (c.specs.some((q) => q[0] === "pthrow" && q[7] === 4)) ew.potions.projectiles.rng = () => new GaussianRandom(2); // EntityExpBottle.onImpact draws from World.rand, which is Random(2) in the probe
+  if (c.specs.some((q) => (q[0] === "pthrow" || q[0] === "mthrow") && q[7] === 4)) ew.potions.projectiles.rng = () => new GaussianRandom(2); // EntityExpBottle.onImpact draws from World.rand, which is Random(2) in the probe
   const projectiles = new Projectiles(rand); // the player's own thrown balls: only the pthrow scenarios put any in
   projectiles.clientParticles = true; projectiles.tickEffects = () => {};
   const hasOrb = c.specs.some((q) => q[0] === "orb"), survival = new Survival({}, "survival"), hasMp = c.specs.some((q) => q[0] === "pthrow" && q[8] === 2), player = { x: hasOrb ? 0.5 : hasMp ? 0 : 1e5, y: 0, z: hasMp ? 0 : 0.5, health: 20, alive: true, width: 0.6, height: 1.8, isPlayer: true };
@@ -110,6 +110,13 @@ export function replayEntityList(c, onBoom = null, without = null) {
       const list = a >= 3 ? ew.potions.projectiles.balls : projectiles.balls;
       m.add = () => { list.push(ball); ew.joined(ball, a >= 3 ? "potion" : "thrown"); }; m.entity = ball;
     }
+    else if (kind === "mthrow") { // batch 68 (projectiles3): a ball a living mob threw (a = type as pthrow's: snowball 0, egg 1, pearl 2, potion 3, exp bottle 4); no player, so no creative thrower and no teleport
+      const flat = Math.hypot(vx, vz), yaw = Math.fround((Math.atan2(vx, vz) * 180) / Math.PI), pitch = Math.fround((Math.atan2(vy, flat) * 180) / Math.PI), rng = new GaussianRandom(7);
+      const witch = { x: 0, y: 0, z: 0 }; // the thrower as WitchPotions.throwAt records it: the mob itself is the owner
+      const ball = { kind: ["snowball", "egg", "enderPearl", "potion", "expBottle"][a], damage: 32732, owner: a === 3 ? witch : null, x, y, z, px: x, py: y, pz: z, mx: vx, my: vy, mz: vz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: rng, random: rng, dead: false };
+      const list = a === 0 ? ew.golemBalls.projectiles.balls : a >= 3 ? ew.potions.projectiles.balls : projectiles.balls; // a snow golem's snowball is the port's own mob throw; eggs and pearls have no mob thrower, so they fly as the player's list does
+      m.add = () => { list.push(ball); ew.joined(ball, a === 0 ? "golemBall" : a >= 3 ? "potion" : "thrown"); }; m.entity = ball;
+    }
     else if (kind === "skull") { const sk = ew.skulls.launch({ owner: null, x, y, z, exact: [vx, vy, vz] }); ew.skulls.list.pop(); m.add = () => { ew.skulls.list.push(sk); ew.joined(sk, "skull"); }; m.entity = sk; }
     else if (kind === "dcow") { // batch 48: a cow with `a` health and recentlyHit `b`, falling from where it is listed (dies on landing)
       const cow = ew.create("cow", x, y, z); cow.growingAge = 0; cow.onGround = false; cow.health = a; cow.recentlyHit = b; setEntityRandom(cow, new JavaRandom(7));
@@ -167,7 +174,7 @@ function view(m, primed, detail = false, player = null, survival = null) {
   if (kind === "painting") return [e.x, e.y, e.z, 0, 0, 0, e.dead ? 1 : 0];
   if (kind === "frame") return [e.x, e.y, e.z, 0, 0, 0, e.dead ? 1 : 0, e.item ? e.item.count : 0];
   if (kind === "pthrow" && m.at.b === 2) return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, player.x, player.y, player.z, 20 - survival.health]; // a pearl of a real EntityPlayerMP thrower: where it stands afterwards and the damage it took
-  if (kind === "potion" || kind === "snowball" || kind === "pthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
+  if (kind === "potion" || kind === "snowball" || kind === "pthrow" || kind === "mthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
   if (kind === "skull") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.blue ? 1 : 0];
   if (kind === "cow" || kind === "dcow") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead || e.death >= 20 ? 1 : 0, e.health]; // setDead at deathTime 20 (the port lets the mob leave in reap)
   return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, e.inGround ? 1 : 0, e.pickup];
