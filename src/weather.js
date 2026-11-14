@@ -22,6 +22,11 @@ const f = Math.fround;
 // plus its chunk test), saplings and mushrooms grow trees and spread over larger areas, the rest (fire, lava, farmland water at 4,
 // crops, cactus, cane, ice, snow) stay within 4.
 export const randomTickReach = (b) => (b === 5 || b === 71 ? 5 : b === 48 || b === 75 || b === 76 ? 8 : 4);
+// A native chunk that overlaps up to four local chunks (b68): its section needs random ticks when any overlapped local chunk's section does (cells outside the window are unknown and not counted).
+const straddleTicks = (world, cx, cz, dx, dz, s) => {
+  for (let i = 0; i <= (dx ? 1 : 0); i++) for (let j = 0; j <= (dz ? 1 : 0); j++) if (world.sectionTickCount(cx + i, cz + j, s) > 0) return true;
+  return false;
+};
 
 // Random.nextLong: (next(32) << 32) + next(32), as a signed 64-bit BigInt.
 export function nextLong(random) {
@@ -270,14 +275,16 @@ export class Weather {
   // one random column, freeze naturally-freezable water under the precipitation height, and
   // lay a snow layer there while it is raining), then three random block ticks (updateLCG
   // picks x, z, y) in every 16-high section that has a randomly ticking block.
-  tickChunk(world, cx, cz) {
+  // b68 chunkscan2: (dx, dz) is a native chunk's offset into local chunk (cx, cz) when the world's grid is not the native one (the legacy End window, server-chunks.js); 0 everywhere else.
+  tickChunk(world, cx, cz, dx = 0, dz = 0) {
+    const fx = cx + dx / 16, fz = cz + dz / 16; // exact: dx / 16 is a binary fraction, so fx * 16 = cx * 16 + dx
     // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop for every chunk of activeChunkSet, ring chunks included
     // (World.func_147467_a is server-side: it draws while ambientTickCountdown is 0 and plays only for a player within 8 blocks, so a
     // ring chunk takes its draws and never a sound; dimension-ticks-reference.json). main.js installs it.
-    const mood = this.mood?.chunk(world, cx, cz);
+    const mood = this.mood?.chunk(world, fx, fz);
     if (mood) this.events.push(mood);
-    this.rollLightningChunk(world, cx, cz);
-    const bx = cx * 16, bz = cz * 16, light = lightOf(world);
+    this.rollLightningChunk(world, fx, fz);
+    const bx = cx * 16 + dx, bz = cz * 16 + dz, light = lightOf(world);
     if (this.random.nextInt(16) === 0) {
       this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;
       const j = this.lcg >> 2,
@@ -293,7 +300,7 @@ export class Weather {
       }
     }
     for (let s = 0; s < (world.height ?? HEIGHT) / 16; s++) {
-      if (world.sectionTickCount && world.sectionTickCount(cx, cz, s) <= 0) continue;
+      if (world.sectionTickCount && (dx || dz ? !straddleTicks(world, cx, cz, dx, dz, s) : world.sectionTickCount(cx, cz, s) <= 0)) continue;
       for (let n = 0; n < 3; n++) {
         this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;
         const j = this.lcg >> 2,
@@ -311,7 +318,7 @@ export class Weather {
     }
   }
   tickChunks(world, chunks) {
-    for (const [cx, cz] of chunks) this.tickChunk(world, cx, cz);
+    for (const [cx, cz, dx, dz] of chunks) this.tickChunk(world, cx, cz, dx, dz);
   }
   // The chunks WorldServer ticks around a player: its view distance (10 by
   // default) clipped to the world.

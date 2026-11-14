@@ -28,5 +28,11 @@ public class ActiveChunksProbe {
     // two players, then one: the table stays at the larger size
     System.out.println(run("shrink", 10, new int[][][]{ {{0, 0}, {40, 40}}, {{3, 2}} }));
     System.out.println(run("small", 3, new int[][][]{ {{2, 2}}, {{2, 2}, {3, 3}}, {{5, 1}} }));
+    // b68 chunkscan2: many overlapping players (bins of 9 or more nodes treeify in a table of 64+ buckets, so the order inside them is the tree's), and the retained table across ticks
+    System.out.println(run("cluster", 10, new int[][][]{ {{1, 1}, {2, 3}, {4, 2}, {3, 5}}, {{1, 1}, {2, 3}}, {{-6, 4}, {-5, 3}, {-4, 6}, {0, 0}, {1, 2}} }));
+    System.out.println(run("crowd", 10, new int[][][]{ {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {2, 2}, {3, 1}, {5, 5}, {6, 4}, {-2, 3}, {-3, -3}}, {{0, 0}}, {{7, 7}, {8, 8}, {9, 6}} }));
+    System.out.println(run("negcluster", 10, new int[][][]{ {{-1, -1}, {-2, -3}, {-5, -2}, {-4, -6}, {-3, -1}} }));
+    System.out.println(run("radius7", 7, new int[][][]{ {{2, 2}, {5, 4}, {8, 3}, {3, 9}} }));
+    System.out.println(run("long", 10, new int[][][]{ {{0, 0}, {3, 4}}, {{0, 0}, {3, 4}, {6, 1}}, {{10, 10}, {11, 12}, {13, 9}, {9, 14}}, {{2, 2}} }));
   }
 }
