@@ -2,6 +2,40 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 70
+
+Batch 70 covered these areas:
+- **Single-player fixes.** Chickens breed on any seeds (bytecode); ender chests draw portal particles; Smite and Bane apply to mob-versus-mob hits and Bane's slowness is applied. Resistance was already ported.
+- **Entity clicks on a server.** Clicks on vehicles and mobs measure from posY, so a sleeper clicks from the bed; piston-pushed boats stop at hanging entities; arrows stuck in the End and `mapData` over a real socket are tested. Frame ids on the map wire were found wrong (native sends none).
+- **Single-player Tab and user lists.** Tab in single player follows the native remote flow with the integrated command set (60 executed records); UserList names come out in HashMap order; `/whitelist add/remove/reload` use `whitelist.json`.
+- **Cart inventories.** Block hoppers and droppers push into and pull from chest and hopper carts; the client interpolates carts over 5 ticks.
+- **server.properties, second pass.** Vehicle range and spawner puffs follow the view distance; allow-nether=false stops Nether and End ticking; game mode is saved per player; spawn protection uses the native spawn; `/setidletimeout` is written back.
+- **Projectile replays.** Arrow pickup (300 executed records, one Creative fix) and the fireball punch pick (2400 scenes) are executed.
+- **Particles.** The snow golem build burst is drawn; cloud and footstep particles are ported but unused in 1.7.10. Witch sounds were found wrong (no assets in 1.7.10).
+- **Player rendering.** Cape chase and deadmau5 ears are drawn; no cape texture source yet.
+- **Research docs.** About 40 more docs swept; the dragon egg claim was wrong.
+
+Still open from batch 70:
+- **Multiplayer.**
+  - server.properties: items and XP orbs have no tracking-range filter (no server object tracker); chunks are not limited by view distance and the client ignores the welcome `viewDistance`; `generate-structures` changes nothing. Key names and defaults are recalled, not executed.
+  - PvP reach in `server-pvp.js` still measures from `position.y`, not a sleeper's posY; vehicle posY is taken as the box centre.
+  - User lists: `/banlist` and `/whitelist list` print insertion order; `whitelist.json` is not read at start-up and is not written atomically.
+  - Carts: away-world and ring hoppers do not find carts; the server sends cart states every changed tick, not at the native cadence.
+  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
+  - Villages: the default server world (generation 9) has no generated villages.
+  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: single-player Tab, cart smoothness, clicking from a bed edge, a boat jamming against a painting, a short view distance on distant carts. Earlier unseen items from batches 67 to 69 still stand.
+- **Single player.**
+  - Player footstep cell uses `floor(y - 0.05)`, native `floor(y - 0.2 - yOffset)` with the fence rule; mobs on fence tops are silent.
+  - Weakness does not reduce mob damage; the slime split stops at 40 entities (native has no cap); no spawners for squid, bat, magma cube or villager.
+  - No shadows for slimes, magma cubes or falling blocks; skulls in a mob's helmet slot and SkullOwner skins are not drawn; no vignette or stem darkness pop; no `jeb_` rainbow sheep.
+  - XP orbs re-pick the nearest player every tick; glowstone Fortune is unresolved; the brewing stand selection box is 0.875 high (native may keep the 0.125 slab; needs a probe).
+  - No cape texture source, `hideCape` flag or cape on the wire; the `witchMagic` particle is absent.
+- **Projectiles.** Candidate order for several fireballs at equal distance is not reproduced; the client arrow trigger box is not executed.
+- **Research docs.** Docs only skimmed (listed in the researchdocs4 note) are not cleared.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 69
 
 Batch 69 covered these areas:
@@ -15,21 +49,7 @@ Batch 69 covered these areas:
 - **Catalogues.** Server list and admin command rows; /netstat is the only dedicated command left Out of scope.
 - **Research docs.** About 85 more docs swept; no closed gap found wrong on a live path.
 
-Still open from batch 69:
-- **Multiplayer.**
-  - server.properties: `generate-structures` changes nothing; object, vehicle and item trackers and the spawner puff keep the 144 limit; allow-nether false only blocks portals (the Nether and End still tick); the client ignores the server's view distance; game mode is not saved per player; the spawn-protection centre is `world.spawn()` without `/setworldspawn`; `/setidletimeout` is not written back. Key names and defaults are recalled, not executed.
-  - Maps: frame ids are not on the wire; `mapData` is not exercised over a real socket; one client map store per page session.
-  - Tab completion: UserList name order is insertion order; single player's Tab still sorts and has no common-prefix step; `/whitelist reload` does nothing; /netstat answers "unavailable".
-  - Entity clicks on vehicles and mobs still measure reach from y + 1.62 for a sleeper; a piston-pushed boat is not blocked by hanging entities; arrows stuck in the End were not run end to end through `/summon`.
-  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
-  - Villages: the default server world (generation 9) has no generated villages.
-  - End: thin island tails past 128 blocks are cut on some seeds (a 336 window would cover 48 of 48 seeds; left for the user's decision).
-  - Not seen in a browser: the favicon and MOTD in the server list, the build-height and flight kick texts, a short view distance on a client, held and framed maps over a connection, the Tab flow in the chat box, a frame popping off a piston, a sleeper digging from bed. Earlier unseen items from batches 67 and 68 still stand.
-- **Single player.** Chickens breed only on wheat seeds (1.7.10 is believed to take any ItemSeeds: pumpkin, melon, nether wart; not yet bytecode-checked); `enderDisplayParticles` is imported but never called; the Resistance potion step is unported; no cape or deadmau5 ears; Smite and Bane do not apply to mob-versus-mob hits; block hoppers do not pull from cart inventories; no client cart interpolation; the snowshovel, cloud and footstep particles are absent; the witch has no sounds (no assets).
-- **Projectiles.** Arrow pickup delay is bytecode-derived only; the server's fireball punch pick is not executed; `blaze-ghast.md` and `bows.md` still carry stale gap lines.
-- **Research docs.** Docs only skimmed by the batch 69 sweep (listed in the researchdocs2/3 notes) are not cleared; `dragon.md`'s egg claim is probably wrong but unchecked.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 69: carried into the batch 70 list above, except the items batch 70 closed or found wrong.
 
 ## Done in batch 68
 
