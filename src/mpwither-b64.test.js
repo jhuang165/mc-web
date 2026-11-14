@@ -103,9 +103,14 @@ test("head targets: both players in range become candidates, and a skull aimed p
   assert.ok(heads.has(views[0]) && heads.has(views[1]), `a side head took each player (${heads.size})`);
   // the sweep: a skull from far behind, aimed along x = 70.5 at b, with a standing nearer to its start
   const sm = s.mobs.mobs; sm.skulls.list.length = 0;
+  sm.entities.splice(sm.entities.indexOf(w), 1); // b64 lead: the wither's own heads and skulls would also aim at a (random), so only the launched skull flies
+  for (let x = 14; x <= 110; x++) for (let z = 20; z <= 110; z++) for (let y = 4; y <= 40; y++) s.world.put(x, y, z, y <= 9 ? 3 : 0, 0, false); // b64 lead: the blasts dug craters, a player standing in one falls
+  for (const [p, x] of [[a, 60.5], [b, 70.5]]) { p.position.copy({ x, y: 10, z: 70.5 }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); } // b64 lead: earlier skull blasts knock the players about
+  for (let i = 0; i < 25; i++) { s.input("a", input()); s.input("b", input()); s.tick(); clear(a, b); } // and leave a hurt window open; let it close
+  a.survival.effects.clear(); b.survival.effects.clear(); // b64 lead: the wither effect from the skulls above would keep ticking damage on a
   w.health = 300; a.survival.health = b.survival.health = 20;
   const hpA = a.survival.health, hpB = b.survival.health;
-  sm.skulls.launch({ owner: null, x: 62.5, y: 11.5, z: 90, dx: 8, dy: 0, dz: -20 });
+  sm.skulls.launch({ owner: null, x: 62.5, y: 11.5, z: 90, dx: 8, dy: 0, dz: -20, exact: [8, 0, -20] }); // b64 lead: no aim spread (the shooterless constructor draws none natively either), so the path is fixed
   for (let i = 0; i < 40; i++) { s.tick(); clear(a, b); }
   assert.ok(b.survival.health < hpB, `the skull flew past a and hit b (${hpB} -> ${b.survival.health})`);
   assert.equal(a.survival.health, hpA, "a was not on its path");

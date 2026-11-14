@@ -131,7 +131,7 @@ test('with mobs on, the End spawns enderman and only enderman, and they are real
   s.dimensions.arrive(a, 1);
   s.input('a', input());
   const seen = new Set();
-  for (let i = 0; i < 600; i++) { s.tick(); for (const e of s.dimensions.end.n.mobs.mobs.entities) seen.add(e.type); }
+  for (let i = 0; i < 600; i++) { s.tick(); for (const e of s.dimensions.end.n.mobs.mobs.entities) if (e.type !== 'ender_dragon' && e.type !== 'ender_crystal') seen.add(e.type); } // b64 lead: mpdragon's dragon and crystals are placed by population, not spawned
   assert.ok(s.dimensions.end.n.mobs.mobs.entities.length > 0, 'something spawned');
   assert.deepEqual([...seen], ['enderman']);
 });

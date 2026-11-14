@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 64 (2026-11-13, ten Sonnet tracks in `../wt64-<name>` on `batch64-<name>`, cut from f76b1db60, merged --no-ff on `batch64-lead`; shared track rules `../artifacts/b64-lead/track-rules.md`; lead note `b64-lead-track.md`; no browser checks by request):
+- 0.93.0, by track:
+  - mpdragon: `multiplayer/server-dragon.js`: the dragon and the spike crystals in the server End, every End player a target, part hits, the death sequence with orbs, exit portal and egg, `dragon: alive|dead` saved, the credits (`dragonCredits`, S2B 4) and respawn; the stand-in exit portal is removed.
+  - mpend2: End coordinates for F3 and native lookups (`originX/originZ`), the End's projectile lane saved (`dimState` in `server-dispense.js`), `multiplayer/server-eyes.js` (the flying eye of ender on the server), the enderman spawn test with mobs on. The window itself is still 128x128.
+  - mpwither2: the wither in any dimension, every player as a head and skull target, skulls saved, 1012/1014 as S28 within 64 blocks; the effect icon was already sent.
+  - mpscoreboard: `multiplayer/server-scoreboard.js`, `client-scoreboard.js`, `remote-labels.js`: `/scoreboard`, the three display slots (S3B-S3E), stat criteria, teams with friendly fire in PvP (`allows`).
+  - mpstats2: `multiplayer/server-fishing.js` / `client-fishing.js` and `fishing-loot.js` (server fishing with 1.7.10 loot), `server-use.js` (seeds, spawn eggs and the `use` stat), the 100-tick attacker credit, `--command-blocks` / `--legacy-owner`; mob damageDealt is `round(f * 10)` (bytecode-read).
+  - mpclientanim: `client-use-predict.js`: the connected client predicts eating, drinking and sword block; overkill at 18 in ServerPvp.
+  - atlas3: `stitcher.js` (the 1.7.10 Stitcher), HD item and block-item sheets, `liveSpriteTransform`; the terrain atlas is not re-stitched yet.
+  - entityprobes: executed `EntityFlightProbe` (`entity-flight-reference.json`); `dropPlayer` uses the sine table and float scatter. The egg, pearl, piston, cart-cow and in-flight gaps were already closed.
+  - trackertransient: `tracker-transient.js` (transient HashSet entries for entities born and gone in a tick), rain counts as wet for copies.
+  - babyrender: executed `BabyModelProbe` (baby pigman head 1.5, kitten head offset, held blocks on mobs) and `FirstPersonProbe` (no swing translate in use, the rod's 180 degree turn).
+- Lead fixes in the merge commits: the dragon's killing blow runs the server's onDeath chain, so the attacker gets mobKills, killEnemy and totalKillCount (`b64-lead.test.js`); skulls are saved through `dimState`, so the End's are kept too; conflicts kept both sides.
+- Verification: see `b64-lead-track.md`. Pushed to github main by the lead.
+
 Batch 63 (2026-11-13, ten Sonnet tracks in `../wt63-<name>` on `batch63-<name>`, cut from 3144b37f2, merged --no-ff on `batch63-lead`; shared track rules `../artifacts/b63-lead/track-rules.md`; lead note `b63-lead-track.md`; no browser checks by request):
 - 0.92.0, by track:
   - mpnether3: Nether orbs, `multiplayer/server-spawners.js` (MobSpawnerBaseLogic on the server, both dimensions), `server-nether-vehicles.js` (carts, boats, pigs, leads and animal clicks per dimension); one server difficulty for every world (bytecode-read), so `/difficulty` now reaches mobs.
