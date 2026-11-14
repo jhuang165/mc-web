@@ -24,7 +24,7 @@ export class RemoteTabCompletion {
     if (!this.completing) {
       this.list = []; this.index = 0;
       const before = text.slice(0, cursor);
-      if (before.length >= 1) { request(before); this.waiting = true; }
+      if (before.length >= 1) { this.waiting = true; request(before); } // waiting first: the integrated server's reply arrives inside request()
       return null;
     }
     const start = wordStart(text, cursor);

@@ -115,6 +115,7 @@ import { showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { clientWake, clientSleepTick, sleepText } from "./multiplayer/client-sleep.js"; // b66 mpsleep
 import { deathComponent, chatTextComponent, senderComponent } from "./team-names.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
+import { spTabComplete } from "./sp-tabcomplete.js"; // b70 sptab70
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
 import { achievementComponent } from "./chat-multi.js";
@@ -2072,7 +2073,7 @@ const chatUi = new ChatUi(document, {
   },
   openLink: (url) => window.open(url, "_blank", "noopener"),
   complete: (before) => commands.complete(before),
-  remote: () => !!multiplayer, request: (text) => multiplayer?.send({ type: 'tabReq', text }), // b69 mptabcomplete: C14 while connected, the reply (S3A) goes to chatUi.tabReply
+  remote: () => true, request: (text) => { if (multiplayer) multiplayer.send({ type: 'tabReq', text }); else chatUi.tabReply(spTabComplete(text, { name: PLAYER_NAME, cheats: commandHost.cheats, complete: (t) => commands.complete(t, true) })); }, // b69 mptabcomplete: C14 while connected, the reply (S3A) goes to chatUi.tabReply; b70 sptab70: single player answers at once like the integrated server
   // GuiScreen.func_146283_a: show_achievement and show_item hovers.
   hoverInfo: { stat: (id) => statHover(id, { itemName: (n) => commandHost.statItemName(n) }), item: itemHoverLines },
   close: () => closeChat(),

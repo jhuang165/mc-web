@@ -40,9 +40,17 @@ const ctor = (await javap("bl")).split("\n  public void a(")[0];
 const registered = [];
 for (const line of ctor.split("\n")) { const m = /new\s+#\d+\s+\/\/ class (\w+)$/.exec(line.trim().replace(/^\d+:\s*/, "")); if (m && m[1] !== "bg") registered.push(m[1]); }
 assert.equal(registered.length, 47);
-const { stdout } = await exec("java", ["-cp", cp, "TabProbe", registered.join(",")], { maxBuffer: 1 << 27 });
-const records = stdout.split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+const integrated = [...registered.slice(0, 31), "bg"]; // ServerCommandManager: the 31 common commands, then (not dedicated) CommandPublishLocalServer (bg); b70 sptab70
+await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/UserListProbe.java")]);
+const userLists = (await exec("java", ["-cp", cp, "UserListProbe", path.join(out, "lists")], { maxBuffer: 1 << 27 })).stdout.split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l)); // b70 sptab70: UserList name order
+assert.equal(userLists.length, 20);
+const { stdout } = await exec("java", ["-cp", cp, "TabProbe", registered.join(","), integrated.join(",")], { maxBuffer: 1 << 27 });
+const all = stdout.split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+const records = all.filter((r) => !r.profile), integratedRecords = all.filter((r) => r.profile === "integrated").map(({ profile, ...r }) => r);
 assert.equal(records.length, 5 * 18);
+assert.equal(integratedRecords.length, 2 * 30);
+// the registration order: the common block ends where the isDedicated() test is (35 lookup keys for the integrated server)
+assert.ok(ctor.indexOf("MinecraftServer.X") > 0);
 // bytecode facts: the arguments branch of z.b has no canCommandSenderUseCommand call, and the names branch has one.
 const handler = await javap("z"), body = handler.split("public java.util.List b(ac, java.lang.String);")[1].split("\n\n")[0];
 const permissionCalls = [...body.matchAll(/aa\.a:\(Lac;\)Z/g)].map((m) => body.slice(0, m.index).split("\n").length);
@@ -51,6 +59,8 @@ const reference = {
   target: "Minecraft Java 1.7.10", clientSha1: "e80d9b3bf5085002218d4be59e668bac718abbc6", registered,
   method: "Executed: CommandHandler.getPossibleCommands (z.b) on a handler holding the 47 command classes the dedicated server registers (ServerCommandManager's constructor order, /publish excluded), with a proxy sender whose permission check is level >= required. Bytecode-read: the arguments branch of z.b has no permission call (one aa.a(ac) call, in the names branch).",
   argumentsBranchPermissionCalls: 0, records,
+  userLists: { method: "Executed (b70 sptab70): the unchanged UserList subclasses (UserListBans op, UserListOps oj, UserListWhitelist or, IP BanList nx) filled through a(ol) with 40 entries (names Steve/Alex/Notch + index, offline UUIDs) and emptied through c(Object) down to 6; each record is the array a() returns (names, or the address keys of the IP list) at 5, 13, 26 and 40 puts and after the removals.", records: userLists },
+  integrated: { registered: integrated, method: "Executed (b70 sptab70): the same getPossibleCommands on a handler holding the 31 common classes plus /publish (bg) in ServerCommandManager's registration order (35 lookup keys with the aliases ?, w, msg), with a proxy sender that follows EntityPlayerMP.canCommandSenderUseCommand (mw.a(int, String), bytecode-read): seed, tell, help and me always, every other command only with cheats (op level 4).", records: integratedRecords },
 };
 await writeFile(path.join(root, "../public/research/tabcomplete-reference.json"), JSON.stringify(reference) + "\n");
 console.log(`Tab-complete records: ${records.length}`);

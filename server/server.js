@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'; // b70 sptab70: whitelist.json
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -155,6 +156,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   const ips = new Map();
   const closeReason = (text) => { let t = String(text); while (Buffer.byteLength(t) > 123) t = t.slice(0, -1); return t; }; // a WebSocket close reason holds 123 bytes
   simulation.admin.directory = (name) => { const a = accounts.byName(name); return a ? { uuid: a.id, name: a.name } : null; };
+  // b70 sptab70: /whitelist reload re-reads whitelist.json beside the world file (the file server.properties lives next to); add and remove write it
+  const whitelistPath = path.join(path.dirname(dataFile), 'whitelist.json');
+  simulation.admin.whitelistFile = { read: () => (existsSync(whitelistPath) ? JSON.parse(readFileSync(whitelistPath, 'utf8')) : null), write: (rows) => writeFileSync(whitelistPath, JSON.stringify(rows, null, 2) + '\n') };
   simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save(), stop: () => { void close().then(() => onStop?.()); } };
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
   simulation.rules.opSource = { any: () => social.ops.size > 0 || simulation.admin.ops.size > 0, is: name => social.isOp(name) }; // b69 serverprops: spawn-protection counts MC_WEB_OPS and the saved ops
