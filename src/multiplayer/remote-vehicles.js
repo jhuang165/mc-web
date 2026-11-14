@@ -55,7 +55,9 @@ export class RemoteVehicles {
         this.copies.set(s.v, c);
       }
       c.target = s;
-      if (!c.v.boat) c.pending = s; // b70: a cart takes it through cartSetPositionAndRotation2 on the tracker's cadence (tick)
+      // b70: a cart takes the state through cartSetPositionAndRotation2 on the tracker's cadence (tick). b71 mpreach71: a server that sends `cartCadence` already released it at the
+      // tracker cadence (take it at once), and `cartMeta` states carry no new position (only the data fields below)
+      if (!c.v.boat && !(message.cartCadence && s.cartMeta)) { c.pending = s; if (message.cartCadence) c.since = CART_SEND_INTERVAL; }
       const v = c.v;
       if (v.boat) { v.timeSinceHit = s.th ?? 0; v.damage = s.dm ?? 0; v.forwardDir = s.fd ?? 1; } else {
         if (v.type === 6 && v.command && typeof s.cmd === 'string') v.command.command = s.cmd; // b63: watcher 23, what the command cart's GUI shows

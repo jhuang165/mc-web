@@ -26,6 +26,7 @@ import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
+import { CartTracker } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 
 const f = Math.fround;
@@ -143,9 +144,9 @@ export class ServerVehicles {
     if (/^[hk]/.test(key)) return this.hanging.act(p, key, hit); // b68 mppaintings: a painting, item frame or leash knot
     const host = this.host, v = this.find(key);
     if (!v || p.survival.health <= 0 || p.mount?.key === key) return false; // a rider cannot hit or use the vehicle it sits in
-    // b70: getDistanceSqToEntity from posY; a boat's and cart's posY is the box centre (yOffset = height / 2), eye height 0 (Entity default)
-    const b = v.bb;
-    if (!useEntityInReach(host.world, p, { x: (b[0] + b[3]) / 2, y: (b[1] + b[4]) / 2, z: (b[2] + b[5]) / 2, eye: 0 })) return false;
+    // b70: getDistanceSqToEntity from posY, eye height 0 (Entity default). b71 mpreach71: the native posY field (v.posY = minY + yOffset - ySize; yOffset = height / 2 for EntityBoat and
+    // EntityMinecart (xi, xl set L = N / 2), ySize stays 0: stepHeight 0 and sa.d only does ySize *= 0.4), not a recomputed box centre
+    if (!useEntityInReach(host.world, p, { x: v.x, y: v.posY, z: v.z, eye: 0 })) return false;
     const system = this.systemOf(v);
     if (hit) { // Minecraft.clickMouse swings, then EntityMinecart / EntityBoat.attackEntityFrom with the held weapon's damage
       p.swing = 6;
@@ -261,18 +262,27 @@ export class ServerVehicles {
   track() {
     const range = Math.min(RANGE, this.host.rules?.trackerLimit ?? RANGE); // b70 serverprops2: EntityTracker's v*16-16 clamp of the 80 range
     const all = this.all.filter(v => !v.dead), states = new Map(all.map(v => [v, vehicleState(v)]));
+    // b71 mpreach71: a cart's position fields are the ones its EntityTrackerEntry last released (every 3 ticks, 4/32 block or 4/256 turn thresholds); other fields go at once
+    const cartTrack = (this.cartTrack ??= new CartTracker());
+    cartTrack.prune(new Set(all));
+    for (const v of all) if (!v.boat) states.set(v, { ...states.get(v), ...cartTrack.tick(v, states.get(v)) });
     for (const [id, view] of this.views) {
       const p = this.host.players.get(id);
       if (!p) { view.known.clear(); continue; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
-      const set = [], del = [], seen = new Set();
+      const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map());
       for (const v of all) {
         if (Math.abs(v.x - p.position.x) > range || Math.abs(v.z - p.position.z) > range) continue;
         const key = keyOf(v), json = JSON.stringify(states.get(v));
         seen.add(key);
-        if (view.known.get(key) !== json) { view.known.set(key, json); set.push(states.get(v)); }
+        if (view.known.get(key) !== json) {
+          const st = states.get(v), pos = v.boat ? '' : `${st.x},${st.y},${st.z},${st.yaw},${st.pitch}`, had = view.known.has(key);
+          view.known.set(key, json);
+          set.push(!v.boat && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : st); // cartMeta: the position is the one the client holds, do not re-aim it
+          knownPos.set(key, pos);
+        }
       }
-      for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); del.push(key); }
-      if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}) };
+      for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); del.push(key); }
+      if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
     }
     for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel
     this.carts.reap(); this.boats.reap();
