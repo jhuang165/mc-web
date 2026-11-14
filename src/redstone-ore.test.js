@@ -238,7 +238,7 @@ test('the touches are wired into the live game (main.js, entities.js) and the ol
   assert.match(main, /mobs\.onEntityWalking = \(x, y, z\) => touchRedstoneOre\(x, y, z\)/);
   assert.match(main, /function touchRedstoneOre\(x, y, z\)[\s\S]{0,260}populationBlocks\?\.touch\(x, y, z, \{ rand: scene\.explosionParticles\.worldRandom/);
   assert.match(main, /\n    touchRedstoneOre,\n/);
-  assert.match(main, /touchRedstoneOre\(Math\.floor\(position\.x\), Math\.floor\(position\.y - 0\.2\), Math\.floor\(position\.z\)\)/);
+  assert.match(main, /const sx = stepB\.x, sy = stepB\.y, sz = stepB\.z;[\s\S]{0,900}if \(!stepB\.replaced\) touchRedstoneOre\(sx, sy, sz\)/); // b71: the step-block.js cell (floor(posY - 0.2 - yOffset)), no touch when a fence below replaced it
   assert.doesNotMatch(main, /populationBlocks\?\.touch\(Math\.floor\(position\.x\),Math\.floor\(position\.y-\.01\)/);
   assert.doesNotMatch(main, /if\(target\?\.block\)world\.populationBlocks\?\.touch/);
   assert.match(entities, /onWalk: \(x, y, z\) => this\.onEntityWalking\?\.\(x, y, z, e\)/);
