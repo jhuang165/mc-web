@@ -21,6 +21,7 @@ import { LiveRedstone } from '../redstone-live.js';
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
 import { ServerChunkSets } from './server-chunks.js';
+import { ServerRules, blockProtected, flightCheck, hardcoreTick } from './server-properties.js'; // b69 serverprops
 import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
@@ -99,6 +100,7 @@ export class DedicatedSimulation {
     this.commandBlocks = options.commandBlocks === true || saved.commandBlocks === true; // b63: enable-command-block (default false, as the dedicated server); command block carts run only when set
     this.fishing = new ServerFishing(this); // b64 mpstats2
     this.sleep = new ServerSleep(this); // b66 mpsleep
+    this.rules = options.rules instanceof ServerRules ? options.rules : new ServerRules(options.rules ?? {}); this.hardcore = saved.hardcore === true || (saved.hardcore === undefined && this.rules.hardcore); // b69 serverprops: server.properties values; hardcore is a creation-time value kept in the save
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
@@ -111,7 +113,7 @@ export class DedicatedSimulation {
     for (let i = 0; i < edits.length; i += 100000) this.world.restore(edits.slice(i, i + 100000));
     this.time = saved.time ?? 6000;
     // World state the operator commands change (src/servercommands-b59.js): game rules, difficulty, the mode a new player starts in.
-    this.gameRules = { ...(saved.gameRules ?? {}) }; if (Number.isInteger(saved.difficulty)) this.difficulty = saved.difficulty; this.newPlayerMode = saved.newPlayerMode ?? null; // a saved difficulty wins over the --difficulty option
+    this.gameRules = { ...(saved.gameRules ?? {}) }; if (Number.isInteger(saved.difficulty)) this.difficulty = saved.difficulty; this.newPlayerMode = saved.newPlayerMode ?? options.newPlayerMode ?? null; // a saved difficulty wins over the --difficulty option
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
     this.worldSpawn = null; if (Array.isArray(saved.worldSpawn) && saved.worldSpawn.length === 3) setWorldSpawn(this, saved.worldSpawn); // b68: a /setworldspawn saved with the world (the dimensions are not built yet: the Overworld is this.world)
@@ -123,7 +125,7 @@ export class DedicatedSimulation {
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
-    this.admin = new ServerAdmin(saved.admin, options); // b68 mpadmin: ops, bans, IP bans, whitelist (native file shapes), saved with the world
+    this.admin = new ServerAdmin(saved.admin, options); if (this.rules.playerIdleTimeout) this.admin.idleMinutes = this.rules.playerIdleTimeout; // b69 serverprops: player-idle-timeout is the starting value (a non-zero property wins over the saved one) // b68 mpadmin: ops, bans, IP bans, whitelist (native file shapes), saved with the world
     this.scoreboard = new ServerScoreboard(saved.scoreboard); // b64 mpscoreboard: the one shared scoreboard (objectives, scores, teams), saved with the world
     this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
     this.golems = new ServerGolems(this); // b66: a pumpkin on snow or iron builds a golem; a broken monster egg lets silverfish out (server-golems.js)
@@ -170,7 +172,7 @@ export class DedicatedSimulation {
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
-    this.chunkSets = new ServerChunkSets(this); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
+    this.chunkSets = new ServerChunkSets(this, this.rules.viewDistance); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
     this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
     this.farming.sharedRandomTicks = true; this.farming.random = this.farming.stemRandom = this.weather.random; // b68 chunkscan2: farmland, crops and stems tick with the other random blocks over the active chunks
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.farming.randomTick(x, y, z, b);
@@ -207,6 +209,7 @@ export class DedicatedSimulation {
     const saved = this.savedPlayers.get(resumeKey), start = saved?.position ?? this.world.spawn();
     const position = vector(start), survival = new Survival(saved?.player ?? {}, this.gameMode);
     if (!saved && this.newPlayerMode) survival.mode = this.newPlayerMode; // /defaultgamemode adventure
+    if (this.rules.forceGamemode) survival.mode = this.newPlayerMode ?? this.gameMode; // b69 serverprops: force-gamemode puts every joining player in the server's mode (oi.a(mw, mw, ahb))
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
@@ -284,7 +287,7 @@ export class DedicatedSimulation {
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
     if (!target) return null;
-    const gate = serverClick({ kind: 'dig', player: [p.position.x, p.position.y, p.position.z], pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    const gate = serverClick({ limit: this.rules.maxBuildHeight, kind: 'dig', player: [p.position.x, p.position.y, p.position.z], pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
     if (!gate.accept) { p.refusal = gate.message ?? null; return null; } // a refused dig is silent natively; only the build-height text can reach the player
     return [...target.block];
   }
@@ -319,6 +322,7 @@ export class DedicatedSimulation {
       const cell = this.aimCell(p);
       if (!cell) return false;
       if (status === 0) {
+        if (blockProtected(this, p, cell)) { (p.resendCells ??= []).push(cell); return false; } // b69 serverprops: spawn-protection
         p.swing = 6;
         if (this.world.get(cell[0], cell[1], cell[2]) === DRAGON_EGG) serverDragonEgg(this.world, cell[0], cell[1], cell[2]); // b65 mpdragon2: onBlockClicked (Survival; mining then continues on the cell)
         serverNoteClick(this, cell); // b66 mpbooks: BlockNote.onBlockClicked
@@ -396,11 +400,12 @@ export class DedicatedSimulation {
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
     const feet = [p.position.x, p.position.y, p.position.z];
-    const gate = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    const gate = serverClick({ limit: this.rules.maxBuildHeight, kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
     // nh.a(jo) always ends a block placement packet (any face but 255) with an S23 for the clicked cell and for the cell on the clicked face, to
     // that player only, accepted or not; a refused dig (status 0, 1, 2 over 6 blocks or at the height limit) returns silently and resends nothing.
     if (place) p.resendCells = [target.block, target.adjacent];
     if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
+    if (blockProtected(this, p, target.block)) { if (!place) p.resendCells = [target.block]; return false; } // b69 serverprops: spawn-protection, nh C07 / C08 send S23 instead
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
     if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
@@ -525,6 +530,7 @@ export class DedicatedSimulation {
   }
   tick() {
     const beforeLit = new Set(this.redstone.lit);
+    hardcoreTick(this); // b69 serverprops: a hardcore world is Hard
     this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle
     this.containers.tick();
     for (const p of this.players.values()) {
@@ -534,6 +540,7 @@ export class DedicatedSimulation {
       const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
       const dead = this.dimensions.within(p, () => this.serverSurvival.tick(p, moved)); // b61: a Nether player's drops and void respawn use the Nether's world and items
       this.stats.tick(p, moved); // b63 mpstats: play time, movement and landing stats
+      flightCheck(this, p); // b69 serverprops: allow-flight off kicks after 80 airborne ticks (nh.a(jd))
       // Survival players: health, food, fall and void damage, death (server-survival.js)
       if (p.position.y < -64 && !dead && p.survival.creative) { (this.events ??= []).push({ type: 'death', id: p.id }); /* Entity.G: outOfWorld damage; the broadcast is server-broadcast.js */ p.position.copy(p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : p.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); } // b61: p.world, the Nether's spawn for a Nether player
       p.survival.time = this.time;
@@ -622,7 +629,7 @@ export class DedicatedSimulation {
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
-      edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
+      edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, hardcore: this.hardcore, generateStructures: this.rules.generateStructures, newPlayerMode: this.newPlayerMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
       admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };

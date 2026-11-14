@@ -36,7 +36,7 @@ export class SharedMobTracker extends MobTracker {
   flush() {} // the server half only: the packets leave through `queued()`
   create(e, size) {
     const made = super.create(e, size), o = made.entry;
-    made.entry = new SharedEntry(e, { range: o.range, frequency: o.frequency, velocity: o.velocity, size: o.size }, this.view, this);
+    made.entry = new SharedEntry(e, { range: o.range, limit: this.limit, frequency: o.frequency, velocity: o.velocity, size: o.size }, this.view, this);
     return made;
   }
   // EntityTracker.addEntityToTracker for a player: it is sent every entry in range at the next tick, in set order. `pos()` is the player's position.

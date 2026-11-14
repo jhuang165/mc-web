@@ -128,8 +128,9 @@ export class ServerHanging {
   // ---- the world tick ----
   // EntityHanging.onUpdate only runs in a chunk that is ticking: here, one that a player of the dimension has within the view distance.
   active(e) {
+    const vd = this.host.rules?.viewDistance ?? VIEW_DISTANCE; // b69 serverprops: view-distance
     for (const p of this.host.players.values()) {
-      if (Math.abs(Math.floor(e.x / 16) - Math.floor(p.position.x / 16)) <= VIEW_DISTANCE && Math.abs(Math.floor(e.z / 16) - Math.floor(p.position.z / 16)) <= VIEW_DISTANCE) return true;
+      if (Math.abs(Math.floor(e.x / 16) - Math.floor(p.position.x / 16)) <= vd && Math.abs(Math.floor(e.z / 16) - Math.floor(p.position.z / 16)) <= vd) return true;
     }
     return false;
   }
@@ -150,13 +151,13 @@ export class ServerHanging {
       const c = knotCentre(k);
       live.push({ key: 'k' + id, x: c.x, z: c.z, record: () => knotRecord(k, id) });
     }
-    const out = new Map();
+    const out = new Map(), range = this.host.rules ? Math.min(160, this.host.rules.trackerLimit) : HANG_RANGE; // b69 serverprops: EntityTracker limit of the view distance
     for (const [id, view] of this.views) {
       const p = playerOf(id);
       if (!p) { view.known.clear(); continue; } // a player of another dimension: the client rebuilt its world
       const hset = [], hdel = [], seen = new Set();
       for (const t of live) {
-        if (Math.abs(t.x - p.position.x) > HANG_RANGE || Math.abs(t.z - p.position.z) > HANG_RANGE) continue;
+        if (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range) continue;
         const record = t.record(), json = JSON.stringify(record);
         seen.add(t.key);
         if (view.known.get(t.key) !== json) { view.known.set(t.key, json); hset.push(record); }

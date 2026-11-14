@@ -182,6 +182,7 @@ export class ServerDimensions {
       if (w.get(x, y, z) === PORTAL) { inside = true; break; }
     }
     if (inside) p.portal.setInPortal(p.previous.x, p.previous.z, at.x, at.z);
+    if (this.sim.rules?.allowNether === false) { if (p.portal.timeUntilPortal > 0) p.portal.timeUntilPortal--; return; } // b69 serverprops: allow-nether false, Entity.onEntityUpdate (sa.C) never counts up (inPortal is not reset)
     const go = p.portal.tick(p.dimension | 0, { isPlayer: true, creative: p.survival.creative, riding: false });
     if (go !== null) this.arrive(p, go);
   }
