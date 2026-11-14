@@ -138,6 +138,7 @@ from `javap` only.
 ## Gaps
 
 - Falling blocks have no entity shadow. The instant fall (`fallInstantly`, used when nearby chunks are not loaded)
+- Batch 70 (docs sweep, 2026-11-14): the instant fall is ported: `fallInstantly` in `src/falling.js` (lines 51 and 113) and `src/gen-world.js` (about line 526, as during population). The falling block shadow is still a real gap: `src/shadows.js` has no falling-block entry (native RenderFallingBlock `shadowSize 0.5`; recalled).
   is not ported.
 - A falling block that lands inside the player is not pushed out or treated specially.
 - Metadata changes with flag 4 (growth age) send no notification, as in the original. Other flag differences between

@@ -28,6 +28,7 @@ The mapping to three.js is (x, 24 − y, −z) / 16, plus RendererLivingEntity's
 - **Children.**
   - Quadrupeds draw the head full size, moved down by `childYOffset` and back by `childZOffset` (pig 4 / 4, cow 8 / 6), and the body at half size about the feet.
   - Biped children (baby zombies, which this build does not spawn) scale the head by 0.75 against the body's 0.5.
+  - Batch 70 (docs sweep, 2026-11-14): stale. Baby zombies spawn: `zombieSpawnRolls` (`src/difficulty.js`, called from `src/entities.js` about line 1265) rolls the child flag, and the zombie-villager and pigman docs rely on it. Whether the head 0.75 scale is applied for the live baby was not checked in a render.
   - The player's third-person `BIPED` table is also compared with `ModelBiped(0)`.
 
 The renderers add no scale for the pig, cow or zombie. RenderSkeleton applies 1.2 only to wither skeletons, which this build does not have.

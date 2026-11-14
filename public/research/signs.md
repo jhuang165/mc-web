@@ -12,6 +12,7 @@ per-metadata bounds and ray boxes, tile store persisted in saves, chunk-runtime 
 the model/text renderer (`sign-renderer.js`, 64-block cull) and the edit screen (`sign-editor.js`).
 
 Not done: no multiplayer packet path (the edit is applied locally) and the editor layout is approximate against the native screen. Not a claim of full parity.
+- Batch 70 (docs sweep, 2026-11-14): closed for the dedicated server. A sign edit goes out as a `sign` message (`updateSign` in `src/multiplayer/client.js`), the server holds a `Signs` store (`src/multiplayer/simulation.js`, C12 `updateSign`) and sends a `signEditor` message when a sign is placed. The editor layout is still approximate.
 
 Merge notes: ids 175-176 overwrite the reserved placeholders that `installNoteJukeboxBlocks` pushes up to 176, so `BLOCKS` stays contiguous. The browser check after the merge found the text plane drawn as a white board: `entityMaterial` compiles the texture lookup only when it gets a map at creation. `sign-renderer.js` now passes the canvas texture up front.
 

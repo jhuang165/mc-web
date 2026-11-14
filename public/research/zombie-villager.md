@@ -19,6 +19,7 @@ Ported from EntityZombie (`yq`), EntityVillager (`yv`) and the tasks AttackOnCol
 
 - Weakness does not reduce zombie damage here.
 - Batch 69 (docs sweep): the bed block exists now (`src/bed.js`); whether the cure boost reads real beds was not checked, so the stand-in id statement is left open: only iron bars boost the cure (beds are replayed with a stand-in id).
+- Batch 70 (docs sweep, 2026-11-14): closed. `src/zombie-villager.js` lines 13 and 21-22: `BOOST_BLOCKS = new Set([IRON_BARS, BED])` with `BED` from `src/world.js`, and `conversionBoost` is called from `src/entities.js` (about line 1838) with `world.get`, so real beds count; the reference test still uses stand-in ids for the probe's block table only. Weakness: still a real gap, see the Weakness line above (`attackDamage` in `src/mob-effects.js` reads only Strength for mobs; the player's `status-effects.js attackDamage` does apply Weakness).
 - The BreakDoor task is run for zombies with `canBreakDoors` or a leader: see [mob-riding](mob-riding.md). Villager zombies share the task list.
 - Profession is not tracked or rendered on zombie villagers (1.7.10 has a single texture).
 - The follow-range spawn bonus and the spawn-with-egg child/jockey rolls use unseeded Randoms natively, so only bounds are verified.

@@ -25,7 +25,9 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 ## Gaps
 
 - Magma cubes follow the same flow (jump delay, boost, split, no fall damage); the probe covers them, the renderer and spawn rules are not probed.
+- Batch 70 (docs sweep, 2026-11-14): slime shadow is a real gap and worse than written: `SHADOWS` in `src/shadows.js` has no `slime` or `magma_cube` entry and `main.js` (about line 4700) only casts for types in `SHADOWS`, so slimes cast no shadow at all (native `RenderSlime` sets `shadowSize = 0.25 * size` per draw).
 - Slimes spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)), with the slime chunk and swamp `getCanSpawnHere` above; seeded replays reach slimes (`spawn-replay2/3/4-reference.json`; round 4 varies world seed, moon phase and size draws, `src/spawnreplays-b69.test.js`). The 40-mob cap applies to splitting.
+- Batch 70 (docs sweep, 2026-11-14): the 40-mob cap on splitting is a port rule, not native. `EntityWorld.splitSlime` in `src/entities.js` (about line 2675) stops when `this.entities.length >= 40`. Bytecode-read in the jar: `ym` (EntitySlime) death loop spawns `2 + nextInt(3)` children with `World.spawnEntityInWorld` and no count test. So a slime that dies in a crowded save splits into fewer children than natively. Real deviation, kept for the save size limit.
 - `mob.attack` (the slime's melee) is emitted as an event with the native two pitch draws; the manifest has no audio for it, so it stays silent.
 - The original may play the landing sound twice in single-player; the port plays it once.
 - Legacy worlds have no biome or Java seed, so the swamp and slime chunk rules do not apply there.
