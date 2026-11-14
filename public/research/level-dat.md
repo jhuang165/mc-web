@@ -54,7 +54,7 @@ reports an approximation for it. Worlds saved at 13, 15 and 16 keep their output
 
 - One clock: the browser's day clock is `DayTime`; `Time` is kept as `totalTime` for export only.
 - Hardcore is carried and played as hardcore (hardcore.md). `initialized`, LastPlayed, SizeOnDisk and newer-version keys are reported as ignored.
-- Not carried (reported in `report.level.player.lost`): non-default fly/walk speeds, effect `Ambient`, large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.
+- Not carried (reported in `report.level.player.lost`): non-default fly/walk speeds, effect `Ambient` (batch 69 docs sweep: `level-dat.js` now reads `Ambient` into `ambient`, so only the other items stay lost), large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.
 - A player in the Nether or End is placed at the world spawn, and the area is the spawn's.
 - `UUIDMost`/`UUIDLeast` are written for the player (record `playerUuid`, else derived from the world id) and read back on import;  the export's stats file uses the offline UUID of "Player".
 - Only one 8×8 chunk area is imported; the rest of the save regenerates from the seed and is not the player's edits.
