@@ -17,12 +17,15 @@ export const SPAWNER_DEFAULTS = Object.freeze({ delay: 20, minSpawnDelay: 200, m
 
 // EntityList names (EntityId) for the port's ENTITY_TYPES keys. An EntityId outside this map
 // is EntityList.createEntityByName returning null: updateSpawner returns before any roll.
-export const SPAWNER_ENTITY_IDS = Object.freeze({ Enderman: "enderman", CaveSpider: "cave_spider", Spider: "spider", Zombie: "zombie", Skeleton: "skeleton", Creeper: "creeper", Pig: "pig", Cow: "cow", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", Silverfish: "silverfish", Witch: "witch", Slime: "slime", Blaze: "blaze", Ghast: "ghast" });
+export const SPAWNER_ENTITY_IDS = Object.freeze({ Enderman: "enderman", CaveSpider: "cave_spider", Spider: "spider", Zombie: "zombie", Skeleton: "skeleton", Creeper: "creeper", Pig: "pig", Cow: "cow", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", Silverfish: "silverfish", Witch: "witch", Slime: "slime", Blaze: "blaze", Ghast: "ghast",
+  // b71: Squid (ws), Bat (we), LavaSlime (yf) and Villager (yv) are EntityList names too; their getCanSpawnHere rules are in EntityWorld.spawnerHooks (entities.js).
+  Squid: "squid", Bat: "bat", LavaSlime: "magma_cube", Villager: "villager" });
 export const spawnerType = (entityId) => (Object.hasOwn(SPAWNER_ENTITY_IDS, entityId) ? SPAWNER_ENTITY_IDS[entityId] : null);
 // getEntitiesWithinAABB(entity.getClass(), box) is Class.isAssignableFrom: EntityCaveSpider
 // extends EntitySpider, so a Spider spawner counts cave spiders and a CaveSpider spawner does not
-// count spiders. (EntityPigZombie and EntityMooshroom would join zombies and cows; neither exists here.)
-const SUBTYPES = { spider: ["spider", "cave_spider"] };
+// count spiders. b71: EntityMagmaCube (yf) extends EntitySlime (ym), so a Slime spawner counts magma cubes too (a LavaSlime spawner does not count slimes). (EntityPigZombie and
+// EntityMooshroom would join zombies and cows; their spawner counts are left as they were.)
+const SUBTYPES = { spider: ["spider", "cave_spider"], slime: ["slime", "magma_cube"] };
 export const countsAs = (spawnType, entityType) => (SUBTYPES[spawnType] ? SUBTYPES[spawnType].includes(entityType) : spawnType === entityType);
 
 // AxisAlignedBB.getBoundingBox(x, y, z, x + 1, y + 1, z + 1).expand(spawnRange * 2, 4, spawnRange * 2).
@@ -188,11 +191,14 @@ export function spawnerMobMatrix(s, partial = 1) {
 }
 // The cached display entity (agq.h, created by EntityList with no spawn rolls), for MobRenderer:
 // at the origin, never ticked, yaw/pitch/limb swing 0, lit by the spawner block.
+// What the renderers read that a bare display entity lacks: a slime and a magma cube need a size (their constructor rolls 1 << nextInt(3) from an unseeded Entity.rand, so any of 1, 2, 4 is
+// right; 1 is shown), a villager its profession (EntityVillager(world) is profession 0, a farmer).
+const DISPLAY_FIELDS = { slime: { size: 1 }, magma_cube: { size: 1 }, villager: { profession: 0 } };
 export function spawnerDisplayEntity(s, partial = 1) {
   const type = spawnerType(entityIdOf(s));
   if (!type) return null;
   const zero = { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, rotationYaw: 0, prevRotationYaw: 0, renderYawOffset: 0, prevRenderYawOffset: 0, rotationYawHead: 0, prevRotationYawHead: 0, rotationPitch: 0, prevRotationPitch: 0, limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0 };
-  return { id: `spawner-${s.x},${s.y},${s.z}`, type, health: 1, age: 0, hurt: 0, death: 0, growingAge: 0, effects: [], ...zero, displayMatrix: spawnerMobMatrix(s, partial), lightPos: { x: s.x, y: s.y, z: s.z } };
+  return { id: `spawner-${s.x},${s.y},${s.z}`, type, health: 1, age: 0, hurt: 0, death: 0, growingAge: 0, effects: [], ...zero, ...DISPLAY_FIELDS[type], displayMatrix: spawnerMobMatrix(s, partial), lightPos: { x: s.x, y: s.y, z: s.z } };
 }
 
 const short = (v) => (v << 16) >> 16;

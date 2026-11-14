@@ -35,3 +35,4 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 - Particle offset uses Math.sin rather than MathHelper's table.
 - Size is capped at 127 on import; float box width differs by about 5e-8.
 - The renderer is not visually verified (no browser used).
+- Batch 71 (mobfixes71): the 40-mob cap on splitting is removed. `EntityWorld.splitSlime` now stops only at `SLIME_SPLIT_GUARD` (5000 mobs), a runaway guard that no world reaches (a size 4 slime leaves 20 at most); the native `ym.B` has no count test (bytecode-read). Magma cubes split the same way. `src/slime-split-b71.test.js` kills a size 4 slime in a world of 100 mobs and counts 2 + nextInt(3) children for 12 seeds. The earlier "kept for the save size limit" note was wrong: saves do not truncate mobs (`serialize` keeps all). A Slime spawner now also counts magma cubes (EntityMagmaCube `yf` extends EntitySlime `ym`).

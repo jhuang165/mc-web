@@ -43,7 +43,7 @@ export function orbColor(color,partial){const f=Math.fround,t=f(f(color+f(partia
 // prevPos for an orb), `color` (xpColor, ticks since spawn or load), the player search state
 // (`retarget`, xpTargetColor, and `target`) and `bb` (rebuilt from the position on load).
 const f=Math.fround,SIZE=0.5,HALF=0.25,LIFETIME=6000,EYE=f(1.62);
-const strip=({px,py,pz,posY,bb,color,retarget,target,dead,inWeb,fallDistance,collidedH,...o})=>o;
+const strip=({px,py,pz,posY,bb,color,retarget,target,who,dead,inWeb,fallDistance,collidedH,...o})=>o;
 const boxAt=(x,posY,z)=>[x-HALF,posY-HALF,z-HALF,x+HALF,posY-HALF+SIZE,z+HALF];
 let nextId=0;
 // The EntityXPOrb(world, x, y, z, value) constructor at posY `y`: rotationYaw, then motion from
@@ -115,7 +115,9 @@ export class ExperienceOrbs {
  }
  reap(){this.orbs=this.orbs.filter(o=>!o.dead);}
  // One orb's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
- tickOne(world,o,player,eye=EYE){
+ // `players` (optional, positions) is the whole player list of a server world: the orb then keeps its `who` (EntityXPOrb.closestPlayer) until it is gone or farther than
+ // 8 blocks, as the original does; without it `player` is the one player (single player), where keeping and re-picking are the same.
+ tickOne(world,o,player,eye=EYE,players=null){
   if(o.dead||!ringEntityActive(world,o))return;
   o.px=o.x;o.py=o.y;o.pz=o.z;
   // Entity.onEntityUpdate: EntityXPOrb.handleWaterMovement pushes with the unshrunk box only;
@@ -138,7 +140,18 @@ export class ExperienceOrbs {
   // Every 20 - entityId % 100 ticks of xpColor (every tick once that is below 1) an orb with no
   // target, or one farther than 8 blocks, looks for the closest player within 8 (distance
   // squared < 64, from posY to the player's feet).
-  if(o.retarget<o.color-20+o.id%100){
+  if(players){
+   if(o.who&&!players.includes(o.who))o.who=null; // the player left this world (the original's list drops a removed player, a stale reference would only linger)
+   if(o.retarget<o.color-20+o.id%100){
+    const dist=(p)=>(o.x-p.x)**2+(o.posY-p.y)**2+(o.z-p.z)**2;
+    if(!o.who||dist(o.who)>64){ // World.getClosestPlayerToEntity(this, 8.0): strictly inside the range, the first of equals wins
+     let best=64;o.who=null;
+     for(const p of players){const d=dist(p);if(d<best){best=d;o.who=p;}}
+    }
+    o.retarget=o.color;
+   }
+   player=o.who;o.target=!!o.who;
+  }else if(o.retarget<o.color-20+o.id%100){
    const d2=player?(o.x-player.x)**2+(o.posY-player.y)**2+(o.z-player.z)**2:Infinity;
    if(!o.target||d2>64)o.target=d2<64;
    o.retarget=o.color;

@@ -819,6 +819,7 @@ function clearSpentStack(survival) {
   const inv = survival.inventory, held = inv.held;
   if (held && held.count <= 0) inv.main[inv.current] = null;
 }
+const SLIME_SPLIT_GUARD = 5000;
 export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
   constructor(world, saved, random = Math.random, ids = new EntityIds()) {
@@ -1434,6 +1435,8 @@ export class EntityWorld {
             playerWithin: (x, y, z, range) => !!p?.alive && (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 < range * range,
           }, (m) => mobBox(m.x, m.y, m.z, t.width, t.height));
         }
+        // EntityVillager inherits EntityCreature.getCanSpawnHere (EntityLiving's checks and a path weight of 0, bytecode-read b71): no light, grass or biome rule.
+        if (e.type === "villager") return living();
         // A Slime spawner (SPAWNER_ENTITY_IDS) uses the slime's own swamp and slime chunk rules (no light rule of EntityMob).
         if (e.type === "slime") return this.slimeCanSpawn(e, entityRandom(e), env.time ?? 0, () => !blocked(sb) && !collisionBoxes(this.world, sb).length && !liquid(sb));
         if (HOSTILE.has(e.type))
@@ -2681,10 +2684,11 @@ export class EntityWorld {
     slimeActionState(e, entityRandom(e), target, (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
   }
   // EntitySlime.setDead (ym.B) at the end of the death animation: 2 to 4 children of half the size beside the corpse. The
-  // 40 mob limit a save keeps still applies (slime.md Gaps).
+  // No mob count test natively (ym.B: 2 + nextInt(3) spawnEntityInWorld calls, bytecode-read, slime.md); b71 drops the old 40 cap. SLIME_SPLIT_GUARD is only a
+  // runaway guard against a hand-built world of thousands of slimes dying at once, far above anything a world reaches (a size 4 slime leaves 20 at most).
   splitSlime(e, rand) {
     for (const k of slimeChildren(rand, e)) {
-      if (this.entities.length >= 40) break;
+      if (this.entities.length >= SLIME_SPLIT_GUARD) break;
       const child = this.create(e.type, k.x, k.y, k.z);
       Object.assign(child, slimeFields(k.size, this.random));
       this.entitySeed?.(child, "slime-split"); // the replays seed the child's Entity.rand (its constructor's draws and first jump delay)
