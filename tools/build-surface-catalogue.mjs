@@ -1,6 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { auditSentence } from './catalogue-audit.mjs';
+import { SERVER_COMMANDS } from '../src/server-broadcast.js';
+import { SUMMONABLE } from '../src/commands.js';
 
 const research = new URL('../public/research/', import.meta.url);
 const reference = JSON.parse(await readFile(new URL('surface-registry-reference.json', research)));
@@ -24,7 +26,7 @@ const CMD_PARTIAL = {
   tp: 'selectors resolve to the local player', give: 'supported item data tags only', effect: 'effects limited to the port\'s Effects table',
   enchant: 'local player', me: '', seed: '', help: 'paged, 7 per page', tell: 'local player only', say: '',
   spawnpoint: '', setworldspawn: 'stored in the world record; spawn search unchanged', gamerule: 'all nine defaults plus custom keys',
-  clear: 'local player', testfor: 'local player', playsound: '', summon: 'only the entities in SUMMONABLE (36 of 57 registrations, including carts and the End crystal)',
+  clear: 'local player', testfor: 'local player', playsound: '', summon: `all ${Object.keys(SUMMONABLE).length} concrete EntityList registrations are /summon types (SUMMONABLE: mobs, carts, End crystal, items, orbs, TNT, falling blocks, boats, hanging entities, projectiles); unsupported tag keys are reported as ignored`,
   setblock: 'supported tile data tags only', testforblock: 'typed subset comparison', publish: 'LAN settings only, no browser socket hosting',
 };
 // Batch 13 commands: documented in commands-b13.md, with probe evidence in commands-b13-reference.json / scoreboard-reference.json.
@@ -35,11 +37,14 @@ const CMD_B13 = {
   debug: 'Profiler.getProfilingData probed on a filled map; the result file follows CommandDebug; the browser\'s profiler sections are not the server\'s',
   scoreboard: 'objectives/players/teams output, state and data/scoreboard.dat probed (scoreboard-reference.json); sidebar, Tab score, team chat prefix; belowName has no other players to show',
 };
+// The repo's dedicated server (src/server-broadcast.js SERVER_COMMANDS, batches 59-66) runs a subset over named players: operators only for the world
+// and player commands; /summon, /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers, /debug and /publish are not on it.
+const serverNote = name => SERVER_COMMANDS.has(name) ? '; also on the dedicated server (named players, src/server-broadcast.js)' : '; not on the dedicated server';
 const commandStatus = c => {
-  if (c.scope === 'dedicated') return 'Out of scope; dedicated-server only, not registered in the integrated server (multiplayer/server management)';
-  if (c.name in CMD_B13) return `Partial; [batch 13 commands](commands-b13.md); ${CMD_B13[c.name]}`;
+  if (c.scope === 'dedicated') return SERVER_COMMANDS.has(c.name) ? 'Partial; dedicated-server command, not registered in the integrated server; implemented on the repo\'s dedicated server (src/server-broadcast.js)' : 'Out of scope; dedicated-server only, not registered in the integrated server, and not implemented on the repo\'s dedicated server either (not in SERVER_COMMANDS)';
+  if (c.name in CMD_B13) return `Partial; [batch 13 commands](commands-b13.md); ${CMD_B13[c.name]}${serverNote(c.name)}`;
   assert(c.name in CMD_PARTIAL, c.name);
-  return `Partial; [commands](commands.md)${CMD_PARTIAL[c.name] ? '; ' + CMD_PARTIAL[c.name] : ''}`;
+  return `Partial; [commands](commands.md)${CMD_PARTIAL[c.name] ? '; ' + CMD_PARTIAL[c.name] : ''}${serverNote(c.name)}`;
 };
 const partialCount = commands.filter(c => c.scope !== 'dedicated').length, dedicatedCount = commands.length - partialCount;
 const commandRows = commands.map(c => `| /${c.name} | ${c.aliases.map(a => '/' + a).join(', ') || '—'} | ${c.scope} | ${c.permissionLevel}${c.customPermission ? '; custom check' : ''} | ${c.usage} | ${short(c.mappedName)} | ${commandStatus(c)} | Q |`);
@@ -57,7 +62,7 @@ await writeFile(new URL('command-parity-catalogue.md', research), `# Original co
 
 ${intro}
 
-${auditSentence(commandRows)} Dedicated-server commands are Out of scope as they are not registered by the integrated server (batch 19 audit).
+${auditSentence(commandRows)} Dedicated-server commands are Out of scope for the integrated server; only /list of them exists on the repo's dedicated server (batch 67 audit).
 
 All **${commands.length} command registrations** in the original ServerCommandManager constructor: common entries plus dedicated-only entries and integrated-only publish. Registration membership/order comes from inspected constructor bytecode. The unchanged individual constructors, name/alias/default-permission/usage getters and CommandHandler.registerCommand execute in the probe. The actual ServerCommandManager constructor and command bodies are not executed; no server starts. Profile alias maps reproduce native registration with **35 integrated** and **50 dedicated** lookup keys, not 85 distinct commands.
 
@@ -89,15 +94,15 @@ const screenEvidence = {
   GuiRenameWorld: ['Partial; rename world', 'parity.md'],
   GuiYesNo: ['Partial; delete confirmation', 'parity.md'],
   GuiLanguage: ['Partial; installed languages sorted by code (English US alone until the lang files are fetched) and Force Unicode Font', 'languages.md'],
-  GuiShareToLan: ['Partial; local LAN settings, no browser sockets', 'commands.md'],
+  GuiShareToLan: ['Partial; local LAN settings, no browser sockets (the dedicated server is a separate WebSocket server, not this screen)', 'commands.md'],
   GuiChat: ['Partial; native constants, history, Tab completion, cheats gating', 'commands.md'],
-  GuiSleepMP: ['Partial; Leave Bed with chat field', 'bed.md'],
+  GuiSleepMP: ['Partial; Leave Bed with chat field; over a connection Leave Bed is sleepLeave (client-sleep.js)', 'bed.md'],
   GuiCommandBlock: ['Partial; command-block-screen.js on the bitmap font, Previous Output in the disabled colour 0x707070 (no Track Output toggle in 1.7.10)', 'command-blocks.md'],
-  GuiWinGame: ['Partial; End credits text and dragon-death return', 'dimensions.md'],
+  GuiWinGame: ['Partial; End credits text and dragon-death return; on the server the exit portal plays the credits through S2B state 4 and the client then asks to respawn (main.js)', 'dimensions.md'],
   GuiAchievements: ['Partial; achievements screen and toasts', 'achievements.md'],
   GuiContainer: ['Partial; container interaction framework', 'inventory.md'],
   GuiChest: ['Partial; single/large/trapped/ender chest', 'chests.md'],
-  GuiContainerCreative: ['Partial; Creative tabs/search incl. 600 of 606 native entries', 'creative.md'],
+  GuiContainerCreative: ['Partial; Creative tabs/search incl. all 606 native search entries (creative.test.js: SEARCH_ORDER 606 against creative-reference.json)', 'creative.md'],
   GuiCrafting: ['Partial; workbench container', 'inventory.md'],
   GuiFurnace: ['Partial; furnace container', 'inventory.md'],
   GuiInventory: ['Partial; player inventory/armor and the potion effect list', 'inventory-player.md'],
@@ -107,20 +112,20 @@ const screenEvidence = {
   GuiDispenser: ['Partial; dispenser/dropper container', 'dispense.md'],
   GuiHopper: ['Partial; hopper container', 'hopper.md'],
   GuiBeacon: ['Partial; beacon power selection', 'beacon.md'],
-  GuiMerchant: ['Partial; villager trading screen', 'villager-trading-live.md'],
+  GuiMerchant: ['Partial; villager trading screen; over a connection the offers arrive as MC|TrList and the choice goes as MC|TrSel (client-trade.js)', 'villager-trading-live.md'],
   GuiEditSign: ['Partial; sign editor, board placement from the drawScreen GL transforms (sign-layout.js signGuiGeometry)', 'modal-dialogs.md'],
   GuiScreenHorseInventory: ['Partial; horse saddle/armor/chest screen', 'horse-inventory.md'],
-  GuiStats: ['Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate', 'stats.md'],
+  GuiStats: ['Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate; the server sends its own counters (client-stats.js)', 'stats.md'],
   ScreenChatOptions: ['Partial; nine native options, Show Cape disabled, persisted and applied to the chat', 'chat-options.md'],
-  GuiScreenBook: ['Partial; page editing, page turns and signing for Book and Quill and Written Book (book-ui.js); layout bytecode-read, not probed', 'books.md'],
+  GuiScreenBook: ['Partial; page editing, page turns and signing for Book and Quill and Written Book (book-ui.js); layout bytecode-read, not probed; over a connection the edit and sign go as MC|BEdit and MC|BSign (client-books.js, server-books.js)', 'books.md'],
   GuiCreateFlatWorld: ['Partial; layer list, Remove Layer, Presets, Done/Cancel; Add/Edit Layer hidden as in 1.7.10 (flat-gui.js)', 'superflat.md'],
   GuiFlatPresets: ['Partial; the 8 native presets and the shareable string box (flat-gui.js); positions bytecode-read', 'superflat.md'],
   GuiConfirmOpenLink: ['Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events', 'chat-options.md'],
   GuiScreenResourcePacks: ['Partial; two-list pack screen with .zip/folder import, move/reorder, Done refreshes in place (resource-packs-ui.js)', 'resource-packs.md'],
   GuiSnooper: ['Out of scope; no usage telemetry (drawn disabled)', 'settings-parity-catalogue.md'],
-  GuiMultiplayer: ['Out of scope; multiplayer', 'parity.md'], GuiScreenAddServer: ['Out of scope; multiplayer', 'parity.md'],
-  GuiScreenServerList: ['Out of scope; multiplayer', 'parity.md'], GuiConnecting: ['Out of scope; multiplayer', 'parity.md'],
-  GuiDisconnected: ['Out of scope; multiplayer', 'parity.md'], GuiDownloadTerrain: ['Partial; shown on portal and dimension trips (loading-screen.js downloadTerrainScreen); the multiplayer join path is out of scope', 'loading-screens.md'],
+  GuiMultiplayer: ['Partial; one account-based Multiplayer screen with sign-in, Join Server and an invite code instead of the native server list (multiplayer/screen.js); no Direct Connect, Add Server, Edit, Delete or server pinging', 'parity.md'], GuiScreenAddServer: ['Out of scope; no server list, the Multiplayer screen joins one configured server', 'parity.md'],
+  GuiScreenServerList: ['Out of scope; no server list (Direct Connect is not ported)', 'parity.md'], GuiConnecting: ['Partial; no separate screen: the Join Server button shows Connecting and the status line "Connecting and downloading terrain..." (multiplayer/screen.js)', 'parity.md'],
+  GuiDisconnected: ['Partial; a connection loss opens the shared errorScreen titled Disconnected with the server reason (main.js onClose); the button is the shared Cancel label, where native GuiDisconnected uses gui.toMenu (recalled, not re-read from bytecode)', 'loading-screens.md'], GuiDownloadTerrain: ['Partial; shown on portal and dimension trips and on the multiplayer join and dimension changes (loading-screen.js downloadTerrainScreen, main.js)', 'loading-screens.md'],
   GuiScreenRealmsProxy: ['Out of scope; Mojang Realms service', 'parity.md'], GuiScreenDemo: ['Out of scope; demo mode', 'parity.md'],
   GuiIngestServers: ['Out of scope; Twitch streaming', 'parity.md'], GuiStreamOptions: ['Out of scope; Twitch streaming', 'parity.md'],
   GuiStreamUnavailable: ['Out of scope; Twitch streaming', 'parity.md'], GuiTwitchUserMode: ['Out of scope; Twitch streaming', 'parity.md'],
@@ -157,7 +162,7 @@ const SUPPORT_OUT_OF_SCOPE = new Set(['GuiSnooper$List']);
 const SUPPORT_PROGRESS = new Set(['GuiStats$Stats', 'GuiStats$StatsBlock', 'GuiStats$StatsBlock$1', 'GuiStats$StatsGeneral', 'GuiStats$StatsItem', 'GuiStats$StatsItem$1', 'GuiStats$StatsMobsList', 'IProgressMeter']);
 const supportStatus = name => {
   if (name === 'GuiScreenBook$NextPageButton') return 'Partial; the page arrows of the book screen (book-ui.js), no hover texture, see [books](books.md)';
-  if (name === 'GuiPlayerInfo') return 'Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md)';
+  if (name === 'GuiPlayerInfo') return 'Partial; the Tab player list (player-list.js) shows every connected player over a connection with the list-objective score, but the ping bars always read 0 (main.js passes ping: 0); see [chat options](chat-options.md)';
   if (SUPPORT_EVIDENCE.has(name)) return 'Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md)';
   if (SUPPORT_PROGRESS.has(name)) return 'Partial; statistics screen ([stats](stats.md))';
   if (SUPPORT_RESOURCE_PACKS.has(name)) return 'Partial; folded into the Resource Packs screen (resource-packs-ui.js), see [resource packs](resource-packs.md)';
@@ -202,9 +207,9 @@ ${supportRows.join('\n')}
 const STRUCT = {
   Mineshaft: ['Implemented', '[mineshaft generator](mineshafts-live.md), structure NBT in [structure-nbt](structure-nbt.md)'],
   Stronghold: ['Implemented', '[stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md)'],
-  Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md)'],
-  Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), witch hut created and populated NBT probe-verified (temple-nbt-reference.json), jungle populated flags not replayed in JS, shears disarm, random ticks and projectile triggers are not probed or modelled'],
-  Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; start/piece NBT and data/Fortress.dat write and read are probe-verified byte for byte ([structure NBT](structure-nbt.md)); piece loot and spawner state beyond the persisted Chest/Mob/Seed flags is not'],
+  Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md); on the dedicated server villagers and the village collection exist (server-villagers.js) but the default server world (generation 9) has no generated villages, and zombie sieges are missing everywhere (batch 66 list)'],
+  Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), witch hut created and populated NBT probe-verified (temple-nbt-reference.json), jungle populated flags replayed (temple-jungle-nbt.test.js), tripwire entity classes incl. arrows, snowballs, eggs, pearls and potions probed (verify-tripwire.mjs), shears disarm in block-break-simulation.js; random ticks of the trap parts other than the tripwire are not modelled (redstone.js header)'],
+  Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; start/piece NBT and data/Fortress.dat write and read are probe-verified byte for byte ([structure NBT](structure-nbt.md)); chests and the throne-room Blaze spawner are placed once per column in the Nether (also on the dedicated server, server-nether.js); loot and spawner state beyond the persisted Chest/Mob/Seed flags is not probed'],
 };
 const structFamily = id => id.startsWith('MS') || id === 'Mineshaft' ? 'Mineshaft' : id.startsWith('SH') || id === 'Stronghold' ? 'Stronghold' : id.startsWith('Vi') || id === 'Village' ? 'Village' : id.startsWith('Te') || id === 'Temple' ? 'Temple' : id.startsWith('Ne') || id === 'Fortress' ? 'Fortress' : assert.fail(id);
 const structStatus = id => { const [w, t] = STRUCT[structFamily(id)]; return `${w}; ${t}`; };
