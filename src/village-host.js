@@ -3,7 +3,8 @@
 import { liveOrder } from "./saved-order.js";
 import { VillageCollection } from "./village.js";
 import { WOODEN_DOOR, normalCube } from "./world.js";
-import { JavaRandom } from "./lighting.js";
+import { JavaRandom, celestialAngle } from "./lighting.js";
+import { VillageSiege } from "./village-siege.js";
 
 export const PLAYER_NAME = "Player";
 
@@ -49,3 +50,12 @@ export function createVillageHost(ew) {
   };
 }
 export const createVillages = (ew) => new VillageCollection(createVillageHost(ew));
+
+// VillageSiege (village-siege.js) for this world: the siege rolls on the world's daylight and clock and walks the world's players (EntityWorld.siegePlayers).
+export const createSiege = (ew) => new VillageSiege({
+  isDaytime: () => !!ew.day,
+  celestialAngle: () => celestialAngle(ew.siegeTime?.() ?? 0),
+  get rand() { return ew.villages.host.rand; },
+  players: () => ew.siegePlayers(),
+  get villages() { return ew.villages; },
+});
