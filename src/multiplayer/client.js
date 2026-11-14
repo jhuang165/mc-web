@@ -43,6 +43,7 @@ export class DedicatedClient {
             resolve(message); return;
           }
           if (message.type === 'error') throw new Error(message.text);
+          if (message.type === 'tabReply') { this.onTabReply?.(message.options); return; } // b69 mptabcomplete: S3A
           if (this.pings.handle(message, m => this.send(m))) return; // b68 mpping: answer keep-alives at once (also while terrain loads); S38 items
           if (!this.ready) this.buffer(message);
           else this.apply(message);

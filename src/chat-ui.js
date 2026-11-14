@@ -2,6 +2,7 @@
 // GuiIngame translates to (0, height - 48) and the chat adds (2, 20): the newest line's bottom edge sits 28 GUI pixels above
 // the window's bottom; each line is 9 pixels high with a black rectangle of alpha / 2 and white text with a shadow. GuiChat
 // draws its field at (4, height - 12) over a 50 % black rectangle from (2, height - 14) to (width - 2, height - 2).
+import { RemoteTabCompletion } from "./multiplayer/client-tabcomplete.js"; // b69 mptabcomplete
 import { ChatLog, SentHistory, TabCompletion, CHAT, allowedText, chatDelivered, linkUrlAllowed } from "./chat.js";
 import { textHtml } from "./menu-ui.js";
 import { hoverLines } from "./chat-component.js";
@@ -27,7 +28,7 @@ const STYLE = `
 `;
 
 export class ChatUi {
-  // hooks: submit(text), complete(textBeforeCursor) -> string[], close(), visible() -> boolean
+  // hooks: submit(text), complete(textBeforeCursor) -> string[], remote() -> boolean and request(textBeforeCursor) (connected: C14), close(), visible() -> boolean
   constructor(doc, hooks, log = chat) {
     this.doc = doc;
     this.hooks = hooks;
@@ -35,6 +36,7 @@ export class ChatUi {
     this.isOpen = false;
     this.history = new SentHistory(log);
     this.tab = new TabCompletion();
+    this.remoteTab = new RemoteTabCompletion(); // b69 mptabcomplete: the connected flow (hooks.remote() true): C14 / S3A
     const style = doc.createElement("style");
     style.textContent = STYLE;
     this.box = doc.createElement("div");
@@ -56,7 +58,7 @@ export class ChatUi {
     this.input.addEventListener("input", () => {
       const clean = allowedText(this.input.value);
       if (clean !== this.input.value) this.input.value = clean;
-      this.tab.reset();
+      this.resetTab();
     });
     this.box.addEventListener("wheel", () => {});
     // GuiChat.mouseClicked: a left click on a component with a ClickEvent (chatLinks on); Shift inserts its text instead.
@@ -107,10 +109,20 @@ export class ChatUi {
     } else if (click.action === "suggest_command") this.input.value = allowedText(click.value);
     else if (click.action === "run_command") this.hooks.submit(click.value);
   }
+  resetTab() { this.tab.reset(); this.remoteTab.reset(); }
+  // S3APacketTabComplete (GuiChat.func_146406_a): the server's strings for the text last sent.
+  tabReply(options) {
+    if (!this.isOpen || !Array.isArray(options)) return;
+    const value = this.input.value, cursor = this.input.selectionStart ?? value.length;
+    this.applyTab(this.remoteTab.reply(options.filter((o) => typeof o === "string"), value, cursor, (t) => this.log.print(t, chatTick(), 1)));
+  }
+  applyTab(out) {
+    if (out) { this.input.value = out.text.slice(0, CHAT.inputMaxLength); this.input.setSelectionRange(out.cursor, out.cursor); }
+  }
   open(prefill = "") {
     this.isOpen = true;
     this.history.reset();
-    this.tab.reset();
+    this.resetTab();
     this.log.resetScroll();
     this.input.value = allowedText(prefill);
     this.inputBox.classList.add("open");
@@ -133,7 +145,7 @@ export class ChatUi {
   key(e) {
     e.stopPropagation();
     const code = e.code;
-    if (code !== "Tab") this.tab.reset();
+    if (code !== "Tab") this.resetTab();
     if (code === "Escape") { e.preventDefault(); this.hooks.close(); return; }
     if (code === "Enter" || code === "NumpadEnter") {
       e.preventDefault();
@@ -158,8 +170,9 @@ export class ChatUi {
     }
     if (code === "Tab") {
       e.preventDefault();
-      const out = this.tab.next(this.input.value, this.input.selectionStart ?? this.input.value.length, (t) => this.hooks.complete(t), (t) => this.log.print(t, chatTick(), 1));
-      if (out) { this.input.value = out.text.slice(0, CHAT.inputMaxLength); this.input.setSelectionRange(out.cursor, out.cursor); }
+      const cursor = this.input.selectionStart ?? this.input.value.length, print = (t) => this.log.print(t, chatTick(), 1);
+      if (this.hooks.remote?.()) this.applyTab(this.remoteTab.press(this.input.value, cursor, (t) => this.hooks.request(t), print)); // b69 mptabcomplete: ask the server
+      else this.applyTab(this.tab.next(this.input.value, cursor, (t) => this.hooks.complete(t), print));
     }
   }
   render() {

@@ -897,6 +897,7 @@ async function joinMultiplayer(settings) {
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
+  client.onTabReply = options => chatUi.tabReply(options); // b69 mptabcomplete: S3A
   client.onSleep = mpSleepMessage; // b66 mpsleep: S0A / S0B / bed messages
   if (bedSleep.sleeping || bedSleep.timer) { bedSleep.reset(); hideBedScreen(); }
   multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
@@ -2062,6 +2063,7 @@ const chatUi = new ChatUi(document, {
   },
   openLink: (url) => window.open(url, "_blank", "noopener"),
   complete: (before) => commands.complete(before),
+  remote: () => !!multiplayer, request: (text) => multiplayer?.send({ type: 'tabReq', text }), // b69 mptabcomplete: C14 while connected, the reply (S3A) goes to chatUi.tabReply
   // GuiScreen.func_146283_a: show_achievement and show_item hovers.
   hoverInfo: { stat: (id) => statHover(id, { itemName: (n) => commandHost.statItemName(n) }), item: itemHoverLines },
   close: () => closeChat(),
