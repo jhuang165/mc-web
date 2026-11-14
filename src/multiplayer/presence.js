@@ -43,10 +43,11 @@ export class RemotePlayers {
     renderer.skinHash = hash ?? null;
     const uniform = renderer.base.uniforms.map;
     renderer.steveMap ??= uniform.value;
+    renderer.hasSkin = false; // b70: AbstractClientPlayer.o() (the skin texture is present) gates the deadmau5 ears
     if (!hash) { uniform.value = renderer.steveMap; return; }
-    void this.skin(hash).then(texture => { if (renderer.skinHash === hash) uniform.value = texture ?? renderer.steveMap; });
+    void this.skin(hash).then(texture => { if (renderer.skinHash === hash) { uniform.value = texture ?? renderer.steveMap; renderer.hasSkin = !!texture; } });
   }
-  resetSkin(renderer) { if (renderer?.steveMap) renderer.base.uniforms.map.value = renderer.steveMap; if (renderer) renderer.skinHash = null; }
+  resetSkin(renderer) { if (renderer?.steveMap) renderer.base.uniforms.map.value = renderer.steveMap; if (renderer) { renderer.skinHash = null; renderer.hasSkin = false; } }
   sync(players, self) {
     this.at = performance.now();
     const seen = new Set();
@@ -62,6 +63,7 @@ export class RemotePlayers {
         this.drawLabel(entry);
       }
       this.applySkin(entry.renderer, p.skin);
+      entry.renderer.name = p.name; // b70: RenderPlayer compares the name with "deadmau5"
       { const d = stepRemoteDeath(entry, p.dead); if (d.burst && this.scene.fx) burst(this.scene.fx, 'explode', 20, { x: p.x, y: p.y - (p.ySize ?? 0), z: p.z, width: 0.6, height: 1.8 }, entry.rand); } // b60: S19 status 3 copy, 20 ticks of tilt then the poof
       if (entry.name !== p.name || (this.board && entry.sbRev !== this.board.revision)) { entry.name = p.name; this.drawLabel(entry); }
       stepRemoteHurt(entry, p.hurt === true, entry.body); // b61: S19 status 2 on the copy: limbSwingAmount 1.5 and hurtTime 10, before its onUpdate
@@ -77,7 +79,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       const invisible = !!p.invisible, viewer = this.me?.name ?? null; // b65 mpinvis
-      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
+      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0, hideCape: !!p.hideCape /* b70: metadata 16 bit 1; the wire does not carry it yet */ });
       this.placeTags(entry, p, invisible, viewer);
     }
   }

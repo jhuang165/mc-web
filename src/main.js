@@ -810,8 +810,9 @@ function applyMultiplayerTick(message) {
     walkFrozen = self.sneak && self.grounded;
     $("#movement-label").textContent = flying ? 'FLYING' : 'WALKING';
     mpRiding = self.riding || false; // b61: seated in a vehicle the server carries
-    playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0, riding: !!mpRiding });
+    playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0, riding: !!mpRiding, motion: { x: velocity.x, y: velocity.y, z: velocity.z, onGround: grounded, frozen: walkFrozen } /* b70 cape */ });
     if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
+    if (playerRenderer) playerRenderer.name = self.name; // b70: deadmau5 ears
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
@@ -4448,7 +4449,7 @@ function animate(now) {
       tickProf.endStart("player");
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
-      if (!multiplayer) playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
+      if (!multiplayer) playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle, motion: { x: velocity.x, y: velocity.y, z: velocity.z, onGround: grounded, frozen: walkFrozen } /* b70 cape */ });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
       tickProf.end();
