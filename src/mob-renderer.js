@@ -4,7 +4,7 @@ import { skinBox, pixelTexture } from "./first-person.js";
 import { limbAngles } from "./animation.js";
 import { entityMaterial, FOG_PARS } from "./light-material.js";
 import { ENTITY_TYPES, mobPose } from "./entities.js";
-import { FLEECE_COLORS } from "./sheep.js";
+import { sheepFurTint } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
 import { syncMobEquipment, followChildHeld } from "./mob-equipment-renderer.js";
@@ -512,7 +512,7 @@ export class MobRenderer {
         r.neck.position.set(0, ((24 - drop) / 16 - (baby ? 8 / 16 : 0)) * (baby ? 2 : 1), 8 / 16);
         r.neck.scale.setScalar(baby ? 2 : 1);
         for (const m of r.fur) m.visible = !e.sheared;
-        r.wool.uniforms.tint.value.set(...FLEECE_COLORS[e.color ?? 0]);
+        r.wool.uniforms.tint.value.set(...sheepFurTint(e, partial)); // jeb_ blends by tick (sheep.js)
       }
       if (r.saddleParts) for (const m of r.saddleParts) m.visible = !!e.saddled;
       if (r.child) {

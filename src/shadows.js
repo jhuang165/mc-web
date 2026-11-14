@@ -34,6 +34,13 @@ export const SHADOWS = {
   boat: { size: f(0.5), opaque: 1 },
   // RenderMinecart: this.shadowSize = 0.5F (constructor bytecode-read, shadowOpaque stays 1); EntityMinecart.getShadowSize (Entity.Y) is 0.0F, so the cast starts at posY.
   minecart: { size: f(0.5), opaque: 1 },
+  // RenderSlime (new bie(16), new bie(0), 0.25F) and RenderMagmaCube (boe: bok(new bho, 0.25F)): the constructor value only. Neither class overrides
+  // doRender (javap: bot declares only the pass, preRender and texture methods), so shadowSize is NOT 0.25 * size per draw (that is a later version); the
+  // size shows only through getShadowSize = height / 2 (callers pass the slime's 0.6 * size height).
+  slime: { size: f(0.25), opaque: 1 },
+  magma_cube: { size: f(0.25), opaque: 1 },
+  // RenderFallingBlock (bnq): shadowSize = 0.5F, shadowOpaque stays 1. EntityFallingBlock.getShadowSize (xj.Y) returns 0.0F, so the cast starts at posY (height 0, as the boat).
+  falling_block: { size: f(0.5), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   // RenderEnderman: super(new ModelEnderman(), 0.5F).
   enderman: { size: f(0.5), opaque: 1 },

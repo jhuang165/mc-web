@@ -171,6 +171,7 @@ import { replayPlayerCommands } from "./away-commands.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
 import { SHADOWS } from "./shadows.js";
+import { isSlimeLike, slimeHeight } from "./slime.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
@@ -309,6 +310,7 @@ import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
 import { SkullRenderer } from "./skull-renderer.js";
+import { skinBook } from "./skull-skins.js";
 import { EnchantingBooks, EnchantingScreenExtras } from "./enchanting-book-live.js";
 import { EnchantingBookRenderer, EnchantingGuiBookView } from "./enchanting-book-renderer.js";
 import { Signs, isSign, signShouldPop, signDrops } from "./signs.js";
@@ -4705,10 +4707,12 @@ function shadowCasters(partial) {
   for (const b of vehicleViews(objectTracker, boats.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
   // RenderMinecart: shadowSize 0.5, EntityMinecart.getShadowSize 0 (the same cast as the boat's, from the copy view).
   if (minecarts) for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.minecart, x: lerp(c.px, c.x), y: lerp(c.py, c.posY), z: lerp(c.pz, c.z), pos: { x: c.x, y: c.posY, z: c.z }, height: 0 });
+  // b71 RenderFallingBlock: shadowSize 0.5, getShadowSize 0 (cast from posY = box bottom + 0.49, height 0).
+  for (const e of objectViews(objectTracker, falling?.entities ?? [], "falling")) list.push({ ...SHADOWS.falling_block, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.49, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.49, z: e.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.
-    if (SHADOWS[e.type] && !isInvisible(e)) { const c = mobs.clientPosition(e) ?? e; list.push({ ...SHADOWS[e.type], x: lerp(c.px, c.x), y: lerp(c.py, c.y), z: lerp(c.pz, c.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child }); }
+    if (SHADOWS[e.type] && !isInvisible(e)) { const c = mobs.clientPosition(e) ?? e; list.push({ ...SHADOWS[e.type], x: lerp(c.px, c.x), y: lerp(c.py, c.y), z: lerp(c.pz, c.z), pos: e, height: isSlimeLike(e) ? slimeHeight(e.size) : ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child }); } // b71: a slime's height is 0.6 * size
   }
   return list;
 }
@@ -4751,6 +4755,7 @@ async function boot(){try {
   mobRenderer = new MobRenderer(scene.scene, scene);
   horseGearRenderer = new HorseGearRenderer(scene.scene);
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
+  skinBook.add({ skinOf: (lower) => (playerRenderer?.hasSkin && playerRenderer.name?.toLowerCase() === lower ? playerRenderer.base.uniforms.map.value : null) }); // b71: the signed-in player's own skin for SkullOwner heads
   chestRenderer = new ChestRenderer(scene.scene, scene);
   endPortalRenderer = new EndPortalRenderer(scene.scene);
   beaconRenderer = new BeaconRenderer(scene.scene);

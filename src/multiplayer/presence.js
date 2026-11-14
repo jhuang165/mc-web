@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
 import { skinCanvas, capeCanvas } from '../skin.js';
+import { skinBook } from '../skull-skins.js'; // b71: SkullOwner heads take these skins
 import { ITEMS } from '../survival.js';
 import { BOW } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
@@ -21,6 +22,7 @@ export class RemotePlayers {
     this.board = board; // b64 mpscoreboard: the replica Scoreboard (team-coloured names, the belowName score)
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
     this.skinUrl = skinUrl; this.capeUrl = capeUrl; this.capes = new Map(); /* b71 mpcapes: hash -> Promise<texture | null> */ this.skins = new Map(); // hash → Promise<texture | null>
+    skinBook.add(this); // b71: skull-skins.js reads skinOf
   }
   // Skins are re-normalized here even though the server checked them: the PNG
   // is decoded by the browser as untrusted data and only ever becomes pixels.
@@ -67,6 +69,8 @@ export class RemotePlayers {
     if (!hash) { renderer.setCape(null); return; }
     void this.cape(hash).then(texture => { if (renderer.capeHash === hash) renderer.setCape(texture); });
   }
+  // b71: the loaded skin of the player called `lower` (lower-case name), for SkullOwner heads (skull-skins.js).
+  skinOf(lower) { for (const e of this.entries.values()) if (e.renderer.hasSkin && e.renderer.name?.toLowerCase() === lower) return e.renderer.base.uniforms.map.value; return null; }
   resetSkin(renderer) { if (renderer?.steveMap) renderer.base.uniforms.map.value = renderer.steveMap; if (renderer) { renderer.skinHash = null; renderer.hasSkin = false; } }
   sync(players, self) {
     this.at = performance.now();
@@ -140,5 +144,6 @@ export class RemotePlayers {
     for (const p of this.skins.values()) void p.then(t => t?.dispose());
     for (const p of this.capes.values()) void p.then(t => t?.dispose()); this.capes.clear(); // b71 mpcapes
     this.skins.clear();
+    skinBook.remove(this);
   }
 }

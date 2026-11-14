@@ -3,7 +3,7 @@
 // that module (imported by difficulty.js) needs no item registry.
 import { ORIGINAL_ITEMS } from "./original-items.js";
 import { ITEMS } from "./survival.js";
-import { emptyGear, readGear, cloneStack, pickUpItem, GOLDEN_SWORD, STONE_SWORD, BOW } from "./mob-equipment.js";
+import { emptyGear, readGear, cloneStack, skullFields, pickUpItem, GOLDEN_SWORD, STONE_SWORD, BOW } from "./mob-equipment.js";
 
 const LIVE_TO_ORIGINAL = new Map();
 for (const [key, live] of Object.entries(ORIGINAL_ITEMS)) {
@@ -16,12 +16,12 @@ export function toLiveStack(s) {
   const id = s && (ORIGINAL_ITEMS[`${s.id}:${s.damage ?? 0}`] ?? ORIGINAL_ITEMS[s.id]);
   if (id === undefined || !ITEMS[id]) return null;
   const damage = ITEMS[id].durability ? Math.min(s.damage ?? 0, ITEMS[id].durability) : ORIGINAL_ITEMS[`${s.id}:${s.damage ?? 0}`] !== undefined ? 0 : s.damage ?? 0;
-  return { id, count: s.count ?? 1, damage, ...(s.enchantments?.length ? { enchantments: pairs(s.enchantments) } : {}) };
+  return { id, count: s.count ?? 1, damage, ...(s.enchantments?.length ? { enchantments: pairs(s.enchantments) } : {}), ...skullFields(s) };
 }
 export function fromLiveStack(s) {
   const original = s && LIVE_TO_ORIGINAL.get(s.id);
   if (!original) return null;
-  return { id: original.id, count: s.count ?? 1, damage: original.damage ?? s.damage ?? 0, ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: pairs(s.enchantments) } : {}) };
+  return { id: original.id, count: s.count ?? 1, damage: original.damage ?? s.damage ?? 0, ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: pairs(s.enchantments) } : {}), ...skullFields(s) };
 }
 
 // The mob types that carry equipment, and what their class constructors leave in the hand when a save has none.
