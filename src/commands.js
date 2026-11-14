@@ -627,13 +627,13 @@ export function createCommandRunner(host) {
     }
   }
   // ServerCommandManager.getPossibleCommands + each command's addTabCompletionOptions (text before the cursor, with its "/").
-  function complete(before) {
+  function complete(before, unchecked = host.tabUnchecked) { // b70: `unchecked` for the integrated server's answer (no permission test on arguments)
     const players = host.playerNames ? host.playerNames() : [name()]; // b69 mptabcomplete: the server's getAllUsernames (every connected player)
     if (!before.startsWith("/")) return matchLast(before.split(" "), players);
     const line = before.slice(1), parts = line.split(" ");
     if (parts.length === 1) return REGISTERED.filter((c) => allowed(c) && startsWithIgnoreCase(parts[0], c.name)).map((c) => "/" + c.name).sort();
     const command = BY_NAME.get(parts[0]);
-    if (!command || (!host.tabUnchecked && !allowed(command))) return []; // b69: CommandHandler.getPossibleCommands checks no permission for arguments
+    if (!command || (!unchecked && !allowed(command))) return []; // b69: CommandHandler.getPossibleCommands checks no permission for arguments
     const args = parts.slice(1), index = args.length - 1;
     let options = [];
     const n = command.name;

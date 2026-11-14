@@ -11,6 +11,7 @@
 // The lists are kept in the server's save data (DedicatedSimulation.save() -> `admin`), in the native file shapes; ops are keyed by the player's account UUID.
 import { translation, text as textComponent } from '../chat-component.js';
 import { joinNiceString } from '../commands-scoreboard.js';
+import { UserMap } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists
 
 export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3 };
 export const DEFAULT_OP_LEVEL = 4; // server.properties op-permission-level
@@ -39,13 +40,14 @@ export class ServerAdmin {
   constructor(saved = {}, { opLevel = DEFAULT_OP_LEVEL, whitelist = false, now = () => Date.now() } = {}) {
     this.now = now;
     this.opLevel = Number.isInteger(opLevel) && opLevel >= 1 && opLevel <= 4 ? opLevel : DEFAULT_OP_LEVEL;
-    const keyed = (rows) => new Map((Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.uuid === 'string').map((r) => [r.uuid, { ...r }]));
+    const keyed = (rows) => new UserMap((Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.uuid === 'string').map((r) => [r.uuid, { ...r }]));
     this.ops = keyed(saved.ops); this.bans = keyed(saved.banned); this.allow = keyed(saved.whitelist);
-    this.ipBans = new Map((Array.isArray(saved.bannedIps) ? saved.bannedIps : []).filter((r) => r && typeof r.ip === 'string').map((r) => [r.ip, { ...r }]));
+    this.ipBans = new UserMap((Array.isArray(saved.bannedIps) ? saved.bannedIps : []).filter((r) => r && typeof r.ip === 'string').map((r) => [r.ip, { ...r }]));
     this.profiles = new Map((Array.isArray(saved.profiles) ? saved.profiles : []).filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.name.toLowerCase(), { uuid: r.uuid, name: r.name }]));
     this.whitelistOn = typeof saved.whitelistOn === 'boolean' ? saved.whitelistOn : whitelist === true; // white-list property
     this.idleMinutes = Number.isInteger(saved.idleMinutes) && saved.idleMinutes >= 0 ? saved.idleMinutes : 0; // player-idle-timeout
     this.autosave = true; // /save-off: runtime only, as WorldServer.levelSaving
+    this.whitelistFile = null; // b70 sptab70: { read(): rows | null, write(rows) } for whitelist.json beside server.properties (set by server/server.js)
     this.directory = null; // (name) => { uuid, name } | null: accounts the server knows but that never joined (the usercache's role)
     this.host = null; // { kick(id, reason), ipOf(id), stop(), save() } set by server/server.js
     this.pending = null; this.lastAction = new Map(); this.looks = new Map();
@@ -225,18 +227,28 @@ export class ServerAdmin {
       case 'add': {
         if (a.length < 2) throw new Fail('commands.whitelist.add.usage');
         const p = this.profile(a[1]); if (!p) throw new Fail('commands.whitelist.add.failed', a[1]);
-        this.allow.set(p.uuid, { uuid: p.uuid, name: p.name });
+        this.allow.set(p.uuid, { uuid: p.uuid, name: p.name }); this.writeWhitelist();
         return ctx.feedback('commands.whitelist.add.success', a[1]);
       }
       case 'remove': {
         if (a.length < 2) throw new Fail('commands.whitelist.remove.usage');
         const e = [...this.allow.values()].find((w) => w.name.toLowerCase() === a[1].toLowerCase());
         if (!e) throw new Fail('commands.whitelist.remove.failed', a[1]);
-        this.allow.delete(e.uuid);
+        this.allow.delete(e.uuid); this.writeWhitelist();
         return ctx.feedback('commands.whitelist.remove.success', a[1]);
       }
-      case 'reload': this.reloaded = (this.reloaded ?? 0) + 1; return ctx.feedback('commands.whitelist.reloaded'); // the lists live in the save data: nothing on disk to re-read
+      case 'reload': this.reloadWhitelist(); return ctx.feedback('commands.whitelist.reloaded'); // oi.func_152599_k is empty in the base class (bytecode-read); the dedicated list re-reads whitelist.json (recalled)
       default: throw new Fail('commands.whitelist.usage');
     }
+  }
+  // b70 sptab70: DedicatedPlayerList.func_152599_k re-reads the whitelist file (recalled: the UserList loader is server-only, not in the client JAR). Here the file is whitelist.json
+  // beside server.properties, written after every /whitelist add and remove; a missing or unreadable file leaves the list as it is.
+  writeWhitelist() { try { this.whitelistFile?.write([...this.allow.values()].map((r) => ({ ...r }))); } catch { /* the save data still holds the list */ } }
+  reloadWhitelist() {
+    this.reloaded = (this.reloaded ?? 0) + 1;
+    let rows = null; try { rows = this.whitelistFile?.read() ?? null; } catch { rows = null; }
+    if (!Array.isArray(rows)) return false;
+    this.allow = new UserMap(rows.filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.uuid, { uuid: r.uuid, name: r.name }]));
+    return true;
   }
 }

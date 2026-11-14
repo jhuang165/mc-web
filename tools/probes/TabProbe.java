@@ -29,11 +29,24 @@ public class TabProbe {
       }
     }
   }
+  static String run(z handler, ac sender, String profile, String key, int keyValue, String text) {
+    List<String> r;
+    String head = "{\"profile\":" + q(profile) + "," + (key == null ? "" : "\"" + key + "\":" + keyValue + ",") + "\"text\":" + q(text) + ",";
+    try { r = handler.b(sender, text); } catch (Throwable t) { return head + "\"error\":" + q(String.valueOf(t)) + "}"; }
+    StringBuilder b = new StringBuilder();
+    if (r != null) for (String s : r) b.append(b.length() == 0 ? "" : ",").append(q(s));
+    return head + "\"options\":" + (r == null ? "null" : "[" + b + "]") + "}";
+  }
+  static z handlerOf(String list) throws Exception {
+    z handler = new z();
+    for (String cls : list.split(",")) handler.a((aa) Class.forName(cls).getDeclaredConstructor().newInstance());
+    return handler;
+  }
+  // args[0]: the dedicated server's command classes (ServerCommandManager's `isDedicated` branch taken), args[1] the integrated server's (the common 31 plus the lan-only /publish).
   public static void main(String[] args) throws Exception {
     stubServer();
-    z handler = new z();
-    for (String cls : args[0].split(",")) handler.a((aa) Class.forName(cls).getDeclaredConstructor().newInstance());
     String[] texts = {"", "s", "S", "t", "te", "se", "b", "ban", "w", "?", "x", "gamemode s", "gamemode ", "difficulty p", "weather r", "time set ", "nosuch ", "TIME s"};
+    z dedicated = handlerOf(args[0]);
     for (int level = 0; level <= 4; level++) {
       final int lv = level;
       ac sender = (ac) Proxy.newProxyInstance(TabProbe.class.getClassLoader(), new Class[]{ac.class}, (p, m, a) -> {
@@ -41,13 +54,26 @@ public class TabProbe {
         if (m.getName().equals("b_")) return "Player";
         return null;
       });
-      for (String text : texts) {
-        List<String> r;
-        try { r = handler.b(sender, text); } catch (Throwable t) { System.out.println("{\"level\":" + level + ",\"text\":" + q(text) + ",\"error\":" + q(String.valueOf(t)) + "}"); continue; }
-        StringBuilder b = new StringBuilder();
-        if (r != null) for (String s : r) b.append(b.length() == 0 ? "" : ",").append(q(s));
-        System.out.println("{\"level\":" + level + ",\"text\":" + q(text) + ",\"options\":" + (r == null ? "null" : "[" + b + "]") + "}");
-      }
+      for (String text : texts) System.out.println(run(dedicated, sender, "dedicated", "level", lv, text).replace("{\"profile\":\"dedicated\",", "{"));
+    }
+    // The integrated server: EntityPlayerMP.canCommandSenderUseCommand (mw.a(int, String), bytecode-read): "seed" is always allowed (the server is not dedicated), "tell", "help" and "me" too;
+    // any other command needs the player to be an op (ServerConfigurationManager.g: cheats on for the owner's world) and the op level 4 (MinecraftServer.l()) >= the required level.
+    z integrated = handlerOf(args[1]);
+    String[] more = Arrays.copyOf(texts, texts.length + 12);
+    String[] extra = {"g", "ga", "p", "pu", "d", "de", "m", "ms", "k", "e", "he", "sp"};
+    System.arraycopy(extra, 0, more, texts.length, extra.length);
+    for (int cheats = 0; cheats <= 1; cheats++) {
+      final boolean on = cheats == 1;
+      ac sender = (ac) Proxy.newProxyInstance(TabProbe.class.getClassLoader(), new Class[]{ac.class}, (p, m, a) -> {
+        if (m.getName().equals("a") && m.getParameterTypes().length == 2) {
+          String name = (String) a[1];
+          if (name.equals("seed") || name.equals("tell") || name.equals("help") || name.equals("me")) return true;
+          return on && 4 >= ((Integer) a[0]);
+        }
+        if (m.getName().equals("b_")) return "Player";
+        return null;
+      });
+      for (String text : more) System.out.println(run(integrated, sender, "integrated", "cheats", cheats, text));
     }
   }
 }

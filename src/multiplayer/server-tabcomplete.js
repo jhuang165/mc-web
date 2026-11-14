@@ -9,13 +9,13 @@
 //    that starts with the word and whose command canCommandSenderUseCommand, in HashMap iteration order (not sorted). More words: the command found by the exact (case-sensitive) first word
 //    answers addTabCompletionOptions(sender, the other words), with NO permission check; an unknown command answers nothing.
 //  * bytecode-read: the dedicated commands' addTabCompletionOptions (op, deop, ban, ban-ip, pardon, pardon-ip, banlist, whitelist, kick), /say, /me and /tell (every word: player names).
-//  * recalled: the order of a UserList's names (a HashMap keyed by profile UUID) is not reproduced; the lists answer in insertion order. The HashMap order of the command map is
+//  * bytecode-read (batch 70, user-list-order.js): the UserList name arrays iterate a HashMap keyed by the UUID string (IP string for the IP list), emulated there. The HashMap order of the command map is
 //    java.util.HashMap's (Java 8 and later: spread hash, power-of-two table, split-preserving bin order), compared with the executed run of the JDK that ran the probe.
 import { COMMAND_LIST } from '../command-data.js';
 import { createCommandRunner, startsWithIgnoreCase, matchLast } from '../commands.js';
 
-/** Java's String.hashCode. */
-export function javaStringHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0; return h; }
+import { javaStringHash, userListValues, userListKeys } from './user-list-order.js';
+export { javaStringHash };
 /** Iteration order of a java.util.HashMap<String, ?> after `keys` were put in order (duplicates keep their first place): bucket index ascending, insertion order inside a bucket. */
 export function javaHashOrder(keys) {
   const seen = new Set(); let capacity = 16, size = 0;
@@ -30,6 +30,17 @@ const KEYS = []; const BY_KEY = new Map();
 for (const c of DEDICATED) for (const key of [c.name, ...c.aliases]) { KEYS.push(key); if (!BY_KEY.has(key)) BY_KEY.set(key, c); }
 export const COMMAND_KEY_ORDER = javaHashOrder(KEYS);
 
+// b70 sptab70: the integrated server's ServerCommandManager registers the 31 common commands, then (isDedicated() false) /publish: 32 commands, 35 lookup keys with ?, w and msg
+// (executed: tabcomplete-reference.json `integrated`). Single player uses the same CommandHandler.getPossibleCommands, with the owner's permission (EntityPlayerMP.func_70003_b).
+const INTEGRATED = COMMAND_LIST.filter((c) => c.group !== 'dedicated');
+const INTEGRATED_KEYS = []; export const INTEGRATED_BY_KEY = new Map();
+for (const c of INTEGRATED) for (const key of [c.name, ...c.aliases]) { INTEGRATED_KEYS.push(key); if (!INTEGRATED_BY_KEY.has(key)) INTEGRATED_BY_KEY.set(key, c); }
+export const INTEGRATED_KEY_ORDER = javaHashOrder(INTEGRATED_KEYS);
+/** The integrated server's getPossibleCommands for the single word: `canUse(command)` is the sender's permission test (seed, tell, help and me always; the rest with cheats). */
+export function integratedCommandNames(word, canUse) {
+  return INTEGRATED_KEY_ORDER.filter((key) => startsWithIgnoreCase(word, key) && canUse(INTEGRATED_BY_KEY.get(key)));
+}
+
 /** CommandHandler.getPossibleCommands for the single word: the command keys (names and aliases) a sender of permission `level` may use. */
 export function possibleCommandNames(level, word) {
   return COMMAND_KEY_ORDER.filter((key) => startsWithIgnoreCase(word, key) && level >= BY_KEY.get(key).permission);
@@ -41,21 +52,21 @@ function adminOptions(name, args, ctx) {
   const online = ctx.online, admin = ctx.admin;
   const names = (rows) => [...rows].map((r) => r.name).filter((x) => typeof x === 'string');
   if (name === 'op' && n === 1) return matchLast(last, online.filter((p) => !ctx.isOp(p))); // MinecraftServer.func_152357_F profiles that are not ops
-  if (name === 'deop' && n === 1) return matchLast(last, names(admin?.ops.values() ?? [])); // ServerConfigurationManager.func_152606_n: the ops list
+  if (name === 'deop' && n === 1) return matchLast(last, names(admin ? userListValues(admin.ops) : [])); // ServerConfigurationManager.func_152606_n: the ops list
   if ((name === 'ban' || name === 'kick') && n >= 1) return matchLast(last, online); // MinecraftServer.func_71213_z
   if (name === 'ban-ip' && n === 1) return matchLast(last, online);
-  if (name === 'pardon' && n === 1) return matchLast(last, names(admin?.bans.values() ?? [])); // UserListBans.func_152685_a
-  if (name === 'pardon-ip' && n === 1) return matchLast(last, [...(admin?.ipBans.keys() ?? [])]); // BanList.func_152685_a
+  if (name === 'pardon' && n === 1) return matchLast(last, names(admin ? userListValues(admin.bans) : [])); // UserListBans.func_152685_a
+  if (name === 'pardon-ip' && n === 1) return matchLast(last, admin ? userListKeys(admin.ipBans) : []); // BanList.func_152685_a
   if (name === 'banlist' && n === 1) return matchLast(last, ['players', 'ips']);
   if (name === 'whitelist') {
     if (n === 1) return matchLast(last, ['on', 'off', 'list', 'add', 'remove', 'reload']);
-    if (n === 2 && args[0] === 'remove') return matchLast(last, names(admin?.allow.values() ?? [])); // oi.func_152598_l: the whitelist
+    if (n === 2 && args[0] === 'remove') return matchLast(last, names(admin ? userListValues(admin.allow) : [])); // oi.func_152598_l: the whitelist
     if (n === 2 && args[0] === 'add') return matchLast(last, names(admin?.profiles.values() ?? [])); // PlayerProfileCache.func_152654_a: known names
   }
   return [];
 }
 const ADMIN = new Set(['op', 'deop', 'ban', 'ban-ip', 'pardon', 'pardon-ip', 'banlist', 'whitelist', 'kick']);
-const ALL_WORDS = new Set(['say', 'me', 'tell']); // /say (every word), /me and /tell/w/msg (CommandMessage): getAllUsernames at any position
+export const ALL_WORDS = new Set(['say', 'me', 'tell']); // /say (every word), /me and /tell/w/msg (CommandMessage): getAllUsernames at any position
 
 /** CommandHandler.getPossibleCommands(sender, text without the slash). ctx: { sender, level, online: string[], admin, isOp(name), scoreboard }. */
 export function possibleCommands(line, ctx) {
