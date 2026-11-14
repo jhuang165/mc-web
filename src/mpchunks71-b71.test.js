@@ -66,6 +66,7 @@ const fixture = (viewDistance) => {
   const world = new World('mpchunks-b71');
   world.spawn = () => ({ x: 8.5, y: 100, z: 8.5 });
   const s = new DedicatedSimulation({}, { world, gameMode: 'creative', mobs: false, rules: { viewDistance } });
+  s.rules.chunkStream = false; // b72: these tests are about the square in the snapshot (the streaming join is tested in mpstream72-b72)
   return s;
 };
 const place = (s, p, x, z) => { p.position.copy({ x, y: 100, z }); p.previous.copy(p.position); p.flying = true; };

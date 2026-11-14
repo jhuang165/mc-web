@@ -135,6 +135,7 @@ test('chunk resends go only to clients that joined with chunks: true; an older p
     return { ws, next };
   };
   const modern = await connect('Modern', { chunks: true }), legacy = await connect('Legacy', {});
+  const column = m => m.type === 'chunkBulk' && m.columns.some(c => c.x === 0 && c.z === 0); await Promise.all([modern.next(column), legacy.next(column)]); // b72: cells only go to players that were sent the column
   for (let i = 0; i < 64; i++) simulation.world.put(i % 16, 100 + (i >> 4), 3, 3, 0);
   const a = await modern.next(m => m.type === 'tick' && m.chunks?.length);
   const b = await legacy.next(m => m.type === 'tick' && m.tick === a.tick);

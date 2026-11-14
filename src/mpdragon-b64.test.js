@@ -16,6 +16,7 @@ function fixture() {
   const world = new World('mp-dragon-b64');
   world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
   const s = new DedicatedSimulation({}, { world, gameMode: 'creative', mobs: false });
+  s.rules.chunkStream = false; // b72: tracking needs the column sent; the whole square is in the snapshot here
   const a = s.addPlayer('a', 'Alice', key(1));
   s.dimensions.arrive(a, 1);
   const end = s.dimensions.end.n, mobs = end.mobs.mobs;

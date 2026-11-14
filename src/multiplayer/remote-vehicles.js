@@ -87,6 +87,8 @@ export class RemoteVehicles {
       v.yaw = s.yaw; v.pitch = s.pitch;
     }
   }
+  // b72 mpstream72: the carts and boats standing in an unloaded column (keys `cx,cz`) leave the client world (Chunk.onChunkUnload).
+  dropColumns(columns) { const del = []; for (const [k, c] of this.copies) if (columns.has(`${Math.floor(c.v.x / 16)},${Math.floor(c.v.z / 16)}`)) del.push(k); if (del.length) this.apply({ del }); }
   keyOf(v) { for (const [k, c] of this.copies) if (c.v === v) return k; return null; }
   // EntityRenderer.getMouseOver on the copies' boxes: the nearest vehicle the ray reaches (the 0.1 border included). Returns { key, vehicle, distance } or null.
   pick(origin, dir, reach, wall = reach, ignore = null) { // `ignore`: the key of the vehicle the player sits in

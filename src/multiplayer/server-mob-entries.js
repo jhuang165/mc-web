@@ -69,6 +69,7 @@ export class SharedMobTracker extends MobTracker {
     for (const w of this.watchers.values()) {
       const p = w.view.player, g = w.flag, dx = p.x - g.x, dy = (p.y ?? 0) - g.y, dz = p.z - g.z;
       w.flagged = false;
+      if (w.fresh?.()) g.initialised = false; // b72 mpstream72: columns sent / unloaded this tick: re-evaluate every entry
       if (!g.initialised || dx * dx + dy * dy + dz * dz > 16) { g.x = p.x; g.y = p.y ?? 0; g.z = p.z; g.initialised = true; w.flagged = true; }
       if (w.flagged) for (const e of this.walk()) this.entries.get(e).entry.tryStartFor(w);
     }

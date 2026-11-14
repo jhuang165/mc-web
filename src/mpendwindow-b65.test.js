@@ -13,7 +13,7 @@ import { buildExitPortal } from './multiplayer/server-end.js';
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const OBSIDIAN = 22, STONE = 152, FULL = END_WINDOWS.full, OLD = END_WINDOWS.legacy;
 const input = () => ({ type: 'input', controls: { ...IDLE_INPUT }, yaw: 0, pitch: 0, current: 0, hotbar: Array(9).fill(null) });
-const newSim = (saved = {}) => { const world = new World('mp-endwindow-b65'); world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 }); return new DedicatedSimulation(saved, { world, gameMode: 'creative', mobs: false }); };
+const newSim = (saved = {}) => { const world = new World('mp-endwindow-b65'); world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 }); const s = new DedicatedSimulation(saved, { world, gameMode: 'creative', mobs: false }); s.rules.chunkStream = false; /* b72: these tests read the snapshot columns */ return s; };
 
 test('a new End is 256 x 256 with the origin at native (-128, -128); the light grid is as wide', { timeout: 120000 }, () => {
   const s = newSim(), a = s.addPlayer('a', 'Alice', key(1));

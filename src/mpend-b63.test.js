@@ -16,7 +16,8 @@ function fixture(mode = 'survival') {
   const world = new World('mp-end-b63');
   for (let x = 40; x <= 100; x++) for (let z = 50; z <= 80; z++) for (let y = 9; y <= 40; y++) world.put(x, y, z, y === 9 ? 3 : 0, 0, false);
   world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
-  return { s: new DedicatedSimulation({}, { world, gameMode: mode, mobs: false }), world };
+  const s = new DedicatedSimulation({}, { world, gameMode: mode, mobs: false }); s.rules.chunkStream = false; // b72: these tests read the snapshot columns
+  return { s, world };
 }
 // twelve frames round a 3 x 3 interior at x 62..64, z 62..64 (y 10), each facing inward
 const ring = world => {

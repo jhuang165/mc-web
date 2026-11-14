@@ -60,7 +60,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
-    if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
+    if (message.type === 'dimRespawn') { this.messages = this.messages.filter(m => m.type !== 'chunkBulk' && m.type !== 'chunkUnload'); this.messages.push(message); this.pending = null; return; } /* b72 mpstream72: columns of the old world are void */ // b61 mpnether: the world swap keeps its place in the queue
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'pistonTiles') { this.messages.push(message); return; } // b66 mppistons: S24 and the moving blocks, in order
