@@ -52,6 +52,7 @@ import { ServerMobs } from './server-mobs.js';
 import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
+import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
@@ -84,6 +85,7 @@ export function cleanHotbar(slots) {
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
   constructor(saved = {}, { world = null, gameMode = 'creative', ...options } = {}) {
+    saved = upgradeLegacyEnd(saved); // b66 mpend3: an End saved in the 0.93.0 128 window moves into the 256 window (server-end-upgrade.js)
     this.commandBlocks = options.commandBlocks === true || saved.commandBlocks === true; // b63: enable-command-block (default false, as the dedicated server); command block carts run only when set
     this.fishing = new ServerFishing(this); // b64 mpstats2
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state

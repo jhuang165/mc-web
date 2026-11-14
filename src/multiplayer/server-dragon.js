@@ -18,7 +18,7 @@ const PORTAL_MARGIN = 6; // the exit portal is 9 wide (radius 4): keep its disc 
 export const END_CENTRE = Object.freeze({ x: END_OFFSET.x, z: END_OFFSET.z }); // the native origin (0, 0) in the 0.93.0 window
 // b65 mpendwindow: the native origin (0, 0) in a world's own window, and the chunk window it holds (native chunk coordinates).
 export const centreOf = world => ({ x: -world.originX, z: -world.originZ });
-const windowOf = world => ({ cx0: Math.floor(world.originX / 16), cx1: Math.floor((world.size - 1 + world.originX) / 16), cz0: Math.floor(world.originZ / 16), cz1: Math.floor((world.size - 1 + world.originZ) / 16) });
+export const windowOf = world => ({ cx0: Math.floor(world.originX / 16), cx1: Math.floor((world.size - 1 + world.originX) / 16), cz0: Math.floor(world.originZ / 16), cz1: Math.floor((world.size - 1 + world.originZ) / 16) });
 
 // Called by ServerMobs' constructor, once per dimension's instance.
 export function installServerDragon(sm) {
@@ -49,14 +49,31 @@ export function setupEnd(n, source, fresh) {
   mobs.dragonCenter = centre;
   mobs.dragonPortalAt = (x, z) => [Math.max(PORTAL_MARGIN, Math.min(size - 1 - PORTAL_MARGIN, x)), Math.max(PORTAL_MARGIN, Math.min(size - 1 - PORTAL_MARGIN, z))];
   if (!fresh) return;
+  addEndCrystals(n, source);
+  spawnDragonIfAbsent(n.world, mobs, Math.random, centre);
+}
+
+// The crystals of the spikes inside the world's window (a spike's chunk population), except the native keys `skip` (b66 mpend3: an upgraded End's crystals that exist or were destroyed).
+export function addEndCrystals(n, source, skip = null) {
+  const mobs = n.mobs.mobs, world = n.world, size = world.size;
   for (const c of source.endCrystals(10, windowOf(world))) {
     const x = c.x - world.originX, z = c.z - world.originZ;
     if (x < 1 || x >= size - 1 || z < 1 || z >= size - 1) continue; // a crystal on the cut-off edge has no pillar here
+    if (skip?.has(`${c.x},${c.z}`)) continue;
     const e = mobs.create(ENDER_CRYSTAL, x, c.y, z);
     e.yaw = (-c.yaw * Math.PI) / 180;
     mobs.entities.push(e);
   }
-  spawnDragonIfAbsent(n.world, mobs, Math.random, centre);
+}
+
+// b66 mpend3: the native keys of the crystals a 0.93.0 End (128 window) made at its first load; an upgrade adds the others.
+export function legacyCrystalKeys(source) {
+  const old = { originX: -END_OFFSET.x, originZ: -END_OFFSET.z, size: 128 }, keys = new Set();
+  for (const c of source.endCrystals(10, windowOf(old))) {
+    const x = c.x - old.originX, z = c.z - old.originZ;
+    if (x >= 1 && x < 127 && z >= 1 && z < 127) keys.add(`${c.x},${c.z}`);
+  }
+  return keys;
 }
 
 // What the End saves about the fight: a dragon (even one dying) is 'alive', none is 'dead' (its exit portal and egg are edits of the world).

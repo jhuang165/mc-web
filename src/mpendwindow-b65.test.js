@@ -78,7 +78,7 @@ test('every spike inside the window has its crystal, the exit portal and the dra
   assert.equal(s.dimensions.end.saveField().dragon, 'alive'); assert.equal(s.dimensions.end.saveField().window, 'full');
 });
 
-test('an End saved by 0.93.0 loads as the 128 x 128 window it was stored in', { timeout: 120000 }, () => {
+test('an End saved by 0.93.0 is upgraded into the 256 window on load (b66 mpend3 replaced the b65 "stays legacy" rule)', { timeout: 120000 }, () => {
   // make a save, then rewrite the End record into the 0.93.0 shape: no `window`, edits in the old window's coordinates, no dragon alive
   const first = newSim(), a = first.addPlayer('a', 'Alice', key(1));
   first.dimensions.arrive(a, 1);
@@ -88,22 +88,18 @@ test('an End saved by 0.93.0 loads as the 128 x 128 window it was stored in', { 
   delete end.window; end.dragon = 'dead'; end.mobs = [];
   const oldX = 100 + OLD.x, oldZ = OLD.z; // the platform's centre in the old window
   end.edits = [[`${oldX},60,${oldZ}`, 1]]; // one stone block of the old End
-  const me = saved.players.find(([k]) => k === key(1))[1]; me.x = oldX + 0.5; me.z = oldZ + 0.5;
+  const me = saved.players.find(([k]) => k === key(1))[1]; me.x = oldX + 0.5; me.z = oldZ + 0.5; me.position = { x: oldX + 0.5, y: 50, z: oldZ + 0.5 };
   const again = newSim(saved), back = again.addPlayer('a2', 'Alice', key(1));
   assert.equal(back.dimension, 1);
   const w = back.world;
-  assert.equal(w.size, 128); assert.equal(w.endWindow, 'legacy'); assert.deepEqual([w.originX, w.originZ], [-25, -96]);
-  assert.equal(w.get(oldX, 60, oldZ), 1, 'the old edit is where it was');
-  const snap = again.snapshot('a2');
-  assert.equal(snap.window, 'legacy'); assert.equal(snap.columns.length, 64);
-  const replica = restoreReplica(JSON.parse(JSON.stringify(snap)));
-  assert.equal(replica.size, 128); assert.equal(replica.originX, -25);
-  assert.equal(again.dimensions.end.n.light.size, 128);
-  assert.equal(again.dimensions.end.saveField().window, 'legacy');
-  // a snapshot from an older server has no `window` at all: the same legacy reading
-  const bare = { ...snap }; delete bare.window;
-  assert.equal(restoreReplica(JSON.parse(JSON.stringify(bare))).size, 128);
+  assert.equal(w.size, 256); assert.equal(w.endWindow, 'full'); assert.deepEqual([w.originX, w.originZ], [-128, -128]);
+  assert.equal(w.get(100 + 128, 60, 128), 1, 'the old edit is at the same native cell in the new window');
+  assert.deepEqual([back.position.x, back.position.z], [100.5 + 128, 0.5 + 128]);
+  assert.equal(again.snapshot('a2').window, 'full'); assert.equal(again.dimensions.end.saveField().window, 'full');
+  // the client still reads a snapshot without `window` (an older server) as the 128 window
   assert.equal(new FiniteDimensionWorld('x', END).size, 128);
+  const legacy = new FiniteDimensionWorld('x', END, 'legacy');
+  assert.equal(legacy.size, 128); assert.equal(legacy.originX, -25);
 });
 
 test('the Nether and the Overworld keep the 128 grid', () => {
