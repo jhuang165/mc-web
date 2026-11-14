@@ -11,9 +11,24 @@ export function transientIds(born, trackers, lists) {
   const listed = new Set(lists.flat());
   const out = [];
   for (const e of born) {
-    if (!e || e.dead !== true || listed.has(e) || trackers.some((t) => t.entries.has(e))) continue;
+    if (!e || (e.dead !== true && e.transientGone !== true) || listed.has(e) || trackers.some((t) => t.entries.has(e))) continue;
     const id = idNumber(e);
     if (id !== null) out.push(id);
   }
   return out;
+}
+
+// Batch 65 (trackertransient2): mobs have no spawn hook (they are pushed to `entities` from dozens of places), but a mob is only removed in one or two places: the end of EntityWorld.tick and
+// the frozen-mob sweep. A mob removed there that no tracker ever listed (`entries`) was spawned and gone inside one tick (a peaceful-mode removal of a spawn made after the tracker pass,
+// a despawn): it took a HashSet slot at its spawn and gave it back (executed: the transient* cases of tracker-dead-reference.json are entity-agnostic, World.updateEntities removes any dead sa the same way).
+// `before` / `after`: the mob list around the removal. The mob is marked (`transientGone`) and reported to the live tracker (`born`, replayed by `transientIds` at the next pass) and to the away
+// run's trace (`traceBorn`, away-trace.js: it keeps the ones it never sampled).
+export function noteGoneMobs(world, before, after) {
+  if (before.length === after.length || (!world.tracker && !world.traceBorn)) return;
+  const keep = new Set(after);
+  for (const e of before) {
+    if (keep.has(e) || e.transientGone) continue;
+    if (world.traceBorn) { e.transientGone = true; world.traceBorn.push(e); } // the worker has no tracker: AwayTrace.sample drops the ones it sampled (they are ghosts)
+    else if (!world.tracker.entries.has(e) && world.tracker.born.length < 4096) { e.transientGone = true; world.tracker.born.push(e); }
+  }
 }

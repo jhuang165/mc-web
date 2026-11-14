@@ -60,6 +60,11 @@ export function copyLivingPre(c, m, rand = deathRandom(c), world = null, boatBox
   }
 }
 
+// Batch 65 (trackertransient2): EntityLivingBase.fall on the copy (the client world has no isRemote guard there) calls attackEntityFrom(fall, ceil(distance - 3)); EntityEnderman.attackEntityFrom
+// runs setScreaming(true) before its super call, whose client side refuses the damage, so a landing after a drop above 3 blocks makes the copy scream (executed: MobCopies2Probe
+// `fallhigh` `fallshort` `fallnone`). `landed`: the fall distance moveEntity returns on the tick the copy touched the ground.
+export function copyFallScream(c, m, landed) { if (m.type === "enderman" && landed > 3 && !c.gone) c.screaming = true; }
+
 // The draws of onLivingUpdate (the wither's, after its move) and the slime's onUpdate tail on the copy, after the move (the enderman's and the blaze's are copyLivingPre). Skipped once the copy has been removed (deathDone before this tick).
 export function copyLivingUpdate(c, m, rand = deathRandom(c)) {
   if (c.gone) return;

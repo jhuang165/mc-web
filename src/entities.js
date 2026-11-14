@@ -1,5 +1,6 @@
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
-import { copyLivingRoll, copyLivingUpdate, copyLivingPre } from "./copy-talk.js";
+import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
+import { noteGoneMobs } from "./tracker-transient.js";
 import { copyWaterEnter, copyWaterAfterMove, copyBreathe } from "./copy-water.js"; // batch 61: the copies' water and air draws
 import { copyPotionSwirl } from "./copy-meta.js";
 import { copyWolfShake, copyStatus } from "./copy-status.js";
@@ -2042,7 +2043,8 @@ export class EntityWorld {
       c.vx *= friction; c.vy *= friction; c.vz *= friction;
     } else {
       const mx = [c.vx, c.vy, c.vz];
-      moveEntityWithHeading(this.world, c, w, h, 0);
+      c.living = true; // EntityLivingBase.updateFallState: a landing in water cancels the fall (moveEntity reads it)
+      copyFallScream(c, m, moveEntityWithHeading(this.world, c, w, h, 0)); // b65: a landing above 3 blocks makes an enderman copy scream (copy-talk.js)
       if (c.inWater === false) copyWaterAfterMove(c, m, inWater(this.world, c, w, h), w, mx); // batch 61: updateFallState's second handleWaterMovement (a splash on the copy's Random)
     }
   }
@@ -2052,6 +2054,7 @@ export class EntityWorld {
     const [w, h] = this.size(m), r = w / 2;
     const wasInWater = c.inWater;
     c.inWater = inWater(this.world, c, w, h);
+    if (c.inWater) c.fallDistance = 0; // Entity.handleWaterMovement (b65: the fall damage of the copy's landing, copyFallScream)
     c.inLava = m.type === "magma_cube" ? false : inLava(this.world, [c.x - r, c.y, c.z - r, c.x + r, c.y + h, c.z + r]);
     // the start of onLivingUpdate that runs on both sides: EntityBlaze (airborne and falling) and EntityWither damp the vertical motion by 0.6
     if (m.type === "blaze" && !c.onGround && c.vy < 0) c.vy *= 0.6;
@@ -2148,6 +2151,7 @@ export class EntityWorld {
   // `joined` when it spawned, or is placed after the mobs known so far when it has none (a saved one, or a spawn site that does not report).
   joined(e, kind) {
     EntityWorld.prototype.takeId.call(this, e); // Entity.<init>: nextEntityID++ (an item, arrow, thrown entity, TNT, falling block or rocket takes its number at its creation)
+    this.traceBorn?.push(e); // b65 (away-trace.js): the away worker's spawns
     this.tracker?.born.length < 4096 && this.tracker.born.push(e); // b64 (tracker-transient.js): a spawn that is dead before the tracker's next pass still took a slot in the HashSet
     const w = this.walks?.get(kind);
     if (!w) return;
@@ -2443,7 +2447,8 @@ export class EntityWorld {
       this.serverPlayerUpdate(p);
     }
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
-    this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
+    const kept = this.entities.filter((e) => e.health > 0 || e.death < 20);
+    noteGoneMobs(this, this.entities, kept); this.entities = kept; // b65 (tracker-transient.js): a mob spawned and removed inside one tick
   }
   // The tick of the server's copy of the player (see tick): EntityPlayerMP.onUpdateEntity (mw.i). Entity.onEntityUpdate's handleWaterMovement (the flow push) and lava flag, then
   // EntityLivingBase.onLivingUpdate: the motion snap below 0.005 (y too), moveEntityWithHeading with no input (the copy is a plain EntityPlayerMP: stepHeight 0, its own sneak flag

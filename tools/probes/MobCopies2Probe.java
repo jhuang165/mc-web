@@ -119,6 +119,27 @@ public class MobCopies2Probe {
       }
       MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
     }
+    { // b65 trackertransient2: client-side fall damage on an enderman copy. EntityLivingBase.fall (landing after a drop above 3 blocks) calls attackEntityFrom(fall); EntityEnderman.attackEntityFrom
+      // (ya.a) runs setScreaming(true) BEFORE super, whose client side refuses (isRemote), so the copy screams (watcher 18) and then rolls nextInt(100) each tick. Dry copy dropped from y 8 (fallhigh, fall 8)
+      // and from y 3.5 (fallshort, fall 3.5: damage ceil(0.5) = 1 still counts) and from y 3.0 (fallnone: nothing); 3 seeds, 60 ticks, `pre` rows as the rain records.
+      MobMoveProbe.ProbeWorld.exact = true; MobMoveProbe.step = 2;
+      String[] kinds = { "fallhigh", "fallshort", "fallnone" }; double[] fromY = { 8.0, 3.5, 3.0 };
+      for (int k = 0; k < 3; k++) for (long sd = 7000 + 10 * k; sd < 7003 + 10 * k; sd++) {
+        sv e = make("Enderman", sd, 10.5, fromY[k], -5.5, false);
+        HorseProbe.out(head(kinds[k], "Enderman", sd, e) + ",\"fromY\":" + fromY[k] + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 60, true) + "}");
+      }
+      MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
+    }
+    { // b65: a BURNING copy (watcher 0 bit 0) in the rain. Entity.onEntityUpdate (sa.C) zeroes `fire` on every client entity, and Entity.moveEntity (sa.d) plays random.fizz only for `isWet() && fire > 0`
+      // (fire is set again inside the move only when NOT wet), so the copy never fizzes and nothing is extinguished: rain strikes at every y, zombie copy on the ground, 60 ticks, 3 seeds.
+      MobMoveProbe.ProbeWorld.exact = true; MobMoveProbe.step = 2;
+      for (long sd = 7100; sd < 7103; sd++) {
+        sv e = make("Zombie", sd, 10.5, 0.0, -5.5, false);
+        watch(e, 0, (byte) 1); PW.rainMinY = -64;
+        HorseProbe.out(head("rainburn", "Zombie", sd, e) + ",\"width\":" + MobMoveProbe.fl(e, "M") + ",\"height\":" + MobMoveProbe.fl(e, "N") + "," + ticks(e, 60, true) + "}");
+      }
+      MobMoveProbe.ProbeWorld.exact = false; MobMoveProbe.step = 0;
+    }
     { // wither: spawn charge and armour
       long[] seeds = { 6201, 6202, 6203 }; int[] invul = { 100, 0, 100 }; float[] health = { 300f, 100f, 100f };
       for (int k = 0; k < 3; k++) {
