@@ -2,6 +2,40 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 72
+
+Batch 72 covered these areas:
+- **Cake and fog.** Left click on a cake eats a slice, in single player and on the server; the Nether and End use the short fog distances.
+- **Offline cape.** Single player can load a cape file from Chat Settings.
+- **Client settings on the server.** The server receives all client settings and hides chat from players who turned it off. Four planned items were found wrong (native has no such server behaviour).
+- **Spawn caps.** Spawn eggs, `/summon` and natural spawning have no entity cap; the dragon and crystals block spawns; stems use the shared random; spawner counts include subclasses.
+- **Small fixes.** The step `ySize` item was wrong (executed); vines count for the climb stat; away-run droppers transfer.
+- **Flower pots and seeds.** All 113 pot stacks compared with native; big oaks grow in legacy worlds; the structure seed atlas uses the native spawn.
+- **Server item cadence.** Items and orbs go out on the native 20-tick tracker cadence and the client moves them in between.
+- **Riders.** Rider fall order fixed; boat and cart landings hurt and sound for the rider; chicken jockeys search in native order; no step sounds while riding.
+- **Projectile order.** Ties between entities at equal distance follow the native chunk order (executed); the arrow pickup box is native (executed).
+- **Chunk streaming.** The join streams its columns; block changes and entities only go to players that have the column; the legacy End window is limited.
+
+Still open from batch 72:
+- **Multiplayer.**
+  - Chunks: remote players and client tile-entity maps are not dropped on unload; `chunkStream` is a test switch, not a server.properties key.
+  - Cake: the server cannot place a cake item.
+  - Settings: the hidden-chat player's own tab completion is not gated (recalled native); natural spawning stops at the 80-mob wire limit.
+  - Riders: server players riding server boats and carts get no fall sound; server `collectArrows` passes no ridden box.
+  - The brewing stand selection flag is kept separately by the server and the client.
+  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
+  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: the streamed join, items and orbs between cadence packets, the profile screen and capes on remote players. Earlier unseen items from batches 67 to 71 still stand.
+- **Single player.**
+  - Cake `random.eat` on use is unverified.
+  - A rider mounted while falling does not carry the fall into its first landing; a mob passenger takes its fall at its own turn.
+  - Flower pots: native stacks with damage values the port cannot hold are not representable; pot NBT import/export is not wired.
+  - Mob chunk cells are stamped at projectile sweeps, not on every update; items, orbs and vehicles are not interleaved with arrows in one pickup order; other port boxes may still lack float sizes.
+  - Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
+  - No offline skin choice; the offline cape is per browser profile.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 71
 
 Batch 71 covered these areas:
@@ -16,27 +50,7 @@ Batch 71 covered these areas:
 - **Server admin lists.** List commands print in native order; the four JSON list files are read at start-up and written atomically; `generate-structures=false` works on generation 10+ worlds.
 - **Research docs.** 32 more docs swept; four claims were wrong.
 
-Still open from batch 71:
-- **Multiplayer.**
-  - Chunks: the join snapshot carries the first square at once instead of streaming it; block changes still go to every player and the client drops those for absent columns; the legacy End window is never limited; entities in an unloaded column stay on the client.
-  - Trackers: item and orb positions are sent every tick, not on the 20-tick cadence; the `dimRespawn` snapshot is not cut; a look-only cart update sends the full position.
-  - server.properties: the default generation 9 server world builds no villages or other structures whatever `generate-structures` says; list file write order is recalled, not executed. Key names and defaults are recalled.
-  - Capes: single player has no cape source; the other C15 fields (language, view distance) are not ported.
-  - The brewing stand selection flag is kept separately by the server and the client.
-  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
-  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: walking at a short view distance, items appearing at range edges, cart smoothness at the 3-tick cadence, capes on remote players and the profile screen layout. Earlier unseen items from batches 67 to 70 still stand.
-- **Single player.**
-  - Left click on cake does not eat a slice; Nether fog distances use the Overworld values; a mob rider's fall distance is zeroed; boat and cart riders fall silently.
-  - Spawn eggs and `/summon` stop at 40 entities and natural spawning at 256 (native has no cap); the spawn-box test skips the dragon and End crystals.
-  - Stem growth uses its own random; chicken jockeys search mobs in the wrong order; legacy 64-high worlds keep the oak stand-in for big oaks; only one flower pot entry is compared with native.
-  - Step block: `ySize` decay at the start of a move is not modelled; `statsLive` still counts vines as climbing; a riding player's step is bytecode-read only.
-  - Held and dropped skulls are flat icons (native); a head named after a player the game has not loaded stays Steve; mob render changes are bytecode-read only.
-  - Spawners: zombie/pigman and cow/mooshroom counts ignore subclasses. Away-run droppers have no transfer host.
-- **Projectiles.** Candidate order for several fireballs at equal distance is not reproduced; the client arrow trigger box is not executed.
-- **Research docs.** `structure-seeds.md` and its generator still say the streamed spawn is origin + 64 (stale for generation 18+).
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 71: carried into the batch 72 list above, except the items batch 72 closed or found wrong.
 
 ## Done in batch 70
 
