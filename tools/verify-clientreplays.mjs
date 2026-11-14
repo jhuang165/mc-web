@@ -25,15 +25,13 @@ async function library(prefix) {
   }
   throw new Error(`Missing ${prefix}*.jar; pass library JARs in MC_PROBE_LIBS.`);
 }
-const libs = await Promise.all(['guava-', 'log4j-api-', 'commons-lang3-', 'gson-'].map(library));
+const libs = await Promise.all(['guava-', 'log4j-api-', 'commons-lang3-', 'gson-', 'authlib-', 'commons-io-'].map(library));
 const out = path.join(research, 'clientreplays-b65-probe'), classes = path.join(out, 'classes'), probe = path.join(out, 'probe');
 await rm(out, { recursive: true, force: true }); await mkdir(classes, { recursive: true }); await mkdir(probe, { recursive: true });
 await exec('unzip', ['-q', '-o', jar, '*.class', '-d', classes], { maxBuffer: 1 << 24 });
-await mkdir(path.join(probe, 'src/com/mojang/authlib'), { recursive: true });
-await writeFile(path.join(probe, 'src/com/mojang/authlib/GameProfile.java'), 'package com.mojang.authlib; public class GameProfile {}\n');
 const cp = [probe, classes, ...libs].join(path.delimiter);
 const run = async (name, extra = []) => {
-  await exec('javac', ['-nowarn', '-cp', cp, '-d', probe, path.join(probe, 'src/com/mojang/authlib/GameProfile.java'), ...extra.map(n => path.join(root, `probes/${n}.java`)), path.join(root, `probes/${name}.java`)], { maxBuffer: 1 << 24 });
+  await exec('javac', ['-nowarn', '-cp', cp, '-d', probe, ...extra.map(n => path.join(root, `probes/${n}.java`)), path.join(root, `probes/${name}.java`)], { maxBuffer: 1 << 24 });
   const { stdout } = await exec('java', ['-cp', cp, name], { maxBuffer: 1 << 28 });
   return stdout.trim().split('\n').filter(s => s.startsWith('{')).map(JSON.parse);
 };
@@ -62,6 +60,26 @@ if (!only || only === 'push') {
     pushSection: lines,
     addVelocity: velocity,
     method: 'javap -c -p over the unchanged classes: the "push" profiler section of EntityLivingBase.onLivingUpdate and the fields Entity.addVelocity writes. Bytecode-read, extracted mechanically; nothing is run.',
+  };
+}
+if (!only || only === 'effects7') {
+  // The Java 7 HashMap order of the effect map: the batch 54 order sequences with Java7Map (a port of the OpenJDK 7 HashMap) in the mob's map field.
+  await exec('unzip', ['-q', '-o', jar, 'assets/minecraft/lang/en_US.lang', '-d', classes], { maxBuffer: 1 << 24 });
+  const rows = await run('MobEffectsJava7Probe', ['MobMoveProbe', 'ModelProbe', 'HorseProbe', 'MobEffectsProbe', 'MobEffects2Probe', 'Java7Map']);
+  assert.equal(rows.length, 52); assert.equal(rows.filter(r => r.error && r.error !== 'null').length, 0);
+  reference.effects7 = { method: 'The unchanged EntityLivingBase / PotionEffect classes drive tools/probes/Java7Map.java, a port of the OpenJDK 7u40 HashMap (spread hash, head insertion, resize in addEntry, chain-reversing transfer), swapped into the mob before any effect is put in. The port itself is recalled from the JDK 7 source, not run from a JDK 7 jar (none installed; the JDK here is 19).', jdk: (await exec('java', ['-version'])).stderr.split('\n')[0], rows };
+}
+if (!only || only === 'dragonsound') {
+  // The dragon's living sound on a client copy: RenderGlobal.playSound (both overloads) and EntityDragon.getLivingSound, javap of the unchanged classes.
+  const javap = async c => (await exec('javap', ['-c', '-p', '-cp', classes, c], { maxBuffer: 1 << 26 })).stdout.split('\n');
+  const body = (lines, sig) => { const i = lines.findIndex(l => l.trim() === sig); assert.ok(i >= 0, sig); const out = []; for (let j = i + 2; j < lines.length && lines[j].trim(); j++) out.push(lines[j].replace(/^\s*\d+:\s*/, '').replace(/\s+#\d+\s*\/\/\s*/, ' ').trim()); return out; };
+  const bma = await javap('bma'), xa = await javap('xa');
+  reference.dragonSound = {
+    classes: { bma: { name: 'RenderGlobal', sha256: await digest('bma') }, xa: { name: 'EntityDragon', sha256: await digest('xa') } },
+    renderGlobalPlaySound: body(bma, 'public void a(java.lang.String, double, double, double, float, float);'),
+    renderGlobalPlaySoundExcept: body(bma, 'public void a(yz, java.lang.String, double, double, double, float, float);'),
+    dragonLivingSound: body(xa, 'protected java.lang.String t();'),
+    method: 'javap -c -p over the unchanged classes, extracted mechanically. World.playSoundAtEntity loops the world accesses and calls RenderGlobal.playSound, which is empty in 1.7.10, so the client copy rolls the growl (random draws) and plays nothing; the sound comes from the server packet.',
   };
 }
 const file = path.join(root, '../public/research/clientreplays-reference.json');
