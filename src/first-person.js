@@ -9,7 +9,7 @@ import { STAIR_ITEM_BOXES } from './stairs.js';
 import { GATE_ITEM_BOXES, itemBoxUv, BOX_FACE_CORNERS, CACTUS_ITEM_QUADS } from './render-shapes.js';
 import { blockTile,tileRect,flatBlockTileUrl,tileName } from "./block-textures.js";
 import { flatBlockItem, HOPPER_BLOCK, HOPPER_ITEM_URL } from "./flat-block-items.js";
-import { entityMaterial, ITEM_LIGHTS, applySpriteTransform } from "./light-material.js";
+import { entityMaterial, ITEM_LIGHTS, liveSpriteTransform } from "./light-material.js";
 import { itemPasses } from "./item-passes.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { ITEM_SKULL, skullIconUrl } from "./skull.js";
@@ -93,7 +93,7 @@ export function glintMesh(geometry, map) {
     glintTexture.wrapS = glintTexture.wrapT = THREE.RepeatWrapping;
   }
   const material = new THREE.ShaderMaterial({
-    uniforms: { item: { value: map }, glint: { value: glintTexture }, time: { value: 0 }, st: { value: applySpriteTransform(map, new THREE.Vector4()) } },
+    uniforms: { item: { value: map }, glint: { value: glintTexture }, time: { value: 0 }, st: { value: liveSpriteTransform(map) } },
     vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
     fragmentShader: `uniform sampler2D item,glint;uniform float time;uniform vec4 st;varying vec2 vUv;
 vec2 turn(vec2 p,float degrees){float a=radians(degrees),c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
