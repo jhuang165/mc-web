@@ -59,7 +59,7 @@ No real Java save with tile entities is checked in. Chest/furnace NBT layouts we
 
 ## Open
 
-The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, tile-entity factories beyond chests/furnaces, mob riders and the remaining entity ids, item NBT, pending ticks, and Java write-back. level.dat/player/stats import is in [level-dat](level-dat.md) (one area per import).
+Batch 69 (docs sweep): the whole-save import below (batch 15) streams every region, and entities, riders, item NBT (`src/region-import.js` ench, StoredEnchantments) and Pistons convert now; biome and light import and Java write-back were not rechecked. Original text: the browser still lacks streaming beyond
 
 ## Whole-save import (batch 15)
 

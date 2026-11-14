@@ -18,7 +18,7 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 
 ## Gaps
 
-- No dyes yet, so sheep cannot be recoloured and the dye recipes themselves are not craftable; only the mix table exists. The `jeb_` sheep name is ignored.
-- Four string now craft white wool ([spiders](spiders.md)); beds, carpets and paintings remain unimplemented.
-- Sheep AI follows the existing simplified mob loop (no pathfinding, head turning limits, or per-task tick rates other than eat grass's third-tick check). Sheep spawn only when a world is created, with no despawn or periodic spawning.
+- Batch 69 (docs sweep): dyes exist and a dye click recolours a sheep (`dye()` in `src/entities.js`), and the lamb colour mix is live. Still open: the `jeb_` sheep name is ignored.
+- Batch 69 (docs sweep): carpets (171) exist (`src/colored-blocks.js` per `src/block-registry.js`), as do beds (`src/bed.js`) and paintings (`src/hanging.js`). Four string craft white wool ([spiders](spiders.md)).
+- Sheep AI follows the existing simplified mob loop (no pathfinding, head turning limits, or per-task tick rates other than eat grass's third-tick check). Batch 69 (docs sweep): natural and periodic spawning now run through `src/spawner-animals.js` ([natural spawning](natural-spawning.md)); despawn rules were not checked.
 - The wool block-break particles use the registry block colour rather than the metadata colour.

@@ -28,7 +28,7 @@ Internal 140-164 are `reserved` placeholders in `BLOCKS` (world.js) so ids stay 
 
 - The render models are this build's own boxes (vanilla-like): gate posts/rails/bar with leaves swung toward the facing when open; wall post plus 0.8125 arms (or the thin straight run). Not checked against the native renderer.
 - The probe's recorded wall selection `y1 = 1.5` is shared-bounds state from the collision call; the client calls `setBlockBoundsBasedOnState` first, so selection is 1 high here.
-- Silk touch is not implemented (double wood slab, canSilk).
+- Batch 69 (docs sweep): Silk Touch exists (`src/enchantment-effects.js`, see [snow](snow.md)); whether the double wood slab honours it was not checked, so the line is left open: silk touch for the double wood slab.
 - Placement support/solidity for the gate uses a hand-written non-solid list (air, liquids, snow layer, plants, fire, torch, ladder, vine, rails, wire) checked against the 23 `gateSupport` rows only through the registry.
 - Item and block sounds come from the registry mapping through `block-sounds.js` (dig.wood / dig.stone); the door sound reuses `doorSound` (aux 1003).
 - Shadow/lighting rows for 165-169 are not in `shadow-reference.json`; `lighting.js` and `shadows.js` carry the native opacity (slabs 255, gate/trapdoor/wall 0).

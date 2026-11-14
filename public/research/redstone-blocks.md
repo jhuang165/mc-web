@@ -51,7 +51,7 @@ them to the original ids through `POPULATION_ITEMS`. Original 94 (powered repeat
 
 ## Limits
 
-- No power: plates, tripwire and hooks never change state from entities; the pairing of hooks and tripwire and
+- Batch 69 (docs sweep): plates, tripwire and hooks now react (plates to entities, `src/redstone-runtime.js`; tripwire and hooks live per [redstone-live](redstone-live.md)). Still not checked: shears-disarm pairing. Dust is drawn at its power level by the live engine. Original text: no power, a powered repeater (94) imports as a plain repeater that keeps its `powered` flag only for export.
   shears-disarm are not simulated. Dust is always drawn at power 0. A powered repeater (94) imports as a plain
   repeater that keeps its `powered` flag only for export.
 - The repeater collides (0.125 high), as in 1.7.10, although the brief asked for no collision boxes.

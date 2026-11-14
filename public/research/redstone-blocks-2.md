@@ -45,7 +45,7 @@ Target: Minecraft Java 1.7.10. No full-parity claim. This note covers the BLOCK 
 * The comparator's torch layout (two rear torches, front torch raised in subtract mode) is drawn from the class
   description, not replayed against the native renderer. Item icons for the button, plates and sensor are drawn as
   cubes (native `setBlockBoundsForItemRender` boxes are not replicated).
-* The daylight sensor recipe (three glass, three quartz, three wooden slabs) is not craftable: the build has no wooden
+* The daylight sensor recipe (three glass, three quartz, three wooden slabs): Batch 69 (docs sweep): the wood slab (126) and the Nether exist now (`src/shaped-blocks.js`, `src/dimension-live.js`); whether the browser registers the recipe was not checked (the recipe catalogue row says no), so it is left open.
   slab block. Quartz is only obtainable from Creative (no Nether).
 * Fortune on glowstone is implemented in `redstoneDrops2`; the live mining path does not yet pass the held Fortune level.
 * Torch sprite wall variants rely on the existing torch model (metadata 1-4 lean, standing stored as 0).
