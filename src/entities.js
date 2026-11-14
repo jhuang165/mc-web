@@ -1139,6 +1139,7 @@ export class EntityWorld {
     // EntityWitch.applyPotionDamageCalculations: its own damage is ignored, magic damage is cut to 15 %.
     if (e.type === "witch") amount = witchDamage(amount, { isMagic: name === "magic" || name === "indirectMagic", byWitch: source?.attacker === e });
     if (e.absorption > 0) { const left = Math.max(f(amount - e.absorption), 0); e.absorption = f(e.absorption - f(amount - left)); amount = left; }
+    this.lastDealt = amount; // b65 mpstats3: the amount CombatTracker.func_94547_a records (server-stats.js)
     if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
   }
   // EntityZombie.attackEntityFrom (yq.a(ro, F)) once the hit counts, even a killing one. The

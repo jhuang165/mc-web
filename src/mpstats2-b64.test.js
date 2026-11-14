@@ -105,7 +105,7 @@ test('damageDealt is round(f * 10) of the pre-armour damage of a landed hit, not
   assert.equal(p.stats.get(STAT.damageDealt), 10, 'a bare hand is 1 point: 10, though only 0.5 health was left');
 });
 
-test('a mob that dies later from something else credits the player who hit it in the last 100 ticks', () => {
+test('a mob that dies later from something else credits mobKills to the player who hit it in the last 100 ticks', () => {
   const s = fixture(true), p = join(s);
   const mk = x => { const z = s.mobs.mobs.create('cow', x, 10, 64.5); s.mobs.mobs.entities.push(z); return z; };
   const a = mk(65.5), b = mk(66.5); s.tick();
@@ -114,8 +114,8 @@ test('a mob that dies later from something else credits the player who hit it in
   assert.ok(a.recentlyHit > 0);
   s.mobs.mobs.kill(a);
   assert.equal(p.stats.get(STAT.mobKills), 1);
-  assert.equal(p.stats.get('stat.killEntity.Cow'), 1);
-  b.recentlyHit = 0; s.mobs.mobs.kill(b); // the window ran out
+  assert.equal(p.stats.get('stat.killEntity.Cow') ?? 0, 0, 'b65: onKillEntity runs on DamageSource.getEntity() only, and a kill with no source entity has none');
+  b.recentlyHit = 0; b.age += 101; s.mobs.mobs.kill(b); // the window ran out (attackingPlayer and the 100-tick revenge target)
   assert.equal(p.stats.get(STAT.mobKills), 1);
 });
 

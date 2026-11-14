@@ -22,6 +22,7 @@ import { StatsLive, addFallStat, addMountedMovementStat, toolUses, originalItem,
 import { eyeInWater } from '../fluids.js';
 import { countsVertical } from '../ladders.js';
 import { PHYSICS } from '../world.js';
+import { KillCredit } from './server-combat-tracker.js';
 
 export const STATS_INTERVAL = 300; // pg.a(mw): ticks between two S37 that carry stats
 const mountKind = m => (m?.mob ? 'pig' : m?.boat ? 'boat' : 'minecart');
@@ -86,27 +87,31 @@ export class ServerStats {
   watchMobs(mobs) {
     const sim = this.sim, attacker = () => sim.achievements?.attacker ?? null;
     const death = mobs.onDeath, attack = mobs.attack, baby = mobs.spawnBaby, hit = mobs.hitPlayer;
-    // b64: EntityLivingBase.onDeath credits func_94060_bK(), the CombatTracker's best attacker (rn.c, bytecode-read): the player who did the most damage, whatever killed the mob
-    // (fire, a fall). The tracker forgets after 100 quiet ticks; recentlyHit (100, set by a player's hit) is its stand-in here. `combat` keeps each player's damage on the mob.
-    const combat = new WeakMap(), damageEntity = mobs.damageEntity;
+    // b65: EntityLivingBase.onDeath credits func_94060_bK(): the CombatTracker's best attacker, else attackingPlayer, else the revenge target (server-combat-tracker.js, bytecode-read and
+    // executed in combat-best-reference.json). The tracker sees every damageEntity of the mob; a killing hit empties it first, so a death by fire or a fall falls back to attackingPlayer
+    // (the last player to hit, while recentlyHit > 0). mobKills goes to that credit; the kill-by-type stat (Entity.onKillEntity) only to the player the killing source names.
+    const states = new WeakMap(), damageEntity = mobs.damageEntity, who = (e, source) => {
+      if (source?.player) return { isPlayer: true, living: true, p: attacker() };
+      const by = source?.shooter ?? source?.attacker;
+      return by && by !== e ? { isPlayer: false, living: true, p: null, tamedWolf: by.type === 'wolf' && !!by.owner } : null;
+    };
     if (typeof damageEntity === 'function') mobs.damageEntity = function (e, amount, name, source, ...rest) {
-      const p = source?.player ? attacker() : null, before = e.health, result = damageEntity.call(this, e, amount, name, source, ...rest);
-      if (p?.stats) {
-        let row = combat.get(e);
-        if (!row || !(e.recentlyHit > 0)) combat.set(e, row = new Map());
-        row.set(p, (row.get(p) ?? 0) + Math.max(0, before - e.health));
-      }
+      this.lastDealt = 0;
+      const result = damageEntity.call(this, e, amount, name, source, ...rest);
+      let st = states.get(e); if (!st) states.set(e, st = new KillCredit());
+      st.hit(who(e, source), this.lastDealt, e.age | 0, e.health > 0); // amount after armour (entities.js damageEntity sets lastDealt)
       return result;
     };
     const credited = (e, source) => {
-      const row = combat.get(e); combat.delete(e);
-      let best = null, most = -1;
-      if (row && e.recentlyHit > 0) for (const [q, d] of row) if (d > most && sim.players.get(q.id) === q) { best = q; most = d; } // a strictly greater total replaces: the first of equals wins
-      return best ?? (source.player ? attacker() : null);
+      const st = states.get(e); states.delete(e);
+      if (!st) return source?.player ? attacker() : null;
+      const entry = st.killer(e.age | 0, e.recentlyHit, e.health > 0), q = entry?.isPlayer ? entry.p : null; // a living mob that did the most: no player is credited
+      return q?.stats && sim.players.get(q.id) === q ? q : null;
     };
     mobs.onDeath = function (e, source = {}) {
-      const result = death.call(this, e, source), p = credited(e, source);
-      if (p?.stats) { p.stats.increment(STAT.mobKills); p.stats.kill(e.type); }
+      const direct = source?.player ? attacker() : null, result = death.call(this, e, source), p = credited(e, source);
+      if (p?.stats) p.stats.increment(STAT.mobKills);
+      if (direct?.stats) direct.stats.kill(e.type); // EntityPlayer.onKillEntity on DamageSource.getEntity()
       return result;
     };
     mobs.attack = function (e, tool, ...rest) {

@@ -147,6 +147,7 @@ export class ServerEnd {
       particle: noop, // WorldServer drops particle calls (the clients draw their own)
     }, p.rand);
     if (!p.survival.creative) p.survival.take(id); // Creative keeps the stack (ItemInWorldManager restores it)
+    this.dims.sim.stats?.used(p, id); // b65 mpstats3: ItemEnderEye.onItemUse returned true (the use stat); throwing an eye (onItemRightClick) counts nothing
     return true;
   }
 }
