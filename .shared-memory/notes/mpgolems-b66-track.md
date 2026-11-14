@@ -16,7 +16,7 @@
 
 ## Verification
 - `node --check` on every touched file.
-- `node --test src/mpgolems-b66.test.js`: 13 pass. `iron-golem.test.js` 12, `silverfish.test.js` 75, `mooshroom-golem.test.js` 9, `mpwither-b63.test.js` 12, `mpwither-b64.test.js` 7, `mpdispense-b61.test.js` 15, `mpmobs2-b60.test.js` see report: all pass.
+- `node --test src/mpgolems-b66.test.js`: 13 pass. `iron-golem.test.js` 12, `silverfish.test.js` 75, `mooshroom-golem.test.js` 9, `mpwither-b63.test.js` 12, `mpwither-b64.test.js` 7, `mpdispense-b61.test.js` 15, `mpmobs2-b60.test.js` 7: all pass.
 - Full npm test not run (batch rule). No browser checks (batch rule): the golem arm swing, the snowball model and the silverfish puff were not looked at.
 
 ## Follow-ups
