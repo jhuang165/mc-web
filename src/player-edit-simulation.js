@@ -335,15 +335,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     // BlockDragonEgg.onBlockActivated: the egg teleports (dragon-egg-live.js) and the click is consumed.
     if (activates && block === DRAGON_EGG && hook('useDragonEgg', x, y, z) !== undefined) return act('use-dragon-egg');
     // BlockCake.onBlockActivated (stems-cake.js): eat a slice when hungry and not in Creative; the seventh bite removes the cake.
-    if (activates && block === CAKE) {
-      const eaten = cakeEat(state.survival, state.world, x, y, z);
-      if (eaten.ate) {
-        state.world.set(x, y, z, eaten.next === null ? 0 : CAKE, true, eaten.next ?? 0);
-        hook('updateBlock', x, z, y); hook('renderVitals'); hook('markUnsaved');
-        hook('playSound', 'random.eat', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
-      }
-      return act('use-cake', { eaten });
-    }
+    if (activates && block === CAKE) return act('use-cake', { eaten: eatCakeSlice(state, hook, x, y, z) });
     if (activates && block === BED) { hook('useBed', x, y, z); return act('use-bed'); }
     // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
     if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {
@@ -601,9 +593,10 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (now === DRAGON_EGG) hook('useDragonEgg', ...dug, true); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues (the client half ran at the click, below)
     if (now === 177) hook('blockClicked', ...dug); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
     if (now === REDSTONE_ORE || now === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...dug); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
+    if (now === CAKE) eatCakeSlice(state, hook, ...dug); // BlockCake.onBlockClicked (b72 cakefog72): a punch eats a slice too; the dig then goes on
   };
   if (block === DRAGON_EGG) hook('clientDragonEgg', ...dug); // PlayerControllerMP.clickBlock runs onBlockClicked on the client world at once (bje.b offset 217, probe 'dragonegg-click'): the portal particles
-  if (block === DRAGON_EGG || block === 177 || block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hooks.serverTask ? hooks.serverTask(serverClicked) : serverClicked();
+  if (block === DRAGON_EGG || block === 177 || block === REDSTONE_ORE || block === LIT_REDSTONE_ORE || block === CAKE) hooks.serverTask ? hooks.serverTask(serverClicked) : serverClicked();
   // C07 status 0 also starts the server's own dig timer (ItemInWorldManager.initialDamage, b53 digfinish): in the network tick like the click above. An instant
   // break starts it too (initialDamage only; server-dig.js keeps the earlier cell).
   // PlayerControllerMP.clickBlock first sends the abort (C07 status 1, resetBlockRemoving) when a dig of another block or tool is under way (b54 digabort).
@@ -616,6 +609,17 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
   state.mining = { block: [...target.block], type: block, progress: 0, tool: id, auto: !state.mineHeld };
   return act('start-mining');
+}
+
+// BlockCake.onBlockActivated and onBlockClicked (aju, bytecode-read) both call the same eat method: one slice when canEat(false).
+function eatCakeSlice(state, hook, x, y, z) {
+  const eaten = cakeEat(state.survival, state.world, x, y, z);
+  if (eaten.ate) {
+    state.world.set(x, y, z, eaten.next === null ? 0 : CAKE, true, eaten.next ?? 0);
+    hook('updateBlock', x, z, y); hook('renderVitals'); hook('markUnsaved');
+    hook('playSound', 'random.eat', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+  }
+  return eaten;
 }
 
 // ItemSword.onItemRightClick: setItemInUse(72000) with EnumAction.block. Only the use state exists here (the first- and third-person sword pose); the movement slowdown

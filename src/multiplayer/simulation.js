@@ -45,6 +45,8 @@ import { ITEM_POTION, isSplashDamage } from '../potions.js'; // b63
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerPvp } from './server-pvp.js'; // b63 mppvp
+import { CAKE as CAKE_BLOCK } from '../stems-cake.js';
+import { serverCakeEat } from './server-cake.js'; // b72 cakefog72: BlockCake clicks
 import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragonEgg clicks
 import { DRAGON_EGG } from '../dragon-egg.js';
 import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js'; // b66 mpbooks: note blocks and jukeboxes
@@ -339,6 +341,7 @@ export class DedicatedSimulation {
         p.swing = 6;
         if (this.world.get(cell[0], cell[1], cell[2]) === DRAGON_EGG) serverDragonEgg(this.world, cell[0], cell[1], cell[2]); // b65 mpdragon2: onBlockClicked (Survival; mining then continues on the cell)
         serverNoteClick(this, cell); // b66 mpbooks: BlockNote.onBlockClicked
+        serverCakeEat(this.world, p.survival, cell[0], cell[1], cell[2]); // b72 cakefog72: BlockCake.onBlockClicked eats a slice; mining continues
         const rate = this.digRate(p, cell);
         p.dig.start(cell, rate);
         if (rate !== null && Math.fround(rate) >= 1) this.breakDug(p, cell);
@@ -428,6 +431,7 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
+    if (b === CAKE_BLOCK && !(p.input.sneak && p.survival.held) && serverCakeEat(this.world, p.survival, x, y, z)) return true; // b72 cakefog72: BlockCake.onBlockActivated
     if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
     if (b === BED && !(p.input.sneak && p.survival.held) && this.sleep.use(p, x, y, z)) return true; // b66 mpsleep: BlockBed.onBlockActivated
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
