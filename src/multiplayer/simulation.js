@@ -408,6 +408,7 @@ export class DedicatedSimulation {
     if (b === BED && !(p.input.sneak && p.survival.held) && this.sleep.use(p, x, y, z)) return true; // b66 mpsleep: BlockBed.onBlockActivated
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     if (place && isFence(b) && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
+    if (place && this.vehicles.hanging.useHeld(p, target)) return true; // b68 mppaintings: ItemHangingEntity.onItemUse (painting, item frame) on the clicked wall
     if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water
     const id = state.heldTool;
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)

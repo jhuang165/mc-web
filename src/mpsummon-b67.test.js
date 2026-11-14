@@ -70,11 +70,11 @@ test("onSpawnWithEgg runs only without a tag: a bare zombie may roll gear or a j
   assert.equal(calls, 1);
 });
 
-test("a kind the server cannot keep (the giant) and the hanging entities give the failure message", () => {
+test("a kind the server cannot keep (the giant) gives the failure message", () => {
   const f = fixture(); f.join("a", "Alex", 1);
   assert.deepEqual(f.say("a", "/summon Giant"), [FAILED]);
-  assert.deepEqual(f.say("a", "/summon Painting"), [FAILED]);
-  assert.deepEqual(f.say("a", "/summon ItemFrame"), [FAILED]);
+  assert.deepEqual(f.say("a", "/summon Painting"), [OK]); // b68 mppaintings: kept by server-hanging.js
+  assert.deepEqual(f.say("a", "/summon ItemFrame"), [OK]);
   assert.equal(f.sim.mobs.mobs.entities.some((e) => e.type === "giant"), false);
 });
 

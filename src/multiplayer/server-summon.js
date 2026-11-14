@@ -8,7 +8,7 @@
 // ghast fireballs and wither skulls into the mobs' own Fireballs, primed TNT into the dispenser's `primed`, falling blocks into the dimension's FallingBlocks, items and orbs into the
 // dimension's lists (an orb takes a world entity id), rockets into the dispenser's FireworkRockets.
 // A kind the server cannot keep is a failed creation (`commands.summon.failed`, also as a Riding mount, which ends the chain): the mobs outside SUPPORTED (the giant), a full world
-// (MOB_LIMIT), and the hanging entities (paintings, item frames, leash knots: the server has no hanging system).
+// (MOB_LIMIT), (paintings, item frames and leash knots are kept by server-hanging.js since batch 68).
 // Coordinates are the server's own local ones, as /tp uses them (the Nether is not scaled; the End window's local origin is not added).
 import { createCommandHost } from '../command-host.js';
 import { SUMMONABLE } from '../commands.js';
@@ -21,7 +21,7 @@ import { WitchPotions } from '../witch-potions.js';
 import { EyesOfEnder } from '../eye-of-ender-live.js';
 import { JavaRandom } from '../java-random.js';
 
-export const UNKEPT_ENTITIES = new Set(['Painting', 'ItemFrame', 'LeashKnot']);
+export const UNKEPT_ENTITIES = new Set([]); // b68 mppaintings: paintings, item frames and leash knots are kept now (server-hanging.js)
 
 // Adds one converted projectile record (java-projectiles.js) to the live list of `d`, the dimension's ServerProjectiles. Returns false when the list is not kept here.
 export function adoptProjectile(sim, d, mobs, dim, list, record) {
@@ -72,7 +72,7 @@ export function summonHost(sim, p) {
       d.hook?.(); // the witch's potion lane and the skeleton's bow are wired on first use
       const orbs = { get orbs() { return { push: o => { if (xp.ids) o.id = xp.ids.take(); xp.orbs.push(o); xp.joined?.(o); } }; } };
       const hosts = {
-        items: sim.items, xpOrbs: orbs, primed: d.primed, falling: sim.falling, boats: sim.vehicles?.boats, projectiles: d.balls, arrows: d.arrows, mobs, eyes: null, hanging: null, dimension: dim,
+        items: sim.items, xpOrbs: orbs, primed: d.primed, falling: sim.falling, boats: sim.vehicles?.boats, projectiles: d.balls, arrows: d.arrows, mobs, eyes: null, hanging: sim.vehicles?.hanging?.h ?? null /* b68 mppaintings: the dimension's Hanging */, dimension: dim,
         adopt: (list, record) => adoptProjectile(sim, d, mobs, dim, list, record),
       };
       const env = {

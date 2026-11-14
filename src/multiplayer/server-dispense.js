@@ -133,6 +133,7 @@ export class ServerDispense {
       const q = p.position;
       out.push({ ref: p, immune: !!p.survival.creative, box: [q.x - hw, q.y, q.z - hw, q.x + hw, q.y + f(1.8), q.z + hw] });
     }
+    out.push(...(this.hangingOf(lane.dim)?.targets() ?? [])); // b68 mppaintings: paintings and item frames are collidable
     if (ball) { const who = ball.thrower ?? ball.owner ?? this.ownerOf(ball); for (const t of out) if (t.ref === who) t.thrower = true; }
     return out;
   }
@@ -158,14 +159,16 @@ export class ServerDispense {
     return true;
   }
   // A snowball or egg that struck: a mob takes the 0-damage thrown hit (3 on a blaze); a player takes none (EntityPlayer.attackEntityFrom returns false for 0).
-  ballHit(mobs, e, ball) { return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? ball, ball); }
+  // b68 mppaintings: the dimension's paintings and item frames (server-hanging.js)
+  hangingOf(dim) { return (dim ? this.dimState(dim)?.vehicles : this.sim.vehicles)?.hanging; }
+  ballHit(mobs, e, ball) { for (const d of [0, -1, 1]) if (this.hangingOf(d)?.thrown(e, this.ownerOf(ball))) return true; return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? ball, ball); }
   // EntityEnderPearl.onImpact for a thrown pearl: the thrower (if online, alive and in this dimension) moves to the pearl, loses nothing but 5 fall damage and the fall distance.
   pearlImpact(lane, { pearl, hit }) {
     const p = this.ownerOf(pearl), mobs = lane.mobs, world = lane.world;
     const ok = p && !p.dead && (p.dimension | 0) === lane.dim;
     const owner = ok ? { kind: 'playerMP', connected: true, world, riding: !!p.mount, get fallDistance() { return p.fallDistance ?? 0; }, set fallDistance(v) { p.fallDistance = v; p.landedFall = 0; } } : null;
     impactEnderPearl(pearl, { world, owner, hit: hit?.survival ? null : hit }, {
-      hit: (e) => { if (e?.type) thrownHit(mobs, e, p?.position ?? pearl, pearl); },
+      hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, p)) return; if (e?.type) thrownHit(mobs, e, p?.position ?? pearl, pearl); },
       dismount: () => this.sim.vehicles?.dismount?.(p),
       teleport: (_o, x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); },
       damage: (_o, { amount }) => this.sim.damagePlayer(p, amount, { name: 'a fall', from: undefined, call: () => p.survival.damage(amount, 'a fall', false) }),
@@ -206,6 +209,7 @@ export class ServerDispense {
       const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z) => this.igniteBlockTnt(x, y, z) : undefined, hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
       for (const a of [...arrows.list]) {
         if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
+        ctx.hanging = this.hangingOf(dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings
         this.credit(this.ownerOf(a), () => arrows.tickOne(world, a, ctx));
       }
       arrows.reap();

@@ -215,6 +215,7 @@ export class ServerMobs {
     const { world, weather, items } = this.host, { x, y, z, size } = ev;
     if (!(size > 0)) return;
     explodeMobs({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null });
+    this.host.vehicles?.hanging?.explode(x, y, z, size); // b68 mppaintings: paintings and item frames in the blast
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival;
       if (s.creative || s.health <= 0) continue;
