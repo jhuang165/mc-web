@@ -33,7 +33,7 @@ export class ServerStats {
   // A player record joins (addPlayer): the saved stats load, and pg.d() marks all of them dirty for the first S37.
   join(p, saved) {
     const stats = p.stats = new Stats(saved?.stats), net = p.statsNet = { dirty: new Set(stats.values.keys()), last: -STATS_INTERVAL };
-    stats.onIncrement = id => net.dirty.add(id);
+    stats.onIncrement = id => { net.dirty.add(id); this.sim.scoreboard?.statIncrement(p.name, id); }; // b64 mpscoreboard: the stat's scoreboard criteria
     p.statsLive = new StatsLive(stats);
     p.statsLive.bind(p.survival); // EntityPlayer.jump and attackEntityFrom: the jump and damage taken stats
     return stats;

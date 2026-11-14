@@ -25,9 +25,11 @@ export class ServerPvp {
   /** MinecraftServer.isPVPEnabled. */
   get enabled() { return this.sim.pvp !== false; }
   /** EntityPlayerMP.canAttackPlayer for a DamageSource entity `from` (a plain object: `isPlayer`); other attackers are never refused. */
-  allows(from) { return !from?.isPlayer || this.enabled; }
+  allows(from, victim) { return !from?.isPlayer || (this.enabled && this.teamAllows(from, victim)); }
+  /** b64 mpscoreboard: EntityPlayer.canAttackPlayer (yz.a): true without a team or across teams, else the team's friendlyFire. A mob or a self-inflicted source has no player `from`. */
+  teamAllows(from, victim) { return !victim?.name || !this.sim.scoreboard || this.sim.scoreboard.teamAllowsAttack(from.name, victim.name); }
   /** The DamageSource entity of a player attacker as the combat tracker and the knockback read it. */
-  fromOf(p) { return { x: p.position.x, y: p.position.y, z: p.position.z, type: 'player', isPlayer: true, name: p.name, playerId: p.id, held: p.survival.held ?? undefined }; }
+  fromOf(p) { return { x: p.position.x, y: p.position.y, z: p.position.z, type: 'player', isPlayer: true, name: p.name, formattedName: this.sim.scoreboard?.formatName(p.name) ?? p.name /* b64: the team-coloured name of the combat tracker */, playerId: p.id, held: p.survival.held ?? undefined }; }
   /**
    * NetHandlerPlayServer.processUseEntity: the target must exist and not be the sender; the squared distance (feet to feet, Entity.getDistanceSqToEntity) must be below 36, below 9 when the
    * attacker's eyes cannot see the target's eyes (Entity.canEntityBeSeen: World.rayTraceBlocks eye to eye). A dead player or one in another dimension is not an entity of this world.

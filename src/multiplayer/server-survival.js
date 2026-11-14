@@ -54,7 +54,7 @@ export class ServerSurvival {
     p.dead = true; p.itemInUse = null; p.dig?.abort?.();
     this.sim.stats?.death(p); // b63 mpstats: stat.deaths and the killed-by stat
     this.dropOnDeath(p);
-    const component = deathComponent(p.survival.combat, p.name, { rawName: p.name });
+    const component = deathComponent(p.survival.combat, this.sim.scoreboard?.formatName(p.name) ?? p.name /* b64 mpscoreboard: team-coloured */, { rawName: p.name });
     const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
     (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
     if (killer !== undefined && killer !== p.id) { const k = this.sim.players.get(killer); if (k) this.sim.stats?.add(k, STAT.playerKills); } // b63 lead: EntityPlayer.addToPlayerScore of a player victim (stat.playerKills)

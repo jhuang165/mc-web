@@ -4,6 +4,7 @@ import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
+import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
 import { Farming } from '../farming.js';
 import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
@@ -103,6 +104,7 @@ export class DedicatedSimulation {
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
+    this.scoreboard = new ServerScoreboard(saved.scoreboard); // b64 mpscoreboard: the one shared scoreboard (objectives, scores, teams), saved with the world
     this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
@@ -168,7 +170,7 @@ export class DedicatedSimulation {
   // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
   // the death is seen by ServerSurvival.tick. Lead fix at the b59 merge: the mpmobs no-op is replaced by the mpstate health.
-  damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; if (!this.pvpRules.allows(source?.from)) return false; /* b63 mppvp: EntityPlayerMP.canAttackPlayer (pvp=false) */ return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
+  damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; if (!this.pvpRules.allows(source?.from, player)) return false; /* b63 mppvp: EntityPlayerMP.canAttackPlayer (pvp=false) */ return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
@@ -572,6 +574,6 @@ export class DedicatedSimulation {
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
-      tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
+      scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }

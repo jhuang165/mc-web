@@ -133,6 +133,7 @@ import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
 import { Scoreboard, scoreboardToJSON, scoreboardFromJSON } from "./scoreboard.js";
 import { ScoreboardLive, SidebarUi } from "./scoreboard-live.js";
+import { createClientScoreboard, applyScoreboardMessage } from "./multiplayer/client-scoreboard.js"; // b64 mpscoreboard
 import { applyStatsMessage } from "./multiplayer/client-stats.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
@@ -629,6 +630,7 @@ const achievements = new Achievements({
 // The world scoreboard (scoreboard.js, data/scoreboard.dat), its criteria hooks and the sidebar (scoreboard-live.js).
 const scoreboard = new Scoreboard(), scoreboardLive = new ScoreboardLive({ scoreboard, stats, achievements, name: () => PLAYER_NAME }), sidebar = new SidebarUi(document);
 scoreboard.onChange = () => { saved = false; };
+const mpBoard = createClientScoreboard(); // b64 mpscoreboard: the dedicated server's scoreboard as S3B-S3E describe it (multiplayer only; never saved)
 
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
@@ -658,7 +660,7 @@ function showMultiplayer() {
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
-  remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
+  remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, true) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
@@ -845,6 +847,7 @@ async function joinMultiplayer(settings) {
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
+    onScoreboard: message => applyScoreboardMessage(mpBoard, message), // b64 mpscoreboard: S3B / S3C / S3D / S3E
     onStats: message => { applyStatsMessage(stats, message); const w = statsWaiter; statsWaiter = null; w?.(); }, // b63 mpstats: S37 fills the Statistics screen
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
@@ -854,7 +857,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
-  multiplayer = client;
+  multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
   try {
     const welcome = await client.connect({ url: settings.url, session: settings.session });
     localStorage.setItem('mc-web-server', JSON.stringify({ name: settings.api.account?.name ?? '' }));
@@ -871,7 +874,7 @@ async function joinMultiplayer(settings) {
     remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats) }; // b61
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
-    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
@@ -914,7 +917,7 @@ async function multiplayerDimension(client, settings, m) {
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) });
-    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
+    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
     client.start();
     syncMultiplayerItems(snapshot.items ?? []);
@@ -3978,11 +3981,11 @@ function screenshot() {
 // GuiIngame.renderGameOverlay: the scoreboard sidebar (display slot 1) at the right edge, in scaled GUI pixels (scoreboard-live.js).
 function sidebarFrame() {
   const scale = guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0);
-  sidebar.update(scoreboard, screen !== "home" && screen !== "credits" && !$("#hud").classList.contains("hidden"), Math.ceil(innerWidth / scale), Math.ceil(innerHeight / scale), fontWidth);
+  sidebar.update(multiplayer ? mpBoard : scoreboard, screen !== "home" && screen !== "credits" && !$("#hud").classList.contains("hidden"), Math.ceil(innerWidth / scale), Math.ceil(innerHeight / scale), fontWidth);
 }
 // key.playerlist (Tab) held: GuiIngame draws the list unless a lone integrated player is on the server (player-list.js).
 const showPlayerList = () => {
-  if (multiplayer) { playerList.show(multiplayer.players.map(p => ({ name: p.name, ping: 0 })), Math.ceil(innerWidth / guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0))); return; }
+  if (multiplayer) { const lo = mpBoard.slot(0); playerList.show(multiplayer.players.map(p => ({ name: mpBoard.formatName(p.name), ping: 0, score: lo ? mpBoard.peek(p.name, lo)?.value ?? 0 : undefined })), /* b64 mpscoreboard: team names and the list objective's scores */ Math.ceil(innerWidth / guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0))); return; }
   const listObjective = scoreboard.slot(0); // display slot "list": shows the overlay even for a lone player, with a score column
   if (!playerListVisible({ integrated: true, players: 1, hasObjective: !!listObjective, lanShared: lan.public })) return;
   playerList.show([{ name: scoreboard.formatName(PLAYER_NAME), ping: 0, score: listObjective ? scoreboard.peek(PLAYER_NAME, listObjective)?.value ?? 0 : undefined }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));

@@ -52,6 +52,7 @@ export class SidebarUi {
   }
   // width / height: the scaled screen size in GUI pixels; fontWidth: FontRenderer.getStringWidth.
   update(board, visible, width, height, fontWidth) {
+    if (this.board !== board) { this.board = board; this.key = null; } // b64 mpscoreboard: the multiplayer replica and the world's board alternate
     const obj = visible ? board.slot(1) : null;
     const key = obj ? `${board.revision}|${width}|${height}` : "";
     if (key === this.key) return;
