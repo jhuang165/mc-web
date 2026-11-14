@@ -33,7 +33,7 @@ Block id equals item id for 150-158. The nether brick item (original 405) is int
 
 ## Limits
 
-- The Nether and the End dimensions, their generation, portals and Nether fortresses do not exist; these blocks only come from crafting, Creative and imported worlds.
+- Batch 69 (docs sweep): the Nether and the End exist now (`src/dimension-live.js`, portals; see [nether](nether.md)); Nether fortresses were not checked here. Original text: these blocks only came from crafting, Creative and imported worlds.
 - Fire over netherrack follows the decompiled `BlockFire.updateTick` branches but was not probed natively; `fire.test.js` was not extended.
 - The Fortune II quartz histogram in the fixture is biased (a power-of-two `nextInt` bound over consecutive seeds); the test checks the support set instead of the counts.
 - The direction of the quarter-turn on the side pillar texture is not native-verified (the quartz lines are almost symmetric).

@@ -50,7 +50,7 @@ Internal blocks are appended after the previous end of `BLOCKS`; nothing was ren
 - **Render:** renderBlockFence draws the post plus bars at 0.75–0.9375 and 0.375–0.5625. The item icon is the inventory fence model.
 - **Block facts:** light opacity 0, hardness 2, axe effective, drops itself, furnace fuel 300.
 - **Crafting and Creative:** 6 sticks make 2 fences; listed in the Decorations tab.
-- Fence gates are not ported.
+- Fence gate (107) is ported in `src/shaped-blocks.js` (batch 39 render match; `src/shaped-blocks.test.js`, `src/gate-item.test.js`). Batch 69 (docs sweep): the old "not ported" line was stale.
 
 ### Rail (`src/rails.js`)
 
@@ -102,6 +102,6 @@ Internal blocks are appended after the previous end of `BLOCKS`; nothing was ren
 
 - `main.js` does not yet color the tooltip title or render the gray lines' class. The watchers, spawner saves and minecart runtime are wired; see [live mineshafts](mineshafts-live.md).
 - Ascending rails' extra notify of the block above is not replayed.
-- Enchanted books have no glint and no anvil use.
-- Region import does not read `StoredEnchantments`.
-- Fence gates and powered/detector/activator rails are not ported; empty/chest cart travel and empty-cart riding are live (see [minecarts](minecarts.md)).
+- Batch 69 (docs sweep): enchanted books glint (`src/armor-enchantments.js` hasEffect, `src/armor-enchantments.test.js`) and the anvil exists (`src/anvil-container.js`, `src/anvil.test.js`).
+- Batch 69 (docs sweep): region import reads `StoredEnchantments` (`src/region-import.js`).
+- Batch 69 (docs sweep): fence gates and powered/detector/activator rails are ported (`src/shaped-blocks.js`, `src/powered-rails.js`); empty/chest cart travel and empty-cart riding are live (see [minecarts](minecarts.md)).

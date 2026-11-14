@@ -59,13 +59,13 @@ A save stores the seed plus edits, and every load regenerates the world, `world.
 
 ## Gaps
 
-- Powered/detector/activator rails and live redstone remain absent. Empty-cart placement/riding and chest-cart placement are live since 0.26.0.
-- Hoppers and comparators do not interact with carts.
+- Batch 69 (docs sweep): powered/detector/activator rails and live redstone exist (`src/powered-rails.js`, `src/redstone-live.js`). Empty-cart placement/riding and chest-cart placement are live since 0.26.0.
+- Batch 69 (docs sweep): hopper carts and comparators reading chest carts exist (`src/cart-hopper.js`, `src/redstone-runtime.js`); block hoppers still do not pull from cart inventories.
 - The display mob is lit by the spawner cell, as natively, so it is very dark without a light source.
-- Spawner rendering, ticking and cart ticking cover the 128 x 128 live area only; there is no chunk streaming or unloading.
+- Batch 69 (docs sweep): live terrain streams (`src/streaming-generator.js`, [streaming](streaming.md)); whether the spawner and cart ticks follow the streamed area was not checked, so the 128 x 128 limit is left as written: spawner rendering, ticking and cart ticking cover the 128 x 128 live area only.
 - Mob AI does not path around carts, and mobs push carts only through the shared `pushEntity` path.
 - A cart drop whose original item has no browser mapping (`drop.original`) is not spawned in the live world; it is lost when the cart is broken. Saved carts do keep such items.
-- `SpawnPotentials` and spawner NBT edits are not supported.
+- Batch 69 (docs sweep): `SpawnPotentials` and spawner NBT are supported (`src/mob-spawner.js`, `src/spawner-data.js`).
 - The cart chest screen plays no open or close sound. `EntityMinecartContainer` has none natively either, but this has not been checked against the client.
 
 ## Vehicle continuation browser check (0.26.0)

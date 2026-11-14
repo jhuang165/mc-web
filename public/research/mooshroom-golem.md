@@ -21,7 +21,7 @@ Source of truth: `tools/probes/MooshroomGolemProbe.java` runs the unchanged obfu
 ## Gaps
 
 - Mooshroom natural spawning: `EntityAnimal.getCanSpawnHere` needs grass, so mooshrooms cannot spawn on mycelium at runtime. They exist through chunk population and `/summon` only; no mushroom island biome spawning is added.
-- The `snowshovel` build burst (120 particles) and `snowballpoof` impact particles are not drawn; the probe records them.
+- The `snowshovel` build burst (120 particles) is still not drawn (no snowshovel kind in `src/`); Batch 69 (docs sweep): `snowballpoof` impact particles are drawn (`src/object-tracker.js`, `sims.balls.poof`).
 - Renderer: the mushroom placement on the cow and the pumpkin head transform are approximations of the RenderBlocks calls, not matched to bytecode. ModelSnowMan arm and body animation angles are reconstructed, not probed (the boxes are probed). Not checked in a browser.
 - Snow golem balls do not damage the player or other mobs than the golem's targets (golems only target monsters). Golems do not retaliate against the player.
 - Spawn eggs and the mob spawner id list were left alone.

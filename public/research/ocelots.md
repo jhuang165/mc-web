@@ -23,6 +23,6 @@ Evidence: `public/research/ocelot-reference.json`, written by `tools/verify-ocel
 - Kitten growth by feeding fish is not modelled. The original returns false for a kitten with fish.
 - Single-player owner only (the owner is a name string, not a UUID).
 - The owner's sit click returns "used" here; the original returns false from interact after setting the sit wish.
-- Sounds: `cat` was added to the import regex in `tools/import-vanilla-media.mjs` but the import needs network and was not run, so no `mob.cat.*` audio files exist yet and `media.test.js` is unchanged. Until then the cat sounds are silent.
+- Sounds: Batch 69 (docs sweep): `mob.cat.*` audio files are now installed (`public/audio/1.7.10/mob/cat/`), so the cat sounds are no longer silent.
 - No browser or visual check was made (no dev server by rule); rendering is verified only through the model pose maths test.
 - Region import of `Ozelot` has a single test, not an end-to-end save round trip.
