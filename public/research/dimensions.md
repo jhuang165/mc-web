@@ -48,6 +48,8 @@ Import the resulting JSON through Select World. The converter keeps native coord
 
 ## Gaps
 
+Batch 68 (docs sweep): the lines below date from the batch they name. Where they say the Overworld's spawn-area ticks and entities, spawning, commands or command blocks do not run while the player is away, the batch 30 to 46 sections further down (`src/away-world.js`, `src/away-entities.js`, `src/away-light.js`) supersede them; the "Still not ported" lists inside those sections are the current ones.
+
 - Batch 27: the Nether and End run WorldServer's chunk loop (3 random ticks per section, fire and fluid scheduled ticks, lava rate 10, ice to air in the Nether, eternal fire over End bedrock, no weather) in the window and the headless ring; see [natural spawning](natural-spawning.md) Round 9. The End's no-sky light and 128 actual height were added in batch 28 (below).
 
 - Natural spawning uses the SpawnerAnimals flow with the browser's six-by-six ticking window as the eligible chunks (cap 70 × 36 / 256 = 9 monsters) and no spawn-point rule in dimensions (natively the overworld's spawn point applies); see [natural spawning](natural-spawning.md). Portal pigmen (`portalSpawnPosition` in nether-portal.js) are not called by the live world yet.

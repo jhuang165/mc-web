@@ -13,7 +13,7 @@ Code: `src/iron-golem.js` (constants, drops, animation, pumpkin shape), `src/vil
 ## Live behaviour
 
 - Village golem: spawned by the village collection by its native rule; refreshes its village and home every 70 + nextInt(50) ticks. It hits hostile mobs in range with the native damage, fling and sounds; it defends villagers against attackers and the player at reputation -15 or below.
-- Player-created golem: a pumpkin placed on top of two iron blocks with an iron block on both sides of the middle one (x or z) clears the five blocks and spawns a golem with `playerCreated` (no jack-o'-lantern exists in this build; the native check accepts it too). The 120 snowball particles of the original are not drawn.
+- Player-created golem: a pumpkin placed on top of two iron blocks with an iron block on both sides of the middle one (x or z) clears the five blocks and spawns a golem with `playerCreated` (Batch 68 docs sweep: the jack-o'-lantern, block 91, now exists in this build, but `EntityWorld.tryBuildIronGolem` in `src/entities.js` still tests only the plain pumpkin, so the native lit-pumpkin build is still open). The 120 snowball particles of the original are not drawn.
 - Rose: LookAtVillager holds the arm out for 400 ticks; child villagers walk up and take it (FollowGolem).
 - Saved in the browser record (`playerCreated`); Java export writes id `VillagerGolem` with `PlayerCreated`. Java import reads `VillagerGolem` (PlayerCreated, health, effects) in an imported area.
 - Renderer: ModelIronGolem on the original `iron_golem.png`, with RenderIronGolem's walking roll. Sounds `mob.irongolem.*` come from the 1.7.10 asset index (imported by `tools/import-vanilla-media.mjs`).

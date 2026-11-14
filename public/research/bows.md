@@ -48,6 +48,8 @@ Pieces marked "bytecode only" were read from the disassembly and are checked in 
 - Model (`bic`): the zombie model's proportions with 2-wide arms and legs (`skeleton.png`, 64 x 32), arms raised like the zombie's, the bow drawn in the right hand with the player's held-bow transform.
 
 ## Gaps
+
+Batch 68 (docs sweep): several lines below are stale. Crit trails, arrow bubbles, the stuck-arrow display, the pickup fly-to, Power/Punch/Flame, wither skeletons and server skeletons are ported (catalogue rows `Arrow` and `Skeleton`; code in `src/bow.js`, `src/wither-skeleton.js`, `src/enchantment-effects.js`). Not re-checked in this sweep, so they stand: the third-person bow pose, skeleton armour, step sounds, skeleton-vs-mob targeting, the simplified spawn clock, and the bytecode-derived (not probed) `ItemBow`/AI timers. The original list follows unchanged.
 - Version 0.18 adds [spiders](spiders.md) as a Survival string source, making the bow recipe obtainable.
 - No critical-hit particles, no water bubbles from arrows, no arrow-in-body display and no pickup fly-to animation (`onItemPickup`).
 - No third-person drawing pose (`aimedBow` arm raise) or use-stage icon in third person.

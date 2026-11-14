@@ -53,10 +53,9 @@ Touch on eggs), `src/region-export.js` (`Silverfish`), audio under `public/audio
   and call count) but not path geometry or physics; live pathing uses the existing PathFinder/navigator and
   physics, so routes and speed are approximate.
 - `MathHelper.sin/cos` tables are not used: the model sway differs from the reference by under 1e-3.
-- `getClosestVulnerablePlayer` sneak/invisibility range scaling is not ported (range is always 8).
-- `mobGriefing` is treated as true (the port has no gamerule).
+- Batch 68 (docs sweep): `getClosestVulnerablePlayer` sneak/invisibility range scaling is now ported in `MobAI.closestVulnerablePlayer` (`src/ai.js`, sneaking x0.8, invisible x0.7 x armour visibility; replayed by `src/detection.test.js`), and `mobGriefing` now reads the gamerule (`entities.js` `silverfishThink` env, `get mobGriefing()`); the older lines that said otherwise were stale.
 - Hide and wake edits do not feed block-update, light or fluid systems beyond redrawing the cell.
-- Region import does not convert mobs, so there is no Java import path for silverfish; export writes id `Silverfish`.
+- Batch 68 (docs sweep): Java region import now converts mobs; `Silverfish` is in `JAVA_SUMMON_MOBS` (`src/java-mobs.js`, read by `region-import.js`), so imported silverfish become live mobs. Export writes id `Silverfish`.
 - The save keeps 40 mobs: a release past that limit is skipped. Silverfish sound events were derived from the shipped
   files (hit1-3, kill, say1-4, step1-4); `sounds.json` itself is not in the local research cache.
 - Native evidence has no multi-fish or collision-driven cases; sounds in the live path were not played in a browser.
