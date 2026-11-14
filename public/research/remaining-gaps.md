@@ -2,6 +2,42 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 73
+
+Batch 73 covered these areas:
+- **Server player tracking.** Remote players are only sent within the native tracking range; remote players and client tile entities go away with their chunk and come back with it.
+- **Server placement.** Cake, beds and hoe tilling work on the server (found by an executed sweep of every item); player heads keep their owner.
+- **Server riders.** Boat and cart landings hurt and sound for the riding player; arrow pickup uses the ridden box. A rider mounted mid-fall was found right already (executed).
+- **Tile entity NBT.** Flower pots and three more tile kinds import and export. Two listed gaps were wrong.
+- **Entity order.** The native entity list order is kept every tick; items and arrows are picked up in one pass in native order (executed); entity boxes use float sizes.
+- **Server mob cap.** The flat 80-mob cap is gone; the native per-type caps decide.
+- **Particles.** Fishing wake, mycelium aura and brewing stand / end portal particles; crit particles from the server.
+- **Offline skin.** Single player can load a skin file; the skin cleanup matches native pixel for pixel (executed).
+- **Sounds.** Every 1.7.10 sound event is listed; cake and cauldron are silent as natively; the arrow hit ding plays.
+- **Research docs.** 30 more docs swept.
+
+Still open from batch 73:
+- **Multiplayer.**
+  - Players: positions go out every tick, not at the tracker frequency of 2; the `dimRespawn` snapshot is not cut for players.
+  - Placement: the server sends no place sound for any block.
+  - Pickup: server item and arrow pickup are not interleaved in list order.
+  - Combat: server mob attacks pass no sprint knockback or attacker slowdown; the client crit target is a snapshot.
+  - Not measured: server tick time with several hundred mobs.
+  - The brewing stand selection flag is kept separately by the server and the client.
+  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
+  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: players appearing at the tracking edge, signs returning with their column, wake and aura sprites, skin on the arm and heads, the arrow ding. Earlier unseen items from batches 67 to 72 still stand.
+- **Single player.**
+  - No death throw on player death; item entities never trample farmland; bonus chest torches have no orientation; falling anvil damage to non-living targets is unchecked.
+  - `CustomName` on chests, furnaces, dispensers, brewing stands and enchanting tables is not imported or exported.
+  - An orb's sound is queued ahead of item pop sounds within one tick; a mob passenger takes the vehicle's fall at its own turn.
+  - Flower pots: native stacks with damage values the port cannot hold are not representable.
+  - The browser skin decode is premultiplied (one colour step off native on partly transparent pixels).
+  - Sound volume and pitch were compared by hand for a few call sites only; run-time built names are prefix rows.
+  - Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
+- **Rendering.** No native pixel capture; the client lacks the server's `recheckGaps` pass after height-map edits (bytecode-predicted).
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 72
 
 Batch 72 covered these areas:
@@ -16,25 +52,7 @@ Batch 72 covered these areas:
 - **Projectile order.** Ties between entities at equal distance follow the native chunk order (executed); the arrow pickup box is native (executed).
 - **Chunk streaming.** The join streams its columns; block changes and entities only go to players that have the column; the legacy End window is limited.
 
-Still open from batch 72:
-- **Multiplayer.**
-  - Chunks: remote players and client tile-entity maps are not dropped on unload; `chunkStream` is a test switch, not a server.properties key.
-  - Cake: the server cannot place a cake item.
-  - Settings: the hidden-chat player's own tab completion is not gated (recalled native); natural spawning stops at the 80-mob wire limit.
-  - Riders: server players riding server boats and carts get no fall sound; server `collectArrows` passes no ridden box.
-  - The brewing stand selection flag is kept separately by the server and the client.
-  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
-  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: the streamed join, items and orbs between cadence packets, the profile screen and capes on remote players. Earlier unseen items from batches 67 to 71 still stand.
-- **Single player.**
-  - Cake `random.eat` on use is unverified.
-  - A rider mounted while falling does not carry the fall into its first landing; a mob passenger takes its fall at its own turn.
-  - Flower pots: native stacks with damage values the port cannot hold are not representable; pot NBT import/export is not wired.
-  - Mob chunk cells are stamped at projectile sweeps, not on every update; items, orbs and vehicles are not interleaved with arrows in one pickup order; other port boxes may still lack float sizes.
-  - Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
-  - No offline skin choice; the offline cape is per browser profile.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 72: carried into the batch 73 list above, except the items batch 73 closed or found wrong.
 
 ## Done in batch 71
 

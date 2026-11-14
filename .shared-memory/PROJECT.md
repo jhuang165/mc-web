@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 73 (2026-11-14, ten Sonnet tracks in `../wt73-<name>` on `batch73-<name>`, cut from d20d9666f, merged --no-ff on `batch73-lead`; shared track rules `../artifacts/b73-lead/track-rules.md`; lead note `b73-lead-track.md`; no browser checks by request):
+- 0.102.0, by track:
+  - streamfix73: `server-player-tracker.js`: remote players are tracked per viewer (EntityTracker range 512 clamped by the view-distance limit, bytecode-read); untracked players become `far: true` rows (tab list only); the client drops remote players and its tile-entity maps (`client-tiles.js`: signs, skulls, beacons, spawners, chests, ender chests, moving pistons) for unloaded columns and restores them from a re-sent bulk. Player positions still go out every tick.
+  - mpblocks73: an executed sweep of every item id against single player found three server gaps: cake, beds (both halves) and hoe tilling, now placed by `server-place.js`; server skulls keep the held stack's SkullOwner.
+  - mpriders73: server boat and cart landings use the single-player rider fall (Jump Boost, combat tracker, fall sounds, fall stat); server arrow pickup passes the ridden box (`ServerVehicles.ridingBox`). Found wrong: a rider mounted while falling never spends the carried fall natively (`MountFallProbe`, executed).
+  - nbtexport73: flower pots import and export (`Item`/`Data`); `EnderChest`, `EnchantTable` and `DLDetector` tiles are exported. Found wrong: TileTicks were already exported natively-shaped, and the trapped chest signal is not saved natively.
+  - mobcells73: entities are re-stamped in the native list order after every update; items and stuck arrows are picked up in one pass in list order (`pickup-order.js`, `PickupOrderProbe`, 700 executed scenes); player, mob, falling block and witch boxes use float sizes.
+  - mpspawn73: the server's flat 80-mob cap is gone (the 5000 runaway guard remains); natural spawning keeps the native per-type caps over the union of players' 17x17 windows (radius 8 regardless of view distance, bytecode-read); measured wire sizes stay flat with distant mobs.
+  - particles73: fishing `wake` particles (`WakeParticleProbe`, executed), mycelium `townaura` and brewing stand / end portal display ticks; server crit animations (`pfx73`) and the jump-attack critical on server mob hits. `footstep` and `cloud` have no native caller.
+  - skins73: `sp-skin.js` (offline skin file, Chat Settings buttons); `userSkinPixels` ports ImageBufferDownload exactly (`SkinParseProbe`, 13 executed images); the first-person arm uses the skin; own-name heads use it.
+  - sounds73: `sound-events-reference.json` (every sound string in the client classes vs sounds.json); cake eating and cauldron use are silent (the port's `random.eat` and made-up `liquid.splash` removed); witch, slime `mob.attack`, `damage.thorns` and `mob.chickenplop` are silent natively; the arrow `random.successful_hit` ding for player shooters; burp pitch.
+  - researchdocs7: 30 more research docs swept; stale claims corrected (enchanting, mobGriefing on farmland, hoes, structure data, region files); new real gaps listed under Open.
+- Lead joins: docs conflict in `sound.md` kept both sections; four older tests take the float entity sizes (`models`, `mooshroom-golem`, `player-renderer`, `sheep`).
+- Open: "Still open from batch 73" in `public/research/remaining-gaps.md`.
+
 Batch 72 (2026-11-14, ten Sonnet tracks in `../wt72-<name>` on `batch72-<name>`, cut from 0866e8951, merged --no-ff on `batch72-lead`; shared track rules `../artifacts/b72-lead/track-rules.md`; lead note `b72-lead-track.md`; no browser checks by request):
 - 0.101.0, by track:
   - cakefog72: left click on a cake eats a slice (`eatCakeSlice` in single player, `server-cake.js` on the dedicated server); Nether and End fog use the short `dimensionFogRange` / `doesXZShowFog` distances in `void-fog.js` (bytecode: the End gets the short fog too).
