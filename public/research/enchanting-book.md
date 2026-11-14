@@ -29,4 +29,5 @@ Ports `TileEntityEnchantmentTable` (apd), `RenderEnchantmentTable` (bmn), `Model
 - Glyph shapes and widths are original, so a name wraps differently from the real font on long lines; the real `ascii_sga.png` width table is not used. The book texture is original, so it will not look like the vanilla book.
 - The GUI book is lit by the two item lights with a white lightmap; the exact GL light/normal rescale is approximated by the entity shader.
 - The original tables' tile entities are only ticked while loaded; this build resets a table's book when its chunk streams back in. The table `CustomName` (anvil-renamed tables, region import) is not stored.
+- Batch 70 (docs sweep): the `CustomName` gap is confirmed: no `EnchantTable` tile is imported or exported (`region-import.js`, `region-export.js`).
 - The level text sits 7 pixels below the glyph origin in the original (`y + 16 + 19n + 7`); the existing CSS places it at `top: 7u` inside a button that starts 14 pixels down, which was left unchanged and not compared pixel by pixel.

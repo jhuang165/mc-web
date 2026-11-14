@@ -115,6 +115,7 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
 
 ## Gaps
 - Light: sliced, but each slice still runs on the page thread (identical results); no worker light.
+- Batch 70 (docs sweep): re-checked. Light still runs in slices on the page thread (the `new Worker` sites are `dimension-live.js`, `mesh-pool.js`, `spawn-presolve.js`, `travel-loading.js` and `main.js`; none builds light). Quit saves with the `Saving…` label (`main.js`) and no screen, as this doc says.
 - Portal trips depend on the `portalColumns` invariant (assumed); a future structure that places portal blocks in terrain would need `portalColumns` removed or extended.
 - The Overworld return trip still takes about 8 s wall (worker population cells); the screen stays live and no frame exceeds 100 ms. Native duration is assumed.
 - The native download-terrain duration is assumed in every path.

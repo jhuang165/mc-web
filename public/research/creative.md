@@ -66,3 +66,4 @@ The click, scroll, key and drawing rules below come from the bytecode (javap). T
 - The survival-tab player figure does not turn toward the pointer.
 - The search field lacks clipboard shortcuts and Shift selection.
 - Creative players can break bedrock (it is listed in Building Blocks), except the world floor at y = 0, which protects this finite world.
+- Batch 70 (docs sweep): the y = 0 exception is wrong. Creative breaking runs `player-edit-simulation.js` (only Survival is refused bedrock) into `breakPlayerBlock` (`block-break-simulation.js`, `block === 11 && !creative`), and `World.inside` accepts y >= 0, so bedrock at y = 0 breaks and the player can open the floor onto the void (`world.test.js` asserts `set(20, 0, 20, 0)` succeeds; `block-break-simulation.test.js` covers Creative bedrock). Native Creative breaks bedrock everywhere too.

@@ -58,6 +58,7 @@ Each of these rolls is drawn, so the random streams stay in step, but its result
 Other gaps:
 
 - Creeper spawn rolls (the follow-range bonus) are not run.
+- Batch 70 (docs sweep): the creeper bullet is stale. `entities.js` `onSpawnWithEgg` runs `EntityLiving`'s follow-range roll for every class outside `OWN_SPAWN_BONUS` (a creeper is not in it), as the first `Entity.rand` draw, and stores the bonus as a modifier (`addSpawnBonus`, probed in `interchange-spawn-reference.json`). Villager zombies and conversion are live too: `zombieKilledVillager` (`entities.js`, from the kill path) uses `killConverts` (`zombie-villager.js`: Hard always, Normal on one `nextBoolean`, Easy and Peaceful never), then the conversion timer, golden apple cure and Weakness (see [zombie-villager](zombie-villager.md)); pinned by `src/docs-sweep-b70.test.js`.
 - Reinforcements only answer hits whose target is the player.
 - Hurt sounds and knockback draw on the zombie's own Random since 0.22.12 ([combat](combat.md)), but live entity update order still differs from the original's, so live games do not reproduce its exact reinforcement spots. The replay does.
 - Hard-only content: Batch 69 (docs sweep): cave spider poison is in (`entities.js` caveSpider attack, difficulty-scaled ticks) and Hardcore exists (`hardcore.js`, `hardcore.test.js`); wither effects tick on mobs (`mob-effects.js`, `effects.md`). Villager conversion was not re-checked here.
