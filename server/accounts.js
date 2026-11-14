@@ -5,7 +5,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, cre
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { validName } from '../src/multiplayer/protocol.js';
-import { pngSize, SKIN_WIDTH, SKIN_HEIGHT, MAX_SKIN_BYTES, CAPE_WIDTH, CAPE_HEIGHT, MAX_CAPE_BYTES } from '../src/skin.js';
+import { capePngError, pngSize, SKIN_WIDTH, SKIN_HEIGHT, MAX_SKIN_BYTES, CAPE_WIDTH, CAPE_HEIGHT, MAX_CAPE_BYTES } from '../src/skin.js';
 
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 export const SESSION_MS = 30 * 24 * 3600 * 1000, INVITE_MS = 7 * 24 * 3600 * 1000;
@@ -150,9 +150,8 @@ export class AccountStore {
   async clearSkin(account) { this.dropSkin(account); account.skin = account.skinHash = null; await this.save(); return this.public(account); }
   // b71 mpcapes: an optional cape, validated like a skin (64 x 32 PNG, at most 16 KB). Users upload their own; none ships.
   async setCape(account, png) {
-    if (!Buffer.isBuffer(png) || png.length > MAX_CAPE_BYTES) throw new AccountError(413, 'Capes must be at most 16 KB.');
-    const size = pngSize(png);
-    if (!size || size.width !== CAPE_WIDTH || size.height !== CAPE_HEIGHT) throw new AccountError(400, 'Upload a 64 × 32 PNG cape.');
+    const bad = Buffer.isBuffer(png) ? capePngError(png) : { status: 413, message: 'Capes must be at most 16 KB.' }; // b72 spcapes: shared with single player
+    if (bad) throw new AccountError(bad.status, bad.message);
     const hash = sha(png).slice(0, 20);
     this.dropCape(account);
     account.cape = png.toString('base64'); account.capeHash = hash; this.capes.set(hash, png);
