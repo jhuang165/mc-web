@@ -194,7 +194,7 @@ export class ServerRules {
     if (!any) return false;
     if (this.opSource ? this.opSource.is(p.name) : sim.admin.isOpName(p.name)) return false;
     if (size <= 0) return false;
-    const s = sim.worldSpawn ?? (() => { const at = sim.world.spawn(); return [Math.floor(at.x), Math.floor(at.y), Math.floor(at.z)]; })();
+    const w0 = sim.world, s = sim.worldSpawn ?? (w0.nativeSpawn ? [w0.nativeSpawn[0] - w0.originX, w0.nativeSpawn[1], w0.nativeSpawn[2] - w0.originZ] /* b70 serverprops2: a native world's WorldInfo spawn itself, not spawn()'s random 10-block player placement */ : (() => { const at = w0.spawn(); return [Math.floor(at.x), Math.floor(at.y), Math.floor(at.z)]; })());
     return Math.max(Math.abs(x - s[0]), Math.abs(z - s[2])) <= size;
   }
 }
@@ -242,6 +242,14 @@ export async function loadServerProperties(dir, { overrides = {}, fs = null, now
   const settings = resolveSettings(props); // may also write back a bad number's default
   if (props.dirty || !existed) { await fs.mkdir(dir, { recursive: true, mode: 0o700 }); await fs.writeFile(path, props.text(now()), { mode: 0o644 }); }
   return { props, path, created: !existed, ...settings };
+}
+
+// PropertyManager.setProperty + saveProperties (the DedicatedServer override of MinecraftServer.func_143006_e, `d(int)` in the jar, which only stores the int: RECALLED for the
+// override): put `value` under `key` and rewrite the file. `settings` is the loadServerProperties result. A flag or environment override of the key stays out of the file's way
+// (it still applies on the next start). Returns the write's promise (a failed write is passed to `warn`).
+export async function saveProperty(settings, key, value, { fs = null, warn = () => {}, now = () => new Date() } = {}) {
+  settings.props.map.set(key, String(value));
+  try { fs ??= await import('node:fs/promises'); await fs.writeFile(settings.path, settings.props.text(now()), { mode: 0o644 }); } catch (error) { warn(`Failed to save ${settings.path}: ${error.message}`); }
 }
 
 // server-icon.png: a PNG of exactly 64 x 64 pixels becomes the status favicon (RECALLED: DedicatedServer refuses other sizes). Returns { favicon } or { error }.

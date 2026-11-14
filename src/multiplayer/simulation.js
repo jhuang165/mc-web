@@ -1,6 +1,6 @@
 import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, raycast, collides } from '../world.js';
 import { isFence } from '../fences.js'; // b62: the fence lead click
-import { Survival, ITEMS } from '../survival.js';
+import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
@@ -127,7 +127,7 @@ export class DedicatedSimulation {
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
-    this.admin = new ServerAdmin(saved.admin, options); if (this.rules.playerIdleTimeout) this.admin.idleMinutes = this.rules.playerIdleTimeout; // b69 serverprops: player-idle-timeout is the starting value (a non-zero property wins over the saved one) // b68 mpadmin: ops, bans, IP bans, whitelist (native file shapes), saved with the world
+    this.admin = new ServerAdmin(saved.admin, options); if (this.rules.playerIdleTimeout) this.admin.idleMinutes = this.rules.playerIdleTimeout; this.admin.onIdleTimeout = n => this.rules.persistIdleTimeout?.(n); /* b70 serverprops2 */ // b69 serverprops: player-idle-timeout is the starting value (a non-zero property wins over the saved one) // b68 mpadmin: ops, bans, IP bans, whitelist (native file shapes), saved with the world
     this.scoreboard = new ServerScoreboard(saved.scoreboard); // b64 mpscoreboard: the one shared scoreboard (objectives, scores, teams), saved with the world
     this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
     this.golems = new ServerGolems(this); // b66: a pumpkin on snow or iron builds a golem; a broken monster egg lets silverfish out (server-golems.js)
@@ -212,6 +212,7 @@ export class DedicatedSimulation {
     const saved = this.savedPlayers.get(resumeKey), start = saved?.position ?? this.world.spawn();
     const position = vector(start), survival = new Survival(saved?.player ?? {}, this.gameMode);
     if (!saved && this.newPlayerMode) survival.mode = this.newPlayerMode; // /defaultgamemode adventure
+    if (saved && Object.hasOwn(GAME_MODE_IDS, saved.player?.gameMode)) survival.mode = saved.player.gameMode; // b70 serverprops2: EntityPlayerMP.readEntityFromNBT (bytecode-read mw.a(dh)) restores `playerGameType` when the tag exists, unless force-gamemode
     if (this.rules.forceGamemode) survival.mode = this.newPlayerMode ?? this.gameMode; // b69 serverprops: force-gamemode puts every joining player in the server's mode (oi.a(mw, mw, ahb))
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
@@ -243,7 +244,7 @@ export class DedicatedSimulation {
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p) }; }
+    player: { gameMode: p.survival.mode, /* b70 serverprops2: playerGameType (mw.b(dh)) */ slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -580,7 +581,7 @@ export class DedicatedSimulation {
     this.mobs.tick();
     this.vehicles.tick(); // b61
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
-    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles }); // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
+    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     for (const p of this.players.values()) this.serverItems.settle(p);

@@ -148,7 +148,7 @@ export function tickNether(sim, n, players) {
   viewNetherPlayers(n, players); n.vehicles.riderInput(); // b63: a pig steers on this tick's keys
   n.mobs.tick();
   n.vehicles.tick();
-  tickSpawners({ mobs: n.mobs, spawners: n.tileEntities.spawners, random: n.weather.random, players, light: netherLight(n), time: sim.time, vehicles: n.vehicles }); // b65: + vehicles; b63: MobSpawnerBaseLogic (blaze spawners), after the entities
+  tickSpawners({ mobs: n.mobs, spawners: n.tileEntities.spawners, random: n.weather.random, players, light: netherLight(n), time: sim.time, vehicles: n.vehicles, viewDistance: sim.rules?.viewDistance }); // b70 serverprops2: tracker clamp (undefined = 10) // b65: + vehicles; b63: MobSpawnerBaseLogic (blaze spawners), after the entities
   n.dispense.flush();
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();
