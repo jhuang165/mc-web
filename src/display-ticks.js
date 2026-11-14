@@ -1,3 +1,4 @@
+import { enderDisplayParticles, ENDER_CHEST } from "./chest-blocks.js";
 import { portalDisplayTick } from "./nether-portal.js";
 // WorldClient.doVoidFogParticles (bjf.C), Java 1.7.10: each client tick 1000 cells within
 // 15 blocks of the viewer (x + rand.nextInt(16) - rand.nextInt(16) on each axis, from the
@@ -54,6 +55,8 @@ export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () =>
     // BlockLeaves.randomDisplayTick: a drip under rain-exposed leaves with nothing solid below.
     if (canStrike(x, y + 1, z) && !solidTopSurface(world, x, y - 1, z) && random.nextInt(15) === 1)
       fx.spawn("dripWater", f(x + random.nextFloat()), y - 0.05, f(z + random.nextFloat()));
+  } else if (b === ENDER_CHEST) { // BlockEnderChest.randomDisplayTick: three portal particles
+    for (const [name, px, py, pz, vx, vy, vz] of enderDisplayParticles(random, x, y, z)) fx.spawn(name, px, py, pz, vx, vy, vz);
   } else if (b === 164) portalDisplayTick(world, x, y, z, random, fx, sound); // Nether portal
   else if (b === WATER || b === LAVA) liquid(world, x, y, z, b, random, fx, sound);
   else if (b === RS_TORCH) redstoneTorchDisplay(world, x, y, z, random, fx);

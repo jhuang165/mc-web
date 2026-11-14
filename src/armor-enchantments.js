@@ -62,7 +62,7 @@ export function blockedDamage(amount, key, blocking) {
 // `armor` is the four armour stacks (boots first, as InventoryPlayer.armorInventory). An amount of 0 or
 // less returns 0 at once without drawing; otherwise the shared Random is drawn once, the sum is capped
 // at 25, the draw adds up to half, the result is capped at 20 and the amount becomes
-// amount * (25 - k) / 25 in floats when k > 0. The Resistance potion (earlier in the same method) is not ported.
+// amount * (25 - k) / 25 in floats when k > 0. The Resistance step (earlier in the same method, 20% per level, not for outOfWorld, bytecode-read sv.c) lives in the callers: Survival.damage, EntityWorld.damageEntity and client-health.js.
 export function enchantedDamage(armor, key, amount, random = enchantmentRandom) {
   if (!(amount > 0)) return 0;
   if (isAbsolute(key)) return amount;
