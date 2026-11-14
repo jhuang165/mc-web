@@ -263,6 +263,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (player.vehPackets && ws) send(ws, player.vehPackets); player.vehPackets = null; // b61: minecarts and boats near this player (server-vehicles.js)
         for (const m of player.dispOut ?? []) if (ws) send(ws, m); // b61: dispEnts / dispFx of dispensed entities (server-dispense.js)
         player.dispOut = null;
+        for (const m of player.pistonOut ?? []) if (ws) send(ws, m); player.pistonOut = null; // b66 mppistons: S24 and the moving blocks (server-pistons.js)
         player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null; player.itemsOut = null; player.mobPackets = null;
       }
     }

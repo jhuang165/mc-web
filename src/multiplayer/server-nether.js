@@ -21,6 +21,7 @@ import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
 import { LiveRedstone } from '../redstone-live.js';
+import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission } from '../lighting.js';
 import { tickWorldSystems } from '../world-tick.js';
 import { tickBeacons } from '../pyramid-live.js';
@@ -112,6 +113,7 @@ export function buildNetherInside(sim, n, saved = {}) {
   n.mobs.mobs.ignite = (x, y, z) => n.fire.ignite(x, y, z); // a fireball sets fire where it lands
   sim.mobs = n.mobs;
   buildNetherVehicles(sim, n, saved.vehicles ?? null); // b63: after the mobs and the dispenser (a pig's seat, a dispenser's boat)
+  n.pistons = new ServerPistons({ sim, dim: n.dim ?? NETHER, redstone: n.redstone, world: n.world, mobs: () => n.mobs, items: () => n.items, xp: () => n.xp, dispense: () => n.dispense, falling: () => n.falling }); // b66 mppistons
   if (saved.items) n.items.load(saved.items, s => reader.read(s), 0);
 }
 
@@ -149,6 +151,7 @@ export function tickNether(sim, n, players) {
   n.falling.tick();
   tickWorldSystems({ farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, hoppers: n.containers.ticks.hoppers },
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
+  n.pistons.flush(); // b66 mppistons
   tickBeacons(n.tileEntities.beacons, { world: w, time: sim.time, apply: (pl, e) => {
     const p = pl.player;
     p.survival.effects.add(e);
