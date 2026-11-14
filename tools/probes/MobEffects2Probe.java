@@ -25,11 +25,13 @@ public class MobEffects2Probe {
   static { try { u = MobMoveProbe.unsafe(); } catch (Exception e) { throw new RuntimeException(e); } }
   static HorseProbe.World W;
   static Field MAP;
+  static boolean J7; // batch 65: swap each new mob's activePotionsMap for the Java 7 HashMap port (Java7Map) before anything is put in it
   static Method UPDATE;
   static String hex(dh tag) throws Exception { return MobEffectsProbe.hex(tag); }
   static sa make(String kind) throws Exception {
     sa m = sg.a(kind, W);
     if (m == null) throw new IllegalStateException("no mob " + kind);
+    if (J7) MAP.set(m, new Java7Map());
     MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(m, 100.5, 64.0, -20.25);
     return m;
   }

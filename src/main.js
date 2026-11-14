@@ -242,7 +242,7 @@ import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
 import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
-import { pushClientPlayer } from "./client-push.js";
+import { pushClientPlayer, CLIENT_PUSHES_PLAYER } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { predictUse, slotReplacesUse, finishPredictedUse } from "./multiplayer/client-use-predict.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -732,7 +732,7 @@ const tntRows = () => (remoteDispense?.primed.length ? [...primed, ...remoteDisp
 function tickRemoteFishing() {
   const own = remoteFishing.own(multiplayer.id);
   rodState.cast = !!own;
-  scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, angler: null } : null);
+  scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, swing: Math.min(1, animation.swingTime / SWING_SECONDS), angler: null } : null);
   scene.setOtherFishing(remoteFishing.others(multiplayer.id).map(h => { const e = remotePlayers?.entries.get(h.angler); return e ? { hook: h, angler: e.body, sneaking: !!e.state?.sneak } : null; }).filter(Boolean));
 }
 function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles); }
@@ -3167,7 +3167,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   seatOnCartCopy();
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
-  scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking, angler: multiplayer ? null : playerBody } : null);
+  scene.setFishing(fishing.active ? { hook: objectViews(objectTracker, [fishing.hook], "fishHook")[0], first: !thirdPersonView, sneaking: !!motion.sneaking, swing: Math.min(1, animation.swingTime / SWING_SECONDS), angler: multiplayer ? null : playerBody } : null); // b65: swing = getSwingProgress for the first-person line
   scene.setDrops(objectViews(objectTracker, items.items, "item"));
   scene.setProjectiles(eyes.eyes.length || rockets.rockets.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...viewBalls(projectiles.balls), ...eyes.rows(objectViews(objectTracker, eyes.eyes, "eyeOfEnder")), ...rockets.rows(objectViews(objectTracker, rockets.rockets, "firework")), ...viewBalls(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : viewBalls(projectiles.balls), projectiles.particles);
   scene.setTime(survival.time);
@@ -3768,7 +3768,7 @@ function movementTick(controls) {
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
-  pushClientPlayer(mobs, { x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height, riding: !!rider.vehicle, dead: survival.health <= 0 }, velocity); // sv.bo on the client player, after the move
+  if (CLIENT_PUSHES_PLAYER) pushClientPlayer(mobs, { x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height, riding: !!rider.vehicle, dead: survival.health <= 0 }, velocity); // sv.bo on the client player, after the move
   streamPrefetch?.update(position.x, position.z);
   if (world.ringSink?.rtList && world.warmBiomes) world.warmBiomes(world.ringSink.rtList); // ring chunks' biomes, a few ms a tick, before their ice rolls need them
   walkFrozen = sneakOnGround;

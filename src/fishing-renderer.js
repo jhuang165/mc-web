@@ -1,13 +1,14 @@
 // RenderFish (bnn) drawing: the bobber is the particles.png tile at (1, 2) (8x8 of the 128x32 sheet) on a
 // camera-facing 0.5 quad centred on the hook, and the line is 16 segments of a sagging curve from the rod tip
-// to the bobber. First person puts the tip at the eye plus (-0.5, 0.03, 0.8) turned by the view angles; other
-// views use the body's yaw (the camera yaw stands in for renderYawOffset here). Black, one pixel wide.
+// to the bobber. The tip and curve come from fishing-line.js (first person: the hand vector turned by pitch, yaw and the swing offsets; other
+// views: the angler's renderYawOffset, batch 65 executed replay). Black, one pixel wide.
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { pixelTexture } from "./first-person.js";
 import { mcAngles } from "./fishing.js";
+import { fishingLine } from "./fishing-line.js";
 
-const SEGMENTS = 16, RAD = Math.PI / 180, EYE_HEIGHT = 1.62; // EntityPlayer.getEyeHeight
+const SEGMENTS = 16, EYE_HEIGHT = 1.62; // EntityPlayer.getEyeHeight
 export class FishingRenderer {
   constructor(scene, view) {
     this.scene = scene;
@@ -40,31 +41,19 @@ export class FishingRenderer {
     this.mesh.position.set(hx, hy, hz);
     this.mesh.quaternion.copy(camera.quaternion);
     this.material.setLight(this.view.brightness(hx, hy, hz));
-    const eye = view.eye ?? camera.position, a = mcAngles(view.yaw ?? 0, view.pitch ?? 0);
-    let tx, ty, tz;
-    if (view.first !== false) {
-      // Vec3(-0.5, 0.03, 0.8).rotateAroundX(-pitch).rotateAroundY(-yaw)
-      let x = -0.5, y = 0.03, z = 0.8;
-      const p = -a.pitch * RAD, cp = Math.cos(p), sp = Math.sin(p);
-      [y, z] = [y * cp + z * sp, z * cp - y * sp];
-      const w = -a.yaw * RAD, cw = Math.cos(w), sw = Math.sin(w);
-      [x, z] = [x * cw + z * sw, z * cw - x * sw];
-      tx = eye.x + x; ty = eye.y + y; tz = eye.z + z;
-    } else {
-      // RenderFish's other-view branch reads the angler's client entity: its interpolated position and prevRenderYawOffset / renderYawOffset
-      // (the local player's PlayerBody here), not the camera, which stands behind the player in third person.
-      const an = view.angler;
-      const b = (an ? an.prevRenderYawOffset + (an.renderYawOffset - an.prevRenderYawOffset) * partial : a.yaw) * RAD, s = Math.sin(b), c = Math.cos(b);
-      const ex = an ? an.px + (an.x - an.px) * partial : eye.x, ey = an ? an.py + (an.y - an.py) * partial + EYE_HEIGHT : eye.y, ez = an ? an.pz + (an.z - an.pz) * partial : eye.z;
-      tx = ex - c * 0.35 - s * 0.85;
-      ty = ey - 0.45 - (view.sneaking ? 0.1875 : 0);
-      tz = ez - s * 0.35 + c * 0.85;
-    }
-    const dx = hx - tx, dy = hy + 0.25 - ty, dz = hz - tz, pos = this.line.geometry.attributes.position;
-    for (let i = 0; i <= SEGMENTS; i++) {
-      const f = i / SEGMENTS;
-      pos.setXYZ(i, tx + dx * f, ty + dy * (f * f + f) * 0.5 + 0.25, tz + dz * f);
-    }
+    const eye = view.eye ?? camera.position, a = mcAngles(view.yaw ?? 0, view.pitch ?? 0), first = view.first !== false, local = view.local !== false, an = view.angler;
+    // batch 65 (fishing-line.js, executed RenderFish replay): the first-person view reads the camera's interpolated eye and angles (already blended with the
+    // partial tick) plus the swing offsets; other views read the angler's body. A body's y is its feet: the local player's posY is the eye (yOffset 1.62, ySize
+    // already in the body), another player's posY is its feet.
+    const lift = local ? EYE_HEIGHT : 0;
+    const body = an ? { px: an.px, py: an.py + lift, pz: an.pz, x: an.x, y: an.y + lift, z: an.z, prevRenderYawOffset: an.prevRenderYawOffset, renderYawOffset: an.renderYawOffset }
+      : { px: eye.x, py: eye.y, pz: eye.z, x: eye.x, y: eye.y, z: eye.z, prevRenderYawOffset: a.yaw, renderYawOffset: a.yaw };
+    const angler = first
+      ? { px: eye.x, py: eye.y, pz: eye.z, x: eye.x, y: eye.y, z: eye.z, prevYaw: a.yaw, yaw: a.yaw, prevPitch: a.pitch, pitch: a.pitch }
+      : body;
+    const { points } = fishingLine({ angler, hook, first, local, swing: view.swing ?? 0, partial });
+    const pos = this.line.geometry.attributes.position;
+    points.forEach((p, i) => pos.setXYZ(i, p[0], p[1], p[2]));
     pos.needsUpdate = true;
   }
   hide() {
@@ -81,7 +70,7 @@ export class FishingPool {
       const e = list[i];
       if (!e) { this.renderers[i]?.hide(); continue; }
       const r = this.renderers[i] ??= new FishingRenderer(this.scene, this.view);
-      r.update(e.hook, camera, partial, { ...particleView, first: false, sneaking: !!e.sneaking, angler: e.angler ?? null });
+      r.update(e.hook, camera, partial, { ...particleView, first: false, local: false, angler: e.angler ?? null });
     }
   }
   clear() { for (const r of this.renderers) r.hide(); }
