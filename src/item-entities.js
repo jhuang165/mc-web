@@ -124,7 +124,7 @@ export class ItemEntities {
   }
   // Solid block boxes overlapping [x0..x1] (World.getCollidingBoundingBoxes), with the moving piston blocks' boxes.
   boxes(world, x0, y0, z0, x1, y1, z1) {
-    const out = movingBoxes([x0, y0, z0, x1, y1, z1]);
+    const out = movingBoxes([x0, y0, z0, x1, y1, z1], world);
     for (let bx = Math.floor(x0); bx < Math.floor(x1 + 1); bx++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++)
         for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)

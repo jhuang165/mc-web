@@ -373,7 +373,7 @@ export { setMovingBoxes };
 function collisionBoxes(world, b, e) {
   const out = entityBoxes && e ? entityBoxes(b, e) : [];
   if (worldEntityBoxes && e) out.push(...worldEntityBoxes(b, e, world));
-  out.push(...movingBoxes(b));
+  out.push(...movingBoxes(b, world));
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
