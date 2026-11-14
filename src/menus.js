@@ -469,6 +469,13 @@ export function createMenus(gui, ctx) {
           g.button({ x: cx + 76, y: cy, w: 74, h: 20 }, "No Cape", () => { ctx.clearCape(); note = "Cape removed."; g.build(); }, { enabled: !!ctx.hasCape?.() });
           if (note) g.text(note, cx, cy + 24, { color: 0xaaaaaa });
         }
+        // b73 skins73: offline skin source. 1.7.10 has no skin screen (the skin is the account's profile texture, an offline player is Steve), so the
+        // two buttons sit in the empty slot right of Chat Width, next to the cape ones; the note line above is shared.
+        if (ctx.chooseSkin) {
+          const L9 = L.options[L.options.length - 1][1], sx = L9.x + 160, sy = L9.y;
+          g.button({ x: sx, y: sy, w: 74, h: 20 }, "Skin File...", async () => { note = (await ctx.chooseSkin()) || note; g.build(); });
+          g.button({ x: sx + 76, y: sy, w: 74, h: 20 }, "No Skin", () => { ctx.clearSkin(); note = "Skin removed."; g.build(); }, { enabled: !!ctx.hasSkin?.() });
+        }
         g.button(L.buttons.done, t("gui.done"), () => { ctx.saveOptions(); show(parent); });
       },
     };
