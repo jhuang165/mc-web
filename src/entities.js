@@ -32,7 +32,7 @@ import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
 import { mobStepEvents, isEntityMob } from "./mob-steps.js";
 import { setMovingBoxes, movingBoxes } from "./moving-boxes.js";
 import { ITEMS } from "./survival.js";
-import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
+import { weaponEnchantments, arthropodSlowness, javaLikeRandom, creatureAttribute } from "./enchantment-effects.js";
 import { insideOpaqueBlock } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom, skylightSubtracted, celestialAngle } from "./lighting.js";
 import { mobKnockbackKick, golemLift } from "./player-knockback.js";
@@ -307,6 +307,10 @@ export function aiMoveSpeed(e, multiplier) {
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
 // Pigs use only carrots (ade.bF), including the carrot held by EntityAITempt.
 export const BREED_ITEM = { pig: CARROT, mooshroom: 305, cow: 305, sheep: 305, chicken: 309 };
+// EntityChicken.isBreedingItem (wg.c, bytecode-read) is `stack.getItem() instanceof ItemSeeds`: wheat, pumpkin and melon seeds and
+// nether wart (carrot and potato are ItemSeedFood, an ItemFood). The tempt task (BREED_ITEM) stays on wheat seeds.
+export const CHICKEN_BREEDING_ITEMS = new Set([309, 361, 362, 386]);
+export const isBreedingItem = (type, id) => type === "chicken" ? CHICKEN_BREEDING_ITEMS.has(id) : !!BREED_ITEM[type] && id === BREED_ITEM[type];
 export const EGG = 316;
 export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
@@ -1554,6 +1558,8 @@ export class EntityWorld {
       info.knockback = knockback;
       info.enchantCritical = weapon.damage > 0;
       info.slowness = arthropodSlowness(survival.inventory?.armor, held, e.type, info.playerRandom ?? (this.playerRandom ??= javaLikeRandom(this.random)));
+      // Enchantment.func_151368_a (EnchantmentDamage): Slowness IV (amplifier 3) on the arthropod that was hit, for the rolled length.
+      if (info.slowness != null) addMobEffect(e, 2, info.slowness, 3);
     }
     // The reference shows no tool wear when the hit is refused by the hurt window.
     if (landed) {
@@ -1714,7 +1720,7 @@ export class EntityWorld {
   // EntityAnimal.interact (leads2-reference.json sizes): the check is the held stack itself, whatever its size (a stack of size <= 0 still feeds);
   // `--stackSize` and the emptying of a slot left at size <= 0 run outside Creative only.
   feed(e,id,survival){
-    if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
+    if(!this.entities.includes(e)||e.health<=0||!isBreedingItem(e.type,id)||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
     if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
@@ -1775,7 +1781,7 @@ export class EntityWorld {
   // difficulty scaling: that is the player's); a burning zombie with an empty hand may set the victim alight.
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
-    const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
+    const melee = e.equipment ? meleeEffects(e.equipment[0], creatureAttribute(target.type)) : null; // getEnchantmentModifierLiving(attacker, target): Smite and Bane by the target's creature attribute (yg.n, bytecode-read)
     const hit = this.attackEntityFrom(target, f(mobHitAmount(e) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && melee) {
       // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
@@ -1784,6 +1790,12 @@ export class EntityWorld {
         addVelocity(target, f(f((dx / d) * melee.knockback) * 0.5), 0.1, f(f((dz / d) * melee.knockback) * 0.5));
       }
       if (melee.fire > 0) setMobFire(target, melee.fire);
+    }
+    // EntityMob.attackEntityAsMob (yg.n) ends with EnchantmentHelper.func_151385_b(this, target) on a landed hit: Bane of Arthropods on the mob's five equipment
+    // slots (EntityLiving.getLastActiveItems) and its held item again, rolled on the mob's own Entity.rand; the Slowness IV lands on an arthropod target.
+    if (hit && e.equipment) {
+      const ticks = arthropodSlowness(e.equipment, e.equipment[0], target.type, entityRandom(e));
+      if (ticks != null) addMobEffect(target, 2, ticks, 3);
     }
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);

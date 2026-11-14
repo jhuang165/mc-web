@@ -6,7 +6,7 @@
 // Client (`predictAnimalUse`): the same click on the client's copy (the stand-in record of remote-mobs.js), drawn at once. The client does what the native client does:
 // EntityPlayer.interactWith runs on both sides, and the server's answer is the slot message of the next tick; a prediction the server did not make is sent back by
 // `animResend` (the server marks the held slot as unseen).
-import { BREED_ITEM } from '../entities.js';
+import { isBreedingItem } from '../entities.js';
 import { milkCow } from '../buckets.js';
 import { mooshroomUse, useBowl, SHEARS } from '../mooshroom.js';
 import { SADDLE } from '../pig-saddle.js';
@@ -52,7 +52,7 @@ export function predictAnimalUse(mob, survival, { drop = () => {} } = {}) {
   }
   if (mob.type === 'sheep' && id === SHEARS && !mob.sheared && adult && (creative || survival.count(id))) { mob.sheared = true; wear(); return { handled: true, sound: SHEAR_SOUND }; }
   if (isCow(mob.type) && milkCow(survival, { drop })) return { handled: true };
-  if (BREED_ITEM[mob.type] === id && id && (held || survival.count(id)) && mob.growingAge === 0 && !(mob.love > 0)) {
+  if (id && isBreedingItem(mob.type, id) && (held || survival.count(id)) && mob.growingAge === 0 && !(mob.love > 0)) {
     mob.love = 600;
     if (!creative) { if (held?.id === id) survival.inventory.decr(survival.inventory.current, 1); else survival.take(id); }
     return { handled: true };

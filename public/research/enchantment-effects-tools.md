@@ -19,7 +19,7 @@ Native evidence: `tools/probes/EnchantmentEffectProbe.java` drives the unchanged
 - Looting is applied in `mobDrops` on the mob's own random: `nextInt(looting+1)` only when looting > 0 (animals always draw), skeleton arrows/bones `nextInt(3+looting)`, equipment `nextFloat - looting*0.01 < chance`, rare drop `nextInt(200) - looting < 5`.
 
 ## Limits
-- Bane slowness is rolled and reported (`info.slowness`) but not applied to the mob; the mob effect system has no slowness.
+- Bane slowness is rolled, reported (`info.slowness`) and, since batch 70, applied to the hit arthropod as Slowness IV (`addMobEffect(e, 2, ticks, 3)`); a mob with a Bane weapon or armour does the same to an arthropod victim in `hitMob`.
 - Blocks outside the rule table keep their non-enchanted drops; Batch 69 (docs sweep): nether quartz ore (153) and quartz blocks (155) are in the rule table now (`enchantment-effects.js`, BlockOre / BlockQuartz rows); glowstone was not re-checked.
 - Live drops use a `Math.random` adapter unless `dropRandom` is supplied, so they are not seed-reproducible in play.
 - Full 1.7.10 parity is not claimed.
