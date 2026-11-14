@@ -19,6 +19,7 @@ import { Beds } from '../bed.js';
 import { LiveRedstone } from '../redstone-live.js';
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
+import { ServerChunkSets } from './server-chunks.js';
 import { tickWorldSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
@@ -165,6 +166,7 @@ export class DedicatedSimulation {
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
+    this.chunkSets = new ServerChunkSets(this); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
     this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b);
     // Instance hook sees *every* write, including untracked and fluid/redstone
