@@ -1,4 +1,4 @@
-// Batch 63 mpend: the End on the dedicated multiplayer server.
+// Batch 63 mpend: the End on the dedicated multiplayer server. (b66 mpend3: an End saved in the 128 window described below is upgraded into the 256 window when the save loads, server-end-upgrade.js.)
 //
 // ServerDimensions (server-dimensions.js) owns the player's dimension, the world swap (`within` / `swap`), the trip (`arrive`) and the per-dimension tick message; it asks this module for
 // everything that is only the End's. What is here, and the evidence behind it:
