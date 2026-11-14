@@ -231,7 +231,7 @@ import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { drainKnockback } from "./player-knockback.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
-import { sparkleHeight } from "./bone-meal.js";
+import { sparkleHeight, useBoneMeal } from "./bone-meal.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
 import { useDragonEgg, clientDragonEgg } from "./dragon-egg-live.js";
@@ -1725,7 +1725,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
         setFire: (x, y, z) => { fire.ignite(x, y, z); },
         breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
-        boneMeal: (x, y, z, original) => original === 6 && trees.boneMeal(x, y, z) !== null,
+        boneMeal: (x, y, z, original, rand) => { const g = useBoneMeal({ world, trees, farming, flowers: FLOWERS, grassRandom: boneRandom, items, rand }, x, y, z); for (const q of g.changed) scene.updateBlock(q[0], q[2], q[1]); if (g.farm) applyFarmUpdates(farming.drain()); return g.used; }, // b67 bonemeal3: ItemDye.func_150919_a, world Random from the dispenser
       },
       maxStack: (st) => survival.inventory.maxStack(st),
       subtracted: () => scene.subtracted ?? 0,

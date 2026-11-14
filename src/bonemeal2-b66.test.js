@@ -16,7 +16,7 @@ import { makeStack } from './inventory.js';
 import { STAT } from './stats.js';
 
 const reference = JSON.parse(readFileSync(new URL('../public/research/bone-meal-reference.json', import.meta.url), 'utf8'));
-const records = reference.records;
+const records = reference.records.filter(r => !/^(grass|sapling-marked)/.test(r.name)); // b67 added the grass and marked-sapling Random-stream records (bonemeal3-b67.test.js)
 const OX = 64, OZ = 64, DY = -44; // the probe's y 64 is y 20 here (a plain World is 64 high)
 const native = (w, x, y, z) => toOriginal(w.get(x, y, z), w.getMeta(x, y, z)) ?? [0, 0];
 const place = (w, x, y, z, id, meta) => {

@@ -18,6 +18,8 @@ public class PlantProbe {
   public static class W extends MobMoveProbe.ProbeWorld {
     Map<Long, int[]> cells = new HashMap<>();
     Base base = (x, y, z) -> new int[] {y < 0 ? 1 : 0, 0};
+    ahu biome = ahu.d(1); // b67 bonemeal3: World.getBiomeGenForCoords (plains by default; BoneMealProbe sets forest for the grass cases)
+    public ahu a(int x, int z) { return biome; }
     List<sa> spawned = new ArrayList<>();
     List<String> scheduled = new ArrayList<>();
     List<int[]> sets = new ArrayList<>();

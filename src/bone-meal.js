@@ -59,9 +59,9 @@ function nativeCan(id, meta) {
 // Returns { used, changed: [[x, y, z], ...] (cells written outside trees/farming), farm: farming.drain() is due }.
 export function useBoneMeal(host, x, y, z) {
   const w = host.world, b = w.get(x, y, z), out = { used: false, changed: [], farm: false };
-  if (b === SAPLING) { host.trees.boneMeal(x, y, z); out.used = true; return out; }
+  if (b === SAPLING) { host.trees.boneMeal(x, y, z, host.rand ?? null); /* b67: the world Random when the host gives one */ out.used = true; return out; }
   if (b === 1) { // BlockGrass.func_149853_b: always fertilisable, always grows
-    for (const q of growGrass(w, host.flowers, host.grassRandom, w.biome, x, y, z)) out.changed.push(q);
+    for (const q of growGrass(w, host.flowers, host.rand ?? host.grassRandom, w.biome, x, y, z)) out.changed.push(q);
     out.used = true;
     return out;
   }

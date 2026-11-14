@@ -9,7 +9,8 @@ import { Hoppers, hopperBehaviour } from '../hopper.js';
 import { installDispensers } from '../dispense.js';
 import { trappedPower, trappedStrongPower } from '../chest-blocks.js';
 import { burnTime } from '../survival.js';
-import { WATER, LAVA } from '../world.js';
+import { WATER, LAVA, YELLOW_FLOWER, RED_FLOWER } from '../world.js';
+import { useBoneMeal } from '../bone-meal.js'; // b67 bonemeal3: BehaviorDispenseBoneMeal -> ItemDye.func_150919_a for every IGrowable
 import { JavaRandom } from '../java-random.js';
 
 const AUX_RANGE_SQ = 64 * 64;
@@ -37,7 +38,7 @@ export class ContainerTicks {
       setAir: (x, y, z) => { sim.world.set(x, y, z, 0, true, 0); },
       setFire: (x, y, z) => { sim.fire.ignite(x, y, z); },
       breakBlock: (x, y, z) => { const b = sim.world.get(x, y, z); if (b) sim.fluids.wash(x, y, z, b); },
-      boneMeal: (x, y, z, original) => original === 6 && sim.trees.boneMeal(x, y, z) !== null,
+      boneMeal: (x, y, z, original, rand) => { const g = useBoneMeal({ world: sim.world, trees: sim.trees, farming: sim.farming, flowers: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, items: sim.items, rand }, x, y, z); if (g.farm) sim.farming.drain(); return g.used; }, // b67: world Random from the dispenser
       transfer: () => this.hoppers.host,
       maxStack: s => tiles().inventory.maxStack(s),
       changed: () => {},

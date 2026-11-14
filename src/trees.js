@@ -279,9 +279,12 @@ export class Trees {
   }
   // ItemDye.applyBonemeal on a sapling: IGrowable.func_149851_a is true, so the stack is always
   // used; with probability 0.45 the sapling then advances like a random tick that rolled 1/7.
-  boneMeal(x, y, z) {
+  // b67 bonemeal3: `rand` is the world Random the caller passes (natively ItemDye hands `world.rand` to both the gate and the tree generators); omitted, the tree's own stream.
+  boneMeal(x, y, z, rand = null) {
     if (this.world.get(x, y, z) !== SAPLING) return null;
-    return boneMealWorks(this.random) ? this.markOrGrow(x, y, z) : "none";
+    const own = this.random;
+    if (rand) this.random = rand;
+    try { return boneMealWorks(this.random) ? this.markOrGrow(x, y, z) : "none"; } finally { this.random = own; }
   }
   // BlockLeaves.updateTick.
   tickLeaves(x, y, z) {
