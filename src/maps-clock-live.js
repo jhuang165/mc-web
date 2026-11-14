@@ -58,11 +58,12 @@ export const isClockUrl = (url) => urlSet.has(url) || (typeof url === "string" &
 const opacityCache = new Map();
 const opacity = (id) => { let o = opacityCache.get(id); if (o === undefined) { const t = toOriginal(id, 0); o = t ? blockLightOpacity(t[0]) : 0; opacityCache.set(id, o); } return o; };
 // ItemMap.updateMapData reads world.provider.dimensionId and provider.hasNoSky (aqo.g: Nether and End, half radius, fixed dirt/stone dither).
-const worldContext = (world, dimension = world?.dimension ?? 0) => ({
+// b69 mpmaps: `origin` [x, z] is the world's native offset (the dedicated server's End window keeps local = native - origin); map coordinates are native.
+export const worldContext = (world, dimension = world?.dimension ?? 0, origin = [0, 0]) => ({
   dimension, noSky: !!world?.hasNoSky,
-  blockAt: (x, y, z) => { const id = world.get(x, y, z); if (!id) return 0; const t = toOriginal(id, world.getMeta(x, y, z)); return t ? (t[0] << 4) | (t[1] & 15) : 0; },
-  chunkEmpty: (x, z) => !world.isLoaded(x, z),
-  heightValue: (x, z) => { for (let y = Math.min(255, (world.height ?? 256) - 1); y >= 0; y--) if (opacity(world.get(x, y, z)) > 0) return y + 1; return 0; },
+  blockAt: (x, y, z) => { const id = world.get(x - origin[0], y, z - origin[1]); if (!id) return 0; const t = toOriginal(id, world.getMeta(x - origin[0], y, z - origin[1])); return t ? (t[0] << 4) | (t[1] & 15) : 0; },
+  chunkEmpty: (x, z) => !world.isLoaded(x - origin[0], z - origin[1]),
+  heightValue: (x, z) => { for (let y = Math.min(255, (world.height ?? 256) - 1); y >= 0; y--) if (opacity(world.get(x - origin[0], y, z - origin[1])) > 0) return y + 1; return 0; },
 });
 
 export class MapsClock {
@@ -92,6 +93,7 @@ export class MapsClock {
       // Freshly drawn slots point at the raw 16x1024 strip; swap in the current frame once it has loaded.
       if (urlSet.has(url)) for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (rawImgSrc(img) === "/media/1.7.10/items/clock.png") img.setAttribute("src", url);
     }
+    if (mapStore.remote) return; // b69 mpmaps: on a dedicated server the server runs ItemMap.onUpdate and sends the S34 updates (multiplayer/server-maps.js)
     mapStore.spawn = mapStore.spawn ?? { x: 0, z: 0 };
     const player = { name, x: position.x, z: position.z, yaw, dimension: world?.dimension ?? 0 };
     const held = survival.held;

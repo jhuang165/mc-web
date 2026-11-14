@@ -146,7 +146,7 @@ export function updateVisiblePlayers(data, player, holdsMap, worldTime, frame = 
 
 // ---- MapStorage and the id counter (World.getUniqueDataId "map", data/idcounts.dat) ----
 export class MapStore {
-  constructor() { this.maps = new Map(); this.counter = 0; this.spawn = { x: 0, z: 0 }; this.dimension = 0; this.revision = 0; }
+  constructor() { this.maps = new Map(); this.counter = 0; this.spawn = { x: 0, z: 0 }; this.dimension = 0; this.revision = 0; this.remote = false; }
   nextId() { return this.counter++; }
   get(id) { return this.maps.get(id); }
   set(data) { this.maps.set(data.id, data); this.revision++; }
@@ -200,7 +200,7 @@ export function createEmptyMapData(store, player) {
 }
 // ItemMap.onCreated (adh.d): a stack carrying map_is_scaling takes a new id and the next scale. Mutates `stack`.
 export function mapOnCreated(store, stack) {
-  if (!stack?.mapScaling) return stack;
+  if (!stack?.mapScaling || store.remote) return stack; // b69 mpmaps: a connected client never takes ids; the server's crafting does
   const old = store.ensure(stack);
   stack.damage = store.nextId();
   delete stack.mapScaling;
