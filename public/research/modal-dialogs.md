@@ -17,6 +17,7 @@ Batch 27 audit: `main.js` has no `modal()` call left (the container screens move
 Behaviour fixes that came from the bytecode: the non-hardcore "Title screen" button now asks the quit question first (id 1 opens the GuiYesNo in both modes; before, it left immediately); "Respawn" on that question respawns; Escape does nothing on the game over screen (before, no key handling); Escape on the quit question returns to the game over screen.
 
 Non-native by design: Export World and the notes page; `deathScreen.leaveServer` (remote servers only) is not applicable.
+- Batch 71 (docs sweep, 2026-11-14): unchanged. `notes()` still exists at `src/main.js` 1206 with no caller found in this sweep, and Export World stays port-only (`src/modal-dialogs.js` 25 and 53). No gap claim needed code changes.
 
 ## Batch 25 guiscreens2 (bytecode-read; numbers in `gui-screens-reference.json`, written by `tools/verify-gui-screens.mjs`, pinned by `src/gui-screens.test.js`)
 

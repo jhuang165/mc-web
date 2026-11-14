@@ -16,9 +16,13 @@ Original blocks 104 (pumpkin stem), 105 (melon stem) and 92 (cake) map to intern
 ## Gaps
 
 - The big-stem geometry beside a fruit is approximated, not replayed from `RenderBlocks.func_147740_a`.
+- Batch 71 (docs sweep, 2026-11-14): closed. `src/render-vessels.js` 82-84 ports `func_147795_a` and `func_147740_a` (bytecode-read) and the mesher uses it for stems 104 and 105 (`src/chunk-mesher.js` 729-735); [post shaders](post-shaders.md) records the stem streams matching the native vertex record (`render-types-2-reference.json`, 432 vertices).
 - No darkness pop (BlockBush.canBlockStay light test); stems only pop when farmland is lost.
 - Left click does not eat a slice; only right click does (not checked in the original).
+- Batch 71 (docs sweep, 2026-11-14): wrong, and a real gap. BlockCake (`aju`) overrides `Block.onBlockClicked` (`a(ahb,int,int,int,yz)`): javap shows its body calls the private eat method `b(...)`, which tests `EntityPlayer.canEat(false)` (`yz.g(Z)Z`) and calls `FoodStats.addStats` (`zr.a(IF)V`); the base `aji` method at the same signature is empty. So a left click eats a slice in Survival. The port wires `onBlockClicked` for the dragon egg, note block and redstone ore only (`src/player-edit-simulation.js` 599-605 `serverClicked`), not for cake; the right click path is `player-edit-simulation.js` 337-345.
 - Melon Fortune cap of 9 is not implemented (melon drops 3-7 slices without Fortune).
+- Batch 71 (docs sweep, 2026-11-14): closed. `src/enchantment-effects.js` 71 gives melon (103) `Math.min(9, 3 + nextInt(5) + nextInt(1 + fortune))`.
 - Clicking a cell to place the cake uses the door replaceable set, slightly wider than ItemReed's snow, vine, tall grass and dead bush rule.
 - Bone meal sparkles are generic; villages and structures do not place stems or cake; the render path was not checked in a browser; region import/export relies on the registry mapping and was not tested separately.
 - Stem growth uses its own `JavaRandom`, not the world's tick random.
+- Batch 71 (docs sweep, 2026-11-14): still open. `Farming.growStem` (`src/farming.js` 31) draws from `this.stemRandom`, a `JavaRandom` seeded from `Math.random`, not the world tick random; crops pass the caller's random (`farming.js` 38).

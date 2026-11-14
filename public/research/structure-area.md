@@ -32,6 +32,8 @@ tiles (`gen-world.js` createTile).
   `structure-live-neighbors.test.js` (neighbour callbacks on). The quiet `StructurePopulationArea` test here still skips the area's jungle
   steps because `relaxRedstone` drops the temple's redstone hooks. Worlds saved at generation 13 or 15 keep the legacy biome map by design.
 - Redstone puzzle hooks (29, 55, 69, 93, 131, 132) are no-ops under `relaxRedstone` (jungle area only);
+- Batch 71 (docs sweep, 2026-11-14): the "live jungle temples need an equivalent guard" claim is stale. A live `PopulationArea` builds a `StructureRedstone` when neighbour callbacks are on (`src/population-world.js` 73) and sets `relaxRedstone = false` (line 55), so the temple's puzzle hooks run through `src/structure-redstone.js` and `native-neighbor-world.js` 51, 129 and 148 instead of throwing; the jungle area replays whole in `structure-live-neighbors.test.js` (per this doc's limit above). The `unported` throw remains in `gen-world.js` 61 and 465 for other blocks.
   the generic world still throws "unported" for them, so live jungle temples need an equivalent guard.
 - Flower pot contents come from a meta table in `gen-world.js`; only meta 7 (red mushroom) is
+- Batch 71 (docs sweep, 2026-11-14): still open. `FLOWER_POT_CONTENTS` (`src/gen-world.js` 60) maps 14 metas; the probe records pot contents for the temples and huts it generates, but only meta 7 was compared, so the other 13 entries stay recalled.
   native-verified.

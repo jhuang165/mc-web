@@ -11,4 +11,5 @@ Bytecode-verified:
 Approximate / gaps:
 - The distance term is applied only in 256-high worlds (`scene.js`). The legacy 64-high world would fog every cave, so it is skipped there.
 - Fog near is set to 0.75 of far, an approximation of the linear-fog start.
+- Batch 71 (docs sweep, 2026-11-14): wrong. Bytecode-read (javap on `blt` setupFog, offsets 531-566): after the void term lowers `far`, native sets the start to `far * 0.75` and the end to `far` (start 0 only for mode < 0), so `u.fogNear = far * 0.75` (`src/scene.js` 696 and 702) is native, not an approximation. The Nether is a real gap: `blt` 610-637 takes `WorldProvider.doesXZShowFog` (`aqo.b(II)Z`, true in `aqp`, the Nether provider, read with javap) and sets start `far * 0.05`, end `min(far, 192) * 0.5`; `scene.js` 696-697 never reads it (see Follow-ups of the batch 71 note).
 - Sky darkening below the horizon is not changed.

@@ -146,6 +146,8 @@ Select World has an Endless button (`src/endless-world.js`) that writes a new `j
 
 Villages, strongholds and temples are still absent from streamed worlds, and population composes per cell rather than in native on-demand chunk order. Replace the working-set activity policy with the existing native provider/player-manager lifecycle, hydrate and evict the remaining entity/queue/farm/spawner runtime records lazily, move the remaining shift relight (about 15–20 ms since 0.30.0) off the main thread or into per-chunk light arrays, and record the claimed-column mask per chunk instead of in the world record. Preserve existing populated and generation-12 saves during that transition. No Site publication.
 
+Batch 71 (docs sweep, 2026-11-14): the first sentence of Next work is stale. Streamed generation 15 and later worlds place villages, strongholds, temples and swamp huts (parity-roadmap GEN-06, `structure-area.md`, `src/structure-population-area.js`; streamed flat worlds with MapFeatures in `superflat.md`). The rest of the paragraph (per-cell population order, window-based activity) was not re-checked. The Batch 42 and 43 "Not done" lines are multiplayer items and belong to the multiplayer docs.
+
 Batch 27 (imported saves): `stored-peek.js` gives the Teleporter peek and `/spreadplayers` a view of non-resident stored columns, and imported TerrainPopulated=false chunks are populated at import (`imported-population.js`); see region-import.md.
 
 ## Batch 42 (tilesync): ring containers, chunk resend tile entities, first loot lookup

@@ -143,4 +143,5 @@ Approximate:
   the eye-position listener are now probed ([sound.md](sound.md)).
 - Stopping a stream is instant, where paulscode queues it, so the ticker never sees a stopped song as still playing.
 - Before the page's first click there is no running audio context: the menu music is skipped and comes back after the
+- Batch 71 (docs sweep, 2026-11-14): the stop line above is stale. `src/audio.js` 29 and `src/sound-bookkeeping.js` (probe-replayed) model `SoundManager.isSoundPlaying` including the 20-tick stop time, so the ticker sees a stopped stream as playing for that time, as paulscode does. The first-click limit is still true (`audio.js` 90-94 `unlock`, 279). The panner model is unchanged (not re-read).
   next MENU delay.

@@ -33,5 +33,6 @@ Probes (unchanged 1.7.10 classes, run by `node tools/verify-projectile-nbt.mjs` 
 Export reverses this (`java-projectiles.js` `javaProjectileToNbt`; potions in `thrownPotions` are bucketed by column in `regionSource`). `world-import.js` now keeps `thrownPotions` in the imported runtime.
 
 ## Not converted
+- Batch 71 (docs sweep, 2026-11-14): checked the list. The shooter is saved only for a player thrower natively (`EntityThrowable.writeEntityToNBT`, `zk`, bytecode-read: `ownerName` is set only after `instanceof EntityPlayer`), so "shooter beyond the local player" is not a native save field for throwables. Fireball `direction` handling, `Entity.readFromNBT` motion zeroing and the unexported fishing hook are as written.
 
 Shooter and ownership beyond "the local player", shake/inGround of throwables (vestigial in 1.7.10), the entity RNG, in-air age, fishing bobbers (EntityFishHook has no EntityList id, like EntityEgg: neither is ever in a native save, and neither is exported), the fireball acceleration and shooter, the wither skull dangerous flag, and an eye's target. An imported fireball with no `direction` is lost (the native class kills it). Entity.readFromNBT zeroes a motion component beyond 10. Full parity is not claimed.

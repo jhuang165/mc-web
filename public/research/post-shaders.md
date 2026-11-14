@@ -32,6 +32,7 @@ Every native reader was found by `javap -p -c` over all 1803 classes (bytecode-r
 Ported: the mesher converts the block colour multiplier (`Mesher.tint`, `anaglyphMultiplier`, `meshAnaglyph` in `src/anaglyph.js`) for cubes (grass, leaves), the grass side overlay, tall grass/fern/reeds/double plant and stems. Paths that never read the flag keep raw tints: water (`blm.p`), vines, lily pad, redstone wire. Toggling marks every chunk dirty (loadRenderers). The sunrise fan converts only the centre vertex (`bma.a` @566); the rim keeps the raw RGB at alpha 0. Probe: `tools/probes/Anaglyph2Probe.java` (Java float arithmetic of the read expression).
 
 Still open: the FontRenderer colour table, the DOM GUI, held/dropped block item colours in the first-person hand (not read natively either), and the `bma` @515 chunk-update skip.
+- Batch 71 (docs sweep, 2026-11-14): the first two "still open" items are closed: the FontRenderer colour table is `colorCodeTable(anaglyph)` (`src/font-renderer.js` 51-63) and the DOM GUI is `src/gui-anaglyph.js` (`src/anaglyph.js` 4 names both). The held and dropped block item colours and the `bma` chunk-update skip are unchanged (the latter is explained at line 44 as already the render-all path).
 
 ## Batch 29: DOM GUI conversion, toggle timing, chunk-update skip
 
