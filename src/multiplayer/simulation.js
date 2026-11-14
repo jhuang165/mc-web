@@ -5,6 +5,7 @@ import { PlayerMotion } from '../player-movement.js';
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
+import { ServerAdmin } from './server-admin.js'; // b68 mpadmin
 import { Farming } from '../farming.js';
 import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
@@ -120,6 +121,7 @@ export class DedicatedSimulation {
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
+    this.admin = new ServerAdmin(saved.admin, options); // b68 mpadmin: ops, bans, IP bans, whitelist (native file shapes), saved with the world
     this.scoreboard = new ServerScoreboard(saved.scoreboard); // b64 mpscoreboard: the one shared scoreboard (objectives, scores, teams), saved with the world
     this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
     this.golems = new ServerGolems(this); // b66: a pumpkin on snow or iron builds a golem; a broken monster egg lets silverfish out (server-golems.js)
@@ -210,6 +212,7 @@ export class DedicatedSimulation {
     this.serverItems.join(player, saved);
     this.sleep.join(player); // b66 mpsleep: damage wakes a sleeper
     this.stats.join(player, saved); // b63 mpstats
+    this.admin.seen(resumeKey, name); this.admin.join(id, this.ticks); // b68 mpadmin: profile cache, idle clock
     this.players.set(id, player);
     this.mobs.addPlayer(player);
     this.vehicles.addPlayer(player); // b61
@@ -225,7 +228,7 @@ export class DedicatedSimulation {
     if (p) this.trade.leave(p); // b66 mptrade: the villager's customer is released
     if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
-    this.players.delete(id);
+    this.players.delete(id); this.admin.leave(id); // b68 mpadmin
     this.mobs.removePlayer(id);
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
@@ -618,6 +621,6 @@ export class DedicatedSimulation {
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
-      scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
+      admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
