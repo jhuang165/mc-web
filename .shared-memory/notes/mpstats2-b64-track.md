@@ -20,6 +20,8 @@ New wire messages: `fishHooks` (server to client, hook list per dimension), `fis
 
 ## Verification
 - `node --test src/mpstats2-b64.test.js src/mpstats-b63.test.js src/stats.test.js src/pvp-b63.test.js src/fishing.test.js src/fishing-simulation.test.js src/b63-lead.test.js src/mpprojectiles-b62.test.js src/mpanimals-b61.test.js`: 72 pass, 0 fail.
+- `node --test src/mpend-b63.test.js src/mpnether3-b63.test.js`: 14 pass, 0 fail.
+- `npm run build`: ok.
 - `node --check` on every touched file: ok.
 - main.js identifiers (remoteFishing, tickRemoteFishing, rodState, liveFishStack, RemoteFishing) checked for scope.
 - Full npm test not run (batch rule).
