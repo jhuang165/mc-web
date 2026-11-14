@@ -51,6 +51,7 @@ import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragon
 import { DRAGON_EGG } from '../dragon-egg.js';
 import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js'; // b66 mpbooks: note blocks and jukeboxes
 import { ServerMaps } from './server-maps.js'; // b69 mpmaps: empty maps, map data, S34 updates
+import { placeBlockItem } from './server-place.js'; // b73 mpblocks73: bed, cake, hoe
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerLightning } from './server-lightning.js'; // b66 mplightning: thunderstorm bolts
@@ -450,12 +451,13 @@ export class DedicatedSimulation {
         openEditor: tile => { tile.editor = p.id; p.openSign = [tile.x, tile.y, tile.z]; } }).placed;
     }
     if (id === ITEM_SKULL) {
-      return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, this.wither.hooks(p)).placed; // b63: soul sand and the difficulty are passed, so the T builds a wither (Overworld)
+      return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target, stack: p.survival.held /* b73 mpblocks73: a player head's SkullOwner */ }, this.wither.hooks(p)).placed; // b63: soul sand and the difficulty are passed, so the T builds a wither (Overworld)
     }
     if (place && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     if (place && useOnBlock(this, p, target, id)) return true; // b64 mpstats2: seeds, nether wart and spawn eggs on the clicked block (and their use stat)
     if (place && this.maps.useEmpty(p)) return true; // b69 mpmaps: ItemEmptyMap.onItemRightClick (no block used)
+    if (place && placeBlockItem(this, p, target, id)) { this.stats.used(p, id); return true; } // b73 mpblocks73: ItemBed, ItemReed (cake), ItemHoe
     const put = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
