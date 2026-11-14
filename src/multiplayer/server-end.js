@@ -27,22 +27,23 @@ import { fromOriginal } from '../block-registry.js';
 import { createExitPortal } from '../exit-portal.js';
 import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, useEyeOnFrame, hasEye } from '../eye-of-ender.js';
 import { GAME_IDS, transferTarget } from '../dimensions.js';
-import { FiniteDimensionWorld, END, END_OFFSET } from './client-dimensions.js';
+import { FiniteDimensionWorld, END } from './client-dimensions.js';
 import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
 import { setupEnd, dragonState } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
 
-const OVERWORLD = 0, SIZE = 128, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
-const toLocal = (x, z) => [x + END_OFFSET.x, z + END_OFFSET.z];
+const OVERWORLD = 0, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
+// b65 mpendwindow: the replica's own origin says where it lies in the End (native = local + origin), for the 256 window and for a 0.93.0 save's 128 window alike.
+const toLocalIn = (world, x, z) => [x - world.originX, z - world.originZ];
 
-// The End's terrain into the finite world, shifted by END_OFFSET. A generated chunk holds (lx * 16 + lz) * 256 + y; a column of 256 cells moves as one run.
+// The End's terrain into the finite world, shifted by the world's origin. A generated chunk holds (lx * 16 + lz) * 256 + y; a column of 256 cells moves as one run.
 export function fillEnd(world, seed) { // returns the generator (its spikes' crystals are collected from it)
-  const source = new DimensionWorld(seed, END);
-  for (let cx = Math.floor(-END_OFFSET.x / 16); cx <= Math.floor((SIZE - 1 - END_OFFSET.x) / 16); cx++) {
-    for (let cz = Math.floor(-END_OFFSET.z / 16); cz <= Math.floor((SIZE - 1 - END_OFFSET.z) / 16); cz++) {
+  const source = new DimensionWorld(seed, END), size = world.size;
+  for (let cx = Math.floor(world.originX / 16); cx <= Math.floor((size - 1 + world.originX) / 16); cx++) {
+    for (let cz = Math.floor(world.originZ / 16); cz <= Math.floor((size - 1 + world.originZ) / 16); cz++) {
       const made = source.generateTerrainChunk(cx, cz);
       for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
-        const [tx, tz] = toLocal(cx * 16 + lx, cz * 16 + lz);
-        if (tx < 0 || tx >= SIZE || tz < 0 || tz >= SIZE) continue;
+        const [tx, tz] = toLocalIn(world, cx * 16 + lx, cz * 16 + lz);
+        if (tx < 0 || tx >= size || tz < 0 || tz >= size) continue;
         const column = world.chunks.get(`${tx >> 4},${tz >> 4}`), from = (lx * 16 + lz) * 256, to = ((tx & 15) * 16 + (tz & 15)) * 256;
         column.blocks.set(made.blocks.subarray(from, from + 256), to); column.meta.set(made.metadata.subarray(from, from + 256), to);
       }
@@ -53,7 +54,7 @@ export function fillEnd(world, seed) { // returns the generator (its spikes' cry
 
 // EntityDragon.createEnderPortal on the End's world (original ids mapped to this port's blocks); the cells are edits of the world like any other.
 export function buildExitPortal(world, centerX = 0, centerZ = 0) {
-  const [cx, cz] = toLocal(centerX, centerZ);
+  const [cx, cz] = toLocalIn(world, centerX, centerZ);
   createExitPortal({ setBlock(x, y, z, id) { const m = id === 0 ? { id: 0, meta: 0 } : fromOriginal(id, 0); if (m) world.set(x, y, z, m.id, true, m.meta); } }, cx, cz);
 }
 
@@ -63,7 +64,9 @@ export class ServerEnd {
   // The End, built on first use (about a second once; the tick that needs it waits).
   ensure() {
     if (this.n) return this.n;
-    const dims = this.dims, sim = dims.sim, saved = dims.saved.end ?? {}, world = new FiniteDimensionWorld(sim.world.seed, END);
+    const dims = this.dims, sim = dims.sim, saved = dims.saved.end ?? {};
+    // b65 mpendwindow: a new End is the 256 x 256 window; an End saved by 0.93.0 (no `window` field) is read as the 128 x 128 window it was stored in.
+    const window = !dims.saved.end || saved.window === 'full' ? 'full' : 'legacy', world = new FiniteDimensionWorld(sim.world.seed, END, window);
     const source = fillEnd(world, sim.world.seed);
     // b64 mpdragon: the exit portal is the dying dragon's (server-dragon.js); b63's stand-in built at the origin is gone. An End saved by b63 keeps that portal in its edits and has no
     // `dragon` field: its fight counts as over.
@@ -90,7 +93,7 @@ export class ServerEnd {
   // A player saved in the End comes back to it (ServerDimensions.adopt).
   adopt(p) { const n = this.ensure(); p.world = n.world; p.dimension = END; n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); return n; }
   // What the End adds to the save.
-  saveField() { const n = this.n; return n ? { edits: [...n.world.edits], ...saveNether(n), dragon: dragonState(n) } : (this.dims.saved.end ?? null); }
+  saveField() { const n = this.n; return n ? { window: n.world.endWindow, edits: [...n.world.edits], ...saveNether(n), dragon: dragonState(n) } : (this.dims.saved.end ?? null); }
 
   // ---- travel ----
   // BlockEndPortal.onEntityCollidedWithBlock: the player's box overlaps an end portal cell (Entity.doBlockCollisions: the box shrunk by 0.001). Returns true when a trip was made.
@@ -123,7 +126,7 @@ export class ServerEnd {
   }
   // transferEntityToWorld into the End: the entity goes to the entrance (100, 50, 0) (in the window's coordinates) and the Teleporter builds the platform there, in the End's own context.
   place(e, from, yaw) {
-    const tt = transferTarget(from, END, 0, 0, 0, yaw), [x, z] = toLocal(tt.x, tt.z);
+    const tt = transferTarget(from, END, 0, 0, 0, yaw), [x, z] = toLocalIn(this.ensure().world, tt.x, tt.z);
     Object.assign(e, { x, y: tt.y, z, yaw: tt.yaw });
     this.dims.swap(this.ensure(), () => this.dims.teleporterFor(END).placeInPortal(e, e.x, e.y, e.z, e.yaw));
   }

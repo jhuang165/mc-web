@@ -160,7 +160,7 @@ export class ServerDimensions {
     const p = this.sim.players.get(playerId);
     if (!p?.dimension) return null;
     const n = this.state(p.dimension), sim = this.sim;
-    return { gameMode: sim.gameMode, items: this.list(n.items), seed: n.world.seed, biome: n.world.biome, generationVersion: n.world.generationVersion, dimension: p.dimension,
+    return { gameMode: sim.gameMode, items: this.list(n.items), seed: n.world.seed, biome: n.world.biome, generationVersion: n.world.generationVersion, dimension: p.dimension, ...(n.world.endWindow ? { window: n.world.endWindow } : {}), // b65 mpendwindow: the End's layout
       time: sim.time, ticks: sim.ticks, columns: [...n.world.chunks.values()].map(encodeColumn), players: sim.presence(p.dimension), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, contTiles: this.swap(n, () => n.containers.describeAll()) };
   }
   // ---- per tick ----

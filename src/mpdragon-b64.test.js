@@ -5,7 +5,8 @@ import { World } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { RemoteMobs } from './multiplayer/remote-mobs.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
-import { END_OFFSET } from './multiplayer/client-dimensions.js';
+import { END_WINDOWS } from './multiplayer/client-dimensions.js';
+const END_OFFSET = END_WINDOWS.full; // b65 mpendwindow: a new End is the 256 window
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const END_PORTAL = 149, EGG = 171;
@@ -28,8 +29,9 @@ test('a new End has the dragon at the middle of the End and the crystals of the 
   assert.ok(d);
   assert.deepEqual([d.x, d.y, d.z], [END_OFFSET.x, 128, END_OFFSET.z]);
   const crystals = mobs.entities.filter(e => e.type === 'ender_crystal');
-  assert.ok(crystals.length >= 3 && crystals.length <= 10, 'crystals ' + crystals.length);
-  for (const c of crystals) assert.ok(c.x > 0 && c.x < 128 && c.z > 0 && c.z < 128);
+  assert.ok(crystals.length >= 3, // b65 mpendwindow: the 256 window holds every spike of the island (b64's 128 window kept 3 to 10)
+     'crystals ' + crystals.length);
+  for (const c of crystals) assert.ok(c.x > 0 && c.x < 256 && c.z > 0 && c.z < 256);
   a.position.copy({ x: END_OFFSET.x + 100.5, y: 49, z: END_OFFSET.z + 0.5 });
   tick(s, 3);
   assert.ok(dragon().dragon.parts.length === 7);
@@ -82,14 +84,14 @@ test('the dragon dies in 200 ticks: orbs, the exit portal with the egg, the stat
   assert.ok(a.world.chunks.size > 0);
   const end = s.dimensions.end.n;
   let portals = 0, egg = 0;
-  for (let x = 0; x < 128; x++) for (let z = 0; z < 128; z++) { if (end.world.get(x, 64, z) === END_PORTAL) portals++; if (end.world.get(x, 68, z) === EGG) egg++; }
+  for (let x = 0; x < 256; x++) for (let z = 0; z < 256; z++) { if (end.world.get(x, 64, z) === END_PORTAL) portals++; if (end.world.get(x, 68, z) === EGG) egg++; }
   assert.ok(portals >= 20, 'exit portal ' + portals);
   assert.equal(egg, 1, 'the dragon egg');
   assert.ok(end.xp.orbs.length > 5, 'orbs');
   assert.equal(s.dimensions.end.saveField().dragon, 'dead');
   // the portal: credits for the player, who stays until the client answers
   let px = 0, pz = 0;
-  for (let x = 0; x < 128; x++) for (let z = 0; z < 128; z++) if (end.world.get(x, 64, z) === END_PORTAL) { px = x; pz = z; }
+  for (let x = 0; x < 256; x++) for (let z = 0; z < 256; z++) if (end.world.get(x, 64, z) === END_PORTAL) { px = x; pz = z; }
   a.position.copy({ x: px + 0.5, y: 64, z: pz + 0.5 }); a.previous.copy(a.position); a.dimOut = null;
   tick(s);
   assert.equal(a.dimension, 1);

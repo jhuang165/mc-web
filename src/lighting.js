@@ -295,21 +295,24 @@ function lightTables() {
 export class LightVolume {
   // `defer`: the columns and the first flood are not run here; `buildSteps()` runs them in slices (scene.js, main.js openWorld).
   constructor(world, emission = (x, y, z, b) => lightEmission(b), { defer = false } = {}) {
+    this.size = world.size ?? SIZE; // b65 mpendwindow: the grid is as wide as its world (128; the server End 256)
     this.world = world;
     this.height = world.height ?? HEIGHT;
     this.emission = emission;
-    this.sky = new Uint8Array(SIZE * SIZE * this.height);
-    this.block = new Uint8Array(SIZE * SIZE * this.height);
-    this.heights = new (this.height > 255 ? Uint16Array : Uint8Array)(SIZE * SIZE);
+    this.sky = new Uint8Array(this.size * this.size * this.height);
+    this.block = new Uint8Array(this.size * this.size * this.height);
+    this.heights = new (this.height > 255 ? Uint16Array : Uint8Array)(this.size * this.size);
     if (!defer) drain(this.buildSteps());
   }
   // The constructor's work as a generator that yields between independent pieces (about every 4096 cells or queue entries): the same
   // statements in the same order, so the arrays are identical however the steps are spread over frames.
   *buildSteps() {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     for (let x = 0; x < SIZE; x++) { for (let z = 0; z < SIZE; z++) this.column(x, z); yield; }
     return yield* this.relightSteps(0, SIZE - 1, 0, SIZE - 1);
   }
   column(x, z) {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     if (this.world.hasNoSky) { this.heights[x * SIZE + z] = this.height; return; } // the Nether: no cell sees the sky
     let y = this.height - 1;
     const col = this.world.columnBlocks?.(x, z);
@@ -318,10 +321,12 @@ export class LightVolume {
     this.heights[x * SIZE + z] = y + 1;
   }
   skyAt(x, y, z) {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     if (y >= this.height || x < 0 || z < 0 || x >= SIZE || z >= SIZE) return this.world.hasNoSky ? 0 : 15;
     return this.sky[(x * SIZE + z) * this.height + Math.max(0, y)];
   }
   blockAt(x, y, z) {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     if (y >= this.height || x < 0 || z < 0 || x >= SIZE || z >= SIZE) return 0;
     return this.block[(x * SIZE + z) * this.height + Math.max(0, y)];
   }
@@ -342,6 +347,7 @@ export class LightVolume {
   // Relights the columns within 15 blocks of a change; light cannot travel
   // further. Returns the box of cells whose light changed, or null.
   update(x, y, z) {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return null;
     this.column(x, z);
     return this.relight(Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15));
@@ -350,6 +356,7 @@ export class LightVolume {
   // relight as a generator: yields between columns and every STEP queue entries and returns the changed box. Driving it to the end
   // (`drain`) is exactly the old whole-box call.
   *relightSteps(x0, x1, z0, z1) {
+    const SIZE = this.size; // b65 mpendwindow: per-world grid width
     const w = this.world, H = this.height, XS = SIZE * H, n = (x1 - x0 + 1) * (z1 - z0 + 1) * H,
       oldSky = new Uint8Array(n), oldBlock = new Uint8Array(n), cost = new Uint8Array(n), emit = new Uint8Array(n);
     if (!OPACITY) lightTables();

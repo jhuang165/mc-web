@@ -432,16 +432,16 @@ export class Fire {
   // world like the original's: a fixed count that is a multiple of 128 would pin every
   // slot's x to one value, because the generator's low bits cycle that fast.
   scan() {
-    const w = this.world, n = SIZE / 16, secs = (w.height ?? HEIGHT) / 16, marks = new Uint8Array(n * n * secs);
-    for (let x = 0; x < SIZE; x++)
-      for (let z = 0; z < SIZE; z++) {
+    const w = this.world, S = w.size ?? SIZE, n = S / 16, secs = (w.height ?? HEIGHT) / 16, marks = new Uint8Array(n * n * secs); // b65 mpendwindow: S is the world's width
+    for (let x = 0; x < S; x++)
+      for (let z = 0; z < S; z++) {
         const base = (x >> 4) * n * secs + (z >> 4) * secs;
         for (let y = 0; y < (w.height ?? HEIGHT); y++) if (RANDOM_TICKS[w.get(x, y, z)]) marks[base + (y >> 4)] = 1;
       }
     this.marks = marks;
   }
   mark(x, y, z) {
-    if (this.marks) this.marks[(x >> 4) * (SIZE / 16) * ((this.world.height ?? HEIGHT) / 16) + (z >> 4) * ((this.world.height ?? HEIGHT) / 16) + (y >> 4)] = 1;
+    if (this.marks) this.marks[(x >> 4) * ((this.world.size ?? SIZE) / 16) * ((this.world.height ?? HEIGHT) / 16) + (z >> 4) * ((this.world.height ?? HEIGHT) / 16) + (y >> 4)] = 1;
   }
   // WorldServer.tickUpdates for fire, then the random block ticks (func_147456_g): per
   // active chunk and 16-high section that needs them, three cells chosen from
@@ -465,7 +465,7 @@ export class Fire {
     if (this.world.get(x, y, z) === FIRE) updateTick(this.L, x, y, z);
   }
   endTick(px = SIZE / 2, pz = SIZE / 2) {
-    const w = this.world, n = SIZE / 16, secs = (w.height ?? HEIGHT) / 16;
+    const w = this.world, n = (w.size ?? SIZE) / 16, secs = (w.height ?? HEIGHT) / 16;
     const weather = this.weather();
     // In the game the random ticks come from Weather.tickChunk's single WorldServer loop,
     // which calls randomTick below; standalone (tests) this class runs its own.

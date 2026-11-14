@@ -6,7 +6,8 @@ import { World } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { restoreReplica } from './multiplayer/client.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
-import { END_OFFSET } from './multiplayer/client-dimensions.js';
+import { END_WINDOWS } from './multiplayer/client-dimensions.js';
+const END_OFFSET = END_WINDOWS.full; // b65 mpendwindow: a new End is the 256 window
 import { strongholdsOf } from './multiplayer/server-eyes.js';
 import { nearestStronghold, ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { JavaRandom } from './java-random.js';
