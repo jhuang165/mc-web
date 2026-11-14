@@ -16,6 +16,7 @@ import { materialSolid } from "./plants.js";
 import { POTION_TYPES } from "./potions.js";
 import { noteColour } from "./note-blocks.js";
 import { makeReddustParticle, reddustTexture, makeEnchantParticle, stepEnchantParticle } from './extra-particles.js';
+import { makeWakeParticle, stepWake } from './wake-particles.js'; // b73: EntityFishWakeFX
 import { makeSnowShovelParticle, makeCloudParticle, makeFootstepParticle, stepSnowShovel, stepCloud, stepFootstep } from './snow-cloud-particles.js';
 import { makePortalParticle, stepPortalParticle, portalParticleScale, portalParticleLight } from './portal-particles.js';
 
@@ -31,7 +32,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2, footstep: 3 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "witchMagic", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime", "snowshovel", "cloud", "footstep"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "witchMagic", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime", "snowshovel", "cloud", "footstep", "wake"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -90,6 +91,7 @@ export class Fx {
       case 'snowshovel': return makeSnowShovelParticle(this, x, y, z, vx, vy, vz);
       case 'cloud': return makeCloudParticle(this, x, y, z, vx, vy, vz);
       case 'footstep': return makeFootstepParticle(this, x, y, z);
+      case 'wake': return makeWakeParticle(this, x, y, z, vx, vy, vz);
       // RenderGlobal "slime": EntityBreakingFX(world, x, y, z, Items.slime_ball), the 5-argument constructor (no 0.1 motion scale).
       case 'slime': return this.iconcrack(x, y, z, 0, 0, 0, 341, 0, false);
       case "bubble": {
@@ -310,6 +312,7 @@ export class Fx {
     if (p.kind === 'enchant') { stepEnchantParticle(p); return; }
     if (p.kind === 'snowshovel') { stepSnowShovel(world, p); return; }
     if (p.kind === 'footstep') { stepFootstep(p); return; }
+    if (p.kind === 'wake') { stepWake(world, p); return; }
     if (p.kind === 'cloud') { stepCloud(world, p, this.closestPlayer(p, 2)); return; }
     if (p.kind === "crit2") {
       const rand = p.rand, t = p.target();

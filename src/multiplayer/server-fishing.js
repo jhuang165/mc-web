@@ -7,7 +7,7 @@
 //
 // Wire (server -> client, queued on `p.dispOut` like dispEnts):
 //   { type: 'fishHooks', hooks: [{ o: anglerId, i: entityId, x, y, z }] }   the bobbers near this player (an empty list once, to clear them). The client draws bobber and line (client-fishing.js).
-//   { type: 'fishFx', events: [{ n: 'splash'|'bubble', x, y, z, vx, vy, vz }] }   one-shot particles (EntityFishHook's WorldServer.func_147487_a; the wake has no browser particle).
+//   { type: 'fishFx', events: [{ n: 'splash'|'bubble'|'wake', x, y, z, vx, vy, vz }] }   one-shot particles (EntityFishHook's WorldServer.func_147487_a).
 // Sounds go through sim.soundsOut (S29). Loot, XP orb (1-6 at the angler's feet + 0.5), rod wear (1 for a bite, 3 for a pulled mob, +2 on the ground; none in Creative)
 // and the fishCaught / junkFished / treasureFished statistics follow the single-player rules. Hooks are not saved (EntityFishHook has no entity-list name, so a native
 // server drops it on a restart), and one dies with a dimension change, the angler's death, leaving or putting the rod away.

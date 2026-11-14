@@ -15,6 +15,7 @@ import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
 import { explodeMobs } from '../explosion-simulation.js';
 import { livingEyeHeight } from '../ai.js';
+import { serverCritical, sendCritFx } from './server-crit-fx.js'; // b73 particles73
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
 import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fixes68: a lying player's posY, eye and 0.2 box
 import { entityBox, isWet, canSeeSky } from '../weather.js';
@@ -414,7 +415,9 @@ export class ServerMobs {
     if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : !useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
-    try { return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }); } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
+    // b73 particles73: the jump-attack critical (damage * 1.5F) and its S0B animations 4 / 5 for the players in range
+    const critical = serverCritical(p), info = {};
+    try { const landed = this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }, 0, critical, info); if (landed) { const t = this.mobs.fxTarget(mob), at = { x: t.x, y: t.minY, z: t.z, w: t.width, h: t.height, mx: t.mx, my: t.my, mz: t.mz }; if (critical) sendCritFx(this.host, p, at, false); if (info.enchantCritical) sendCritFx(this.host, p, at, true); } return landed; } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
   }
   // C02 UseEntity, interact (b61, animal-use.js): same reach as the attack; the server's own rules decide, `p.animHandled` tells the network tick to drop the click's item use.
   interact(p, wireId, claim = false) {
