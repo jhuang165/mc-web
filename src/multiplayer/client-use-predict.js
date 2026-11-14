@@ -18,3 +18,9 @@ export function predictUse(held, survival) {
   if (item?.food && !survival.creative && (survival.food < 20 || item.alwaysEdible) && survival.usable(id)) return { id, ticks: 32 };
   return null;
 }
+
+// b65 mpuse2: S2F (NetHandlerPlayClient.handleSetSlot) puts a NEW ItemStack object into the held slot, and EntityPlayer.onUpdate compares `inventory.getCurrentItem() != itemInUse`
+// by identity (yz.h, bytecode-read), so any set-slot message for the held slot (even an equal stack) clears the use via clearItemInUse. `message.slots` lists main-inventory cells.
+export function slotReplacesUse(message, current) {
+  return (message?.slots ?? []).some(s => s?.slot === current);
+}
