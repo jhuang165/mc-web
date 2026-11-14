@@ -18,5 +18,5 @@ Evidence: `tools/probes/StatsProbe.java` + `tools/verify-stats.mjs` (run with `M
 - Use stat: placed or applied items only for the branches in `USE_BRANCHES` (blocks, seeds, nether wart, flint and steel, fire charge, spawn eggs, bone meal; bone meal counts even when nothing grew), tool hits on mobs and tool block breaks. Hoeing, buckets, signs, doors and other `onItemUse` successes are not counted.
 - killedBy: last mob that hit the player within 300 ticks; projectile killers and the exact CombatTracker rule are not modelled.
 - damageTaken is counted in `Survival.damage` from the amount it receives (difficulty scaling happens in callers); damageDealt is the mob's health drop.
-- animalsBred counts any breeding, not only the one the player fed; playerKills is never awarded (no PvP).
+- animalsBred counts any breeding, not only the one the player fed. Batch 69 (docs sweep): playerKills is awarded on the dedicated server through the combat tracker and PvP (`src/multiplayer/server-combat-tracker.js`, `server-scoreboard.js`); single player has no PvP.
 - GuiStats item names and column headers use `title` tooltips, not the vanilla tooltip box; hover states were not compared pixel for pixel and the screen was not browser-checked.

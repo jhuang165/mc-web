@@ -35,7 +35,7 @@ Everything here comes from the unchanged 1.7.10 client JAR (sha1 `e80d9b3b...`, 
 ## Missing / deliberate gaps
 
 - Critical-hit particles (`EntityPlayer.onCriticalHit`, 1.7.10 spawns "crit" particles) are not drawn; the damage is.
-- The Knockback enchantment does not exist yet; `attack(..., extraKnockback)` takes any level, main.js passes sprint only.
+- Batch 69 (docs sweep): the Knockback enchantment is defined (`src/enchantments.js`, id 19, with Punch); whether main.js passes its level to `attack` was not traced, so the sprint-only line is left open.
 - Correction (0.21.1): 1.7.10 has no step-up `ySize` feed. `sa.d` only decays ySize, and refuses the 0.5 step while it is >= 0.05 unless sneaking on the ground ([player step](player-step.md)). Only `setPositionAndRotation` resets it to 0.
 - Underwater tint, block picking and the camera in water do not use the sneak drop; only the eye position does.
 - Cape and nameplate sneak effects are not ported; there is no touch sneak button.
