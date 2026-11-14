@@ -2,6 +2,35 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 69
+
+Batch 69 covered these areas:
+- **server.properties.** The dedicated server creates and reads `server.properties` with the native defaults: view distance (and the tracker limit), max players, spawn protection, allow-nether, allow-flight, the spawn switches, difficulty, game mode and force-gamemode, hardcore, PvP, command blocks, the op permission level, the whitelist, the MOTD, the build height and the idle timeout; `server-icon.png` is the status favicon.
+- **Maps on a server.** Empty maps take ids, held and framed maps update in every dimension and reach the right players at the native cadence, and map data is saved with the world (executed packet record). Found wrong: framed-map updates go to every player of the world.
+- **Tab completion on a server.** Commands, arguments and player names complete over the connection in the native chat flow; the command order matches the real CommandHandler at every op level (90 executed records). The "Pinging..." sprite animates.
+- **Multiplayer fixes.** Pistons break hanging entities off; `/summon` tag coordinates map into the End window; spawn eggs and dispenser eggs ignore the mob cap; a sleeper reaches and aims from posY (minY + 0.2), which corrects batch 68's eye note.
+- **Single-player farming.** Farmland, crops, stems and cocoa tick only in the render-distance active chunks in the native draw order (executed orders); cocoa grows at all now, in single player and on the server.
+- **Fireworks in fluids.** Rockets in water and lava and against boats and carts match 34 executed records (flow push, splash draws, entity boxes added).
+- **Spawn replays.** 15 more executed natural-spawn replays; the Slime and Bat catalogue rows were stale.
+- **Catalogues.** Server list and admin command rows; /netstat is the only dedicated command left Out of scope.
+- **Research docs.** About 85 more docs swept; no closed gap found wrong on a live path.
+
+Still open from batch 69:
+- **Multiplayer.**
+  - server.properties: `generate-structures` changes nothing; object, vehicle and item trackers and the spawner puff keep the 144 limit; allow-nether false only blocks portals (the Nether and End still tick); the client ignores the server's view distance; game mode is not saved per player; the spawn-protection centre is `world.spawn()` without `/setworldspawn`; `/setidletimeout` is not written back. Key names and defaults are recalled, not executed.
+  - Maps: frame ids are not on the wire; `mapData` is not exercised over a real socket; one client map store per page session.
+  - Tab completion: UserList name order is insertion order; single player's Tab still sorts and has no common-prefix step; `/whitelist reload` does nothing; /netstat answers "unavailable".
+  - Entity clicks on vehicles and mobs still measure reach from y + 1.62 for a sleeper; a piston-pushed boat is not blocked by hanging entities; arrows stuck in the End were not run end to end through `/summon`.
+  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
+  - Villages: the default server world (generation 9) has no generated villages.
+  - End: thin island tails past 128 blocks are cut on some seeds (a 336 window would cover 48 of 48 seeds; left for the user's decision).
+  - Not seen in a browser: the favicon and MOTD in the server list, the build-height and flight kick texts, a short view distance on a client, held and framed maps over a connection, the Tab flow in the chat box, a frame popping off a piston, a sleeper digging from bed. Earlier unseen items from batches 67 and 68 still stand.
+- **Single player.** Chickens breed only on wheat seeds (1.7.10 is believed to take any ItemSeeds: pumpkin, melon, nether wart; not yet bytecode-checked); `enderDisplayParticles` is imported but never called; the Resistance potion step is unported; no cape or deadmau5 ears; Smite and Bane do not apply to mob-versus-mob hits; block hoppers do not pull from cart inventories; no client cart interpolation; the snowshovel, cloud and footstep particles are absent; the witch has no sounds (no assets).
+- **Projectiles.** Arrow pickup delay is bytecode-derived only; the server's fireball punch pick is not executed; `blaze-ghast.md` and `bows.md` still carry stale gap lines.
+- **Research docs.** Docs only skimmed by the batch 69 sweep (listed in the researchdocs2/3 notes) are not cleared; `dragon.md`'s egg claim is probably wrong but unchecked.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 68
 
 Batch 68 covered these areas:
@@ -16,21 +45,7 @@ Batch 68 covered these areas:
 - **Pistons and carts.** Carts on rails already matched (9 executed scenarios); riding players are pushed and snap back; push landings wait a tick as natively.
 - **Research docs.** About 30 linked docs corrected.
 
-Still open from batch 68:
-- **Multiplayer.**
-  - Server commands: /publish stays off; /debug files are kept in memory; the admin commands have no tab completion; `/whitelist reload` does nothing (the lists live in the save data); idle activity is approximated; the server's view distance is fixed at 10.
-  - `/summon`: coordinates inside a data tag (leash X/Y/Z, painting TileX) are not mapped to the End window; dispensers and spawn eggs still refuse at the mob limit.
-  - Hanging entities: no maps in frames (the server has no maps); pistons do not push or break hanging entities.
-  - Server list: no favicon option on the server; the "Pinging..." sprite only redraws when a result arrives; the list is seeded with the build's public server.
-  - Beds: block clicks and digs ray from y + 1.62 for a sleeper; mob distances to a sleeper use minY, not posY.
-  - Villages: the default server world (generation 9) has no generated villages.
-  - End: thin island tails past 128 blocks are cut on some seeds (a 336 window would cover 48 of 48 seeds; left for the user's decision).
-  - Not seen in a browser: the server list, Edit and Direct Connect screens and the Disconnected screen; ping bars; paintings, frames and knots over a connection; a long ban reason as the close reason; the compass at a new server spawn; /playsound on a client; a rider in a pushed cart; more than 80 mobs drawn. Still unseen from batch 67: a remote player on a boat or a moving block, the lying model, golem dust, silverfish puffs, crops changing near players, the connected bobber line, dispenser sparkles.
-- **Farming.** Single player still uses its hash scan (same mean rate, not the native draw order) and dries farmland anywhere in the world.
-- **Fireworks.** Rockets in flowing water or lava and against boat or cart boxes are unprobed.
-- **Research docs.** About 120 linked docs are not yet swept (chunks, generation, region import, particles, loading screens, streaming, natural spawning, controls, resource packs, post shaders and others).
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 68: carried into the batch 69 list above, except the items batch 69 closed or found wrong.
 
 ## Done in batch 67
 

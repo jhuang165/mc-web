@@ -24,7 +24,7 @@ Docs touched and claims changed (evidence):
 Code reading only (label: bytecode not involved). Generators: no generator row calls any of these docs stale, none edited.
 
 ## Verification
-`node --test src/catalogue-consistency.test.js src/content-catalogue.test.js` and `npm run build`: see the final report. Full npm test not run (batch rule).
+`node --test src/catalogue-consistency.test.js src/content-catalogue.test.js` and `npm run build`: 6 pass, 0 fail; build ok (filled in by the b69 lead from the track report). Full npm test not run (batch rule).
 
 ## Follow-ups
 Real code gaps found on live paths: none confirmed. Still true and left: `minecart-variants`-area client interpolation (`setPositionAndRotation2`) not found in `src/`; block hoppers do not pull from cart inventories (`inventory-transfer.js` says so); `snowshovel`, cloud, footstep, witchMagic, mobappearance particles absent; witch sounds have no assets (`public/audio/1.7.10/mob` has no witch dir); mob-vs-mob Smite/Bane (`creatureAttribute` is not used by `hitMob`); `mob.attack` has no manifest event for the slime.
