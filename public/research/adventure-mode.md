@@ -51,3 +51,5 @@ Evidence: `tools/verify-adventure.mjs` runs `tools/probes/AdventureProbe.java` a
   - A web page cannot listen on a port or broadcast on the local network, so no other device can join.
   - A grey chat line says so.
   - The port shown is 25564, the fallback that `shareToLAN` itself uses when the free-port lookup fails.
+
+Batch 73 (docs sweep, 2026-11-14): checked by code reading: `src/adventure.js` (`adventureExempt`, `mayHitBlock`) is used in `player-edit-simulation.js` 559 and `main.js` 3782, the Open to LAN screen cycles survival, creative, adventure (`menus.js` 408-412) and the Create World game mode button cycles Survival, Hardcore, Creative (`menus.js` 303). Both statements in this doc still hold. `CanDestroy`/`CanPlaceOn` appear only in `adventure.js` comments as 1.8 text.

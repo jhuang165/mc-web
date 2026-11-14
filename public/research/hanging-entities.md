@@ -27,3 +27,5 @@ Code: `src/hanging.js` (rules), `src/hanging-interaction.js` (aim, place, hit, u
 - Adventure-mode `canPlayerEdit` check is not applied.
 - Frame bar and back-panel UVs use the full tile rather than the native sub-cropped regions.
 - Rendering is built from bytecode facts. A localhost check showed a placed painting (Wasteland), a frame with an item and a rotation update; no pixel comparison against the original was made.
+
+Batch 73 (docs sweep, 2026-11-14): two Remaining-differences lines are stale or settled. Frames holding maps are drawn as maps now (`hanging-renderer.js` imports `frameMapMatrix`/`MapSurface`; `hanging-interaction.js` line 11 header comment is stale and says maps are not implemented). The adventure `canPlayerEdit` line is not a gap: `Item.canItemEditBlocks` is true, so an item in hand always passes (adventure-mode.md); a rotate click with an empty hand has no check natively. Server paintings and frames exist (`multiplayer/server-hanging.js`).

@@ -31,3 +31,5 @@ Mutated biomes (`BiomeGenMutated`) delegate `getBiomeClass` and `isEqualTo` to t
 - Block and sky light in the replay are fixtures, not a light engine.
 - The 79 per-biome regions run with map features off; structures are covered by the 14 separate areas above, not by every slot. Worldgen animals are compared as entity records only.
 - Everything above was probed against the native jar; no part is bytecode-read only.
+
+Batch 73 (docs sweep, 2026-11-14): the lily pad rotation hash and corners are ported (`lily-pad.js`, `chunk-mesher.js`, per the batch 69 line in biome-colors.md). No stale gap line found.

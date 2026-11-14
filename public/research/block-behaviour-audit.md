@@ -164,3 +164,5 @@ Tile-entity blocks (chest 54, ender chest 130, trapped chest 146, skull 144, flo
 - Native collision of a moving block reads the stored block's bounds fields primed by the preceding setBlockBoundsBasedOnState (an inverted box for top slabs); the replay uses the primed pool box from the probe, not the port's own stored-block bounds.
 - Drop streams outside `harvestBlock` use other streams than native; hopper/comparator/skull tile-entity contents are not probed.
 - Right-click activation and tile-entity NBT of the listed blocks are not covered here.
+
+Batch 73 (docs sweep, 2026-11-14): rows marked `O` were not re-probed. The "explosion resistance was 0" and similar fixed rows are history; the Vine row is covered by `src/block-audit.test.js` replays per this doc.

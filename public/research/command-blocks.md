@@ -22,3 +22,5 @@ stored output independently. Say/me broadcast to local chat. The integrated-serv
 Remaining adaptations: one local player (batch 13 added teams/scoreboard and `@p[team=,score_…]` selectors, [commands-b13.md](commands-b13.md)), no Java network server, styled HTML editor rather than pixel-exact
 GuiCommandBlock, plain-text output represented as chat JSON, one success per command in the single-player adapter. Unsupported
 commands still fail. Complete native server/command/selector parity is not claimed.
+
+Batch 73 (docs sweep, 2026-11-14): "one local player" and "no Java network server" are first-release text. The dedicated server runs command blocks and command block carts (`multiplayer/server-cart-commands.js`, `server-owners.js`, batch 63) and has scoreboards and teams (`server-scoreboard.js`). The styled HTML editor (not pixel-exact `GuiCommandBlock`) remains a browser-only check.

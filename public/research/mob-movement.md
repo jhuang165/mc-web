@@ -28,3 +28,5 @@ Ports the ground/water motion of `EntityPig` [wo], `EntityCow` [wh] and `EntityZ
 - Pathfinding is ported in 0.14; see [pathfinding](pathfinding.md).
 - No lava, ladder, ice or flowing-water currents; fall sound and particles omitted.
 - Zombies no longer flee when hit (the old simplified flee was not in the original).
+
+Batch 73 (docs sweep, 2026-11-14): checked: the land-friction and water rules are the ones the mob steps and `mob-riding.js` ports use; riders no longer move through steps (batch 72, `passFall`). No stale claim found.

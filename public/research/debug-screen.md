@@ -66,3 +66,5 @@ Port flow (assumed presentation): the game menu opens and a dialog shows the cra
 GuiIngame draws before `currentScreen.drawScreen`, so the overlay lies under the GUI's dark gradient and panel (bytecode-read order). `#debug` sits in `#hud` below `#modal`, and `updateDebugOverlay()` now runs on the playing, inventory, game-menu and death frames. Checked in headless Chrome over the inventory (`artifacts/b22-debugkeys/f3-over-inventory.png`).
 
 Tests: `src/debug-keys.test.js`.
+
+Batch 73 (docs sweep, 2026-11-14): the F3+C dialog is built: `src/debug-keys.js` holds `CRASH_DESCRIPTION` and the 6000 ms hold (bytecode-read in `bao`), and `main.js` shows the report. The presentation (a dialog, no exit) remains the documented deviation; a browser would be needed to judge the layout.

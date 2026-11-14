@@ -9,3 +9,5 @@ Source: 1.7.10 `RenderPlayer.renderSpecials` (`bop`), `ModelBiped` (`bhm`), `Ent
 - **Show Cape** (bytecode-read): the setting is sent in C15PacketClientSettings; the server sets `getHideCape` (metadata 16 bit 1), which hides the cape for all viewers.
 
 Port: `src/cape.js` (maths), `PlayerBody.cape`, `PlayerRenderer.setCape(texture)`, `PlayerRenderer.name` / `hasSkin` (ears). Batch 71: accounts carry an optional uploaded 64 x 32 cape (`/api/cape`, `/api/capes/<hash>.png`), player rows carry `cape` and `hideCape`, the client sends `capeSettings {show}`, and the Show Cape button works. No Mojang cape ships.
+
+Batch 73 (docs sweep, 2026-11-14): no gap claim here. Added after this doc: `sp-cape.js` (single-player cape, batch 72), `cape-wire.js` and the `capeSettings` message; the Show Cape setting is sent for server players.

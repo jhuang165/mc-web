@@ -21,3 +21,5 @@ Internal block 138 = Bed (`138: same(26)` in the block registry); item 355 maps 
 ## Limits
 
 Browser check on localhost covered rendering only; sleeping flow is covered by the replay tests. Villages and mob sleeping have no bed logic. Full parity remains unfinished.
+
+Batch 73 (docs sweep, 2026-11-14): checked: the sleep, spawn-point and missing-bed message rules still stand; the server mirror is `multiplayer/server-sleep.js` (batch 66), and the sleeper box and eye are `BedSleep.boxY` and `sleeper-eye.js`.
