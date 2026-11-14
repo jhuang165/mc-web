@@ -11,7 +11,7 @@
 // The lists are kept in the server's save data (DedicatedSimulation.save() -> `admin`), in the native file shapes; ops are keyed by the player's account UUID.
 import { translation, text as textComponent } from '../chat-component.js';
 import { joinNiceString } from '../commands-scoreboard.js';
-import { UserMap } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists
+import { UserMap, userListValues, userListKeys } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists; b71 mpadmin71: listings, files and the profile cache use it
 
 export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3 };
 export const DEFAULT_OP_LEVEL = 4; // server.properties op-permission-level
@@ -43,28 +43,37 @@ export class ServerAdmin {
     const keyed = (rows) => new UserMap((Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.uuid === 'string').map((r) => [r.uuid, { ...r }]));
     this.ops = keyed(saved.ops); this.bans = keyed(saved.banned); this.allow = keyed(saved.whitelist);
     this.ipBans = new UserMap((Array.isArray(saved.bannedIps) ? saved.bannedIps : []).filter((r) => r && typeof r.ip === 'string').map((r) => [r.ip, { ...r }]));
-    this.profiles = new Map((Array.isArray(saved.profiles) ? saved.profiles : []).filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.name.toLowerCase(), { uuid: r.uuid, name: r.name }]));
+    // b71 mpadmin71: PlayerProfileCache (ns) keeps `HashMap<lowercase name, entry>` (bytecode-read); its tab names (ns.func_152654_a) are that map's keySet, so a UserMap
+    this.profiles = new UserMap((Array.isArray(saved.profiles) ? saved.profiles : []).filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.name.toLowerCase(), { uuid: r.uuid, name: r.name }]));
     this.whitelistOn = typeof saved.whitelistOn === 'boolean' ? saved.whitelistOn : whitelist === true; // white-list property
     this.idleMinutes = Number.isInteger(saved.idleMinutes) && saved.idleMinutes >= 0 ? saved.idleMinutes : 0; // player-idle-timeout
     this.autosave = true; // /save-off: runtime only, as WorldServer.levelSaving
     this.whitelistFile = null; // b70 sptab70: { read(): rows | null, write(rows) } for whitelist.json beside server.properties (set by server/server.js)
+    this.listFiles = null; // b71 mpadmin71: { read(name) -> rows | null, write(name, rows) } for ops, whitelist, banned-players and banned-ips (.json beside server.properties; set by server/server.js)
+    this.written = new Map(); // list name -> the text last written to (or read from) its file
     this.directory = null; // (name) => { uuid, name } | null: accounts the server knows but that never joined (the usercache's role)
     this.host = null; // { kick(id, reason), ipOf(id), stop(), save() } set by server/server.js
     this.pending = null; this.lastAction = new Map(); this.looks = new Map();
   }
   /** The server's save data, in the shapes of ops.json, banned-players.json, banned-ips.json, whitelist.json and usercache.json. */
   save() {
-    const rows = (m) => [...m.values()].map((r) => ({ ...r }));
+    const rows = (m) => userListValues(m).map((r) => ({ ...r })); // b71 mpadmin71: UserList.saveToFile writes values() = HashMap order
     return { version: 1, ops: rows(this.ops), banned: rows(this.bans), bannedIps: rows(this.ipBans), whitelist: rows(this.allow), whitelistOn: this.whitelistOn, idleMinutes: this.idleMinutes, profiles: [...this.profiles.values()].map((p) => ({ ...p })) };
   }
   // PlayerProfileCache: a player who joined is known by name; /op, /ban and /whitelist add only known names.
-  seen(uuid, name) { this.profiles.set(String(name).toLowerCase(), { uuid, name }); }
+  // ns.func_152651_a(profile, date): an entry already known by uuid has its old name key removed, then the name is put again (it lands last in its bucket)
+  seen(uuid, name) {
+    for (const [k, v] of this.profiles) if (v.uuid === uuid) this.profiles.delete(k);
+    this.profiles.set(String(name).toLowerCase(), { uuid, name });
+  }
+  /** ns.func_152654_a: the lowercase names, in HashMap order (the /whitelist add completion). */
+  profileNames() { return userListKeys(this.profiles); }
   profile(name) { return this.profiles.get(String(name).toLowerCase()) ?? this.directory?.(name) ?? null; }
   /** An entry past its expiry is removed on lookup (UserList.func_152683_b). */
   live(map, key) {
     const e = map.get(key); if (!e) return null;
     const until = e.expires && e.expires !== 'forever' ? parseBanDate(e.expires) : null;
-    if (until && until.getTime() <= this.now()) { map.delete(key); return null; }
+    if (until && until.getTime() <= this.now()) { map.delete(key); this.flush(); return null; }
     return e;
   }
   /** The op entry's level of a player name (a name that joined once), or null when not an op. */
@@ -122,7 +131,7 @@ export class ServerAdmin {
     } catch (e) {
       if (!(e instanceof Fail)) throw e;
       print(red(translation(e.key, ...e.args)));
-    }
+    } finally { this.flush(); } // b71 mpadmin71: UserList writes its file after every add and remove
   }
   online(ctx, name) { return ctx.online().find((p) => p.name.toLowerCase() === String(name).toLowerCase()) ?? null; } // ServerConfigurationManager.func_152612_a
   dispatch(word, a, ctx) {
@@ -138,7 +147,7 @@ export class ServerAdmin {
       }
       case 'deop': {
         if (!(a.length === 1 && a[0].length > 0)) throw usage('commands.deop.usage');
-        const e = [...this.ops.values()].find((o) => o.name.toLowerCase() === a[0].toLowerCase()); // UserListOps.func_152700_a: by name among the ops
+        const e = userListValues(this.ops).find((o) => o.name.toLowerCase() === a[0].toLowerCase()); // UserListOps.func_152700_a: by name among the ops
         if (!e) throw new Fail('commands.deop.failed', a[0]);
         this.ops.delete(e.uuid);
         return ctx.feedback('commands.deop.success', a[0]);
@@ -159,7 +168,7 @@ export class ServerAdmin {
       }
       case 'pardon': {
         if (!(a.length === 1 && a[0].length > 0)) throw usage('commands.unban.usage');
-        const e = [...this.bans.values()].find((b) => b.name.toLowerCase() === a[0].toLowerCase());
+        const e = userListValues(this.bans).find((b) => b.name.toLowerCase() === a[0].toLowerCase());
         if (!e) throw new Fail('commands.unban.failed', a[0]);
         this.bans.delete(e.uuid);
         return ctx.feedback('commands.unban.success', a[0]);
@@ -186,7 +195,7 @@ export class ServerAdmin {
       }
       case 'banlist': {
         const ips = a.length >= 1 && a[0].toLowerCase() === 'ips';
-        const names = ips ? [...this.ipBans.keys()] : [...this.bans.values()].map((b) => b.name);
+        const names = ips ? userListKeys(this.ipBans) : userListValues(this.bans).map((b) => b.name); // b71 mpadmin71: nx.a() = keySet().toArray, op.a() = values() names: HashMap order (bytecode-read, CommandServerBanlist ax)
         ctx.print(translation(ips ? 'commands.banlist.ips' : 'commands.banlist.players', names.length));
         return ctx.print(textComponent(joinNiceString(names)));
       }
@@ -220,7 +229,7 @@ export class ServerAdmin {
       case 'on': this.whitelistOn = true; return ctx.feedback('commands.whitelist.enabled');
       case 'off': this.whitelistOn = false; return ctx.feedback('commands.whitelist.disabled');
       case 'list': {
-        const names = [...this.allow.values()].map((e) => e.name);
+        const names = userListValues(this.allow).map((e) => e.name); // b71 mpadmin71: oi.l() = or.a() = values() names, HashMap order
         ctx.print(translation('commands.whitelist.list', names.length, this.profiles.size)); // second count: players the server has seen (oi.q)
         return ctx.print(textComponent(joinNiceString(names)));
       }
@@ -232,7 +241,7 @@ export class ServerAdmin {
       }
       case 'remove': {
         if (a.length < 2) throw new Fail('commands.whitelist.remove.usage');
-        const e = [...this.allow.values()].find((w) => w.name.toLowerCase() === a[1].toLowerCase());
+        const e = userListValues(this.allow).find((w) => w.name.toLowerCase() === a[1].toLowerCase());
         if (!e) throw new Fail('commands.whitelist.remove.failed', a[1]);
         this.allow.delete(e.uuid); this.writeWhitelist();
         return ctx.feedback('commands.whitelist.remove.success', a[1]);
@@ -241,14 +250,54 @@ export class ServerAdmin {
       default: throw new Fail('commands.whitelist.usage');
     }
   }
-  // b70 sptab70: DedicatedPlayerList.func_152599_k re-reads the whitelist file (recalled: the UserList loader is server-only, not in the client JAR). Here the file is whitelist.json
-  // beside server.properties, written after every /whitelist add and remove; a missing or unreadable file leaves the list as it is.
-  writeWhitelist() { try { this.whitelistFile?.write([...this.allow.values()].map((r) => ({ ...r }))); } catch { /* the save data still holds the list */ } }
+  // ---- b71 mpadmin71: ops.json, whitelist.json, banned-players.json and banned-ips.json beside server.properties ----
+  // The file wins over the save's `admin` lists at start-up (loadFiles; a missing file keeps the save's list and is created by the first flush: the one-time migration).
+  // UserList.saveToFile (recalled; gson over values()) writes the HashMap order; files are replaced atomically by the hook (temp file + rename).
+  /** [name, list, row filter] of the four files. */
+  fileLists() {
+    const named = (r) => r && typeof r.uuid === 'string' && typeof r.name === 'string';
+    return [['ops', 'ops', named, 'uuid'], ['whitelist', 'allow', named, 'uuid'], ['banned-players', 'bans', (r) => r && typeof r.uuid === 'string', 'uuid'], ['banned-ips', 'ipBans', (r) => r && typeof r.ip === 'string', 'ip']];
+  }
+  io(name) {
+    if (name === 'whitelist' && this.whitelistFile) return this.whitelistFile; // b70 hook (read(), write(rows))
+    const f = this.listFiles; return f ? { read: () => f.read(name), write: (rows) => f.write(name, rows) } : null;
+  }
+  rowsOf(prop) { return userListValues(this[prop]).map((r) => ({ ...r })); }
+  /** Reads every list file that exists; a list whose file is unreadable keeps the save's entries and its file is left alone until the list changes. Returns the names loaded. */
+  loadFiles() {
+    const loaded = [];
+    for (const [name, prop, ok, key] of this.fileLists()) {
+      const io = this.io(name); if (!io) continue;
+      let rows = null, failed = false;
+      try { rows = io.read() ?? null; } catch { failed = true; }
+      if (failed || (rows !== null && !Array.isArray(rows))) { this.written.set(name, JSON.stringify(this.rowsOf(prop), null, 2)); continue; }
+      if (rows === null) continue;
+      const strip = name === 'whitelist' ? (r) => ({ uuid: r.uuid, name: r.name }) : (r) => ({ ...r });
+      this[prop] = new UserMap(rows.filter(ok).map((r) => [r[key], strip(r)]));
+      this.written.set(name, JSON.stringify(this.rowsOf(prop), null, 2));
+      loaded.push(name);
+    }
+    this.flush(); // creates the missing files (migration of the save's lists) and puts loaded ones in native order
+    return loaded;
+  }
+  /** Writes every list whose text differs from the file's last known text; a failed write is retried at the next change. */
+  flush(only) {
+    for (const [name, prop] of this.fileLists()) {
+      if (only && only !== name) continue;
+      const io = this.io(name); if (!io) continue;
+      const rows = this.rowsOf(prop), text = JSON.stringify(rows, null, 2);
+      if (this.written.get(name) === text) continue;
+      try { io.write(rows); this.written.set(name, text); } catch { /* the save data still holds the list */ }
+    }
+  }
+  // b70 sptab70: DedicatedPlayerList.func_152599_k re-reads the whitelist file (recalled: the UserList loader is server-only, not in the client JAR). A missing or unreadable file leaves the list as it is.
+  writeWhitelist() { this.flush('whitelist'); }
   reloadWhitelist() {
     this.reloaded = (this.reloaded ?? 0) + 1;
-    let rows = null; try { rows = this.whitelistFile?.read() ?? null; } catch { rows = null; }
+    let rows = null; try { rows = this.io('whitelist')?.read() ?? null; } catch { rows = null; }
     if (!Array.isArray(rows)) return false;
     this.allow = new UserMap(rows.filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.uuid, { uuid: r.uuid, name: r.name }]));
+    this.written.set('whitelist', JSON.stringify(this.rowsOf('allow'), null, 2));
     return true;
   }
 }

@@ -61,7 +61,7 @@ function adminOptions(name, args, ctx) {
   if (name === 'whitelist') {
     if (n === 1) return matchLast(last, ['on', 'off', 'list', 'add', 'remove', 'reload']);
     if (n === 2 && args[0] === 'remove') return matchLast(last, names(admin ? userListValues(admin.allow) : [])); // oi.func_152598_l: the whitelist
-    if (n === 2 && args[0] === 'add') return matchLast(last, names(admin?.profiles.values() ?? [])); // PlayerProfileCache.func_152654_a: known names
+    if (n === 2 && args[0] === 'add') return matchLast(last, (admin?.profileNames() ?? [])); // PlayerProfileCache.func_152654_a: known names
   }
   return [];
 }

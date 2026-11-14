@@ -106,7 +106,9 @@ export class DedicatedSimulation {
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
-    this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
+    // b71 mpadmin71: WorldInfo.mapFeaturesEnabled is a creation-time value kept in the save (a saved flag wins over generate-structures); it reaches the finite generator (World's mapFeatures)
+    if (typeof saved.generateStructures === 'boolean') this.rules.generateStructures = saved.generateStructures;
+    this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9, 'default', '', this.rules.generateStructures);
     if (this.world.streaming) throw new Error('Dedicated v1 requires a finite world');
     // World.restore deliberately limits browser import batches to 100k cells.
     // A long-lived dedicated world can legitimately edit more cells than that.
@@ -631,7 +633,7 @@ export class DedicatedSimulation {
   presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
-  snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
+  snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(w.mapFeatures === false ? { mapFeatures: false } : {}), ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));

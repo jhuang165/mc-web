@@ -148,7 +148,7 @@ export function generateLivePopulation(world,{seed,originals,ringTerrain,mapBloc
   const pass=new PopulationArea({seed,chunkX:cx,chunkZ:cz,
     terrain:(x,z)=>originals.get(key(x,z))??ringTerrain(x,z),
     biomeAt:(x,z)=>world.javaGenerator.manager.biomeAt(x,z),
-    structures:world.generationVersion>=14,manager:world.javaGenerator.manager}).run();
+    structures:world.generationVersion>=14&&world.mapFeatures!==false,mapFeatures:world.mapFeatures!==false,manager:world.javaGenerator.manager}).run(); // b71 mpadmin71: generate-structures=false builds no MapGen at all
   const w=pass.world, inside=(x,z)=>x>=ox&&z>=oz&&x<ox+128&&z<oz+128;
   const states=new Map();
   for(let a=0;a<8;a++) for(let b=0;b<8;b++) {

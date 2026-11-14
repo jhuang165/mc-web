@@ -70,7 +70,7 @@ test('admin commands complete the lists the bytecode names', () => {
   assert.deepEqual(tabComplete('/banlist ', c), ['players', 'ips']);
   assert.deepEqual(tabComplete('/whitelist ', c), ['on', 'off', 'list', 'add', 'remove', 'reload']);
   assert.deepEqual(tabComplete('/whitelist remove ', c), ['Pal']);
-  assert.deepEqual(tabComplete('/whitelist add N', c), ['Newbie']);
+  assert.deepEqual(tabComplete('/whitelist add N', c), ['newbie']); // b71 mpadmin71: ns.a() returns the lowercase cache keys
   assert.deepEqual(tabComplete('/whitelist list ', c), []);
 });
 

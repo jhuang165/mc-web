@@ -7,7 +7,7 @@ export { expandChunks };
 
 export function restoreReplica(snapshot) {
   if (snapshot.dimension) return restoreDimensionReplica(snapshot); // b61 mpnether: a Nether snapshot (welcome or dimRespawn)
-  const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion);
+  const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion, undefined, undefined, snapshot.mapFeatures); // b71 mpadmin71: the server's MapFeatures flag (absent = on)
   if (world.streaming || snapshot.columns.length !== world.chunks.size) throw new Error('Unsupported multiplayer world');
   const seen = new Set();
   for (const packet of snapshot.columns) {
