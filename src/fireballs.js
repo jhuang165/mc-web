@@ -102,8 +102,10 @@ export class Fireballs {
       if (e.type === "ender_dragon") boxes.push(...dragonPartTargets(e)); // the parts are the collidable entities, not the 16 x 8 box
       else { const box = pushBox(e, ...mobs.size(e)); if (near(box)) boxes.push({ target: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
     }
-    const p = mobs.ai?.player;
-    if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) { const box = pushBox(p, p.width, p.height); if (near(box)) boxes.push({ target: { player: true }, box }); }
+    // b64: the dedicated server lists every player of the dimension (`mobs.sweepPlayers`, World.getEntitiesWithinAABBExcludingEntity sees them all); `view` names the one hit so the impact can hurt that player.
+    for (const p of mobs.sweepPlayers ? mobs.sweepPlayers() : [mobs.ai?.player]) {
+      if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) { const box = pushBox(p, p.width, p.height); if (near(box)) boxes.push({ target: mobs.sweepPlayers ? { player: true, view: p } : { player: true }, box }); }
+    }
     for (const o of this.list) { // EntityLargeFireball.canBeCollidedWith (the small one is not)
       if (o === b || o.dead || !o.large) continue;
       const box = this.boxOf(o);
