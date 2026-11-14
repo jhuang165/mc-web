@@ -4,7 +4,7 @@ const radians = degrees => degrees * Math.PI / 180;
 // combining Y/Z/X rotations into a Three.js XYZ Euler rotation.
 // `bowDraw` is ItemRenderer's bow term while the bow is drawn: getMaxItemUseDuration -
 // (itemInUseCount - partial + 1), i.e. the ticks of use - 1 + partial (null otherwise). `blocking` is a sword in use (EnumAction.block).
-export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null, bowDraw = null, blocking = false} = {}) {
+export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null, bowDraw = null, blocking = false, turnAround = false} = {}) {
   const matrix = new Matrix4(), scratch = new Matrix4();
   const translate = (x,y,z) => matrix.multiply(scratch.makeTranslation(x,y,z));
   const rotate = (axis,angle) => matrix.multiply(axis === 'x' ? scratch.makeRotationX(angle) : axis === 'y' ? scratch.makeRotationY(angle) : scratch.makeRotationZ(angle));
@@ -25,12 +25,13 @@ export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eat
     translate(0,Math.abs(Math.cos(remaining/4*Math.PI)*.1)*(progress>.2?1:0),0);
     translate(amount*.6,-amount*.5,0);
     rotate('y',radians(amount*90));rotate('x',radians(amount*10));rotate('z',radians(amount*30));
-  }else translate(pose.swing.x,pose.swing.y,pose.swing.z);
+  }else if(!blocking&&bowDraw===null)translate(pose.swing.x,pose.swing.y,pose.swing.z); // executed (first-person-reference.json): a stack in use (getItemInUseCount > 0) skips the swing translate
   translate(.7*.8,-.65*.8-(1-pose.equip)*.6,-.9*.8);
   rotate('y',radians(45));rotate('y',pose.swing.ry);rotate('z',pose.swing.rz);rotate('x',pose.swing.rx);scale(.4);
+  if(turnAround)rotate('y',Math.PI); // Item.shouldRotateAroundWhenRendering (the fishing rod): glRotatef(180, 0, 1, 0) after the 0.4 scale (executed, first-person-reference.json)
   if(blocking){
     // ItemRenderer.renderItemInFirstPerson (bly.a, bytecode-read), EnumAction.block with getItemInUseCount() > 0: after the 0.4 scale the sword moves
-    // across the view (translate -0.5, 0.2, 0), then turns 30 about y, -80 about x and 60 about y. The swing translate above stays (only food and drink replace it).
+    // across the view (translate -0.5, 0.2, 0), then turns 30 about y, -80 about x and 60 about y. The swing translate is skipped, as for food, drink and the bow (executed).
     translate(-.5,.2,0);rotate('y',radians(30));rotate('x',radians(-80));rotate('y',radians(60));
   }
   if(bowDraw !== null){
