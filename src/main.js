@@ -94,6 +94,7 @@ import { randomSuperSecretEvent, SUPER_SECRET_SOUND } from "./post-shaders.js";
 import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
 import { Weather, isWet, canLightningStrikeAt, simulationKey } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
+import { RemoteLightning } from "./multiplayer/client-lightning.js"; // b66 mplightning
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, STEVE_URL, nextView, thirdPersonCamera, playerShadowCaster, sleeperShadowCaster } from "./player-renderer.js";
@@ -647,7 +648,7 @@ let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
 let remotePistons = null; // b66 mppistons: the dedicated world's moving piston blocks (multiplayer/client-pistons.js)
-let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
+let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, remoteLightning = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -665,6 +666,7 @@ function showMultiplayer() {
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
+  remoteLightning = null; // b66 mplightning
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
@@ -876,6 +878,7 @@ async function joinMultiplayer(settings) {
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
+  client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
   multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
   try {
     const welcome = await client.connect({ url: settings.url, session: settings.session });
@@ -895,6 +898,7 @@ async function joinMultiplayer(settings) {
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
     remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
+    remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
@@ -3754,7 +3758,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); remoteLightning?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
