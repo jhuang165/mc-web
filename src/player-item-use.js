@@ -33,7 +33,8 @@ export function tickPlayerItemUse(use, heldId, survival, {
       // updateItemUse(16) precedes ItemFood.onEaten, including its chance roll.
       foodEffects(use.id, 16);
       if (survival.eat(use.id, random)) {
-        sound("random.burp", { volume: 0.5 });
+        // ItemFood.onEaten: playSoundAtEntity("random.burp", 0.5F, rand.nextFloat() * 0.1F + 0.9F) (sound-events-reference.json).
+        sound("random.burp", { volume: 0.5, pitch: random() * 0.1 + 0.9 });
         renderHotbar();
         markUnsaved();
       }

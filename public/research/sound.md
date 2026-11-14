@@ -121,3 +121,10 @@ the paulscode jar is not among the local libraries, so there is no concrete buff
 start at once.
 
 Batch 73 (docs sweep, 2026-11-14): "Approximate or open" checked: still true by code reading. `sound-origin.js` still filters by event name, and Sounds.json choice uses `Math.random`. Added since: `public/audio/1.7.10/mob/cat/*.ogg`, piston and note clips (see ocelots.md, piston-live.md).
+
+## Batch 73: sound event audit
+`public/research/sound-events-reference.json` (generator `tools/build-sound-events-reference.mjs`, bytecode-read with `javap -c -p -s` over every client class) lists each sound-like string constant with its class, SRG method, sink call, volume/pitch instructions and, in `RenderGlobal.playAuxSFX`, the case ids. `src/sounds73-b73.test.js` compares it with `sounds.json` (SHA-1 fce0bb3e, 229 events), the manifest and the port's literals.
+- Played by 1.7.10 but not in `sounds.json` (silent natively): `damage.thorns`, `mob.attack` (slime), `mob.chickenplop` (horse chest), `mob.witch.idle/hurt/death`. So the witch has no assets to add.
+- In `sounds.json` but named by no class: `mob.slime.attack`, `random.wood_click`, `mob.cat.hiss`, `mob.wolf.howl`, `portal.travel` and others (see `soundsJsonNeverNamed`). `random.wood_click` is the only one absent from the manifest.
+- `BlockCake` and `BlockCauldron` hold no sound constant: eating a cake slice and the cauldron fills/bottles are silent. The port's `random.eat` (cake) and `liquid.splash` (cauldron; not a 1.7.10 event) were removed. `random.eat` is `EntityPlayer.updateItemUse`'s, `random.burp` `ItemFood.onEaten`'s (pitch `rand * 0.1 + 0.9`, now played in single player too).
+- `random.successful_hit` (S2B reason 6, volume 0.18, pitch 0.45): a landed arrow hit on another player rings at the player shooter (server `hitPlayer`, `main.js` `MP_SOUNDS`).

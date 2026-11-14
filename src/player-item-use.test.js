@@ -16,7 +16,7 @@ test('food use runs all 32 ticks, six cadence effects, finish crumbs, then consu
   let use = { id: CHICKEN, ticks: 32 };
   for (let i = 0; i < 32; i++) {
     const result = tickPlayerItemUse(use, CHICKEN, p, {
-      foodEffects: (id, n) => effects.push([id, n]), sound: (name) => sounds.push(name),
+      foodEffects: (id, n) => effects.push([id, n]), sound: (name, o) => sounds.push(name, o.pitch >= 0.9 && o.pitch < 1 && o.volume === 0.5),
     });
     use = result.use;
     assert.equal(result.completed, i === 31);
@@ -24,7 +24,7 @@ test('food use runs all 32 ticks, six cadence effects, finish crumbs, then consu
   }
   assert.equal(use, null);
   assert.deepEqual(effects, [...[24, 20, 16, 12, 8, 4].map(() => [CHICKEN, 5]), [CHICKEN, 16]]);
-  assert.deepEqual(sounds, ['random.burp']);
+  assert.deepEqual(sounds, ['random.burp', true]);
   assert.equal(p.count(CHICKEN), 0);
   assert.equal(p.food, 12);
 });
@@ -91,7 +91,7 @@ test('final food effects and chance roll happen before the burp and hotbar updat
     renderHotbar: () => calls.push('render'),
   });
   assert.equal(result.use, null);
-  assert.deepEqual(calls, ['crumbs:325:16', 'chance:325', 'random', 'random.burp', 'render']);
+  assert.deepEqual(calls, ['crumbs:325:16', 'chance:325', 'random', 'random', 'random.burp', 'render']);
 });
 
 test('bow draw increments once per tick without invoking food or drink effects', () => {

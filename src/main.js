@@ -894,7 +894,7 @@ function onMultiplayerInventory(m) {
   if (r.hotbar) renderHotbar();
   if (r.container && containerView?.remote?.inv) refreshContainer();
 }
-const MP_SOUNDS = new Set(['tile.piston.out', 'tile.piston.in', 'random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite']); // b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
+const MP_SOUNDS = new Set(['tile.piston.out', 'tile.piston.in', 'random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite', 'random.successful_hit']); // b73: successful_hit is the S2B reason 6 ding to an arrow's player shooter; b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
