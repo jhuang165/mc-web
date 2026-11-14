@@ -10,6 +10,7 @@ import { JavaRandom } from '../java-random.js';
 import { ClientEntity } from '../entity-tracker.js';
 import { EntityIds } from '../entity-ids.js';
 import { slimeFields, slimeSquishStart, slimeSquishEnd } from '../slime.js';
+import { golemStatus, golemTick } from './client-golems.js'; // b66 mpgolems
 
 // The sound names the server's S29 may carry for the mobs (WorldServer.playSoundAtEntity: living, hurt, death, step, the creeper's fuse and blast, the skeleton's bow, the egg's plop).
 export const isMobSound = name => typeof name === 'string' && /^(mob\.[a-z.]+|creeper\.primed|random\.(explode|bow|pop|eat|burp)|step\.[a-z]+)$/.test(name);
@@ -66,6 +67,7 @@ export class RemoteMobs {
       if (status === 2) mob.hurt = HURT_TICKS;
       const name = (status === 2 ? hurtOf : deathOf)(mob);
       if (name) this.fx.sound?.(name, at.x, at.y, at.z, soundVolume(mob.type), statusPitchRandom());
+    } else if (golemStatus(mob, status, at, this.fx.sound)) { // b66: the iron golem's 4 (swing) and 11 (poppy)
     } else if (status === 10) { if (mob.type === 'sheep') mob.eatTimer = 40; // EntitySheep.handleHealthUpdate(10): sheepTimer = 40, the head graze
     } else if (status === 6 || status === 7 || status === 18) {
       if (status === 18) mob.love = 600; // the copy knows it is in love (EntityAnimal.inLove is not watched; the client only hears status 18)
@@ -112,6 +114,7 @@ export class RemoteMobs {
       mob.age++;
       if (mob.love > 0) mob.love--; // EntityAnimal.onLivingUpdate counts inLove down (adults only: a baby has none)
       if (mob.eatTimer > 0) mob.eatTimer--; // EntitySheep.sheepTimer
+      golemTick(mob); // b66: EntityIronGolem attackTimer / holdRoseTick
       if (mob.hurt > 0) mob.hurt--;
       if (mob.health <= 0 && mob.death < DEATH_TICKS && mob.type !== 'ender_dragon') mob.death++; // the dragon dies by its own 200 tick sequence (dragon.js), it never lies down
       this.factory.swingLimbs(mob);

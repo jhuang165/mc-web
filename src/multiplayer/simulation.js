@@ -46,6 +46,7 @@ import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishin
 import { ServerItems } from './server-items.js';
 import { ServerAchievements } from './server-achievements.js';
 import { ServerWither } from './server-wither.js'; // b63 mpwither
+import { ServerGolems } from './server-golems.js'; // b66 mpgolems
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs } from './server-mobs.js';
@@ -111,6 +112,7 @@ export class DedicatedSimulation {
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
     this.scoreboard = new ServerScoreboard(saved.scoreboard); // b64 mpscoreboard: the one shared scoreboard (objectives, scores, teams), saved with the world
     this.wither = new ServerWither(this); // b63: the T of soul sand and three wither skulls builds a wither (server-wither.js)
+    this.golems = new ServerGolems(this); // b66: a pumpkin on snow or iron builds a golem; a broken monster egg lets silverfish out (server-golems.js)
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
@@ -267,7 +269,7 @@ export class DedicatedSimulation {
   }
   breakDug(p, cell) {
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: this.serverItems.xp, heldTool: p.survival.held?.id ?? 0 };
-    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */ }));
+    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
   }
   // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
   // (squared distance from the player's feet below 1024), gets the stage. Stage -1 (or 10, an air cell) takes the crack away.
@@ -374,7 +376,7 @@ export class DedicatedSimulation {
     if (!gate.accept) { p.refusal = gate.message ?? null; return false; }
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
-    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */ }));
+    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
     // Block activations that don't open a GUI remain shared.
     const [x, y, z] = target.block, b = this.world.get(x, y, z);
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
@@ -399,13 +401,14 @@ export class DedicatedSimulation {
     if (place && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     if (place && useOnBlock(this, p, target, id)) return true; // b64 mpstats2: seeds, nether wart and spawn eggs on the clicked block (and their use stat)
-    const placed = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
+    const put = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
         // write, so the same collision test must cover every connected player.
         return collides(w, other.position.x, other.position.y, other.position.z);
       }),
-    }).placed;
+    }), placed = put.placed;
+    if (placed) this.golems.afterPlace(put); // b66 mpgolems: BlockPumpkin.onBlockAdded
     if (placed) this.stats.used(p, id); // b63 mpstats: ItemStack.tryPlaceItemIntoWorld, the use stat
     return placed;
   }
