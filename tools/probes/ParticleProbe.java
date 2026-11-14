@@ -27,6 +27,8 @@ public class ParticleProbe {
   static final Map<Long, int[]> cells = new HashMap<>();
   static bma render;
   static List<String> calls = new ArrayList<>();
+  static boolean realFluids = false;
+  static List<sa> boxEntities = new ArrayList<>();
 
   static long key(int x, int y, int z) { return (((long) x + 1024) * 4096 + (z + 1024)) * 1024 + (y + 512); }
   static int[] cell(int x, int y, int z) {
@@ -41,8 +43,8 @@ public class ParticleProbe {
     public int e(int x, int y, int z) { return cell(x, y, z)[1]; }
     public boolean d(int x, int y, int z) { return true; }
     public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) { return true; }
-    public boolean a(azt box, awt material) { return false; }
-    public boolean a(azt box, awt material, sa entity) { return false; }
+    public boolean a(azt box, awt material) { return realFluids ? super.a(box, material) : false; } // b69 projectiles4: the real World.isMaterialInBB / handleMaterialAcceleration when a probe sets realFluids
+    public boolean a(azt box, awt material, sa entity) { return realFluids ? super.a(box, material, entity) : false; }
     // World.getCollidingBoundingBoxes without the entity part (no entities here).
     public List a(sa entity, azt box) {
       List<azt> out = new ArrayList<>();
@@ -50,6 +52,18 @@ public class ParticleProbe {
       for (int x = x0; x < x1; x++)
         for (int z = z0; z < z1; z++)
           for (int y = y0 - 1; y < y1; y++) a(x, y, z).a(this, x, y, z, box, out, entity);
+      // b69 projectiles4: the entity part of World.getCollidingBoundingBoxes (ahb.a(sa, azt)), over the probe's own entity list: every other entity whose box meets box.expand(0.25),
+      // then that entity's getBoundingBox (sa.J) and the mover's getCollisionBox(other) (sa.h(sa)), each added when it meets the box.
+      if (entity != null && !boxEntities.isEmpty()) {
+        azt grown = box.b(0.25, 0.25, 0.25);
+        for (sa o : boxEntities) {
+          if (o == entity || !o.C.b(grown)) continue;
+          azt bb = o.J();
+          if (bb != null && bb.b(box)) out.add(bb);
+          bb = entity.h(o);
+          if (bb != null && bb.b(box)) out.add(bb);
+        }
+      }
       return out;
     }
     // World.spawnParticle -> RenderGlobal.spawnParticle (the only world access here).

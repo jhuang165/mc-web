@@ -3,9 +3,13 @@
 // Rules: firework-rocket.js, particles: firework-particles.js. Evidence: public/research/fireworks.md.
 import { JavaRandom } from './java-random.js';
 import { createRocket, tickRocket } from './firework-rocket.js';
+import { worldBoatBoxes } from './entity-collision.js';
 import { ITEM_FIREWORK_ROCKET, normalizeFireworks } from './fireworks.js';
 const f = Math.fround;
 
+// World.getCollidingBoundingBoxes' entity part for a rocket: the single-player game installs its boat provider (main.js, next to setEntityBoxes); the dedicated server's boats are found by world.
+let boxProvider = null;
+export const setRocketEntityBoxes = (fn) => { boxProvider = fn; };
 const ROWS = new WeakMap(); // one renderer row per entity (or view)
 export class FireworkRockets {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
@@ -32,7 +36,7 @@ export class FireworkRockets {
   // One rocket's update, where a walk that holds every kind in one list reaches it (away-entities.js).
   tickOne(world, r, hooks = {}) {
     if (r.dead || (hooks.ringActive && !hooks.ringActive(r))) return;
-    const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true });
+    const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true, entityBoxes: (box) => [...(boxProvider?.(box, r) ?? []), ...worldBoatBoxes(box, r, world)] });
     if (out.launch) hooks.sound?.('fireworks.launch', r.x, r.y, r.z, 3, 1, false);
     if (out.spark) hooks.spark?.(...out.spark);
     if (out.explode && !hooks.clientCopies && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);
