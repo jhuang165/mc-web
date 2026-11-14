@@ -146,14 +146,14 @@ test("the port's MapGenNetherBridge builds the jar's fortress starts and piece b
   }
 });
 
-test("natural-spawn ocelot kittens ignore the 40-entity limit; a spawn egg keeps it", () => {
+test("ocelot kittens have no 40-entity limit, natural spawn or egg (b72: the egg lost its old cap)", () => {
   const make = () => {
     const mobs = new EntityWorld({ height: 256, get: () => 0, getMeta: () => 0, solid: () => false, biomeAt: () => ({ id: 21 }) }, []);
     mobs.worldRandom = new JavaRandom(1);
     for (let i = 0; i < 45; i++) mobs.entities.push({ type: "pig", x: 0, y: 0, z: 0, persistent: true });
     return mobs;
   };
-  for (const [limit, expect] of [[Infinity, true], [undefined, false]]) {
+  for (const [limit, expect] of [[Infinity, true], [undefined, true]]) {
     let litters = 0;
     for (let seed = 0; seed < 200; seed++) {
       const mobs = make();
