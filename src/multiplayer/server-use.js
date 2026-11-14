@@ -13,7 +13,7 @@ import { useBoneMeal } from '../bone-meal.js';
 import { ITEM_SPAWN_EGG, ITEM_FIRE_CHARGE } from '../spawn-eggs.js';
 import { useEggOnBlock, eggMobType } from '../spawn-egg-use.js';
 import { ITEMS } from '../survival.js';
-import { SUPPORTED, MOB_LIMIT } from './server-mobs.js';
+import { SUPPORTED } from './server-mobs.js';
 
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER };
 
@@ -47,8 +47,8 @@ export function useOnBlock(sim, p, target, id) {
   }
   if (id === ITEM_SPAWN_EGG) {
     const type = eggMobType(s.held?.damage ?? 0), mobs = sim.mobs?.mobs;
-    if (!mobs || (type && !(SUPPORTED.has(type) && mobs.entities.length < MOB_LIMIT))) { sim.stats.used(p, id); return true; } // a kind the server does not keep: nothing spawns, nothing is spent
-    useEggOnBlock({ world: sim.world, survival: s, mobs }, target, {});
+    if (!mobs || (type && !SUPPORTED.has(type))) { sim.stats.used(p, id); return true; } // a kind the server does not keep: nothing spawns, nothing is spent
+    useEggOnBlock({ world: sim.world, survival: s, mobs }, target, { mobSpawned: e => { e.summonKeep = true; } }); // b69 mpfixes69: native ItemMonsterPlacer.spawnCreature ignores the natural cap; summonKeep keeps the tick's cull off the mob
     sim.stats.used(p, id); // ItemMonsterPlacer.onItemUse returns true whether or not a mob was created
     return true;
   }

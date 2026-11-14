@@ -64,6 +64,7 @@ import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
 import { setWorldSpawn } from './server-worldcmds.js'; // b68 mpworldcmds: /setworldspawn
+import { aimOriginY, serverPosY } from '../sleeper-eye.js'; // b69 mpfixes69
 import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
@@ -280,11 +281,11 @@ export class DedicatedSimulation {
   }
   // The server's ray for a dig: the cell the player's own position and look aim at (no client coordinate is trusted), or null.
   aimCell(p) {
-    const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
+    const eye = { x: p.position.x, y: aimOriginY(p.position.y, p.sleeping, PHYSICS.eye), z: p.position.z }; // b69 mpfixes69: a sleeper aims from posY (sleeper-eye.js)
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
     if (!target) return null;
-    const gate = serverClick({ kind: 'dig', player: [p.position.x, p.position.y, p.position.z], pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
+    const gate = serverClick({ kind: 'dig', player: [p.position.x, serverPosY(p.position.y, p.sleeping), p.position.z], pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
     if (!gate.accept) { p.refusal = gate.message ?? null; return null; } // a refused dig is silent natively; only the build-height text can reach the player
     return [...target.block];
   }
@@ -388,14 +389,14 @@ export class DedicatedSimulation {
     if (!place && !p.survival.creative) return false;
     // Compute the ray on the server from authoritative position/look. No client
     // block coordinate, reach, held item or collision claim is trusted.
-    const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
+    const eye = { x: p.position.x, y: aimOriginY(p.position.y, p.sleeping, PHYSICS.eye), z: p.position.z }; // b69 mpfixes69: a sleeper aims from posY (sleeper-eye.js)
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
     if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p)); /* b64: C08 with the rod */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
-    const feet = [p.position.x, p.position.y, p.position.z];
+    const feet = [p.position.x, serverPosY(p.position.y, p.sleeping), p.position.z]; // b69 mpfixes69: native posY (a lying player's is minY + 0.2)
     const gate = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent, hasMoved: !!p.moved });
     // nh.a(jo) always ends a block placement packet (any face but 255) with an S23 for the clicked cell and for the cell on the clicked face, to
     // that player only, accepted or not; a refused dig (status 0, 1, 2 over 6 blocks or at the height limit) returns silently and resends nothing.

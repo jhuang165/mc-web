@@ -1167,7 +1167,7 @@ export class Brain {
   }
   // Entity.getDistanceSqToEntity: feet to feet.
   distSq(o) {
-    const dx = this.x - o.x, dy = this.y - o.y, dz = this.z - o.z;
+    const dx = this.x - o.x, dy = this.y - (o.posY ?? o.y), dz = this.z - o.z; // b69 mpfixes69: a lying PlayerView's posY is minY + 0.2 (sleeper-eye.js)
     return dx * dx + dy * dy + dz * dz;
   }
   // EntitySkeleton.setCombatTask (yl.bZ): removes the bow and the melee task, then adds the one for the held item (priority 4, so last in the list as natively).
@@ -1308,6 +1308,8 @@ class PlayerView {
     this.armorPieces = 0;
     this.sleeping = false; // set by the host: EntityPlayer.sleepInBedAt setSize(0.2, 0.2) (bytecode-read, b67); no AI class reads isPlayerSleeping
   }
+  // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
+  get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
   update(player, survival, held) {
     this.width = f(this.sleeping ? 0.2 : 0.6);
     this.height = f(this.sleeping ? 0.2 : 1.8);
@@ -1411,7 +1413,7 @@ export class MobAI {
     let r = range;
     if (p.sneaking) r = r * 0.800000011920929;
     if (p.invisible) r = r * f(f(0.7) * Math.max(f(0.1), p.armorVisibility));
-    const dx = mob.x - p.x, dy = mob.y - p.y, dz = mob.z - p.z; // `mob` is an entity or its brain
+    const dx = mob.x - p.x, dy = mob.y - (p.posY ?? p.y), dz = mob.z - p.z; // b69 mpfixes69: posY (a sleeper's is minY + 0.2); `mob` is an entity or its brain
     return range < 0 || dx * dx + dy * dy + dz * dz < r * r ? p : null;
   }
   // Whether the box of `a` grown by (rx, ry, rz) intersects the box of `b`.
