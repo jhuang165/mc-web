@@ -133,6 +133,7 @@ export class ServerDimensions {
       if (p.dimension) w.set(q[0], q[1], q[2], FIRE, true, 0); else sim.fire.ignite(...q);
     }
     if (!p.survival.creative) p.survival.wear(id);
+    sim.stats?.used(p, id); // b64 mpstats2: ItemFlintAndSteel.onItemUse returned true (the use stat)
     return true;
   }
   // ---- joining, saving and describing ----

@@ -86,15 +86,33 @@ export class ServerStats {
   watchMobs(mobs) {
     const sim = this.sim, attacker = () => sim.achievements?.attacker ?? null;
     const death = mobs.onDeath, attack = mobs.attack, baby = mobs.spawnBaby, hit = mobs.hitPlayer;
+    // b64: EntityLivingBase.onDeath credits func_94060_bK(), the CombatTracker's best attacker (rn.c, bytecode-read): the player who did the most damage, whatever killed the mob
+    // (fire, a fall). The tracker forgets after 100 quiet ticks; recentlyHit (100, set by a player's hit) is its stand-in here. `combat` keeps each player's damage on the mob.
+    const combat = new WeakMap(), damageEntity = mobs.damageEntity;
+    if (typeof damageEntity === 'function') mobs.damageEntity = function (e, amount, name, source, ...rest) {
+      const p = source?.player ? attacker() : null, before = e.health, result = damageEntity.call(this, e, amount, name, source, ...rest);
+      if (p?.stats) {
+        let row = combat.get(e);
+        if (!row || !(e.recentlyHit > 0)) combat.set(e, row = new Map());
+        row.set(p, (row.get(p) ?? 0) + Math.max(0, before - e.health));
+      }
+      return result;
+    };
+    const credited = (e, source) => {
+      const row = combat.get(e); combat.delete(e);
+      let best = null, most = -1;
+      if (row && e.recentlyHit > 0) for (const [q, d] of row) if (d > most && sim.players.get(q.id) === q) { best = q; most = d; } // a strictly greater total replaces: the first of equals wins
+      return best ?? (source.player ? attacker() : null);
+    };
     mobs.onDeath = function (e, source = {}) {
-      const result = death.call(this, e, source), p = attacker();
-      if (source.player && p?.stats) { p.stats.increment(STAT.mobKills); p.stats.kill(e.type); }
+      const result = death.call(this, e, source), p = credited(e, source);
+      if (p?.stats) { p.stats.increment(STAT.mobKills); p.stats.kill(e.type); }
       return result;
     };
     mobs.attack = function (e, tool, ...rest) {
-      const before = e.health, landed = attack.call(this, e, tool, ...rest), p = attacker();
+      const landed = attack.call(this, e, tool, ...rest), p = attacker();
       if (landed && p?.stats) {
-        if (before > e.health) p.stats.increment(STAT.damageDealt, damageTenths(before - e.health));
+        p.stats.increment(STAT.damageDealt, damageTenths(this.lastAttackDamage)); // b64: round(f * 10) of the pre-armour damage, as the PvP path (bytecode-read yz.f)
         if (toolUses(tool)) p.stats.use(originalItem(tool)); // ItemStack.hitEntity
       }
       return landed;

@@ -21,13 +21,13 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, ops = [], simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp });
+    simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp, commandBlocks, legacyOwner }); // b64: enable-command-block, legacyOwner
   }
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   let closing = false, saving = Promise.resolve(), saveError = null;
@@ -288,7 +288,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), argument = (key, fallback) => { const at = args.indexOf(key); return at < 0 ? fallback : args[at + 1]; };
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: argument('--gamemode', 'creative'), difficulty: Number(argument('--difficulty', 2)), pvp: String(argument('--pvp', process.env.MC_WEB_PVP ?? 'true')).toLowerCase() !== 'false', /* b63 mppvp: server.properties pvp */ dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: argument('--gamemode', 'creative'), difficulty: Number(argument('--difficulty', 2)), pvp: String(argument('--pvp', process.env.MC_WEB_PVP ?? 'true')).toLowerCase() !== 'false', /* b63 mppvp: server.properties pvp */ commandBlocks: String(argument('--command-blocks', process.env.MC_WEB_COMMAND_BLOCKS ?? 'false')).toLowerCase() === 'true', /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }

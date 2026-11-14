@@ -41,7 +41,7 @@ import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shad
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
-import { FishingRenderer } from "./fishing-renderer.js";
+import { FishingRenderer, FishingPool } from "./fishing-renderer.js";
 import { ArrowRenderer } from "./arrow-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
@@ -108,6 +108,7 @@ export class VoxelScene {
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.fishingRenderer = new FishingRenderer(this.scene, this);
     this.fishingState = null;
+    this.otherFishing = []; this.fishingPool = new FishingPool(this.scene, this); // b64 mpstats2: other players' bobbers
     this.projectileList = { balls: [], particles: [] };
     this.arrows = new ArrowRenderer(this.scene, this);
     this.arrowList = [];
@@ -201,6 +202,7 @@ export class VoxelScene {
     this.dropList = [];
     this.projectiles.clear();
     this.fishingRenderer.clear();
+    this.otherFishing = []; this.fishingPool.clear();
     this.arrows.clear();
     this.arrowList = [];
     this.projectileList = { balls: [], particles: [] };
@@ -707,6 +709,7 @@ export class VoxelScene {
     this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial, particleView);
     this.arrows.update(this.arrowList, this.dropPartial);
     this.fishingRenderer.update(this.fishingState?.hook ?? null, c, this.dropPartial, { ...particleView, ...this.fishingState });
+    this.fishingPool.update(this.otherFishing, c, this.dropPartial, particleView); // b64 mpstats2
     this.particleRenderer.update(this.particles.list, this.dropPartial, particleView);
     this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, particleView);
     // EntityRenderer.setupCameraTransform: the Nausea / portal warp, a matrix applied to eye space ahead of the projection.
@@ -745,6 +748,8 @@ export class VoxelScene {
   setFishing(state) {
     this.fishingState = state;
   }
+  // b64 mpstats2: the bobbers of the other anglers of a connected game: [{ hook, angler, sneaking }].
+  setOtherFishing(list) { this.otherFishing = list; }
   // Flying and stuck arrows (see bow.js).
   setArrows(list) {
     this.arrowList = residentOnly(this.world, list);

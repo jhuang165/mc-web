@@ -189,7 +189,9 @@ import { BeaconContainer } from "./pyramid-container.js";
 import { beaconDecorationsHtml, beaconUiHtml, beaconTooltip } from "./pyramid-gui.js";
 import { slotAt, slotDrawOps, slotDrawHtml, merchantArrowDraw, anvilDecorationsHtml, refreshAnvil, enchantDecorationsHtml, refreshEnchantOptions } from "./container-widgets.js";
 import { Fishing } from "./fishing-simulation.js";
-import { FISHING_ROD } from "./fishing-content.js";
+import { FISHING_ROD, rodState } from "./fishing-content.js";
+import { liveFishStack } from "./fishing-loot.js";
+import { RemoteFishing } from "./multiplayer/client-fishing.js"; // b64 mpstats2: the server's bobbers
 import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW, BOW, canDraw } from "./bow.js";
@@ -642,7 +644,7 @@ function applyServerPlayerOp(message) {
 let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair (multiplayer/server-pvp.js pickPlayer)
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
-let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
+let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -721,6 +723,13 @@ function makeRemoteDispense() {
   });
 }
 const tntRows = () => (remoteDispense?.primed.length ? [...primed, ...remoteDispense.primed] : primed);
+// b64 mpstats2: the server's fish hooks (multiplayer/client-fishing.js): this player's own bobber with the first-person line, the others on their anglers' bodies.
+function tickRemoteFishing() {
+  const own = remoteFishing.own(multiplayer.id);
+  rodState.cast = !!own;
+  scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, angler: null } : null);
+  scene.setOtherFishing(remoteFishing.others(multiplayer.id).map(h => { const e = remotePlayers?.entries.get(h.angler); return e ? { hook: h, angler: e.body, sneaking: !!e.state?.sneak } : null; }).filter(Boolean));
+}
 function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles); }
 // Experience orbs of the server (EntityXPOrb): plain objects the orb renderer reads (x, y, z, previous position, value, colour phase).
 function syncMultiplayerOrbs(list) {
@@ -841,7 +850,7 @@ const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
-    onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onVehicles: m => remoteVehicles?.apply(m), onDisp: message => remoteDispense?.apply(message), onBlocks: message => applyMultiplayerCells(message.changes),
+    onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onVehicles: m => remoteVehicles?.apply(m), onDisp: message => (message.type === 'fishHooks' || message.type === 'fishFx' ? remoteFishing : remoteDispense)?.apply(message), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onSlot: message => { applySlots(survival.inventory, message, mpInv); renderHotbar(); }, // S2F set slot
     onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a), listener: () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }) }); }, // b63 listener: the wither spawn 1013; 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
@@ -875,6 +884,7 @@ async function joinMultiplayer(settings) {
     remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats) }; // b61
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
+    remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
@@ -3165,7 +3175,7 @@ function fishingHost() {
     targets: () => mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height),
     hit: (e) => thrownHit(mobs, e, position),
     pull: (e, [dx, dy, dz]) => { if (Number.isFinite(e.vx)) { e.vx += dx; e.vy += dy; e.vz += dz; } },
-    drop: (stack, x, y, z, motion) => items.spawn(stack, x, y, z, { motion }),
+    drop: (stack, x, y, z, motion) => { const live = liveFishStack(stack); if (live) items.spawn(live, x, y, z, { motion }); }, // b64: the roll uses native ids (fishing-loot.js)
     orb: (n) => xpOrbs.spawn(n, { x: position.x, y: position.y + 0.5, z: position.z + 0.5 }),
     wear: (n) => { if (!survival.creative) survival.wear(FISHING_ROD, n); renderHotbar(); reportBrokenTool(); saved = false; },
   };
@@ -3728,7 +3738,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); if (remoteDispense) tickRemoteDispense(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);

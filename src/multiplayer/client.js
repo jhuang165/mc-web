@@ -61,7 +61,7 @@ export class DedicatedClient {
     if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
-    if (message.type === 'dispEnts' || message.type === 'dispFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
+    if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
     if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
@@ -98,7 +98,7 @@ export class DedicatedClient {
     if (INV.has(message.type)) this.onInv(message);
     if (message.type === 'mobs') this.onMobs(message.packets);
     if (message.type === 'vehicles') this.onVehicles(message); // b61
-    if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'projCollect') this.onDisp(message); // b61
+    if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'projCollect' || message.type === 'fishHooks' || message.type === 'fishFx') this.onDisp(message); // b61 (b64: the fishing bobbers ride the same hook)
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
     if (message.type === 'stats') this.onStats(message); // b63 mpstats: S37
