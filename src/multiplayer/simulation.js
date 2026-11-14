@@ -184,7 +184,7 @@ export class DedicatedSimulation {
     this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
     this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
-    this.pistons = new ServerPistons({ sim: this, dim: 0, redstone: this.redstone, world: this.world, mobs: () => this.mobs, items: () => this.items, xp: () => this.serverItems.xp, dispense: () => this.dispense, falling: () => this.falling }); // b66 mppistons: entity pushes, S24 and the moving block (server-pistons.js)
+    this.pistons = new ServerPistons({ sim: this, dim: 0, redstone: this.redstone, world: this.world, mobs: () => this.mobs, items: () => this.items, xp: () => this.serverItems.xp, dispense: () => this.dispense, falling: () => this.falling, vehicles: () => this.vehicles }); // b66 mppistons: entity pushes, S24 and the moving block (server-pistons.js)
     this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
     this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
     this.dimensions = new ServerDimensions(this, saved.dimensions); // b61 mpnether: after every system that watches the Overworld

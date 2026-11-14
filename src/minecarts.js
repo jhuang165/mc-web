@@ -277,7 +277,7 @@ export class Minecarts {
   // World.getCollidingBoundingBoxes for a cart: block boxes (rails have none) and the boxes of
   // pushable entities (EntityMinecart.getCollisionBox returns any canBePushed entity's box).
   boxes(world, cart, b, others) {
-    const out = movingBoxes(b); // BlockPistonMoving boxes (moving-boxes.js)
+    const out = movingBoxes(b, world); // BlockPistonMoving boxes (moving-boxes.js)
     for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
       for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
         for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)

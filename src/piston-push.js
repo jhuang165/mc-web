@@ -31,6 +31,7 @@ export function bodyMove(world, e, width, height, dx, dy, dz) {
   if (tmp.bb) e.bb = tmp.bb;
   return tmp;
 }
+const PLAYER_W = 0.6, PLAYER_H = 1.8;
 const flat = (e, h, s) => [e.x - h, e.y, e.z - h, e.x + h, e.y + s, e.z + h];
 
 // The player pushed through Entity.moveEntity with its own state, the body movePlayer (player-physics.js) gives moveEntity:
@@ -92,6 +93,12 @@ function vehicleBlockers(game) {
     // Entity.setSize takes floats: the box half-width is (float) width / 2.
     const pos = p.position ?? p, w = Math.fround(p.width ?? 0.6), h = Math.fround(p.height ?? 1.8);
     out.push({ x: pos.x, y: pos.y, z: pos.z, bb: [pos.x - w / 2, pos.y, pos.z - w / 2, pos.x + w / 2, pos.y + h, pos.z + w / 2], ref: p.rider ?? null });
+  }
+  // b67 pistons4: the dedicated server has several players (game.players()); they block a pushed cart or boat like the single player does.
+  for (const q of game.players?.() ?? []) {
+    if (q.dead) continue;
+    const w = Math.fround(PLAYER_W), h = Math.fround(PLAYER_H), pos = q.position;
+    out.push({ x: pos.x, y: pos.y, z: pos.z, bb: [pos.x - w / 2, pos.y, pos.z - w / 2, pos.x + w / 2, pos.y + h, pos.z + w / 2], ref: q.mount?.rider ?? q });
   }
   const mobs = game.mobs?.();
   for (const e of mobs?.entities ?? []) {

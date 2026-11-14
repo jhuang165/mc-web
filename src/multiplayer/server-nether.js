@@ -115,7 +115,7 @@ export function buildNetherInside(sim, n, saved = {}) {
   n.mobs.mobs.ignite = (x, y, z) => n.fire.ignite(x, y, z); // a fireball sets fire where it lands
   sim.mobs = n.mobs;
   buildNetherVehicles(sim, n, saved.vehicles ?? null); // b63: after the mobs and the dispenser (a pig's seat, a dispenser's boat)
-  n.pistons = new ServerPistons({ sim, dim: n.dim ?? NETHER, redstone: n.redstone, world: n.world, mobs: () => n.mobs, items: () => n.items, xp: () => n.xp, dispense: () => n.dispense, falling: () => n.falling }); // b66 mppistons
+  n.pistons = new ServerPistons({ sim, dim: n.dim ?? NETHER, redstone: n.redstone, world: n.world, mobs: () => n.mobs, items: () => n.items, xp: () => n.xp, dispense: () => n.dispense, falling: () => n.falling, vehicles: () => n.vehicles }); // b66 mppistons
   if (saved.items) n.items.load(saved.items, s => reader.read(s), 0);
 }
 
