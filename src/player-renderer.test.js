@@ -225,7 +225,7 @@ test("the player shadow is centred on posY (eye height) + height / 2, as 1.7.10"
   assert.equal(SHADOWS.player.opaque, 1);
   assert.equal(caster.x, 5.5);
   assert.ok(Math.abs(caster.y - 11.62) < 1e-9);
-  assert.equal(caster.height, 1.8);
+  assert.equal(caster.height, Math.fround(1.8)); // b73 lead: setSize(0.6F, 1.8F) float (mobcells73)
   const floor = { get: (x, y, z) => (y < 10 ? 1 : 0), light: () => 15 }, viewer = { x: 6, y: 11.62, z: 5 };
   // Over flat ground the centre is 2.52 up, so no solid cell lies below it.
   assert.equal(shadowQuads(caster, viewer, floor).length, 0);

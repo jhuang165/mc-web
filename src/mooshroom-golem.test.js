@@ -19,8 +19,8 @@ test("facts: sizes, health, speed and eye heights", () => {
   const [r] = by("facts"), row = (n) => r.rows.find((x) => x.name === n);
   const m = row("mooshroom"), s = row("snowman");
   assert.equal(ENTITY_TYPES.mooshroom.health, m.maxHealth);
-  assert.equal(ENTITY_TYPES.mooshroom.width, m.width);
-  assert.equal(ENTITY_TYPES.mooshroom.height, m.height);
+  assert.equal(ENTITY_TYPES.mooshroom.width, f(m.width)); // b73 lead: float sizes (mobcells73)
+  assert.equal(ENTITY_TYPES.mooshroom.height, f(m.height));
   assert.equal(m.super, "wh");
   assert.equal(SNOW_GOLEM.health, s.maxHealth);
   assert.equal(SNOW_GOLEM.width, f(s.width));

@@ -33,7 +33,7 @@ const far = { x: 64, y: 0, z: 100 };
 
 test("sheep use the 1.7.10 size, health, speed and AI multipliers", () => {
   const t = ENTITY_TYPES.sheep;
-  assert.deepEqual([t.width, t.height, t.health, t.movement], [0.9, 1.3, 8, Math.fround(0.23)]);
+  assert.deepEqual([t.width, t.height, t.health, t.movement], [Math.fround(0.9), Math.fround(1.3), 8, Math.fround(0.23)]);
   assert.deepEqual(t.ai, { wander: 1, mate: 1, panic: 1.25, tempt: 1.1, follow: 1.1 });
 });
 

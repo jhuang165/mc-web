@@ -175,10 +175,10 @@ test("burning mobs draw the fire layers instead of a tint", () => {
   view.update([zombie, cow], 0, 1, 90);
   const z = view.rigs.get(zombie.id), c = view.rigs.get(cow.id);
   assert.equal(z.fire.root.visible, true);
-  assert.equal(z.fireKey, "0.6x1.8");
+  assert.equal(z.fireKey, `${Math.fround(0.6)}x${Math.fround(1.8)}`); // b73 lead: float entity sizes (mobcells73)
   assert.ok(Math.abs(z.fire.root.rotation.y + Math.PI / 2) < 1e-9);
   assert.ok(c.fire.root.children.length > 0);
-  assert.equal(c.fireKey, "0.45x0.65");
+  assert.equal(c.fireKey, `${Math.fround(0.45)}x${Math.fround(0.65)}`); // baby: the float size times 0.5
   for (const m of z.materials) assert.deepEqual(m.uniforms.overlay.value.toArray(), [0, 0, 0, 0]);
   zombie.burn = 0;
   view.update([zombie], 0, 1);
