@@ -136,7 +136,19 @@ export function pistonPushExtras(world, game) {
   // Boxes are read when the vehicle moves (an entity pushed earlier in the same call has moved).
   const loose = out.slice();
   const looseBoxes = () => loose.filter((x) => !x.entity.dead && !x.entity.removed).map((x) => ({ bb: x.now(), ref: x.entity }));
-  const others = (boat) => [...(cartList ?? []), ...(boatList ?? []), ...vehicleBlockers(game), ...(boat ? looseBoxes() : [])];
+  // b70 mpclicks: EntityBoat.getCollisionBox (xi.h, bytecode-read) returns `other.boundingBox` with no canBeCollidedWith test, so a pushed boat is also blocked by paintings, item frames
+  // and leash knots (all EntityHanging, a real box each). EntityMinecart.getCollisionBox needs canBePushed, which a hanging entity is not, so carts are not.
+  const hangBoxes = () => {
+    const boxes = [];
+    for (const e of game.hanging?.()?.entities ?? []) if (!e.dead && e.bb) boxes.push({ bb: e.bb, ref: e });
+    for (const k of game.mobs?.()?.knotList ?? []) {
+      if (k.dead) continue;
+      const c = k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 };
+      boxes.push({ bb: [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25], ref: k });
+    }
+    return boxes;
+  };
+  const others = (boat) => [...(cartList ?? []), ...(boatList ?? []), ...vehicleBlockers(game), ...(boat ? [...looseBoxes(), ...hangBoxes()] : [])];
   const vehicles = (system, list, w, h, boat) => {
     if (!system?.move || !world) return add(list, (e) => e.bb, w, h);
     for (const e of list ?? []) if (!e.dead && e.bb) out.push({ box: e.bb, entity: e, move: (dx, dy, dz) => { if (!e.dead) system.move(world, e, dx, dy, dz, others(boat)); } });
