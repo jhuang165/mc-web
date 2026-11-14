@@ -25,3 +25,5 @@ Evidence: `tools/probes/PlayerKnockbackProbe.java` run by `tools/verify-player-k
 - Self-ignited TNT random nudge and bed explosions are not modelled.
 - Thorns and other indirect sources do not knock back.
 - The `Entity.rand` draw for the resistance roll is not consumed.
+
+Batch 73 (docs sweep, 2026-11-14): Gaps list checked by code reading. Still open: no death throw (`EntityPlayer.onDeath` motion) in `src/survival.js` or `src/player-knockback.js` (grep finds neither a death motion nor a TNT/bed explosion nudge). Thorns and other indirect sources still do not knock back. The coincident-attacker nudge is ported (`player-knockback.js` 25-30, `entities.js` 741).

@@ -33,3 +33,5 @@ Seven regression groups cover that evidence, gzip/zlib composition, opaque paylo
 A separate headless Chrome smoke loads all 14 native cases and completes 28 gzip/zlib round trips. Its 14 raw outputs also pass the original loader/writer check. This is module interoperability, not gameplay save UI acceptance.
 
 Next: region headers/sectors/compression IDs and file round trips; then live chunk ownership, entity/tile instantiation, tick scheduling, lighting and scalable persistence with migrations. Full Java save compatibility remains open.
+
+Batch 73 (docs sweep, 2026-11-14): "Region files and complete Java save interchange remain open" is stale as written: `region-file.js`, `region-import.js`, `region-export.js` and `chunk-store.js` exist (see region-file.md, region-import.md). Full Java save compatibility is still not claimed (remaining-gaps.md).

@@ -119,3 +119,5 @@ visited every playing sound on any slider move; `updateVolumes` now stops only s
 Stream start delay: the JAR configures no paulscode streaming (its `SoundSystemConfig` calls are `addLibrary` and `setCodec` only) and
 the paulscode jar is not among the local libraries, so there is no concrete buffer count or size to model. Not modelled: streams
 start at once.
+
+Batch 73 (docs sweep, 2026-11-14): "Approximate or open" checked: still true by code reading. `sound-origin.js` still filters by event name, and Sounds.json choice uses `Math.random`. Added since: `public/audio/1.7.10/mob/cat/*.ogg`, piston and note clips (see ocelots.md, piston-live.md).

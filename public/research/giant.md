@@ -12,3 +12,5 @@ Approximate / gaps:
 - The AI reuses the silverfish legacy `EntityCreature` port (`creatureActionState`). The giant stops about 2.3 blocks from the player in the simulation because of its width; whether the native pathing reaches the strike range was not verified.
 - Model is the zombie rig scaled 6x with arms raised (`mob-renderer.js`); shadow size 3 from `shadows.js`.
 - Natural spawning is not added (the Giant does not spawn naturally in 1.7.10).
+
+Batch 73 (docs sweep, 2026-11-14): the AI-gap line was not re-executed. The giant is still outside the server's `SUPPORTED` set (batch 66 rules), so it only exists in single player; natural spawning is correctly absent.

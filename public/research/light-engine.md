@@ -105,3 +105,5 @@ New native evidence: `tools/probes/LightEngine3Probe.java` (`node tools/verify-l
 `MC_RESEARCH=<research dir> node tools/verify-light-client-server.mjs` writes `light-client-server.jsonl` (`lightcs-probe/`).
 
 `MC_RESEARCH=<research dir> node tools/verify-rim-light.mjs` writes `rim-light-reference.json` (`rimlight-probe/`, about 80 s); `verify-light-client-server.mjs` now also writes the two `resend64` records.
+
+Batch 73 (docs sweep, 2026-11-14): checked: the document is current to batch 30 (ring columns, rim model, `NativeLight`) and later notes (`wt30-ringlight2`, batch 31 rim). The "Not modelled (measured)" deeper-ring line is still true by code reading (`ring-light.js` `isRim` only covers the rim). The client-side missing `recheckGaps` pass (predicted from bytecode, not executed) is still open and needs a browser to judge.

@@ -31,3 +31,5 @@ The provider search order is instrumented through real native calls. The populat
 - `MapGenStructureData`/NBT start persistence and reload are not implemented here.
 - Block callbacks, lighting, update physics, structure entities and combined structure write conflicts are outside this orchestration package.
 - The native `HashMap` value order reflects the recorded JDK 19 runtime; Java 6/7 HashMap iteration may differ.
+
+Batch 73 (docs sweep, 2026-11-14): "`MapGenStructureData` start persistence is not implemented here" is stale for the game: `structure-nbt.js` 303-314 encodes `data/<Name>.dat`, `structure-data.js` saves and loads starts, and region import/export carry them. This doc's adapter is still separate from live generation. Not done: the complete native four-structure write replay named above (no newer probe was found).

@@ -54,3 +54,5 @@ includes 18.
 - The bonus chest still has standing torches (no `onBlockAdded` orientation) and is placed on first open.
 
 Batch 72 (2026-11-14): `tools/find-structure-seeds.mjs` and the generated `structure-seeds.md` now use the native spawn walk (`solveNativeSpawn`, generation 18 rules) for the origin and the spawn column instead of origin + 64 (`--approx-spawn` keeps the old approximation for generations 13 to 17).
+
+Batch 73 (docs sweep, 2026-11-14): "Gaps" checked. Still true by code reading: `bonus-chest.js` 58 places torches with metadata 0 (`w.put(..., TORCH, 0)`), so no `onBlockAdded` orientation, and the chest is placed on first open. The line about `tools/find-structure-seeds.mjs` is already updated by the batch 72 line below.

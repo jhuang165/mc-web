@@ -82,3 +82,5 @@ The original furnace increments its cooking counter to 200 before producing outp
 [Reference results and exact class SHA-256](foodstats-reference.json) are included as data, with no original class or source in the published app. These results validate only the isolated scenarios; they do not establish full game parity.
 
 `node tools/extract-registry.mjs` extracts all 171 base block ID/name registrations from the original Block registration bytecode. [Registry data](block-registry-1.7.10.json) supports a concrete content backlog. Metadata variants and block-specific behavior are not covered by that inventory.
+
+Batch 73 (docs sweep, 2026-11-14): the hoe and gold-tool sentence is stale. `src/survival.js` 99 registers Wooden, Stone, Iron, Diamond and Golden hoes, and `recipe-parity-catalogue.md` lists the hoe and golden tool recipes. The "Not available" list in the 1.7.10 paragraph above is the first-release state; see parity.md and remaining-gaps.md for the current list.

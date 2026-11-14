@@ -45,3 +45,5 @@ Target: Minecraft Java 1.7.10 (client sha1 e80d9b3b...). Not full parity; see th
 ## Language screen and bidi flag (batch 29 text3)
 
 Read from the unchanged jar's bytecode (`javap -c`): `bao` (Minecraft startup) and `bdk` (GuiLanguage, after selecting a language) both call the FontRenderer's bidi setter with `brr.b()` (the language manager's current language, `brq.b()` its bidirectional flag), and `bsf` loads the flag from the language metadata (`bidirectional` in `pack.mcmeta`/the built-in table: ar_SA and he_IL true, every other 1.7.10 language false). Driven once in muted headless Chrome (`artifacts/b29-text3/check.mjs`, screenshots `language-*.png`): English (US) font.bidi false, ar_SA true, he_IL true, back to en_US false.
+
+Batch 73 (docs sweep, 2026-11-14): checked: `src/lang-hooks.js` applies a selected language to menus, commands, achievements and death messages; the bidi flag line stays bytecode-read. No stale claim found.

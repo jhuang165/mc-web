@@ -33,3 +33,5 @@ Adult cows follow held wheat. Feeding two ready adults consumes one wheat each a
 Tests cover native matrix amplitudes/equip lowering, separate arm paths, extruded sprite dimensions, level boundaries, death rewards, orb conservation/pickup/expiration, original-media hashes, feeding prerequisites/resource consumption, breeding uniqueness, and calf/cooldown persistence. Local browser checks exercise the menu, hand/item selection, XP pickup, inventory, feeding, death and respawn.
 
 Version 0.6 corrects the earlier container placements and unifies containers/HUD under integer GUI scaling. See [mining and layout](mining-and-layout.md); the earlier fixed scale-three layout is superseded.
+
+Batch 73 (docs sweep, 2026-11-14): first-release text. The "inventory remains aggregate storage rather than Java's 36-slot/cursor model" sentence is stale: `container-widgets.js` and `inventory.js` carry a cursor stack and `gui.js` uses the native slot and cursor model, and equip, eating and idle item animation follow the native transform notes (see `third-person.md`, `models.md`). Browser-only: exact look of the item-in-hand motion.
