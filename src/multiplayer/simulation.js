@@ -63,6 +63,7 @@ import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerTrade, installTrade } from './server-trade.js'; // b66 mptrade: villager trading windows
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
+import { ObjectTracker } from './server-object-tracker.js'; // b71 mptrackers71: per-player item and orb tracking
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
@@ -192,6 +193,7 @@ export class DedicatedSimulation {
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
     loadVillages(this.mobs, saved, this.world, MOB_LIMIT, options.legacyOwner ?? saved.legacyOwner ?? null); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
+    this.objectTracker = new ObjectTracker(this); // b71 mptrackers71: items (64) and orbs (160) per player; server.js cuts each tick message with it
     this.trade = new ServerTrade(this); // b66 mptrade
     this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)

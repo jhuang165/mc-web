@@ -163,7 +163,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   // b61 mpnether: `alt` maps a dimension to the tick message for the players in it (server-dimensions.js); everyone else gets `message`.
   const broadcast = (message, alt) => {
     const plain = new Map(), expanded = m => m.chunks ? (plain.has(m) ? plain.get(m) : (plain.set(m, expandChunks(m)), plain.get(m))) : m;
-    for (const [pid, ws] of sockets) { const m = alt?.[simulation.players.get(pid)?.dimension | 0] ?? message; send(ws, ws.chunks ? m : expanded(m)); }
+    for (const [pid, ws] of sockets) { const dim = simulation.players.get(pid)?.dimension | 0, m = alt?.[dim] ?? message; send(ws, simulation.objectTracker.messageFor(pid, ws.chunks ? m : expanded(m), dim, m)); /* b71 mptrackers71: items and orbs this player tracks */ }
   };
   // Chat, commands, death and achievement broadcasts (src/server-broadcast.js); `ops` names the players who may run commands.
   installServerRules(simulation); // /gamerule values reach the fire, griefing and tick readers of this process
@@ -221,7 +221,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           }
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
-          send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
+          send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.objectTracker.snapshot(id, simulation.snapshot(id)) /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)) });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
           social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
