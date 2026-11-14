@@ -31,7 +31,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2, footstep: 3 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime", "snowshovel", "cloud", "footstep"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "witchMagic", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime", "snowshovel", "cloud", "footstep"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -143,8 +143,9 @@ export class Fx {
       case "mobSpell":
       case "mobSpellAmbient":
       case "instantSpell": // bma.b: the same EntitySpellParticleFX with setBaseSpellTextureIndex(144)
+      case "witchMagic": // bma.b: as instantSpell, then setRBGColorF(1 * f, 0, 1 * f) with f = worldRandom.nextFloat() * 0.5 + 0.35 (purple)
       case "spell": {
-        const colour = name !== "spell" && name !== "instantSpell";
+        const colour = name !== "spell" && name !== "instantSpell" && name !== "witchMagic";
         p = this.base("spell", x, y, z, colour ? 0 : vx, colour ? 0 : vy, colour ? 0 : vz);
         p.my *= f(0.2);
         if ((colour || vx === 0) && (colour || vz === 0)) {
@@ -153,7 +154,8 @@ export class Fx {
         }
         p.scale = f(p.scale * f(0.75));
         p.max = life(8, r);
-        p.baseTex = name === "instantSpell" ? 144 : 128;
+        p.baseTex = name === "instantSpell" || name === "witchMagic" ? 144 : 128;
+        if (name === "witchMagic") { const c = f(f(this.worldRandom.nextFloat() * f(0.5)) + f(0.35)); p.r = c; p.g = f(0); p.b = c; }
         if (name === "mobSpellAmbient") p.a = f(0.15);
         if (colour) {
           p.r = f(vx);

@@ -4682,6 +4682,9 @@ function animate(now) {
       yawDeg: eye.yaw, pitchDeg: eye.pitch, tick: elapsed * 20, aspect: innerWidth / innerHeight,
     });
   }
+  // GuiIngame.renderVignette (vignette.js): fancy graphics only, with the HUD (not under F1), smoothed brightness of the player's cell.
+  if (screenOverlays && ["playing", "inventory", "paused"].includes(screen) && !document.body.classList.contains("hide-gui"))
+    screenOverlays.renderVignette(options.graphics !== false, playerBrightness((x, y, z) => scene.light.level(x, y, z, scene.subtracted), BRIGHTNESS, position.x, position.y, position.z, 1.8, !!scene.light));
   if (screen !== "home") scene.endFrame(); // post shaders / anaglyph merge, after the hand
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125

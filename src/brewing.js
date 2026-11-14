@@ -137,7 +137,15 @@ export const bubbleHeight = (brewTime) => (brewTime > 0 ? BUBBLE_HEIGHTS[Math.tr
 // BlockBrewingStand.addCollisionBoxesToList: the 2/16 base, then the centre post 7/16-9/16 up to 14/16. The selection box is approximated
 // as the 14/16 high cell (the original keeps whatever bounds the last collision call set).
 export const BREWING_BOXES = Object.freeze([[0, 0, 0, 1, 0.125, 1], [0.4375, 0, 0.4375, 0.5625, 0.875, 0.5625]]);
-export const BREWING_SELECTION = Object.freeze([0, 0, 0, 1, 0.875, 1]);
+// BlockBrewingStand [ajq] never sets its bounds except inside addCollisionBoxesToList (pole 0.4375..0.5625 x 0..0.875, then g() = the 0.125 base
+// slab, the LAST write), and the shared Block keeps them. Executed (tools/probes/BrewingBoundsProbe.java -> brewing-bounds-reference.json):
+// before any collision pass the selection / collision box query returns the constructor's full cube; after the first pass, the base slab. One
+// Block instance serves every stand, so one pass anywhere flips every selection box. The pole is only a collision box, never the selection.
+export const BREWING_SELECTION_FRESH = Object.freeze([0, 0, 0, 1, 1, 1]);
+export const BREWING_SELECTION_AFTER_PASS = Object.freeze([0, 0, 0, 1, 0.125, 1]);
+export const brewingShared = { passed: false };
+export const noteBrewingCollisionPass = () => { brewingShared.passed = true; }; // addCollisionBoxesToList ran on a stand cell
+export const brewingSelection = () => [...(brewingShared.passed ? BREWING_SELECTION_AFTER_PASS : BREWING_SELECTION_FRESH)];
 export const brewingItemBlock = (itemId) => (itemId === ITEM_BREWING_STAND ? BREWING_STAND : 0);
 
 // ---- runtime store: survival.brewing["x,y,z"] = { items: [4 stacks|null], brewTime } is plain data (saved, chunk-resident, exported);

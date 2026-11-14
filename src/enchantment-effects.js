@@ -17,6 +17,7 @@ import { miningState } from './mining.js';
 import { ITEMS, MATERIALS } from './survival.js';
 import { fromOriginal, toOriginal } from './block-registry.js';
 import { itemFromOriginal } from './region-import.js';
+import { itemOfBlock2 } from './redstone-blocks-2.js';
 
 const SELF = (id) => ({ id, damage: 0 });
 const META = (id, meta) => ({ id, damage: meta });
@@ -30,6 +31,7 @@ const SILK = {
   18: (id, meta) => META(id, meta & 3), 161: (id, meta) => META(id, meta & 3),
   20: SELF, 130: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
   153: SELF, 155: (id, meta) => META(id, meta === 3 || meta === 4 ? 2 : meta), // BlockOre / BlockQuartz.createStackedBlock
+  89: SELF, // BlockGlowstone: canSilkHarvest is renderAsNormalCube and no tile entity (aji.E, bytecode-read)
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
   125: (id, meta) => META(126, meta & 7), // BlockWoodSlab double: createStackedBlock is one wood slab (block-audit-reference.json silk row; normal break drops two)
   101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
@@ -74,6 +76,8 @@ const RULES = {
   100: { item: () => 40, quantity: (rand) => Math.max(0, rand.nextInt(10) - 7) },
   30: { item: () => 287 },
   153: { item: () => 406, quantity: oreQuantity(ONE), xp: (rand) => range(rand, 2, 5) }, // BlockOre: nether quartz ore
+  // BlockGlowstone (alg, bytecode-read): quantityDropped 2 + nextInt(3), quantityDroppedWithBonus adds nextInt(fortune + 1) and clamps to 1..4 (qh.a).
+  89: { item: () => 348, quantity: (rand, fortune) => Math.min(4, Math.max(1, 2 + rand.nextInt(3) + rand.nextInt(fortune + 1))) },
   31: { item: (meta, rand) => (rand.nextInt(8) === 0 ? 295 : null), quantity: (rand, fortune) => 1 + rand.nextInt(fortune * 2 + 1) },
 };
 RULES[74] = RULES[73];
@@ -155,7 +159,7 @@ export function enchantedBreakDrops(block, meta, held, rand) {
   if (!r) return null;
   const drops = [];
   for (const d of r.drops) {
-    if (silkTaken) { const sb = fromOriginal(d.id, d.damage).id; drops.push({ id: blockItemId(sb), count: d.count, ...(sb === 140 || sb === 141 ? { damage: d.damage } : {}) }); }
+    if (silkTaken) { const sb = fromOriginal(d.id, d.damage).id; drops.push({ id: itemOfBlock2(sb) || blockItemId(sb), count: d.count, ...(sb === 140 || sb === 141 ? { damage: d.damage } : {}) }); }
     else {
       const item = itemFromOriginal(d.id, d.damage);
       if (!item) continue;
