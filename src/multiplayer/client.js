@@ -63,7 +63,7 @@ export class DedicatedClient {
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
-    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'aux' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'useDone' || message.type === 'aux' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
     message = expandChunks(message);
     const merged = this.pending ??= { cells: new Map(), tiles: new Map() };
@@ -93,6 +93,7 @@ export class DedicatedClient {
     if (message.type === 'health') this.onHealth(message);
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') this.onHealthFx(message);
     if (message.type === 'slot') this.onSlot(message);
+    if (message.type === 'useDone') this.onUseDone?.(message); // b65 lead: S19 status 9
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);
     if (INV.has(message.type)) this.onInv(message);

@@ -328,6 +328,7 @@ export class DedicatedSimulation {
     // runs updateItemUse(stack, 16) and the item's onEaten (the burp), then clears the item in use.
     if (use.ticks <= 25 && use.ticks % 4 === 0) this.useSound(p, use, 5);
     if (--use.ticks <= 0) {
+      (p.itemsOut ??= []).push({ type: 'useDone', id: use.id }); // b65 lead: EntityPlayerMP.onItemUseFinish sends S19 status 9 to the eater first (mw.p bytecode), ahead of the S2F of the eaten stack
       this.useSound(p, use, 16);
       if (!isDrinkUse(use.id)) this.soundsOut.push({ name: 'random.burp', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: Math.fround(Math.fround(this.soundRand.nextFloat() * Math.fround(0.1)) + Math.fround(0.9)), except: null });
       if (!isDrinkUse(use.id)) this.serverSurvival.finishEating(p, use.id); else this.serverSurvival.finishDrinking(p); // b63: finishDrinking also does ItemPotion.onEaten // b60: milk uses a bucket and clears the effects

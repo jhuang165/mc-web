@@ -24,3 +24,12 @@ export function predictUse(held, survival) {
 export function slotReplacesUse(message, current) {
   return (message?.slots ?? []).some(s => s?.slot === current);
 }
+// b65 lead: S19 status 9 (EntityPlayerMP.onItemUseFinish sends it to the eater, mw.p bytecode) -> EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish on the client:
+// updateItemUse(stack, 16) (food: 16 crumbs and random.eat; drink: one random.drink), then clearItemInUse. ItemFood.onEaten's client copy only shrinks a stack the S2F
+// that follows replaces, and its burp is World.playSoundAtEntity, silent on a client (the server's random.burp reaches the eater). Returns the use state left: null.
+export function finishPredictedUse(use, { foodEffects = () => {}, sound = () => {}, random = Math.random } = {}) {
+  if (!use || use.bow || use.block) return use;
+  if (use.drink) sound('random.drink', { volume: 0.5, pitch: random() * 0.1 + 0.9 });
+  else foodEffects(use.id, 16);
+  return null;
+}

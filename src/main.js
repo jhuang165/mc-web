@@ -243,7 +243,7 @@ import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin,
 import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
-import { predictUse, slotReplacesUse } from "./multiplayer/client-use-predict.js";
+import { predictUse, slotReplacesUse, finishPredictedUse } from "./multiplayer/client-use-predict.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { createServerDig } from "./server-dig.js";
@@ -867,6 +867,7 @@ async function joinMultiplayer(settings) {
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
+  client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
   try {
