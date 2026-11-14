@@ -628,15 +628,16 @@ export function createCommandRunner(host) {
   }
   // ServerCommandManager.getPossibleCommands + each command's addTabCompletionOptions (text before the cursor, with its "/").
   function complete(before) {
-    if (!before.startsWith("/")) return matchLast(before.split(" "), [name()]);
+    const players = host.playerNames ? host.playerNames() : [name()]; // b69 mptabcomplete: the server's getAllUsernames (every connected player)
+    if (!before.startsWith("/")) return matchLast(before.split(" "), players);
     const line = before.slice(1), parts = line.split(" ");
     if (parts.length === 1) return REGISTERED.filter((c) => allowed(c) && startsWithIgnoreCase(parts[0], c.name)).map((c) => "/" + c.name).sort();
     const command = BY_NAME.get(parts[0]);
-    if (!command || !allowed(command)) return [];
+    if (!command || (!host.tabUnchecked && !allowed(command))) return []; // b69: CommandHandler.getPossibleCommands checks no permission for arguments
     const args = parts.slice(1), index = args.length - 1;
     let options = [];
     const n = command.name;
-    if (PLAYER_ARG[n]?.includes(index)) options = [name()];
+    if (PLAYER_ARG[n]?.includes(index)) options = players;
     if (n === "gamemode" && index === 0 || n === "defaultgamemode" && index === 0) options = GAME_MODES;
     else if (n === "time" && index === 0) options = ["set", "add"];
     else if (n === "time" && index === 1 && args[0] === "set") options = ["day", "night"];
@@ -649,8 +650,8 @@ export function createCommandRunner(host) {
     else if (n === "summon" && index === 0) options = Object.keys(SUMMONABLE);
     else if (n === "help" && index === 0) options = REGISTERED.filter((c) => allowed(c)).map((c) => c.name);
     else if (n === "effect" && index === 1) options = ["clear"];
-    else if (extra.handlers[n]) options = extra.complete(n, index, args, [name()]);
-    else if (n === "scoreboard") options = scoreboardCommands.complete(n, index, args, [name()]);
+    else if (extra.handlers[n]) options = extra.complete(n, index, args, players);
+    else if (n === "scoreboard") options = scoreboardCommands.complete(n, index, args, players);
     return matchLast(args, options);
   }
   return { run, complete, handlers };

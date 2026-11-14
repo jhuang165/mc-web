@@ -113,7 +113,7 @@ const ICONS = "url('/media/1.7.10/gui/icons.png') no-repeat";
 // GuiMultiplayer. `list` is a ServerList; `ping(url)` -> Promise<status> (client-ping.pingServer); `show(screen)` opens another screen;
 // `join(url, entry)` leaves for the sign-in and join screen; `back()` returns to the main menu.
 export function serverListScreen({ list, ping = pingServer, show, join, back }) {
-  let selected = -1, scroll = 0, statuses = [], buttons = null, started = false, listUi = null, self = null;
+  let selected = -1, scroll = 0, statuses = [], buttons = null, started = false, listUi = null, self = null, pingSprites = [], animTimer = null; // b69 mptabcomplete: pingSprites animate each frame
   const refresh = (g) => {
     statuses = list.entries.map(() => newStatus());
     list.entries.forEach((e, i) => { const st = statuses[i]; ping(addressUrl(e.ip)).then(r => { if (statuses[i] === st) { statuses[i] = r; g?.screen === self && g.build(); } }); });
@@ -133,11 +133,21 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
       g.button({ x: half(w) + 5, y: Math.trunc(h / 6) + 96, w: 150, h: 20 }, tr('gui.cancel'), reopen);
     } });
   };
+  // ServerListEntryNormal.func_148279_a redraws every frame: while a server is pinging its sprite follows Minecraft.getSystemTime (client-ping.pingAnimationRow).
+  const stopAnimation = () => { if (animTimer !== null) clearInterval(animTimer); animTimer = null; };
+  const startAnimation = () => { if (animTimer === null && typeof setInterval === 'function') { animTimer = setInterval(animate, 50); animTimer.unref?.(); } };
+  const animate = () => {
+    pingSprites = pingSprites.filter((p) => statuses[p.index] === p.st && rowState(p.st).pinging && p.sprite.isConnected !== false);
+    if (!pingSprites.length) return stopAnimation();
+    const t = Date.now();
+    for (const p of pingSprites) p.sprite.style.backgroundPosition = `calc(${-10}*var(--u)) calc(${-(176 + 8 * pingAnimationRow(t, p.index))}*var(--u))`;
+  };
   self = {
     id: 'server-list',
     escape: back,
     init(g, w, h) {
       self.g = g;
+      stopAnimation(); pingSprites = [];
       if (!started) { started = true; refresh(g); }
       const L = serverListLayout(w, h);
       listUi = g.slotList(L.list, {
@@ -149,6 +159,7 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
           const rt = r.rightText; if (rt) g.text(rt, x + rowW - textWidth(rt) - 15 - 2, y + 1, { color: COLOR.gray, parent });
           const sprite = g.image('', x + rowW - 15, y, 10, 8, parent), row = r.pinging ? pingAnimationRow(Date.now(), i) : r.row;
           sprite.style.cssText += `;background:${ICONS};background-size:calc(256*var(--u)) calc(256*var(--u));background-position:calc(${-(r.pinging ? 10 : 0)}*var(--u)) calc(${-(176 + 8 * row)}*var(--u));image-rendering:pixelated`;
+          if (r.pinging) { pingSprites.push({ sprite, index: i, st }); startAnimation(); } // also when scrolling re-creates the rows
           sprite.title = r.hover ? (Array.isArray(r.hover) ? r.hover.join('\n') : r.hover) : r.label;
           if (st.icon) { const icon = g.image('', x, y, 32, 32, parent); icon.style.cssText += `;background:url(${st.icon}) no-repeat;background-size:100% 100%;image-rendering:pixelated`; }
         },
@@ -167,7 +178,7 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
       };
       for (const k of ['edit', 'delete', 'select']) buttons[k].enable(selected >= 0);
     },
-    close() { scroll = listUi?.scroll ?? 0; },
+    close() { scroll = listUi?.scroll ?? 0; stopAnimation(); },
   };
   return self;
 }

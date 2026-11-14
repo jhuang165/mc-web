@@ -12,6 +12,7 @@ import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial } from '../src/server-broadcast.js';
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
+import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
 import { installServerRules } from '../src/servercommands-b59.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -236,6 +237,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'windowInventory') simulation.windowInventory(id, m); // the client's 36 slots after S2D
         else if (m.type === 'stationEnchant' || m.type === 'stationItemName') simulation.station(id, m); // b60: C11 EnchantItem, MC|ItemName
         else if (m.type === 'confirmTransaction') simulation.confirmTransaction(id, m); // C0F
+        else if (m.type === 'tabReq' && typeof m.text === 'string') send(ws, { type: 'tabReply', options: socialTabComplete(social, id, m.text) }); // b69 mptabcomplete: C14 -> S3A
         else if (m.type === 'chat' && typeof m.text === 'string') {
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
