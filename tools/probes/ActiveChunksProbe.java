@@ -33,6 +33,10 @@ public class ActiveChunksProbe {
     System.out.println(run("crowd", 10, new int[][][]{ {{0, 0}, {1, 0}, {0, 1}, {1, 1}, {2, 2}, {3, 1}, {5, 5}, {6, 4}, {-2, 3}, {-3, -3}}, {{0, 0}}, {{7, 7}, {8, 8}, {9, 6}} }));
     System.out.println(run("negcluster", 10, new int[][][]{ {{-1, -1}, {-2, -3}, {-5, -2}, {-4, -6}, {-3, -1}} }));
     System.out.println(run("radius7", 7, new int[][][]{ {{2, 2}, {5, 4}, {8, 3}, {3, 9}} }));
+    // b69 spfarming: single player (one player, the integrated server view distance = the render distance option, 2..16), walking over chunk borders.
+    System.out.println(run("sp2", 2, new int[][][]{ {{0, 0}}, {{1, 0}}, {{1, 1}}, {{0, 1}}, {{-1, -1}} }));
+    System.out.println(run("sp5", 5, new int[][][]{ {{3, -2}}, {{4, -2}}, {{4, -3}}, {{5, -3}}, {{-1, 0}}, {{-1, -1}} }));
+    System.out.println(run("sp16", 16, new int[][][]{ {{0, 0}}, {{1, 0}}, {{1, 1}}, {{-2, 3}}, {{-3, 3}} }));
     System.out.println(run("long", 10, new int[][][]{ {{0, 0}, {3, 4}}, {{0, 0}, {3, 4}, {6, 1}}, {{10, 10}, {11, 12}, {13, 9}, {9, 14}}, {{2, 2}} }));
   }
 }

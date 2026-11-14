@@ -1,4 +1,4 @@
-import {hash,isCrop,cropAge,cropKind,CARROTS,POTATOES,HEIGHT} from './world.js';
+import {hash,COCOA,isCrop,cropAge,cropKind,CARROTS,POTATOES,HEIGHT} from './world.js';
 import {plantedBlock,rootDrops} from './crops.js';
 import {isStem,stemTick,stemCanFertilize,stemFertilized} from './stems-cake.js';
 import {JavaRandom} from './java-random.js';
@@ -38,8 +38,13 @@ export class Farming {
   grow(x,y,z,daylight,random=Math.random,nextInt=null){const b=this.world.get(x,y,z);if(isStem(b))return this.growStem(x,y,z,daylight);const age=cropAge(b,this.world.getMeta(x,y,z));if(!isCrop(b)||age===7||(this.lightLevel?this.lightLevel(x,y+1,z):this.light(x,y,z,daylight))<9)return false;const denominator=Math.floor(25/this.growthRate(x,y,z))+1;if((nextInt?nextInt(denominator):Math.floor(random()*denominator))!==0)return false;this.setAge(x,y,z,b,age+1);return true;}
  // b68 chunkscan2: the dedicated server's route. BlockFarmland.updateTick, BlockCrops.updateTick and BlockStem.updateTick are RANDOM block ticks (func_149653_t / tickRandomly true), so the
  // server sets `sharedRandomTicks` and Weather.tickChunk's loop over the active chunk set calls randomTick below with the world's java.util.Random; tick() then only drains the changes.
- // Single player keeps the hash scan in tick() (same 3/4096 mean rate, not the native draw order).
- randomTick(x,y,z,b=this.world.get(x,y,z),random=this.random){if(b===29||b===30){this.observe(x,y,z);this.soilTick(x,y,z);return true;}if(!isCrop(b)&&!isStem(b))return false;this.grow(x,y,z,0,null,random?n=>random.nextInt(n):null);return true;}
+ // b69 spfarming: single player now sets sharedRandomTicks too (main.js); the hash scan in tick() stays only for code that does not (tests, standalone Farming).
+ // b69 spfarming: BlockCocoa.updateTick (bytecode-read, ajz.a): a cocoa pod whose jungle log (block 4, type 3, in the direction of its meta & 3) is gone drops and is removed; otherwise one
+ // world nextInt(5) == 0 ages it by one stage up to 2 (flag 2). Neither the port nor the server grew cocoa before. `drop(x, y, z, stacks)` is optional.
+ cocoaTick(x,y,z,random=this.random){const w=this.world,m=w.getMeta(x,y,z),dir=m&3,px=x+[0,-1,0,1][dir],pz=z+[1,0,-1,0][dir],age=(m&12)>>2;
+  if(!(w.get(px,y,pz)===4&&(w.getMeta(px,y,pz)&3)===3)){this.change(x,y,z,0);this.drop?.(x,y,z,[{id:351,count:age>=2?3:1,damage:3}]);return true;}
+  if((random?random.nextInt(5):Math.floor(Math.random()*5))===0&&age<2)this.change(x,y,z,COCOA,((age+1)<<2)|dir);return true;}
+ randomTick(x,y,z,b=this.world.get(x,y,z),random=this.random){if(b===COCOA)return this.cocoaTick(x,y,z,random);if(b===29||b===30){this.observe(x,y,z);this.soilTick(x,y,z);return true;}if(!isCrop(b)&&!isStem(b))return false;this.grow(x,y,z,0,null,random?n=>random.nextInt(n):null);return true;}
  tick(time,daylight){if(this.sharedRandomTicks)return this.drain();for(const key of this.fields.keys()){const[x,y,z]=key.split(',').map(Number);if(this.world.streaming&&!ringRandomActive(this.world,x,z))continue;if(hash(x+time*13,z,this.world.numericSeed+91)<RANDOM_TICK_CHANCE)this.soilTick(x,y,z);if(hash(x+time*29,z,this.world.numericSeed+449)<RANDOM_TICK_CHANCE)this.grow(x,y+1,z,daylight,()=>hash(x+time,z,780));}return this.drain();}
  drain(){const out=[...this.updates.values()];this.updates.clear();return out;}
  serialize(){return[...this.fields];}
