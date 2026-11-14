@@ -20,7 +20,7 @@
 - Hover phase on the client is random per copy (as the native constructor).
 
 ## Verification
-- `node --test src/mpcadence72-b72.test.js`: 10 pass. `mptrackers71-b71`: 10 pass. `mpitems-b59` 10, `multiplayer` 5, `mpvehicles-b61` 10 pass. `node --check` on touched files. Full npm test not run (batch rule). No browser checks.
+- `node --test src/mpcadence72-b72.test.js`: 10 pass. `mptrackers71-b71`: 10 pass. `mpitems-b59` 10, `multiplayer` 5, `mpvehicles-b61` 10, `mpnether-b61` 7 pass. `mpnether3-b63` did not finish (machine load; stopped). `npm run build`: ok. `node --check` on touched files. Full npm test not run (batch rule). No browser checks.
 
 ## Follow-ups
 - Only a browser would show items and orbs popping in, the late orbs, and item landing at the 20-tick corrections.
