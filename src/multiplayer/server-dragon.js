@@ -11,11 +11,14 @@
 import { ENDER_DRAGON, spawnDragonIfAbsent, dragonHit } from '../dragon-mobs.js';
 import { ENDER_CRYSTAL } from '../ender-crystal-mobs.js';
 import { PHYSICS } from '../world.js';
-import { END_OFFSET } from './client-dimensions.js';
+import { END_OFFSET } from './client-dimensions.js'; // the 0.93.0 window's offset: END_CENTRE below stays its centre
 
 export const DRAGON_KINDS = [ENDER_DRAGON, ENDER_CRYSTAL];
-const SIZE = 128, PORTAL_MARGIN = 6; // the exit portal is 9 wide (radius 4): keep its disc inside the window
-export const END_CENTRE = Object.freeze({ x: END_OFFSET.x, z: END_OFFSET.z }); // the native origin (0, 0) in the window
+const PORTAL_MARGIN = 6; // the exit portal is 9 wide (radius 4): keep its disc inside the window
+export const END_CENTRE = Object.freeze({ x: END_OFFSET.x, z: END_OFFSET.z }); // the native origin (0, 0) in the 0.93.0 window
+// b65 mpendwindow: the native origin (0, 0) in a world's own window, and the chunk window it holds (native chunk coordinates).
+export const centreOf = world => ({ x: -world.originX, z: -world.originZ });
+const windowOf = world => ({ cx0: Math.floor(world.originX / 16), cx1: Math.floor((world.size - 1 + world.originX) / 16), cz0: Math.floor(world.originZ / 16), cz1: Math.floor((world.size - 1 + world.originZ) / 16) });
 
 // Called by ServerMobs' constructor, once per dimension's instance.
 export function installServerDragon(sm) {
@@ -39,23 +42,21 @@ export function installServerDragon(sm) {
   };
 }
 
-// The chunk window of the End replica (native chunk coordinates).
-const WINDOW = Object.freeze({ cx0: Math.floor(-END_OFFSET.x / 16), cx1: Math.floor((SIZE - 1 - END_OFFSET.x) / 16), cz0: Math.floor(-END_OFFSET.z / 16), cz1: Math.floor((SIZE - 1 - END_OFFSET.z) / 16) });
 
 // The End's dragon part. `n` is the End's state ({ world, mobs: ServerMobs }); `source` the DimensionWorld the terrain came from; `fresh` is true for an End nobody saved yet.
 export function setupEnd(n, source, fresh) {
-  const mobs = n.mobs.mobs;
-  mobs.dragonCenter = END_CENTRE;
-  mobs.dragonPortalAt = (x, z) => [Math.max(PORTAL_MARGIN, Math.min(SIZE - 1 - PORTAL_MARGIN, x)), Math.max(PORTAL_MARGIN, Math.min(SIZE - 1 - PORTAL_MARGIN, z))];
+  const mobs = n.mobs.mobs, world = n.world, size = world.size, centre = centreOf(world);
+  mobs.dragonCenter = centre;
+  mobs.dragonPortalAt = (x, z) => [Math.max(PORTAL_MARGIN, Math.min(size - 1 - PORTAL_MARGIN, x)), Math.max(PORTAL_MARGIN, Math.min(size - 1 - PORTAL_MARGIN, z))];
   if (!fresh) return;
-  for (const c of source.endCrystals(10, WINDOW)) {
-    const x = c.x + END_OFFSET.x, z = c.z + END_OFFSET.z;
-    if (x < 1 || x >= SIZE - 1 || z < 1 || z >= SIZE - 1) continue; // a crystal on the cut-off edge has no pillar here
+  for (const c of source.endCrystals(10, windowOf(world))) {
+    const x = c.x - world.originX, z = c.z - world.originZ;
+    if (x < 1 || x >= size - 1 || z < 1 || z >= size - 1) continue; // a crystal on the cut-off edge has no pillar here
     const e = mobs.create(ENDER_CRYSTAL, x, c.y, z);
     e.yaw = (-c.yaw * Math.PI) / 180;
     mobs.entities.push(e);
   }
-  spawnDragonIfAbsent(n.world, mobs, Math.random, END_CENTRE);
+  spawnDragonIfAbsent(n.world, mobs, Math.random, centre);
 }
 
 // What the End saves about the fight: a dragon (even one dying) is 'alive', none is 'dead' (its exit portal and egg are edits of the world).

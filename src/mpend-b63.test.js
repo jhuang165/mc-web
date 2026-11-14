@@ -5,7 +5,8 @@ import { World } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { restoreReplica } from './multiplayer/client.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
-import { END_OFFSET } from './multiplayer/client-dimensions.js';
+import { END_WINDOWS } from './multiplayer/client-dimensions.js';
+const END_OFFSET = END_WINDOWS.full; // b65 mpendwindow: a new End is the 256 window
 import { buildExitPortal } from './multiplayer/server-end.js';
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -64,7 +65,7 @@ test('an end portal sends the player to the End platform (theEnd); the exit port
   assert.equal(a.world, s.dimensions.end.n.world);
   assert.ok(a.world.isEnd && a.world.hasNoSky && !a.world.isHell);
   const r = a.dimOut.find(m => m.type === 'dimRespawn');
-  assert.ok(r && r.dimension === 1 && r.world.dimension === 1 && r.world.columns.length === 64);
+  assert.ok(r && r.dimension === 1 && r.world.dimension === 1 && r.world.columns.length === 256);
   const rep = restoreReplica(r.world);
   assert.equal(rep.dimension, 1);
   assert.equal(a.position.x, 100 + END_OFFSET.x); assert.equal(a.position.z, END_OFFSET.z);
@@ -102,7 +103,7 @@ test('the End has terrain and spawns only enderman-type mobs; it is saved and re
   s.dimensions.arrive(a, 1);
   const w = a.world;
   let stone = 0;
-  for (let x = 0; x < 128; x += 2) for (let z = 0; z < 128; z += 2) for (let y = 0; y < 128; y++) if (w.get(x, y, z) === 152) stone++;
+  for (let x = 0; x < 256; x += 2) for (let z = 0; z < 256; z += 2) for (let y = 0; y < 128; y++) if (w.get(x, y, z) === 152) stone++;
   assert.ok(stone > 2000, 'end stone island, ' + stone);
   w.set(10, 100, 10, 1, true, 0);
   s.input('a', input());

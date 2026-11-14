@@ -20,7 +20,7 @@ const MAX_LAYER = 0xffff;
 export function snapshotRegion(scene, cx, cz) {
   const world = scene.world, H = world.height ?? HEIGHT, light = scene.light, vol = light.inner ?? light, offX = light.inner ? light.x : 0, offZ = light.inner ? light.z : 0;
   const noSky = !!vol.world.hasNoSky, n = SPAN * SPAN * H, blocks = new Uint8Array(n), meta = new Uint8Array(n), sky = new Uint8Array(n), block = new Uint8Array(n);
-  const x0 = cx - PAD, z0 = cz - PAD, skyFill = noSky ? 0 : 15;
+  const x0 = cx - PAD, z0 = cz - PAD, skyFill = noSky ? 0 : 15, VS = vol.size ?? SIZE; // b65 mpendwindow: the light grid's width
   for (let rx = 0; rx < SPAN; rx++)
     for (let rz = 0; rz < SPAN; rz++) {
       const x = x0 + rx, z = z0 + rz, o = (rx * SPAN + rz) * H;
@@ -30,7 +30,7 @@ export function snapshotRegion(scene, cx, cz) {
         else if (world.ringReads) for (let y = 0; y < H; y++) { blocks[o + y] = world.get(x, y, z); meta[o + y] = world.getMeta(x, y, z); }
       }
       const lx = x - offX, lz = z - offZ;
-      if (lx >= 0 && lz >= 0 && lx < SIZE && lz < SIZE) { const s = (lx * SIZE + lz) * vol.height; sky.set(vol.sky.subarray(s, s + H), o); block.set(vol.block.subarray(s, s + H), o); }
+      if (lx >= 0 && lz >= 0 && lx < VS && lz < VS) { const s = (lx * VS + lz) * vol.height; sky.set(vol.sky.subarray(s, s + H), o); block.set(vol.block.subarray(s, s + H), o); }
       else sky.fill(skyFill, o, o + H);
     }
   // Biomes at the column's native coordinates plus one cell (the 3 x 3 colour averages), as indices into a small palette.

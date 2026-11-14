@@ -480,7 +480,8 @@ export class World {
     // WorldInfo.generatorOptions: Superflat's FlatGeneratorInfo string (flat-world.js), normalised as ass.toString writes it.
     this.generatorOptions = this.worldType === 'flat' ? normalizeFlatOptions(generatorOptions) : '';
     this.minX = this.minZ = 0;
-    this.maxX = this.maxZ = SIZE;
+    this.size = this.constructor.windowSize?.() ?? SIZE; // b65 mpendwindow: a finite replica may be wider than 128 (the server End: 256); every other world keeps SIZE
+    this.maxX = this.maxZ = this.size;
     this.height = generationVersion >= 9 && isJavaLandscape(biome) ? 256 : HEIGHT;
     this.seaLevel = this.height === 256 ? 63 : SEA;
     this.numericSeed = hashSeed(seed);
@@ -488,7 +489,7 @@ export class World {
     // SIZE / 16 x SIZE / 16 columns at 0..SIZE - 1. Metadata is a 4-bit value per cell, like Chunk's
     // nibble array. Generated water is level 0, a source.
     this.chunks = new Map();
-    for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz, this.height));
+    for (let cx = 0; cx < this.size / 16; cx++) for (let cz = 0; cz < this.size / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz, this.height));
     this.lastChunk = null;
     this.edits = new Map();
     // Streamed worlds: each column's edits by cell index, stored as order * 4096 + value, where
@@ -518,13 +519,13 @@ export class World {
   // Legacy numeric cell order; streaming uses a coordinate key without finite-width aliases.
   index(x, y, z) {
     if (this.streaming) return `${x},${y},${z}`;
-    return (x * SIZE + z) * this.height + y;
+    return (x * this.size + z) * this.height + y;
   }
   inside(x, y, z) {
     if (this.streaming) return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z)
       && x + this.originX >= -30000000 && x + this.originX < 30000000
       && z + this.originZ >= -30000000 && z + this.originZ < 30000000 && y >= 0 && y < this.height;
-    return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < this.height;
+    return x >= 0 && x < this.size && z >= 0 && z < this.size && y >= 0 && y < this.height;
   }
   isLoaded(x, z) { return !!this.chunkAt(Math.floor(x / 16), Math.floor(z / 16)); }
   // Chunk existence for simulation reads (precipitation height, sky exposure): the window, and during the simulation tick (ringReads) the
@@ -635,7 +636,7 @@ export class World {
   // Every cell as flat block and metadata arrays in index() order (tests and whole-world copies).
   snapshot() {
     if (this.streaming) throw new Error('Streamed worlds use chunk columns, not a finite snapshot');
-    const data = new Uint8Array(SIZE * SIZE * this.height), meta = new Uint8Array(SIZE * SIZE * this.height);
+    const data = new Uint8Array(this.size * this.size * this.height), meta = new Uint8Array(this.size * this.size * this.height);
     for (const c of this.chunks.values())
       for (let lx = 0; lx < 16; lx++)
         for (let lz = 0; lz < 16; lz++) {

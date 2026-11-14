@@ -863,7 +863,7 @@ export class EntityWorld {
     if (
       !t ||
       ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
-      (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
+      (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= (world.size ?? SIZE) || e.z < 0 || e.z >= (world.size ?? SIZE)) ||
       e.y < -64 || // b54so: no upper bound: AnvilChunkLoader files a record above 256 in section 15 (Chunk.addEntity clamps) and loads it; only the void (y < -64) removes
       (e.health <= 0 && !summoned && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200))
     )
@@ -1176,7 +1176,7 @@ export class EntityWorld {
     if (!spot) return null;
     // World.spawnEntityInWorld (ahb.d) returns false for a non-player entity whose chunk is not loaded; yq.a ignores that: the target is set on the unspawned zombie, both charges apply
     // and the search stops at this site (bytecode-read; the b34 unloaded-chunk records). A site in a chunk that is not loaded is therefore a lost reinforcement, not a retry.
-    const loaded = this.chunkLoaded ? this.chunkLoaded(spot.x, spot.z) : this.world.streaming ? this.world.isTicking(spot.x, spot.z) : !(spot.x < 1 || spot.z < 1 || spot.x >= SIZE - 1 || spot.z >= SIZE - 1);
+    const loaded = this.chunkLoaded ? this.chunkLoaded(spot.x, spot.z) : this.world.streaming ? this.world.isTicking(spot.x, spot.z) : !(spot.x < 1 || spot.z < 1 || spot.x >= (this.world.size ?? SIZE) - 1 || spot.z >= (this.world.size ?? SIZE) - 1);
     if (!loaded) {
       // yq.a still runs onSpawnWithEgg on the refused zombie: its rolls draw the world's Random (child, villager, jockey), which later spawns share (b34 reinforce-unloaded records).
       this.onSpawnWithEgg(this.create("zombie", spot.x, spot.y, spot.z), { ghost: true });
