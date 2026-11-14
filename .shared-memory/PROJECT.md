@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 65 (2026-11-13, ten Sonnet tracks in `../wt65-<name>` on `batch65-<name>`, cut from 800542e52, merged --no-ff on `batch65-lead`; shared track rules `../artifacts/b65-lead/track-rules.md`; lead note `b65-lead-track.md`; no browser checks by request):
+- 0.94.0, by track:
+  - mpendwindow: per-world grid width (`World.size`, `LightVolume.size`, default 128); a new server End is 256x256 (native = local - 128), with every spike's crystal; Ends saved by 0.93.0 stay 128 (`window: legacy`).
+  - mpdragon2: crystal blasts set no fire (single player had set it), `multiplayer/server-egg.js` (dragon egg click-teleport), credits waiters leave the End mob view, the eye's trail on clients; the dragon's block eating has no break particles (bytecode-read).
+  - mpinvis: remote invisibility, the 0.15 ghost for `seeFriendlyInvisibles` teammates, native name tag ranges and the 10-block below-name score.
+  - mpuse2: a predicted use runs on until release, held-item change or a held-slot S2F (`slotReplacesUse`); server item drops checked against the flight record; 1012/1014 truncate.
+  - mpstats3: fire charge and bone meal on the server with `use`, frame eyes count; `multiplayer/server-combat-tracker.js` (CombatTracker, executed `CombatBestProbe`); hooks never hook players and are not saved natively (found wrong).
+  - mpspawners2: client spawner effects over a connection (`client-spawners.js`, `dispFx` spawnerBurst/spawnerDelay/spawnerPuff), Riding chains and spawner carts on the server.
+  - trackertransient2: transient mobs and away-run orbs and items in the tracker HashSet, the enderman copy's fall scream; rain fizz found wrong (executed).
+  - terrainatlas: `terrain-layout.js`, the terrain atlas stitched at an HD pack's sprite sizes (vanilla layout pinned), the mesh workers take the layout.
+  - itemsprites2: tinted flat block items from the blocks sheet times the colour, `.mcmeta` item animation in the atlas, first-person map mode (67 executed cases).
+  - clientreplays: `fishing-line.js` (96 executed `RenderFish` cases), `java7-hashmap.js` (Java 7 effect order ported, not switched on), `CLIENT_PUSHES_PLAYER = false` (no client push, bytecode-read).
+- Lead fixes: S19 status 9 (`useDone`): the server tells the eater its use finished, before the S2F, and the client plays the onItemUseFinish burst and ends its predicted use (`b65-lead.test.js`; mpuse2 had read no status 9). Conflict in `main.js` `makeRemoteDispense` kept both the eye trail and the spawner hooks.
+- Verification: see `b65-lead-track.md`. Pushed to github main by the lead.
+
 Batch 64 (2026-11-13, ten Sonnet tracks in `../wt64-<name>` on `batch64-<name>`, cut from f76b1db60, merged --no-ff on `batch64-lead`; shared track rules `../artifacts/b64-lead/track-rules.md`; lead note `b64-lead-track.md`; no browser checks by request):
 - 0.93.0, by track:
   - mpdragon: `multiplayer/server-dragon.js`: the dragon and the spike crystals in the server End, every End player a target, part hits, the death sequence with orbs, exit portal and egg, `dragon: alive|dead` saved, the credits (`dragonCredits`, S2B 4) and respawn; the stand-in exit portal is removed.

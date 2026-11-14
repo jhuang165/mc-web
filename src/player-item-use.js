@@ -24,7 +24,7 @@ export function tickPlayerItemUse(use, heldId, survival, {
   if (!use.drink && before <= 25 && before % 4 === 0) foodEffects(use.id, 5);
   const remaining = before - 1;
   let next = { ...use, ticks: remaining };
-  // b65 mpuse2 (yz.h bytecode-read): EntityPlayer.onUpdate runs onItemUseFinish only `if (--itemInUseCount == 0 && !world.isRemote)`. A connected client never finishes: its count goes
+  // b65 mpuse2 (yz.h bytecode-read): EntityPlayer.onUpdate runs onItemUseFinish only `if (--itemInUseCount == 0 && !world.isRemote)`. A connected client never finishes by itself (the server's S19 status 9, `useDone`, ends it: client-use-predict.js finishPredictedUse): its count goes
   // on below zero (the crumbs / drink sound at every 4th count keep coming) until the server's S2F replaces the held stack, the held item changes or the button is released.
   const finishes = !predicted;
 

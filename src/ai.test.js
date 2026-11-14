@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Task, TaskList, MoveHelper, LookHelper, JumpHelper, findRandomTarget, limitAngle, Rand } from "./ai.js";
-import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, setEntityRandom } from "./entities.js";
+import { JavaRandom } from "./lighting.js";
 
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const player = (x = 64, z = 64) => ({ x, y: 0, z });
@@ -188,6 +189,8 @@ const mobs = (list, random = () => 0.5) => new EntityWorld(grass, list.map((m, i
 
 test("a damaged cow flees along a path (Panic), faster than it wanders", () => {
   const w = mobs([{ type: "cow", x: 64, y: 0, z: 64 }], () => 0.3), cow = w.entities[0];
+  // b65 lead: Entity.rand picks the panic spot; unseeded (Math.random) it lands within a block now and then (1 full run in about ten batches)
+  setEntityRandom(cow, new JavaRandom(65));
   for (let i = 0; i < 3; i++) w.tick(player(64, 64.3), survival);
   const brain = w.ai.brain(cow);
   w.damage(cow, 1, 64, 64.3);
