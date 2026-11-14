@@ -9,7 +9,7 @@ import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { RemoteMobs } from "./multiplayer/remote-mobs.js";
 import { RemoteDispense } from "./multiplayer/client-dispense.js";
 import { dispenserAux, witherSpawnAt } from "./multiplayer/client-containers.js";
-import { SUPPORTED, MOB_LIMIT, mobState } from "./multiplayer/server-mobs.js";
+import { SUPPORTED, mobState } from "./multiplayer/server-mobs.js";
 import { playersAround } from "./multiplayer/server-wither.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { SKULL, ITEM_SKULL } from "./skull.js";
@@ -173,13 +173,14 @@ test("only the Overworld lane sends wither skulls", () => {
   assert.equal(s.dispense.snapshot({ position: a.position, dimension: -1 }).some(r => r.kind === "witherSkull"), false);
 });
 
-test("a full world keeps a wither just built (the cap trims other mobs from the end)", () => {
+const MOB_LIMIT = 80; // the b63-b72 server cap, gone in b73 (mpspawn73)
+test("a full world keeps a wither just built (b73: no flat cull any more)", () => {
   const s = fixture(); s.mobs.spawning = true;
   const p = join(s, "a", 1);
   for (let i = 0; i < MOB_LIMIT + 10; i++) { const m = s.mobs.mobs.create("pig", 40.5 + (i % 20), 10, 90.5 + Math.floor(i / 20)); s.mobs.mobs.entities.push(m); }
   const w = s.mobs.mobs.create("wither", 64.5, 10, 100.5); w.invul = 100; s.mobs.mobs.entities.push(w);
   s.tick();
   assert.ok(s.mobs.mobs.entities.includes(w));
-  assert.ok(s.mobs.mobs.entities.length <= MOB_LIMIT + 2);
+  assert.ok(s.mobs.mobs.entities.filter(e => e.type === 'pig').length >= MOB_LIMIT + 8, 'no flat cull any more (b73 mpspawn73)');
   void p;
 });

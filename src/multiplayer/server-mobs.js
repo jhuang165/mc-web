@@ -6,7 +6,7 @@
 // the cap scaled by the union's size / 256. Mob damage to players goes through `host.damagePlayer(player, amount, source)`; the player-state track replaces its no-op.
 // Batch 60: the server's own sounds (S29), status 2 / 3 / 18 (S19) for the clients' hurt and death sounds and hearts, experience orbs of a kill (server-items.js), knockback on the
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
-import { EntityWorld } from '../entities.js';
+import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
 import { SharedMobTracker } from './server-mob-entries.js';
 import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
@@ -38,7 +38,7 @@ export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 's
 for (const k of VILLAGE_KINDS) SUPPORTED.add(k); // b66 mpvillage: villagers and the village's iron golems (server-villagers.js)
 for (const k of DRAGON_KINDS) SUPPORTED.add(k); // b64 mpdragon: the Ender Dragon and the End crystals (the End's mobs)
 for (const k of GOLEM_KINDS) SUPPORTED.add(k); // b66 mpgolems: iron and snow golems, silverfish
-export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
+export const MOB_LIMIT = SPAWN_RUNAWAY_GUARD; // b73 mpspawn73: no flat cap any more (native has none); only the runaway guard. Natural spawning is limited per type by max * chunks / 256 (spawnPass), the wire per player by range (the trackers)
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
 
@@ -296,7 +296,7 @@ export class ServerMobs {
     }
     if (this.spawning) {
       this.spawnPass();
-      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (!mobs.entities[i].summonKeep && !['wither', 'villager', 'iron_golem', 'snow_golem'].includes(mobs.entities[i].type)) mobs.entities.splice(i, 1); // b63: the cap never cuts a wither or golem just built; b66: nor a villager (mpvillage); b68 summon2: nor a /summon-ed mob (summonKeep: native /summon ignores the cap)
+      // b73 mpspawn73: the flat cull at 80 is gone (native has no global cap; the per-type cap of spawnPass bounds natural spawns)
     }
     this.use(first);
     const lead = first.player.position;
