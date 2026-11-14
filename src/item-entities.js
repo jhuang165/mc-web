@@ -16,9 +16,10 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { entityPushOut } from "./entities.js";
 import { freshEntityRandom } from "./java-random.js";
+import { mhSin, mhCos } from "./lighting.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
-const f = Math.fround;
+const f = Math.fround, PI_F = Math.fround(Math.PI);
 
 export class ItemEntities {
   constructor(random = Math.random) {
@@ -102,20 +103,21 @@ export class ItemEntities {
     const r = this.random;
     let motion;
     if (scatter) {
-      const speed = f(r() * 0.5), angle = f(r() * Math.PI * 2);
-      motion = [-Math.sin(angle) * speed, 0.2, Math.cos(angle) * speed];
+      // qh.a / qh.b are MathHelper's float sine table, in float arithmetic (executed: EntityFlightProbe scatter records).
+      const speed = f(r() * f(0.5)), angle = f(f(r() * PI_F) * 2);
+      motion = [f(-mhSin(angle) * speed), 0.20000000298023224, f(mhCos(angle) * speed)];
     } else {
-      // This build's yaw/pitch are radians, looking along (-sin yaw, sin pitch, -cos yaw).
-      const s = 0.3, cp = Math.cos(pitch), angle = f(r() * Math.PI * 2), kick = f(0.02 * r());
-      motion = [
-        -Math.sin(yaw) * cp * s + Math.cos(angle) * kick,
-        Math.sin(pitch) * s + 0.1 + f((r() - r()) * 0.1),
-        -Math.cos(yaw) * cp * s + Math.sin(angle) * kick,
-      ];
+      // This build's yaw/pitch are radians, looking along (-sin yaw, sin pitch, -cos yaw); the native degrees are 180 - yaw and -pitch. The direction runs through the sine
+      // table (qh.a/qh.b), the random kick through Math.sin/cos, as func_146097_a does.
+      const mcYaw = f(180 - (yaw * 180) / Math.PI), mcPitch = f((-pitch * 180) / Math.PI),
+        k = f(f(mcYaw / 180) * PI_F), p = f(f(mcPitch / 180) * PI_F), s = f(0.3), cp = mhCos(p);
+      const x = f(f(-mhSin(k) * cp) * s), z = f(f(mhCos(k) * cp) * s), my = f(f(-mhSin(p) * s) + f(0.1));
+      const angle = f(f(r() * PI_F) * 2), kick = f(f(0.02) * f(r()));
+      motion = [x + Math.cos(angle) * kick, my + f(f(r() - r()) * f(0.1)), z + Math.sin(angle) * kick];
     }
     // EntityPlayer.func_146097_a drops any stack but an exact size 0, a negative one included (neg-stacks2-reference.json drop).
     if (!stack || stack.count === 0) return null;
-    return this.spawn(stack, feet.x, feet.y + 1.32, feet.z, { delay: 40, motion, death, empty: true });
+    return this.spawn(stack, feet.x, feet.y - 0.30000001192092896 + 1.6200000047683716, feet.z, { delay: 40, motion, death, empty: true });
   }
   box(e) {
     return [e.x - W, e.y, e.z - W, e.x + W, e.y + H, e.z + W];
