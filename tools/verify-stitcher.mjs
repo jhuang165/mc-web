@@ -26,6 +26,11 @@ const cp = [probe, classes, lib("log4j-api-2.0-beta9"), lib("guava-15.0"), lib("
 await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/StitcherProbe.java")]);
 const { stdout } = await exec("java", ["-Djava.awt.headless=true", `-Djar=${jar}`, "-cp", cp, "StitcherProbe"], { maxBuffer: 1 << 26 });
 const runs = stdout.trim().split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+// Batch 64: HD sprite-size cases (StitcherProbe.hdCases), one line per (type, rule, mipmap level) starting with "HD ".
+const hdCases = stdout.trim().split("\n").filter((l) => l.startsWith("HD {")).map((l) => JSON.parse(l.slice(3)));
+assert.equal(hdCases.length, 2 * 8 * 2);
+// Item.getSpriteNumber() of every registered item: [id, class, spriteNumber, superclass].
+const spriteNumbers = JSON.parse(stdout.trim().split("\n").find((l) => l.startsWith("SN [")).slice(3));
 assert.equal(runs.length, 10);
 const atlases = {};
 for (const type of ["blocks", "items"]) {
@@ -36,7 +41,7 @@ for (const type of ["blocks", "items"]) {
 }
 await writeFile(path.join(root, "../public/research/stitcher-reference.json"), JSON.stringify({
   source: "tools/verify-stitcher.mjs: unchanged Stitcher (bpv, Holder bpw, Slot bpx) and TextureAtlasSprite.initSprite (bqd) driven as TextureMap.loadTextureAtlas does, over the sprites registered by the executed Block.registerBlockIcons / Item.registerIcons",
-  clientSha1, maxTextureSize: 16384, atlases,
+  clientSha1, maxTextureSize: 16384, atlases, hdCases, spriteNumbers,
 }) + "\n");
 // The port reads only the block atlas positions: name -> [x, y, size].
 const layout = Object.fromEntries(atlases.blocks.sprites.map((s) => [s.name, [s.x, s.y, s.w]]));

@@ -41,6 +41,7 @@ public class StitcherProbe {
     aji.p();
     adb.l();
     ZipFile zip = new ZipFile(System.getProperty("jar"));
+    spriteNumbers();
     for (int type = 0; type < 2; type++) {
       String dir = type == 0 ? "blocks" : "items";
       List<String> names = collect(type);
@@ -79,6 +80,76 @@ public class StitcherProbe {
         System.out.println(sb.append("]}"));
         if (mip == 0 && type == 0) System.err.println("blocks missing png: " + missing);
         if (mip == 0 && type == 1) System.err.println("items missing png: " + missing);
+      }
+      hdCases(dir, names, dims);
+    }
+  }
+
+  // Batch 64 (atlas3): Item.getSpriteNumber() (adb.d()) of every registered item, which decides the TextureMap an item's icon is registered on and drawn from (0 = blocks,
+  // 1 = items). One "SN " line: for each item id, the class name and the sprite number.
+  static void spriteNumbers() {
+    StringBuilder sb = new StringBuilder("SN [");
+    boolean first = true;
+    for (int id = 0; id < 4096; id++) {
+      adb it = adb.d(id);
+      if (it == null) continue;
+      sb.append(first ? "" : ",").append("[").append(id).append(",\"").append(it.getClass().getName()).append("\",").append(it.d()).append(",\"").append(it.getClass().getSuperclass().getName()).append("\"]");
+      first = false;
+    }
+    System.out.println(sb.append("]"));
+  }
+
+  // Batch 64 (atlas3): the same Stitcher driven with resource-pack sprite sizes (HD packs, mixed sizes, a tiny sprite), the way loadTextureAtlas does for the pack's PNGs.
+  // Each case gives every sprite a square size (size = rule(index, name)); output lines start with "HD " and carry the input sizes, the atlas size, the mipmap levels
+  // limit (min(mip, qh.c(smallest size))) and per sprite x, y, w, h, rotated and (for the first sprites) the initSprite uv.
+  static int sizeOf(String rule, int index, String name, int base) {
+    switch (rule) {
+      case "x2": return base * 2;
+      case "x4": return base * 4;
+      case "x8": return base * 8;
+      case "mixed": return index % 7 == 3 ? base * 4 : index % 11 == 5 ? base * 2 : base;
+      case "oneBig": return index == 0 ? 128 : base;
+      case "tiny": return index == 2 ? 8 : index % 5 == 1 ? base * 2 : base;
+      case "hdTiny": return index == 4 ? 8 : base * 4;
+      case "wide": return index % 3 == 0 ? base * 8 : index % 3 == 1 ? base * 2 : base;
+      default: return base;
+    }
+  }
+
+  static void hdCases(String dir, List<String> names, Map<String, int[]> dims) {
+    String[] rules = { "x2", "x4", "x8", "mixed", "oneBig", "tiny", "hdTiny", "wide" };
+    List<String> present = new ArrayList<>();
+    for (String n : names) if (dims.get(n) != null) present.add(n);
+    for (String rule : rules) {
+      for (int mip : new int[] { 0, 4 }) {
+        bpv st = new bpv(16384, 16384, true, 0, mip);
+        Map<String, Sprite> sprites = new LinkedHashMap<>();
+        StringBuilder in = new StringBuilder();
+        int minDim = Integer.MAX_VALUE;
+        for (int i = 0; i < present.size(); i++) {
+          String n = present.get(i);
+          int size = sizeOf(rule, i, n, dims.get(n)[0]);
+          Sprite s = new Sprite(n); s.b(size); s.c(size);
+          minDim = Math.min(minDim, size);
+          st.a(s); sprites.put(n, s);
+          in.append(i == 0 ? "" : ",").append("[\"").append(n).append("\",").append(size).append("]");
+        }
+        int level = Math.min(mip, qh.c(minDim));
+        Sprite miss = new Sprite("missingno"); miss.b(16); miss.c(16); st.a(miss);
+        minDim = Math.min(minDim, 16);
+        level = Math.min(mip, qh.c(minDim));
+        in.append(",[\"missingno\",16]");
+        st.c();
+        StringBuilder sb = new StringBuilder("HD {\"type\":\"" + dir + "\",\"rule\":\"" + rule + "\",\"mip\":" + mip + ",\"levels\":" + level + ",\"width\":" + st.a() + ",\"height\":" + st.b() + ",\"input\":[" + in + "],\"sprites\":[");
+        boolean first = true; int k = 0;
+        for (Object o : st.d()) {
+          bqd s = (bqd) o;
+          sb.append(first ? "" : ",").append("[\"").append(s.g()).append("\",").append(s.h()).append(",").append(s.i()).append(",").append(s.a()).append(",").append(s.b());
+          if (k < 6) sb.append(",").append(s.c()).append(",").append(s.d()).append(",").append(s.e()).append(",").append(s.f());
+          sb.append("]");
+          first = false; k++;
+        }
+        System.out.println(sb.append("]}"));
       }
     }
   }

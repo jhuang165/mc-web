@@ -43,6 +43,8 @@ export function createLighting() {
 }
 
 // The uv window of an item atlas sprite texture (item-atlas.js sets userData.st), identity for every other texture; written into `out` (a Vector4: scale u, v, offset u, v).
+// The live vector of a sprite texture (item-atlas.js updates it in place when the sheet is stitched again for an HD pack), or a fresh identity.
+export const liveSpriteTransform = (texture) => texture?.userData?.st ?? new THREE.Vector4(1, 1, 0, 0);
 export function applySpriteTransform(texture, out) {
   const st = texture?.userData?.st;
   return st ? out.copy(st) : out.set(1, 1, 0, 0);
@@ -88,7 +90,7 @@ export function entityMaterial(lighting, { map = null, color = null, alphaTest =
     lightmap: lighting.uniforms.lightmap,
     ...(fog ? lighting.uniforms : { fogColor: { value: new THREE.Vector3() }, fogNear: { value: 1e6 }, fogFar: { value: 2e6 }, fogDensity: { value: 0 } }),
     map: { value: map },
-    mapST: { value: applySpriteTransform(map, new THREE.Vector4()) },
+    mapST: { value: liveSpriteTransform(map) },
     tint: { value: new THREE.Vector3(...(color ?? [1, 1, 1])) },
     overlay: { value: new THREE.Vector4(0, 0, 0, 0) },
     lightCoord: { value: new THREE.Vector2(0, 240) },
@@ -112,7 +114,7 @@ if(t.a<=alphaTest)discard;vec3 c=t.rgb*min(vec3(1.),tint*vDiffuse)*texture2D(lig
   });
   // Item sprites are cells of the item atlas (item-atlas.js): whoever assigns uniforms.map.value (an item frame swapping its content) moves the uv window with it.
   let current = map;
-  Object.defineProperty(uniforms.map, "value", { get: () => current, set: (v) => { current = v; applySpriteTransform(v, uniforms.mapST.value); }, enumerable: true, configurable: true });
+  Object.defineProperty(uniforms.map, "value", { get: () => current, set: (v) => { current = v; uniforms.mapST.value = liveSpriteTransform(v); }, enumerable: true, configurable: true });
   material.setLight = (packed) => material.uniforms.lightCoord.value.set(packed & 0xffff, (packed >> 16) & 0xffff);
   return material;
 }
