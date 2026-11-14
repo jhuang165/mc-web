@@ -16,6 +16,7 @@ function flat() {
 }
 function fixture(viewDistance) {
   const sim = new DedicatedSimulation({}, { world: flat(), mobs: false, gameMode: "survival" });
+  sim.objectTracker.cadence = false; // b72 mpcadence72: these tests read the list mode (the Simulation now runs the packet mode; mpcadence72-b72.test.js covers it)
   if (viewDistance) sim.rules.viewDistance = viewDistance;
   const a = sim.addPlayer("a", "Alice", key(1)), b = sim.addPlayer("b", "Bob", key(2));
   a.position.copy({ x: 8.5, y: 10, z: 64.5 }); a.previous.copy(a.position);
@@ -148,14 +149,14 @@ test("real server, two WebSocket players: the item next to Alice is sent to her 
   for (const [p, x] of [[pa, 8.5], [pb, 120.5]]) { p.position.copy({ x, y: 10, z: 64.5 }); p.previous.copy(p.position); }
   const item = sim.items.spawn(makeStack(3, 1, 0), 20.5, 10.5, 64.5, { delay: 0, motion: [0, 0, 0] });
   const wait = async (pred) => { for (let i = 0; i < 400 && !pred(); i++) await new Promise((r) => setTimeout(r, 10)); assert.ok(pred(), "condition"); };
-  const has = (S) => S.seen.some((m) => m.type === "tick" && m.items?.some((r) => r.i === item.eid));
+  const has = (S) => S.seen.some((m) => m.type === "tick" && (m.items?.some((r) => r.i === item.eid) || m.itrack?.some((r) => r.k === "item" && r.i === item.eid && r.p.some((q) => q.type === "spawn")))); // b72: the packet mode
   await wait(() => has(A));
   const mark = B.seen.length; await new Promise((r) => setTimeout(r, 150));
   assert.equal(B.seen.slice(mark).filter((m) => m.type === "tick").length > 3, true, "Bob receives ticks");
   assert.equal(has(B), false, "Bob never got the item (100 blocks away)");
   pa.position.copy({ x: 100.5, y: 10, z: 64.5 }); // 80 from the item
   const markA = A.seen.length;
-  await wait(() => A.seen.slice(markA).some((m) => m.type === "tick" && !m.items));
+  await wait(() => A.seen.slice(markA).some((m) => m.type === "tick" && (m.itrack?.some((r) => r.i === item.eid && r.p.some((q) => q.type === "destroy")) || (!m.items && !m.itrack))));
   assert.ok(sim.items.items.some((e) => e.eid === item.eid && !e.dead), "the item itself still exists on the server");
   assert.equal(has(B), false, "and Bob, still far away, never saw it");
 });

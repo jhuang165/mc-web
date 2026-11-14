@@ -35,11 +35,15 @@ export class CartTracker {
     const meta = JSON.stringify(Object.fromEntries(Object.entries(state).filter(([k]) => !POS.includes(k)))), dataChanged = en.meta !== undefined && en.meta !== meta;
     en.meta = meta;
     en.entry.sendLocation(en.e.airBorne, dataChanged);
-    en.released = en.entry.packets.some(p => p.type === 'move' || p.type === 'moveLook' || p.type === 'look' || p.type === 'teleport');
+    // b72 mpcadence72: S15 (move) carries the position only, S16 (look) the rotation only, S17 and S18 both; the client keeps what a packet does not carry
+    const kinds = new Set(en.entry.packets.map(p => p.type));
+    const place = kinds.has('move') || kinds.has('moveLook') || kinds.has('teleport'), turn = kinds.has('look') || kinds.has('moveLook') || kinds.has('teleport');
+    en.released = place || turn;
     en.entry.packets.length = 0;
     if (v.airBorne) v.airBorne = false; // Entity.isAirBorne is reset by the tracker after the send
     if (v.velocityChanged) v.velocityChanged = false; // and velocityChanged once its S12 went out
-    if (en.released) for (const k of POS) en.sent[k] = state[k];
+    if (place) for (const k of ['x', 'y', 'z']) en.sent[k] = state[k];
+    if (turn) for (const k of ['yaw', 'pitch']) en.sent[k] = state[k];
     return en.sent;
   }
   /** Drops the entries of carts that are gone. */

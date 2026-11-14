@@ -233,6 +233,7 @@ import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // 
 import { recordAux, noteEvent } from "./multiplayer/client-music.js"; // b66 mpbooks
 import { applyMapMessage, connectMaps, disconnectMaps } from "./multiplayer/client-maps.js"; // b69 mpmaps
 import { applyChunkMessage, presentCells } from "./multiplayer/client-chunks.js"; // b71 mpchunks
+import { ItemTrackClient } from "./multiplayer/client-itrack.js"; // b72 mpcadence72
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -709,6 +710,7 @@ function applyMultiplayerCells(changes) {
 // Item entities of a Survival server (EntityItem): one stable object per wire id so the drop renderer keeps its mesh; positions interpolate from the previous tick.
 // Pickup stays the server's call: the client names the items in reach that its inventory has room for, the server repeats the test and answers with a stack.
 let mpFurnaces = {}; // b60: the server's lit furnaces as scene.setFurnaces data
+const itrackClient = new ItemTrackClient(); // b72 mpcadence72: client copies of the server's items and orbs (multiplayer/client-itrack.js)
 const remoteItems = new Map(), requestedPickups = new Map(), mpInv = {}, remoteOrbs = new Map(), takenDrops = new Set(); // b61: takenDrops: ids of stacks partly taken (NetHandlerPlayClient.handleCollectItem removed the entity and only a re-track re-adds it): not drawn, still collectable
 function syncMultiplayerItems(list) {
   const seen = new Set();
@@ -826,6 +828,7 @@ function applyMultiplayerTick(message) {
     if (e && who) scene.drops.pickup(e, who);
     if (e && t.partial) takenDrops.add(t.i); // b61: the remainder of a partly taken stack vanishes on every client, as natively
   }
+  if (message.itrack || itrackClient.size) { itrackClient.tick(message.itrack, world, position); Object.assign(message, itrackClient.lists()); } // b72 mpcadence72: item / orb packets, client physics between them
   if (message.xp || remoteOrbs.size) syncMultiplayerOrbs(message.xp ?? []);
   if (message.items || remoteItems.size) syncMultiplayerItems(message.items ?? []);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
@@ -939,7 +942,7 @@ async function joinMultiplayer(settings) {
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
-    syncMultiplayerItems(snapshot.items ?? []);
+    itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
     printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).');
   } catch (error) {
@@ -982,7 +985,7 @@ async function multiplayerDimension(client, settings, m) {
     remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
-    syncMultiplayerItems(snapshot.items ?? []);
+    itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
