@@ -38,6 +38,8 @@ import { ITEM_POTION, isSplashDamage } from '../potions.js'; // b63
 import { JavaRandom } from '../java-random.js';
 import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerPvp } from './server-pvp.js'; // b63 mppvp
+import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
+import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerItems } from './server-items.js';
 import { ServerAchievements } from './server-achievements.js';
 import { ServerWither } from './server-wither.js'; // b63 mpwither
@@ -80,6 +82,7 @@ export function cleanHotbar(slots) {
 export class DedicatedSimulation {
   constructor(saved = {}, { world = null, gameMode = 'creative', ...options } = {}) {
     this.commandBlocks = options.commandBlocks === true || saved.commandBlocks === true; // b63: enable-command-block (default false, as the dedicated server); command block carts run only when set
+    this.fishing = new ServerFishing(this); // b64 mpstats2
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
@@ -193,6 +196,7 @@ export class DedicatedSimulation {
     const p = this.players.get(id);
     if (p) this.vehicles.removePlayer(p); // b61: a rider is let down before the position is saved
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
+    if (p) this.fishing.drop(p); // b64 mpstats2: the bobber goes with its angler
     if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
@@ -352,7 +356,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p)); // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
+    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p)); /* b64: C08 with the rod */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -385,7 +389,9 @@ export class DedicatedSimulation {
     if (id === ITEM_SKULL) {
       return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target }, this.wither.hooks(p)).placed; // b63: soul sand and the difficulty are passed, so the T builds a wither (Overworld)
     }
+    if (place && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
+    if (place && useOnBlock(this, p, target, id)) return true; // b64 mpstats2: seeds, nether wart and spawn eggs on the clicked block (and their use stat)
     const placed = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
@@ -519,8 +525,10 @@ export class DedicatedSimulation {
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();
     this.vehicles.tick(); // b61
+    this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
     tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time }); // b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
+    this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     for (const p of this.players.values()) this.serverItems.settle(p);
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();

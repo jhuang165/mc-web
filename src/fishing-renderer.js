@@ -72,3 +72,17 @@ export class FishingRenderer {
   }
   clear() { this.hide(); }
 }
+
+// Other anglers' bobbers (batch 64, multiplayer): one FishingRenderer per bobber, grown on demand. Each entry is { hook, angler (the remote player's PlayerBody), sneaking }.
+export class FishingPool {
+  constructor(scene, view) { this.scene = scene; this.view = view; this.renderers = []; }
+  update(list, camera, partial, particleView) {
+    for (let i = 0; i < Math.max(list.length, this.renderers.length); i++) {
+      const e = list[i];
+      if (!e) { this.renderers[i]?.hide(); continue; }
+      const r = this.renderers[i] ??= new FishingRenderer(this.scene, this.view);
+      r.update(e.hook, camera, partial, { ...particleView, first: false, sneaking: !!e.sneaking, angler: e.angler ?? null });
+    }
+  }
+  clear() { for (const r of this.renderers) r.hide(); }
+}
