@@ -18,6 +18,11 @@ export function findStronghold(world, x, y, z) {
   return hit ? [hit[0] - ox, hit[1], hit[2] - oz] : null;
 }
 
+// b64 mpend2: the clients' copy of World.playAuxSFX 2003 (an eye that shattered, told by the server): the break particles and the two portal rings on `fx` (scene.fx.spawn).
+export function spawnEyeShatter(fx, x, y, z, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
+  for (const p of shatterEffects(x, y, z, random)) fx.spawn(p.name, p.x, p.y, p.z, p.vx, p.vy, p.vz);
+}
+
 const ROWS = new WeakMap(); // one renderer row per entity (or view)
 export class EyesOfEnder {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {

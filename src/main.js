@@ -176,7 +176,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
-import { EyesOfEnder } from "./eye-of-ender-live.js";
+import { EyesOfEnder, spawnEyeShatter } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
@@ -712,6 +712,7 @@ function makeRemoteDispense() {
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),
     poof: row => projectiles.clientImpact(row),
+    shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
     // b63 (mpprojectiles2): S0D collect for an arrow: EntityPickupFX flies it to whoever took it (this player, or another one from the last player rows)
     collect: (i, by, at) => {
       const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by);
@@ -4307,7 +4308,7 @@ function updateDebugOverlay() {
     pie: debugChart ? { list: clientProfiler.results(debugSection) } : null,
     left: {
       fps, chunkUpdates: debugSecond.shown, renders: debugCache.renders, entities: debugCache.entities, particles: scene.effectRenderer.count(),
-      chunkCache: world.chunks?.size ?? scene.chunks.size, x: position.x, z: position.z, feetY: position.y, eyeY, yaw: nativeYaw(yaw), onGround: grounded && !flying, height: debugCache.height,
+      chunkCache: world.chunks?.size ?? scene.chunks.size, x: position.x + (world.displayX || 0), z: position.z + (world.displayZ || 0), /* b64 mpend2: the End window's native coordinates */ feetY: position.y, eyeY, yaw: nativeYaw(yaw), onGround: grounded && !flying, height: debugCache.height,
       walkSpeed: WALK_SPEED, flySpeed: FLY_SPEED,
       light: loaded && by >= 0 && by < 256 ? { topSegment: debugCache.topSegment, biome, block: lv ? lv.blockAt(bx, by, bz) : 0, sky: lv ? lv.skyAt(bx, by, bz) : 15, real: lv ? lv.level(bx, by, bz, 0) : 15 } : null,
     },

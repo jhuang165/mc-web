@@ -25,7 +25,10 @@ export class FiniteDimensionWorld extends World {
     this.dimension = FiniteDimensionWorld.pending;
     const end = this.dimension === END; // b63: the End has no sky and no hell flag (BiomeGenEnd 'Sky', temperature 0.5)
     this.isEnd = end; this.isHell = !end; this.hasNoSky = true; // aqo.f / aqo.g: the Nether (hell) or the End (no sky only)
-    this.originX = this.originZ = 0;
+    // b64 mpend2: the End replica is a shifted window, but the world's origin names where it lies in the End (native = local + origin), so the code that reads native coordinates (the eye of
+    // ender's stronghold search, structure and chunk lookups) and F3 (displayX / displayZ) see the End's own coordinates. Positions on the wire stay window-local (the replica predicts in them).
+    this.originX = end ? -END_OFFSET.x : 0; this.originZ = end ? -END_OFFSET.z : 0;
+    this.displayX = this.originX; this.displayZ = this.originZ;
     this.biomeAt = () => (end ? END_BIOME : NETHER_BIOME);
     this.temperatureAt = () => (end ? 0.5 : 2);
     this.seaLevel = end ? 0 : 32;
