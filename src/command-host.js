@@ -182,6 +182,7 @@ export function createCommandHost(env) {
       const ignored = [], convertItem = (t, o) => itemStackFromNbt(t, { ...o, ignored });
       const mobs = env.mobs();
       const spawnOne = (type, nbt) => {
+        if (env.summonRefuses?.(type)) return null; // b67 mpsummon: a kind the dedicated server cannot keep is a failed creation (createEntityFromNBT null), also as a Riding mount
         if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
         if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true, vehicle: r.cart } : null; }
         const id = entityIdOfSummon(type);

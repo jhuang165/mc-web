@@ -9,7 +9,8 @@
 // func_94550_c (rn.c) then walks the entries in order and keeps, per entry, the entity with the largest SINGLE amount (a strictly greater amount replaces, so the first of equals wins):
 // the best EntityPlayer, and the best EntityLivingBase (players are living too). It returns the player when playerAmount >= livingAmount / 3 (float), else the living one, else null.
 // sv.aX (func_94060_bK) is that, else attackingPlayer (field aR, the last player to hit, valid while recentlyHit > 0), else the revenge target (field i, any living attacker of the
-// last 100 ticks). onDeath calls aX() first: addToPlayerScore on it (mobKills / playerKills, only a player has one), then Entity.onKillEntity on source.getEntity() (kill-by-type stat).
+// last 100 ticks, and only while it lives: b67 bytecode-read sv.C (the victim's per-tick update) clears `i` through setRevengeTarget(null) when the target is not alive (sv.Z, isEntityAlive)
+// or ticksExisted - revengeTimer > 100; sv.aX itself returns the field unchecked, and attackingPlayer (aR) is returned unchecked too, cleared only when recentlyHit runs out). onDeath calls aX() first: addToPlayerScore on it (mobKills / playerKills, only a player has one), then Entity.onKillEntity on source.getEntity() (kill-by-type stat).
 const f = Math.fround;
 
 export class CombatTrackerPort {
@@ -48,13 +49,14 @@ export class KillCredit {
     if (by?.living) { this.revenge = by; this.revengeAt = now; } // func_70604_c
     if (by?.isPlayer) this.aR = by; else if (by?.tamedWolf) this.aR = null; // attackingPlayer (a tamed wolf's hit sets recentlyHit but not the player)
   }
-  // sv.aX(): the entry that gets the score, or null. `recentlyHit` is the victim's counter (> 0 while attackingPlayer stands).
-  killer(now, recentlyHit, alive) {
+  // sv.aX(): the entry that gets the score, or null. `recentlyHit` is the victim's counter (> 0 while attackingPlayer stands). `revengeAlive(by)` is the revenge target's
+  // isEntityAlive: a dead one has been dropped by the victim's tick (checked here, at the moment of the kill; an attacker that died after the victim's last tick is counted dead).
+  killer(now, recentlyHit, alive, revengeAlive = () => true) {
     if (!this.tracker.lethal && !alive) this.tracker.expire(now, false); // a death that skipped damageEntity: the lethal entry would have emptied the list
     const best = this.tracker.best();
     if (best) return best;
     if (recentlyHit > 0 && this.aR) return this.aR;
-    if (this.revenge && now - this.revengeAt <= 100) return this.revenge;
+    if (this.revenge && now - this.revengeAt <= 100 && revengeAlive(this.revenge)) return this.revenge;
     return null;
   }
 }

@@ -17,7 +17,11 @@ import { importedMobType } from '../java-mobs.js';
 // (c) `playAuxSFX(2004, x, y, z, 0)` after a spawn (mp.a(yz, IIIII): sendToAllNearExcept 64.0, strict 3-D distance, same dimension), and (d) entity status 20 on the mob. A spawner minecart (xt/xu) sends no EntityId at all:
 // its logic's a(int) is `world.setEntityState(cart, 1)` (S19 to the cart's trackers) and the client copy keeps the default Pig. Here these ride `dispFx` events (client-dispense.js): spawnerBurst, spawnerDelay, spawnerPuff.
 const FX_RANGE_SQ = 64 * 64; // sendToAllNear 64.0 (squared)
-const CART_RANGE_SQ = 80 * 80; // EntityTracker range of a minecart (server-vehicles.js RANGE)
+const CART_RANGE = 80; // EntityTracker range of a minecart (server-vehicles.js RANGE)
+// b67 mpsummon (bytecode-read mn.a(sa), the EntityTracker.addEntityToTracker table, and my.b(mw), updatePlayerEntity): a status (S19) goes to the entity's tracking players, and a player tracks
+// when |dx| <= range and |dz| <= range (a square, inclusive, height ignored) from the tracker's own range: EntityMinecart (xl, so the spawner cart) 80, EntitySquid 64, the dragon 160 and
+// every other IAnimals / IMob (the spawner's mobs) 80. The batch 65 circle of 64 blocks for the puff was wrong. (The server's view-distance clamp, 144 at the default 10, is not modelled.)
+export const mobTrackRange = type => (type === 'squid' ? 64 : type === 'ender_dragon' ? 160 : 80);
 const FX_CAP = 64;
 
 // Every mob of a SpawnData Riding chain must be a kind the server keeps (a mount outside SUPPORTED would be a mob nobody can see). A vehicle id (minecart, boat) or an unmakeable id is not a mob kind here.
@@ -44,14 +48,14 @@ export function tickSpawners({ mobs, spawners, random, players, light, time = 0,
   const ctx = {
     ...hooks, random, players: living,
     spawnParticles: (x, y, z) => events.push({ k: 'spawnerBurst', x, y, z }), // playAuxSFX 2004
-    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h }); }, // entity status 20 (spawnExplosionParticle)
+    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h, sq: mobTrackRange(mob.type) }); }, // entity status 20 (spawnExplosionParticle)
   };
   const run = (s, key = null) => {
     const own = {
       ...ctx,
       // A kind the server has no client copy for, or a Riding mount of one, is refused: the rolls are spent and nothing spawns.
       createMob: (type, ...rest) => (SUPPORTED.has(type) && chainSupported(s.spawnData) ? create(type, ...rest) : null),
-      blockEvent: key ? () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z, v: key }) : () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z }), // addBlockEvent(1, 0) / setEntityState 1
+      blockEvent: key ? () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z, v: key, sq: CART_RANGE }) : () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z }), // addBlockEvent(1, 0) / setEntityState 1
     };
     return updateSpawner(s, own);
   };
@@ -63,14 +67,15 @@ export function tickSpawners({ mobs, spawners, random, players, light, time = 0,
   return out;
 }
 
-// Queue the events on each player's `dispOut` (sent by server.js after the tick) as one `dispFx`: a block event or burst reaches players within 64 blocks, a minecart's status those within its tracking range.
+// Queue the events on each player's `dispOut` (sent by server.js after the tick) as one `dispFx`: a block event or burst reaches players within 64 blocks, a minecart's or a mob's status the players its tracker holds (`sq`: the square range).
 export function sendSpawnerFx(players, events, cartOf = null) {
   if (!events.length) return;
   for (const p of players) {
     const q = p.position, list = [];
     for (const e of events) {
       const dx = e.x - q.x, dz = e.z - q.z, dy = e.y - q.y;
-      if (e.v ? dx * dx + dz * dz < CART_RANGE_SQ : dx * dx + dy * dy + dz * dz < FX_RANGE_SQ) list.push(e);
+      const sq = e.sq ?? (e.v ? CART_RANGE : 0);
+      if (sq ? Math.abs(dx) <= sq && Math.abs(dz) <= sq : dx * dx + dy * dy + dz * dz < FX_RANGE_SQ) list.push(e);
     }
     if (list.length) (p.dispOut ??= []).push({ type: 'dispFx', events: list.slice(0, FX_CAP) });
   }

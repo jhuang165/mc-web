@@ -91,9 +91,9 @@ export class ServerStats {
     // executed in combat-best-reference.json). The tracker sees every damageEntity of the mob; a killing hit empties it first, so a death by fire or a fall falls back to attackingPlayer
     // (the last player to hit, while recentlyHit > 0). mobKills goes to that credit; the kill-by-type stat (Entity.onKillEntity) only to the player the killing source names.
     const states = new WeakMap(), damageEntity = mobs.damageEntity, who = (e, source) => {
-      if (source?.player) return { isPlayer: true, living: true, p: attacker() };
+      if (source?.player) { const q = attacker(); return { isPlayer: true, living: true, p: q, alive: () => !!q && sim.players.get(q.id) === q && !q.dead && (q.survival?.health ?? 1) > 0 }; } // b67: sv.Z of the revenge target
       const by = source?.shooter ?? source?.attacker;
-      return by && by !== e ? { isPlayer: false, living: true, p: null, tamedWolf: by.type === 'wolf' && !!by.owner } : null;
+      return by && by !== e ? { isPlayer: false, living: true, p: null, tamedWolf: by.type === 'wolf' && !!by.owner, alive: () => !by.dead && !(by.health <= 0) } : null;
     };
     if (typeof damageEntity === 'function') mobs.damageEntity = function (e, amount, name, source, ...rest) {
       this.lastDealt = 0;
@@ -105,7 +105,7 @@ export class ServerStats {
     const credited = (e, source) => {
       const st = states.get(e); states.delete(e);
       if (!st) return source?.player ? attacker() : null;
-      const entry = st.killer(e.age | 0, e.recentlyHit, e.health > 0), q = entry?.isPlayer ? entry.p : null; // a living mob that did the most: no player is credited
+      const entry = st.killer(e.age | 0, e.recentlyHit, e.health > 0, by => by.alive?.() !== false), q = entry?.isPlayer ? entry.p : null; // a living mob that did the most: no player is credited
       return q?.stats && sim.players.get(q.id) === q ? q : null;
     };
     mobs.onDeath = function (e, source = {}) {
