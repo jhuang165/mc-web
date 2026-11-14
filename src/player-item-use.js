@@ -8,6 +8,7 @@ export function tickPlayerItemUse(use, heldId, survival, {
   renderHotbar = () => {},
   markUnsaved = () => {},
   random = Math.random,
+  predicted = false, // b64: a connected client only animates; the server applies food, effects and the burp
 } = {}) {
   if (!use) return { use: null, cancelled: false, completed: false };
   if (heldId !== use.id) return { use: null, cancelled: true, completed: false };
@@ -28,7 +29,7 @@ export function tickPlayerItemUse(use, heldId, survival, {
     if (remaining <= 0) {
       // updateItemUse(16) precedes ItemFood.onEaten, including its chance roll.
       foodEffects(use.id, 16);
-      if (survival.eat(use.id, random)) {
+      if (predicted) { /* the server eats and sends the burp */ } else if (survival.eat(use.id, random)) {
         sound("random.burp", { volume: 0.5 });
         renderHotbar();
         markUnsaved();
@@ -43,7 +44,7 @@ export function tickPlayerItemUse(use, heldId, survival, {
     sound("random.drink", { volume: 0.5, pitch: random() * 0.1 + 0.9 });
   if (remaining <= 0) {
     sound("random.drink", { volume: 0.5, pitch: random() * 0.1 + 0.9 });
-    if (finishDrinking(survival)) {
+    if (!predicted && finishDrinking(survival)) {
       renderHotbar();
       markUnsaved();
     }
