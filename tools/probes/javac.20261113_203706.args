@@ -1,0 +1,6 @@
+-nowarn
+-cp
+/Users/programming-xcode/Desktop/mc-web/tools/research/fishing-probe/classes:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/commons-io-2.4.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/commons-lang3-3.1.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/gson-2.2.4.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/guava-15.0.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/icu4j-core-mojang-51.2.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/log4j-api-2.0-beta9.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/log4j-core-2.0-beta9.jar:/Users/programming-xcode/Desktop/mc-web/tools/research/libs-1.7.10/lwjgl-2.9.2-nightly-20140822.jar:
+-d
+/private/tmp/claude-501/c65/fl
+FishLineProbe.java
