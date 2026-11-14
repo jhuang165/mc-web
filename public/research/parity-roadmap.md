@@ -138,3 +138,14 @@ The Hard spider effects are now the source of mob potion effects. An invisible s
 0.22.12 continues PLAYER-01. `src/combat.js` and `EntityWorld.attackEntityFrom` port the mob side of `attackEntityFrom`, `onDeath` and `onDeathUpdate`: hurt resistance with top-up hits, zombie armour, sound volume and pitch, every drop roll (cooked meat when burning, the skeleton's worn bow, the zombie's rare drop), experience at death tick 20 and the death burst, all on the mob's own Random. Pushing follows `collideWithNearbyEntities`/`applyEntityCollision`, including the player. CombatProbe records 1,113 cases from the unchanged classes, all replayed exactly. Browser check: drops, experience and pushing worked in a scratch world with audio stubbed and no console errors. Gaps are in [combat](combat.md).
 
 0.22.13: mob kills in Creative drop experience orbs, as `onDeathUpdate` does in every game mode; Creative players already collected orbs.
+
+## Batch 71 docs sweep (2026-11-14)
+
+This tracker is history; the status cells below were re-read against `src/` and are stale in these places. Table rows are left as written.
+
+- VEHICLE-02: "No standing on boats or mob riders" is stale. `src/entity-collision.js` 3-5 gives boats a box that players and mobs stand on (`boat-reference.json`, `boats.test.js`); mob riders are live (`src/mob-riding.js`, [mob riding](mob-riding.md)).
+- ENTITY-01: "No fishing statistics, wolf spawn egg or hanging-entity region import" is stale. Fishing awards stats (`src/stats-live.js` 98-99), the wolf egg (id 95) is in `src/spawn-eggs.js` 19, and paintings and item frames are read and written by region import and export (`src/region-import.js` 44, `src/region-export.js` 169).
+- BREW-01: "thrown potions in region export" is stale (`src/region-export.js` 177), and invisibility detection range is live (`src/ai.js` 860 and 1407, `detection-reference.json`). Stand model detail was not re-checked.
+- VILLAGE-01: "Open: BreakDoor, bed cure boost, zombie villager professions" is stale for the first two ([mob riding](mob-riding.md) door breaking; the bed boost was closed in batch 70, see [zombie villager](zombie-villager.md)); professions were not re-read.
+- WORLD-03e and WORLD-03f: "Live import remains open" and "Full save migration remains open" are stale: `src/region-import.js` and `src/level-dat.js` import Java saves (generation 22 and 23, see [superflat](superflat.md)); full-save fidelity is not claimed.
+- Not re-checked here: every other Partial row, PLAN-03 percentages and the evidence-limits paragraph. No code changed.

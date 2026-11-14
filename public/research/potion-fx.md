@@ -23,4 +23,5 @@ The probe runs the unchanged EntityRenderer (blt), RenderGlobal (bma) and World 
 - The sky pass is hidden while blind rather than drawn through fog.
 - `detectionRangeScale` is wired through `MobAI.closestVulnerablePlayer` (`src/ai.js`) into the legacy `findPlayerToAttack` mobs; the task-based `EntityAINearestAttackableTarget` has no such scaling in 1.7.10. See `detection.md`.
 - Potions in flight are not exported to region files; a witch-thrown potion loses its owner when loaded.
+- Batch 71 (docs sweep, 2026-11-14): both halves are wrong. `src/region-export.js` 177 exports `thrownPotions` (`javaProjectileToNbt`, `src/java-projectiles.js` 115-117 writes `ThrownPotion` with `Potion`). The witch owner is lost natively too: `EntityThrowable.writeEntityToNBT` (`zk`, javap on the 1.7.10 jar, offsets 95-119) copies the thrower's name into `ownerName` only after `instanceof EntityPlayer` (`yz`), so a witch's potion is saved without an owner. `witch-potions.js` 50-52 keeps `owner` only for the local player, the same rule.
 - The splash particles' motion after `multiplyVelocity` is not compared to native (colours and spawn arguments are).

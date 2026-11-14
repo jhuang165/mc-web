@@ -7,3 +7,4 @@ The particle keeps its spawn origin and original motion. Each update sets its po
 `tools/verify-portal-particles.mjs` runs `PortalParticleProbe.java` against the pinned, unchanged 1.7.10 JAR. Eight constructor/motion cases record every update through death, both random stream positions, and native render-size/light results at early, middle and final ages, three partial ticks and three light levels. The probe reuses the existing `FxProbe` world and Tessellator harness, without a GL draw. `portal-particles.test.js` replays these outputs and checks the setting/range filter and shared lifetime pool.
 
 The native evidence covers particle state and the render-size/light methods. Full client/server packet timing and framebuffer equivalence remain outside this probe.
+- Batch 71 (docs sweep, 2026-11-14): unchanged. `portal-particles.js` is wired through `Fx.spawn('portal', ...)`; no claim here needed a change, and the packet-timing and framebuffer limit stays (browser only).

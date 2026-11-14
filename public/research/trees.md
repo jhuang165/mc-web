@@ -64,6 +64,7 @@ code path the probe does not reach).
 - Meta writes on a cell that has become air after a drop are skipped.
 - Old saves keep their hand-made trees; their leaves have no bit 4 and will decay once marked, as with natural leaves.
 - Shears damage on leaves, silk touch and fortune on leaf drops, birch/spruce/jungle saplings and leaves are not modeled.
+- Batch 71 (docs sweep, 2026-11-14): that bullet is stale. Leaves drop by Fortune and Silk Touch (`src/enchantment-effects.js` 81 `leaves`, `harvestBlock`; `src/block-break-simulation.js` 45-55), shears take the leaf block with its type and are damaged as in `mining.js` 46, and birch, spruce, jungle, acacia and dark oak saplings and leaves are in `src/tree-growth.js` (see [wood types](wood-types.md)). The legacy-world oak stand-in and the sapling light bullets are still open (`src/trees.js` 264).
 - Worldgen v7 does not apply the log/leaf breakBlock marks; v7 also moves flowers and tall grass indirectly because the
   new crowns occupy different cells.
 - Sapling light is the browser's own light value, not the original chunk's light update queue.

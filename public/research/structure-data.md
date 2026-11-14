@@ -21,3 +21,4 @@ Decision: merge, native precedence. On export, imported start compounds are kept
 - Saves record starts only; piece contents are not in a save-folder chunk NBT here. Exports keep the standing limit that Java regenerates beyond provided columns.
 - Streamed v15 exports search the exported columns exactly like finite; streaming's per-cell generation order is not modelled (start existence is order independent).
 - Unaligned imports drop structure data (reported). HashMap order is modelled for Java 8+ only.
+- Batch 71 (docs sweep, 2026-11-14): unchanged. The Streamed v15 line stays true (`src/structure-data.js` searches exported columns). The "HashMap order for Java 8+ only" line was not re-read; still unverified for a JDK 7 save.

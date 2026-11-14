@@ -34,3 +34,4 @@ The mapping to three.js is (x, 24 − y, −z) / 16, plus RendererLivingEntity's
 The renderers add no scale for the pig, cow or zombie. RenderSkeleton applies 1.2 only to wither skeletons, which this build does not have.
 
 Not covered: animation curves beyond the rest pose (they were checked against the `setRotationAngles` bytecode earlier, not run in a probe), armor layers on mobs and the remaining mob roster.
+- Batch 71 (docs sweep, 2026-11-14): the sentences naming what "this build does not have" are stale. The wither skeleton exists (`src/wither-skeleton.js`, `GEAR_TYPES` in `src/mob-equipment-live.js` 28), and the RenderSkeleton 1.2 scale is applied (`src/mob-renderer.js` 169, `WITHER_SKELETON_SCALE` in `src/wither-skeleton.js` 11). Armour and held items on mobs are drawn by `src/mob-equipment-renderer.js` and `src/wearable-heads.js`. Animation curves and the rest of the roster are unchanged (not re-run).

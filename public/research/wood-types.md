@@ -41,4 +41,5 @@ types, sapling drops carrying their type, shears keeping the leaf type.
 - The browser's sapling light is its own light value, not the original chunk light queue (see trees.md).
 - The probe uses a flat synthetic world; real terrain neighbours (water, slopes) are only covered by the generator replays.
 - Log placement orientation is bytecode-transcribed, not executed. Dispensers/pistons do not place logs.
+- Batch 71 (docs sweep, 2026-11-14): still open and re-checked. The legacy 64-high stand-in is still the gate in `src/trees.js` 264 (`generationVersion >= 11 || height >= 256` goes to `growSapling`; otherwise only oak, with the big-oak roll answered by a normal oak). Log placement still uses `logPlacedMeta` (`src/wood-types.js` 6), bytecode-transcribed, not executed.
 - Full parity is not claimed.

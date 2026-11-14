@@ -1,6 +1,8 @@
 # Villager trading rules (Minecraft Java 1.7.10)
 
 This is a standalone rules kernel. It is not connected to the villager entity or a trading screen. `VillagerTradingProbe.java` executes the unchanged `MerchantRecipeList` and `MerchantRecipe` classes from the pinned 1.7.10 client JAR; `verify-villager-trading.mjs` records the results in [villager-trading-reference.json](villager-trading-reference.json), replayed by `src/villager-trading.test.js`.
+
+- Batch 71 (docs sweep, 2026-11-14): the opening sentence ("not connected to the villager entity or a trading screen") is stale: the kernel is used live by `src/merchant-ui.js` and `src/villager.js` ([villager trading live](villager-trading-live.md)), and on the dedicated server by `src/multiplayer/server-trade.js`. The kernel itself and its native record are unchanged.
 - Batch 70 (docs sweep, 2026-11-14): closed. The kernel is connected: [villager-trading-live](villager-trading-live.md) (`src/villager-trade*.js`) and on the dedicated server `src/multiplayer/server-trade.js` and `client-trade.js` (batch 66). The sentence above is history.
 
 ## Covered

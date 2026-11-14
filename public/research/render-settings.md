@@ -14,6 +14,7 @@ Saved device settings: `graphics` (true = Fancy), `ao` 0..2, `clouds`, `mipmapLe
 ## Approximated or limited
 - Fast clouds: flat layer of 8 block texels at alpha 0.8, without culling; geometry follows the bytecode loosely and was not compared pixel by pixel.
 - The vignette is Fancy-only natively; the port draws none, so there is nothing to switch.
+- Batch 71 (docs sweep, 2026-11-14): not touched (the vignette and darkness pop belong to batch 71 `hudfx71`). At the base of this batch `style.css` 62 and 93 hold a `#vignette` element and `minecraft-ui.css` 3 sets it to `display:none`, so nothing is drawn; the line above is still accurate.
 - Mipmaps cover the block atlas only. Items, entities, particles and GUI textures stay unmipmapped. Level 0 output is pixel-exact (no mip data, linear filtering unchanged).
 - Mipmap level 4 is the native default, so the distant-terrain look differs from earlier builds; set Mipmap Levels to OFF for the old look.
 - Anisotropic filtering needs EXT_texture_filter_anisotropic and is clamped to the GPU maximum; it applies to the block atlas only.

@@ -32,3 +32,4 @@ Internal ids 87-96 map to the original ids 53 (oak), 67 (cobblestone), 109 (ston
 - The `RenderBlocks.renderBlockAsItem` item boxes (`STAIR_ITEM_BOXES`) come from the bytecode by reading, not from a probe run.
 - Recipe C90 (stone brick stairs) depends on the stone-bricks item mapping 98 -> internal 101; the recipe already accepts internal id 101 with any damage. Item 5:1-5 (planks damage variants) is now mapped in `region-import.js`, so those recipes are audited.
 - Full parity is not claimed: stair AI path costs, redstone and stair-specific mob spawning rules are not checked, and shape logic was verified only against the stair class with the neighbours described above.
+- Batch 71 (docs sweep, 2026-11-14): unchanged and still open. No code in `src/` or a test reads stair path costs or the stair spawn surface rule, and the stale-octant placement test is only the recorded `boundsAfterTrace` (`src/stairs.test.js` 155); nothing models it in play.
