@@ -5,7 +5,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, cre
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { validName } from '../src/multiplayer/protocol.js';
-import { pngSize, SKIN_WIDTH, SKIN_HEIGHT, MAX_SKIN_BYTES } from '../src/skin.js';
+import { pngSize, SKIN_WIDTH, SKIN_HEIGHT, MAX_SKIN_BYTES, CAPE_WIDTH, CAPE_HEIGHT, MAX_CAPE_BYTES } from '../src/skin.js';
 
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 export const SESSION_MS = 30 * 24 * 3600 * 1000, INVITE_MS = 7 * 24 * 3600 * 1000;
@@ -29,6 +29,8 @@ export class AccountStore {
     this.invites = new Map((data.invites ?? []).map(i => [i.hash, i]));
     this.skins = new Map();
     for (const a of this.accounts.values()) if (a.skin) this.skins.set(a.skinHash, Buffer.from(a.skin, 'base64'));
+    this.capes = new Map(); // b71 mpcapes: hash -> PNG, like skins
+    for (const a of this.accounts.values()) if (a.cape) this.capes.set(a.capeHash, Buffer.from(a.cape, 'base64'));
     this.failures = new Map(); // lower-case name → [timestamps], not saved
     this.attempts = []; // every login/register attempt in the last minute
     this.saving = Promise.resolve();
@@ -58,7 +60,7 @@ export class AccountStore {
     for (const a of this.accounts.values()) if (a.name.toLowerCase() === lower) return a;
     return null;
   }
-  public(a) { return { id: a.id, name: a.name, admin: !!a.admin, skin: a.skinHash ?? null }; }
+  public(a) { return { id: a.id, name: a.name, admin: !!a.admin, skin: a.skinHash ?? null, cape: a.capeHash ?? null }; }
   // Shared limit on password checks (every client arrives from Serve as
   // 127.0.0.1) plus a per-name lockout after repeated failures.
   throttle(name) {
@@ -91,7 +93,7 @@ export class AccountStore {
     if (this.byName(name)) throw new AccountError(409, 'That name is taken.');
     const salt = randomBytes(16);
     const account = { id: randomUUID(), name, salt: salt.toString('base64'), hash: (await scrypt(password, salt)).toString('base64'),
-      admin, createdAt: this.now(), invitedBy: admin ? null : record.createdBy, skin: null, skinHash: null };
+      admin, createdAt: this.now(), invitedBy: admin ? null : record.createdBy, skin: null, skinHash: null, cape: null, capeHash: null };
     // Re-check after the asynchronous hash: two registrations may race.
     if (this.byName(name)) throw new AccountError(409, 'That name is taken.');
     if (!admin) { if (!this.invites.has(inviteHash)) throw new AccountError(403, 'That invite code is wrong, used or expired.'); this.invites.delete(inviteHash); }
@@ -146,6 +148,21 @@ export class AccountStore {
     return this.public(account);
   }
   async clearSkin(account) { this.dropSkin(account); account.skin = account.skinHash = null; await this.save(); return this.public(account); }
+  // b71 mpcapes: an optional cape, validated like a skin (64 x 32 PNG, at most 16 KB). Users upload their own; none ships.
+  async setCape(account, png) {
+    if (!Buffer.isBuffer(png) || png.length > MAX_CAPE_BYTES) throw new AccountError(413, 'Capes must be at most 16 KB.');
+    const size = pngSize(png);
+    if (!size || size.width !== CAPE_WIDTH || size.height !== CAPE_HEIGHT) throw new AccountError(400, 'Upload a 64 × 32 PNG cape.');
+    const hash = sha(png).slice(0, 20);
+    this.dropCape(account);
+    account.cape = png.toString('base64'); account.capeHash = hash; this.capes.set(hash, png);
+    await this.save();
+    return this.public(account);
+  }
+  async clearCape(account) { this.dropCape(account); account.cape = account.capeHash = null; await this.save(); return this.public(account); }
+  dropCape(account) {
+    if (account.capeHash && ![...this.accounts.values()].some(a => a !== account && a.capeHash === account.capeHash)) this.capes.delete(account.capeHash);
+  }
   dropSkin(account) {
     if (account.skinHash && ![...this.accounts.values()].some(a => a !== account && a.skinHash === account.skinHash)) this.skins.delete(account.skinHash);
   }

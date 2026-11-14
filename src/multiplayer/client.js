@@ -130,6 +130,7 @@ export class DedicatedClient {
   // Item entities in reach with room in the inventory (Survival): the server repeats the pickup test and answers each one with a `collect` stack.
   pickup(ids, fit) { this.send({ type: 'pickup', ids, ...(fit ? { fit } : {}) }); }
   // C16 client status 0: perform respawn after a death.
+  capeSettings(show) { this.send({ type: 'capeSettings', show: !!show }); } // b71 mpcapes: C15 ClientSettings.showCape
   respawn() { this.send({ type: 'respawn' }); }
   dropHeld(all) { this.send({ type: 'achDrop', all: !!all }); } // b60: EntityPlayer.dropOneItem happens on the server
   requestStats() { this.send({ type: 'requestStats' }); } // b63 mpstats: C16PacketClientStatus REQUEST_STATS (GuiStats opening)

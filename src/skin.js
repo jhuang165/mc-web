@@ -7,6 +7,8 @@
 
 export const SKIN_WIDTH = 64, SKIN_HEIGHT = 32;
 export const MAX_SKIN_BYTES = 16384;
+// b71 mpcapes: an uploaded cape is a plain 64 x 32 PNG (the layout AbstractClientPlayer.locationCape is drawn from); the same size limit as skins.
+export const CAPE_WIDTH = 64, CAPE_HEIGHT = 32, MAX_CAPE_BYTES = 16384;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 // Width and height from a PNG's IHDR, or null when the bytes are not a PNG.
@@ -79,3 +81,17 @@ export async function skinCanvas(blob) {
   } finally { bitmap.close?.(); }
 }
 export const canvasPng = (canvas) => new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode the skin."))), "image/png"));
+
+// b71 mpcapes, browser only: decode a cape PNG into a 64 x 32 canvas. Cape pixels are kept as they are (no skin opacity rules); other sizes are rejected.
+export async function capeCanvas(blob) {
+  let bitmap;
+  try { bitmap = await createImageBitmap(blob); }
+  catch { throw new Error("That file is not a readable PNG image."); }
+  try {
+    if (bitmap.width !== CAPE_WIDTH || bitmap.height !== CAPE_HEIGHT) throw new Error(`A cape must be 64 × 32 pixels (this is ${bitmap.width} × ${bitmap.height}).`);
+    const out = document.createElement("canvas");
+    out.width = CAPE_WIDTH; out.height = CAPE_HEIGHT;
+    out.getContext("2d").drawImage(bitmap, 0, 0);
+    return out;
+  } finally { bitmap.close?.(); }
+}

@@ -1,7 +1,7 @@
 import { DEFAULT_SERVER, validName } from './protocol.js';
 import { convertGuiCanvas } from '../gui-anaglyph.js';
 import { AccountApi } from './account-api.js';
-import { skinCanvas, canvasPng, drawSkinPreview, PREVIEW_WIDTH, PREVIEW_HEIGHT } from '../skin.js';
+import { skinCanvas, capeCanvas, canvasPng, drawSkinPreview, PREVIEW_WIDTH, PREVIEW_HEIGHT } from '../skin.js';
 
 // Browser-server sign-in and join; intentionally doesn't pretend to discover
 // Java LAN servers. Accounts are invite-only and live on the server (server/accounts.js).
@@ -85,7 +85,7 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
 // Name and skin for the signed-in account. A chosen PNG is previewed locally
 // (normalized as 1.7.10 reads skins) before Save Skin uploads it.
 export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }) {
-  let name = api.account.name, busy = false, error = '', note = '', pending = null, current = null, loaded = false;
+  let name = api.account.name, busy = false, error = '', note = '', pending = null, current = null, loaded = false, capePending = null; // capePending: b71 mpcapes, a chosen cape canvas
   const run = async (g, work) => {
     if (busy) return;
     busy = true; error = ''; note = ''; g.build();
@@ -101,13 +101,22 @@ export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }
     };
     input.click();
   };
+  const chooseCape = (g) => { // b71 mpcapes: an optional 64 x 32 PNG the user supplies; none ships with the game
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/png';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) void run(g, async () => { capePending = await capeCanvas(file); note = 'Cape chosen. Press Save Cape to use it.'; });
+    };
+    input.click();
+  };
   return {
     id: 'multiplayer-profile',
     escape: () => { if (!busy) back(); },
     init(g, w, h) {
       if (!loaded) { loaded = true; void loadSkin(api.account.skin).then(c => { current = c; g.build(); }); }
       const x = Math.floor(w / 2) - 150, top = Math.max(24, Math.floor(h / 2) - 80);
-      g.text('Name and Skin', w / 2, 12, { center: true });
+      g.text('Name, Skin and Cape', w / 2, 12, { center: true });
       const box = g.image('mc-skin-preview', x, top, PREVIEW_WIDTH * 3, PREVIEW_HEIGHT * 3);
       const canvas = document.createElement('canvas');
       canvas.width = PREVIEW_WIDTH; canvas.height = PREVIEW_HEIGHT;
@@ -131,8 +140,15 @@ export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }
       g.button({ x: rx + 92, y: top + 78, w: 88, h: 20 }, 'Use Default', () => run(g, async () => {
         changed(await api.clearSkin()); current = pending = null; note = 'Using the default skin.';
       }), { enabled: !busy && (!!current || !!pending) });
-      g.text(error || note || (busy ? 'Saving…' : '64 × 32 or 64 × 64 PNG; 1.7.10 uses the top half.'), w / 2, top + 116, { center: true, color: error ? 0xff7777 : 0xaaaaaa });
-      g.button({ x: x + 77, y: top + 134, w: 146, h: 20 }, 'Done', back, { enabled: !busy });
+      g.button({ x: rx, y: top + 100, w: rw, h: 20 }, 'Choose PNG Cape…', () => chooseCape(g), { enabled: !busy }); // b71 mpcapes
+      g.button({ x: rx, y: top + 122, w: 88, h: 20 }, 'Save Cape', () => run(g, async () => {
+        changed(await api.uploadCape(await canvasPng(capePending))); capePending = null; note = 'Cape saved. Other players see it now.';
+      }), { enabled: !busy && !!capePending });
+      g.button({ x: rx + 92, y: top + 122, w: 88, h: 20 }, 'No Cape', () => run(g, async () => {
+        changed(await api.clearCape()); capePending = null; note = 'Cape removed.';
+      }), { enabled: !busy && (!!api.account.cape || !!capePending) });
+      g.text(error || note || (busy ? 'Saving…' : 'Skin: 64 × 32 or 64 × 64 PNG. Cape: 64 × 32 PNG.'), w / 2, top + 148, { center: true, color: error ? 0xff7777 : 0xaaaaaa });
+      g.button({ x: x + 77, y: top + 166, w: 146, h: 20 }, 'Done', back, { enabled: !busy });
     },
   };
 }

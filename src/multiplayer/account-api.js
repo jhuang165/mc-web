@@ -36,6 +36,9 @@ export class AccountApi {
   async rename(name) { return (await this.request('me', { method: 'PATCH', json: { name } })).account; }
   async uploadSkin(png) { return (await this.request('skin', { method: 'PUT', body: png, type: 'image/png' })).account; }
   async clearSkin() { return (await this.request('skin', { method: 'DELETE' })).account; }
+  async uploadCape(png) { return (await this.request('cape', { method: 'PUT', body: png, type: 'image/png' })).account; } // b71 mpcapes
+  async clearCape() { return (await this.request('cape', { method: 'DELETE' })).account; }
+  capeUrl(hash) { return hash ? new URL(`capes/${hash}.png`, this.base).href : null; }
   async invite() { return this.request('invites', { method: 'POST' }); }
   skinUrl(hash) { return hash ? new URL(`skins/${hash}.png`, this.base).href : null; }
 }

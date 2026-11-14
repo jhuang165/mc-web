@@ -6,7 +6,7 @@ Target: Minecraft Java 1.7.10. Evidence: `ChatOptionsProbe` (executes `GuiNewCha
 
 GuiOptions "Multiplayer Settings..." opens it (bytecode: id 101 of GuiOptions shows ScreenChatOptions). Nine options in two columns at `w/2 - 155 + (i % 2) * 160`, `h/6 + 24 * (i >> 1)`: Chat (visibility button), Colors, Web Links, Opacity (slider), Prompt on Links, Scale, Focused Height, Unfocused Height, Width. The "Multiplayer Settings..." heading sits at `h/6 + 127`, Show Cape at `h/6 + 144`, Done at `h/6 + 168`. Labels: opacity `(int)(f*90+10)%`, scale `OFF` at 0 else `(int)(f*100)%`, width and heights in px through the GuiNewChat conversions (`floor(f*280+40)`, `floor(f*160+20)`). Values are saved in the device settings with the GameSettings defaults (`chatVisibility` 0, colours, links and prompt on, opacity/scale/width/focused height 1, unfocused 0.44366196, `showCape` true) and validated by `migrateSettings`.
 
-Show Cape is drawn disabled: the cape model, motion and the hide rule are ported (`cape.js`, batch 70) but nothing supplies a cape texture (accounts carry skins only), so the setting has no effect yet. Natively the setting travels in C15PacketClientSettings and the server sets `getHideCape` (metadata 16 bit 1), which hides the cape for every viewer (bytecode-read).
+Show Cape is enabled (batch 71): accounts can carry an uploaded cape, the setting is sent as `capeSettings` (C15 showCape) and the server's hide-cape flag is shown to other clients. Natively the setting travels in C15PacketClientSettings and the server sets `getHideCape` (metadata 16 bit 1), which hides the cape for every viewer (bytecode-read).
 
 ## What the settings do
 

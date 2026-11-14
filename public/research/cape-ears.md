@@ -8,4 +8,4 @@ Source: 1.7.10 `RenderPlayer.renderSpecials` (`bop`), `ModelBiped` (`bhm`), `Ent
 - **Remote players** (bytecode-read): `EntityOtherPlayerMP` never moves through `moveEntity` and its motion stays 0, so its cameraYaw and walked distance stay 0; only the chase swing and the sneak offset move a remote cape.
 - **Show Cape** (bytecode-read): the setting is sent in C15PacketClientSettings; the server sets `getHideCape` (metadata 16 bit 1), which hides the cape for all viewers.
 
-Port: `src/cape.js` (maths), `PlayerBody.cape`, `PlayerRenderer.setCape(texture)`, `PlayerRenderer.name` / `hasSkin` (ears). Open: there is no cape texture source (accounts have skins only), the wire carries neither a cape hash nor the hide flag, and the local Show Cape button stays disabled.
+Port: `src/cape.js` (maths), `PlayerBody.cape`, `PlayerRenderer.setCape(texture)`, `PlayerRenderer.name` / `hasSkin` (ears). Batch 71: accounts carry an optional uploaded 64 x 32 cape (`/api/cape`, `/api/capes/<hash>.png`), player rows carry `cape` and `hideCape`, the client sends `capeSettings {show}`, and the Show Cape button works. No Mojang cape ships.

@@ -33,7 +33,6 @@ export const UNAVAILABLE = {
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
-  showCape: "The browser build has no cape source (accounts carry skins only), so the Show Cape button is drawn disabled.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
   languages: "Only English (US) is installed (npm run lang:fetch).",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
@@ -60,7 +59,7 @@ export function createMenus(gui, ctx) {
   // GuiOptionSlider / GuiOptionButton for a GameSettings.Options entry.
   function optionWidget(g, o, r, parent) {
     const fixed = !(o in FIELDS) && o !== "USE_FULLSCREEN";
-    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
+    const reason = o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
     if (o in FLOAT_OPTIONS) {
       return g.slider(r, {
         parent, reason,
