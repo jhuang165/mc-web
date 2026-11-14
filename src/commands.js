@@ -467,7 +467,7 @@ export function createCommandRunner(host) {
     },
     summon(a) {
       if (a.length < 1) usage("commands.summon.usage");
-      const p = pos(), here = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y + 0.5), z: Math.floor(p.z) + 0.5 };
+      const p = (host.summonPosition ?? pos)(), here = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y + 0.5), z: Math.floor(p.z) + 0.5 }; // b68 summon2: host.summonPosition is the sender's native position (the dedicated server's End window is shifted)
       let { x, y, z } = here;
       if (a.length >= 4) { x = parseCoordinate(here.x, a[1]); y = parseCoordinate(here.y, a[2], 0, 0); z = parseCoordinate(here.z, a[3]); }
       if (!host.inWorld(x, y, z)) return feedback("commands.summon.outOfWorld");

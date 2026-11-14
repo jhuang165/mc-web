@@ -105,9 +105,11 @@ export class ServerStats {
     const credited = (e, source) => {
       const st = states.get(e); states.delete(e);
       if (!st) return source?.player ? attacker() : null;
-      const entry = st.killer(e.age | 0, e.recentlyHit, e.health > 0, by => by.alive?.() !== false), q = entry?.isPlayer ? entry.p : null; // a living mob that did the most: no player is credited
+      const entry = st.killer(e.age | 0, e.recentlyHit, e.health > 0), q = entry?.isPlayer ? entry.p : null; // a living mob that did the most: no player is credited
       return q?.stats && sim.players.get(q.id) === q ? q : null;
     };
+    const tick = mobs.tick; // b68 summon2: sv.C drops a dead revenge target in the victim's own tick (here: once at the top of the world's tick, before any entity moves)
+    if (typeof tick === 'function') mobs.tick = function (...a) { for (const e of this.entities) states.get(e)?.tick(e.age | 0); return tick.apply(this, a); };
     mobs.onDeath = function (e, source = {}) {
       const direct = source?.player ? attacker() : null, result = death.call(this, e, source), p = credited(e, source);
       if (p?.stats) p.stats.increment(STAT.mobKills);

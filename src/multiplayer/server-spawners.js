@@ -6,6 +6,8 @@
 // Tile entities tick after the entities (World.updateEntities), so the host calls this after the mobs' tick. A kind the server has no client copy for (SUPPORTED) is refused like any
 // other port-side refusal: the rolls are spent and nothing spawns (b65: so is a SpawnData Riding mount of one, `chainSupported`). The effects go to the clients as `dispFx` events (below).
 import { SUPPORTED, MOB_LIMIT } from './server-mobs.js';
+import { clampTrackRange } from '../ring-events.js';
+import { VIEW_DISTANCE } from './server-chunks.js';
 import { liveCartSpawners, spawnerVehicle } from '../structure-simulation.js';
 import { updateSpawner, spawnerType, boxesIntersect } from '../mob-spawner.js';
 import { ridingChain } from '../spawner-riding.js';
@@ -20,7 +22,7 @@ const FX_RANGE_SQ = 64 * 64; // sendToAllNear 64.0 (squared)
 const CART_RANGE = 80; // EntityTracker range of a minecart (server-vehicles.js RANGE)
 // b67 mpsummon (bytecode-read mn.a(sa), the EntityTracker.addEntityToTracker table, and my.b(mw), updatePlayerEntity): a status (S19) goes to the entity's tracking players, and a player tracks
 // when |dx| <= range and |dz| <= range (a square, inclusive, height ignored) from the tracker's own range: EntityMinecart (xl, so the spawner cart) 80, EntitySquid 64, the dragon 160 and
-// every other IAnimals / IMob (the spawner's mobs) 80. The batch 65 circle of 64 blocks for the puff was wrong. (The server's view-distance clamp, 144 at the default 10, is not modelled.)
+// every other IAnimals / IMob (the spawner's mobs) 80. The batch 65 circle of 64 blocks for the puff was wrong. b68 summon2: the tracker's view-distance clamp (min(range, viewDistance * 16 - 16) = 144 at 10) applies to the puff's `sq` (the dragon's 160 becomes 144).
 export const mobTrackRange = type => (type === 'squid' ? 64 : type === 'ender_dragon' ? 160 : 80);
 const FX_CAP = 64;
 
@@ -48,7 +50,7 @@ export function tickSpawners({ mobs, spawners, random, players, light, time = 0,
   const ctx = {
     ...hooks, random, players: living,
     spawnParticles: (x, y, z) => events.push({ k: 'spawnerBurst', x, y, z }), // playAuxSFX 2004
-    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h, sq: mobTrackRange(mob.type) }); }, // entity status 20 (spawnExplosionParticle)
+    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h, sq: clampTrackRange(mobTrackRange(mob.type), VIEW_DISTANCE) }); }, // entity status 20 (spawnExplosionParticle)
   };
   const run = (s, key = null) => {
     const own = {

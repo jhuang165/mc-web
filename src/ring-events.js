@@ -16,6 +16,10 @@
 //    16-block ring particle cull is the native range, not a shortcut.
 const MOB_RANGE = 80;
 const MOB_RANGES = { squid: 64, ender_dragon: 160, ender_crystal: 256 };
+// b68 summon2 (bytecode-read mn.<init>, oi.d, mq.b): EntityTracker's `e` = ServerConfigurationManager.getEntityViewDistance() = PlayerManager.getFurthestViewableBlock(viewDistance) = viewDistance * 16 - 16, read ONCE when
+// the world's tracker is built (oi.a(int), setViewDistance, only resizes the PlayerManagers); addEntityToTracker (mn.a(sa, int, int, boolean)) uses min(range, e).
+export const trackerLimit = (viewDistance) => viewDistance * 16 - 16;
+export const clampTrackRange = (range, viewDistance = 10) => Math.min(range, trackerLimit(viewDistance));
 export const trackingRange = (type) => MOB_RANGES[type] ?? MOB_RANGE;
 // EntityTrackerEntry.updatePlayerEntity: both axes within `range`.
 export const trackedWithin = (range, x, z, player) => !!player && Math.abs(x - player.x) <= range && Math.abs(z - player.z) <= range;

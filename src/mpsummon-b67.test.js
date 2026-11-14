@@ -230,7 +230,7 @@ test("server stats: a player who died no longer gets the kill by revenge (a livi
     w.damageEntity(pig, 1, "player", { player: true });
     f.sim.achievements.attacker = null;
     pig.recentlyHit = 0; // attackingPlayer has run out; the fire death skips damageEntity, so the tracker is emptied (the victim is dead): only the revenge target is left
-    if (attackerDies) a.dead = true;
+    if (attackerDies) { a.dead = true; w.tick({ x: 64.5, y: 10, z: 64.5 }, a.survival, 0); } // b68: sv.C drops the dead revenge target in the victim's own tick, before the kill
     pig.health = 0;
     w.onDeath(pig, { fire: true });
     return kills;
