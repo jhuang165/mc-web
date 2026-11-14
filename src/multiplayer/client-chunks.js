@@ -55,7 +55,7 @@ export function applyChunkMessage(message, host) {
     }
     // b72 mpstream72: Chunk.onChunkUnload (bytecode-read, bjd.b(II) -> apx.d()) hands the column's entities to World.unloadEntities: the client copies in it are gone, the server's tracker
     // entry is not told (it ends by range). `host.entities` removes the mob and vehicle copies; items and orbs ride the per-tick list the server cuts to sent columns.
-    if (gone.size) host.entities?.(gone);
+    if (gone.size) { host.entities?.(gone); host.dropTiles?.(gone); } // b73 streamfix73: tile entities too (client-tiles.js)
   } else if (message.type === 'chunkBulk') {
     for (const packet of message.columns ?? []) {
       const key = keyOf(packet.x, packet.z), column = world.chunks.get(key);

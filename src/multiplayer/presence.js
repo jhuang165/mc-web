@@ -76,6 +76,7 @@ export class RemotePlayers {
     this.at = performance.now();
     const seen = new Set();
     for (const p of players) {
+      if (p.far) continue; // b73 streamfix73: an untracked player is a player-list entry only (server-player-tracker.js); no entity
       if (p.id === self) { this.me = p; continue; } // b65 mpinvis: the viewer's own name and position (name tag distance, team visibility)
       seen.add(p.id);
       let entry = this.entries.get(p.id);
@@ -98,6 +99,8 @@ export class RemotePlayers {
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
   }
+  // b73 streamfix73: Chunk.onChunkUnload drops the entities of the column; a remote player standing in an unloaded column leaves (the server stops tracking him with the column)
+  dropColumns(columns) { for (const [id, entry] of [...this.entries]) if (columns.has(`${Math.floor(entry.last.x / 16)},${Math.floor(entry.last.z / 16)}`)) { this.dispose(entry); this.entries.delete(id); } }
   frame() {
     const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
     for (const entry of this.entries.values()) {

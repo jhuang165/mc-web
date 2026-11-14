@@ -68,6 +68,7 @@ import { ServerTrade, installTrade } from './server-trade.js'; // b66 mptrade: v
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { ObjectTracker } from './server-object-tracker.js'; // b71 mptrackers71: per-player item and orb tracking
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
+import { ServerPlayerTracker } from './server-player-tracker.js'; // b73 streamfix73
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
 import { setWorldSpawn } from './server-worldcmds.js'; // b68 mpworldcmds: /setworldspawn
@@ -199,6 +200,7 @@ export class DedicatedSimulation {
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
     loadVillages(this.mobs, saved, this.world, MOB_LIMIT, options.legacyOwner ?? saved.legacyOwner ?? null); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
+    this.playerTracker = new ServerPlayerTracker(this, (pid, cx, cz) => this.chunkViews.sees(pid, cx, cz), pid => this.chunkViews.takeFresh(pid, 'players')); // b73 streamfix73: EntityPlayerMP tracking (range 512, frequency 2, clamped, needs the sent column)
     this.objectTracker = new ObjectTracker(this, (pid, cx, cz) => this.chunkViews.sees(pid, cx, cz) /* b72 mpstream72: only sent columns */, true); // b72 mpcadence72: cadence mode (itrack packets); b71 mptrackers71: items (64) and orbs (160) per player; server.js cuts each tick message with it
     this.trade = new ServerTrade(this); // b66 mptrade
     this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
