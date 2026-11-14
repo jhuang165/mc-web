@@ -2651,7 +2651,9 @@ function useMerchant(entity) {
   const brain = mobs?.ai?.brain(entity);
   if (!brain || !villagerInteract(brain, holdingEgg, "Player")) return false;
   const merchant = { offers: () => villagerOffers(brain), useRecipe: (r) => { villagerUseRecipe(brain, r); saved = false; handleEntityEvents(); }, hover: (has) => villagerHover(brain, has), close: () => villagerClearCustomer(entity) };
-  openContainer(new MerchantContainer(survival.inventory, merchant), "merchant");
+  const container = new MerchantContainer(survival.inventory, merchant);
+  container.slots[2].onCraft = (stack, n) => statsLive.crafted(stack, n); // b66 mptrade: SlotMerchantResult.onCrafting adds the item's craft statistic
+  openContainer(container, "merchant");
   villagerOffers(brain);
   refreshContainer();
   return true;

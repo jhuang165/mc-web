@@ -98,13 +98,19 @@ class ResultSlot extends PaymentSlot {
     if (this.has) this.amount += Math.min(n, this.stack.count);
     return super.decr(n);
   }
-  crafted(_s, n) {
+  // SlotMerchantResult.onCrafting(stack, n) / onCrafting(stack): ItemStack.onCrafting adds the taken amount to the item's craft statistic (aau.b -> add.a(world, player, amount)); no achievement.
+  crafted(s, n) {
     this.amount += n;
-    this.amount = 0;
+    this.finish(s);
   }
-  // onPickupFromSlot: the recipe consumes its inputs from either slot order and the villager uses it.
-  onPickup() {
+  finish(s) {
+    const n = this.amount;
     this.amount = 0;
+    if (s && n > 0) this.onCraft?.(s, n);
+  }
+  // onPickupFromSlot: onCrafting first, then the recipe consumes its inputs from either slot order and the villager uses it.
+  onPickup(s) {
+    this.finish(s);
     this.inventory.container.trade();
   }
 }
