@@ -49,6 +49,11 @@ export class KillCredit {
     if (by?.living) { this.revenge = by; this.revengeAt = now; } // func_70604_c
     if (by?.isPlayer) this.aR = by; else if (by?.tamedWolf) this.aR = null; // attackingPlayer (a tamed wolf's hit sets recentlyHit but not the player)
   }
+  // b68 summon2 (bytecode-read sv.C, the victim's per-tick update): the victim itself drops a dead or older-than-100 revenge target at the top of its own tick, so the liveness is the
+  // attacker's at the victim's last tick, not at the kill. `alive(by)` is the attacker's isEntityAlive. Call once per victim tick, before the tick.
+  tick(now, alive = by => by.alive?.() !== false) {
+    if (this.revenge && (now - this.revengeAt > 100 || !alive(this.revenge))) this.revenge = null;
+  }
   // sv.aX(): the entry that gets the score, or null. `recentlyHit` is the victim's counter (> 0 while attackingPlayer stands). `revengeAlive(by)` is the revenge target's
   // isEntityAlive: a dead one has been dropped by the victim's tick (checked here, at the moment of the kill; an attacker that died after the victim's last tick is counted dead).
   killer(now, recentlyHit, alive, revengeAlive = () => true) {

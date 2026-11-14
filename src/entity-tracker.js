@@ -26,7 +26,7 @@
 // and the body yaw of an AI mob (EntityBodyHelper) that the chicken's seat reads, and the client's own water flags.
 // Not modelled: the chunk send queue (chunks are watched at once), a mount the player rides (it keeps its live position for the camera), every entity
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
-import { trackingRange } from "./ring-events.js";
+import { trackingRange, trackerLimit } from "./ring-events.js";
 import { mountEntity, seatPosition } from "./mob-riding.js";
 import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox, DRAGON_MAX_HEALTH, DRAGON_CRYSTAL_RANGE } from "./dragon.js";
 import { squidState } from "./squid-bat.js";
@@ -37,7 +37,7 @@ import { copyDeathUpdate } from "./death-fx.js";
 import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
 import { transientIds } from "./tracker-transient.js"; // b64: entities that spawned and died inside one tick
 
-export const TRACKER_LIMIT = 144; // EntityTracker.e with the integrated view distance 10
+export const TRACKER_LIMIT = trackerLimit(10); // EntityTracker.e with the integrated view distance 10
 export const MOB_UPDATE_FREQUENCY = 3; // EntityTracker.trackEntity: IAnimals, EntityBat, EntityWither, EntityDragon, EntitySquid
 export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
 // Mobs whose client class is not run at all: the dragon moves by its ring buffer of positions (dragon.js) and keeps its live position. The

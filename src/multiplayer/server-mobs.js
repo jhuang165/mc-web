@@ -278,7 +278,7 @@ export class ServerMobs {
     }
     if (this.spawning) {
       this.spawnPass();
-      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (!['wither', 'villager', 'iron_golem', 'snow_golem'].includes(mobs.entities[i].type)) mobs.entities.splice(i, 1); // b63: the cap never cuts a wither or golem just built; b66: nor a villager (mpvillage)
+      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (!mobs.entities[i].summonKeep && !['wither', 'villager', 'iron_golem', 'snow_golem'].includes(mobs.entities[i].type)) mobs.entities.splice(i, 1); // b63: the cap never cuts a wither or golem just built; b66: nor a villager (mpvillage); b68 summon2: nor a /summon-ed mob (summonKeep: native /summon ignores the cap)
     }
     this.use(first);
     const lead = first.player.position;
