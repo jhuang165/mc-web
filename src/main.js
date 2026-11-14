@@ -156,6 +156,7 @@ import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
 import { RemoteDispense } from "./multiplayer/client-dispense.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
+import { serverListScreen, ServerList, disconnectedScreen, disconnectHeading } from "./multiplayer/server-list-gui.js"; // b68 mpping
 import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { applyHealthMessage } from "./multiplayer/server-survival.js";
@@ -664,9 +665,15 @@ function showMultiplayer() {
     if (!hash) return null;
     try { const r = await fetch(api.skinUrl(hash)); return r.ok ? await skinCanvas(await r.blob()) : null; } catch { return null; }
   };
-  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer,
-    profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
+  // b68 mpping: GuiMultiplayer first; Join Server / Direct Connect open the sign-in and join screen for that address.
+  const list = mpServerList ??= new ServerList();
+  const openList = () => gui.show(serverListScreen({ list, show: s => gui.show(s), back: () => gui.show(menus.mainMenu()), join: (url) => {
+    gui.show(multiplayerScreen({ back: openList, defaults: { ...multiplayerDefaults(), url }, connect: joinMultiplayer,
+      profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
+  } }));
+  openList();
 }
+let mpServerList = null; // b68 mpping
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
@@ -884,7 +891,7 @@ async function joinMultiplayer(settings) {
     onDimRespawn: message => multiplayerDimension(client, settings, message), // b61 mpnether: S07 Respawn, the server moved this player to another dimension
     onHealthFx: applyHealthFx,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
-    onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
+    onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(true), message: reason, back: showMultiplayer })); } }, // b68 mpping: GuiDisconnected (disconnect.lost)
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
@@ -962,7 +969,7 @@ async function multiplayerDimension(client, settings, m) {
     sendMultiplayerInput();
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
-    screen = tripFrom; leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: String(error?.message ?? error), cancel: showMultiplayer }));
+    screen = tripFrom; leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(client.id !== undefined), message: String(error?.message ?? error), back: showMultiplayer })); // b68 mpping: connect.failed before the welcome, else disconnect.lost
   } finally { openingWorld = false; tripLoading = false; }
 }
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
@@ -4046,7 +4053,7 @@ function sidebarFrame() {
 }
 // key.playerlist (Tab) held: GuiIngame draws the list unless a lone integrated player is on the server (player-list.js).
 const showPlayerList = () => {
-  if (multiplayer) { const lo = mpBoard.slot(0); playerList.show(multiplayer.players.map(p => ({ name: mpBoard.formatName(p.name), ping: 0, score: lo ? mpBoard.peek(p.name, lo)?.value ?? 0 : undefined })), /* b64 mpscoreboard: team names and the list objective's scores */ Math.ceil(innerWidth / guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0))); return; }
+  if (multiplayer) { const lo = mpBoard.slot(0); playerList.show(multiplayer.players.map(p => ({ name: mpBoard.formatName(p.name), ping: multiplayer.pings.get(p.name), /* b68 mpping: S38 */ score: lo ? mpBoard.peek(p.name, lo)?.value ?? 0 : undefined })), /* b64 mpscoreboard: team names and the list objective's scores */ Math.ceil(innerWidth / guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0))); return; }
   const listObjective = scoreboard.slot(0); // display slot "list": shows the overlay even for a lone player, with a score column
   if (!playerListVisible({ integrated: true, players: 1, hasObjective: !!listObjective, lanShared: lan.public })) return;
   playerList.show([{ name: scoreboard.formatName(PLAYER_NAME), ping: 0, score: listObjective ? scoreboard.peek(PLAYER_NAME, listObjective)?.value ?? 0 : undefined }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
