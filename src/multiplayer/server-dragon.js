@@ -28,6 +28,15 @@ export function installServerDragon(sm) {
     }
     return out;
   };
+  // b64 lead: EntityDragon.func_82195_e is super.attackEntityFrom, so the blow that takes the last health runs EntityLivingBase.onDeath (recalled from the 1.7.10 source; the dragon's
+  // dropFewItems is empty and its orbs come from onDeathUpdate). The adapter (dragon-mobs.js) skips the base attackEntityFrom, so this calls the server's onDeath chain for that blow:
+  // onKillEntity (killEnemy, the dragon is an IMob) and addToPlayerScore (mobKills, then the scoreboard's totalKillCount) for the attacker of the moment.
+  const hit = mobs.attackEntityFrom;
+  mobs.attackEntityFrom = function (e, amount, source = {}) {
+    const was = e?.type === ENDER_DRAGON ? e.health : 0, result = hit.call(this, e, amount, source);
+    if (was > 0 && e.health <= 0) this.onDeath(e, source);
+    return result;
+  };
 }
 
 // The chunk window of the End replica (native chunk coordinates).
