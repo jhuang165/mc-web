@@ -6,6 +6,7 @@ import { Arrows, ARROW } from "./bow.js";
 import { Survival } from "./survival.js";
 import { GaussianRandom } from "./projectiles.js";
 import { makeStack } from "./inventory.js";
+import { candidateOrder } from "./candidate-order.js";
 
 // Batch 70 (projectiles5). public/research/arrow-pickup-reference.json (tools/probes/ArrowPickupProbe.java, executed: the unchanged
 // EntityArrow.onCollideWithPlayer on a real EntityPlayer with a real InventoryPlayer; only EntityPlayer.onItemPickup is recorded).
@@ -70,6 +71,8 @@ test("balls: only the large fireball can be collided with; both have collision b
 });
 
 test("Fireballs.pick picks the ball getMouseOver picks, at the distance it records", () => {
+  candidateOrder.flat = true; // b72: this probe's world double lists balls in one flat insertion order; the chunk order is replayed in projectiles6-b72.test.js
+  try {
   const scenes = pickRef.filter((r) => r.case === "pick");
   let picked = 0;
   for (const [n, r] of scenes.entries()) {
@@ -84,4 +87,5 @@ test("Fireballs.pick picks the ball getMouseOver picks, at the distance it recor
     if (got >= 0) { picked++; assert.ok(hit.distance === r.distance, `scene ${n} distance ${hit.distance} vs ${r.distance}`); }
   }
   assert.ok(picked > 1500);
+  } finally { candidateOrder.flat = false; }
 });

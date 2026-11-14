@@ -1,5 +1,6 @@
 import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ringEntityActive } from './streaming-ticks.js';
+import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
 // ItemSnowball (aed); EntityEgg (zl) and EntityEnderPearl (zm) share its flight
 // rules but provide their own impact adapters and item icons. Thrown entities are
@@ -396,7 +397,7 @@ export class Projectiles {
   reap() { this.balls = this.balls.filter((b) => !b.dead); }
   tickEffects(world) { if (this.ownsEffects) this.effects.tick(world); }
   // One ball's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
-  tickOne(world, b, targets = [], onHit = () => {}, onPearlImpact = null) { if (!b.dead && ringEntityActive(world, b)) this.step(world, b, targets, onHit, onPearlImpact); }
+  tickOne(world, b, targets = [], onHit = () => {}, onPearlImpact = null) { if (!b.dead && ringEntityActive(world, b)) { this.step(world, b, targets, onHit, onPearlImpact); if (!b.dead) stampEntity(b, b.x, b.y, b.z); } } // b72: the re-slice after the update
   step(world, b, targets, onHit, onPearlImpact = null) {
     b.px = b.x;
     b.py = b.y;
@@ -428,10 +429,15 @@ export class Projectiles {
       ];
     let hit = null, d0 = 0;
     const grow = f(0.3);
+    const near = [];
     for (const t of targets) {
       const e = t.box;
       if (!(e[3] > area[0] && e[0] < area[3] && e[4] > area[1] && e[1] < area[4] && e[5] > area[2] && e[2] < area[5])) continue;
       if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
+      near.push(t);
+    }
+    for (const t of orderTargets(near, targets)) { // b72: chunk list order decides equal distances (candidate-order.js)
+      const e = t.box;
       if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5) continue;
       const r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;

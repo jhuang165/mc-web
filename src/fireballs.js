@@ -11,6 +11,7 @@ import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
+import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
@@ -71,7 +72,8 @@ export class Fireballs {
   }
   reap() { this.list = this.list.filter((b) => !b.dead); }
   // EntityFireball.onUpdate for one ball.
-  tickOne(b) {
+  tickOne(b) { this.tickBall(b); if (!b.dead) stampEntity(b, b.x, b.y, b.z); } // b72: the re-slice after the update
+  tickBall(b) {
     const mobs = this.mobs;
     if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
     b.px = b.x; b.py = b.y; b.pz = b.z;
@@ -100,20 +102,20 @@ export class Fireballs {
     for (const e of mobs.entities) {
       if (e === b.owner && b.ticks < FIREBALL.ownerGrace) continue; // ticksInAir < 25, the ball's own counter (a punch does not reset it)
       if (e.type === "ender_dragon") boxes.push(...dragonPartTargets(e)); // the parts are the collidable entities, not the 16 x 8 box
-      else { const box = pushBox(e, ...mobs.size(e)); if (near(box)) boxes.push({ target: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
+      else { const box = pushBox(e, ...mobs.size(e)); if (near(box)) boxes.push({ target: e, key: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
     }
     // b64: the dedicated server lists every player of the dimension (`mobs.sweepPlayers`, World.getEntitiesWithinAABBExcludingEntity sees them all); `view` names the one hit so the impact can hurt that player.
     for (const p of mobs.sweepPlayers ? mobs.sweepPlayers() : [mobs.ai?.player]) {
-      if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) { const box = pushBox(p, p.width, p.height); if (near(box)) boxes.push({ target: mobs.sweepPlayers ? { player: true, view: p } : { player: true }, box }); }
+      if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) { const box = pushBox(p, p.width, p.height); if (near(box)) boxes.push({ target: mobs.sweepPlayers ? { player: true, view: p } : { player: true }, key: p, player: true, box }); }
     }
     for (const o of this.list) { // EntityLargeFireball.canBeCollidedWith (the small one is not)
       if (o === b || o.dead || !o.large) continue;
       const box = this.boxOf(o);
-      if (near(box)) boxes.push({ target: { ball: o }, box });
+      if (near(box)) boxes.push({ target: { ball: o }, key: o, box });
     }
     let best = null, bd = 0;
     const area = sweepArea(b);
-    for (const c of boxes) {
+    for (const c of orderTargets(boxes.filter((c) => !c.reach || c.reach(area)))) { // b72: chunk list order decides equal distances (candidate-order.js)
       if (c.reach && !c.reach(area)) continue; // a dragon part: the world lists it only for the dragon's own box and chunk (ze.h's query box)
       const g = SWEEP, box = [c.box[0] - g, c.box[1] - g, c.box[2] - g, c.box[3] + g, c.box[4] + g, c.box[5] + g], r = intercept(box, a, z);
       if (!r) continue;
@@ -177,9 +179,9 @@ export class Fireballs {
     ];
     const far = (v) => Math.fround(Math.sqrt((v[0] - o[0]) ** 2 + (v[1] - o[1]) ** 2 + (v[2] - o[2]) ** 2));
     let best = null, pickDist = 0, d2 = wallDistance;
-    for (const b of this.list) {
-      if (b.dead || !b.large) continue;
-      const raw = this.boxOf(b);
+    const cands = [];
+    for (const b of this.list) if (!b.dead && b.large) cands.push({ key: b, ball: b, box: this.boxOf(b) });
+    for (const { ball: b, box: raw } of orderTargets(cands)) { // b72: chunk list order decides equal distances (candidate-order.js)
       if (search && !(raw[3] > search[0] && raw[0] < search[3] && raw[4] > search[1] && raw[1] < search[4] && raw[5] > search[2] && raw[2] < search[5])) continue;
       const box = [raw[0] - PICK_BORDER, raw[1] - PICK_BORDER, raw[2] - PICK_BORDER, raw[3] + PICK_BORDER, raw[4] + PICK_BORDER, raw[5] + PICK_BORDER];
       const r = intercept(box, o, end);

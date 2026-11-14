@@ -1,6 +1,7 @@
 import { makeStack } from "./inventory.js";
 import { isFrozen } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { ringEntityActive } from './streaming-ticks.js';
+import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 // ItemBow (abm), EntityArrow (zc) and the arrow half of EntitySkeleton (yl) from the
 // 1.7.10 JAR. Evidence, class digests and gaps: public/research/bows.md; the numbers
 // below are replayed against public/research/bow-reference.json by bow.test.js.
@@ -242,7 +243,7 @@ export class Arrows {
   }
   reap() { this.list = this.list.filter((a) => !a.dead); }
   // One arrow's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
-  tickOne(world, a, ctx = {}) { if (!a.dead && ringEntityActive(world, a)) this.step(world, a, ctx); }
+  tickOne(world, a, ctx = {}) { if (!a.dead && ringEntityActive(world, a)) { this.step(world, a, ctx); if (!a.dead) stampEntity(a, a.x, a.y, a.z); } } // b72: the re-slice after the update
   step(world, a, ctx) {
     // Entity.onUpdate / onEntityUpdate: previous position and angles, water (which
     // also puts a fire out), fire, lava and the -64 void.
@@ -311,9 +312,13 @@ export class Arrows {
       ];
     let nearest = null, d0 = 0;
     const grow = f(0.3);
+    const near = [];
     for (const t of ctx.targets || []) {
       if (!overlap(t.box, area)) continue;
       if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
+      near.push(t);
+    }
+    for (const t of orderTargets(near, ctx.targets || [])) { // b72: chunk list order decides equal distances (candidate-order.js)
       if ((t.ref === a.shooter || (a.owner && t.ref === a.owner)) && a.ticksInAir < 5) continue; // b62: `owner` is the server player who shot it (shooter stays "player" for the mobs' credit)
       const e = t.box, r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
@@ -458,11 +463,18 @@ export class Arrows {
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one
   // arrow is added), 2 works in Creative only; the pickup sound is random.pop at 0.2.
   // addItemStackToInventory answers true for Creative even when nothing fits (arrow-pickup-reference.json), so the default asks the inventory, not Survival.add's stored count.
-  collect(playerBox, survival, take = (n) => survival.inventory?.add ? survival.inventory.add(makeStack(ARROW, n)) : survival.add(ARROW, n)) {
-    const near = [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];
+  // Batch 72: the trigger box is EntityPlayer.onLivingUpdate's (bytecode-read, composed in ArrowTriggerProbe): with a living ridden entity (`ridingBox`) the union of
+  // both boxes grown (1, 0, 1), else the player's box grown (1, 0.5, 1); the candidates meet the player in chunk list order (candidate-order.js), which decides who
+  // gets the last free inventory slot.
+  collect(playerBox, survival, take = (n) => survival.inventory?.add ? survival.inventory.add(makeStack(ARROW, n)) : survival.add(ARROW, n), ridingBox = null) {
+    const near = ridingBox
+      ? [Math.min(playerBox[0], ridingBox[0]) - 1, Math.min(playerBox[1], ridingBox[1]), Math.min(playerBox[2], ridingBox[2]) - 1, Math.max(playerBox[3], ridingBox[3]) + 1, Math.max(playerBox[4], ridingBox[4]), Math.max(playerBox[5], ridingBox[5]) + 1]
+      : [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];
     let n = 0;
-    for (const a of this.list) {
-      if (a.dead || isFrozen(a) || !a.inGround || a.shake > 0 || !overlap(box(a), near)) continue;
+    const cands = [];
+    for (const a of this.list) if (!a.dead && !isFrozen(a) && overlap(box(a), near)) cands.push({ key: a, ref: a, box: box(a) });
+    for (const { ref: a } of orderTargets(cands, () => this.list.map((q) => ({ key: q, ref: q, box: box(q) })))) {
+      if (a.dead || !a.inGround || a.shake > 0) continue;
       let ok = a.pickup === 1 || (a.pickup === 2 && survival.creative);
       if (a.pickup === 1 && !take(1)) ok = false;
       if (!ok) continue;
