@@ -50,5 +50,6 @@ Browser check (muted, scratch "Ladder Check" Creative world): 25 XP spawned 4 bl
 
 - Pickup runs after the orbs move, as for items. The server handles the player's movement packet before the world's entity tick, so the original order within a tick may differ.
 - One player only. Orbs keep aiming at the player's death position until respawn, as the original keeps a dead player in `playerEntities`.
+- Batch 70 (docs sweep, 2026-11-14): the dedicated server aims orbs at several players: `tickOrbs` in `src/multiplayer/server-items.js` gives each orb the nearest player of its dimension, and each player collects with its own `xpCooldown`. Native keeps the first target until it is farther than 8 blocks; the port re-picks the nearest every tick (small difference with two or more players near one orb). Single player is still one player. Read from the code.
 - Kill-reward eligibility (`recentlyHit`, Creative kills) is unchanged.
 - `ticksExisted` for the level-up throttle restarts on load, not on respawn.

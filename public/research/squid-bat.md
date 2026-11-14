@@ -21,3 +21,4 @@ EntitySquid (EntityList id 94, class `ws`) and EntityBat (id 65, class `we`). No
 - Squid flow push untested against the original.
 - Models and renderer were not run or visually checked; no browser check was made.
 - No spawner or spawn egg support. Bats and squid are not breedable.
+- Batch 70 (docs sweep, 2026-11-14): half closed. Spawn eggs work: `SPAWN_EGGS` lists Bat (65) and Squid (94) in `src/spawn-eggs.js`, and `eggMobType` in `src/spawn-egg-use.js` resolves them through `SUMMONABLE` (`src/commands.js`, which has `Squid` and `Bat`). Mob spawners are still a real gap: `SPAWNER_ENTITY_IDS` in `src/mob-spawner.js` has no `Squid` or `Bat` entry, so such a spawner returns before any roll. Breeding: native squid and bats are not breedable (EntityWaterMob and EntityAmbientCreature are not EntityAnimal), unchanged.

@@ -58,4 +58,5 @@ Browser check (muted, scratch "Push Check" world switched to Survival for the ru
 
 - The finite world's x/z edge is a clamp at 0.31, which counts as a horizontal collision.
 - Batch 69 (docs sweep): boats and minecarts exist, and `src/entities.js` has `setEntityBoxes`/`setWorldEntityBoxes` hooks for entity collision boxes; carts natively have no player-blocking box (see [minecarts](minecarts.md)). Whether the single-player player step uses the boat box was not traced, so the line is left open: the player does not collide with entity boxes.
+- Batch 70 (docs sweep, 2026-11-14): closed for the single-player player. `src/player-physics.js:126` calls `moveEntity(world, body, ...)` with the body as the mover, `collisionBoxes(world, box, e)` in `src/entities.js` then asks the provider that `src/main.js` installs with `setEntityBoxes(boatBoxProvider(...))` (`src/entity-collision.js`), so the player stands on and bumps into boats; carts have no box natively. Read from the code path, not run in a browser.
 - No portals, pressure plates, tripwire or soul sand, so the other `onEntityCollidedWithBlock` blocks have nothing to do. The player's fire counter is not saved.

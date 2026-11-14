@@ -28,6 +28,7 @@ Internal ids 100-127 are tools, so these blocks use `1000 + blockId` as items: 1
 
 - Eye insertion and portal activation are not implemented.
 - Glass bottles and armour washing are not implemented (no bottle item).
+- Batch 70 (docs sweep, 2026-11-14): closed. Eye insertion and portal activation: `useEyeOnFrame` in `src/eye-of-ender.js` sets the eye bit and writes the end portal cells, reached from `src/eye-of-ender-live.js` (ItemEnderEye on a frame, called by `src/player-edit-simulation.js`). Glass bottles: `useGlassBottle`/`bottleFromCauldron` in `src/potion-use.js`; armour and banner-style washing: `cauldronWash` in `src/stone-utility.js`, called at `src/player-edit-simulation.js` (cauldron branch). See [cauldron-wash](cauldron-wash.md). The two lines above are history.
 - Slab types 6 (nether brick) and 7 (quartz) are craftable and listed in Creative; see nether-blocks.md.
 - Invalid brick metadata 4-15 is clamped to 0-3 for icons and drops; native keeps the raw value for drops.
 - The frame selection box is 13/16 high, but the native raw block field stays 1.0; the single collision box reports the union when an eye is set.

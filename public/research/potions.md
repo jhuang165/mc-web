@@ -19,7 +19,9 @@ Obfuscated names: aen PotionHelper, rv Potion, rw PotionEffect, adp ItemPotion, 
 ## Approximated or missing
 - Night vision, blindness, nausea and invisibility now have render effects (0.41.0, see potion-fx.md for what is native-verified and what is approximated); the potion bubble particle colour uses the real liquid colours.
 - The thrown potion sprite is not tinted; the held potion is not drawn in 3D. The splash break (world event 2002) and saving potions in flight are in potion-fx.md.
+- Batch 70 (docs sweep, 2026-11-14): closed. `potionPasses` in `src/projectile-renderer.js` draws `potion_overlay` in the liquid colour under the splash bottle for a thrown potion (`itemPasses` in `src/item-passes.js`), and the held and dropped potion use the same two passes (`first-person.js`, `drop-renderer.js`, `held-sprite.js`). The held potion is a flat two-pass sprite natively too (ItemPotion is not a 3D item; recalled).
 - The thrown-aim gaussian is unseeded.
 - Nether-only ingredients have no natural source: nether wart 386, blaze rod 387, ghast tear 389, magma cream 390 are Creative-only (blaze powder 388 from rods; glistering melon 392 and golden carrot 393 from gold nuggets 394).
+- Batch 70 (docs sweep, 2026-11-14): stale. Nether wart is planted and harvested (`src/nether-wart.js`, fortress beds in `src/fortress.js`), blaze rods drop from blazes (`blazeDrops`, `src/blaze-ghast.js:33`), ghast tears from ghasts (`blaze-ghast.js:37`), and the Nether generator exists (`src/nether-generator.js`). Magma cream: the magma cube drop is covered by `src/magma-pigman.test.js` (id 378). So these are no longer Creative-only.
 - No HUD effect icons (1.7.10 draws effects only in the inventory screen).
 - Full parity is not claimed.

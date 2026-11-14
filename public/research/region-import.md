@@ -60,6 +60,7 @@ No real Java save with tile entities is checked in. Chest/furnace NBT layouts we
 ## Open
 
 Batch 69 (docs sweep): the whole-save import below (batch 15) streams every region, and entities, riders, item NBT (`src/region-import.js` ench, StoredEnchantments) and Pistons convert now; biome and light import and Java write-back were not rechecked. Original text: the browser still lacks streaming beyond
+- Batch 70 (docs sweep, 2026-11-14): biome and light, checked. Area import (`importJavaRegionArea`) does not carry biomes: `src/region-import.js` (about line 520) only compares the source biome bytes with the base generator and reports `matching`/`differing`. Whole-save import stores the biome bytes in each column record (`src/whole-save-columns.js`) and `src/region-export.js` (about line 294) writes them back, falling back to the generator. Light is not carried by either path (the section above is still true: the browser relights; `SkyLight`/`BlockLight` are validated only). Java write-back exists (`region-export.js`, stored columns come back out). Whether the biome bytes survive a round trip of every edge case was not run again.
 
 ## Whole-save import (batch 15)
 

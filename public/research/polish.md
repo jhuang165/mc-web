@@ -42,6 +42,7 @@ kept (a stone stack is kept, as in the original), an unknown id is dropped.
 ## Gaps
 - No browser verification of any item (matrices and constants only unit-tested; no pixel comparison against the original renderer).
 - Heads are not drawn on zombies/skeletons (no equipment system; Halloween pumpkins are not rendered on mobs). Skull `SkullOwner`
+- Batch 70 (docs sweep, 2026-11-14): partly closed. A carved pumpkin or jack-o'-lantern on a mob's head is drawn: `src/mob-equipment-renderer.js` (about lines 107-114, `headItemMatrix` from `src/wearable-heads.js`). Still gaps: a skull item in a mob's helmet slot is not drawn there (that renderer only builds the pumpkin branch), and `SkullOwner` skins are not rendered, `src/skull-renderer.js` draws `SKULL_TEXTURES` only although `src/skull-profile.js` keeps the profile.
   skins are not rendered (default skulls only).
 - First-person map and item-frame map rendering have no numeric probe against the original renderer (bytecode-derived constants only).
 - Command cart: the `commandBlocksEnabled` server flag is not modelled; the command runs with the same sender as command blocks.

@@ -18,6 +18,7 @@ Evidence: `public/research/ocelot-reference.json`, written by `tools/verify-ocel
 ## Gaps
 
 - No worldgen or chunk-time ocelot population (the jungle creature list has none, as in 1.7.10). No seeded replay spawned an ocelot, so the list draw is probed but an ocelot's own spawn has only the OcelotProbe rule behind it.
+- Batch 70 (docs sweep, 2026-11-14): the second sentence is stale: `spawn-replay2-reference.json` has the replays `ocelot-jungle` and `ocelot-only` (see [natural-spawning](natural-spawning.md), Replays), so a native-seeded ocelot spawn is replayed.
 - Avoid and pathing behaviour is derived from bytecode; probing reached the pathfinding NPE of the world double. The `ocelotNearPlayer` avoid rows are unexplained and not asserted.
 - The scared check in Tempt needs the player's look (`EntityWorld.playerLook`, set in `main.js`); without it only movement counts.
 - Kitten growth by feeding fish is not modelled. The original returns false for a kitten with fish.

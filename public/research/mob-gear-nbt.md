@@ -18,6 +18,7 @@ Evidence: `tools/probes/MobGearNbtProbe.java` runs the unchanged 1.7.10 classes 
 ## Gaps
 
 - The player UUID of a lead holder is written as 0/0 (this build has no profile UUID; a real client would drop a lead that does not match its profile). Import accepts any UUID as the player.
+- Batch 70 (docs sweep, 2026-11-14): closed. `src/region-export.js` (about lines 99, 116, 118) writes `playerLeashTag(report.playerUuid ?? exportPlayerUuid({}))` and the owner text from `src/owner-links.js`, and import keeps the holder UUID (see [region-import](region-import.md), Leashes). The line above is history. The slot 1-4 and bare default hand lines are still true: `DEFAULT_HELD` in `src/mob-equipment-live.js` still gives a bare skeleton a bow and a pigman a golden sword.
 - Slots 1-4 of mobs other than zombie, pigman, skeleton and wither skeleton are not read (nothing equips them live), and a witch's non-potion held item is reported ignored in `/summon`.
 - The live default hand of a bare skeleton (bow) and pigman (golden sword) is the earlier port's choice and differs from the native constructor (empty); native saves always carry `Equipment`, so imports are exact.
 - `PortalCooldown` above 300 is kept at 300 by the live portal state.

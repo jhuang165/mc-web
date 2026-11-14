@@ -70,8 +70,10 @@ The item hangs off the right arm after its rotation: `translate(-0.0625, 0.4375,
 ## Differences
 
 - Riding uses ModelBiped arm/leg angles and follows the cart seat (see [minecarts](minecarts.md)); no bow or block poses; no cape or ears (an offline player has no cape skin). Armor and held-item glint and dyed leather are ported.
+- Batch 70 (docs sweep, 2026-11-14): the 'no bow or block poses' part is stale. `bipedPose` in `src/player-renderer.js` has `aimedBow` (about lines 256-257, ModelBiped.aimedBow) and `heldRight` states, and `heldItemMatrix` has a `blocking` branch for the sword block (about lines 310-343). Capes and ears are still absent.
 - Death: `RendererLivingEntity.rotateCorpse` (`boh.a(sv,F,F,F)`) rolls the model `min(1, sqrt((deathTime + partial - 1) / 20 * 1.6)) * 90` degrees about z after the body yaw, and the hurt tint stays while `deathTime > 0`. The death screen keeps drawing the model in views 1 and 2 until `onDeathUpdate` calls `setDead` at deathTime 20, which removes the entity. No other death-time hiding exists in the renderer.
 - Sleeping head: see [beds](bed.md); the head stays turned by the yaw and pitch frozen at bed entry.
 - Held items use a simplified item mesh, not `ItemRenderer` and `RenderBlocks.renderBlockAsItem`; torches and other sprite blocks draw as flat sprites.
+- Batch 70 (docs sweep, 2026-11-14): stale. `heldItemMatrix` in `src/player-renderer.js` ports `RenderPlayer`/`ItemRenderer.renderItem` placement (3D branch for block items, 2D branch for sprites, witch nose and arm origins); the quads still come from the port's own item meshes (`held-sprite.js`), which the earlier text meant. Not compared in a browser.
 - The view is not saved. There is no F1 debug camera.
 - The camera trace uses the bobbed eye as its origin (1.7.10 applies the bob in view space after the trace).

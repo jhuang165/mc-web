@@ -31,5 +31,7 @@ Everything here comes from the unchanged 1.7.10 client JAR (sha1 `e80d9b3b...`, 
 ## Remaining differences
 
 - The player still uses the simplified main.js collision (no 0.5 step-up, no exact `moveEntity` box sweep), so speeds against walls and on slopes can differ.
+- Batch 70 (docs sweep, 2026-11-14): closed. The player moves through `moveEntity` with the step-up and box sweep: `src/player-physics.js:126`; see [player-step](player-step.md).
 - `isInWater` used the block at feet + 0.6 until 0.22.9, which switched to `handleMaterialAcceleration` on the contracted box ([particles](particles.md)).
 - Sprint running particles are in [particles](particles.md); no speed/slowness potion terms in the FOV, no hunger-based sprint stop message.
+- Batch 70 (docs sweep, 2026-11-14): the FOV term for Speed/Slowness is wired: `fovMultiplier({ potion })` in `src/player-movement.js` (about line 204) gets `survival.effects.moveSpeedMultiplier()` from `src/main.js` (about line 3928). The hunger stop exists as `canSprint: creative || food > 6` in `src/player-physics.js` (about line 33); whether 1.7.10 shows a message was not checked.
