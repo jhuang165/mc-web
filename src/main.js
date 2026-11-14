@@ -108,6 +108,7 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
+import { spActiveChunkSource } from "./sp-active-chunks.js"; // b69 spfarming
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, mobInBox, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { showChatLine, PLAYER_NAME } from "./death-messages.js";
@@ -1651,11 +1652,15 @@ async function launch(record, prepared, { slice = false } = {}) {
     weather.apply = applyWeatherEdit;
     weather.drop = (w, x, y, z, stacks) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count)), x, y, z); // BlockSnowBlock.updateTick: 4 snowballs
     fire.sharedRandomTicks = true;
+    // b69 spfarming: farmland, crops, stems and cocoa take the same shared random ticks (weather.blockTick below), over the integrated server's active chunk set: radius = the render distance option (sp-active-chunks.js).
+    farming.sharedRandomTicks = true; farming.random = farming.stemRandom = weather.random;
+    farming.drop = (x, y, z, stacks) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z);
+    weather.activeChunkSource = spActiveChunkSource(() => position, () => options.distance);
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
     // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
     populationBlocks=new PopulationBlocks(world,{random:weather.random,drop:(stacks,x,y,z)=>items.dropBlock(stacks.map(d=>makeStack(d.id,d.count,d.damage||0)),x,y,z),apply:changes=>{scene.updateBlocks(changes);saved=false;}}).watch();
     world.populationBlocks=populationBlocks;
-    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b) || redstoneRuntime?.randomTick(x, y, z, b);
+    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || farming.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b) || redstoneRuntime?.randomTick(x, y, z, b);
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
