@@ -66,7 +66,7 @@ export class DedicatedClient {
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'pistonTiles') { this.messages.push(message); return; } // b66 mppistons: S24 and the moving blocks, in order
-    if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
+    if (message.type === 'mobs' || message.type === 'vehicles' || message.type === 'mapData') { this.messages.push(message); return; } // b69 mpmaps: every S34 payload matters, in order // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
     if (message.type === 'chat' || message.type === 'blocks' || message.type === 'signEditor' || message.type === 'effect' || message.type === 'beaconWindow' || message.type === 'collect' || message.type === 'playerOp' || message.type === 'health' || message.type === 'slot' || message.type === 'useDone' || message.type === 'aux' || message.type === 'musicEvent' || INV.has(message.type) || WINDOW.has(message.type)) { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
@@ -104,6 +104,7 @@ export class DedicatedClient {
     if (message.type === 'useDone') this.onUseDone?.(message); // b65 lead: S19 status 9
     if (message.type === 'aux') this.onAux(message);
     if (message.type === 'musicEvent') this.onMusic?.(message); // b66 mpbooks: S24 on a note block
+    if (message.type === 'mapData') this.onMaps?.(message); // b69 mpmaps: S34 map updates (client-maps.js)
     if (WINDOW.has(message.type)) this.onWindow(message);
     if (INV.has(message.type)) this.onInv(message);
     if (message.type === 'pistonTiles') this.onPiston?.(message); // b66 mppistons (client-pistons.js)

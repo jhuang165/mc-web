@@ -225,6 +225,7 @@ import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
 import { recordAux, noteEvent } from "./multiplayer/client-music.js"; // b66 mpbooks
+import { applyMapMessage, connectMaps, disconnectMaps } from "./multiplayer/client-maps.js"; // b69 mpmaps
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -675,6 +676,7 @@ function showMultiplayer() {
 }
 let mpServerList = null; // b68 mpping
 function leaveMultiplayer() {
+  disconnectMaps(); // b69 mpmaps
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
   remoteLightning = null; // b66 mplightning
@@ -894,6 +896,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(true), message: reason, back: showMultiplayer })); } }, // b68 mpping: GuiDisconnected (disconnect.lost)
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
+  connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
@@ -1918,7 +1921,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     );
     projectiles.load(record.projectiles);
     eyes.load(record.eyes);
-    maps.load(record.maps);
+    if (!mapStore.remote) maps.load(record.maps); // b69 mpmaps: a dimension trip on a server keeps the maps the server sent
     rockets.load(record.rockets);
     fishing.load(record.fishing);
     objectTracker = new ObjectTracker(10, Math.random, entityIds); // a fresh client world: nothing is tracked yet

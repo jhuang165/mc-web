@@ -45,6 +45,7 @@ import { ServerPvp } from './server-pvp.js'; // b63 mppvp
 import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragonEgg clicks
 import { DRAGON_EGG } from '../dragon-egg.js';
 import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js'; // b66 mpbooks: note blocks and jukeboxes
+import { ServerMaps } from './server-maps.js'; // b69 mpmaps: empty maps, map data, S34 updates
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerLightning } from './server-lightning.js'; // b66 mplightning: thunderstorm bolts
@@ -195,6 +196,7 @@ export class DedicatedSimulation {
     this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
     this.mobs.mobs.ignite = (x, y, z) => this.fire.ignite(x, y, z); // a fireball sets fire where it lands
     this.dimensions = new ServerDimensions(this, saved.dimensions); // b61 mpnether: after every system that watches the Overworld
+    this.maps = new ServerMaps(this, saved.maps); // b69 mpmaps: MapStorage, ItemMap.onUpdate and the S34 packets (server-maps.js)
   }
   // Mobs hurt a player here: the player-state track replaces this with the server's health. Returns false when the hit did not land (the default lands and does nothing).
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
@@ -229,6 +231,7 @@ export class DedicatedSimulation {
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
     if (p) this.fishing.drop(p); // b64 mpstats2: the bobber goes with its angler
     if (p) this.trade.leave(p); // b66 mptrade: the villager's customer is released
+    if (p) this.maps.leave(p); // b69 mpmaps: the next login gets a new MapInfo
     if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id); this.admin.leave(id); // b68 mpadmin
@@ -391,7 +394,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p)); /* b64: C08 with the rod */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
+    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p) || this.maps.useEmpty(p)); /* b64: C08 with the rod */ /* b69 mpmaps: ItemEmptyMap.onItemRightClick */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -431,6 +434,7 @@ export class DedicatedSimulation {
     if (place && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
     if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     if (place && useOnBlock(this, p, target, id)) return true; // b64 mpstats2: seeds, nether wart and spawn eggs on the clicked block (and their use stat)
+    if (place && this.maps.useEmpty(p)) return true; // b69 mpmaps: ItemEmptyMap.onItemRightClick (no block used)
     const put = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
@@ -573,6 +577,7 @@ export class DedicatedSimulation {
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     for (const p of this.players.values()) this.serverItems.settle(p);
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
+    this.maps.tick(); // b69 mpmaps: ItemMap.onUpdate and the S34 map updates (server-maps.js)
     this.deliverSounds();
     this.weather.tick(this.world);
     this.sleep.worldTick(); // b66 mpsleep: WorldServer.tick's all-asleep night skip, right after the weather update (the clock has already advanced by this tick's one)
@@ -624,7 +629,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(), ...this.maps.saveField() /* b69 mpmaps */,
       admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
