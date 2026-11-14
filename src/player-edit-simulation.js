@@ -356,7 +356,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       const level = bottleFromCauldron(state, state.world.getMeta(x, y, z) & 3);
       state.world.set(x, y, z, CAULDRON, true, level);
       hook('updateBlock', x, z, y);
-      hook('playSound', 'liquid.splash', { volume: 1, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      // BlockCauldron (ajw, bytecode-read) holds no sound string and sounds.json has no liquid.splash: the cauldron is silent.
       hook('renderHotbar'); hook('markUnsaved');
       return act('bottle-from-cauldron', { level });
     }
@@ -389,7 +389,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         if (used.level !== level) {
           state.world.set(x, y, z, CAULDRON, true, used.level);
           hook('updateBlock', x, z, y);
-          hook('playSound', 'liquid.splash', { volume: 1, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+          // BlockCauldron (ajw, bytecode-read) holds no sound string and sounds.json has no liquid.splash: the cauldron is silent.
           hook('markUnsaved');
         }
         if (used.bucket) { const inv = state.survival.inventory; inv.main[inv.current] = makeStack(BUCKET_ITEM); hook('renderHotbar'); hook('markUnsaved'); }
@@ -617,7 +617,7 @@ function eatCakeSlice(state, hook, x, y, z) {
   if (eaten.ate) {
     state.world.set(x, y, z, eaten.next === null ? 0 : CAKE, true, eaten.next ?? 0);
     hook('updateBlock', x, z, y); hook('renderVitals'); hook('markUnsaved');
-    hook('playSound', 'random.eat', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+    // BlockCake (aju, bytecode-read) holds no sound string: eating a slice is silent (random.eat is EntityPlayer.updateItemUse's, random.burp ItemFood's).
   }
   return eaten;
 }

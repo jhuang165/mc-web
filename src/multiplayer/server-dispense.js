@@ -151,6 +151,9 @@ export class ServerDispense {
     if (a.fire > 0) s.setFire?.(5);
     const hit = this.sim.damagePlayer(p, dmg, { name: 'an arrow', from, call: () => s.damage(dmg, 'an arrow', true, undefined, from) }) !== false;
     if (!hit) return false;
+    // EntityArrow.onUpdate (zc, bytecode-read): a landed hit on another player from a player shooter sends S2B reason 6 to the shooter; NetHandlerPlayClient plays
+    // random.successful_hit (volume 0.18, pitch 0.45) at (posX, posY + getEyeHeight, posZ): the client's posY is feet + 1.62 and EntityPlayer.getEyeHeight 0.12 (player-item-use.js), so feet + 1.74.
+    if (who && who !== p && this.sim.players.get(who.id) === who) (who.soundsOut ??= []).push({ name: 'random.successful_hit', x: who.position.x, y: who.position.y + 1.74, z: who.position.z, volume: Math.fround(0.18), pitch: Math.fround(0.45) });
     if (s.health > 0) s.arrowCount = addStuckArrow(s.arrowCount);
     arrowPunch(s, a, v => Math.fround(Math.sqrt(v)));
     if (shooter && typeof shooter === 'object' && mobs?.entities?.includes(shooter)) // a hit by a mob's arrow runs the wearer's Thorns on the shooter
