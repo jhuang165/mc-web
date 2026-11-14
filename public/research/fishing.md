@@ -25,9 +25,9 @@ event, loot stack/wear/enchantments, orb, statistic, drop position and velocity)
 
 ## Known differences
 
-- No statistics system exists, so `stat.fishCaught`, `stat.junkFished` and `stat.treasureFished` are rolled and returned but not stored.
+- Batch 69 (docs sweep): a statistics system exists (`stats.js` has `fishCaught`, `junkFished`, `treasureFished`) and the dedicated server stores them (`multiplayer/server-fishing.js`). Whether the single-player fishing path adds them was not verified.
 - The `wake` particle (EntityFishWakeFX) has no browser particle; the bubble and splash particles are drawn.
-- The hook cannot hook its own angler; hooked entities are mobs only, pulled by adding to their velocity.
+- Batch 69 (docs sweep): batch 64 and 67 added server fishing and `ownFishingAngler` (`main.js`); the angler-hook claim was not re-checked. Older text: the hook cannot hook its own angler; hooked entities are mobs only, pulled by adding to their velocity.
 - The line tip for other views uses the camera yaw instead of renderYawOffset; the rod model does not use the mirrored
   shouldRotateAroundWhenRendering transform.
 - Fish dropped by a bite use World.rand for the roll and the entity RNG for items, as native, but the hook seeds are not replayed

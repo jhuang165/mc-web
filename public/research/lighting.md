@@ -62,8 +62,8 @@ Sources: `javap -c -p -constants` on the 1.7.10 client JAR, read through the 1.7
 
 - **Void fog** is implemented for the colour term and, in 256-high worlds only, the `setupFog` distance term; see `void-fog.md`.
 - **Cloud height**: sea level + 65, since this world is shorter than vanilla's 128-block cloud layer.
-- **Burning** uses an orange overlay as a stand-in; the fire texture overlay on entities is not drawn.
-- **Missing effects**: no weather (rain/snow colour darkening, rain fog), fog distance follows the block-based View distance option rather than chunk render distance, no anisotropic or mipmap options, no Fast graphics mode, no entity shadows.
+- **Burning** uses an orange overlay as a stand-in; the fire texture overlay on entities is not drawn. Batch 69 (docs sweep): superseded, `fire-fx.js` draws the fire quad stacks and `display-ticks.js` the display ticks.
+- **Missing effects**: Batch 69 (docs sweep): weather exists (`weather.js`, `weather-renderer.js`, `weather.md`), Fast graphics exists (`render-settings.test.js`) and entity shadows exist (`shadows.js`); still true as written: fog distance follows the block-based View distance option and no anisotropic or mipmap options were checked. Older text: no weather (rain/snow colour darkening, rain fog), fog distance follows the block-based View distance option rather than chunk render distance, no anisotropic or mipmap options, no Fast graphics mode, no entity shadows.
 - **Precision**: light updates relight whole 31×31 column areas rather than using the original's queue-based incremental updates. The final light values are the same at the fixed point; the timing within a tick is not. `light-engine.md` replays the unchanged `updateLightByType`/Chunk light code against the port on 18 scenarios and lists the documented differences (eager lateral light at generation, native stale light, native skip beside unloaded chunks).
 - **Dev handle**: a `window.__mc` handle (scene, world, survival, position, look, teleport) exists only in Vite dev builds, for browser verification.
 

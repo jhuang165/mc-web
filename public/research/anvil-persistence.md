@@ -26,7 +26,7 @@ Regression coverage includes stack split/copy/save round trips, tag-sensitive in
 
 ## Remaining limits
 
-- The live anvil uses a local name field and transactions; the multiplayer rename packet remains unimplemented.
-- Enchantment glint and effects other than Unbreaking are not implemented. The supported `Unbreakable` tag stops item durability loss.
-- Java region import does not convert minecart entities yet; their item metadata is retained through browser cart saves and Java export when a cart already exists in a browser world.
+- The live anvil uses a local name field and transactions. Batch 69 (docs sweep): the dedicated server now handles the rename (`rename(p, m)` in `src/multiplayer/server-stations.js`, client side in `client-containers.js`).
+- Batch 69 (docs sweep): the enchantment glint is drawn on enchanted items and effect potions (`gui.js`, an animated overlay approximating the native texture scroll); enchantment effects have their own docs (`enchantment-effects-tools.md`). The supported `Unbreakable` tag stops item durability loss.
+- Batch 69 (docs sweep): `src/region-import.js` now reads `EntityMinecart` records (and `src/region-export.js` writes them), so the line below about minecart import is superseded. Older text: Java region import does not convert minecart entities yet; their item metadata is retained through browser cart saves and Java export when a cart already exists in a browser world.
 - Unrecognized item NBT is not round-tripped. The Java save probe parses the exported native storage and sections; it does not instantiate every entity/tile or prove a fully playable Java reload.

@@ -22,7 +22,7 @@ EntityFireworkSparkFX `bkd`, EntityFireworkOverlayFX `bkc`, dispenser behaviour 
 
 ## Gaps
 
-- Skull shape: the skull item has no internal id until the wither track merges; call `registerSkullItem(id)` with it.
+- Batch 69 (docs sweep): the skull item is registered by default (`SKULL_ITEM_IDS = new Set([2050])` in `fireworks.js`, skull.js `ITEM_SKULL`), so the creeper-shape ingredient works without a `registerSkullItem` call.
 - A star explosion with no Colors makes the original starter throw (probe `starterThrows`); the port skips it instead.
 - The rocket moves with the shared particle mover (`moveParticleEntity`), which is `Entity.moveEntity` for a body with no step
   height. Batch 68 executed it against blocks (`firework-collide-reference.json`, `FireworkCollideProbe`, 31 records: stone and

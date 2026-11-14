@@ -60,4 +60,4 @@ Other gaps:
 - Creeper spawn rolls (the follow-range bonus) are not run.
 - Reinforcements only answer hits whose target is the player.
 - Hurt sounds and knockback draw on the zombie's own Random since 0.22.12 ([combat](combat.md)), but live entity update order still differs from the original's, so live games do not reproduce its exact reinforcement spots. The replay does.
-- Hard-only content that this build lacks is missing: cave spider poison, wither effects, villager conversion, and the Hardcore lock.
+- Hard-only content: Batch 69 (docs sweep): cave spider poison is in (`entities.js` caveSpider attack, difficulty-scaled ticks) and Hardcore exists (`hardcore.js`, `hardcore.test.js`); wither effects tick on mobs (`mob-effects.js`, `effects.md`). Villager conversion was not re-checked here.

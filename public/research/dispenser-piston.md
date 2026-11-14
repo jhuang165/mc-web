@@ -29,7 +29,7 @@ Block ids 100-127 collide with tool item ids, so these blocks use items 1000 + i
 
 ## Limits
 
-- Dispensing is inert (no redstone, no item or projectile launch, no dispense sound).
-- Piston extension and retraction are inert; an extended piston from a structure or import stays as static blocks. Moving piston (36) is not implemented. Structures that contain these blocks do not generate them yet.
+- Batch 69 (docs sweep): dispensing is live: `dispense.js` (behaviours, `dispense.test.js`), `dispenser-container.js` (the container), redstone triggering in `redstone-runtime.js`.
+- Batch 69 (docs sweep): piston extension and retraction run (`piston-live.js`, `piston-push.js`, `piston-live.md`) and the moving piston block (original 36, `ORIGINAL_MOVING`) is handled there. Not re-checked: whether generated structures contain pistons.
 - Pistons use flat cell brightness, not per-vertex smooth lighting. Sticky-head pick-block and the metadata of dispensers with the triggered bit are stored but unused.
 - `shadow-reference.json` only carries entries for ids 115-118 from this family.

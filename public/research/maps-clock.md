@@ -11,8 +11,8 @@ Evidence: `tools/probes/MapsClockProbe.java` drives the unchanged original class
 
 ## Gaps
 
-- No first-person two-hand map render, no decoration drawing, no maps in item frames; maps are only shown as the item icon.
-- Dimension 0 only: no nether or end map data (nether branch is ported in rules but unused).
+- Batch 69 (docs sweep): `src/map-render.js` ports `MapItemRenderer` (colour quad, decorations from `map_icons.png`), the first-person map pose (`mapHandMatrices`, used in `first-person.js`) and the item frame map case (`RenderItemFrame` at 1/128 scale with frame markers only), so the line below is stale. Not checked by a browser.
+- Batch 69 (docs sweep): `maps-clock-live.js` passes the world's dimension and `hasNoSky` to `ItemMap.updateMapData` (`worldContext`, `dimension: state.world?.dimension ?? 0`), so Nether and End map data is created by the live path. Native evidence for those branches was not re-checked.
 - Clock spin in non-surface dimensions is bytecode-derived, not probed.
 - `HashMultiset` ties in the colour choice are non-deterministic in the original; the port picks arbitrarily among ties.
 - Shift-click crafting of a zoomed map is not specially handled.

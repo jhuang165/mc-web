@@ -23,9 +23,9 @@ Port of BlockBeacon (`ajg`), TileEntityBeacon (`aoq`), ContainerBeacon (`zx`, pa
 ## Gaps
 
 - The `ambient` flag is carried but the existing `Effects` class ignores it (no particle or HUD difference).
-- The "full pyramid" achievement is not modelled.
+- Batch 69 (docs sweep): the "Beaconator" achievement (`fullBeacon`) is modelled: `achievements.js` `beacon()` fires when a pyramid reaches level 4 near the player, called from `main.js`; tested by `src/achievements.test.js`.
 - No beacon sounds exist in 1.7.10; none added. No audio importer change.
 - The beam and the inventory icon are approximations: no screenshot or browser comparison was made; texture scroll direction and the GUI hit areas follow bytecode only.
 - Tiles are created when the block is placed or found in the loaded edits at world load; streamed chunks loaded later do not create tiles for beacons that were never edited in this session (a beacon only exists via an edit, but chunk streaming restore is untested).
-- The Wither does not exist in this branch; nothing drops the nether star yet.
-- Single player only; the server packet is simulated locally.
+- Batch 69 (docs sweep): the Wither exists (`src/wither-boss.js`, `wither-boss-mobs.js`) and drops the nether star (`NETHER_STAR`, asserted in `src/wither-boss.test.js`).
+- Batch 69 (docs sweep): the dedicated server also ticks beacons (`src/dedicated-beacon.test.js`, batch 44). Single player simulates the server packet locally.

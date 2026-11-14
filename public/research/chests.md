@@ -20,8 +20,8 @@ Evidence: `tools/probes/ChestsProbe.java` run by `tools/verify-chests.mjs` again
 
 ## Gaps
 
-- Ender chest recipe (8 obsidian + eye of ender) is not added: the eye of ender is not in the port.
-- `EnderItems` is exported but not imported (no level.dat player reader).
+- Batch 69 (docs sweep): the ender chest recipe is in (one "1 ender chest" recipe is counted in `src/recipe-catalogue.test.js`) and the eye of ender exists (`eye-of-ender.md`).
+- Batch 69 (docs sweep): `EnderItems` is also imported: `level-dat.js` reads the list (slots 0-26) and `region-import.js` converts `EnderChest` tiles.
 - Portal particles: `enderDisplayParticles` is verified but not yet called from the render loop; the particle system has no portal sprite hookup.
 - No `EnderChest` tile entity is written on export (Java creates it on load).
 - Inventory icons use the chest and obsidian atlas tiles, not the entity textures.

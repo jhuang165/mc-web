@@ -41,7 +41,7 @@ Everything matches exactly.
 
 ### Not done
 
-- GEN-02 and GEN-03 consume these modules; version 9 now wires them into playable Java worlds. Streaming remains open.
+- GEN-02 and GEN-03 consume these modules; version 9 now wires them into playable Java worlds. Batch 69 (docs sweep): streaming exists now (`src/streaming-generator.js`, `streaming.md`). Older text: streaming remains open.
 - `BiomeCache` never expires blocks (the client drops ones unused for 30 s); this does not change any value.
 - Version 9 now accepts full signed-long seeds and Java string hashes; blank entries use the browser's existing surprise-seed source rather than native `GuiCreateWorld` RNG.
 

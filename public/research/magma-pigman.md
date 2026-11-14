@@ -17,9 +17,9 @@ Evidence: `tools/probes/MagmaPigmanProbe.java` drives the unchanged original cla
 - Lightning on a pig (baby too) removes it and creates an adult pigman with the sword, no damage. `portalPigmanSpawn` ports BlockPortal.updateTick's roll (nextInt(2000) < difficulty); the lead wires it up.
 
 ## Gaps
-- Natural spawning in the Nether goes through the SpawnerAnimals port with BiomeGenHell's and the fortress lists ([natural spawning](natural-spawning.md)); live portal pigmen are not called yet.
+- Natural spawning in the Nether goes through the SpawnerAnimals port with BiomeGenHell's and the fortress lists ([natural spawning](natural-spawning.md)); Batch 69 (docs sweep): live portal pigmen are spawned (`nether-portal-live.js`, the `BlockPortal.updateTick` roll calling `EntityWorld.spawnPortalPigman`; `nether-portal-wart.test.js`).
 - Pigman think loop, path refresh and idle wander timing are adapted from the legacy spider flow, not probed tick-for-tick; non-player targets are not modelled; no group reinforcement (reinforcements 0 in the original).
-- Baby pigmen roll as in the original but render and behave as adults.
+- Batch 69 (docs sweep): the pigman child and jockey rolls have tests (`pigman-jockey.test.js`, `magma-pigman.test.js`); whether baby pigmen render and behave as babies was not re-checked.
 - Water acceleration of the pigman and magma lava particles/landing particle behaviour are adapted, not probed.
 - Sword is a flat sprite, not the 3D held item.
 - `mob.magmacube.*` and `mob.zombiepig.*` audio files are not imported (the lead runs `tools/import-vanilla-media.mjs`; its regex already includes them).

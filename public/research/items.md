@@ -56,8 +56,8 @@ Broken blocks, killed mobs, thrown stacks, death drops and spilled containers no
 ## Known differences
 
 - No water current push on items, and no lava burning or fire damage.
-- No hoppers, item frames or creative 4,800-tick despawn.
-- Ground slipperiness is always the default 0.6 (ice is not in this build).
+- Batch 69 (docs sweep): hoppers (`hopper.md`, `cart-hopper.js`) and item frames (`hanging-entities.md`) exist now. The creative 4,800-tick despawn was not re-checked.
+- Ground slipperiness is always the default 0.6 for items (batch 69 docs sweep: ice and packed ice exist in `world.js` now, so the "ice is not in this build" half is stale; the item slipperiness code was not re-checked).
 - The player picks items up only in the survival tick. Collision uses this build's block boxes, which are simpler than the full `addCollisionBoxesToList` shapes.
 
 ## Tests

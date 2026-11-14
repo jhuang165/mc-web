@@ -40,11 +40,11 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 ## Missing
 
 - Chicken jockeys, their 10 XP and the baby-zombie riding are now implemented: see [mob-riding](mob-riding.md) (region export still writes `IsChickenJockey` 0).
-- `mob.chicken.step` is imported but unplayed: no mob has step sounds wired.
+- Batch 69 (docs sweep): mob step sounds are wired, chickens included (`mob-steps.js`, `chicken: own("mob.chicken.step", 0.15)`, `mob-steps.test.js`).
 - Only wheat seeds exist, so pumpkin and melon seeds do not tempt or breed chickens (any `ItemSeeds` does in 1.7.10).
 - Chicks drop nothing here, following the existing adult-only convention; 1.7.10's `dropFewItems` has no age check.
-- Burning is not wired for chickens in the render and fire code, only for the cooked-meat drop test; no looting.
+- Batch 69 (docs sweep): the shared drop code takes the burning state (`mobDrops` call in `entities.js` passes `burning: e.fire > 0`) and the player's Looting (`looting: weapon.looting`, see `combat.md`), so cooked chicken and looting apply. Burning visuals are in `fire-fx.js`.
 - Hatched chicks and bred chicks stop at the 40-mob cap.
-- Simplified mob loop: no pathfinding or `EntityAILookIdle` / `WatchClosest`, no periodic spawning or despawning, chickens spawn only when a world is created.
+- Batch 69 (docs sweep): periodic natural spawning and despawning exist (`natural-spawning.md`, `SpawnerAnimals` port) and pathfinding exists (`pathfinding.md`). The `EntityAILookIdle` / `WatchClosest` claim was not re-checked for chickens.
 - Egg splash particles in water, and eggs that hit a mob only apply 0 damage and knockback via the shared snowball hit.
-- `public/research/sheep.md` still says chickens do not exist yet.
+- Batch 69 (docs sweep): `sheep.md` no longer says that (it lists chickens at world creation). Still open and verified: chickens breed and tempt only with wheat seeds (`BREED_ITEM.chicken = 309` in `entities.js`), so pumpkin and melon seeds do not work.

@@ -60,6 +60,8 @@ regenerates `public/research/dyes-reference.json`; `src/dyes.test.js` replays it
 
 ## Not ported
 
+Batch 69 (docs sweep): the first four bullets below are historical. Now in code: cactus smelts to cactus green (`survival.js` FurnaceRecipes comment, around line 558), ink sacs drop from squids (`squid-bat.js`), cocoa has bone meal growth (`bone-meal.js`), lapis ore exists (`world.js` BLOCKS, `block-textures.js`), the 4-string wool recipe exists (`survival.js` `string-wool`), stained clay, glass and panes exist (`world.js`, `colored-blocks.md`), double plants exist (`biome-features.js`, `bone-meal.js`) and bone meal's 2005 particles are drawn (`bone-meal.js` comment on `RenderGlobal.playAuxSFX 2005`). Not re-checked: the dye recipes for each new block, per-biome flower placement and flower `checkAndDropBlock`.
+
 - Cactus smelting (no cactus), and sources for ink sacs (squid), cocoa beans and lapis (lapis ore). The items
   exist for Creative only; the lapis block recipe is also absent.
 - String and the 4-string wool recipe; carpet, stained clay, stained glass and panes (the dye recipes for them).

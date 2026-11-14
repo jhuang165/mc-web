@@ -88,7 +88,7 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
   player position/look handler (`a(fu)`) sets a first-packet flag and calls `displayGuiScreen(null)`. In single player the integrated server logs the player in through the same handler (`launchIntegratedServer`
   connects with `provideLocalClient`), so "Downloading terrain" follows "Building terrain" natively. Its draw (`bdu`) is the dirt background and the string at `h / 2 - 50`, `keyTyped` is empty, `doesGuiPauseGame` is false. The port shows it
   from the end of "Building terrain" until the column meshes are built and the player is placed. The native duration is assumed (not probed): a few client ticks of packet exchange, longer when the server is busy.
-- Not wired: portal trips. Natively `handleRespawn` shows GuiDownloadTerrain for a dimension change as well; the port keeps the game on screen there because showing a GUI mid-game also pauses input and the loop, so this stays a gap.
+- Batch 69 (docs sweep): superseded by the "Batch 22: portal-trip screens" section below (portal trips show the blank loading frame natively does). Older text: not wired: portal trips. Natively `handleRespawn` shows GuiDownloadTerrain for a dimension change as well; the port keeps the game on screen there because showing a GUI mid-game also pauses input and the loop, so this stays a gap.
   GuiScreenWorking has no counterpart in this flow: bytecode-read, the only class referencing `bdt` besides itself is `brc` (the save-format list); the conversion progress goes to the server's `outputPercentRemaining`
   log line, never a screen, in the integrated start; the port has no world conversion either. It stays built and unused.
 

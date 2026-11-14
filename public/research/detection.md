@@ -14,5 +14,5 @@ Target is Minecraft Java 1.7.10. Full parity is not claimed. Code: `MobAI.closes
 
 ## Gaps
 - The probe replaces `World.selectEntitiesWithinAABB` with a scripted lookup; entity chunk lookup is not native-run. Enderman and ghast bR/bq bodies are covered through the shared lookup and their ranges, not by running those methods.
-- The browser has one player; ordering among several players is not exercised.
+- The browser has one player; ordering among several players is not exercised. Batch 69 (docs sweep): the dedicated server runs several players (`src/multiplayer/`); whether the target scan order across players is replayed was not checked.
 - Blaze targeting stays on the task list approximation (native is legacy flow), so it has no scaling.

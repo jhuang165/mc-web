@@ -47,7 +47,7 @@ split), a full target, and three comparator scenarios (chest, hopper, furnace).
 ## Known limits
 
 - Furnace smelting is not in the native probe (the furnace is not ticked there); furnace sided behaviour is natively verified, cooking progress is the repo's existing port.
-- Minecart inventories (hopper pulling/pushing minecarts) and ocelots sitting on chests are not modelled.
+- Batch 69 (docs sweep): hopper minecarts pull from containers and item entities (`src/cart-hopper.js`, probe-verified in `carts-reference.json`). Ocelots sitting on chests were not re-checked.
 - Droppers share the `dispensers` store (as the original TileEntityDropper extends TileEntityDispenser); dispenser/dropper firing must call `containerChanged` itself (owned by the dispenser track).
 - Hopper minecarts (item 408) are not part of this change.
 - The browser pass was not completed: the dev server full-reloaded repeatedly while five agents edited sources.

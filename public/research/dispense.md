@@ -13,9 +13,9 @@ Internal ids: dropper block 132, item 1132 (recipe: 7 cobblestone and redstone).
 - Dropper: inserts one item into the facing inventory through the shared `inventory-transfer.js` helper (chests blocked by a normal cube above, furnace sides, dispensers, hoppers), otherwise the default throw; no sound when an insert succeeds or fails.
 
 ## Approximated or absent
-- Smoke and bone meal particles (2000, 2005) are not drawn; the click and bow sounds are played.
-- Boats, fire charges and spawn eggs do not exist in this build and so have no behaviour; potions that are not splash potions are thrown as items.
-- Bone meal on grass, saplings beyond the existing sapling hook, mushrooms, melons, stems and cocoa depends on the game hooks and is otherwise a failed click.
+- Batch 69 (docs sweep): `dispense.js` emits the level events (1000 click, 1001, 1002, 2000 smoke, 2005 bone meal) through `host.aux`, and the client draws them (`onAux` in `main.js`; `mpdispense-b61.test.js`). Not re-checked: the particle sprites themselves.
+- Batch 69 (docs sweep): the header of `dispense.js` lists boats, fire charges, spawn eggs, TNT, fireworks and worn armour as dispenser behaviours (host callbacks `boat`, `spawnEgg`), tested in `dispense.test.js` and `spawn-egg-rolls-b52.test.js`. Older text: boats, fire charges and spawn eggs do not exist in this build; potions that are not splash potions are thrown as items.
+- Batch 69 (docs sweep): dispenser bone meal runs the IGrowable path (`bone-meal.js`, `dispense.js` batch 67 note) for every growable block.
 - The per-item Random of live projectiles and the item yaw are unseeded as in the original and not compared; dispensed entities use the browser entity systems' own flight and impact code.
 - One slot-choice Random stream is shared by all dispensers (the original has one per tile).
 - Parity with the whole 1.7.10 dispenser registry is not claimed.

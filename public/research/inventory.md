@@ -32,6 +32,6 @@ Comparing against the originals fixed four tables: coal ore and diamond ore smel
 - The creative inventory is a searchable picker for the selected hotbar slot, not the tabbed `GuiContainerCreative`.
 - Dropped and thrown items are recoverable piles, not physical item entities.
 - Mouse handling is ported from `GuiContainer` bytecode and unit-tested, not run against the original GUI class.
-- Armor is not drawn on the player, and pumpkins and skulls cannot be worn. Leather armor cannot be dyed, and the held leather item in first person is untinted.
-- Trapped and ender chests, hoppers, dispensers, enchanting, anvils and brewing containers are not implemented.
+- Armor is not drawn on the player, and pumpkins and skulls cannot be worn. Batch 69 (docs sweep): leather armour dyeing exists (`leather-dye.js`, `leather-dye.md`) and a worn pumpkin is read by the enderman code (`enderman-live.js`); armour on the player body was not re-checked. Older text: leather armor cannot be dyed, and the held leather item in first person is untinted.
+- Batch 69 (docs sweep): trapped and ender chests (`chests.md`), hoppers (`hopper.md`), dispensers (`dispenser-container.js`), enchanting (`enchanting-table.md`), anvils (`anvil-container.js`) and brewing (`brewing.md`) are all implemented now.
 - Chest placement, facing, opening and lid rules are ported from `BlockChest`/`TileEntityChest` bytecode and unit-tested; only the container is replayed against the original classes. Ocelots, comparators, the distance-based user recount and chest breaking particles are absent. The held chest and its icon are a textured cube rather than the 3D chest model. Chest contents are stored with the player save, like furnaces.
