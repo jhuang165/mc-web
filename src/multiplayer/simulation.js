@@ -197,7 +197,7 @@ export class DedicatedSimulation {
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
     loadVillages(this.mobs, saved, this.world, MOB_LIMIT, options.legacyOwner ?? saved.legacyOwner ?? null); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
-    this.objectTracker = new ObjectTracker(this); // b71 mptrackers71: items (64) and orbs (160) per player; server.js cuts each tick message with it
+    this.objectTracker = new ObjectTracker(this, undefined, true); // b72 mpcadence72: cadence mode (itrack packets); b71 mptrackers71: items (64) and orbs (160) per player; server.js cuts each tick message with it
     this.trade = new ServerTrade(this); // b66 mptrade
     this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
@@ -268,7 +268,7 @@ export class DedicatedSimulation {
   // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
   pickup(id, eids, fits) { return this.serverItems.pickup(this.players.get(id), eids, fits); }
-  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay })); }
+  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz })); }
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
