@@ -546,7 +546,7 @@ export class PlayerRenderer {
       this.heldGeometry = spriteGeometry();
       this.heldMaterial = this.material({ map: pixelTexture(url), ...(leather ? { color: leather.tint } : {}) });
       mesh = new THREE.Mesh(this.heldGeometry, this.heldMaterial);
-      if (leather) {
+      if (leather?.overlay) {
         const overlayMap = pixelTexture(leather.overlay);
         this.heldOverlayMaterial = this.material({ map: overlayMap, ...(leather.overlayTint ? { color: leather.overlayTint } : {}), transparent: true, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
         const overlay = new THREE.Mesh(this.heldGeometry, this.heldOverlayMaterial);

@@ -12,8 +12,7 @@
 //
 // Resource packs with higher resolution: a sheet starts on the native layout (all sprites at the vanilla sizes). When a sprite image turns out to have another size, the sheet
 // is stitched again with the sizes seen so far (unseen sprites keep their vanilla size) by the ported Stitcher (stitcher.js: largest first, power-of-two growth) and every sprite
-// is drawn at its own size, 1:1, not scaled to a 16 px cell. Not modelled: item mip levels (none natively), pack .mcmeta animation of item sprites other than the clock and
-// compass strips, and exact Anaglyph conversion of translucent texels (the canvas is read back at upload, see anaglyph.js).
+// is drawn at its own size, 1:1, not scaled to a 16 px cell. Not modelled: item mip levels (none natively), the 1.8 interpolate flag, and exact Anaglyph conversion of translucent texels (the canvas is read back at upload, see anaglyph.js).
 import * as THREE from "three";
 import { NATIVE_ITEM_SPRITES, NATIVE_ITEM_ATLAS_WIDTH, NATIVE_ITEM_ATLAS_HEIGHT } from "./item-atlas-layout.js";
 import { NATIVE_BLOCK_SPRITES, NATIVE_ATLAS_WIDTH, NATIVE_ATLAS_HEIGHT } from "./atlas-layout.js";
@@ -137,6 +136,7 @@ function sheetTexture(kind, name) {
 }
 // The sprite texture of an item url that the Stitcher laid out (the item atlas, or a block atlas cell for a /media blocks png), or null (not laid out, or no DOM: tests).
 export function itemAtlasTexture(url) {
+  if (frameUrlResolver) url = frameUrlResolver(url) ?? url; // a cut frame of a pack-animated sprite (item-animation.js) is the sprite's own cell, which shows the current frame
   const item = itemSpriteName(url);
   if (item) return sheetTexture("items", item);
   const block = blockSpriteName(url);
@@ -152,6 +152,10 @@ export function setItemAtlasFrame(name, frame) {
   if (e.img) { drawEntry(a, e); refreshGpu(a, false); }
 }
 const pendingFrames = new Map();
+// item-animation.js registers how a cut frame url (a data url) maps back to its sprite url; the atlas cell then follows setItemAtlasFrame for every item sprite with a pack .mcmeta
+// strip (TextureAtlasSprite.updateAnimation runs for every sprite of the items TextureMap in 1.7.10, not only the clock and compass).
+let frameUrlResolver = null;
+export function setFrameUrlResolver(fn) { frameUrlResolver = fn; }
 // Resource pack change (also the Anaglyph toggle): every sprite image is read again and the sheets redrawn (and stitched again when the sprite sizes changed) and re-uploaded.
 onResourcesRefreshed(async (gen) => {
   await Promise.all(Object.values(sheets).filter(Boolean).map(async (a) => {

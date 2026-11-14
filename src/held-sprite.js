@@ -11,7 +11,7 @@ export function heldSprite(id, damage, material) {
   const passes = itemPasses(id, damage), url = passes?.base ?? itemTexture(id, damage);
   if (!url) return null;
   const geometry = spriteGeometry(), mesh = new THREE.Mesh(geometry, material({ map: pixelTexture(url), ...(passes ? { color: passes.tint } : {}) }));
-  if (passes) {
+  if (passes?.overlay) {
     const m = material({ map: pixelTexture(passes.overlay), ...(passes.overlayTint ? { color: passes.overlayTint } : {}), alphaTest: 0.1 });
     m.transparent = true;
     m.depthWrite = false;

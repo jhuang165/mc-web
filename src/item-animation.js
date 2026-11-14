@@ -7,6 +7,7 @@
 import { resolveAnimation, fetchMcmeta } from "./texture-animation.js";
 import { versioned, unversioned, mediaGeneration } from "./media-version.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
+import { setItemAtlasFrame, setFrameUrlResolver, itemSpriteName } from "./item-atlas.js";
 import { rawImgSrc } from "./gui-anaglyph.js"; // an icon converted for 3D Anaglyph keeps the page's own src here
 
 const ITEM_URL = /\/media\/1\.7\.10\/items\/[^/]+\.png$/;
@@ -18,7 +19,12 @@ let readyHook = null, dirty = false;
 // fn(urls) runs when an animated item's frame urls exist (first-person.js preloads their textures so a frame switch never blanks).
 export function onItemFramesReady(fn) { readyHook = fn; }
 
+// A cut frame url -> the sprite's plain url, so the item atlas draws it as the sprite's own cell (item-atlas.js); the cell shows the entry's current frame (tickItemAnimations).
+setFrameUrlResolver((url) => byData.get(url)?.base);
+const spriteOf = (entry) => itemSpriteName(entry.base);
+
 function load(base, entry) {
+  entry.base = base;
   const gen = mediaGeneration(), img = new Image();
   img.onload = async () => {
     const text = await fetchMcmeta(base);
@@ -37,6 +43,8 @@ function load(base, entry) {
       byData.set(url, entry);
     }
     entry.state = "anim";
+    const sprite = spriteOf(entry);
+    if (sprite) setItemAtlasFrame(sprite, anim.frame);
     dirty = true;
     readyHook?.(entry.urls);
   };
@@ -80,11 +88,18 @@ function swapIcons() {
 export function tickItemAnimations() {
   let changed = dirty;
   dirty = false;
-  for (const entry of entries.values()) if (entry.state === "anim" && entry.anim.step()) changed = true;
+  for (const entry of entries.values()) {
+    if (entry.state !== "anim" || !entry.anim.step()) continue;
+    changed = true;
+    const sprite = spriteOf(entry);
+    if (sprite) setItemAtlasFrame(sprite, entry.anim.frame); // every view of the sprite shows the same frame (the native cell upload)
+  }
   if (changed && byData.size) swapIcons();
   return changed;
 }
 
 // Pack change: forget every cut frame; the next itemTexture() call reloads under the new generation.
-export function resetItemAnimations() { entries.clear(); byData.clear(); specialTags.clear(); dirty = false; }
+export function resetItemAnimations() {
+  for (const entry of entries.values()) if (entry.state === "anim") { const sprite = spriteOf(entry); if (sprite) setItemAtlasFrame(sprite, 0); }
+  entries.clear(); byData.clear(); specialTags.clear(); dirty = false; }
 onResourcesRefreshed(() => { resetItemAnimations(); });
