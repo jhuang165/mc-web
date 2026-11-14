@@ -1311,6 +1311,7 @@ class PlayerView {
   update(player, survival, held) {
     this.width = f(this.sleeping ? 0.2 : 0.6);
     this.height = f(this.sleeping ? 0.2 : 1.8);
+    this.eyeHeight = this.sleeping ? f(0.2) + PLAYER_EYE_HEIGHT : PLAYER_EYE_HEIGHT; // b68 fixes68: posY = minY + yOffset 0.2 while lying, eye = posY + 1.62 (sleeper-eye.js)
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
     // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
     const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;

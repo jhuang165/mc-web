@@ -70,7 +70,7 @@ export function useOnBlock(sim, p, target, id) {
   if (id === DYE && s.held?.damage === 15) {
     if (s.adventure || (!s.creative && !s.usable(id))) return false;
     sim.boneRandom ??= new JRandom(Date.now());
-    const grown = useBoneMeal({ world: sim.world, trees: sim.trees, farming: sim.farming, flowers: FLOWERS, grassRandom: sim.boneRandom, items: sim.items }, x, y, z);
+    const grown = useBoneMeal({ world: sim.world, trees: sim.trees, farming: sim.farming, flowers: FLOWERS, grassRandom: sim.boneRandom, items: sim.items, rand: sim.weather?.random }, x, y, z); // b68 fixes68: World.rand (the Overworld's Random)
     if (grown.farm) sim.farming.drain();
     if (!grown.used) return false;
     sparkles(sim, p, x, y, z);

@@ -14,6 +14,7 @@ import { entityBox } from "./weather.js";
 import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
+import { serverPosY, serverEyeY, SLEEP_BOX } from "./sleeper-eye.js"; // b68 fixes68
 
 // An EntityMinecart or EntityBoat in the blast: Entity.getEyeHeight is 0, so the eye is posY; attackEntityFrom(explosion source, damage) wobbles it and breaks it
 // above 40 (a creative player's own explosion breaks it outright), then the knockback is added to its motion (vehicles are not EntityLivingBase: no Blast Protection).
@@ -113,7 +114,7 @@ export function explodeMobs(state, request) {
 export function applyExplosion(state, request, hooks = {}) {
   const {
     world, weather, random = weather?.random, mobs, items, xpOrbs, arrows,
-    projectiles, falling, primed, survival, position, velocity, farming,
+    projectiles, falling, primed, survival, position, velocity, farming, sleeping = false,
   } = state;
   // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
   // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
@@ -147,8 +148,8 @@ export function applyExplosion(state, request, hooks = {}) {
   if (survival.health > 0) {
     playerHit = explosionImpact(
       world, x, y, z, size,
-      position.x, position.y, position.z, position.y + Math.fround(PHYSICS.eye), // EntityPlayerMP.getEyeHeight is the float 1.62F (eye-height-reference.json); creeperwitch-b45 push records
-      entityBox(position, PHYSICS.width, PHYSICS.height),
+      position.x, serverPosY(position.y, sleeping), position.z, serverEyeY(position.y, sleeping), // EntityPlayerMP.getEyeHeight is the float 1.62F (eye-height-reference.json); creeperwitch-b45 push records; b68: a sleeper's posY is minY + 0.2
+      entityBox(position, sleeping ? SLEEP_BOX : PHYSICS.width, sleeping ? SLEEP_BOX : PHYSICS.height),
     );
     if (playerHit) {
       if (!survival.creative && survival.scaledDamage(

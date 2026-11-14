@@ -43,7 +43,7 @@ export class ServerLightning {
   strike(b) {
     const sim = this.sim, box = strikeBox(b);
     strikeMobs(sim.mobs.mobs, b);
-    strikeThings({ items: sim.items, orbs: sim.serverItems.xp, minecarts: sim.vehicles.carts, boats: sim.vehicles.boats, arrows: sim.dispense.arrows }, b); // b67: items, orbs, carts, boats, arrows (weather-simulation.js)
+    strikeThings({ items: sim.items, orbs: sim.serverItems.xp, minecarts: sim.vehicles.carts, boats: sim.vehicles.boats, arrows: sim.dispense.arrows, cartHost: sim.vehicles.cartHost }, b); // b67: items, orbs, carts, boats, arrows (weather-simulation.js)
     for (const p of sim.players.values()) {
       const s = p.survival;
       if (p.dimension | 0 || p.dead || s.creative || s.health <= 0 || !overlaps(entityBox(p.position, PHYSICS.width, PHYSICS.height), box)) continue;

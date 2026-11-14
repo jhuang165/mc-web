@@ -2964,7 +2964,7 @@ function tickWeather() {
     for (const e of weather.drain()) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
     return;
   }
-  tickWeatherSimulation({ world, weather, mobs, survival, things: () => ({ items, orbs: xpOrbs, minecarts, boats, hanging, arrows }) }, position, PHYSICS.width, PHYSICS.height);
+  tickWeatherSimulation({ world, weather, mobs, survival, things: () => ({ items, orbs: xpOrbs, minecarts, boats, hanging, arrows, cartHost }) }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
     // Thunder is volume 10000 in vanilla: gain 1, and a LINEAR distance of 160000 blocks (SoundManager.playSound), so the
@@ -3552,7 +3552,7 @@ function edit(place = false) {
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
     farming, trees, fire, fluids, items, projectiles, eyes, maps, rockets, grounded, fallDistance, wasInWater, yaw, pitch,
-    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs, difficulty: survival.difficulty, rider };
+    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, worldRand: weather.random, signs, difficulty: survival.difficulty, rider }; // b68 fixes68: worldRand = World.rand for the bone meal click
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
   const bucket = place ? captureBucketTarget(world, state.heldTool, eyeRay) : null;
@@ -3675,7 +3675,7 @@ const cartHost = {
 function thrownAtStruck(e) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, { player: true, creative: survival.creative })) return false; saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
-    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, {
+    survival, position, velocity, farming, sleeping: bedSleep.sleeping }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, { // b68 fixes68: a lying player's posY, eye and 0.2 box
     ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
     vehicleDrop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
