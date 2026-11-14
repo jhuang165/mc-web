@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { World } from './world.js';
 import { makeStack } from './inventory.js';
+import { overridesFrom } from './multiplayer/server-properties.js'; // b69 lead
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { ServerPvp, pickPlayer } from './multiplayer/server-pvp.js';
 import { drainKnockback } from './player-knockback.js';
@@ -120,7 +121,10 @@ test('pvp defaults to true and the dedicated server wires --pvp, MC_WEB_PVP and 
   assert.equal(new DedicatedSimulation({}, {}).pvp, true);
   const src = readFileSync(new URL('../server/server.js', import.meta.url), 'utf8');
   assert.match(src, /pvp = true/);
-  assert.match(src, /argument\('--pvp'/);
+  // b69 lead: since serverprops the CLI flag and the env var reach the server through server.properties overrides (overridesFrom), not argument('--pvp')
+  assert.match(src, /pvp: settings\.pvp/);
+  assert.deepEqual(overridesFrom(['--pvp', 'false'], {}).pvp, 'false');
+  assert.deepEqual(overridesFrom([], { MC_WEB_PVP: 'false' }).pvp, 'false');
   assert.match(src, /m\.type === 'attackPlayer' && typeof m\.player === 'string'\) simulation\.queuePvpAttack\(id, m\.player\)/);
 });
 

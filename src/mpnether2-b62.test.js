@@ -111,7 +111,9 @@ test('a punched fireball kills a ghast and the puncher gets the ghast achievemen
   frames(s);
   assert.equal(ball.owner, 'player', 'the left click deflected it (EntityFireball.attackEntityFrom)');
   assert.equal(ball.punchedBy, a);
-  for (let i = 0; i < 60 && ghast.health > 0; i++) { a.position.copy({ x: 64.5, y: 70, z: 64.5 }); frames(s); }
+  // b69 lead: the ghast's wander draws on an Entity.rand seeded from Math.random, so it could drift off the ball's line (about 1 run in 6, batch 68 too); hold it in place.
+  const hold = () => Object.assign(ghast, { x: 64.5, y: 71, z: 50.5, vx: 0, vy: 0, vz: 0 });
+  for (let i = 0; i < 60 && ghast.health > 0; i++) { a.position.copy({ x: 64.5, y: 70, z: 64.5 }); hold(); frames(s); }
   assert.ok(ghast.health <= 0, 'the deflected ball killed the ghast');
   assert.ok((s.events ?? []).some(e => e.type === 'award' && e.id === 'a' && e.achievement === 'ghast'), 'the ghast achievement went to the puncher');
 });

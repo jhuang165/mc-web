@@ -156,9 +156,12 @@ test("a monster egg a Creative player breaks lets one silverfish out, a Survival
   p.position.copy({ x: 70.5, y: 13, z: 70.5 }); p.previous.copy(p.position); p.yaw = 0; p.pitch = -Math.PI / 2;
   c.queueEdit(p.id, { place: false }); c.tick();
   assert.equal(c.world.get(70, 10, 70), 0);
-  assert.equal(kinds(c, "silverfish").length, 1);
+  // b69 lead: a released silverfish may hide in the stone below on its first tick (its Entity.rand is seeded from Math.random), which removes it and
+  // draws a second puff; released = (puffs + left) / 2, hidden = (puffs - left) / 2. The test failed about 3 in 8 runs before this, batch 68 included.
   const puffs = (p.dispOut ?? []).flatMap(m => m.type === "dispFx" ? m.events : []).filter(e => e.k === "spawnerPuff");
-  assert.equal(puffs.length, 1);
+  const left = kinds(c, "silverfish").length;
+  assert.equal((puffs.length + left) / 2, 1, "one silverfish released");
+  assert.ok(left <= 1);
   const s = fixture(), q = join(s, "b", 2);
   s.world.put(70, 10, 70, MONSTER_EGG, 0, false);
   s.release = s.golems.release.bind(s.golems);
