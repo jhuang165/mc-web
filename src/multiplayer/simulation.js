@@ -533,7 +533,7 @@ export class DedicatedSimulation {
     this.mobs.tick();
     this.vehicles.tick(); // b61
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
-    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time }); // b63: MobSpawnerBaseLogic after the entities
+    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles }); // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     for (const p of this.players.values()) this.serverItems.settle(p);

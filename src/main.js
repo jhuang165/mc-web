@@ -148,6 +148,7 @@ import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { pickPlayer } from "./multiplayer/server-pvp.js"; // b63 mppvp: the client's aim at another player (C02 attack)
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
+import { applySpawnerDelay } from "./multiplayer/client-spawners.js"; // b65 mpspawners2
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
 import { RemoteDispense } from "./multiplayer/client-dispense.js";
@@ -716,6 +717,9 @@ function makeRemoteDispense() {
     poof: row => projectiles.clientImpact(row),
     shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
     eyeTrail: (row, vx, vy, vz) => spawnEyeTrail(scene.fx, row, vx, vy, vz), // b65 mpdragon2: the flying eye's portal trail (the copy draws it, as EntityEnderEye.onUpdate does)
+    spawnerBurst: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)), // b65 mpspawners2: aux 2004
+    spawnerDelay: (x, y, z, key) => applySpawnerDelay({ spawners, copies: remoteVehicles?.copies }, x, y, z, key), // b65: the spawner's block event 1
+    spawnerPuff: (x, y, z, w, h) => burst(scene.fx, "explode", 20, { x, y, z, width: w, height: h }, scene.explosionParticles.worldRandom), // b65: entity status 20
     // b63 (mpprojectiles2): S0D collect for an arrow: EntityPickupFX flies it to whoever took it (this player, or another one from the last player rows)
     collect: (i, by, at) => {
       const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by);
@@ -3744,7 +3748,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
@@ -4520,6 +4524,7 @@ function animate(now) {
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
+  if (remoteVehicles && screen !== "home") for (const c of remoteVehicles.carts.carts) if (c.type === 4 && !c.dead && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(remoteVehicles.carts, world, c, partial); if (d) shown.push(d); } // b65 mpspawners2: the server's spawner carts (Pig, as natively)
   if (minecarts && screen !== "home") for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live)) if (c.type === 4 && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
   const mpLeads = remoteMobs && multiplayer ? leadViews(remoteMobs.list(), multiplayer.id, id => remotePlayers?.entries.get(id)?.last ?? null) : { mobs: [], knots: [] }; // b62: leads of the dedicated world's mobs (multiplayer/remote-leads.js)
   if (mobs) horseGearRenderer?.update(screen === "home" ? [] : [...mobs.gearViews(), ...mpLeads.mobs], { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: mobs.gearViewOf(aimedEntity), sneaking: !!motion.sneaking, knots: [...knotViews(objectTracker, mobs.knotList ?? []), ...mpLeads.knots] }); // Batch 48: the knot copies
