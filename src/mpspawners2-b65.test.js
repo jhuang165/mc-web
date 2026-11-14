@@ -76,7 +76,7 @@ test('chainSupported: a Riding mount outside the server kinds refuses the whole 
   const jockey = { props: comp(['id', str('Skeleton')], ['Riding', comp(['id', str('Spider')])]) };
   const mk = j => MobSpawners.fromJSON([{ x: 0, y: 0, z: 0, EntityId: 'Skeleton', SpawnData: j }]).get(0, 0, 0).spawnData;
   assert.equal(chainSupported(mk(jockey)), true, 'spider jockey');
-  assert.equal(chainSupported(mk(spawnData('Skeleton', comp(['id', str('Villager')])))), false, 'a villager mount has no client copy');
+  assert.equal(chainSupported(mk(spawnData('Skeleton', comp(['id', str('Giant')])))), false, 'a giant mount has no client copy'); // b66: villagers are server kinds now
   assert.equal(chainSupported(mk(spawnData('Zombie', comp(['id', str('Boat')])))), true, 'a boat is a vehicle, made in ServerVehicles');
   assert.equal(chainSupported(mk(spawnData('Zombie', comp(['id', str('Spider')], ['Riding', comp(['id', str('Pig')])])))), true, 'a deeper chain');
   assert.equal(chainSupported(null), true);
@@ -102,9 +102,9 @@ test('a spider jockey from SpawnData Riding is spawned and linked on the server,
 
 test('an unsupported Riding mount spawns nothing (the rolls are spent)', { timeout: 300000 }, () => {
   const { s, a, n, w } = fixture();
-  addSpawner(n, w, { EntityId: 'Skeleton', SpawnData: spawnData('Skeleton', comp(['id', str('Villager')])) });
+  addSpawner(n, w, { EntityId: 'Skeleton', SpawnData: spawnData('Skeleton', comp(['id', str('Giant')])) }); // b66: villagers are server kinds now
   for (let i = 0; i < 80; i++) { s.input('a', input()); a.position.copy({ x: 64.5, y: 70, z: 64.5 }); s.tick(); a.dispOut = null; a.mobPackets = null; }
-  assert.equal(n.mobs.mobs.entities.filter(e => e.type === 'skeleton' || e.type === 'villager').length, 0);
+  assert.equal(n.mobs.mobs.entities.filter(e => e.type === 'skeleton' || e.type === 'giant').length, 0);
 });
 
 test('a SpawnData Riding boat is made in the dimension\'s vehicles', { timeout: 300000 }, () => {

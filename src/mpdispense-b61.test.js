@@ -145,16 +145,16 @@ test("a water bucket in the dispenser places water in front (existing engine, st
   assert.equal(tile(s).items[0].id, ITEM.BUCKET);
 });
 
-test("a spawn egg adds a mob through ServerMobs; a type the clients cannot show keeps the egg", () => {
+test("a spawn egg adds a mob through ServerMobs, a villager too (b66)", () => {
   const s = fixture(), p = join(s, "a", 1);
   const disp = load(s, makeStack(ITEM.SPAWN_EGG, 2, 90)); // pig
   run(s, 8, [p]);
   assert.equal(s.mobs.mobs.entities.filter(e => e.type === "pig").length, 1);
   assert.equal(tile(s).items[0].count, 1);
-  const t = fixture(), q = join(t, "b", 1), d2 = load(t, makeStack(ITEM.SPAWN_EGG, 2, 120)); // villager: not in SUPPORTED
-  run(t, 8, [q]);
-  assert.equal(t.mobs.mobs.entities.length, 0);
-  assert.equal(tile(t).items[0].count, 2, "the egg stays in the dispenser");
+  const v = fixture(), r = join(v, "c", 1); load(v, makeStack(ITEM.SPAWN_EGG, 2, 120)); // b66: villagers are server kinds now (mpvillage)
+  run(v, 8, [r]);
+  assert.equal(v.mobs.mobs.entities.filter(e => e.type === "villager").length, 1);
+  // b66: every 1.7.10 spawn-egg kind is a server kind now; the giant, the one left out, has no egg (EntityList.entityEggs), so no egg is kept back any more.
 });
 
 test("armour dispensed at a player in front is worn (invSet), not dropped; one already wearing a helmet gets the item thrown", () => {
