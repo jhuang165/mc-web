@@ -2,7 +2,7 @@
 // hand, with the geometry of fire-fx.js. They use their own camera (identity view, the hand's projection) like first-person.js.
 import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
-import { blockTile, tileRect } from "./block-textures.js";
+import { blockTile, tileRect, terrainLayoutVersion } from "./block-textures.js";
 import { FIRE_OVERLAY, INSIDE_BLOCK_OVERLAY, fireOverlayQuads, insideBlockQuad, waterOverlayQuad, handFov, overlayPlan } from "./fire-fx.js";
 
 // Side 2 (north) of the original is face 5 (-z) in block-textures.js's order (+x, -x, +y, -y, +z, -z).
@@ -58,13 +58,13 @@ export class ScreenOverlays {
     this.block.visible = plan.includes("block");
     this.water.visible = plan.includes("water");
     if (this.fire.visible) this.fireMaterial.uniforms.frame.value = Math.floor(state.tick) % 32;
-    if (this.block.visible && this.blockId !== state.insideBlock) {
+    if (this.block.visible && (this.blockId !== state.insideBlock || this.blockLayout !== terrainLayoutVersion())) {
       const r = tileRect(blockTile(state.insideBlock, PORT_NORTH_FACE), 0);
       const q = insideBlockQuad({ minU: r.u0, maxU: r.u1, minV: r.v1, maxV: r.v0 });
       this.block.geometry.dispose();
       this.block.geometry = quadGeometry([q.vertices]);
       this.block.material.color.setRGB(...q.color.slice(0, 3));
-      this.blockId = state.insideBlock;
+      this.blockId = state.insideBlock; this.blockLayout = terrainLayoutVersion(); // the quad's uv follows a relayout
     }
     if (this.water.visible) {
       const q = waterOverlayQuad({ brightness: state.brightness, yaw: state.yawDeg, pitch: state.pitchDeg });

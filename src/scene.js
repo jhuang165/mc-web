@@ -24,7 +24,8 @@ import { tileByName } from './block-textures.js';
 import { lilyPadCornerUv } from "./lily-pad.js";
 import { BiomeColorField, PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { biomeFacts } from "./biomes.js";
-import { createBlockAtlas, blockTile, tileRect, namedTile } from "./block-textures.js";
+import { bindTerrainAtlas } from "./item-atlas.js";
+import { createBlockAtlas, blockTile, tileRect, namedTile, terrainLayoutVersion } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { entityBrightness } from "./display-light.js";
@@ -103,6 +104,7 @@ export class VoxelScene {
     this.clouds = new Clouds(this.lighting, CLOUD_HEIGHT);
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
+    bindTerrainAtlas(this.textures); // item sprites of the blocks map read this atlas (item-atlas.js)
     this.textures.setMaxTextureSize(this.renderer.capabilities?.maxTextureSize); // GL_MAX_TEXTURE_SIZE for the Stitcher (HD packs, terrain-layout.js)
     // An HD pack re-stitched the block atlas: every chunk mesh holds the old uvs, so all are meshed again (the mesh workers get the new layout with their next job).
     this.textures.onRelayout = () => { for (const k of this.chunks.keys()) this.dirty.add(k); };
@@ -338,13 +340,13 @@ export class VoxelScene {
   meshRequest(cx, cz) {
     const key = `${cx},${cz}`, pool = this.meshPool;
     if (!this.meshWorkers || !this.light || this.lightPending || this.predicted?.active || !this.world.chunks.has(`${cx / 16},${cz / 16}`)) return null; // a worker snapshot reads the real world, not the predicted view
-    const epoch = this.keyEpoch.get(key) || 0, gen = this.meshGen, stamp = this.dirty.stamps?.get(key), snap = snapshotRegion(this, cx, cz);
+    const epoch = this.keyEpoch.get(key) || 0, gen = this.meshGen, layoutAtSend = terrainLayoutVersion(), stamp = this.dirty.stamps?.get(key), snap = snapshotRegion(this, cx, cz);
     const lit = new Map(snap.job.repeaters.map(([x, y, z, on]) => [`${x},${y},${z}`, on]));
     return pool.request(snap).then((r) => {
       if (!r) return null;
       for (const k of r.repeaters) this.repeaterEmit.set(k, lit.get(k) === true); // the light volume's emission callback records these
       // current: still this world and not meshed on the page since; fresh: also not queued again since (a stale-by-stamp mesh is still installed, and the column stays queued)
-      return { current: gen === this.meshGen && epoch === (this.keyEpoch.get(key) || 0), fresh: stamp === this.dirty.stamps?.get(key), layers: r.layers };
+      return { current: gen === this.meshGen && layoutAtSend === terrainLayoutVersion() && epoch === (this.keyEpoch.get(key) || 0), fresh: stamp === this.dirty.stamps?.get(key), layers: r.layers };
     });
   }
   // Applies a result from meshRequest to the column; false when it was stale or the column left the window.
@@ -435,7 +437,7 @@ export class VoxelScene {
         e.parts.forEach((part, i) => {
           const key = `${e.x},${e.y},${e.z},${i}`, light = this.light.packed(e.x, e.y, e.z),
             last = part.quads?.[part.quads.length - 1]?.verts?.[0]?.join(","),
-            sig = `${part.block},${part.meta},${part.quads ? `q${part.quads.length}:${last}` : "c"},${light}`;
+            sig = `${terrainLayoutVersion()},${part.block},${part.meta},${part.quads ? `q${part.quads.length}:${last}` : "c"},${light}`;
           used.add(key);
           let entry = cache.get(key);
           if (!entry || entry.sig !== sig) {

@@ -7,6 +7,7 @@
 // planes), 19 stems (renderBlockStemSmall, height 0.25 from BlockStem.setBlockBoundsForItemRender) and 2 torches (upright).
 import * as THREE from "three";
 import { blockTile, tileRect, TILES } from "./block-textures.js";
+import { trackUvArray } from "./uv-rebake.js";
 import { crossedSquares, stemSmall } from "./render-vessels.js";
 import { hasColormaps, itemGrassColor, rgbFloats, PINE, BIRCH, FOLIAGE_BASIC } from "./biome-colors.js";
 
@@ -82,19 +83,23 @@ export function displayQuads(shape) {
 
 // The geometry of a flat shape for the port's cell `{ id, meta }`, its texture the cell's side tile.
 export function displayGeometry(shape, cell) {
-  const side = tileRect(blockTile(cell.id, 0, false, cell.meta)), positions = [], uvs = [], indices = [];
-  for (const q of displayQuads(shape)) {
-    const r = q.tile ? tileRect(TILES.indexOf(q.tile)) : side, base = positions.length / 3;
-    q.verts.forEach((v, i) => { positions.push(v[0], v[1], v[2]); uvs.push(r.u0 + (r.u1 - r.u0) * q.uv[i][0], r.v1 - (r.v1 - r.v0) * q.uv[i][1]); });
+  const sideTile = blockTile(cell.id, 0, false, cell.meta), quads = displayQuads(shape), positions = [], indices = [];
+  const uvsOf = () => { // re-run on a terrain relayout (uv-rebake.js)
+    const uvs = [], side = tileRect(sideTile);
+    for (const q of quads) { const r = q.tile ? tileRect(TILES.indexOf(q.tile)) : side; q.verts.forEach((v, i) => uvs.push(r.u0 + (r.u1 - r.u0) * q.uv[i][0], r.v1 - (r.v1 - r.v0) * q.uv[i][1])); }
+    return uvs;
+  };
+  for (const q of quads) {
+    const base = positions.length / 3;
+    q.verts.forEach((v) => positions.push(v[0], v[1], v[2]));
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   g.setIndex(indices);
   if (shape === "hopper") g.computeVertexNormals(); // the hopper's quads carry their face normals (executed, equal to the winding normals)
   else g.setAttribute("normal", new THREE.Float32BufferAttribute(positions.map((_, i) => (i % 3 === 1 ? -1 : 0)), 3)); // every flat vertex carries the item normal (0, -1, 0) (executed, b53dq); with the standard item lighting (bytecode-read: blt.a enables RenderHelper bam.b around renderEntities) that is a constant 0.4 diffuse, not the face-normal shading the port computed before
-  return g;
+  return trackUvArray(g, uvsOf);
 }
 
 // Batch 51/52: renderBlockAsItem (blm.a(aji, meta, brightness), useInventoryTint on) multiplies the colour by Block.getRenderColor(meta) (aji.i(int)) before drawing; for the grass block
