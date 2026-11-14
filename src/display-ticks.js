@@ -8,6 +8,7 @@ import { portalDisplayTick } from "./nether-portal.js";
 // the lit BlockFurnace (ale), BlockFire (alb), BlockLeaves (alt) and BlockLiquid (alw).
 // Particles go through World.spawnParticle (fx.spawn, RenderGlobal's filter), sounds
 // through `sound(name, x, y, z, volume, pitch)`. Evidence: public/research/particles.md.
+import { extraDisplayTick } from "./block-display-b73.js"; // b73: mycelium, brewing stand, end portal
 import { JavaRandom } from "./lighting.js";
 import { WATER, LAVA, FIRE, SNOW_LAYER, normalCube } from "./world.js";
 import { canCatchFire } from "./fire.js";
@@ -47,6 +48,7 @@ export function displayTicks(world, cx, cy, cz, { rand, fx, repeaterLit = () => 
 }
 
 export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () => {}, lit = () => false, canStrike = () => false, repeaterLit = () => false, worldRand = random }) {
+  if (extraDisplayTick(b, x, y, z, random, fx)) return;
   if (b === TORCH) torch(world, x, y, z, fx);
   else if (b === FURNACE) {
     if (lit(x, y, z)) furnace(x, y, z, random, fx);

@@ -31,10 +31,9 @@ export class Fishing {
     };
   }
   // WorldServer.func_147487_a (S2APacketParticles on the client): count 0 is one particle moving at
-  // speed * offset, otherwise `count` particles with gaussian offsets and velocities. "wake" has no
-  // browser particle (EntityFishWakeFX) and is skipped.
+  // speed * offset, otherwise `count` particles with gaussian offsets and velocities. "wake" is
+  // EntityFishWakeFX (wake-particles.js, b73).
   particle(host, name, x, y, z, count, dx, dy, dz, speed) {
-    if (name === 'wake') return;
     const g = () => this.particleRand.nextGaussian();
     if (count === 0) { host.fx.spawn(name, x, y, z, speed * dx, speed * dy, speed * dz); return; }
     for (let i = 0; i < count; i++) host.fx.spawn(name, x + g() * dx, y + g() * dy, z + g() * dz, g() * speed, g() * speed, g() * speed);
