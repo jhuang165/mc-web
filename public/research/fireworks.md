@@ -27,7 +27,9 @@ EntityFireworkSparkFX `bkd`, EntityFireworkOverlayFX `bkc`, dispenser behaviour 
 - The rocket moves with the shared particle mover (`moveParticleEntity`), which is `Entity.moveEntity` for a body with no step
   height. Batch 68 executed it against blocks (`firework-collide-reference.json`, `FireworkCollideProbe`, 31 records: stone and
   slab ceilings, a fence, a cobweb, walls, the void): all replay exactly. One real gap was the void (posY < -64 kills the rocket
-  in `Entity.onEntityUpdate`, no status 17), now fixed. Water flow and lava are not probed.
+  in `Entity.onEntityUpdate`, no status 17), now fixed. Batch 69 added fluids and entity boxes
+  (`firework-fluid-reference.json`, `FireworkFluidProbe`, 34 records: still and flowing water, lava, a boat and a minecart): the rocket takes
+  the 0.014 flow push, the first-entry splash draws 32 random floats, and boat and cart boxes block it; all replay at 1e-12.
 - `ItemFirework.onItemUse` and the dispenser behaviour (aux 1002, spawn position) come from bytecode, not the probe.
 - A rocket without a star carrying an Explosion tag has no Flight NBT in the original (probe evidence); kept.
 - Sounds `fireworks.*` need the media importer (the regex now includes `fireworks/`); the importer was NOT run here, so the
