@@ -103,6 +103,9 @@ export class VoxelScene {
     this.clouds = new Clouds(this.lighting, CLOUD_HEIGHT);
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
+    this.textures.setMaxTextureSize(this.renderer.capabilities?.maxTextureSize); // GL_MAX_TEXTURE_SIZE for the Stitcher (HD packs, terrain-layout.js)
+    // An HD pack re-stitched the block atlas: every chunk mesh holds the old uvs, so all are meshed again (the mesh workers get the new layout with their next job).
+    this.textures.onRelayout = () => { for (const k of this.chunks.keys()) this.dirty.add(k); };
     this.textures.setUploader(createAtlasUploader(this.renderer, THREE)); // animated tiles upload as sub-rects (atlas-upload.js)
     this.drops = new DropRenderer(this.scene, this);
     this.projectiles = new ProjectileRenderer(this.scene, this);

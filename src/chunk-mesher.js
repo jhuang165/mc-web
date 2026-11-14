@@ -19,7 +19,7 @@ import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAY
 import { tileByName } from './block-textures.js';
 import { lilyPadRotation } from "./lily-pad.js";
 import { PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
-import { blockTile, tileRect, tileOrigin, ATLAS_WIDTH, ATLAS_HEIGHT, namedTile } from "./block-textures.js";
+import { blockTile, tileRect, tileOrigin, tileSize, ATLAS_WIDTH, ATLAS_HEIGHT, namedTile } from "./block-textures.js";
 import { wireQuads, leverBaseBounds, leverHandleQuads, hookPlateBounds, hookQuads } from "./render-redstone.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD, dispenserPistonBounds } from "./dispenser-piston.js";
 import { mhSin, mhCos, smoothFace, flatFace, lightEmission } from "./lighting.js";
@@ -197,8 +197,8 @@ export class MeshMethods {
   // brightness with no face shading. Vertices follow the original order.
   torch(m, x, y, z, tileId = 20) {
     const meta = this.world.getMeta(x, y, z), light = this.light.packed(x, y, z), t = blockTile(tileId, 0),
-      [tx, ty] = tileOrigin(t), W = ATLAS_WIDTH, H = ATLAS_HEIGHT;
-    this.torchAt(m, x, y, z, meta, (u, v) => [(tx + u) / W, 1 - (ty + v) / H], light);
+      [tx, ty] = tileOrigin(t), W = ATLAS_WIDTH, H = ATLAS_HEIGHT, k = tileSize(t) / 16; // u, v are 16 px cell units; an HD tile is k times larger (batch 65)
+    this.torchAt(m, x, y, z, meta, (u, v) => [(tx + u * k) / W, 1 - (ty + v * k) / H], light);
   }
   // The renderTorchAtAngle model at a (possibly fractional) base position; uv maps tile pixels to atlas fractions.
   torchAt(m, x, y, z, meta, uv, light) {
