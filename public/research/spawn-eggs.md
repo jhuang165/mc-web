@@ -14,7 +14,7 @@ Browser ids: original 383/384/385 are taken by other items, so they map to inter
 - Fire charge: right click puts fire in the cell beside the face if that cell is air (sound fire.ignite, volume 1, pitch r*0.4+0.8); the charge is spent outside Creative whether or not fire was placed (probe: fire). Shapeless recipe: blaze powder + coal or charcoal + gunpowder -> 3 (matches the original recipe manager, `recipe-catalogue.test.js`).
 
 ## Gaps
-- Not full parity. Living sound after an egg spawn (`playLivingSound`) is not played; custom names are stored on the mob (`customName`) but not rendered or persisted; no dispenser behaviours (spawn egg, bottle, fire charge small fireball); no small fireball entity.
+- Not full parity. Batch 69 (docs sweep): dispenser behaviours for spawn eggs, bottles and fire charges exist (`src/dispense.js`) and the small fireball entity exists (`src/blaze-ghast.js`). Still open as written: living sound after an egg spawn (`playLivingSound`) is not played; custom names are stored on the mob (`customName`) but not rendered or persisted.
 - Zombie, Skeleton and Zombie Pigman could not be constructed on the probe's world double (NPE), so their use records are errors; their placement relies on the other eggs' records.
 - Thrown-bottle launch matches the seeded constructor replay only to about 5e-5 per component (the port reuses the potion launch's float rounding).
 - Bottle break particles use the water-bottle shards (damage 0) of the potion effect; not compared pixel for pixel. Egg icon composition is browser-only and untested outside it.

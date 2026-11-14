@@ -10,7 +10,7 @@ Facts below are bytecode-derived (javap of the unchanged 1.7.10 jar: BlockSkull 
 - Sound regex: `wither` added to `tools/import-vanilla-media.mjs` (importer not run).
 
 ## Gaps
-- The Wither entity is not implemented: no EntityWither AI, flight, three heads, wither skulls in flight, block breaking, armour phase, spawn explosion, boss bar, renderer, nether star drop, `/summon WitherBoss`.
+- Batch 69 (docs sweep): the Wither is implemented (`src/wither-boss.js`, `src/wither-boss-mobs.js`, `src/wither-boss-renderer.js`; see [wither boss](wither-boss.md)).
 - No `WitherProbe.java`, `verify-wither.mjs` or `wither-reference.json`; `skull.test.js` checks bytecode-derived values only.
 - Heads in the helmet slot and on the player/paper doll; head drop from charged creeper kills; pick-block damage; player-head owner skins; wither skeleton stone sword model; Nether Fortress spawning (no nether here).
-- Wither skeleton is not imported from region files (Skeleton entities are not imported at all).
+- Batch 69 (docs sweep): wither skeletons import from region files (`src/java-mobs.js` maps `SkeletonType` 1 to `wither_skeleton`). Nether Fortress spawning: the Nether and fortresses exist (`src/fortress.js`); the spawn list was not checked.

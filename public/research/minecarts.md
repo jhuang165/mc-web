@@ -97,10 +97,10 @@ Additional port tests cover JSON actions, inventory use, crafting, mounted reloa
 
 ## Gaps
 
-- Mob pickup by empty carts, and furnace, TNT, hopper, spawner and command carts.
-- Hoppers pulling from carts, and the comparator output.
-- Powered rail redstone propagation and detector rail output. The meta bits are read, but nothing powers or unpowers rails.
-- Client interpolation (`setPositionAndRotation2`) and the 0.5 shadow.
+- Batch 69 (docs sweep): mob pickup by empty carts is ported (`src/vehicle-riders.js`, below); furnace, TNT, hopper and command carts and the spawner cart are ported in `src/cart-variants.js`, `cart-hopper.js`, `command-cart.js`, `cart-spawner-display.js`, tested by `src/carts.test.js` ([minecart variants](minecart-variants.md)).
+- Batch 69 (docs sweep): the hopper cart pulls from the inventory above (`src/cart-hopper.js`) and the comparator reads a chest cart through the redstone runtime's `inventory` query (`src/redstone-runtime.js`). Still true: block hoppers do not pull from minecart inventories (`src/inventory-transfer.js` says minecart inventories are not modelled).
+- Batch 69 (docs sweep): powered, detector and activator rails now propagate redstone (`src/powered-rails.js`, tested by `src/powered-rails.test.js`).
+- Client interpolation (`setPositionAndRotation2`) is not found in `src/` (left open). Batch 69 (docs sweep): the 0.5 cart shadow is read in `src/shadows.js`.
 - Carts have no blocking box for player movement, natively; the shared cart-push path remains adapted to the browser tick.
 - `inventory.js copyStack` preserves stored enchantments but still drops custom item names when a stack moves through the container or becomes an item entity.
 - Unmapped original loot still has no live dropped-item representation.

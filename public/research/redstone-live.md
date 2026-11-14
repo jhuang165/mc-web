@@ -47,10 +47,10 @@ clocks) and `record.pistons = pistons.save()` (chunk-runtime splits that list pe
 
 ## Known limits (open)
 
-- Dispenser/dropper behaviour is not ported here (power does nothing); the hopper is live (hopper.md). Trapped chests have no internal block.
+- Batch 69 (docs sweep): dispenser and dropper exist (`src/dispense.js`, `src/dispenser-container.js`); the hopper is live (hopper.md). Trapped chests are block 146 (`src/block-registry.js`); whether they emit signals was not checked.
 - Comparator reads chest, furnace, dispenser and hopper contents from the browser stores and re-reads them whenever a container changes: a slot click in an open screen, a hopper transfer, a furnace fuel/smelt result and a screen close call `containerChanged` (the `World.func_147453_f` path; see [hopper.md](hopper.md)). Dispenser/dropper firing is the dispenser track's to report.
   Furnace progress and chest-lid changes do not notify comparators.
-- Minecarts, thrown projectiles and tripwire do not trigger plates; arrows, items, orbs, primed TNT, mobs and the player do (strict AABB).
+- Batch 69 (docs sweep): minecarts trigger plates (`src/redstone-runtime.js` `cartsIn` mode "all" includes every cart). Thrown projectiles and tripwire do not trigger plates; arrows, items, orbs, primed TNT, mobs and the player do (strict AABB).
 - Sensor sky light uses the scene light volume; the daylight cycle follows `scene.angle`.
 - Tripwire hook (131) and string (132) are live (tripwire-reference.json, 16 native scenarios; see scattered-features.md, Live traps). Not probed: shears disarm, the selection bounds, random ticks; thrown projectiles, boats and falling blocks do not trip strings.
-- Redstone tile ticks are not written to Java exports.
+- Batch 69 (docs sweep): pending ticks are exported in Java `TileTicks` (`src/region-export.js`, `src/tile-ticks.js`); whether redstone's own ticks are among them was not checked.

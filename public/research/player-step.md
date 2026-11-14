@@ -57,5 +57,5 @@ Browser check (muted, scratch "Push Check" world switched to Survival for the ru
 ## Gaps
 
 - The finite world's x/z edge is a clamp at 0.31, which counts as a horizontal collision.
-- The player does not collide with entity boxes (`World.getCollidingBoundingBoxes` also returns boats and minecarts, which do not exist here).
+- Batch 69 (docs sweep): boats and minecarts exist, and `src/entities.js` has `setEntityBoxes`/`setWorldEntityBoxes` hooks for entity collision boxes; carts natively have no player-blocking box (see [minecarts](minecarts.md)). Whether the single-player player step uses the boat box was not traced, so the line is left open: the player does not collide with entity boxes.
 - No portals, pressure plates, tripwire or soul sand, so the other `onEntityCollidedWithBlock` blocks have nothing to do. The player's fire counter is not saved.

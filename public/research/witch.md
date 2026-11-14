@@ -24,7 +24,7 @@ Item ids of this build: 384 glass bottle, 385 potion.
 - Player motion is treated as 0 when the witch leads its throw.
 - The player takes splash harm and poison; slowness and weakness now feed player speed, FOV and melee damage through status-effects.js (see player-knockback.md); witch potions on the player are otherwise unchanged.
 - No potion break particles; the glass sound `game.potion.smash` is emitted but the asset index has no witch sounds (`mob.witch.*`), so the witch is silent.
-- Potions cannot be obtained or brewed; there is no glass bottle recipe. The held/thrown sprite has no potion tint, and the held potion is not drawn in 3D.
+- Batch 69 (docs sweep): brewing exists (`src/brewing.js`, `src/brewing-container.js`) and glass bottle (374) is an item. Still open as written: the held/thrown sprite has no potion tint and the held potion is not drawn in 3D.
 - Only the eight potion values the witch uses are implemented, not PotionHelper.
 - Natural spawning goes through the SpawnerAnimals port ([natural spawning](natural-spawning.md)): weight 5 in groups of 1 in the biome monster lists, and the witch hut list inside a swamp hut (looked up only in swamp biome slots). The hut's generated witch still comes from the structure records.
 - Thrown potions in flight are not saved. The held potion is not exported to region files.

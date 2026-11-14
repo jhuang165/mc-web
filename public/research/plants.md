@@ -143,7 +143,7 @@ from `javap` only.
 - Metadata changes with flag 4 (growth age) send no notification, as in the original. Other flag differences between
   the original `setBlock` calls and this build's `world.set` are not modelled.
 - The cactus inventory icon is a plain isometric cube, not the inset item render.
-- No desert biome, so no natural cactus. Swamp `reedsPerChunk` is unused.
+- Batch 69 (docs sweep): deserts and natural cactus exist (`src/biome-decorator.js` places `WorldGenCactus` from the biome's `cacti` count; `src/decoration-features.test.js`). Swamp `reedsPerChunk` was not checked.
 
 
 ## Falling-block blast deflection (0.22)
