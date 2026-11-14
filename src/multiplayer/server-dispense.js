@@ -49,7 +49,7 @@ export class ServerDispense {
   get world() { return this.dim ? (this.dimState(this.dim)?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
   get eyeSystem() { return this._eyes ??= new ServerEyes(this); } // b64 mpend2: made on first use (the constructor's load may reach it first)
-  get any() { return this._eyes?.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) > 0 || this.lanes.some(laneBusy); }
+  get any() { return this._eyes?.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }
 
   // The host of dispense.js's engine (installDispensers). `stop(...)` is the old "put the stack back" for what has no entity path here.
@@ -282,6 +282,7 @@ export class ServerDispense {
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale });
+    for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0 }); // b63: wither skulls (the model turns to its flight)
     return out;
   }

@@ -26,12 +26,14 @@ import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from
 import { installServerWither, boundedSkullResistance } from './server-wither.js'; // b63 mpwither
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
 import { VILLAGE_KINDS, installServerVillagers } from './server-villagers.js'; // b66 mpvillage
+import { GOLEM_KINDS, installServerGolems } from './server-golems.js'; // b66 mpgolems
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
 export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton', 'wither']); // b63: the wither (server-wither.js); b62: the Nether's kinds (Overworld spawn lists never name them)
 for (const k of VILLAGE_KINDS) SUPPORTED.add(k); // b66 mpvillage: villagers and the village's iron golems (server-villagers.js)
 for (const k of DRAGON_KINDS) SUPPORTED.add(k); // b64 mpdragon: the Ender Dragon and the End crystals (the End's mobs)
+for (const k of GOLEM_KINDS) SUPPORTED.add(k); // b66 mpgolems: iron and snow golems, silverfish
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
@@ -126,6 +128,7 @@ export class ServerMobs {
     mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
     installServerVillagers(this); // b66 mpvillage: reputation by player name, the village's player lookup
     installServerDragon(this); // b64 mpdragon: the dragon sees every player of its world
+    installServerGolems(this, MOB_LIMIT); // b66 mpgolems: golem statuses, silverfish puffs
     installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
     this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
@@ -272,7 +275,7 @@ export class ServerMobs {
     }
     if (this.spawning) {
       this.spawnPass();
-      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (mobs.entities[i].type !== 'wither' && mobs.entities[i].type !== 'villager') mobs.entities.splice(i, 1); // b63: the cap never cuts a wither just built
+      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (!['wither', 'villager', 'iron_golem', 'snow_golem'].includes(mobs.entities[i].type)) mobs.entities.splice(i, 1); // b63: the cap never cuts a wither or golem just built; b66: nor a villager (mpvillage)
     }
     this.use(first);
     const lead = first.player.position;
