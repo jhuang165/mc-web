@@ -480,7 +480,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (id === DYE && state.survival.held?.damage === 15) {
       if (!state.survival.creative && !state.survival.usable(id)) return act('bone-meal-no-item');
       // bone-meal.js (b66): ItemDye.func_150919_a for every IGrowable (saplings, grass, crops, stems, mushrooms, tall grass, double plants, cocoa).
-      const grown = useBoneMeal({ world: state.world, trees: state.trees, farming: state.farming, flowers: state.flowers, grassRandom: state.boneRandom, items: state.items }, x, y, z);
+      const grown = useBoneMeal({ world: state.world, trees: state.trees, farming: state.farming, flowers: state.flowers, grassRandom: state.boneRandom, items: state.items, rand: state.worldRand ?? undefined }, x, y, z); // b68 fixes68: ItemDye.func_150919_a draws from world.rand
       for (const q of grown.changed) hook('updateBlock', q[0], q[2], q[1]);
       if (grown.farm) hook('applyFarmUpdates', state.farming.drain());
       const used = grown.used;

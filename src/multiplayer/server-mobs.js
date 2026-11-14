@@ -13,6 +13,7 @@ import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
 import { explodeMobs } from '../explosion-simulation.js';
+import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fixes68: a lying player's posY, eye and 0.2 box
 import { entityBox, isWet, canSeeSky } from '../weather.js';
 import { hurtOf, deathOf } from '../entities.js';
 import { drainKnockback } from '../player-knockback.js';
@@ -152,7 +153,7 @@ export class ServerMobs {
   punchBall(p) {
     const fb = this.mobs._fireballs;
     if (!fb?.list.length || p.survival.health <= 0) return false;
-    const reach = p.survival.creative ? 6 : 3, eye = { x: p.position.x, y: p.position.y + PHYSICS.eye, z: p.position.z };
+    const reach = p.survival.creative ? 6 : 3, eye = { x: p.position.x, y: serverEyeY(p.position.y, p.sleeping), z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const wall = raycast(this.host.world, eye, dir, p.survival.creative ? 5 : 4.5);
     const hit = fb.pick(eye, dir, reach, wall ? wall.distance : reach);
@@ -218,7 +219,8 @@ export class ServerMobs {
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival;
       if (s.creative || s.health <= 0) continue;
-      const hit = explosionImpact(world, x, y, z, size, p.x, p.y, p.z, p.y + Math.fround(PHYSICS.eye), entityBox(p, PHYSICS.width, PHYSICS.height));
+      const lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)
+      const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
       if (!hit) continue;
       this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null });
       for (const k of ['x', 'y', 'z']) v.player.velocity[k] += hit.push[k === 'x' ? 0 : k === 'y' ? 1 : 2];
@@ -392,7 +394,7 @@ export class ServerMobs {
   attack(p, wireId) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
-    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
+    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - serverEyeY(p.position.y, p.sleeping), dz = mob.z - p.position.z;
     if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : dx * dx + dy * dy + dz * dz > 36) return false; // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
@@ -402,7 +404,7 @@ export class ServerMobs {
   interact(p, wireId, claim = false) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
-    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
+    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - serverEyeY(p.position.y, p.sleeping), dz = mob.z - p.position.z;
     if (dx * dx + dy * dy + dz * dz > 36) return false;
     this.use(v);
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
