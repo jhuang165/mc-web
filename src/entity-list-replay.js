@@ -94,6 +94,10 @@ export function replayEntityList(c, onBoom = null, without = null) {
       const p = hanging.createPainting(world, x, y, z, a); p.ticks = b; // the tile, the facing and EntityHanging's private 100-tick counter
       m.add = () => { hanging.entities.push(p); hanging.joined(p); }; m.entity = p;
     }
+    else if (kind === "frame") { // batch 67: an item frame at the wall tile (dir a, the 100-tick counter b); a held cobblestone when the spec's 11th field is 1
+      const fr = hanging.createFrame(x, y, z, a); fr.ticks = b; if (m.at.seed === 1) fr.item = { id: 4, count: 1, damage: 0 };
+      m.add = () => { hanging.entities.push(fr); hanging.joined(fr); }; m.entity = fr;
+    }
     else if (kind === "potion" || kind === "snowball") {
       const flat = Math.hypot(vx, vz), yaw = Math.fround((Math.atan2(vx, vz) * 180) / Math.PI), pitch = Math.fround((Math.atan2(vy, flat) * 180) / Math.PI), rng = ew.potions.projectiles.rng();
       const ball = { kind, damage: a, owner: null, x, y, z, px: x, py: y, pz: z, mx: vx, my: vy, mz: vz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: rng, random: rng, dead: false };
@@ -161,6 +165,7 @@ function view(m, primed, detail = false, player = null, survival = null) {
   if (kind === "cart") return [e.x, e.posY, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.yaw, e.pitch, ...(detail ? [e.damage, e.rolling, e.rollingDir] : [])];
   if (kind === "boat") return [e.x, e.posY, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.yaw, e.timeSinceHit, ...(detail ? [e.damage] : [])];
   if (kind === "painting") return [e.x, e.y, e.z, 0, 0, 0, e.dead ? 1 : 0];
+  if (kind === "frame") return [e.x, e.y, e.z, 0, 0, 0, e.dead ? 1 : 0, e.item ? e.item.count : 0];
   if (kind === "pthrow" && m.at.b === 2) return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, player.x, player.y, player.z, 20 - survival.health]; // a pearl of a real EntityPlayerMP thrower: where it stands afterwards and the damage it took
   if (kind === "potion" || kind === "snowball" || kind === "pthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
   if (kind === "skull") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.blue ? 1 : 0];

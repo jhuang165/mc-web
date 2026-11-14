@@ -737,10 +737,16 @@ function makeRemoteDispense() {
 }
 const tntRows = () => (remoteDispense?.primed.length ? [...primed, ...remoteDispense.primed] : primed);
 // b64 mpstats2: the server's fish hooks (multiplayer/client-fishing.js): this player's own bobber with the first-person line, the others on their anglers' bodies.
+// b67 entityprobes2: the own bobber's third-person line leaves from the player's own body (RenderFish reads the local player's renderYawOffset), not the camera eye;
+// the body's feet are lowered by ySize as the single-player tick does (the local player's posY).
+function ownFishingAngler() {
+  const b = playerBody;
+  return { px: b.px, py: b.py - motion.prevYSize, pz: b.pz, x: b.x, y: b.y - motion.ySize, z: b.z, prevRenderYawOffset: b.prevRenderYawOffset, renderYawOffset: b.renderYawOffset };
+}
 function tickRemoteFishing() {
   const own = remoteFishing.own(multiplayer.id);
   rodState.cast = !!own;
-  scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, swing: Math.min(1, animation.swingTime / SWING_SECONDS), angler: null } : null);
+  scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, swing: Math.min(1, animation.swingTime / SWING_SECONDS), angler: ownFishingAngler() } : null);
   scene.setOtherFishing(remoteFishing.others(multiplayer.id).map(h => { const e = remotePlayers?.entries.get(h.angler); return e ? { hook: h, angler: e.body, sneaking: !!e.state?.sneak } : null; }).filter(Boolean));
 }
 function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles); }
