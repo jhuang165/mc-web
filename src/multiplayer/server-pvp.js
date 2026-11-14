@@ -16,6 +16,7 @@ import { rayTraceBlocks } from '../buckets.js';
 import { ITEMS } from '../survival.js';
 import { mhSin, mhCos } from '../lighting.js';
 import { STAT } from '../stats.js';
+import { OVERKILL_DAMAGE } from '../achievements.js';
 
 const f = Math.fround, EYE = 1.62, TOOLS = ['sword', 'axe', 'pickaxe', 'shovel'];
 
@@ -66,6 +67,7 @@ export class ServerPvp {
       });
       (sim.events ??= []).push({ type: 'pvpHit', id: p.id, victim: v.id, damage: Math.round(f(damage * 10)), dealt: f(health - vs.health) }); // the damageDealt statistic (mpstats)
       sim.stats?.add(p, STAT.damageDealt, Math.round(f(damage * 10))); // b63 lead: EntityPlayer.attackTargetEntityWithCurrentItem addStat(damageDealtStat, round(f * 10)) for a living target
+      if (damage >= OVERKILL_DAMAGE) sim.achievements?.award(p, 'overkill'); // b64: EntityPlayer.r `if (f >= 18.0F) triggerAchievement(overkill)` after the knockback, f = damage after the critical and enchantments (bytecode-read)
       if (owned && TOOLS.includes(item?.kind)) s.wear(tool, item.kind === 'sword' ? 1 : 2); // ItemStack.hitEntity
       s.exhaust(0.3);
     }

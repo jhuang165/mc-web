@@ -240,6 +240,7 @@ import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin,
 import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
 import { pushClientPlayer } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
+import { predictUse } from "./multiplayer/client-use-predict.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { createServerDig } from "./server-dig.js";
@@ -3445,7 +3446,7 @@ function multiplayerDigStart() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (heldId() === BOW && !eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true }; /* b63: the draw look and FOV from this player's own use state (the server decides the shot) */ } animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (!eating) eating = predictUse(survival.held, survival); /* b63/b64: the draw, eat, drink and block look from this player's own use state (client-use-predict.js; the server decides) */ } animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -3826,6 +3827,7 @@ function movementTick(controls) {
     renderHotbar,
     markUnsaved: () => { saved = false; },
     random: Math.random,
+    predicted: !!multiplayer, // b64: a connected client's eat / drink is animation only
   }).use;
   if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) clickEdit(true);
   if (survival.health <= 0) die();
