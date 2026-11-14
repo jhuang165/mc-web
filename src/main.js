@@ -241,7 +241,7 @@ import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
 import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
-import { pushClientPlayer } from "./client-push.js";
+import { pushClientPlayer, CLIENT_PUSHES_PLAYER } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { predictUse } from "./multiplayer/client-use-predict.js";
 import { tickLivingSimulation, drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
@@ -3758,7 +3758,7 @@ function movementTick(controls) {
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
-  pushClientPlayer(mobs, { x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height, riding: !!rider.vehicle, dead: survival.health <= 0 }, velocity); // sv.bo on the client player, after the move
+  if (CLIENT_PUSHES_PLAYER) pushClientPlayer(mobs, { x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height, riding: !!rider.vehicle, dead: survival.health <= 0 }, velocity); // sv.bo on the client player, after the move
   streamPrefetch?.update(position.x, position.z);
   if (world.ringSink?.rtList && world.warmBiomes) world.warmBiomes(world.ringSink.rtList); // ring chunks' biomes, a few ms a tick, before their ice rolls need them
   walkFrozen = sneakOnGround;

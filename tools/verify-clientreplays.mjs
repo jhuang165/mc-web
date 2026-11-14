@@ -48,6 +48,22 @@ if (!only || only === 'fishline') {
     rows,
   };
 }
+if (!only || only === 'push') {
+  // The client half of the mob push: javap of the unchanged classes, kept as evidence (bytecode-read, extracted mechanically).
+  const javap = async c => (await exec('javap', ['-c', '-p', '-cp', classes, c], { maxBuffer: 1 << 26 })).stdout.split('\n');
+  const clean = l => l.replace(/^\s*\d+:\s*/, '').replace(/\s+#\d+\s*\/\/\s*/, ' ').trim();
+  const sv = await javap('sv'), sa = await javap('sa');
+  const pushIdx = sv.findIndex(l => l.includes('String push')), pushEnd = sv.findIndex((l, i) => i > pushIdx && l.includes('return'));
+  const lines = sv.slice(pushIdx - 3, pushEnd + 1).map(clean);
+  const av = sa.findIndex(l => l.includes('public void g(double, double, double);'));
+  const velocity = sa.slice(av, av + sa.slice(av).findIndex(l => /:\s*return$/.test(l.trim())) + 1).filter(l => l.includes('putfield')).map(clean);
+  reference.mobPush = {
+    classes: { sv: { name: 'EntityLivingBase', sha256: await digest('sv') }, sa: { name: 'Entity', sha256: await digest('sa') } },
+    pushSection: lines,
+    addVelocity: velocity,
+    method: 'javap -c -p over the unchanged classes: the "push" profiler section of EntityLivingBase.onLivingUpdate and the fields Entity.addVelocity writes. Bytecode-read, extracted mechanically; nothing is run.',
+  };
+}
 const file = path.join(root, '../public/research/clientreplays-reference.json');
 let old = {}; if (await exists(file)) old = JSON.parse(await readFile(file, 'utf8'));
 await writeFile(file, JSON.stringify({ ...old, ...reference }) + '\n');

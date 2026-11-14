@@ -5,6 +5,12 @@
 import { applyEntityCollision, boxesMeet } from "./combat.js";
 import { pushBox, pushable } from "./entities.js";
 
+// Batch 65 (bytecode-read): sv.e reaches sv.bo only through `if (!world.isRemote)` (ahb.E, javap sv.e at 580 to 591), and nothing on the client calls
+// applyEntityCollision (sa.g) for the player; the integrated server's EntityPlayerMP is pushed instead, and Entity.addVelocity (sa.g(DDD)) sets isAirBorne,
+// not velocityChanged (sa.H), so the tracker entry (my) sends no S12 for it. The controlled player is therefore NOT pushed by mobs in 1.7.10, and client
+// mob copies do not push anything either. Kept for tests and for a later look; main.js no longer calls it.
+export const CLIENT_PUSHES_PLAYER = false;
+
 // Adds the mobs' push to velocity ({x, z}); mobs.tracker's client copies give the positions (the live mob stands in where untracked).
 export function pushClientPlayer(mobs, player, velocity) {
   if (!mobs?.entities || player.riding || player.dead) return;

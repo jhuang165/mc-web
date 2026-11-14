@@ -28,3 +28,14 @@ test("another player's eye term is the executed EntityPlayer.getEyeHeight, the l
   assert.equal(EYE_HEIGHT_OTHER, eye);
   for (const r of ref.fishLine.rows.filter((r) => r.case.startsWith("line") && !r.first)) assert.equal(r.eyeTerm, r.local ? 0 : eye);
 });
+
+test("the client half of the mob push does not exist: collideWithNearbyEntities is behind !isRemote, addVelocity sends no S12 flag", async () => {
+  const { pushSection, addVelocity, classes } = ref.mobPush;
+  assert.match(classes.sv.sha256, /^[0-9a-f]{64}$/);
+  const i = pushSection.indexOf("getfield Field ahb.E:Z");
+  assert.ok(i > 0 && pushSection[i + 1].startsWith("ifne") && pushSection[i + 3] === "invokevirtual Method bo:()V", "bo() runs only when isRemote is false");
+  assert.deepEqual(addVelocity.slice(-1), ["putfield Field al:Z"], "Entity.addVelocity writes isAirBorne (al) last");
+  assert.ok(!addVelocity.includes("putfield Field H:Z"), "and never velocityChanged (H), the flag the tracker sends S12 for");
+  const { CLIENT_PUSHES_PLAYER } = await import("./client-push.js");
+  assert.equal(CLIENT_PUSHES_PLAYER, false);
+});
