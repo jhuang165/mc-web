@@ -48,7 +48,8 @@ import { ServerAchievements } from './server-achievements.js';
 import { ServerWither } from './server-wither.js'; // b63 mpwither
 import { ServerContainers } from './server-containers.js';
 import { ContainerTicks } from './server-container-ticks.js';
-import { ServerMobs } from './server-mobs.js';
+import { ServerMobs, MOB_LIMIT } from './server-mobs.js';
+import { loadVillages, saveVillages } from './server-villagers.js'; // b66 mpvillage
 import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
@@ -165,6 +166,7 @@ export class DedicatedSimulation {
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
+    loadVillages(this.mobs, saved, this.world, MOB_LIMIT); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
     this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
@@ -586,7 +588,7 @@ export class DedicatedSimulation {
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
       scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
   }
 }
