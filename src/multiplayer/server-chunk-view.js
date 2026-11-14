@@ -34,7 +34,7 @@ import { encodeColumn } from './protocol.js';
 import { describeTiles } from '../tile-sync.js';
 
 export const CHUNK_BULK_MAX = 5; // gz.c()
-const FRESH = ['mobs', 'objects']; // the trackers that re-list when columns change
+const FRESH = ['mobs', 'objects', 'players']; // b73 streamfix73: + the remote player tracker; // the trackers that re-list when columns change
 export const CHUNK_MOVE_SQ = 64; // mq.d: less than 8 blocks from the managed position changes nothing
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export const chunkOf = v => Math.trunc(v) >> 4; // d2i, then ishr 4

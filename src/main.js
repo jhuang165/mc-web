@@ -155,6 +155,7 @@ import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { pickPlayer } from "./multiplayer/server-pvp.js"; // b63 mppvp: the client's aim at another player (C02 attack)
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
+import { dropTilesIn } from "./multiplayer/client-tiles.js"; // b73 streamfix73
 import { ClientPistons } from "./multiplayer/client-pistons.js"; // b66 mppistons
 import { applySpawnerDelay } from "./multiplayer/client-spawners.js"; // b65 mpspawners2
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
@@ -752,7 +753,7 @@ function makeRemoteDispense() {
     spawnerPuff: (x, y, z, w, h) => burst(scene.fx, "explode", 20, { x, y, z, width: w, height: h }, scene.explosionParticles.worldRandom), // b65: entity status 20
     // b63 (mpprojectiles2): S0D collect for an arrow: EntityPickupFX flies it to whoever took it (this player, or another one from the last player rows)
     collect: (i, by, at) => {
-      const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by);
+      const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by && !q.far);
       if (at && who) scene.drops.flyIn({ stack: { id: ARROW, count: 1, damage: 0 }, x: at.x, y: at.y, z: at.z, px: at.x, py: at.y, pz: at.z, age: 0, hover: 0 }, who);
     },
   });
@@ -824,7 +825,7 @@ function applyMultiplayerTick(message) {
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
-    const e = remoteItems.get(t.i), who = t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by);
+    const e = remoteItems.get(t.i), who = t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by && !q.far) /* b73 streamfix73: far rows are list entries only */;
     if (e && who) scene.drops.pickup(e, who);
     if (e && t.partial) takenDrops.add(t.i); // b61: the remainder of a partly taken stack vanishes on every client, as natively
   }
@@ -911,7 +912,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(true), message: reason, back: showMultiplayer })); } }, // b68 mpping: GuiDisconnected (disconnect.lost)
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
-  client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }) }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
+  client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); remotePlayers?.dropColumns(cols); /* b73 streamfix73 */ } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }), dropTiles: cols => dropTilesIn(cols, { signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, pistons: remotePistons }) /* b73 streamfix73: Chunk.onChunkUnload drops the tile entities */ }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
   connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
