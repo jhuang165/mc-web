@@ -16,3 +16,9 @@ export function boatBoxProvider(boats) {
     return out;
   };
 }
+
+// b67 boatstand: the dedicated server's boats, found by the world the mover walks in (the Overworld, the Nether and the End each have their own Boats).
+// `registerBoatWorld(world, boats)` is called by ServerVehicles; `worldBoatBoxes` is installed once through entities.js setWorldEntityBoxes.
+const boatWorlds = new WeakMap();
+export const registerBoatWorld = (world, boats) => { if (world && boats) boatWorlds.set(world, boatBoxProvider(boats)); };
+export const worldBoatBoxes = (box, e, world) => boatWorlds.get(world)?.(box, e) ?? [];
