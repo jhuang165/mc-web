@@ -19,3 +19,5 @@ Browser ids: original 383/384/385 are taken by other items, so they map to inter
 - Thrown-bottle launch matches the seeded constructor replay only to about 5e-5 per component (the port reuses the potion launch's float rounding).
 - Bottle break particles use the water-bottle shards (damage 0) of the potion effect; not compared pixel for pixel. Egg icon composition is browser-only and untested outside it.
 - Fire charge in Adventure mode simply does nothing; egg/bottle behaviour there is not probed.
+
+Batch 72 (spawncaps72, 2026-11-14): a spawn egg has no 40-mob cap any more (native ItemMonsterPlacer has none); only the shared runaway guard (5000) applies.

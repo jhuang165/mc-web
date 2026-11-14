@@ -819,7 +819,8 @@ function clearSpentStack(survival) {
   const inv = survival.inventory, held = inv.held;
   if (held && held.count <= 0) inv.main[inv.current] = null;
 }
-const SLIME_SPLIT_GUARD = 5000;
+export const SPAWN_RUNAWAY_GUARD = 5000; // b72: the one shared runaway guard (native has no entity count test on eggs, /summon, babies, chicks, silverfish, reinforcements, slime splits or natural spawning beyond SpawnerAnimals' per-type caps); far above any reachable count
+const SLIME_SPLIT_GUARD = SPAWN_RUNAWAY_GUARD;
 export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
   constructor(world, saved, random = Math.random, ids = new EntityIds()) {
@@ -1003,7 +1004,7 @@ export class EntityWorld {
   // egg's position with the egg's rotationYaw (Java degrees) and pitch 0. Capped at
   // the 40 mobs a save keeps.
   hatch(x, y, z, yawDegrees) {
-    if (this.entities.length >= 40) return null;
+    if (this.entities.length >= SPAWN_RUNAWAY_GUARD) return null;
     const chick = this.create("chicken", x, y, z);
     chick.growingAge = -24000;
     chick.yaw = (-yawDegrees * Math.PI) / 180;
@@ -1160,7 +1161,7 @@ export class EntityWorld {
     const player = this.ai.player, brain = this.ai.brain(e);
     // yq.a: the attack target, else the revenge target (the legacy entityToAttack stands in), else the hit's living source entity.
     const target = brain.attackTarget ?? brain.revengeTarget ?? (by === "player" ? player : by ? this.ai.brain(by) : null);
-    if (!target || this.entities.length >= 40) return null;
+    if (!target || this.entities.length >= SPAWN_RUNAWAY_GUARD) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
       solidTop: (x, y, z) => y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
@@ -1314,7 +1315,7 @@ export class EntityWorld {
       e.profession = world.nextInt(5);
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
-      for (let i = kittenLitter(world); i > 0 && this.entities.length < (opts.limit ?? 40); i--) {
+      for (let i = kittenLitter(world); i > 0 && this.entities.length < (opts.limit ?? SPAWN_RUNAWAY_GUARD); i--) {
         const kit = this.create("ocelot", x, y, z);
         setLocationAndAngles(kit, x, y, z, e.rotationYaw ?? 0, 0);
         kit.growingAge = -24000;
@@ -1382,7 +1383,7 @@ export class EntityWorld {
       if (p?.alive && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
       // World.checkNoEntityCollision: not yet setDead (a dying mob still counts).
       // preventEntitySpawning is set by EntityLivingBase (bats included, though they are not pushable); probed natively.
-      for (const o of this.entities) if ((o.type === "bat" || pushable(o)) && boxesIntersect(box, sized(o))) return true;
+      for (const o of this.entities) if ((o.type === "bat" || o.type === "ender_dragon" || o.type === "ender_crystal" || pushable(o)) && boxesIntersect(box, sized(o))) return true;
       return !!env.extraCollision?.(box);
     };
     const liquid = (box) => {
@@ -1394,7 +1395,7 @@ export class EntityWorld {
     return {
       countNearby: (type, box) => this.entities.reduce((n, o) => n + (countsAs(type, o.type) && boxesIntersect(box, sized(o)) ? 1 : 0), 0),
       createMob: (type, x, y, z, yaw) => {
-        if (!ENTITY_TYPES[type] || this.entities.length >= (env.limit ?? 40)) return null;
+        if (!ENTITY_TYPES[type] || this.entities.length >= (env.limit ?? SPAWN_RUNAWAY_GUARD)) return null;
         const e = this.create(type, x, y, z);
         // setLocationAndAngles(x, y, z, yaw, 0).
         for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
@@ -1477,7 +1478,7 @@ export class EntityWorld {
       return vehicle && mountMobOnVehicle(vehicle, rider, heightOf) ? vehicle : null;
     }
     const parsed = summonedMobRecord(type, tag);
-    if (!parsed || this.entities.length >= (env.limit ?? 40)) return null;
+    if (!parsed || this.entities.length >= (env.limit ?? SPAWN_RUNAWAY_GUARD)) return null;
     const mount = this.restore({ ...parsed.record, x: rider.x, y: rider.y, z: rider.z }, { summoned: true });
     if (!mount) return null;
     setLocationAndAngles(mount, rider.x, rider.y, rider.z, rider.rotationYaw ?? 0, rider.rotationPitch ?? 0);
@@ -1738,7 +1739,7 @@ export class EntityWorld {
   // spawnParticle, which singleplayer never shows). A full world
   // (40 mobs) keeps them waiting. Returns whether the baby was born.
   spawnBaby(a,b){
-    if(this.entities.length>=40)return false;
+    if(this.entities.length>=SPAWN_RUNAWAY_GUARD)return false;
     const baby=this.makeBaby(a,b);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
     // The breeding experience needs gamerule doMobLoot.
@@ -2754,7 +2755,7 @@ export class EntityWorld {
       thunderLightValue: (x, y, z) => (this.thunderLightAt ? this.thunderLightAt(x, y, z) : Math.max(0, sky(x, y, z) - 10)),
       fullLight: (x, y, z) => (this.fullLightAt ? this.fullLightAt(x, y, z) : sky(x, y, z)),
     };
-    Object.assign(s.env, { thundering: () => !!this.isThundering?.(), time: 0, limit: 256, brightness: dim ? lightBrightnessTable(providerOf(dim).ambient) : SPAWN_BRIGHTNESS });
+    Object.assign(s.env, { thundering: () => !!this.isThundering?.(), time: 0, limit: SPAWN_RUNAWAY_GUARD, brightness: dim ? lightBrightnessTable(providerOf(dim).ambient) : SPAWN_BRIGHTNESS });
     wrapRingEnv(s.env, () => this.ring, dim, () => this.lightSubtracted?.() ?? s.sub);
     const hooks = this.spawnerHooks(s.env);
     // Test doubles without metadata read meta 0.
@@ -2888,7 +2889,7 @@ export class EntityWorld {
   // Adds a silverfish at the centre of a block cell (BlockSilverfish.onBlockDestroyedByPlayer /
   // dropBlockAsItemWithChance spawnEntityInWorld at x + 0.5, y, z + 0.5, yaw 0). The save keeps 40 mobs.
   spawnSilverfishAt(x, y, z) {
-    if (this.entities.length >= 40) return null;
+    if (this.entities.length >= SPAWN_RUNAWAY_GUARD) return null;
     const at = eggSpawn(x, y, z), e = this.create("silverfish", at.x, at.y, at.z);
     for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = at.yaw;
     e.yaw = 0;

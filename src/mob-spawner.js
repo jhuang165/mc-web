@@ -25,7 +25,8 @@ export const spawnerType = (entityId) => (Object.hasOwn(SPAWNER_ENTITY_IDS, enti
 // extends EntitySpider, so a Spider spawner counts cave spiders and a CaveSpider spawner does not
 // count spiders. b71: EntityMagmaCube (yf) extends EntitySlime (ym), so a Slime spawner counts magma cubes too (a LavaSlime spawner does not count slimes). (EntityPigZombie and
 // EntityMooshroom would join zombies and cows; their spawner counts are left as they were.)
-const SUBTYPES = { spider: ["spider", "cave_spider"], slime: ["slime", "magma_cube"] };
+// b72: EntityPigZombie extends EntityZombie and EntityMooshroom extends EntityCow, so Zombie and Cow spawners count them too (the old note above is stale). A wither skeleton is the same Java class as a skeleton (EntitySkeleton, skeletonType 1), so a Skeleton spawner counts it.
+const SUBTYPES = { spider: ["spider", "cave_spider"], slime: ["slime", "magma_cube"], zombie: ["zombie", "pigman"], cow: ["cow", "mooshroom"], skeleton: ["skeleton", "wither_skeleton"] };
 export const countsAs = (spawnType, entityType) => (SUBTYPES[spawnType] ? SUBTYPES[spawnType].includes(entityType) : spawnType === entityType);
 
 // AxisAlignedBB.getBoundingBox(x, y, z, x + 1, y + 1, z + 1).expand(spawnRange * 2, 4, spawnRange * 2).

@@ -27,3 +27,5 @@ Original blocks 104 (pumpkin stem), 105 (melon stem) and 92 (cake) map to intern
 - Stem growth uses its own `JavaRandom`, not the world's tick random.
 - Batch 71 (docs sweep, 2026-11-14): still open. `Farming.growStem` (`src/farming.js` 31) draws from `this.stemRandom`, a `JavaRandom` seeded from `Math.random`, not the world tick random; crops pass the caller's random (`farming.js` 38).
 - Batch 71: found wrong, no code change. The "no darkness pop" gap assumed the 1.6 `BlockBush.canBlockStay` light test. Bytecode of 1.7.10 `ajr` (BlockBush): `j` (canBlockStay) is only `canPlaceBlockOn(block below)`; `anu` (BlockStem) overrides neither `j` nor the light test, and its `updateTick` runs `checkAndDropBlock` (soil only) before the `light >= 9` growth test. A stem therefore never pops in the dark natively, and the port is correct.
+
+Batch 72 (spawncaps72, 2026-11-14): stem growth draws from the caller's world random (`Farming.randomTick` passes it to `growStem`), as BlockStem.updateTick does; the private `stemRandom` is only the fallback of the legacy hash tick.
