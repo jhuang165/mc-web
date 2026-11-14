@@ -52,3 +52,5 @@ includes 18.
   such as a saved world's chunks, is not considered); the probe runs on a world double, not a full integrated server.
 - Player placement was not executed natively (bytecode-read); `solid()` approximates `Material.blocksMovement` for live block ids.
 - The bonus chest still has standing torches (no `onBlockAdded` orientation) and is placed on first open.
+
+Batch 72 (2026-11-14): `tools/find-structure-seeds.mjs` and the generated `structure-seeds.md` now use the native spawn walk (`solveNativeSpawn`, generation 18 rules) for the origin and the spawn column instead of origin + 64 (`--approx-spawn` keeps the old approximation for generations 13 to 17).

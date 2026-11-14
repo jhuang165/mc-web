@@ -189,7 +189,7 @@ export function eyeInWater(w, x, y, z) {
 }
 // ActiveRenderInfo.getBlockAtEntityViewpoint (baj.a): the block at the eye, or
 // the one above it once the eye is at least `meta / 9` below the top of a liquid
-// cell (percent(meta) - 1/9). Water's own fog test in scene.js is separate.
+// cell (percent(meta) - 1/9). Batch 72: scene.js setFog, the FOV water factor and the view-in-water flag in main.js all call this (the old "separate fog test" note was stale).
 export function viewpointBlock(w, x, y, z) {
   const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z), b = w.get(bx, by, bz);
   if (!isLiquid(b)) return b;

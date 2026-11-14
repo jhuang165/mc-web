@@ -1,4 +1,4 @@
-import {growSapling} from './tree-growth.js';
+import {growSapling,growBigOak} from './tree-growth.js';
 // Oak saplings, tree growth, leaf decay and leaf drops, ported from the 1.7.10 JAR
 // (public/research/trees.md; replayed against public/research/trees-reference.json by
 // trees.test.js): BlockSapling (anj) with BlockBush (ajr), WorldGenTrees (asq, the oak
@@ -256,13 +256,14 @@ export class Trees {
     return this.growTree(x, y, z);
   }
   // BlockSapling.func_149878_d (anj.d) for an oak (metadata 0): one time in ten the original uses
-  // WorldGenBigTree (ard), which is not ported (see trees.md); that tick draws the same number and
-  // tries the ordinary tree instead and reports "big" (a stand-in; the reference run stops there).
+  // WorldGenBigTree (ard), ported since batch 72 (growBigOak); the roll reports "big" whether the tree grew or not (the reference run stops there).
   // The sapling cell is cleared with flag 4 first and put back
   // with its stage bit cleared (meta & 7) when the tree does not fit.
   growTree(x, y, z, { notify = true } = {}) {
     if(this.world.generationVersion>=11||this.world.height>=256||(this.world.getMeta(x,y,z)&7)!==0)return growSapling(this,x,y,z,{notify});
     const meta = this.world.getMeta(x, y, z) & 7, big = this.random.nextInt(10) === 0;
+    // Batch 72: the roll's big oak is the ported WorldGenBigTree (tree-growth.js growBigOak); "big" is still reported for the roll, grown or not.
+    if (big && growBigOak(this, x, y, z, { notify }) !== null) return "big";
     this.world.put(x, y, z, 0, 0, true);
     const world = this.world;
     const ok = generateTree(

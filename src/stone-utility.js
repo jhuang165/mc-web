@@ -154,6 +154,21 @@ export function potInsertion(id, damage = 0) {
 // createNewTileEntity by metadata (BlockFlowerPot.func_149929_a): internal [id, damage] or null for an empty pot.
 const POT_META_CONTENTS = [null, [44, 0], [43, 0], [48, 0], [48, 1], [48, 2], [48, 3], [76, 0], [75, 0], [53, 0], [79, 0], [84, 0], [48, 4], [48, 5], null, null];
 export const potContentsOfMeta = (meta) => { const c = POT_META_CONTENTS[meta & 15]; return c ? { id: c[0], damage: c[1] } : null; };
+// TileEntityFlowerPot.writeToNBT / readFromNBT (executed, pot-sweep-reference.json): native Item id and Data. Batch 72.
+// Export keeps the native item and the held damage; import maps a native (Item, Data) to the browser's content when it is a plant the port can
+// draw (single-icon plants ignore Data, flowers and saplings need a representable damage), else null (empty or not drawable).
+export function potNbtOf(content) {
+  const native = content ? potPlantOf(content.id, content.damage) : null;
+  return native ? { Item: native[0], Data: native[1] } : { Item: 0, Data: 0 };
+}
+const NATIVE_TO_POT = { 37: 43, 38: 44, 6: 48, 39: 75, 40: 76, 81: 53, 32: 79, 31: 84 };
+export function potFromNbt(tag) {
+  const item = tag?.Item, data = tag?.Data | 0, id = NATIVE_TO_POT[item];
+  if (id === undefined) return null;
+  if (item === 31) return data === 2 ? { id, damage: 0 } : null;
+  const damage = id === 44 || id === 48 ? data : 0;
+  return potPlantOf(id, damage) ? { id, damage } : null;
+}
 const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
 export function potContents(world, x, y, z) {
