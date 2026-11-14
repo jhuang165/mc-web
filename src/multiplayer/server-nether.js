@@ -99,7 +99,8 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.farming.lightLevel = (x, y, z) => n.light.level(x, y, z, 0);
   n.farming.rained = () => false;
   n.weather.activeChunkSource = sim.chunkSets.sourceFor(n.dim ?? NETHER); // b67 serverchunks
-  n.weather.blockTick = (x, y, z, b) => n.fire.randomTick(x, y, z, b) || n.trees.randomTick(x, y, z, b) || n.plants.randomTick(x, y, z, b);
+  n.farming.sharedRandomTicks = true; n.farming.random = n.farming.stemRandom = n.weather.random; // b68 chunkscan2
+  n.weather.blockTick = (x, y, z, b) => n.fire.randomTick(x, y, z, b) || n.trees.randomTick(x, y, z, b) || n.plants.randomTick(x, y, z, b) || n.farming.randomTick(x, y, z, b);
 }
 
 // Systems that need `sim.*` to be the Nether while they are built (ContainerTicks registers on sim.redstone, hoppers and dispensers read sim.tiles), and the mobs.

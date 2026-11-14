@@ -168,7 +168,8 @@ export class DedicatedSimulation {
     this.weather.fire = this.fire.strikes;
     this.chunkSets = new ServerChunkSets(this); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
     this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
-    this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b);
+    this.farming.sharedRandomTicks = true; this.farming.random = this.farming.stemRandom = this.weather.random; // b68 chunkscan2: farmland, crops and stems tick with the other random blocks over the active chunks
+    this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.farming.randomTick(x, y, z, b);
     // Instance hook sees *every* write, including untracked and fluid/redstone
     // writes. Store only the final cell value per tick; never wrap World globally.
     const put = this.world.put.bind(this.world);

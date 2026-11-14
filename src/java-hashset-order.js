@@ -11,9 +11,12 @@
 //   - Java 8 doubles the table after the insert that makes size exceed the threshold (12 at 16 buckets, 0.75 load factor) and keeps the relative order inside a bucket when it
 //     splits; Java 7 doubles before the insert that finds size >= threshold and a non-empty bucket, and its transfer REVERSES the chains that land together;
 //   - Java 8 only: a chain that reaches 9 nodes in a table smaller than 64 doubles it (treeifyBin). Treeified bins (9+ nodes at 64 buckets or more, which needs ids that agree
-//     modulo the table size) are NOT modelled: the bin keeps list order here, natively its tree root moves to the front.
+//     modulo the table size) are modelled since batch 68 (see below).
 // Removal never shrinks the table (HashMap has no shrink), so a set that was once large keeps its larger capacity and its order.
+// b68 chunkscan2: treeified bins ARE modelled for additions (java-hashmap-tree.js: treeify, putTreeVal, moveRootToFront, split); removal from a treeified bin is not (the bin keeps list
+// order and `treeRemovals` counts it; the trackers never reach 9 ids in one bin).
 // Iteration is bucket 0 upward, each chain from its first node.
+import { treeify, putTreeVal, split } from "./java-hashmap-tree.js";
 const spread8 = (h) => (h ^ (h >>> 16)) | 0;
 const spread7 = (h) => { h ^= (h >>> 20) ^ (h >>> 12); return (h ^ (h >>> 7) ^ (h >>> 4)) | 0; };
 
@@ -24,6 +27,7 @@ export class JavaHashSetOrder {
     this.hash = mode === "java8" ? spread8 : spread7;
     this.table = new Array(16).fill(null).map(() => []); // each bin is a chain of { key, hash }, first node first
     this.size = 0;
+    this.treeRemovals = 0;
     this.keys_ = new Map(); // key -> node (membership; a key is added once, as the set holds one entry per object)
   }
   get capacity() { return this.table.length; }
@@ -36,8 +40,11 @@ export class JavaHashSetOrder {
     this.keys_.set(key, node);
     if (this.mode === "java8") {
       const bin = this.table[node.hash & (this.table.length - 1)];
-      bin.push(node);
-      if (bin.length >= 9 && this.table.length < 64) this.resize8(); // treeifyBin: a small table doubles instead
+      if (bin.tree) putTreeVal(bin, node);
+      else {
+        bin.push(node);
+        if (bin.length >= 9) { if (this.table.length < 64) this.resize8(); else treeify(bin); } // treeifyBin: a small table doubles instead
+      }
       if (++this.size > this.threshold) this.resize8();
     } else {
       if (this.size >= this.threshold && this.table[node.hash & (this.table.length - 1)].length) this.resize7();
@@ -50,6 +57,7 @@ export class JavaHashSetOrder {
     const node = this.keys_.get(key);
     if (!node) return false;
     const bin = this.table[node.hash & (this.table.length - 1)];
+    if (bin.tree) this.treeRemovals++;
     bin.splice(bin.indexOf(node), 1);
     this.keys_.delete(key);
     this.size--;
@@ -57,7 +65,10 @@ export class JavaHashSetOrder {
   }
   resize8() { // the lo / hi split keeps each chain's order
     const n = this.table.length, next = new Array(n * 2).fill(null).map(() => []);
-    for (let j = 0; j < n; j++) for (const node of this.table[j]) next[node.hash & (n * 2 - 1)].push(node);
+    for (let j = 0; j < n; j++) {
+      const bin = this.table[j];
+      if (bin.tree) { const [lo, hi] = split(bin, n); next[j] = lo; next[j + n] = hi; } else for (const node of bin) next[node.hash & (n * 2 - 1)].push(node);
+    }
     this.table = next;
   }
   resize7() { // transfer(): each node goes to the front of its new bin, so chains landing together reverse

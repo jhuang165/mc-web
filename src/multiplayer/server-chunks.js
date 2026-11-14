@@ -11,8 +11,11 @@
 //   * HashSet.clear() keeps the table, so the bucket count only ever grows; ChunkSet below keeps that high-water capacity.
 //   * With no player in the dimension the set is empty: nothing is ticked there (a chunk outside every radius gets no random tick).
 // A chunk of the set that is outside the server's finite window is skipped (the real world has no such limit); its place in the order is still the native one.
-// `world.originX/originZ` is native - local for the End window (END_OFFSET); the native chunk is the local chunk plus floor(origin / 16) (exact when the origin is a multiple of 16: the
-// 256 End and the Overworld and Nether; approximate for the legacy 128 End window, whose x origin is 25).
+// `world.originX/originZ` is native - local for the End window (native = local + origin; -128 for the 256 End, -25 / -96 for a 0.93.0 128 window). Batch 68 chunkscan2 makes the set exact for
+// every origin: the player's native chunk is floor((local + origin) / 16), the set and its HashSet order are built from NATIVE chunk coordinates (the real ChunkCoordIntPair hash), and a native
+// chunk that straddles the window grid (origin not a multiple of 16, the legacy End) is returned as [localCx, localCz, dx, dz]: its blocks start dx / dz cells into local chunk localCx / localCz
+// (Weather.tickChunk reads the two offsets). Chunks wholly outside the window are dropped; a straddling one keeps only its in-window cells when Weather checks them.
+// Java 8's treeified HashMap bins are modelled since batch 68 (java-hashmap-tree.js), so overlapping players keep the exact native order.
 import { JavaHashSetOrder } from '../java-hashset-order.js';
 import { chunkHash } from '../chunk-store.js';
 
@@ -25,24 +28,32 @@ export class ChunkSet {
     this.lastKey = null;
     this.last = [];
   }
-  // The whole set in HashSet order (local chunk coordinates, not clipped): one ahb.C fill of the retained table from the player chunks `centres`.
-  order(centres, radius = VIEW_DISTANCE, bx = 0, bz = 0) {
+  // The whole set in HashSet order (NATIVE chunk coordinates, not clipped): one ahb.C fill of the retained table from the player chunks `centres`.
+  order(centres, radius = VIEW_DISTANCE) {
     const set = new JavaHashSetOrder(this.mode);
     if (this.capacity > set.capacity) set.table = new Array(this.capacity).fill(null).map(() => []);
     for (const [cx, cz] of centres) for (let i = -radius; i <= radius; i++) for (let j = -radius; j <= radius; j++) {
       const x = cx + i, z = cz + j;
-      set.add(`${x},${z}`, chunkHash(x + bx, z + bz));
+      set.add(`${x},${z}`, chunkHash(x, z));
     }
     this.capacity = Math.max(this.capacity, set.capacity);
+    this.treeBins = set.table.reduce((n, b) => n + (b.tree ? 1 : 0), 0);
     return set.keys().map(k => k.split(',').map(Number));
   }
-  // players: [{ x, z }] in the world's local coordinates, in the native player-list order. Returns [[localCx, localCz]] in HashSet order, clipped to the world.
+  // players: [{ x, z }] in the world's local coordinates, in the native player-list order. Returns [[localCx, localCz]] in HashSet order, clipped to the world; a chunk off the 16-grid
+  // (a legacy End window) is [localCx, localCz, dx, dz] (see above).
   chunks(players, world, radius = VIEW_DISTANCE) {
-    const size = (world?.size ?? 128) / 16, bx = Math.floor((world?.originX ?? 0) / 16), bz = Math.floor((world?.originZ ?? 0) / 16);
-    const centres = players.map(p => [Math.floor(p.x / 16), Math.floor(p.z / 16)]);
-    const key = `${radius}|${size}|${bx},${bz}|${centres.join(';')}`;
+    const size = world?.size ?? 128, ox = world?.originX ?? 0, oz = world?.originZ ?? 0;
+    const centres = players.map(p => [Math.floor((p.x + ox) / 16), Math.floor((p.z + oz) / 16)]);
+    const key = `${radius}|${size}|${ox},${oz}|${centres.join(';')}`;
     if (key === this.lastKey) return this.last;
-    const out = this.order(centres, radius, bx, bz).filter(([x, z]) => x >= 0 && z >= 0 && x < size && z < size);
+    const out = [];
+    for (const [nx, nz] of this.order(centres, radius)) {
+      const lx = nx * 16 - ox, lz = nz * 16 - oz; // the native chunk's first cell in local coordinates
+      if (lx + 15 < 0 || lz + 15 < 0 || lx >= size || lz >= size) continue;
+      const cx = Math.floor(lx / 16), cz = Math.floor(lz / 16), dx = lx - cx * 16, dz = lz - cz * 16;
+      out.push(dx || dz ? [cx, cz, dx, dz] : [cx, cz]);
+    }
     this.lastKey = key; this.last = out;
     return out;
   }
