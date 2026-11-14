@@ -37,8 +37,8 @@ const CMD_B13 = {
   debug: 'Profiler.getProfilingData probed on a filled map; the result file follows CommandDebug; the browser\'s profiler sections are not the server\'s',
   scoreboard: 'objectives/players/teams output, state and data/scoreboard.dat probed (scoreboard-reference.json); sidebar, Tab score, team chat prefix; belowName has no other players to show',
 };
-// The repo's dedicated server (src/server-broadcast.js SERVER_COMMANDS, batches 59-66) runs a subset over named players: operators only for the world
-// and player commands; /summon, /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers, /debug and /publish are not on it.
+// The repo's dedicated server (src/server-broadcast.js SERVER_COMMANDS, batches 59-67) runs a subset over named players: operators only for the world
+// and player commands; /summon joined in batch 67 (server-summon.js); /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers, /debug and /publish are not on it.
 const serverNote = name => SERVER_COMMANDS.has(name) ? '; also on the dedicated server (named players, src/server-broadcast.js)' : '; not on the dedicated server';
 const commandStatus = c => {
   if (c.scope === 'dedicated') return SERVER_COMMANDS.has(c.name) ? 'Partial; dedicated-server command, not registered in the integrated server; implemented on the repo\'s dedicated server (src/server-broadcast.js)' : 'Out of scope; dedicated-server only, not registered in the integrated server, and not implemented on the repo\'s dedicated server either (not in SERVER_COMMANDS)';
@@ -207,7 +207,7 @@ ${supportRows.join('\n')}
 const STRUCT = {
   Mineshaft: ['Implemented', '[mineshaft generator](mineshafts-live.md), structure NBT in [structure-nbt](structure-nbt.md)'],
   Stronghold: ['Implemented', '[stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md)'],
-  Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md); on the dedicated server villagers and the village collection exist (server-villagers.js) but the default server world (generation 9) has no generated villages, and zombie sieges are missing everywhere (batch 66 list)'],
+  Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md); on the dedicated server villagers and the village collection exist (server-villagers.js) but the default server world (generation 9) has no generated villages, and the village siege state machine is ported (village-siege.js, batch 67), where 1.7.10 never spawns the siege zombies because its spawn spot search always fails (executed SiegeProbe)'],
   Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), witch hut created and populated NBT probe-verified (temple-nbt-reference.json), jungle populated flags replayed (temple-jungle-nbt.test.js), tripwire entity classes incl. arrows, snowballs, eggs, pearls and potions probed (verify-tripwire.mjs), shears disarm in block-break-simulation.js; random ticks of the trap parts other than the tripwire are not modelled (redstone.js header)'],
   Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; start/piece NBT and data/Fortress.dat write and read are probe-verified byte for byte ([structure NBT](structure-nbt.md)); chests and the throne-room Blaze spawner are placed once per column in the Nether (also on the dedicated server, server-nether.js); loot and spawner state beyond the persisted Chest/Mob/Seed flags is not probed'],
 };
