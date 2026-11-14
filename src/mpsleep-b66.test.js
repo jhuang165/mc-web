@@ -38,7 +38,7 @@ test('a night click on a bed lies the player down: occupied bit, sleepIn, presen
   assert.ok(a.sleeping);
   assert.equal(s.world.getMeta(...head) & 4, 4);
   assert.deepEqual(out(a, 'sleepIn'), [{ type: 'sleepIn', x: 64, y: 10, z: 65, facing: 0 }]);
-  assert.equal(a.position.y, 10.5625);
+  assert.equal(a.position.y, Math.fround(10.9375) - Math.fround(0.2)); // b67: posY - yOffset
   assert.deepEqual(s.presence().find(r => r.id === 'a').sleep, [64, 10, 65, 0]);
 });
 

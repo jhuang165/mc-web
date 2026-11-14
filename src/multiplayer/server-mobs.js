@@ -271,6 +271,7 @@ export class ServerMobs {
     for (const v of views.values()) {
       const p = v.player;
       v.view.sneaking = !!p.input?.sneak;
+      v.view.sleeping = !!p.sleeping; // b67 mpsleep2: a lying player is a 0.2 x 0.2 target
       v.view.update({ x: p.position.x, y: p.position.y, z: p.position.z }, v.survival, p.survival.held?.id ?? 0);
       first ??= v;
     }

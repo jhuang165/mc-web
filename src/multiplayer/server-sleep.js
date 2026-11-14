@@ -20,14 +20,13 @@
 //    verified spawn is copied to the new player (setSpawnChunk(location, forced)). A failed one sends S2B game state 0 (tile.bed.notValid) and leaves the player at the world spawn
 //    with NO spawn point any more (clonePlayer does not copy it).
 //  - my (EntityTrackerEntry): a tracker that starts to see a sleeping player gets S0A as well (here: `sleep` in the presence rows).
-// Recalled, not read: the Entity.yOffset of 0.2 that places the lying box (the single-player mattress height 0.5625 is used for the position), the EntityPlayerMP eye height.
+// b67 bytecode-read: yz.a(III) sets yOffset 0.2 and setPosition(x, y + 0.9375, z), so the lying box minY is y + 0.7375 (BedSleep.boxY). A sleeper is never refused a click: NetHandlerPlayServer's C07/C08/C02/C0E/C09 have no sleeping test (only C03 movement and the C0B leave do), isMovementBlocked (yz.bh) zeroes the input in EntityLivingBase.onLivingUpdate.
 // Wire (all `sleep` prefixed): server to player `sleepIn` {x, y, z, facing}, `sleepWake` {}, `sleepMsg` {key}; player to server `sleepLeave`. Other players see the pose through
 // the presence row field `sleep: [x, y, z, facing]`.
 import { BedSleep, BED, BED_TEXT, activateBed, bedRespawnPosition, isDaytime, mobInBox, nextMorning, verifyRespawn } from '../bed.js';
 import { bedExplosion } from '../dimension-live.js';
 import { ENTITY_TYPES } from '../entities.js';
 
-const MATTRESS = 0.5625; // the lying box rests on the mattress (top 9/16), as main.js enterSleep
 const KEYS = Object.freeze({ noSleep: () => BED_TEXT.noSleep, notSafe: () => BED_TEXT.notSafe, occupied: () => BED_TEXT.occupied, notValid: () => BED_TEXT.notValid });
 
 /** World.resetRainAndThunder (WorldServer.Y). The weather owner (mplightning) may define its own `resetRainAndThunder`; it is preferred. */
@@ -104,7 +103,7 @@ export class ServerSleep {
     if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); // sleepInBedAt: if (isRiding()) mountEntity(null)
     s.look = { yaw: p.yaw, pitch: p.pitch };
     p.sleeping = true; p.itemInUse = null;
-    p.position.copy({ x: s.pos.x, y: s.bed[1] + MATTRESS, z: s.pos.z });
+    p.position.copy({ x: s.pos.x, y: s.boxY, z: s.pos.z }); // b67: posY - yOffset = y + 0.7375 (bytecode-read), not the mattress top
     p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     this.out(p, { type: 'sleepIn', x: s.bed[0], y: s.bed[1], z: s.bed[2], facing: s.facing });
