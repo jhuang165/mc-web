@@ -6,6 +6,7 @@ import { EntityWorld, entityHit, hurtOf, deathOf, ENTITY_TYPES } from '../entiti
 import { soundVolume } from '../combat.js';
 import { statusPitchRandom } from '../damage-fx.js';
 import { burst } from '../fx.js';
+import { witchMagicParticles } from '../witch-magic.js';
 import { JavaRandom } from '../java-random.js';
 import { ClientEntity } from '../entity-tracker.js';
 import { EntityIds } from '../entity-ids.js';
@@ -69,6 +70,8 @@ export class RemoteMobs {
       if (name) this.fx.sound?.(name, at.x, at.y, at.z, soundVolume(mob.type), statusPitchRandom());
     } else if (golemStatus(mob, status, at, this.fx.sound)) { // b66: the iron golem's 4 (swing) and 11 (poppy)
     } else if (status === 10) { if (mob.type === 'sheep') mob.eatTimer = 40; // EntitySheep.handleHealthUpdate(10): sheepTimer = 40, the head graze
+    } else if (status === 15 && mob.type === 'witch') { // b71: EntityWitch.handleHealthUpdate(15), the witchMagic particles on the copy's Random
+      witchMagicParticles((...a) => this.fx.particle?.(...a), { ...at, height: (ENTITY_TYPES.witch ?? { height: 1.8 }).height }, this.rand);
     } else if (status === 6 || status === 7 || status === 18) {
       if (status === 18) mob.love = 600; // the copy knows it is in love (EntityAnimal.inLove is not watched; the client only hears status 18)
       const t = ENTITY_TYPES[mob.type] ?? { width: 0.6, height: 1.8 };

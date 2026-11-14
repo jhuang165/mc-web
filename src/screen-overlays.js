@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
 import { blockTile, tileRect, terrainLayoutVersion } from "./block-textures.js";
+import { Vignette } from "./vignette.js";
 import { FIRE_OVERLAY, INSIDE_BLOCK_OVERLAY, fireOverlayQuads, insideBlockQuad, waterOverlayQuad, handFov, overlayPlan } from "./fire-fx.js";
 
 // Side 2 (north) of the original is face 5 (-z) in block-textures.js's order (+x, -x, +y, -y, +z, -z).
@@ -45,6 +46,30 @@ export class ScreenOverlays {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     this.water = new THREE.Mesh(new THREE.BufferGeometry(), overlayMaterial({ map: tex }));
     for (const m of [this.fire, this.block, this.water]) { m.frustumCulled = false; m.visible = false; this.scene.add(m); }
+    // GuiIngame.renderVignette (vignette.js): screen * (1 - texture * level), glBlendFunc(ZERO, ONE_MINUS_SRC_COLOR, ONE, ZERO).
+    this.vignette = new Vignette();
+    this.vignetteScene = new THREE.Scene();
+    this.vignetteCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.vignetteMaterial = new THREE.ShaderMaterial({
+      uniforms: { map: { value: pixelTexture("/media/1.7.10/misc/vignette.png") }, level: { value: 1 } },
+      vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}",
+      fragmentShader: "uniform sampler2D map;uniform float level;varying vec2 vUv;void main(){gl_FragColor=vec4(texture2D(map,vUv).rgb*level,1.);}",
+      depthTest: false, depthWrite: false, transparent: true, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+      blendSrc: THREE.ZeroFactor, blendDst: THREE.OneMinusSrcColorFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.ZeroFactor,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.vignetteMaterial);
+    quad.frustumCulled = false;
+    this.vignetteScene.add(quad);
+  }
+  // One drawn HUD frame (call only while GuiIngame would draw): advances the smoothed brightness and draws the vignette (fancy graphics only).
+  renderVignette(fancy, brightness) {
+    const level = this.vignette.frame(fancy, brightness);
+    if (!fancy) return;
+    this.vignetteMaterial.uniforms.level.value = level;
+    const clear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+    this.renderer.render(this.vignetteScene, this.vignetteCamera);
+    this.renderer.autoClear = clear;
   }
   // state: { burning, thirdPerson, sleeping, insideBlock (block id or 0), inWater, brightness, yawDeg, pitchDeg, tick, aspect, viewInWater }
   render(state) {

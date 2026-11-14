@@ -1651,7 +1651,7 @@ export class EntityWorld {
       rand: entityRandom(e), inWater: eyeInWater(this.world, e.x, e.y + livingEyeHeight(e.type, t.height), e.z), burning: e.fire > 0, health: e.health, maxHealth: t.health,
       target, targetDistSq: target ? m.distSq(target) : 0, hasEffect,
     });
-    if (r.magic) this.copyState(e, 15); // batch 61: setEntityState(15) on the copy
+    if (r.magic) { this.copyState(e, 15); this.mobStatus?.(e, 15); /* b71: S19 15 on a dedicated server, the witchMagic particles */ } // batch 61: setEntityState(15) on the copy
     e.drinking = w.drinking;
     e.drinkTimer = w.timer;
     e.held = w.held;
@@ -2092,7 +2092,7 @@ export class EntityWorld {
   // After the death update: the potion swirl (batch 61, copy-meta.js), then the living sound roll of every other copy (batch 60, copy-talk.js), on the copy's own Random
   clientLiving(c, m) { copyPotionSwirl(c); if (m.type !== "squid") copyLivingRoll(c, m); }
   // Batch 61: setEntityState on the tracked copy (copy-status.js draws), and the copy's Random for a visible burst of such a status (the live path's own Random otherwise)
-  copyState(e, status) { const c = this.tracker?.clientIfTracked?.(e); return c ? copyStatus(c, e, status) : false; }
+  copyState(e, status) { const c = this.tracker?.clientIfTracked?.(e); return c ? copyStatus(c, e, status, undefined, this.fx) : false; }
   statusRand(e, fallback) { const c = this.tracker?.clientIfTracked?.(e); return c ? deathRandom(c) : fallback; }
   // ws.M() on the client entity: the water in its shrunk box pushes it along the flow (swimSquid record). Returns whether it is wet.
   clientSquidWet(c) {

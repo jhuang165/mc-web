@@ -11,17 +11,18 @@
 import { burst } from "./fx.js";
 import { updateWolf } from "./wolf.js";
 import { deathRandom } from "./death-fx.js";
+import { witchMagicParticles } from "./witch-magic.js";
 
 const NO_FX = { spawn() {} };
 const SEVEN = new Set(["wolf", "ocelot", "horse"]);
 const LOVERS = new Set(["pig", "cow", "mooshroom", "sheep", "chicken", "wolf", "ocelot", "horse"]);
 
 // One handleHealthUpdate(status) on the copy `c` of the live mob `m`. Returns true when the status drew something.
-export function copyStatus(c, m, status, rand = deathRandom(c)) {
+export function copyStatus(c, m, status, rand = deathRandom(c), fx = null) {
   const box = { x: c.x, y: c.y, z: c.z, width: c.width ?? 0.6, height: c.height ?? 1 };
   if (status === 16 && (m.type === "zombie" || m.type === "pigman")) { rand.nextFloat(); rand.nextFloat(); return true; }
   if (status === 15 && m.type === "witch") {
-    for (let i = 0; i < rand.nextInt(35) + 10; i++) { rand.nextGaussian(); rand.nextGaussian(); rand.nextGaussian(); }
+    witchMagicParticles(fx ? (...a) => fx.spawn(...a) : null, { x: c.x, y: c.y, z: c.z, height: c.height ?? 1.8 }, rand); // b71: the visible witchMagic particles (witch-magic.js)
     return true;
   }
   if ((status === 6 || status === 7) && SEVEN.has(m.type)) { burst(NO_FX, status === 7 ? "heart" : "smoke", 7, box, rand, 0.5); return true; }

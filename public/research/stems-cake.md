@@ -22,3 +22,4 @@ Original blocks 104 (pumpkin stem), 105 (melon stem) and 92 (cake) map to intern
 - Clicking a cell to place the cake uses the door replaceable set, slightly wider than ItemReed's snow, vine, tall grass and dead bush rule.
 - Bone meal sparkles are generic; villages and structures do not place stems or cake; the render path was not checked in a browser; region import/export relies on the registry mapping and was not tested separately.
 - Stem growth uses its own `JavaRandom`, not the world's tick random.
+- Batch 71: found wrong, no code change. The "no darkness pop" gap assumed the 1.6 `BlockBush.canBlockStay` light test. Bytecode of 1.7.10 `ajr` (BlockBush): `j` (canBlockStay) is only `canPlaceBlockOn(block below)`; `anu` (BlockStem) overrides neither `j` nor the light test, and its `updateTick` runs `checkAndDropBlock` (soil only) before the `light >= 9` growth test. A stem therefore never pops in the dark natively, and the port is correct.

@@ -14,7 +14,7 @@ import { fenceMask, fenceConnectsTo, fenceBounds, fenceCollisionUnion, fenceColl
 import { installNetherBlocks, NETHER_FENCE, NETHER_BRICK_STAIRS, QUARTZ_STAIRS, SOUL_SAND, SOUL_SAND_COLLISION } from "./nether-blocks.js";
 import { railBounds } from "./rails.js";
 import { NOT_OPAQUE_NEW, isRailBlock2 } from "./blocks-0-40.js";
-import { BREWING_BOXES, BREWING_SELECTION } from "./brewing.js";
+import { BREWING_BOXES, brewingSelection, noteBrewingCollisionPass } from "./brewing.js";
 import { HOPPER_BOXES } from "./hopper-shape.js";
 import { torchBounds } from "./torches.js";
 import { isDoor, isPane, doorBounds, paneMask, paneBounds, paneCollisionBoxes, paneCollisionUnion } from "./doors-panes.js";
@@ -376,7 +376,7 @@ export function blockBounds(world,x,y,z){
   if(isDoor(b))return doorBounds(world,x,y,z);
   if(isPane(b))return paneBounds(paneMask(world,x,y,z));
   if(b===RAIL)return railBounds(world.getMeta(x,y,z));
-  if(b===134)return[...BREWING_SELECTION]; // brewing stand (brewing.js)
+  if(b===134)return brewingSelection(); // brewing stand: the shared Block bounds (brewing.js): full cube until a collision pass, then the base slab
   if(isRailBlock2(b))return railBounds(world.getMeta(x,y,z)); // BlockRailBase.setBlockBoundsBasedOnState tests the raw metadata (2-5 ascend), so a powered ascending rail (meta 10-13) selects flat: block-sweep-reference.json
   if(b===TORCH)return torchBounds(world.getMeta(x,y,z));
   if(b===172)return skullBounds(world.getMeta(x,y,z)); // BlockSkull.setBlockBoundsBasedOnState
@@ -414,11 +414,11 @@ export function collisionBounds(world,x,y,z){
 export function collisionBoxes(world,x,y,z){
   if(!world.solid(x,y,z))return[];
   const b=world.get(x,y,z);
-  return b===134?BREWING_BOXES.map(v=>[...v]):b===133?HOPPER_BOXES.map(v=>[...v]):isShaped(b)?shapedBoxes(world,x,y,z,wallSolid):isFence(b)?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
+  return b===134?(noteBrewingCollisionPass(),BREWING_BOXES.map(v=>[...v])):b===133?HOPPER_BOXES.map(v=>[...v]):isShaped(b)?shapedBoxes(world,x,y,z,wallSolid):isFence(b)?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
 }
 // One-box-per-block collision consumers (items, particles, carts, projectiles) take a stair's two or three boxes
 // and every other block's single collisionBounds box.
-export const collisionBoxList=(world,x,y,z)=>isShaped(world.get(x,y,z))?shapedBoxes(world,x,y,z,wallSolid):world.get(x,y,z)===134?BREWING_BOXES.map(v=>[...v]):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
+export const collisionBoxList=(world,x,y,z)=>isShaped(world.get(x,y,z))?shapedBoxes(world,x,y,z,wallSolid):world.get(x,y,z)===134?(noteBrewingCollisionPass(),BREWING_BOXES.map(v=>[...v])):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
 // Block.getSelectedBoundingBoxFromPool (the drawn outline), block-local. BlockCactus draws its
 // collision box inset; sugar cane its block bounds.
 export function selectionBounds(world,x,y,z){
