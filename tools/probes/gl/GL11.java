@@ -24,7 +24,8 @@ public class GL11 {
   public static int glGenLists(int n) { int id = nextList; nextList += n; return id; }
   public static void glNewList(int id, int mode) { open = new ArrayList<>(); lists.put(id, open); }
   public static void glEndList() { open = null; }
-  public static void glCallList(int id) { events.addAll(lists.get(id)); }
+  public static boolean markLists; // BabyModelProbe: a ["L", id] event ahead of each replayed list names the model part that is drawn
+  public static void glCallList(int id) { if (markLists) add("[\"L\"," + id + "]"); events.addAll(lists.get(id)); }
   public static void glColor3f(float r, float g, float b) {}
   public static void glDepthMask(boolean on) {}
   public static void glDepthFunc(int f) {}

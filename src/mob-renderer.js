@@ -524,7 +524,7 @@ export class MobRenderer {
       }
       // ModelBiped.render: a child zombie's head is scaled 0.75 (1.5 against the halved body)
       // and moved down 16 of those pixels, which leaves its pivot where the root puts it.
-      if (e.type === "zombie") r.neck.scale.setScalar(baby ? 1.5 : 1);
+      if (e.type === "zombie" || e.type === "pigman") r.neck.scale.setScalar(baby ? 1.5 : 1); // a baby pigman is the same ModelBiped (baby-model-reference.json)
       if (e.type === "chicken") {
         // ModelChicken.render: a chick's head, bill and chin stay full size, moved down 5
         // and back 2 (px / 16) before the rest shrinks to half; the root's x0.5 is undone here.

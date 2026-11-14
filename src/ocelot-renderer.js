@@ -92,8 +92,10 @@ function animateOcelot(r, e, pose) {
   const o = pose.ocelot, { parts, head, meshes, materials } = r.ocelot, baby = e.growingAge < 0;
   const { parts: pp } = ocelotParts(o, { limbSwing: pose.limbSwing, limbAmount: pose.limbSwingAmount, headYaw: pose.headYaw, headPitch: pose.headPitch });
   for (const k of Object.keys(pp)) place(parts[k], pp[k].point, pp[k].angle);
-  // ModelOcelot.render for a kitten: the head at 1.5 (the root's 0.5 makes 0.75), 10 down and 4 back, the rest halves.
-  head.position.set(0, baby ? -10 / 16 : 0, baby ? -4 / 16 : 0);
+  // ModelOcelot.render for a kitten (executed, baby-model-reference.json): glScalef(0.75) about the model origin (24 pixels up), then glTranslatef(0, 10, 4) pixels
+  // in that scaled frame. This group scales about the feet and sits under the root's 0.5 (scale 1.5 -> 0.75), so its position is 2 * ((1 - 0.75) * 24 up - 0.75 * (10 down, 4 back))
+  // = 3 pixels down and 6 back. The rest of the model halves with the root.
+  head.position.set(0, baby ? -3 / 16 : 0, baby ? -6 / 16 : 0);
   head.scale.setScalar(baby ? 1.5 : 1);
   // RenderOcelot.preRenderCallback: a tamed cat is scaled 0.8.
   if (o.tamed) r.root.scale.multiplyScalar(0.8);
