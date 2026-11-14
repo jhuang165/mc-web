@@ -13,6 +13,6 @@ chain (8-rail propagation limit), hill (slopes pass power), mixed (powered and a
 
 ## Approximated or not covered
 - Sounds: the powered, detector and activator rails (original 27, 28, 157) are `soundTypeMetal` like the plain rail: the stone files at frequency 1.5 (place and break pitch 1.2, hit 0.75, footstep 1.5), from the native table in [block sounds](block-sounds.md).
-- Hopper/TNT/command-block carts do not exist, so those activator effects are absent.
+- Batch 69 (docs sweep): hopper, TNT, furnace and command-block carts exist (`src/cart-variants.js`, `src/command-cart.js`, `src/carts.test.js`), so the activator effects are present.
 - Pressure-plate and cart-collision interplay is not part of the native recording beyond the entity list adapter.
 - Full parity is not claimed.

@@ -15,13 +15,13 @@
 
 ## Limits
 
-- The audio manifest has no `tile.piston.out/in` events and `public/audio/1.7.10/tile/piston/*.ogg` is not imported, although `assets-1.7.10.json` lists `minecraft/sounds/tile/piston/in.ogg` and `out.ogg`. `tools/import-vanilla-media.mjs` (agent "witch") must add them, or the pistons stay silent.
+- Batch 69 (docs sweep): `tile/piston/in.ogg` and `out.ogg` are in `public/audio/1.7.10/tile/piston/` and the audio manifest (`tools/import-vanilla-media.mjs` imports `tile/piston/`); pistons are not silent.
 - A tick that never calls `redstone.updateTileEntities()` never moves tiles or pushes entities; the live engine must run the tile loop after the block events, as World.updateEntities does.
 - The head's push box is the full cube, as recorded natively (Blocks.piston_head keeps its last-set bounds; a fresh game is 0..1). Real play can leave a different stale box. Stored blocks use `blockBounds`, not each block's exact getCollisionBoundingBoxFromPool.
 - Render: flat cell brightness, not per-vertex smooth lighting; special shapes besides stairs, stone slabs and fences draw as cubes. The drawing branch choice comes from bytecode, not from native pixel output.
 - Entity pushing is verified with free-moving scripted boxes; the live mover uses entities.js `moveEntity` (default player mover without `player.move` writes the delta through it with a temporary body).
-- `renderHead` and `lastProgress` are saved by the browser but not by Java; Java import of an in-motion `Piston` tile is not done (it stays lost).
-- Persisting `pistons.save()` per chunk needs `'pistons'` in `ARRAYS` of `chunk-runtime.js` (not added: `chunk-runtime.test.js` pins the record shape), otherwise store it beside `redstone.save()`; `state.pistons` entries may be plain or `{ value }`.
+- `renderHead` and `lastProgress` are saved by the browser but not by Java. Batch 69 (docs sweep): Java import of an in-motion `Piston` tile is done (`src/region-import.js`, tile id `Piston`, converted to the moving block).
+- Batch 69 (docs sweep): `'pistons'` is in `ARRAYS` of `src/chunk-runtime.js`, so moving tiles persist per chunk.
 
 ## 0.39.0 additions
 
