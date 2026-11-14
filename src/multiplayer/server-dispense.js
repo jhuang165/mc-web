@@ -17,7 +17,7 @@ import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
 import { tickPrimedTnt } from '../entity-simulation.js';
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
-import { SUPPORTED, MOB_LIMIT } from './server-mobs.js';
+import { SUPPORTED } from './server-mobs.js';
 import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
@@ -62,7 +62,7 @@ export class ServerDispense {
       firework: (stack, x, y, z, fx, fz) => { dispenseFirework(this.rockets, x, y, z, fx, fz, stack); },
       spawnTnt: (x, y, z) => { this.prime(x + 0.5, y + 0.5, z + 0.5, false); },
       // BehaviorDispenseSpawnEgg through ServerMobs' own limits: a mob type the clients have no copy of, or a full world, keeps the egg in the dispenser (native would spend it)
-      spawnEgg: (stack, at, roll) => { const type = eggMobType(stack.damage); if (type && !(SUPPORTED.has(type) && this.mobs.entities.length < MOB_LIMIT)) stop(); else spawnEggMob({ mobs: this.mobs }, stack.damage, at, stack.displayName, roll); },
+      spawnEgg: (stack, at, roll) => { const type = eggMobType(stack.damage); if (type && !SUPPORTED.has(type)) stop(); else { const e = spawnEggMob({ mobs: this.mobs }, stack.damage, at, stack.displayName, roll); if (e) e.summonKeep = true; } }, // b69 mpfixes69: native ItemMonsterPlacer.spawnCreature has no natural cap; summonKeep keeps the tick's cull off the mob
       cart: (type, x, y, z, stack) => { if (!v()?.dispenseCart(type, x, y, z, stack)) stop(); },
       boat: (x, y, z) => { if (!v()?.dispenseBoat(x, y, z)) stop(); },
       armorType: stack => ITEMS[stack.id]?.armor,

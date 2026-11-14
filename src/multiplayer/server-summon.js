@@ -27,6 +27,21 @@ export const toLocal = (world, x, z) => { const o = nativeOrigin(world); return 
 export const toNative = (world, x, z) => { const o = nativeOrigin(world); return [x + o.x, z + o.z]; };
 // Extra hosts by kind: push `(sim, player, dim, world) => ({ <host>: ... })` here (b68 summon2); mppaintings sets `hanging` on the hosts directly.
 export const SUMMON_HOSTS = [];
+// b69 mpfixes69: the absolute coordinate tags of a /summon data tag are native too (the End window is shifted): TileX/TileZ of a painting or frame, the Leash compound's X/Z of a mob (the knot's block),
+// and xTile/zTile (the block an arrow, ball or fireball sticks in; -1 is unset). Y is not shifted. Pos is replaced by the command position, so it needs no mapping. The Riding chain is walked.
+// Returns a copy with the tags in the stored window's coordinates (the tag is returned as is when the origin is 0: Overworld and Nether).
+const shiftNum = (t, d, floor = -Infinity) => { if (t && typeof t.value === 'number') t.value = Math.max(floor, t.value - d); };
+export function tagToLocal(tag, ox, oz) {
+  if (!tag || (!ox && !oz)) return tag;
+  const copy = structuredClone(tag);
+  for (let t = copy; t instanceof Map; t = t.get('Riding')?.value) {
+    shiftNum(t.get('TileX'), ox); shiftNum(t.get('TileZ'), oz);
+    const leash = t.get('Leash')?.value;
+    if (leash instanceof Map) { shiftNum(leash.get('X'), ox); shiftNum(leash.get('Z'), oz); }
+    for (const [k, d] of [['xTile', ox], ['zTile', oz]]) { const v = t.get(k); if (v && v.value >= 0) shiftNum(v, d, -1); }
+  }
+  return copy;
+}
 export const UNKEPT_ENTITIES = new Set([]); // b68 mppaintings: paintings, item frames and leash knots are kept now (server-hanging.js)
 
 // Adds one converted projectile record (java-projectiles.js) to the live list of `d`, the dimension's ServerProjectiles. Returns false when the list is not kept here.
@@ -91,7 +106,7 @@ export function summonHost(sim, p) {
         summonRefuses: refuses,
       };
       const before = new Set(mobs.entities);
-      const result = createCommandHost(env).summon(type, x, y, z, tag);
+      const result = createCommandHost(env).summon(type, x, y, z, tagToLocal(tag, nativeOrigin(w).x, nativeOrigin(w).z)); // b69 mpfixes69: the tag's absolute coordinates map like the position
       for (const e of mobs.entities) if (!before.has(e)) e.summonKeep = true; // native /summon ignores the mob cap: the tick's cull (server-mobs.js) skips these
       return result;
     }),

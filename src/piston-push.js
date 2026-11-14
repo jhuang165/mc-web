@@ -143,5 +143,16 @@ export function pistonPushExtras(world, game) {
   };
   vehicles(carts?.move ? carts : null, cartList, CART.width, CART.height, false);
   vehicles(boats, boatList, BOAT.width, BOAT.height, true);
+  // b69 mpfixes69: paintings, item frames and leash knots are in the box too. EntityHanging.moveEntity (bytecode-read, ss.g; addVelocity ss.d is the same): on a server world
+  // (not isRemote), a live entity moved with delta^2 > 0 does setDead() and onBroken(null): a painting drops its item, a frame its frame and (dropChance) the held item, a knot nothing.
+  // `game.hanging()` is the dimension's Hanging (hanging.js, its drops are drained by the caller through `game.hangingDrops()`); the knots are the mobs' knotList.
+  const hang = game.hanging?.();
+  for (const e of hang?.entities ?? []) if (!e.dead && e.bb) out.push({ box: e.bb, entity: e, move: (dx, dy, dz) => { hang.push(e, dx, dy, dz); game.hangingDrops?.(); } });
+  const knotWorld = game.mobs?.();
+  for (const k of knotWorld?.knotList ?? []) {
+    if (k.dead) continue;
+    const c = k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 }; // horse-gear-live.js knotCentre: the 0.5 cube above the position
+    out.push({ box: [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25], entity: k, move: (dx, dy, dz) => { if (!k.dead && dx * dx + dy * dy + dz * dz > 0) knotWorld.knotKill(k); } });
+  }
   return out.filter((x) => x.box && x.box.every(Number.isFinite));
 }

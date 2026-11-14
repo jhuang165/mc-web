@@ -33,6 +33,7 @@ export class ServerPistons {
       items: () => ctx.items()?.items, itemSystem: () => ctx.items(), orbs: () => ctx.xp()?.orbs, orbSystem: () => ctx.xp(),
       primed: () => ctx.dispense()?.primed, falling: () => ctx.falling()?.entities, player: () => null, mobs: () => ctx.mobs()?.mobs,
       // b67 pistons4: ServerVehicles keeps the same `Minecarts` / `Boats` systems (.carts, .move) the single-player interface expects; players block a pushed cart or boat.
+      hanging: () => ctx.vehicles?.()?.hanging?.h, hangingDrops: () => ctx.vehicles?.()?.hanging?.drops(), // b69 mpfixes69: EntityHanging.moveEntity breaks it
       minecarts: () => ctx.vehicles?.()?.carts, boatSystem: () => ctx.vehicles?.()?.boats, players: () => here(),
     };
     const players = () => here().map(p => {

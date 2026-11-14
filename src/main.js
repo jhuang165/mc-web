@@ -1711,7 +1711,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       boats: () => boats.carts, boatSystem: () => boats, falling: () => falling.entities,
       orbs: () => xpOrbs.orbs, orbSystem: () => xpOrbs,
       primed: () => primed,
-      minecarts: () => minecarts,
+      minecarts: () => minecarts, hanging: () => hanging, // b69 mpfixes69: EntityHanging.moveEntity breaks paintings and frames (the frame loop drains the drops)
       chests: () => survival.chests,
       furnaces: () => survival.furnaces,
       dispensers: () => (survival.dispensers ??= {}),
