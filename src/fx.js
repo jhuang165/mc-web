@@ -16,6 +16,7 @@ import { materialSolid } from "./plants.js";
 import { POTION_TYPES } from "./potions.js";
 import { noteColour } from "./note-blocks.js";
 import { makeReddustParticle, reddustTexture, makeEnchantParticle, stepEnchantParticle } from './extra-particles.js';
+import { makeSnowShovelParticle, makeCloudParticle, makeFootstepParticle, stepSnowShovel, stepCloud, stepFootstep } from './snow-cloud-particles.js';
 import { makePortalParticle, stepPortalParticle, portalParticleScale, portalParticleLight } from './portal-particles.js';
 
 const f = Math.fround;
@@ -29,8 +30,8 @@ const freshEntityRandom = () => new JavaRandom(Math.floor(Math.random() * 2 ** 4
 const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
-const LAYER = { crit2: 3, iconcrack: 2 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime"]);
+const LAYER = { crit2: 3, iconcrack: 2, footstep: 3 };
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime", "snowshovel", "cloud", "footstep"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -86,6 +87,9 @@ export class Fx {
       case 'portal': return makePortalParticle(this, x, y, z, vx, vy, vz);
       case 'reddust': return makeReddustParticle(this, x, y, z, vx, vy, vz);
       case 'enchantmenttable': return makeEnchantParticle(this, x, y, z, vx, vy, vz);
+      case 'snowshovel': return makeSnowShovelParticle(this, x, y, z, vx, vy, vz);
+      case 'cloud': return makeCloudParticle(this, x, y, z, vx, vy, vz);
+      case 'footstep': return makeFootstepParticle(this, x, y, z);
       // RenderGlobal "slime": EntityBreakingFX(world, x, y, z, Items.slime_ball), the 5-argument constructor (no 0.1 motion scale).
       case 'slime': return this.iconcrack(x, y, z, 0, 0, 0, 341, 0, false);
       case "bubble": {
@@ -302,6 +306,9 @@ export class Fx {
   step(world, p) {
     if (p.kind === 'portal') { stepPortalParticle(p); return; }
     if (p.kind === 'enchant') { stepEnchantParticle(p); return; }
+    if (p.kind === 'snowshovel') { stepSnowShovel(world, p); return; }
+    if (p.kind === 'footstep') { stepFootstep(p); return; }
+    if (p.kind === 'cloud') { stepCloud(world, p, this.closestPlayer(p, 2)); return; }
     if (p.kind === "crit2") {
       const rand = p.rand, t = p.target();
       for (let i = 0; i < 16; i++) {
@@ -396,6 +403,14 @@ export class Fx {
       p.mz *= GROUND;
     }
   }
+  // World.getClosestPlayerToEntity(p, d): `nearestPlayer()` (optional, set by the host) gives the player's feet x, y, z,
+  // box minY and motionY; null when none is within d blocks (a squared distance below d * d, as the original).
+  closestPlayer(p, d) {
+    const q = this.nearestPlayer?.();
+    if (!q) return null;
+    const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
+    return dx * dx + dy * dy + dz * dz < d * d ? q : null;
+  }
   drag(p, d) {
     p.mx *= d;
     p.my *= d;
@@ -409,7 +424,7 @@ export class Fx {
     let scale = p.scale;
     const t = f(f(p.age + f(partial)) / p.max);
     if (p.kind === 'portal') scale = p.scale = portalParticleScale(p, partial);
-    else if (p.kind === "crit" || p.kind === "heart" || p.kind === "note" || p.kind === "reddust") scale = f(p.base * clamp01(f(t * 32)));
+    else if (p.kind === "crit" || p.kind === "heart" || p.kind === "note" || p.kind === "reddust" || p.kind === "snowshovel" || p.kind === "cloud") scale = f(p.base * clamp01(f(t * 32)));
     else if (p.kind === "flame") scale = f(p.base * f(1 - f(f(t * t) * f(0.5))));
     else if (p.kind === "lava") scale = f(p.base * f(1 - f(t * t)));
     const u = f((p.tex % 16) / 16), v = f(Math.trunc(p.tex / 16) / 16);

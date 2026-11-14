@@ -104,6 +104,9 @@ export function installMooshroomGolem(EntityWorld) {
       for (const [a, b, c] of snow.cells) w.set(a, b, c, 0, true, 0);
       const g = this.create("snow_golem", snow.at.x, snow.at.y, snow.at.z);
       this.entities.push(g);
+      // BlockPumpkin.onBlockAdded: after clearing the cells, 120 "snowshovel" over the 1 x 2.5 x 1 column (World.rand x3 each).
+      const wr = this.fx?.worldRandom;
+      if (wr) for (let i = 0; i < 120; i++) this.fx.spawn("snowshovel", x + wr.nextDouble(), y - 2 + wr.nextDouble() * 2.5, z + wr.nextDouble(), 0, 0, 0);
       return snow.cells;
     }
     const shape = ironGolemShape((a, b, c) => w.get(a, b, c) === IRON_BLOCK, x, y, z);
