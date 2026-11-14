@@ -46,7 +46,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 52 | Spider | yn | no | yes | Partial; [spiders](spiders.md); legacy EntityCreature AI adapted; see doc | E |
 | 53 | Giant | ye | no | no | Partial; [giant](giant.md); summon/region only as native; pathing reach unverified; not among the server's SUPPORTED kinds | E |
 | 54 | Zombie | yq | no | yes | Partial; [pathfinding](pathfinding.md); baby/villager/jockey variants in mob-riding.md and zombie-villager.md; server zombies convert villagers on Hard; village sieges run their state machine (village-siege.js, batch 67) but 1.7.10 never spawns the siege zombies (executed SiegeProbe) | E |
-| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns through the SpawnerAnimals port; no seeded replay reached a slime | E |
+| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns replayed vs the jar (slime chunk, swamp by moon phase, sizes) | E |
 | 56 | Ghast | yd | no | yes | Implemented; [blaze-ghast](blaze-ghast.md) | E |
 | 57 | PigZombie | yh | no | yes | Implemented; [magma-pigman](magma-pigman.md); portal spawning in nether-portal-live.js | E |
 | 58 | Enderman | ya | no | yes | Implemented; [enderman](enderman.md); held-block use by the player probe not covered | E |
@@ -56,7 +56,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 62 | LavaSlime | yf | no | yes | Implemented; [magma-pigman](magma-pigman.md) | E |
 | 63 | EnderDragon | xa | no | no | Partial; [dragon](dragon.md); parts hit by projectiles and explosions (probed explosions); ModelDragon and the End-chunk spawn are bytecode-derived, not probed; fight on the server (server-dragon.js) | E |
 | 64 | WitherBoss | xc | no | no | Partial; [wither-boss](wither-boss.md); target order approximated; head particles bytecode-read; spawn snow is a server no-op; built in any dimension on the server (server-wither.js) | E |
-| 65 | Bat | we | no | yes | Partial; [squid-bat](squid-bat.md); spawn caps probed; no seeded spawn replay reached a bat | E |
+| 65 | Bat | we | no | yes | Partial; [squid-bat](squid-bat.md); spawn caps probed; cave spawns replayed vs the jar (date limit 4/7, ambient cap) | E |
 | 66 | Witch | yp | no | yes | Partial; [witch](witch.md); witch hut list looked up only in swamp slots; silent because the 1.7.10 asset index has no mob.witch events (a native fact); on the server | E |
 | 90 | Pig | wo | no | yes | Implemented; [pig-saddle](pig-saddle.md) | E |
 | 91 | Sheep | wp | no | yes | Implemented; [sheep](sheep.md); dye/shear/breeding in sheep.md, dyes.md | E |
