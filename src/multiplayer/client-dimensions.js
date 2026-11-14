@@ -4,6 +4,7 @@
 // terrain and the world answers like the Nether (no sky, 128 high, Hell biome). FiniteDimensionWorld builds no terrain of its own: the server fills it from
 // the single-player Nether generator (DimensionWorld.generateTerrainChunk, same layout `(lx * 16 + lz) * 256 + y`) and the client decodes the columns it is sent.
 // Wire messages (all prefixed `dim`): `dimRespawn` (S07 Respawn plus the new world) and the `dim` field of a welcome world snapshot.
+import { restoreColumns } from './client-chunks.js'; // b71 mpchunks
 import { World, BLOCKS } from '../world.js';
 import { decodeColumn } from './protocol.js';
 
@@ -60,12 +61,6 @@ export class FiniteDimensionWorld extends World {
 // The client's copy of a dimension world from a snapshot (`welcome.world` or `dimRespawn.world`): the Overworld snapshot has no `dimension`.
 export function restoreDimensionReplica(snapshot) {
   const world = new FiniteDimensionWorld(snapshot.seed, snapshot.dimension, snapshot.window); // b65: `window` is the End's layout (absent: the 0.93.0 window)
-  if (snapshot.columns.length !== world.chunks.size) throw new Error('Unsupported multiplayer world');
-  const seen = new Set();
-  for (const packet of snapshot.columns) {
-    const key = `${packet.x},${packet.z}`, column = world.chunks.get(key);
-    if (!column || seen.has(key)) throw new Error('Invalid multiplayer column');
-    decodeColumn(packet, column, BLOCKS.length); seen.add(key);
-  }
+  restoreColumns(world, snapshot, BLOCKS.length); // b71 mpchunks: the view-distance square
   return world;
 }

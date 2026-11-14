@@ -65,7 +65,7 @@ test('an end portal sends the player to the End platform (theEnd); the exit port
   assert.equal(a.world, s.dimensions.end.n.world);
   assert.ok(a.world.isEnd && a.world.hasNoSky && !a.world.isHell);
   const r = a.dimOut.find(m => m.type === 'dimRespawn');
-  assert.ok(r && r.dimension === 1 && r.world.dimension === 1 && r.world.columns.length === 256);
+  assert.ok(r && r.dimension === 1 && r.world.dimension === 1 && r.world.chunkView === true && r.world.columns.length > 0 && r.world.columns.length <= 256) // b71 mpchunks: the view-distance square of the 16 x 16 End;
   const rep = restoreReplica(r.world);
   assert.equal(rep.dimension, 1);
   assert.equal(a.position.x, 100 + END_OFFSET.x); assert.equal(a.position.z, END_OFFSET.z);

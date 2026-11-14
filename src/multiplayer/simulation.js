@@ -34,6 +34,7 @@ import { Beacons, BEACON, pyramidLevel, applyBeaconPick, isPaymentItem } from '.
 import { tickBeacons } from '../pyramid-live.js';
 import { canSeeSky } from '../weather.js';
 import { MobSpawners } from '../mob-spawner.js';
+import { ServerChunkViews } from './server-chunk-view.js'; // b71 mpchunks
 import { describeTiles, describeCell } from '../tile-sync.js';
 import { createServerDig } from '../server-dig.js';
 import { eyeInWater } from '../fluids.js';
@@ -175,6 +176,7 @@ export class DedicatedSimulation {
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
     this.chunkSets = new ServerChunkSets(this, this.rules.viewDistance); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
+    this.chunkViews = new ServerChunkViews(this); // b71 mpchunks: per-player columns follow the view distance (server-chunk-view.js)
     this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
     this.farming.sharedRandomTicks = true; this.farming.random = this.farming.stemRandom = this.weather.random; // b68 chunkscan2: farmland, crops and stems tick with the other random blocks over the active chunks
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.farming.randomTick(x, y, z, b);
@@ -239,6 +241,7 @@ export class DedicatedSimulation {
     if (p) this.maps.leave(p); // b69 mpmaps: the next login gets a new MapInfo
     if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
+    this.chunkViews.leave(id); // b71 mpchunks
     this.players.delete(id); this.admin.leave(id); // b68 mpadmin
     this.mobs.removePlayer(id);
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
@@ -555,6 +558,7 @@ export class DedicatedSimulation {
       if (!p.survival.creative) this.dimensions.within(p, () => { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }); // b62: a Nether player's delayed break runs in the Nether
       this.tickUse(p);
     }
+    this.chunkViews.tick(); // b71 mpchunks: updatePlayerInstances and the S26 / S21 queue of each player, after they moved
     if (this.items.items.length) {
       this.items.tick(this.world);
       if (this.items.items.length > 300) this.items.items.splice(0, this.items.items.length - 300); // oldest first, a safety cap for one wire message
@@ -632,7 +636,7 @@ export class DedicatedSimulation {
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
-    time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
+    time: this.time, ticks: this.ticks, columns: this.chunkViews.columnsFor(playerId, w) /* b71 mpchunks: the first view-distance square */, chunkView: true, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
