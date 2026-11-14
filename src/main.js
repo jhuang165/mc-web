@@ -936,7 +936,7 @@ async function joinMultiplayer(settings) {
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
-    client.start(); client.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape at join
+    client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
     printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).');
@@ -979,7 +979,7 @@ async function multiplayerDimension(client, settings, m) {
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
     remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
-    client.start(); client.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape at join
+    client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
   } catch (error) {
@@ -1216,7 +1216,7 @@ function notes() {
 // GameSettings.setOptionValue / setOptionFloatValue: apply a change from the menu screens and
 // save the device preferences (options.txt).
 function saveOptions() {
-  if (multiplayer?.ready) multiplayer.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape (the server sets the hide-cape flag)
+  if (multiplayer?.ready) multiplayer.clientSettings(options); // b72 mpsettings: C15 on change (showCape sets the hide-cape flag)
   options.particles = particleSetting(options.particles);
   options.difficulty = difficultySetting(options.difficulty);
   options.guiScale = (Number(options.guiScale) || 0) & 3;
