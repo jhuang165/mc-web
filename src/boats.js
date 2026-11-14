@@ -13,6 +13,7 @@
 import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
 import { ensureUuid, isUuid } from "./entity-uuid.js";
 import { Minecarts } from "./minecarts.js";
+import { passFall } from "./vehicle-riders.js"; // b72: Entity.fall hands the landing to a player or mob rider
 import { recordBirth } from "./tracker-birth.js";
 import { WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { blockCollisions } from "./block-collisions.js";
@@ -147,7 +148,7 @@ export class Boats extends Minecarts {
     const bx = Math.floor(boat.x), by = Math.floor(boat.posY), bz = Math.floor(boat.z);
     if (onGround) {
       if (boat.fallDistance > 3) {
-        boat.rider?.fall?.(boat.fallDistance);
+        passFall(boat, boat.fallDistance);
         if (!boat.dead && !boat.remote) this.crashBreak(boat); // EntityBoat.updateFallState: `!isRemote && !isDead` (executed, boat-copy-reference.json ride-fall-high)
         boat.fallDistance = 0;
       }

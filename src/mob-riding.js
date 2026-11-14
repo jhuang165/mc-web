@@ -105,15 +105,17 @@ export function ridingOrder(list) {
   return out;
 }
 
-// The start of a rider's update: Entity.updateRidden zeroes the motion before onUpdate.
+// The start of a rider's update: Entity.updateRidden zeroes the motion before onUpdate. Batch 72 (riders72, bytecode-read and executed): Entity.updateRidden
+// (sa.ab) itself never touches the fall distance, but EntityLivingBase.updateRidden (sv.ab, which EntityPlayer and every mob use) calls it and then zeroes
+// fallDistance (sa.R), so the zero comes after the rider's own update (endRidden), not before it.
 export function beginRidden(e) {
   e.vx = e.vy = e.vz = 0;
-  e.fallDistance = 0;
 }
 
 // The rest of Entity.updateRidden after the rider's own update: updateRiderPosition, then the rider turns half way (at most 10
 // degrees a tick) with the change of the mount's yaw and pitch.
 export function endRidden(e, heightOf) {
+  e.fallDistance = 0; // EntityLivingBase.updateRidden (sv.ab): after super.updateRidden, a dead mount's early return included
   const m = e.ridingEntity;
   if (!m) return;
   const seat = seatPosition(m, e, heightOf(m));
@@ -173,15 +175,22 @@ export function maxHealthOf(e, base) {
   return e.modifiers?.some((m) => m.attribute === "generic.maxHealth") || Number.isFinite(e.attributeBases?.["generic.maxHealth"]) ? liveAttribute(e, "generic.maxHealth", base, extra) : liveAttribute({}, "generic.maxHealth", own, extra);
 }
 
-// EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5.
+// EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5. Batch 72 (riders72, executed, riders72-reference.json):
+// World.getEntitiesWithinAABB lists the matches chunk x first, then chunk z, then the 16-high slice of the chunk's entity lists (clamped 0..15), then each list's own
+// order, and the zombie takes list.get(0); `entities` gives the insertion order inside a slice. A child zombie's box is the one setSize left (`spawnBox`, anchored at
+// its min corner), not a box centred on the position.
 export function freeChickenNear(zombie, entities, size) {
-  const [zw, zh] = size(zombie), hw = zw / 2, box = [zombie.x - hw - 5, zombie.y - 3, zombie.z - hw - 5, zombie.x + hw + 5, zombie.y + zh + 3, zombie.z + hw + 5];
+  const [zw, zh] = size(zombie), hw = zw / 2, own = zombie.spawnBox ?? [zombie.x - hw, zombie.y, zombie.z - hw, zombie.x + hw, zombie.y + zh, zombie.z + hw];
+  const box = [own[0] - 5, own[1] - 3, own[2] - 5, own[3] + 5, own[4] + 3, own[5] + 5];
+  let best = null, key = null;
   for (const c of entities) {
     if (c.type !== "chicken" || c === zombie || !(c.health > 0) || c.riddenBy) continue;
     const [cw, ch] = size(c), w = cw / 2;
-    if (c.x + w > box[0] && c.x - w < box[3] && c.y + ch > box[1] && c.y < box[4] && c.z + w > box[2] && c.z - w < box[5]) return c;
+    if (!(c.x + w > box[0] && c.x - w < box[3] && c.y + ch > box[1] && c.y < box[4] && c.z + w > box[2] && c.z - w < box[5])) continue;
+    const k = [Math.floor(c.x / 16), Math.floor(c.z / 16), Math.min(15, Math.max(0, Math.floor(c.y / 16)))];
+    if (!best || k[0] < key[0] || (k[0] === key[0] && (k[1] < key[1] || (k[1] === key[1] && k[2] < key[2])))) { best = c; key = k; }
   }
-  return null;
+  return best;
 }
 
 // b58so: the stale link a player leaves on a boat that carried a mob (EntityBoat.interactFirst refuses only another player, so the click mounts: the boat's rider slot is the

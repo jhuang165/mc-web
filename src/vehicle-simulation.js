@@ -20,7 +20,7 @@ export function syncRider(state) {
   rider.dead = survival.health <= 0;
   // EntityLivingBase.fall for the player a mount passes its fall to (Entity.fall): ceil(distance - 3 - Jump Boost level), the fall sound
   // when the caller supplies a sound hook, the landing block's step sound, then the damage (damage-fx.js landingEffects).
-  rider.fall = (distance, { sound = null, world = state.world } = {}) => {
+  rider.fall = (distance, { sound = state.fallSound ?? null, world = state.world } = {}) => { // b72: boats and carts pass no hook; the state's fallSound plays EntityLivingBase.fall's sounds
     if (survival.creative || !(survival.health > 0) || !(distance > 0)) return;
     const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(state.position.y - 0.20000000298023224),
       out = landingEffects(distance, { kind: 'player', amplifier: jump ? jump.amplifier : -1, blockUnder: world?.get?.(Math.floor(state.position.x), by, Math.floor(state.position.z)) ?? 0 });

@@ -3338,7 +3338,8 @@ function traceAction(action) {
 // Browser adapters transfer live references and scalar movement state synchronously.
 function vehicleState() {
   return { screen, world, minecarts, boats, horses: seatsFor(mobs, rider), rider, position, previous, velocity, motion, survival, yaw, eating,
-    grounded, collidedH, flying, fallDistance, landedFall };
+    grounded, collidedH, flying, fallDistance, landedFall,
+    fallSound: (s) => sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: position.x, y: position.y, z: position.z } }) }; // b72 riders72: the fall sounds of a boat or cart landing under the player
 }
 // Batch 52: the client player on a minecart is seated from the cart's client copy (World.updateEntity: the copy's update, then the rider's updateRiderPosition), so the camera and
 // the player model follow the interpolated cart the renderer draws. The server side (the tick's physics, the dismount) keeps the live seat; this runs at the end of each seating.
@@ -3902,14 +3903,16 @@ function movementTick(controls) {
     onLadderStep ? position.y - oldPosition.y : 0,
     position.z - oldPosition.z,
   );
-  if (!sneakOnGround) stepDistance += distance;
+  // Entity.moveEntity (sa.d, bytecode-read; b72 riders72 executed): the whole step block (distanceWalkedModified, distanceWalkedOnStepModified, the step sound, onEntityWalking) needs ridingEntity == null
+  const stepRiding = !!rider.vehicle || mpRiding;
+  if (!sneakOnGround && !stepRiding) stepDistance += distance;
   // Entity.handleWaterMovement: the splash volume follows the entry speed.
   if (inWater && !wasInWater) {
     const s = enterWater(scene.fx, { x: position.x, z: position.z, minY: position.y, width: PHYSICS.width, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
     sounds.play("game.player.swim.splash", { volume: s.volume, pitch: s.pitch });
   }
   wasInWater = inWater;
-  if (stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
+  if (!stepRiding && stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
     stepDistance = 0;
     const sx = stepB.x, sy = stepB.y, sz = stepB.z; // b71 steps71: floor(posY - 0.2 - yOffset), not the old y - 0.05
     const b = stepB.id;

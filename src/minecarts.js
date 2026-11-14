@@ -30,7 +30,7 @@ import { StackArray, ChestContainer, copyStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
 import * as V from "./cart-variants.js";
-import { cartPicksUp, mountMobOnVehicle } from "./vehicle-riders.js";
+import { cartPicksUp, mountMobOnVehicle, passFall } from "./vehicle-riders.js";
 import { hopperSuck, hopperCartContainer } from "./cart-hopper.js";
 
 const f = Math.fround;
@@ -311,7 +311,7 @@ export class Minecarts {
     cart.onGround = ody !== dy && ody < 0;
     cart.collidedH = odx !== dx || odz !== dz;
     // updateFallState: the cart's fall() only passes it to a rider.
-    if (cart.onGround) { if (cart.fallDistance > 0) { if (cart.type === 3) V.tntFall(cart, cart.fallDistance, this.host); cart.rider?.fall?.(cart.fallDistance); } cart.fallDistance = 0; }
+    if (cart.onGround) { if (cart.fallDistance > 0) { if (cart.type === 3) V.tntFall(cart, cart.fallDistance, this.host); passFall(cart, cart.fallDistance); } cart.fallDistance = 0; }
     else if (dy < 0) cart.fallDistance = f(cart.fallDistance - dy);
     if (odx !== dx) cart.vx = 0;
     if (ody !== dy) cart.vy = 0;
