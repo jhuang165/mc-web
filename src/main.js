@@ -231,6 +231,7 @@ import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplay
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
 import { recordAux, noteEvent } from "./multiplayer/client-music.js"; // b66 mpbooks
 import { applyMapMessage, connectMaps, disconnectMaps } from "./multiplayer/client-maps.js"; // b69 mpmaps
+import { applyChunkMessage, presentCells } from "./multiplayer/client-chunks.js"; // b71 mpchunks
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -697,7 +698,7 @@ function sendMultiplayerInput(controls = IDLE_INPUT) {
 function applyMultiplayerCells(changes) {
   if (!multiplayer?.ready || !active?.remote) return;
   const cells = [];
-  for (const [x, y, z, id, meta] of changes) {
+  for (const [x, y, z, id, meta] of presentCells(world, changes)) { // b71 mpchunks: nothing for a column the server has not sent or has unloaded
     const old = world.get(x, y, z);
     world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
   }
@@ -905,6 +906,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(true), message: reason, back: showMultiplayer })); } }, // b68 mpping: GuiDisconnected (disconnect.lost)
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
+  client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }) }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
   connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn

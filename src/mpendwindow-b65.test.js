@@ -46,13 +46,13 @@ test('the island is whole: end stone lies beyond the old window on every side, t
   }
   assert.ok(outside.west > 200 && outside.south > 200, JSON.stringify(outside)); // the generator's island is centred near the origin
   const snap = s.snapshot('a');
-  assert.equal(snap.dimension, 1); assert.equal(snap.window, 'full'); assert.equal(snap.columns.length, 256);
+  assert.equal(snap.dimension, 1); assert.equal(snap.window, 'full'); assert.equal(snap.chunkView, true); assert.ok(snap.columns.length > 0 && snap.columns.length <= 256); // b71 mpchunks: the view-distance square
   const replica = restoreReplica(JSON.parse(JSON.stringify(snap)));
   assert.equal(replica.size, 256); assert.deepEqual([replica.originX, replica.originZ], [-128, -128]);
   assert.equal(replica.get(100 + 128, 48, 128), OBSIDIAN);
   assert.equal(replica.displayX, -128);
   // a replica cell at the far corner of the old island is the server's cell
-  assert.equal(replica.get(5, 60, 5), w.get(5, 60, 5));
+  assert.equal(replica.get(5, 60, 5), replica.absentColumns?.has('0,0') ? 0 : w.get(5, 60, 5)); // b71 mpchunks: a column outside the player's square is blank
   new LightVolume(replica); // the client scene builds the same grid
 });
 

@@ -3,18 +3,14 @@ import { PROTOCOL, serverUrl, decodeColumn, expandChunks } from './protocol.js';
 import { ClientPings } from './client-ping.js'; // b68 mpping
 import { SLEEP_TYPES } from './client-sleep.js'; // b66 mpsleep
 import { restoreDimensionReplica } from './client-dimensions.js'; // b61 mpnether: the Nether's finite world
+import { restoreColumns } from './client-chunks.js'; // b71 mpchunks
 export { expandChunks };
 
 export function restoreReplica(snapshot) {
   if (snapshot.dimension) return restoreDimensionReplica(snapshot); // b61 mpnether: a Nether snapshot (welcome or dimRespawn)
   const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion, undefined, undefined, snapshot.mapFeatures); // b71 mpadmin71: the server's MapFeatures flag (absent = on)
-  if (world.streaming || snapshot.columns.length !== world.chunks.size) throw new Error('Unsupported multiplayer world');
-  const seen = new Set();
-  for (const packet of snapshot.columns) {
-    const key = `${packet.x},${packet.z}`, column = world.chunks.get(key);
-    if (!column || seen.has(key)) throw new Error('Invalid multiplayer column');
-    decodeColumn(packet, column, BLOCKS.length); seen.add(key);
-  }
+  if (world.streaming) throw new Error('Unsupported multiplayer world');
+  restoreColumns(world, snapshot, BLOCKS.length); // b71 mpchunks: a snapshot may hold only the view-distance square
   return world;
 }
 
@@ -67,6 +63,7 @@ export class DedicatedClient {
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'pistonTiles') { this.messages.push(message); return; } // b66 mppistons: S24 and the moving blocks, in order
+    if (message.type === 'chunkBulk' || message.type === 'chunkUnload') { this.messages.push(message); return; } // b71 mpchunks: S26 / S21, in order
     if (message.type === 'mobs' || message.type === 'vehicles' || message.type === 'mapData') { this.messages.push(message); return; } // b69 mpmaps: every S34 payload matters, in order // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
@@ -90,6 +87,7 @@ export class DedicatedClient {
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
     if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)
+    if (message.type === 'chunkBulk' || message.type === 'chunkUnload') this.onChunks?.(message); // b71 mpchunks
     if (message.type === 'blocks') this.onBlocks(message);
     if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'effect') this.onEffect(message);
