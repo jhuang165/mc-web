@@ -105,3 +105,34 @@ test('a pot that holds a plant, or has no tile entity, refuses another plant', (
   const full = { get: () => 140, getMeta: () => 2, pots: new Map([['0,0,0', { id: 43, damage: 0 }]]) };
   assert.equal(potUse(full, 0, 0, 0, 44, 0), null);
 });
+
+// ---- Gap 2: legacy 64-high worlds grow the ported WorldGenBigTree on the one-in-ten oak roll ----
+import { Trees } from './trees.js';
+import { treeRegistryReady } from './tree-growth.js';
+import { JavaRandom } from './java-random.js';
+import { World } from './world.js';
+
+test('a legacy 64-high oak sapling that rolls big grows a WorldGenBigTree (wide, tall canopy), not the ordinary stand-in', async () => {
+  await treeRegistryReady;
+  let bigs = 0, tallest = 0;
+  for (let seed = 1; seed < 80 && bigs < 3; seed++) {
+    const world = new World(1, 0, 8, false, 1, 1);
+    if (world.height >= 256) break;
+    // flat dirt/grass floor with sky above, sapling at the middle
+    const sy = 20, cx = 64, cz = 64;
+    for (let x = cx - 12; x <= cx + 12; x++) for (let z = cz - 12; z <= cz + 12; z++) { for (let y = 0; y < sy; y++) world.put(x, y, z, y === sy - 1 ? 1 : 2, 0, true); for (let y = sy; y < 64; y++) world.put(x, y, z, 0, 0, true); }
+    world.put(cx, sy, cz, 48, 0, true);
+    const t = new Trees(world, { random: new JavaRandom(seed), light: () => 15 });
+    const r = t.growTree(cx, sy, cz);
+    if (r !== 'big') continue;
+    bigs++;
+    let top = sy; for (let y = sy; y < 64; y++) if (world.get(cx, y, cz) === 4) top = y;
+    tallest = Math.max(tallest, top - sy + 1);
+    assert.equal(world.get(cx, sy, cz), 4, 'trunk replaces the sapling');
+    let reach = 0;
+    for (let x = cx - 8; x <= cx + 8; x++) for (let z = cz - 8; z <= cz + 8; z++) for (let y = sy; y < 64; y++) if (world.get(x, y, z) === 5) reach = Math.max(reach, Math.abs(x - cx), Math.abs(z - cz));
+    assert.ok(reach >= 3, `canopy reach ${reach}`); // WorldGenTrees leaves reach 2; WorldGenBigTree branches reach further
+  }
+  assert.ok(bigs >= 1, 'a big roll occurred');
+  assert.ok(tallest >= 5);
+});
