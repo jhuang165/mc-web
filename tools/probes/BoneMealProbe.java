@@ -16,13 +16,19 @@ public class BoneMealProbe {
   static String str(String s) { return "\"" + s + "\""; }
 
   static void run(String name, int soil, int block, int meta, int index, int[][] extra) throws Exception {
+    run(name, soil, block, meta, index, extra, SY, 1);
+  }
+
+  // cy: the clicked cell's height (the block is put there); biome: BiomeGenBase id read by World.getBiomeGenForCoords (the grass block's flower choice).
+  static void run(String name, int soil, int block, int meta, int index, int[][] extra, int cy, int biome) throws Exception {
     long seed = index * 987654321L + 12345L; // small seeds give nearly equal first draws, so the index is spread
     PlantProbe.W w = PlantProbe.world(floor(soil));
     MobMoveProbe.set(w, "s", new Random(seed));
-    w.put(SX, SY, SZ, block, meta);
+    w.biome = ahu.d(biome);
+    w.put(SX, cy, SZ, block, meta);
     if (extra != null) for (int[] c : extra) w.put(c[0], c[1], c[2], c[3], c[4]);
     add stack = new add(adb.d(351), 1, 15);
-    boolean ret = acj.a(stack, w, SX, SY, SZ);
+    boolean ret = acj.a(stack, w, SX, cy, SZ);
     int draw = w.s.nextInt(1000000);
     StringBuilder items = new StringBuilder("[");
     int n = 0;
@@ -35,8 +41,8 @@ public class BoneMealProbe {
       }
     items.append("]");
     System.out.println("{\"case\":\"bone\",\"name\":" + str(name) + ",\"soil\":" + soil + ",\"block\":" + block + ",\"meta\":" + meta + ",\"seed\":" + seed
-      + ",\"extra\":" + Arrays.deepToString(extra == null ? new int[0][] : extra) + ",\"returned\":" + ret + ",\"stack\":" + stack.b + ",\"sets\":" + PlantProbe.sets(w)
-      + ",\"items\":" + items + ",\"next\":" + draw + ",\"here\":[" + w.cell(SX, SY, SZ)[0] + "," + w.cell(SX, SY, SZ)[1] + "]}");
+      + ",\"cy\":" + cy + ",\"biome\":" + biome + ",\"extra\":" + Arrays.deepToString(extra == null ? new int[0][] : extra) + ",\"returned\":" + ret + ",\"stack\":" + stack.b + ",\"sets\":" + PlantProbe.sets(w)
+      + ",\"items\":" + items + ",\"next\":" + draw + ",\"here\":[" + w.cell(SX, cy, SZ)[0] + "," + w.cell(SX, cy, SZ)[1] + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -76,6 +82,12 @@ public class BoneMealProbe {
         for (int seed = 1; seed <= 3; seed++) run("stem-" + block + "-" + meta, 60, block, meta, seed, null);
     // Saplings: the stack is spent; the 45 % gate then marks the sapling (meta | 8). Type 0..5 marks the same way.
     for (int meta = 0; meta < 6; meta += 5) for (int seed = 1; seed <= 10; seed++) run("sapling-" + meta, 3, 6, meta, seed, null);
+    // b67 bonemeal3: the world Random stream of the grass block (BlockGrass.func_149853_b: 128 walks, tall grass or the biome's flower) and of a marked sapling's tree
+    // (func_149878_d; the stage bit set: the gate draw, then the generator's draws), checked through the next draw like every record.
+    for (int i = 1; i <= 6; i++) run("grass-plains", 2, 2, 0, i, null, 63, 1);
+    for (int i = 1; i <= 4; i++) run("grass-forest", 2, 2, 0, i, null, 63, 4);
+    for (int i = 1; i <= 3; i++) run("grass-covered", 2, 2, 0, i, new int[][] {{0, 64, 0, 1, 0}, {1, 64, 0, 1, 0}, {-1, 64, 1, 1, 0}}, 63, 1);
+    for (int type = 0; type < 6; type++) for (int seed = 1; seed <= 12; seed++) run("sapling-marked-" + type, 3, 6, 8 | type, seed, null);
     // Not IGrowable.
     int[] never = {37, 38, 81, 83, 106, 111, 115, 86, 103, 59 + 20, 32, 2 + 1, 18, 17};
     for (int block : never) run("not-growable-" + block, block == 81 ? 12 : block == 83 ? 3 : block == 115 ? 88 : 2, block, 0, 1, null);

@@ -19,7 +19,7 @@
 //   host.armorType(stack) -> 0..3|undefined       ItemArmor.armorType (0 helmet .. 3 boots); host.equip(cell, stack, position) -> boolean puts one piece on an entity in the front cell
 //                                                  (position 4 - armorType, getArmorPosition); false (or no host.equip) throws the item instead
 //   host.setLiquid(x, y, z, originalId) / host.setAir(x, y, z) / host.breakBlock(x, y, z) optional world writers
-//   host.boneMeal(x, y, z) -> boolean             ItemDye.func_150919_a for blocks other than wheat, carrots and potatoes
+//   host.boneMeal(x, y, z, original, rand) -> boolean  ItemDye.func_150919_a on the facing block with the world Random (b67: every IGrowable; a host that declines keeps the inline wheat family)
 //   host.transfer()                               the inventory-transfer.js host for droppers (omit to always drop)
 //   host.maxStack(stack), host.changed(keys[])
 import { JavaRandom } from "./java-random.js";
@@ -334,14 +334,18 @@ const DYE = {
     if ((stack.damage ?? 0) !== 15) return DEFAULT.stack.call(this, w, x, y, z, facing, stack);
     const [fx, fy, fz] = FACING[facing], i = x + fx, j = y + fy, k = z + fz, block = w.getBlock(i, j, k);
     let ok = false;
-    if (CROPS.has(block)) {
+    // b67 bonemeal3: ItemDye.func_150919_a (the IGrowable path, bone-meal.js) with the world Random; true spends one bone meal and sends 2005 even when the
+    // growth gate fails (bytecode-read kq.b: stack spent inside func_150919_a, aux 2005 data 0 only when it returned true, else the shared flag turns the click into 1001).
+    // A host whose hook declines (the away world's `() => false`, no hook) keeps the wheat family inline; a full host never reaches it with a young crop.
+    ok = !!this.host.boneMeal?.(i, j, k, block, w.rand);
+    if (!ok && CROPS.has(block)) {
       const meta = w.getBlockMetadata(i, j, k);
       if (meta !== 7) {
         // BlockCrops.func_149863_m: + getRandomIntegerInRange(rand, 2, 5), capped at 7.
         w.setBlockMetadataWithNotify(i, j, k, Math.min(7, meta + w.rand.nextInt(4) + 2), 2);
         ok = true;
       }
-    } else ok = !!this.host.boneMeal?.(i, j, k, block);
+    }
     if (ok) { stack.count--; this.aux(w, 2005, i, j, k, 0); } else this.flags.bone = false;
     return stack;
   },
