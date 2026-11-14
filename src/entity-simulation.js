@@ -78,7 +78,10 @@ function collectArrows(state, hooks) {
   const { arrows, survival, position, width, height } = state, { arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
   const { x, y, z } = position, half = width / 2;
   const playerBox = [x - half, y, z - half, x + half, y + height, z + half];
-  if (survival.health > 0 && arrows.collect(playerBox, survival)) arrowsCollected();
+  // b72: a living ridden entity (cart, boat or mount) widens the pickup box to the union (EntityPlayer.onLivingUpdate; executed in ArrowTriggerProbe)
+  const v = state.rider?.vehicle, mob = v && !v.bb && state.mobs?.size ? state.mobs.size(v) : null;
+  const ridingBox = !v || v.dead ? null : v.bb ?? (mob ? [v.x - mob[0] / 2, v.y, v.z - mob[0] / 2, v.x + mob[0] / 2, v.y + mob[1], v.z + mob[0] / 2] : null);
+  if (survival.health > 0 && arrows.collect(playerBox, survival, undefined, ridingBox)) arrowsCollected();
   flushArrows();
 }
 
