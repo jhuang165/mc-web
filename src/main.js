@@ -109,8 +109,9 @@ import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
-import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
+import { wakeSavedSleeper, mobInBox, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { showChatLine, PLAYER_NAME } from "./death-messages.js";
+import { clientWake, clientSleepTick, sleepText } from "./multiplayer/client-sleep.js"; // b66 mpsleep
 import { deathComponent, chatTextComponent, senderComponent } from "./team-names.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
@@ -883,6 +884,8 @@ async function joinMultiplayer(settings) {
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
+  client.onSleep = mpSleepMessage; // b66 mpsleep: S0A / S0B / bed messages
+  if (bedSleep.sleeping || bedSleep.timer) { bedSleep.reset(); hideBedScreen(); }
   multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
   try {
     const welcome = await client.connect({ url: settings.url, session: settings.session });
@@ -2146,11 +2149,7 @@ function useBed(x, y, z) {
     player: { x: position.x, y: position.y, z: position.z, alive: true },
     daytime: (scene.subtracted ?? 0) < 4,
     // EntityMob within 8 x 5 x 8 of the head cell (strict box intersection).
-    monsterNear: (b) => !!mobs?.entities.some((e) => {
-      if (!HOSTILE.has(e.type) || e.health <= 0) return false;
-      const size = ENTITY_TYPES[e.type], hw = size.width / 2;
-      return e.x + hw > b[0] && e.x - hw < b[3] && e.y + size.height > b[1] && e.y < b[4] && e.z + hw > b[2] && e.z - hw < b[5];
-    }),
+    monsterNear: (b) => mobInBox(mobs?.entities, b, ENTITY_TYPES), // EntityMob only (bed.js ENTITY_MOB): slimes and ghasts do not block sleep
     otherSleeperAt: () => false,
   };
   const out = activateBed(world, x, y, z, bedSleep, ctx);
@@ -2159,6 +2158,7 @@ function useBed(x, y, z) {
 }
 // EntityPlayer.wakeUpPlayer(resetTimer, update, setSpawn): stand beside the bed (or above its head), clear the occupied bit.
 function bedWake(resetTimer, setSpawn, leaveScreen = true) {
+  if (multiplayer) { multiplayer.send({ type: 'sleepLeave' }); return; } // b66 mpsleep: C0B action 3; the server's S0B wakes this player
   const head = bedSleep.bed, feet = bedSleep.wake(world, resetTimer, setSpawn);
   if (!feet) return;
   if (head) scene.updateBlock(head[0], head[2], head[1]);
@@ -2183,6 +2183,14 @@ function tickBed() {
     bedWake(false, true);
   }
   updateBedFade();
+}
+// b66 mpsleep (multiplayer): the server's S0A / S0B and bed messages (client-sleep.js).
+function mpSleepMessage(m) {
+  if (m.type === "sleepIn") {
+    if (bedSleep.begin(world, m.x, m.y, m.z, { player: { x: m.x, y: m.y, z: m.z, alive: true }, daytime: false }) === "OK") { enterSleep(thirdPersonView === 0); saved = false; lastHealth = survival.health; }
+  } else if (m.type === "sleepWake") {
+    if (clientWake(bedSleep)) { hideBedScreen(); if (screen === "inventory" && !containerView) resume(); }
+  } else { const text = sleepText(m.key); if (text) showChatLine(document, text); }
 }
 // A saved sleeping player lies down again when the bed is still there.
 function restoreSleep(data) {
@@ -4407,7 +4415,7 @@ function animate(now) {
       world.ringReads = !!world.ringSink; // simulation reads see the ring columns; meshing, light and the window shift do not
       try { movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); } finally { world.ringReads = false; } // a sleeping player ignores the keys
       tickProf.endStart("bed");
-      if (!multiplayer) tickBed();
+      if (!multiplayer) tickBed(); else { clientSleepTick(bedSleep); updateBedFade(); } // b66 mpsleep: the server decides the wake-ups
       tickProf.endStart("effects");
       scene.effectRenderer.tick(world);
       tickProf.endStart("player");

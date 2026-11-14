@@ -165,6 +165,19 @@ export const isDaytime = (subtracted) => subtracted < 4;
 // The next morning (WorldServer.tick): world time + 24000 rounded down to a whole day.
 export const nextMorning = (time) => { const t = time + 24000; return t - (t % 24000); };
 
+// EntityPlayer.sleepInBedAt searches getEntitiesWithinAABB(EntityMob.class, ...) (bytecode-read, b66: class yg). EntityMob's subclasses in
+// 1.7.10 are zombie (and pigman, villager zombie), skeleton (and wither skeleton), spider (and cave spider), creeper, enderman, silverfish,
+// witch, giant, blaze and the wither. Slime and magma cube extend EntityLiving (IMob only), the ghast extends EntityFlying: none of them block sleep.
+export const ENTITY_MOB = new Set(['zombie', 'pigman', 'skeleton', 'wither_skeleton', 'spider', 'cave_spider', 'creeper', 'enderman', 'silverfish', 'witch', 'giant', 'blaze', 'wither']);
+// A living EntityMob whose box strictly intersects `box` ([x0, y0, z0, x1, y1, z1]); `types` maps a type to {width, height}.
+export function mobInBox(entities, box, types) {
+  return !!entities?.some((e) => {
+    if (!ENTITY_MOB.has(e.type) || e.health <= 0) return false;
+    const size = types[e.type], hw = size.width / 2;
+    return e.x + hw > box[0] && e.x - hw < box[3] && e.y + size.height > box[1] && e.y < box[4] && e.z + hw > box[2] && e.z - hw < box[5];
+  });
+}
+
 // EntityPlayer sleeping state (sleeping flag, sleepTimer, playerLocation = the head cell, the spawn point).
 export class BedSleep {
   constructor() { this.reset(); }

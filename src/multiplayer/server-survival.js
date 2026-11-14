@@ -41,7 +41,7 @@ export class ServerSurvival {
     const s = p.survival;
     s.difficulty = this.sim.difficulty ?? NORMAL;
     if (!p.dead) {
-      tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying }, moved, { tickWeather() {} });
+      tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying, sleeping: !!p.sleeping }, moved, { tickWeather() {} });
       finishPlayerMovement(p, moved); p.inWater = !!moved?.inWater; // b63 mppvp: the critical-hit test of a melee attack reads it
       if (s.health <= 0) this.die(p);
     } else this.tickDeath(p);
@@ -138,7 +138,7 @@ export class ServerSurvival {
   /** C16 client status 0 (perform respawn): a dead player starts again at the world spawn with full vitals. */
   respawn(p) {
     if (!p?.dead) return false;
-    const s = p.survival, spawn = p.spawnpoint ? { x: p.spawnpoint[0] + 0.5, y: p.spawnpoint[1], z: p.spawnpoint[2] + 0.5 } : this.sim.world.spawn(); // /spawnpoint (servercommands-b59)
+    const s = p.survival, spawn = this.sim.sleep.respawnPoint(p); // b66 mpsleep: the bed or /spawnpoint verified in the Overworld (ServerConfigurationManager.respawnPlayer), else the world spawn
     Object.assign(s, { health: 20, food: 20, saturation: 5, exhaustion: 0, timer: 0, air: 300, fire: 0, absorption: 0, hurtTicks: 0, hurtAmount: 0, protection: 60, combat: new CombatTracker(), lastDamage: '', lastSource: null, lastAttacker: null });
     s.effects = new Effects(); s.effects.player = s;
     this.discardWindow(p); // the new EntityPlayerMP has a fresh ContainerPlayer: the cursor and the 2x2 grid of the dead one are gone, not thrown

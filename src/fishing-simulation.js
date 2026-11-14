@@ -51,7 +51,7 @@ export class Fishing {
       entities: (area) => targets().filter((t) => t.box[0] < area[3] && t.box[3] > area[0] && t.box[1] < area[4] && t.box[4] > area[1] && t.box[2] < area[5] && t.box[5] > area[2])
         .map((t) => ({ ref: t.ref, box: t.box, angler: !!t.thrower })),
       // The angler is never hooked here (the build has no self-pull); mobs take a zero-damage thrown hit.
-      hitEntity: (ref) => !!mobs && mobs.entities?.includes(ref) && host.hit(ref),
+      hitEntity: (ref) => ref?.playerTarget ? (host.hitPlayer?.(ref.playerTarget) ?? false) : !!mobs && mobs.entities?.includes(ref) && host.hit(ref), // b66 mpsleep: another player (server only)
       entityState: (ref) => {
         if (!mobs?.entities?.includes(ref)) return null;
         const t = targets().find((e) => e.ref === ref);

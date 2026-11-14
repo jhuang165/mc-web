@@ -1,4 +1,4 @@
-import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, raycast, collides } from '../world.js';
+import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, raycast, collides } from '../world.js';
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
@@ -61,6 +61,7 @@ import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats 
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
+import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
 const noop = () => {};
@@ -94,6 +95,7 @@ export class DedicatedSimulation {
     saved = upgradeLegacyEnd(saved); // b66 mpend3: an End saved in the 0.93.0 128 window moves into the 256 window (server-end-upgrade.js)
     this.commandBlocks = options.commandBlocks === true || saved.commandBlocks === true; // b63: enable-command-block (default false, as the dedicated server); command block carts run only when set
     this.fishing = new ServerFishing(this); // b64 mpstats2
+    this.sleep = new ServerSleep(this); // b66 mpsleep
     this.difficulty = options.difficulty ?? 2; this.serverSurvival = new ServerSurvival(this); this.pvp = options.pvp !== false; this.pvpRules = new ServerPvp(this); /* b63 mppvp: the `pvp` server property (default true) and C02 attacks on players */ // World.difficultySetting (0-3) for hunger and damage; the players' Survival state
     this.gameMode = gameMode === 'survival' ? 'survival' : 'creative'; // creative (the milestone default) breaks at once; survival runs ItemInWorldManager's dig timer
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
@@ -201,9 +203,10 @@ export class DedicatedSimulation {
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, rand: seeded(),
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, spawnForced: saved?.spawnForced, rand: seeded(),
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.serverItems.join(player, saved);
+    this.sleep.join(player); // b66 mpsleep: damage wakes a sleeper
     this.stats.join(player, saved); // b63 mpstats
     this.players.set(id, player);
     this.mobs.addPlayer(player);
@@ -213,6 +216,7 @@ export class DedicatedSimulation {
   }
   removePlayer(id) {
     const p = this.players.get(id);
+    if (p) this.sleep.logout(p); // b66 mpsleep: a sleeper stands beside the bed before the save
     if (p) this.vehicles.removePlayer(p); // b61: a rider is let down before the position is saved
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
     if (p) this.fishing.drop(p); // b64 mpstats2: the bobber goes with its angler
@@ -224,7 +228,7 @@ export class DedicatedSimulation {
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint } : {}), ...this.dimensions.savedFields(p) }; }
+    player: { slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
@@ -399,6 +403,7 @@ export class DedicatedSimulation {
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
     if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
+    if (b === BED && !(p.input.sneak && p.survival.held) && this.sleep.use(p, x, y, z)) return true; // b66 mpsleep: BlockBed.onBlockActivated
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     if (place && isFence(b) && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
     if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water
@@ -515,6 +520,7 @@ export class DedicatedSimulation {
     this.containers.tick();
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
+      this.sleep.tickPlayer(p); // b66 mpsleep: the sleep timer and the morning wake
       this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
       const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
       const dead = this.dimensions.within(p, () => this.serverSurvival.tick(p, moved)); // b61: a Nether player's drops and void respawn use the Nether's world and items
@@ -560,6 +566,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();
     this.weather.tick(this.world);
+    this.sleep.worldTick(); // b66 mpsleep: WorldServer.tick's all-asleep night skip, right after the weather update (the clock has already advanced by this tick's one)
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
     this.falling.tick();
@@ -600,7 +607,7 @@ export class DedicatedSimulation {
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
