@@ -8,7 +8,7 @@ import { moveEntity } from "./entities.js";
 import { STAIRS, stairExplosionResistance } from "./stairs.js";
 import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM } from "./dispenser-piston.js";
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem } from "./stone-utility.js";
-import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
+import { TNT, MONSTER_EGG, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
 import { SHAPED_RESISTANCE } from "./shaped-blocks.js";
 import { CHEST_RESISTANCE } from "./chest-blocks.js";
@@ -308,11 +308,11 @@ export const explodePitch = (rand) => f(f(1 + f(f(rand.nextFloat() - rand.nextFl
 // (canDropFromExplosion false), removal, and TNT priming. `flaming` (Ghast fireballs;
 // creepers and TNT never set it) then puts fire on a third of the air cells above an
 // opaque cube, from the explosion's own Random. Returns
-// { list, pitch, broken: [{x, y, z, id, meta}], drops, xp, primed: [{x, y, z, fuse}], fires }.
+// { list, pitch, broken: [{x, y, z, id, meta}], drops, xp, primed: [{x, y, z, fuse}], fires, released: [[x, y, z]] (monster eggs) }.
 // The caller performs the block edits; `world.get/getMeta` are read only.
 export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false, resistance = explosionResistance } = {}) {
   const list = explosionBlocks(world, x, y, z, size, rand, resistance);
-  const pitch = explodePitch(rand), broken = [], drops = [], xp = [], primed = [], fires = [];
+  const pitch = explodePitch(rand), broken = [], drops = [], xp = [], primed = [], fires = [], released = [];
   const removed = new Set(), get = (bx, by, bz) => (removed.has(bx + "," + by + "," + bz) ? 0 : world.get(bx, by, bz));
   const chance = f(1 / size);
   if (smoking)
@@ -325,6 +325,9 @@ export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flam
         drops.push(...d.items);
         for (const v of d.xp) xp.push({ value: v, x: bx + 0.5, y: by + 0.5, z: bz + 0.5 });
       }
+      // BlockSilverfish.dropBlockAsItemWithChance (amb.a, bytecode-read): Explosion.doExplosionB calls it for every block that canDropFromExplosion (aji.a(agw) is true,
+      // amb does not override it), and it spawns a silverfish at (x + 0.5, y, z + 0.5) whatever the chance. The callers spawn them after the blocks are gone.
+      if (id === MONSTER_EGG) released.push([bx, by, bz]);
       removed.add(bx + "," + by + "," + bz);
       broken.push({ x: bx, y: by, z: bz, id, meta });
       if (id === TNT) primed.push({ x: f(bx + 0.5), y: f(by + 0.5), z: f(bz + 0.5), fuse: chainFuse(rand) });
@@ -332,7 +335,7 @@ export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flam
   if (flaming)
     for (const [bx, by, bz] of list)
       if (get(bx, by, bz) === 0 && opaque(get(bx, by - 1, bz)) && own.nextInt(3) === 0) fires.push([bx, by, bz]);
-  return { list, pitch, broken, drops, xp, primed, fires };
+  return { list, pitch, broken, drops, xp, primed, fires, released };
 }
 
 // --- EntityTNTPrimed (xw) ---

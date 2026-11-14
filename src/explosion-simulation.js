@@ -214,6 +214,7 @@ export function applyExplosion(state, request, hooks = {}) {
   for (const drop of explosion.drops)
     items.spawn(makeStack(drop.id, 1, drop.damage || 0), drop.x, drop.y, drop.z, { delay: 10 });
   for (const orb of explosion.xp) xpOrbs.spawn(orb.value, orb);
+  for (const at of explosion.released) (hooks.releaseSilverfish ?? ((x, y, z) => mobs?.spawnSilverfishAt?.(x, y, z)))(...at); // b67: a blown-up monster egg lets its silverfish out (explosion.js)
   const chainedTnt = [];
   for (const block of explosion.primed) {
     const entity = primeTnt(block.x, block.y, block.z, { fuse: block.fuse, placer: attacker });
