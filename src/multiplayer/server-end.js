@@ -81,9 +81,7 @@ export class ServerEnd {
     for (const System of [Rails, Torches, Doors, Beds]) new System(world, { drop, apply: noop }).watch();
     this.n = n;
     dims.swap(n, () => buildNetherInside(sim, n, saved));
-    // The projectile instance reads its dimension's world and mobs through getters that name the Nether (server-dispense.js); the End's own are these.
-    Object.defineProperty(n.dispense, 'world', { get: () => n.world });
-    Object.defineProperty(n.dispense, 'mobs', { get: () => n.mobs.mobs });
+    dims.sim.dispense?.adopt?.(n.dispense); // b64 mpend2: saved End arrows, balls and potions (the Overworld's stand-in lane for dimension 1) move to the End's own instance
     return n;
   }
   // A player saved in the End comes back to it (ServerDimensions.adopt).

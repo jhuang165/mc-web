@@ -48,6 +48,7 @@ export class RemoteDispense {
       else if (e.k === 'splash') { h.splash?.(e.x, e.y, e.z, e.damage | 0); h.sound?.('game.potion.smash', e.x + .5, e.y + .5, e.z + .5, e.volume ?? 1, e.pitch ?? 1); }
       else if (e.k === 'firework') h.firework?.(e.x, e.y, e.z, e.vx, e.vy, e.vz, e.fireworks ?? null);
       else if (e.k === 'spark') h.spark?.(e.x, e.y, e.z, e.vx, e.vy, e.vz);
+      else if (e.k === 'eyeShatter') h.shatter?.(e.x, e.y, e.z); // b64 mpend2: an eye of ender broke (WorldServer.playAuxSFX 2003)
       else if (e.k === 'sound' && SOUNDS.has(e.name)) h.sound?.(e.name, e.x, e.y, e.z, e.volume ?? 1, e.pitch ?? 1);
     }
   }

@@ -1,0 +1,23 @@
+# Batch 64 mpend2: the End on the server, native coordinates, End projectiles, flying eye of ender
+
+## Summary
+- `src/multiplayer/client-dimensions.js`: the End replica now has `originX/originZ = -END_OFFSET` (native = local + origin) and `displayX/displayZ`. Code that reads native coordinates (the eye's stronghold search, structure and chunk lookups, mob spawn chunk order) sees the End's own coordinates. `main.js` F3 prints `position + displayX/Z`, so a player on the platform reads x 100, z 0 (it read 125, 96).
+- Window kept at 128 x 128 (x -25..102, z -96..31), stored shifted. Not enlarged: the light grid (`LightVolume`, `SIZE`), the world's 8 x 8 columns, the `columns` wire check and the client scene all assume 0..127. The generator puts end stone out to about x -112..113, z -95..128 (executed count by radius: 13.6k cells in radius 0-10 up to a thin tail at 120-130), so no 128 window holds the island together with the platform at x 100. Positions on the wire and in the save stay window-local (the replica predicts in them); the save needed no migration because the stored representation did not change. This part of the goal is only half done: display and native lookups are native, the cut-off island and the shifted wire are not.
+- End projectile lane: `server-dispense.js` no longer names the Nether. `dimState(dim)` returns the Nether state or the End state; the instance getters (`world`, `mobs`), `laneFor`, the stand-in lane's `world`, the swap of an extra lane, `save` (lanes -1 and 1), fireball save/restore and `load` (accepts dimension 1) use it. `server-end.js` no longer overrides the getters and calls `sim.dispense.adopt(n.dispense)` so a saved End arrow, ball or potion moves from the stand-in lane to the End's instance.
+- Flying eye of ender: new `src/multiplayer/server-eyes.js` (`ServerEyes`, `strongholdsOf`). `ServerProjectiles.throwHeld` sends an eye to `eyeSystem.use(p)`: Overworld only, `nearestStronghold` over the seed's stronghold list (`StructureCache` + `WorldChunkManager`, computed once per seed; the server's finite world has no structure manager), `EyesOfEnder.launch` (12-block hop, 1 in 5 shatters), "random.bow" heard, stack used outside Creative. The flight is `tickEye` (80 ticks) ticked from `ServerDispense.tick`; a drop becomes an item of `sim.items`; a shatter is a `dispFx` event `eyeShatter`. Others see it as a `dispEnts` ball of kind `eyeOfEnder` (the client renderer already draws that kind). Saved in the Overworld lane's extras (`eyes`). Client: `client-dispense.js` handles `eyeShatter` (hook `shatter`), `eye-of-ender-live.js` `spawnEyeShatter`, `main.js` one hook line plus the import.
+- New wire event: `dispFx` `eyeShatter {x, y, z}` (no new message type).
+- Tests: `src/mpend2-b64.test.js` (6). The "only enderman in the End" check now runs with mobs on and asserts that 600 ticks spawned something (it spawns, and only endermen); the batch 63 test used `mobs: false`, so its loop was empty.
+
+## Evidence
+- executed: JS tests above; spawn run with mobs on; island extent from `DimensionWorld.generateTerrainChunk` (scratch run, not kept).
+- reused executed: eye flight and shatter/drop rules (`eye-of-ender-reference.json`, `tracker-extras-reference.json`), stronghold positions (`structure-placement.js`).
+- recalled: ChunkProviderHell / ChunkProviderEnd.func_147416_a return null for "Stronghold" (so the eye does nothing outside the Overworld); eye spawn y = posY + 1.62 - yOffset (eye height on the server); aux 2003 has the particles only (no sound).
+- No new Java probe: nothing here needed a new native fact beyond the recalled ones above.
+
+## Verification
+- `node --test src/mpend2-b64.test.js`: 6 pass. `mpend-b63`, `mpend2-b64`, `mpdispense-b61`, `mpprojectiles-b62`, `mpprojectiles2-b63`: 43 pass. `mpnether-b61`, `mpnetherN` (2, 3), `b62-lead`, `b63-lead`, `eye-of-ender`: 38 pass. `npm run build` ok. `node --check` ok on every touched file. Full npm test not run (batch rule).
+- Scope check for `main.js` hooks: `spawnEyeShatter` (imported from eye-of-ender-live.js, which exports it), `scene` (module scope), `world.displayX` (the `world` module variable, read as `world.displayX || 0`).
+
+## Follow-ups
+- Real native End coordinates for the wire and the island's far side need a larger world and light grid (or a sliding window like the streamed worlds); not attempted. Merge with `mpdragon`: `server-end.js` only changed in `ensure()` (the two `defineProperty` lines became one `adopt` line).
+- The eye's shatter particles and the stronghold direction only show in a browser; the portal particle trail of a flying eye is not sent to other clients.

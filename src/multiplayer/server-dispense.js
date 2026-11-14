@@ -20,6 +20,7 @@ import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
 import { SUPPORTED, MOB_LIMIT } from './server-mobs.js';
 import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
+import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
 const f = Math.fround;
@@ -42,10 +43,13 @@ export class ServerDispense {
     sim.redstone.hooks.primeTnt = (x, y, z) => this.prime(x + 0.5, y + 0.5, z + 0.5, true); // flint and steel on a TNT block (BlockTNT.func_150114_a)
     this.load(saved);
   }
-  get mobs() { return this.dim ? (this.sim.dimensions?.nether?.mobs?.mobs ?? this.sim.mobs.mobs) : this.sim.mobs.mobs; } // the EntityWorld of this instance's dimension
-  get world() { return this.dim ? (this.sim.dimensions?.nether?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
+  // b64 mpend2: the state object of a dimension (-1 the Nether, 1 the End), once built; null for the Overworld
+  dimState(dim) { const d = this.sim.dimensions; return (dim | 0) === 1 ? d?.end?.n ?? null : dim ? d?.nether ?? null : null; }
+  get mobs() { return this.dim ? (this.dimState(this.dim)?.mobs?.mobs ?? this.sim.mobs.mobs) : this.sim.mobs.mobs; } // the EntityWorld of this instance's dimension
+  get world() { return this.dim ? (this.dimState(this.dim)?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
-  get any() { return this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) > 0 || this.lanes.some(laneBusy); }
+  get eyeSystem() { return this._eyes ??= new ServerEyes(this); } // b64 mpend2: made on first use (the constructor's load may reach it first)
+  get any() { return this._eyes?.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }
 
   // The host of dispense.js's engine (installDispensers). `stop(...)` is the old "put the stack back" for what has no entity path here.
@@ -99,13 +103,13 @@ export class ServerDispense {
   laneFor(dim) {
     dim |= 0;
     if (dim === this.dim) return this;
-    const own = this.sim.dimensions?.nether?.dispense; // b62 lead: the dimension's own instance, once it is built
+    const own = this.dimState(dim)?.dispense; // b62 lead: the dimension's own instance, once it is built
     if (own && own !== this && (own.dim | 0) === dim) return own;
     let lane = this.extra.get(dim);
     if (!lane) {
-      const sim = this.sim, balls = new Projectiles(Math.random);
+      const sim = this.sim, self = this, balls = new Projectiles(Math.random);
       balls.clientParticles = true;
-      lane = { dim, arrows: new Arrows(Math.random), balls, potions: null, get world() { return sim.dimensions?.nether?.world ?? null; },
+      lane = { dim, arrows: new Arrows(Math.random), balls, potions: null, get world() { return self.dimState(dim)?.world ?? null; },
         mobs: { entities: [], events: [], worldRandom: sim.weather.random, joined() {}, attackEntityFrom() {}, get world() { return lane.world; } } };
       this.extra.set(dim, lane);
     }
@@ -175,8 +179,9 @@ export class ServerDispense {
     if (!this.any) return;
     if (this.primed.length) tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) });
     this.tickLane(this);
+    this._eyes?.tick(); // b64 mpend2: eyes of ender in flight
     for (const lane of this.extra.values()) { // another dimension's lane runs with that dimension's items and orbs in place (server-dimensions.js swap)
-      const n = this.sim.dimensions?.nether;
+      const n = this.dimState(lane.dim);
       if (n && laneBusy(lane)) this.sim.dimensions.swap(n, () => this.tickLane(lane));
     }
     if (this.rockets.rockets.length) this.rockets.tick(this.sim.world, {
@@ -273,6 +278,7 @@ export class ServerDispense {
       for (const b of lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0 });
     }
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
+    if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale });
@@ -301,7 +307,7 @@ export class ServerDispense {
   // its owner across a restart while that player is online). Primed TNT, rockets and fireballs are not saved here.
   save() {
     this.restorePotions();
-    const lanes = {}, own = this.sim.dimensions?.nether?.dispense, all = own && own !== this ? [...this.lanes, own] : this.lanes; // b62 lead: the Nether instance's lane is saved here
+    const lanes = {}, all = [...this.lanes, ...[-1, 1].map(d => this.dimState(d)?.dispense).filter(o => o && o !== this)]; // b62 lead: the Nether instance's lane is saved here
     for (const lane of all) {
       const arrows = lane.arrows.list.filter(a => !a.dead), balls = lane.balls.balls, potions = lane.potions?.projectiles.balls.filter(b => !b.dead) ?? [], more = lane.extrasOut ? lane.extrasOut() : lane.pending ? ((({ tnt, rockets, fireballs }) => Object.fromEntries(Object.entries({ tnt, rockets, fireballs }).filter(([, v]) => v)))(lane.pending)) : null; // a stand-in lane re-saves what it holds
       if (!arrows.length && !balls.length && !potions.length && !(more && Object.keys(more).length)) continue;
@@ -316,10 +322,11 @@ export class ServerDispense {
   // the server read one format. Null when there is nothing to write.
   extrasOut() {
     const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
-      fireballs = (this.dim ? this.sim.dimensions?.nether?.mobs?.mobs : this.sim.mobs?.mobs)?._fireballs?.serialize(this.dim) ?? [], out = {};
+      fireballs = (this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs)?._fireballs?.serialize(this.dim) ?? [], out = {};
     if (tnt.length) out.tnt = tnt;
     if (rockets) out.rockets = rockets;
     if (fireballs.length) out.fireballs = fireballs;
+    const eyes = this._eyes?.serialize(); if (eyes) out.eyes = eyes; // b64 mpend2
     return Object.keys(out).length ? out : null;
   }
   restoreExtras(d) {
@@ -328,6 +335,7 @@ export class ServerDispense {
       if (!t || ![t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)) continue;
       this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     }
+    if (d.eyes) this.eyeSystem.load(d.eyes); // b64 mpend2
     if (d.rockets) { const tmp = new FireworkRockets(); tmp.load(d.rockets); this.rockets.rockets.push(...tmp.rockets); if (d.rockets.random) this.rockets.random.restore(d.rockets.random); }
     if (Array.isArray(d.fireballs) && d.fireballs.length) this.pendingFireballs = d.fireballs; // the mobs (its owners' world) are built after this object: restored on the first tick
   }
@@ -339,7 +347,7 @@ export class ServerDispense {
   }
   restoreFireballs() {
     if (!this.pendingFireballs) return;
-    const list = this.pendingFireballs, mobs = this.dim ? this.sim.dimensions?.nether?.mobs?.mobs : this.sim.mobs?.mobs; // this dimension's own mobs only
+    const list = this.pendingFireballs, mobs = this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs; // this dimension's own mobs only
     if (!mobs) return;
     this.pendingFireballs = null;
     mobs.fireballs.load(list, this.dim);
@@ -348,7 +356,7 @@ export class ServerDispense {
     if (!saved || typeof saved !== 'object' || !saved.lanes) return;
     for (const [key, d] of Object.entries(saved.lanes)) {
       const dim = Number(key);
-      if (!(dim === 0 || dim === -1) || !d) continue; // the Overworld and the Nether (b62 lead: the Nether is -1)
+      if (!(dim === 0 || dim === -1 || dim === 1) || !d) continue; // the Overworld, the Nether (b62 lead: -1) and the End (b64 mpend2: 1)
       const lane = this.laneFor(dim), rows = Array.isArray(d.arrows) ? d.arrows : [], balls = Array.isArray(d.balls) ? d.balls : [], potions = Array.isArray(d.potions) ? d.potions : [];
       lane.arrows.load(rows); lane.balls.load(balls);
       if (lane === this && !this.sim.mobs) this.pendingPotions = potions; // b63: the server's mobs (the potions' world) do not exist yet while the simulation builds this object; restorePotions runs on the first tick

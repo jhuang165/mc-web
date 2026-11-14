@@ -12,6 +12,7 @@ import { usePotion, ITEM_POTION } from '../potion-use.js';
 import { throwExpBottle } from '../spawn-egg-use.js';
 import { ITEM_EXP_BOTTLE } from '../spawn-eggs.js';
 import { isSplashDamage } from '../potions.js';
+import { ITEM_EYE_OF_ENDER } from '../eye-of-ender.js';
 
 export class ServerProjectiles extends ServerDispense {
   constructor(sim, saved = null) { super(sim, saved); this.hooked = false; }
@@ -48,6 +49,7 @@ export class ServerProjectiles extends ServerDispense {
     const s = p.survival, held = s.held, id = held?.id ?? 0, lane = this.laneFor(p.dimension | 0);
     if (!lane || !id) return false;
     const dim = lane.dim, sound = (name, o) => this.fx.push({ k: 'sound', name, x: p.position.x, y: p.position.y, z: p.position.z, volume: o.volume, pitch: o.pitch, dim });
+    if (id === ITEM_EYE_OF_ENDER) return this.eyeSystem.use(p); // b64 mpend2: ItemEnderEye.onItemRightClick (the nearest stronghold)
     if (isThrowable(id)) {
       const r = throwHeldItem({ survival: s, projectiles: lane.balls, position: p.position, yaw: p.yaw, pitch: p.pitch }, id, { random: Math.random, playSound: sound });
       if (r.ball) { r.ball.thrower = p; r.ball.ownerName = p.name; }
