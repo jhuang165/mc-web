@@ -17,7 +17,7 @@ export function restoreReplica(snapshot) {
 }
 
 const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
-const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
+const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose', 'tradeList']);
 export class DedicatedClient {
   constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {}, onScoreboard = () => {} } = {}) {
     Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onScoreboard, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
@@ -147,6 +147,7 @@ export class DedicatedClient {
   // b60: C11 EnchantItem (option 0..2) and the MC|ItemName payload of the open anvil.
   stationEnchant(windowId, slot) { this.send({ type: 'stationEnchant', windowId, slot }); }
   stationItemName(windowId, name) { this.send({ type: 'stationItemName', windowId, name }); }
+  tradeSelect(windowId, index) { this.send({ type: 'tradeSelect', windowId, index }); } // b66 mptrade: MC|TrSel
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }

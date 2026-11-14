@@ -49,7 +49,7 @@ const solidId = id => id !== 0 && materialSolid(id);
 const clamp = v => Math.max(MARGIN, Math.min(SIZE - MARGIN, v));
 const TILE_KEYS = ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles'];
 // Simulation methods a player's own message reaches (by player id); each runs inside that player's dimension.
-const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow', 'clickWindow', 'windowInventory', 'confirmTransaction', 'station', 'dropHeld', 'updateSign', 'chooseBeacon', 'setBeaconPayment', 'queueVehicle'];
+const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow', 'clickWindow', 'windowInventory', 'confirmTransaction', 'station', 'dropHeld', 'updateSign', 'chooseBeacon', 'tradeSelect', 'setBeaconPayment', 'queueVehicle'];
 
 export class ServerDimensions {
   constructor(sim, saved = {}) {

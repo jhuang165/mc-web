@@ -160,6 +160,7 @@ export class ServerContainers {
   // After the server changed the open window itself (C11, MC|ItemName): the dropped stacks, then the changed slots and properties.
   afterServerChange(p) { if (!p.window?.ready) return; this.drain(p); this.changes(p); this.sendProps(p, false); }
   canInteract(p) {
+    if (p.window.merchant) return p.window.merchant.usable(); // b66 mptrade: ContainerMerchant.canInteractWith (the villager's customer is this player)
     if (p.window.cart) return this.sim.vehicles.carts.usable(p.window.cart, p.position); // b62: EntityMinecartContainer.isUseableByPlayer (alive, within 8 blocks)
     const win = p.window, [x, y, z] = win.key, b = this.sim.world.get(x, y, z), ok = win.kind === 'chest' ? (win.container.keys ?? []).every(k => {
       const [a, c, d] = k.split(',').map(Number), bb = this.sim.world.get(a, c, d); return isChestBlock(bb) || bb === ENDER_CHEST;

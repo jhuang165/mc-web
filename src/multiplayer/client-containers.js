@@ -10,6 +10,7 @@ import { newChest } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
 import { AnvilContainer } from '../anvil-container.js';
 import { EnchantingContainer } from '../enchanting-container.js';
+import { buildMerchant, applyTradeList, wireTrade } from './client-trade.js'; // b66 mptrade
 
 const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count === b.count && (a.damage ?? 0) === (b.damage ?? 0));
 const fromWire = s => (s ? makeStack(s.id, s.count, s.damage ?? 0, undefined, s) : null);
@@ -34,6 +35,7 @@ export function buildWindow(m, { survival, world, station = {}, crafted = null }
   else if (kind === 'brewing') container = new BrewingContainer(inv, brewingView((survival.brewing[key] ??= newBrewingTile())), null);
   else if (kind === 'workbench') container = survival.openWorkbench();
   else if (kind === 'enchanting' || kind === 'anvil') container = buildStation(kind, m, { survival, world, station });
+  else if (kind === 'merchant') container = buildMerchant(m, inv, { crafted }); // b66 mptrade: the offers follow in `tradeList`
   if (!container || container.slots.length !== m.size) return null;
   container.title = m.title;
   if (crafted && kind === 'workbench') container.onCraft = crafted;
@@ -42,6 +44,7 @@ export function buildWindow(m, { survival, world, station = {}, crafted = null }
 }
 // Makes the container's clicks go to the server; nested clicks (shift-click repeats) and local drops stay local.
 export function wireClicks(container, client, windowId) {
+  if (container.merchant) wireTrade(container, client, windowId); // b66 mptrade: MC|TrSel
   const click = container.click.bind(container);
   let depth = 0, action = 0;
   container.click = (slot, button, mode) => {
@@ -55,6 +58,7 @@ export function wireClicks(container, client, windowId) {
 // S30 / S2F / S31 / S32 for the open window: tile slots take the server's stacks, player slots keep the client's own stack when it is equal (tags survive).
 export function applyWindow(m, { container, windowId, survival, key, client, kind }) {
   if (m.windowId !== windowId) return false;
+  if (m.type === 'tradeList') return applyTradeList(container, m); // b66 mptrade: MC|TrList
   const inv = survival.inventory, put = (i, s) => {
     const slot = container.slots[i];
     if (!slot) return;

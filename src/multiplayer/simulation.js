@@ -52,6 +52,7 @@ import { ServerMobs, MOB_LIMIT } from './server-mobs.js';
 import { loadVillages, saveVillages } from './server-villagers.js'; // b66 mpvillage
 import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
+import { ServerTrade, installTrade } from './server-trade.js'; // b66 mptrade: villager trading windows
 import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
@@ -168,6 +169,8 @@ export class DedicatedSimulation {
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
     loadVillages(this.mobs, saved, this.world, MOB_LIMIT); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
+    this.trade = new ServerTrade(this); // b66 mptrade
+    this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
     this.leads = new ServerLeads(this); // b62 mpriding2: leads and fence knots (server-leads.js)
     this.vehicles.connect(this.redstone); // b62 mpriding2: powered, detector and activator rails, the detector's cart touch
     this.dispense.vehicles = { dispenseBoat: (x, y, z) => !!this.vehicles.spawnVehicle('boat', x, y, z), dispenseCart: (type, x, y, z) => !!this.vehicles.spawnVehicle({ 0: 'minecart', 1: 'chest_minecart', 2: 'furnace_minecart', 3: 'tnt_minecart', 5: 'hopper_minecart' }[type], x, y, z) }; // b61 lead: BehaviorDispenseBoat / BehaviorDispenseMinecart (chest and hopper carts keep the stack)
@@ -203,6 +206,7 @@ export class DedicatedSimulation {
     if (p) this.vehicles.removePlayer(p); // b61: a rider is let down before the position is saved
     if (p) this.serverItems.inv.leave(p); // b60: the cursor and crafting grid are thrown
     if (p) this.fishing.drop(p); // b64 mpstats2: the bobber goes with its angler
+    if (p) this.trade.leave(p); // b66 mptrade: the villager's customer is released
     if (p) this.stats.leave(p); // b63 mpstats: stat.leaveGame
     if (p) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     this.players.delete(id);
@@ -457,6 +461,7 @@ export class DedicatedSimulation {
   invAck(id) { this.serverItems.inv.ack(this.players.get(id)); }
   invClose(id) { this.serverItems.inv.close(this.players.get(id)); }
   invCreative(id, m) { return this.serverItems.inv.creative(this.players.get(id), m); } // b61: C10 creative inventory slot / drop
+  tradeSelect(id, m) { const p = this.players.get(id); return !!p && this.trade.select(p, m); } // b66 mptrade: MC|TrSel
   closeWindow(id) { const p = this.players.get(id); if (p) { p.beaconWindow = null; this.containers.close(p); } }
   clickWindow(id, m) { const p = this.players.get(id); return !!p && this.containers.click(p, m); } // C0E
   // b60 (server-stations.js): C11 EnchantItem and the MC|ItemName payload of the open station window.

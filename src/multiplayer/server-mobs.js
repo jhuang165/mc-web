@@ -196,6 +196,8 @@ export class ServerMobs {
     if (held) best = held;
     const rider = e.rider?.ref && this.views.get(e.rider.ref.id); // b62: a ridden pig reads its rider's keys and stick, not the nearest player's
     if (rider) best = rider;
+    const trader = this.host.trade?.customerView(e, this.views); // b66 mptrade: a villager reads its customer (EntityVillager.getCustomer)
+    if (trader) best = trader;
     if (best) this.use(best);
   }
   // b64: a sweep hit on a player's view (Fireballs.sweep with `sweepPlayers`): that player becomes the AI's player for the impact.
@@ -400,7 +402,7 @@ export class ServerMobs {
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
     if (owned) { if (unkeyed(mob)) stampOwner(mob, p); mob.ownerHere = ownedBy(mob, p); if (mob.ownerHere && mob.ownerUuid !== p.resumeKey) stampOwner(mob, p); } // b63: a legacy record is the clicker's (server-owners.js)
-    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), villager: (q, e) => !!this.villagerUse?.(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), villager: (q, e) => !!this.villagerUse?.(q, e) /* b66: mptrade's installTrade (simulation.js) */, drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
     if (owned && !was && mob.owner) { stampOwner(mob, p); mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
