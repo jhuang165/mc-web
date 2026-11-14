@@ -2,7 +2,7 @@
 // the unchanged 1.7.10 bytecode with javap (bytecode-derived; no probe record yet). The live entity, its AI, renderer and boss
 // bar are NOT wired in this build (public/research/wither.md, Gaps). The T-shape builder itself is in skull.js.
 export const WITHER = Object.freeze({
-  width: 0.9, height: 4, maxHealth: 300, speed: 0.6, followRange: 40, armorValue: 4, experience: 50,
+  width: Math.fround(0.9), height: 4, maxHealth: 300, speed: 0.6, followRange: 40, armorValue: 4, experience: 50,
   invulStart: 220, startHealthFraction: 1 / 3, spawnExplosion: 7, skullExplosion: 1, skullDamage: 8, skullHeal: 5,
   chargedChance: 0.001, blockBreakCooldown: 20, skullSpeedCharged: 0.73,
 });

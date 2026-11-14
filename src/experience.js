@@ -4,6 +4,7 @@ import { inLava, waterAcceleration } from './fluids.js';
 import { moveEntity, entityPushOut } from './entities.js';
 import { LAVA, slipperiness } from './world.js';
 import { explosionImpact } from './explosion.js';
+import { orderTargets } from "./candidate-order.js"; // b73
 import {mhSin} from "./lighting.js";
 import {freshEntityRandom} from "./java-random.js";
 import { FISHING_SMELT_EXPERIENCE } from "./fishing-content.js";
@@ -95,10 +96,14 @@ export class ExperienceOrbs {
  collect(feet,width=0.6,height=1.8){
   if(this.cooldown>0)this.cooldown--;
   const r=f(width)/2,a=[feet.x-r-1,feet.y-0.5,feet.z-r-1,feet.x+r+1,feet.y+f(height)+0.5,feet.z+r+1];
-  for(const o of this.orbs){
-   if(o.dead||this.cooldown||isFrozen(o))continue;
+  const near=[];
+  if(!this.cooldown)for(const o of this.orbs){
+   if(o.dead||isFrozen(o))continue;
    const b=o.bb;
-   if(!(b[3]>a[0]&&b[0]<a[3]&&b[4]>a[1]&&b[1]<a[4]&&b[5]>a[2]&&b[2]<a[5]))continue;
+   if(b[3]>a[0]&&b[0]<a[3]&&b[4]>a[1]&&b[1]<a[4]&&b[5]>a[2]&&b[2]<a[5])near.push({key:o,ref:o,box:b,posY:o.posY});
+  }
+  for(const {ref:o} of orderTargets(near)){ // b73: the world's list order decides which orb is taken first (the cooldown then holds the rest back)
+   if(o.dead||this.cooldown)continue;
    this.cooldown=2;
    const rr=this.rng(o),r1=rr(),r2=rr();
    this.sounds.push({name:'random.orb',volume:f(0.1),pitch:f(f(0.5)*f(f(f(f(r1)-f(r2))*f(0.7))+f(1.8))),x:feet.x,y:feet.y,z:feet.z});

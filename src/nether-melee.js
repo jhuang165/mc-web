@@ -39,7 +39,7 @@ export const MAGMA_BRIGHTNESS = Object.freeze({ packed: 15728880, value: 1 });
 export const GOLD_NUGGET = 394, GOLD_INGOT = 304, ROTTEN_FLESH = 206, GOLDEN_SWORD = 119;
 export const GOLDEN_SWORD_DURABILITY = 32;
 export const PIGMAN = Object.freeze({
-  health: 20, width: 0.6, height: 1.8, movement: 0.5, attackDamage: 5, followRange: 40, armor: 2, experience: 5,
+  health: 20, width: Math.fround(0.6), height: Math.fround(1.8), movement: 0.5, attackDamage: 5, followRange: 40, armor: 2, experience: 5,
   talkInterval: 80, angerRange: 32, boost: 0.45, // "Attacking speed boost", operation 0
   sounds: Object.freeze({ say: "mob.zombiepig.zpig", hurt: "mob.zombiepig.zpighurt", death: "mob.zombiepig.zpigdeath", angry: "mob.zombiepig.zpigangry" }),
   texture: "zombie_pigman",

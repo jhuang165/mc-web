@@ -42,7 +42,7 @@ import { installDispensers } from "./dispense.js";
 // Blocks a right click operates through the redstone engine (lever, both buttons, repeater, both comparators).
 export const USE_BLOCKS = new Set([LEVER, STONE_BUTTON, WOODEN_BUTTON, REPEATER, COMPARATOR, COMPARATOR_POWERED]);
 const inside = (b, [x0, y0, z0, x1, y1, z1]) => b[3] > x0 && b[0] < x1 && b[4] > y0 && b[1] < y1 && b[5] > z0 && b[2] < z1;
-const FALLING_HALF = 0.49, FALLING_SIZE = 0.98;
+const FALLING_HALF = Math.fround(0.98) / 2, FALLING_SIZE = Math.fround(0.98); // b73: the float box
 const ITEM_SIZE = 0.25, ITEM_HALF = 0.125, ARROW_HALF = 0.25, ARROW_SIZE = 0.5, TNT_HALF = 0.49, TNT_SIZE = 0.98;
 
 export function createRedstoneRuntime({ world, scene = null, game = {} }) {
