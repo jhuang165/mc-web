@@ -83,6 +83,7 @@ export class RemoteMobs {
     mob.burn = s.burn ? 1 : 0;
     // batch 61: the other kinds' watched objects (server-mobs.js mobState)
     if (mob.type === 'zombie') mob.villager = !!s.villager;
+    else if (mob.type === 'villager') mob.profession = s.prof | 0; // b66 mpvillage
     else if (mob.type === 'enderman') { mob.carried = s.carried ?? 0; mob.carriedData = s.carriedData ?? 0; mob.screaming = !!s.screaming; }
     else if (mob.type === 'slime' || mob.type === 'magma_cube') { if ((s.size ?? 1) !== mob.size) Object.assign(mob, slimeFields(s.size ?? 1, () => 0)); }
     else if (mob.type === 'witch') mob.held = s.held ? { ...s.held, count: 1 } : null;

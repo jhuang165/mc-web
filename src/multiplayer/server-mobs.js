@@ -25,10 +25,12 @@ import { serverAnimalUse } from './animal-use.js';
 import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from './server-owners.js'; // b63
 import { installServerWither, boundedSkullResistance } from './server-wither.js'; // b63 mpwither
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
+import { VILLAGE_KINDS, installServerVillagers } from './server-villagers.js'; // b66 mpvillage
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
 export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton', 'wither']); // b63: the wither (server-wither.js); b62: the Nether's kinds (Overworld spawn lists never name them)
+for (const k of VILLAGE_KINDS) SUPPORTED.add(k); // b66 mpvillage: villagers and the village's iron golems (server-villagers.js)
 for (const k of DRAGON_KINDS) SUPPORTED.add(k); // b64 mpdragon: the Ender Dragon and the End crystals (the End's mobs)
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
@@ -62,6 +64,7 @@ export function mobState(e) {
   if (e.burn > 0 || e.fire > 0) s.burn = 1;
   // b61: the watched objects the renderers of the other kinds read (EntityEnderman 16/17/18, EntitySlime 16, EntityWolf 16/18/19, EntityOcelot 16/18, EntityHorse type and variant, EntityZombie villager)
   if (e.type === 'zombie' && e.villager) s.villager = 1;
+  if (e.type === 'villager') s.prof = e.profession | 0; // b66: watcher 16, the profession the renderer picks the skin by
   if (e.type === 'enderman') { if (e.carried) { s.carried = e.carried; s.carriedData = e.carriedData || 0; } if (e.screaming) s.screaming = 1; }
   if (e.type === 'slime' || e.type === 'magma_cube') s.size = e.size ?? 1;
   if (e.type === 'witch' && e.held) s.held = { id: e.held.id, damage: e.held.damage || 0 };
@@ -121,6 +124,7 @@ export class ServerMobs {
     // b62: the puppy or kitten of a tamed parent belongs to the parent's owner (EntityTameable.func_152115_b(parent owner UUID)); puppyFields / kittenFields only copy the flag.
     const made = mobs.makeBaby;
     mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
+    installServerVillagers(this); // b66 mpvillage: reputation by player name, the village's player lookup
     installServerDragon(this); // b64 mpdragon: the dragon sees every player of its world
     installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
@@ -266,7 +270,7 @@ export class ServerMobs {
     }
     if (this.spawning) {
       this.spawnPass();
-      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (mobs.entities[i].type !== 'wither') mobs.entities.splice(i, 1); // b63: the cap never cuts a wither just built
+      if (mobs.entities.length > MOB_LIMIT) for (let i = mobs.entities.length - 1; i >= 0 && mobs.entities.length > MOB_LIMIT; i--) if (mobs.entities[i].type !== 'wither' && mobs.entities[i].type !== 'villager') mobs.entities.splice(i, 1); // b63: the cap never cuts a wither just built
     }
     this.use(first);
     const lead = first.player.position;
@@ -396,7 +400,7 @@ export class ServerMobs {
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
     if (owned) { if (unkeyed(mob)) stampOwner(mob, p); mob.ownerHere = ownedBy(mob, p); if (mob.ownerHere && mob.ownerUuid !== p.resumeKey) stampOwner(mob, p); } // b63: a legacy record is the clicker's (server-owners.js)
-    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), villager: (q, e) => !!this.villagerUse?.(q, e), drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
     if (owned && !was && mob.owner) { stampOwner(mob, p); mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot
