@@ -573,7 +573,7 @@ export class DedicatedSimulation {
   itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}) })); } // b61: `hurt` = S19 status 2 for the other players' copies
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {

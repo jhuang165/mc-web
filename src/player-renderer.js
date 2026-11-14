@@ -423,6 +423,10 @@ export class PlayerRenderer {
     this.root.add(this.frame);
     this.root.visible = false;
     this.base = this.material({ map: pixelTexture(STEVE_URL) });
+    // b65 mpinvis: RendererLivingEntity.renderModel for an invisible entity that is not invisible to the viewer: glColor4f(1,1,1,0.15), depthMask off, blend 770/771, alpha func 1/255
+    // (bytecode-read, boh.a). The body material gets a `fade` factor on its alpha; `update({ ghost })` switches it.
+    this.base.uniforms.fade = { value: 1 };
+    this.base.fragmentShader = this.base.fragmentShader.replace("uniform float alphaTest;", "uniform float alphaTest;uniform float fade;").replace("applyFog(c),1.)", "applyFog(c),fade)");
     this.pivots = {};
     for (const name of PART_NAMES) {
       const pivot = new THREE.Group();
@@ -608,7 +612,7 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, ghost = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
     // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
@@ -640,7 +644,7 @@ export class PlayerRenderer {
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];
       // RendererLivingEntity.renderModel draws no body for an invisible entity (Entity.isInvisibleToPlayer, no teams); armour and the held item still draw.
-      pivot.children[0].visible = !invisible;
+      pivot.children[0].visible = !invisible || ghost; // b65: ghost = invisible but not invisible to this viewer (a teammate with seeFriendlyInvisibles): drawn at alpha 0.15
       pivot.position.set(point[0] / 16, point[1] / 16, point[2] / 16);
       pivot.rotation.set(rot[0], rot[1], rot[2]);
     }
@@ -651,6 +655,7 @@ export class PlayerRenderer {
       level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
       b = BRIGHTNESS[Math.max(0, level)];
     this.arrowMaterial?.setLight(packed);
+    { const g = invisible && ghost; this.base.transparent = g; this.base.depthWrite = !g; this.base.uniforms.fade.value = g ? 0.15 : 1; this.base.uniforms.alphaTest.value = g ? 0.003921569 : 0.1; } // b65 mpinvis
     for (const m of this.materials) {
       m.setLight(packed);
       // RendererLivingEntity tints while hurtTime > 0 || deathTime > 0.

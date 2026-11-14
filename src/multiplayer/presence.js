@@ -8,7 +8,7 @@ import { itemCrumbs, burst } from '../fx.js';
 import { stepRemoteDeath } from './remote-death.js';
 import { stepRemoteHurt } from './remote-hurt.js';
 import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
-import { drawScoreLabel } from './remote-labels.js'; // b64 mpscoreboard
+import { labelRows, paintTagRow, tagPlan, tagHeights, invisibleToViewer } from './remote-labels.js'; // b64 mpscoreboard, b65 mpinvis
 
 // EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
 // eating and drinking change no third-person pose.
@@ -50,16 +50,14 @@ export class RemotePlayers {
     this.at = performance.now();
     const seen = new Set();
     for (const p of players) {
-      if (p.id === self) continue;
+      if (p.id === self) { this.me = p; continue; } // b65 mpinvis: the viewer's own name and position (name tag distance, team visibility)
       seen.add(p.id);
       let entry = this.entries.get(p.id);
       if (!entry) {
         const body = new PlayerBody(); body.reset(p, p.yaw, p.pitch);
         const renderer = new PlayerRenderer(this.scene.scene, this.scene, this.scene.textures.texture);
-        const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 40;
-        const texture = new THREE.CanvasTexture(canvas), material = new THREE.SpriteMaterial({ map: texture, depthTest: true });
-        const label = new THREE.Sprite(material); label.scale.set(2.8, .4375, 1); label.position.y = 2.2; renderer.root.add(label);
-        entry = { body, renderer, label, texture, material, canvas, name: p.name, last: { ...p }, use: createRemoteUse(), rand: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }; this.entries.set(p.id, entry);
+        const tags = { name: [this.tagSprite(renderer.root, 10), this.tagSprite(renderer.root, 11)], score: [this.tagSprite(renderer.root, 10), this.tagSprite(renderer.root, 11)] }; // b65: [dim, bright] per row
+        entry = { body, renderer, tags, name: p.name, last: { ...p }, use: createRemoteUse(), rand: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }; this.entries.set(p.id, entry);
         this.drawLabel(entry);
       }
       this.applySkin(entry.renderer, p.skin);
@@ -77,23 +75,41 @@ export class RemotePlayers {
     const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
     for (const entry of this.entries.values()) {
       const p = entry.state;
-      entry.renderer.update(entry.body, t, { visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
-      entry.label.visible = !p.sneak && !entry.hidden;
+      const invisible = !!p.invisible, viewer = this.me?.name ?? null; // b65 mpinvis
+      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
+      this.placeTags(entry, p, invisible, viewer);
     }
+  }
+  // b65 mpinvis: one tag sprite (256x40 canvas); `order` keeps the dim pass under the bright one.
+  tagSprite(root, order) {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 40;
+    const texture = new THREE.CanvasTexture(canvas), material = new THREE.SpriteMaterial({ map: texture, depthTest: order === 11, depthWrite: false, transparent: true });
+    const sprite = new THREE.Sprite(material); sprite.scale.set(2.8, .4375, 1); sprite.renderOrder = order; root.add(sprite);
+    return { canvas, texture, material, sprite };
+  }
+  // The native tag (tagPlan): hidden when invisible to the viewer or out of range, belowName row within 10 blocks, a sneaking name lower and depth-tested, a standing one dim through walls and bright in view.
+  placeTags(entry, p, invisible, viewer) {
+    const me = this.me, distSq = me ? (me.x - p.x) ** 2 + (me.y - p.y) ** 2 + (me.z - p.z) ** 2 : 0;
+    const plan = tagPlan({ invisible, sneak: !!p.sneak, distSq, name: p.name, viewerName: viewer, board: this.board }), show = plan.show && !entry.hidden;
+    const below = plan.below && entry.rows?.below != null, y = tagHeights({ sneak: !!p.sneak, below });
+    const [nd, nb] = entry.tags.name, [sd, sb] = entry.tags.score;
+    nd.sprite.visible = show; nb.sprite.visible = show && !plan.sneakStyle; nd.material.depthTest = plan.sneakStyle; nd.sprite.position.y = nb.sprite.position.y = y.name;
+    sd.sprite.visible = sb.sprite.visible = show && below; sd.sprite.position.y = sb.sprite.position.y = y.score;
   }
   // Plain canvas text is only a name tag; untrusted names are never HTML.
   drawLabel(entry) {
-    if (this.board) { entry.sbRev = this.board.revision; drawScoreLabel(entry, this.board); return; } // b64 mpscoreboard
-    const c = entry.canvas.getContext('2d');
-    c.clearRect(0, 0, 256, 40); c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(0, 0, 256, 40);
-    c.fillStyle = '#fff'; c.font = '24px monospace'; c.textAlign = 'center'; c.fillText(entry.name, 128, 28);
-    entry.texture.needsUpdate = true;
+    if (this.board) entry.sbRev = this.board.revision; // b64 mpscoreboard
+    const rows = this.board ? labelRows(this.board, entry.name) : { top: entry.name, below: null };
+    entry.rows = rows;
+    const paint = ([dim, bright], text) => { paintTagRow(dim.canvas, text, 'dim'); paintTagRow(bright.canvas, text, 'bright'); dim.texture.needsUpdate = bright.texture.needsUpdate = true; };
+    paint(entry.tags.name, rows.top);
+    if (rows.below != null) paint(entry.tags.score, rows.below);
   }
   dispose(entry) {
     entry.renderer.root.removeFromParent(); entry.renderer.fire.root.removeFromParent();
     for (const m of entry.renderer.materials) m.dispose();
     entry.renderer.held?.traverse(node => node.geometry?.dispose());
-    entry.texture.dispose(); entry.material.dispose();
+    for (const row of Object.values(entry.tags)) for (const t of row) { t.sprite.removeFromParent(); t.texture.dispose(); t.material.dispose(); }
   }
   clear() {
     for (const entry of this.entries.values()) this.dispose(entry);
