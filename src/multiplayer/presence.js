@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
-import { skinCanvas } from '../skin.js';
+import { skinCanvas, capeCanvas } from '../skin.js';
 import { ITEMS } from '../survival.js';
 import { BOW } from '../bow.js';
 import { JavaRandom } from '../java-random.js';
@@ -17,10 +17,10 @@ export const useFlags = p => ({ blocking: !!p.using && ITEMS[p.held?.id]?.kind =
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
-  constructor(scene, { skinUrl = () => null, board = null } = {}) {
+  constructor(scene, { skinUrl = () => null, capeUrl = () => null, board = null } = {}) {
     this.board = board; // b64 mpscoreboard: the replica Scoreboard (team-coloured names, the belowName score)
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
-    this.skinUrl = skinUrl; this.skins = new Map(); // hash → Promise<texture | null>
+    this.skinUrl = skinUrl; this.capeUrl = capeUrl; this.capes = new Map(); /* b71 mpcapes: hash -> Promise<texture | null> */ this.skins = new Map(); // hash → Promise<texture | null>
   }
   // Skins are re-normalized here even though the server checked them: the PNG
   // is decoded by the browser as untrusted data and only ever becomes pixels.
@@ -47,6 +47,26 @@ export class RemotePlayers {
     if (!hash) { uniform.value = renderer.steveMap; return; }
     void this.skin(hash).then(texture => { if (renderer.skinHash === hash) { uniform.value = texture ?? renderer.steveMap; renderer.hasSkin = !!texture; } });
   }
+  // b71 mpcapes: the cape texture of a player row's `cape` hash (AbstractClientPlayer.locationCape); null leaves the cloak off.
+  cape(hash) {
+    if (!hash) return Promise.resolve(null);
+    if (!this.capes.has(hash)) this.capes.set(hash, (async () => {
+      const url = this.capeUrl(hash);
+      if (!url) return null;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('cape ' + response.status);
+      const texture = new THREE.CanvasTexture(await capeCanvas(await response.blob()));
+      texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
+      return texture;
+    })().catch(() => null));
+    return this.capes.get(hash);
+  }
+  applyCape(renderer, hash) {
+    if ((renderer.capeHash ?? null) === (hash ?? null)) return;
+    renderer.capeHash = hash ?? null;
+    if (!hash) { renderer.setCape(null); return; }
+    void this.cape(hash).then(texture => { if (renderer.capeHash === hash) renderer.setCape(texture); });
+  }
   resetSkin(renderer) { if (renderer?.steveMap) renderer.base.uniforms.map.value = renderer.steveMap; if (renderer) { renderer.skinHash = null; renderer.hasSkin = false; } }
   sync(players, self) {
     this.at = performance.now();
@@ -62,7 +82,7 @@ export class RemotePlayers {
         entry = { body, renderer, tags, name: p.name, last: { ...p }, use: createRemoteUse(), rand: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }; this.entries.set(p.id, entry);
         this.drawLabel(entry);
       }
-      this.applySkin(entry.renderer, p.skin);
+      this.applySkin(entry.renderer, p.skin); this.applyCape(entry.renderer, p.cape); // b71 mpcapes
       entry.renderer.name = p.name; // b70: RenderPlayer compares the name with "deadmau5"
       { const d = stepRemoteDeath(entry, p.dead); if (d.burst && this.scene.fx) burst(this.scene.fx, 'explode', 20, { x: p.x, y: p.y - (p.ySize ?? 0), z: p.z, width: 0.6, height: 1.8 }, entry.rand); } // b60: S19 status 3 copy, 20 ticks of tilt then the poof
       if (entry.name !== p.name || (this.board && entry.sbRev !== this.board.revision)) { entry.name = p.name; this.drawLabel(entry); }
@@ -79,7 +99,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       const invisible = !!p.invisible, viewer = this.me?.name ?? null; // b65 mpinvis
-      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0, hideCape: !!p.hideCape /* b70: metadata 16 bit 1; the wire does not carry it yet */ });
+      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0, hideCape: !!p.hideCape /* b71: the wire carries it (cape-wire.js) */ });
       this.placeTags(entry, p, invisible, viewer);
     }
   }
@@ -118,6 +138,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) this.dispose(entry);
     this.entries.clear();
     for (const p of this.skins.values()) void p.then(t => t?.dispose());
+    for (const p of this.capes.values()) void p.then(t => t?.dispose()); this.capes.clear(); // b71 mpcapes
     this.skins.clear();
   }
 }

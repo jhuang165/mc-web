@@ -685,7 +685,7 @@ function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
   remoteLightning = null; // b66 mplightning
-  remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
+  remotePlayers?.resetSkin(playerRenderer); remotePlayers?.applyCape(playerRenderer, null); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, true) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
@@ -811,7 +811,7 @@ function applyMultiplayerTick(message) {
     $("#movement-label").textContent = flying ? 'FLYING' : 'WALKING';
     mpRiding = self.riding || false; // b61: seated in a vehicle the server carries
     playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0, riding: !!mpRiding, motion: { x: velocity.x, y: velocity.y, z: velocity.z, onGround: grounded, frozen: walkFrozen } /* b70 cape */ });
-    if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
+    if (playerRenderer) { remotePlayers?.applySkin(playerRenderer, self.skin); remotePlayers?.applyCape(playerRenderer, self.cape); } // seen in F5; b71 mpcapes: the local account's cape on the local body
     if (playerRenderer) playerRenderer.name = self.name; // b70: deadmau5 ears
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
@@ -929,9 +929,9 @@ async function joinMultiplayer(settings) {
     remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
-    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
-    client.start();
+    client.start(); client.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape at join
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
     printChat(snapshot.gameMode === 'survival' ? 'Shared Survival world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).' : 'Shared Creative world on ledoge0. World border: 128 × 128. Nether portals lead to the Nether; an eye-filled end portal leads to the End (no dragon yet).');
@@ -972,9 +972,9 @@ async function multiplayerDimension(client, settings, m) {
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats), hanging: new HangingRenderer(scene.scene, scene) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
-    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
+    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
-    client.start();
+    client.start(); client.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape at join
     syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
   } catch (error) {
@@ -1211,6 +1211,7 @@ function notes() {
 // GameSettings.setOptionValue / setOptionFloatValue: apply a change from the menu screens and
 // save the device preferences (options.txt).
 function saveOptions() {
+  if (multiplayer?.ready) multiplayer.capeSettings(options.showCape !== false); // b71 mpcapes: C15 showCape (the server sets the hide-cape flag)
   options.particles = particleSetting(options.particles);
   options.difficulty = difficultySetting(options.difficulty);
   options.guiScale = (Number(options.guiScale) || 0) & 3;
@@ -4610,6 +4611,7 @@ function animate(now) {
   playerRenderer?.update(playerBody, partial, {
     // RenderGlobal draws the view entity in first person too while it is sleeping (isPlayerSleeping).
     // The death screen keeps drawing the dying model until onDeathUpdate's setDead at deathTime 20 removes the entity.
+    hideCape: options.showCape === false, // b71 mpcapes: the server sets the flag from showCape (single player: the same option)
     visible: (thirdPersonView > 0 || bedSleep.sleeping) && (["playing", "inventory", "paused"].includes(screen) || (screen === "dead" && deathTime < 20)),
     deathTime: screen === "dead" ? deathTime : 0,
     sleeping: bedSleep.sleeping ? { pos: bedSleep.pos, offset: bedSleep.offset, facing: bedSleep.facing } : null,

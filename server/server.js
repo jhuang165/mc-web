@@ -8,7 +8,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
 import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
-import { MAX_SKIN_BYTES } from '../src/skin.js';
+import { MAX_SKIN_BYTES, MAX_CAPE_BYTES } from '../src/skin.js';
+import { setCapeShow } from '../src/multiplayer/cape-wire.js'; // b71 mpcapes
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial } from '../src/server-broadcast.js';
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
@@ -97,7 +98,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   const bearer = req => /^Bearer (\S{1,200})$/.exec(req.headers.authorization ?? '')?.[1] ?? null;
   const signedIn = req => { const a = accounts.authenticate(bearer(req)); if (!a) throw new AccountError(401, 'Sign in again.'); return a; };
   // Renames and skin changes reach connected players on the next presence tick.
-  const refresh = account => { for (const [id, owner] of owners) if (owner === account.id) Object.assign(simulation.players.get(id) ?? {}, { name: account.name, skin: account.skinHash }); };
+  const refresh = account => { for (const [id, owner] of owners) if (owner === account.id) Object.assign(simulation.players.get(id) ?? {}, { name: account.name, skin: account.skinHash, cape: account.capeHash ?? null }); };
   async function api(req, res, url) {
     // Browsers send Origin; a request from a page outside the allowlist is refused.
     // Command-line clients (no Origin) still need a session or the server key.
@@ -114,6 +115,20 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', ...cors(req) });
       return res.end(req.method === 'HEAD' ? undefined : png);
     }
+    const cape = /^\/api\/capes\/([a-f0-9]{20})\.png$/.exec(url.pathname); // b71 mpcapes
+    if (cape && (req.method === 'GET' || req.method === 'HEAD')) {
+      const png = accounts.capes.get(cape[1]);
+      if (!png) return json(res, 404, { error: 'No such cape' }, req);
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', ...cors(req) });
+      return res.end(req.method === 'HEAD' ? undefined : png);
+    }
+    if (route === 'PUT /api/cape') {
+      const account = signedIn(req);
+      if (req.headers['content-type'] !== 'image/png') throw new AccountError(415, 'Upload a PNG image.');
+      const out = await accounts.setCape(account, await body(req, MAX_CAPE_BYTES)); refresh(account);
+      return json(res, 200, { account: out }, req);
+    }
+    if (route === 'DELETE /api/cape') { const account = signedIn(req); const out = await accounts.clearCape(account); refresh(account); return json(res, 200, { account: out }, req); }
     if (route === 'POST /api/register') { const m = await jsonBody(req); return json(res, 201, await accounts.register(m, token), req); }
     if (route === 'POST /api/login') { const m = await jsonBody(req); return json(res, 200, await accounts.login(m), req); }
     if (route === 'POST /api/logout') { await accounts.logout(bearer(req)); return json(res, 204, null, req); }
@@ -204,7 +219,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
             social.forget(previous); simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
             old.replaced = true; old.close(1008, 'You logged in from another location');
           }
-          simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
+          simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
@@ -216,6 +231,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
+        else if (m.type === 'capeSettings') setCapeShow(simulation.players.get(id), m.show); // b71 mpcapes: C15 showCape -> the hide-cape flag
         else if (m.type === 'sleepLeave') simulation.sleep.leave(id); // b66 mpsleep: C0B action 3, leave bed
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
         else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids, m.fit); // item entities the client reaches (Survival)
