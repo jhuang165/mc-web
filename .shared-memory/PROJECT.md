@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 67 (2026-11-13, ten Sonnet tracks in `../wt67-<name>` on `batch67-<name>`, cut from 4f1a19470, merged --no-ff on `batch67-lead`; shared track rules `../artifacts/b67-lead/track-rules.md`; lead note `b67-lead-track.md`; no browser checks by request):
+- 0.96.0, by track:
+  - boatstand: `setWorldEntityBoxes` in `entities.js` `collisionBoxes`, `registerBoatWorld` / `worldBoatBoxes` in `entity-collision.js`: server players and mobs stand on boats (single player already did).
+  - pistons4: per-world `setWorldMovingBoxes` (`moving-boxes.js`), players collide with block 130 on the server, a push that lands a player gives fall damage (`landPlayer`), carts and boats are pushed, a client joining mid-move gets the moving tile.
+  - bonemeal3: dispensers fertilise every IGrowable through `bone-meal.js`, sapling and grass gates draw from the world Random (308 executed `BoneMealProbe` records).
+  - entityprobes2: item frame hits by snowballs, eggs, pearls, potions and XP bottles checked against 22 executed `EntityThrowFrameProbe` records (the port already matched); the connected client's own bobber line starts at its body (`ownFishingAngler`).
+  - sieges: `village-siege.js` (VillageSiege's state machine and draws); executed: 1.7.10 never spawns siege zombies (the spawn spot search always fails); legacy "Player" reputation mapped by the server option `legacyOwner`; per-dimension village saves found not to exist.
+  - catalogues2: `tools/build-content-catalogue.mjs` / `build-surface-catalogue.mjs` rows brought up to batch 66.
+  - mpsleep2: the sleeper's body box at bed y + 0.7375 (`BedSleep.boxY`) and 0.2 x 0.2 for mob targeting; sleeper click refusals and the weather re-roll delay found wrong.
+  - mpvehiclehits: `strikeThings` (lightning breaks boats and carts, a TNT cart explodes, frames and arrows); blasts release silverfish in single player and on the server; golem snowballs used up at players; golem dust on copies; snowball knockback on a player found wrong (zero damage returns early).
+  - serverchunks: `multiplayer/server-chunks.js`: per-dimension active chunk sets, radius 10 in HashSet order (executed `ActiveChunksProbe`), drive the lightning roll, ice and snow, cauldron fill and random block ticks through `activeChunkSource`; nobody online in a dimension ticks no chunk.
+  - mpsummon: `multiplayer/server-summon.js` (`/summon` on the server, in SERVER_COMMANDS); square tracker ranges (80, squid 64, dragon 160); the revenge fallback needs a live attacker.
+- Lead joins: `collisionBoxes` adds the world entity boxes before the moving boxes; catalogue rows for sieges, server `/summon`, silverfish blasts and golem dust.
+- Open: "Still open from batch 67" in `public/research/remaining-gaps.md`.
+
 Batch 66 (2026-11-13, ten Sonnet tracks in `../wt66-<name>` on `batch66-<name>`, cut from 7b61f6b49, merged --no-ff on `batch66-lead`; shared track rules `../artifacts/b66-lead/track-rules.md`; lead note `b66-lead-track.md`; no browser checks by request):
 - 0.95.0, by track:
   - mpvillage: `multiplayer/server-villagers.js`: villagers and village iron golems are server kinds (profession and age in the mob state), the village collection saved by player name, reputation hits, golem target lookup by name, generated-structure villagers once; `serverAnimalUse` takes a `villager` hook.
