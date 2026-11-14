@@ -32,7 +32,7 @@ import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, spawnEggIconHtml } from "./spawn-eggs.js";
 import { spawnEggMob } from "./spawn-egg-use.js";
 import { isThrowable } from "./player-throw-simulation.js";
-import { ITEM_POTION } from "./item-passes.js";
+import { ITEM_POTION, itemPasses } from "./item-passes.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
 import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-ui.js';
@@ -1083,6 +1083,10 @@ function icon(id, damage = 0, stack) {
   if (id === 385) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${(damageColor(damage | 0) & 0xffffff).toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${(damage | 0) & 16384 ? "potion_bottle_splash" : "potion_bottle_drinkable"}.png" alt=""></span>`;
   if (id === ITEM_SPAWN_EGG) return spawnEggIconHtml(damage); // spawn-eggs.js: primary and secondary colour layers
   if (id === ITEM_COMPASS) return compassIcon();
+  // Tinted flat block items (grass, fern, vine, lily pad, double plants): the grey blocks-sheet icon times getRenderColor, as RenderItem draws it (item-passes.js), not a baked image.
+  const flatTint = itemPasses(id, damage | 0);
+  if (flatTint && !flatTint.overlay && flatTint.base.startsWith("/media/1.7.10/blocks/"))
+    return `<span class="vanilla-item-icon tinted-item" style="--tint:#${flatTint.color.toString(16).padStart(6, "0")};--base:url('${flatTint.base}')" aria-hidden="true"><i></i></span>`;
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
   // Leather armor multiplies its base layer by display.color; the overlay stays untinted.
   if (item.tint)

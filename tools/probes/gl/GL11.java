@@ -14,6 +14,7 @@ public class GL11 {
   public static void glRotatef(float a, float x, float y, float z) { add("[\"R\"," + a + "," + x + "," + y + "," + z + "]"); }
   public static void glColor4f(float r, float g, float b, float a) { add("[\"C\"," + r + "," + g + "," + b + "," + a + "]"); }
   public static void glScalef(float x, float y, float z) { add("[\"S\"," + x + "," + y + "," + z + "]"); }
+  public static void glNormal3f(float x, float y, float z) {} // not recorded (Batch 65: the map background quad sets a normal)
   public static void glPushMatrix() { add("[\"P\"]"); }
   public static void glPopMatrix() { add("[\"O\"]"); }
   // Display lists (ModelRenderer compiles its boxes into one): events while a list is open go to that list, glCallList replays the list's events inline.

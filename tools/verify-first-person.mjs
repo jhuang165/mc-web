@@ -27,7 +27,7 @@ const held = (f) => path.join(root, "probes/held", f), fp = (f) => path.join(roo
 await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/FirstPersonProbe.java"), fp("bao.java"), fp("bnn.java"), fp("bam.java"), held("bqf.java"), held("bqi.java"), held("buu.java"), held("com/mojang/authlib/GameProfile.java"), path.join(root, "probes/gl/GL11.java")]);
 const { stdout } = await exec("java", ["-Djava.awt.headless=true", "-cp", cp, "FirstPersonProbe"], { maxBuffer: 1 << 27 });
 const data = JSON.parse(stdout.trim().split("\n").filter((l) => l.startsWith("{")).pop());
-assert.equal(data.cases.length, 42);
+assert.equal(data.cases.length, 67);
 const hashClass = async (id) => createHash("sha256").update((await exec("unzip", ["-p", jar, id + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
 const names = { bly: "ItemRenderer", add: "ItemStack", adb: "Item", bnn: "RenderManager (the probe shadows it)", bao: "Minecraft (the probe shadows it)", bam: "RenderHelper (the probe shadows it)", bqi: "texture helper (the probe shadows it)", buu: "OpenGlHelper (the probe shadows it)" };
 await writeFile(path.join(root, "../public/research/first-person-reference.json"), JSON.stringify({

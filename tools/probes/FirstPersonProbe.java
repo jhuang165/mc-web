@@ -5,7 +5,7 @@ import java.lang.reflect.Field;
 // subclass of EntityClientPlayerMP whose constructor is skipped (Unsafe), with the swing progress, the use count and the interpolated view fields set per case; the world answers
 // every light query with 0. Nothing in the item branch of bly.a is replaced, so every glTranslatef, glRotatef and glScalef the original makes is recorded in order, up to and
 // including the final ItemRenderer.renderItem (the sprite quads are recorded as ["D", n], a block item is the marker ["B", id] as in HeldPoseProbe).
-// Events: ["T", x, y, z], ["R", angle, x, y, z], ["S", x, y, z], ["P"], ["O"], ["C", r, g, b, a], ["D", n], ["B", id].
+// Events: ["T", x, y, z], ["R", angle, x, y, z], ["S", x, y, z], ["P"], ["O"], ["C", r, g, b, a], ["D", n], ["B", id], ["A"] (first-person arm drawn), ["M", frame] (map colours drawn).
 public class FirstPersonProbe {
   static Field field(Class<?> c, String name) throws Exception {
     for (; c != null; c = c.getSuperclass()) try { Field f = c.getDeclaredField(name); f.setAccessible(true); return f; } catch (NoSuchFieldException e) {}
@@ -43,11 +43,17 @@ public class FirstPersonProbe {
   static class World extends bjf {
     World() { super(null, null, 0, null, null); }
     public int c(int x, int y, int z, int w) { return 0; }
+    public ayl a(Class c, String name) { return new ayi(name); }
   }
   static class Blocks extends blm {
     Blocks() { super(null); }
     public void a(aji block, int damage, float brightness) { org.lwjgl.opengl.GL11.events.add("[\"B\"," + aji.b(block) + "]"); }
   }
+  // Map cases (Batch 65): RenderPlayer.renderFirstPersonArm (bop.a(yz)) and the map colour renderer MapItemRenderer.render (bbx.a(ayi, boolean)) are recorded as markers; the pose and the
+  // background quad between them are the unchanged bly.a code. The world hands every map lookup a fresh MapData, so the branch reaches the renderer call.
+  static class ArmRender extends bop { public void a(yz p) { org.lwjgl.opengl.GL11.events.add("[\"A\"]"); } }
+  static class MapRender extends bbx { MapRender() { super(null); } public void a(ayi data, boolean frame) { org.lwjgl.opengl.GL11.events.add("[\"M\"," + frame + "]"); } }
+  static class Renderer extends blt { Renderer() { super(null, null); } static bbx maps; public bbx i() { return maps; } }
   static String f(float v) { return Float.toString(v); }
   public static void main(String[] args) throws Exception {
     Field uf = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -61,6 +67,9 @@ public class FirstPersonProbe {
     Player p = (Player) unsafe.allocateInstance(Player.class);
     mc.h = p;
     mc.f = (bjf) unsafe.allocateInstance(World.class);
+    bnn.arm = (bno) unsafe.allocateInstance(ArmRender.class);
+    Renderer.maps = (bbx) unsafe.allocateInstance(MapRender.class);
+    mc.p = (blt) unsafe.allocateInstance(Renderer.class);
     bly items = (bly) unsafe.allocateInstance(bly.class);
     set(items, "d", mc);
     set(items, "h", unsafe.allocateInstance(Blocks.class));
@@ -73,13 +82,22 @@ public class FirstPersonProbe {
       {267, 0, 0, 0f, 1f, 1f, 1f}, {267, 0, 5, 0f, 1f, 1f, 1f}, {267, 0, 0, 0.3f, 1f, 1f, 1f}, {267, 0, 5, 0.3f, 1f, 1f, 1f}, {267, 0, 5, 0.6f, 0.4f, 0.2f, 0.25f},
       {257, 0, 5, 0f, 1f, 1f, 1f}, {261, 0, 0, 0f, 1f, 1f, 1f}, {261, 0, 5, 0f, 1f, 1f, 1f}, {261, 0, 40, 0f, 1f, 1f, 1f}, {261, 0, 71990, 0f, 1f, 1f, 1f}, {261, 0, 71998, 0f, 1f, 1f, 0.5f}, {261, 0, 71980, 0.2f, 0.8f, 0.7f, 0.25f}, {297, 0, 0, 0f, 1f, 1f, 1f}, {297, 0, 10, 0f, 1f, 1f, 1f},
       {373, 0, 0, 0f, 1f, 1f, 1f}, {373, 0, 12, 0f, 1f, 1f, 1f}, {1, 0, 0, 0f, 1f, 1f, 1f}, {1, 0, 0, 0.45f, 1f, 1f, 1f}, {50, 0, 0, 0.2f, 0.7f, 0.5f, 0.5f}, {280, 0, 0, 0.5f, 1f, 1f, 1f}, {346, 0, 0, 0f, 1f, 1f, 1f},
+      // Batch 65: filled map (id 358): rest, swing, equip animation, mid-swing with a turned view
+      {358, 0, 0, 0f, 1f, 1f, 1f}, {358, 0, 0, 0.3f, 1f, 1f, 1f}, {358, 0, 0, 0.7f, 0.5f, 0.3f, 0.25f}, {358, 0, 0, 0f, 0.2f, 0.1f, 0.5f}, {358, 3, 0, 1f, 1f, 1f, 0f},
     };
+    // map cases also get steeper pitches (the pitch term of the map pose)
+    float[][] pitchViews = { {-40f, -40f, 0, 0, 0, 0, 0, 0}, {35f, 30f, 20f, 10f, 30f, 25f, 15f, 10f}, {90f, 90f, 0, 0, 90f, 90f, 0, 0} };
     // Two view rows: level view, and a turned view where the arm's own lag shows in the sway rotations.
     float[][] views = { {0, 0, 0, 0, 0, 0, 0, 0}, {20f, 10f, 70f, 50f, 15f, 5f, 60f, 40f} };
     StringBuilder out = new StringBuilder("{\"cases\":[");
     int count = 0;
-    for (float[] v : views) {
+    java.util.List<float[]> all = new java.util.ArrayList<>();
+    for (float[] v : views) all.add(v);
+    for (float[] v : pitchViews) all.add(v);
+    for (float[] v : all) {
+      boolean pitchOnly = v[0] == -40f || v[0] == 90f || (v[0] == 35f && v[1] == 30f);
       for (float[] c : cases) {
+        if (pitchOnly && c[0] != 358) continue;
         adb item = adb.d((int) c[0]);
         if (item == null) continue;
         add stack = new add(item, 1, (int) c[1]);
