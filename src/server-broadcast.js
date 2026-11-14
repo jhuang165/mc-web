@@ -26,7 +26,7 @@ import { pickedAchievement } from "./achievements-live.js";
 import { summonHost } from "./multiplayer/server-summon.js"; // b67 mpsummon
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
-export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", "summon" /* b67 mpsummon */, ...SERVER_WORLD_COMMANDS]);
+export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", "summon" /* b67 mpsummon */, /* b68 mpadmin */ "op", "deop", "kick", "ban", "ban-ip", "pardon", "pardon-ip", "banlist", "whitelist", "stop", "save-all", "save-on", "save-off", "setidletimeout", ...SERVER_WORLD_COMMANDS]);
 export const SERVER_UNSUPPORTED_TEXT = (name) => `The /${name} command is not available on this server`;
 
 /** An S02PacketChat of this build: the component as JSON beside the legacy text older clients print. */
@@ -67,7 +67,9 @@ export class ServerSocial {
     if (simulation.achievements) simulation.achievements.sink = this; // b60: the biome and beacon observers read the per-player Achievements (server-achievements.js)
   }
   idOf(name) { for (const [id, p] of this.simulation.players) if (p.name.toLowerCase() === String(name).toLowerCase()) return id; return undefined; }
-  isOp(name) { return this.ops.has(String(name).toLowerCase()); }
+  // b68 mpadmin: an operator is a MC_WEB_OPS name (level = op-permission-level) or a /op entry of the admin lists (its own level).
+  isOp(name) { return this.ops.has(String(name).toLowerCase()) || (this.simulation.admin?.isOpName(name) ?? false); }
+  opLevel(name) { return this.simulation.admin?.levelOfName(name) ?? (this.ops.has(String(name).toLowerCase()) ? this.simulation.admin?.opLevel ?? 4 : 0); }
   everyone(message) { for (const id of this.simulation.players.keys()) this.deliver(id, message); }
   toPlayer(name, message) { const id = this.idOf(name); if (id !== undefined) this.deliver(id, message); }
 
@@ -121,13 +123,19 @@ export class ServerSocial {
     const sim = this.simulation, sender = sim.players.get(id);
     const roster = [...sim.players.values()].map((p) => ({ name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, mode: p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0 }));
     const op = this.isOp(sender.name), out = [];
+    // b68 mpadmin: /op /kick /ban /whitelist /stop ... run in server-admin.js (they are not in the single-player registry)
+    if (sim.admin.handles(line)) {
+      const live = () => [...sim.players.values()];
+      return sim.admin.run(line, { sender: sender.name, level: this.opLevel(sender.name), deliver: (name, c) => this.toPlayer(name, chatMessage(c)),
+        ops: () => live().filter((p) => this.isOp(p.name)).map((p) => p.name), online: () => live().map((p) => ({ id: p.id, name: p.name, uuid: p.resumeKey })) });
+    }
     const to = (name, message) => out.push({ to: name, message });
     const records = roster.map((r) => ({ name: r.name, position: () => r.position, mode: r.mode, level: 0 }));
     const rights = (name) => this.isOp(name);
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
     const host = Object.assign(Object.create(forPlayer(sender.name)), {
       name: sender.name, playerName: sender.name, cheats: op, scoreboard: sim.scoreboard, // b64 mpscoreboard: /scoreboard acts on the shared board
-      canUse: (command) => (op ? SERVER_COMMANDS.has(command.name) : canUse(command, false) || command.name === "list"),
+      canUse: (command) => (op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false) || command.name === "list"), // b68: op level
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
