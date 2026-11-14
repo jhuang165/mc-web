@@ -26,7 +26,9 @@ export class ServerPistons {
     this.ctx = ctx;
     const { redstone, world, sim } = ctx;
     this.events = []; this.fresh = [];
-    const here = () => [...sim.players.values()].filter(p => (p.dimension | 0) === ctx.dim && !p.dead && !sim.vehicles?.riding?.(p));
+    this.landings = []; // b68 pistons5: pushed players' landings waiting for the network phase of the next tick
+    // b68 pistons5: a riding player is in the list too: TileEntityPiston.func_145863_a moves every entity in the box (bytecode-read: no rider test), the rider as well as its cart, and the vehicle's next updateRiderPosition puts it back.
+    const here = () => [...sim.players.values()].filter(p => (p.dimension | 0) === ctx.dim && !p.dead);
     const game = {
       items: () => ctx.items()?.items, itemSystem: () => ctx.items(), orbs: () => ctx.xp()?.orbs, orbSystem: () => ctx.xp(),
       primed: () => ctx.dispense()?.primed, falling: () => ctx.falling()?.entities, player: () => null, mobs: () => ctx.mobs()?.mobs,
@@ -40,7 +42,9 @@ export class ServerPistons {
         get collidedH() { return p.collidedH; }, set collidedH(v) { p.collidedH = v; },
         get fallDistance() { return p.fallDistance; }, set fallDistance(v) { p.fallDistance = v; },
         // b67 pistons4: a push that lands the player takes the landing at once (player-environment.js landPlayer: fall damage, Creative skips it).
-        land: d => { if (!p.dead) landPlayer({ world: p.world, position: p.position, survival: p.survival, inWater: !!p.inWater }, d); },
+        // b68 pistons5: the landing is taken at the end of the NEXT tick (flush): natively the damage comes with the C03 on-ground packet, which MinecraftServer.updateTimeLightAndEntities
+        // processes ("connection", NetworkSystem.networkTick) after every world's tick and updateEntities (the tile entity loop that pushed the player).
+        land: d => { if (!p.dead && !sim.vehicles?.riding?.(p)) this.landings.push({ p, d, tick: sim.ticks, at: { x: p.position.x, y: p.position.y, z: p.position.z } }); },
       };
       const x = p.position.x, y = p.position.y, z = p.position.z, w = PHYSICS.width / 2;
       return { box: [x - w, y, z - w, x + w, y + PHYSICS.height, z + w], entity: p, move: (dx, dy, dz) => { pushPlayer(world, adapter, dx, dy, dz); } };
@@ -74,6 +78,12 @@ export class ServerPistons {
   }
   // End of the dimension's tick: each player in range gets the events and the moving blocks they have not been sent (new ones, and ones already mid-move when the player joined or came in range).
   flush() {
+    // b68 pistons5: landings of earlier ticks (the player's C03 arrives after the tile entity loop; see the land callback above).
+    if (this.landings.length) for (const l of this.landings.splice(0)) {
+      if (l.tick >= this.ctx.sim.ticks) { this.landings.push(l); continue; }
+      const p = l.p;
+      if (!p.dead && this.ctx.sim.players.get(p.id) === p) landPlayer({ world: p.world, position: l.at, survival: p.survival, inWater: !!p.inWater }, l.d);
+    }
     const events = this.events.splice(0);
     this.fresh.length = 0; // new tiles are in the live list below
     const live = this.ctx.redstone.pistonTiles().filter(t => !t.invalid && t.world);
