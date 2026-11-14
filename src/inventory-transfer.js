@@ -68,14 +68,14 @@ export function containerPending(host, x, y, z, waiter = `${x},${y},${z}`) {
 }
 
 // func_145893_b: the inventory of a block position, or null. A chest with a normal cube above it (or above its partner)
-// is closed to hoppers (BlockChest.func_149951_m); ocelots and minecart inventories are not modelled.
+// is closed to hoppers (BlockChest.func_149951_m); the entity search for chest and hopper minecarts is `host.cartAt` (cart-inventory.js).
 export function containerAt(host, x, y, z) {
   const id = host.world.get(x, y, z), key = `${x},${y},${z}`;
   if (id === BLOCK_CHEST || id === 162) { // chest or trapped chest (chests pair only with their own kind)
     // saved containers of an evicted column still loading: wait; a chest of a never-resident chunk gets its generated loot first (ring-chests.js)
     if (host.seedChest?.(x, y, z) === false) return null;
     const chests = host.chests(), open = openChest(host.world, chests, x, y, z);
-    if (!open) return null;
+    if (!open) return host.cartAt?.(x, y, z) ?? null; // a chest closed from above has no inventory: the entity search (cart-inventory.js) still runs
     const inv = open.inventory, parts = inv instanceof LargeChestInventory;
     return {
       key, keys: open.keys, size: inv.size, sides: null, valid: () => true,
@@ -105,7 +105,7 @@ export function containerAt(host, x, y, z) {
       sides: { slots: (side) => brewingSlots(side), canInsert: () => true, canExtract: () => true },
     });
   }
-  return null;
+  return host.cartAt?.(x, y, z) ?? null; // no inventory tile: a chest or hopper minecart whose box covers the cell (cart-inventory.js, func_145893_b)
 }
 export const newHopperTile = () => ({ items: Array(HOPPER_SLOTS).fill(null), cooldown: 0, name: null });
 
