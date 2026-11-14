@@ -26,20 +26,19 @@ test('predictUse: food needs hunger and is not Creative, sword blocks, potion dr
   assert.equal(predictUse(null, fake()), null);
 });
 
-test('a predicted eat shows the crumbs at 24..0, the final 16 and never eats or burps; a predicted drink sounds but applies nothing', () => {
+test('a predicted eat shows the crumbs at 24..0 and never eats or burps; a predicted drink sounds but applies nothing (b65: it no longer ends at count 0, see mpuse2-b65.test.js)', () => {
   let use = { id: food, ticks: 32 };
   const crumbs = [], sounds = [], s = fake();
-  for (let i = 0; i < 40 && use; i++) use = tickPlayerItemUse(use, food, s, { predicted: true, foodEffects: (id, n) => crumbs.push(n), sound: n => sounds.push(n) }).use;
-  assert.equal(use, null);
-  assert.deepEqual(crumbs, [5, 5, 5, 5, 5, 5, 16]);
-  assert.equal(crumbs.at(-1), 16);
+  for (let i = 0; i < 33 && use; i++) use = tickPlayerItemUse(use, food, s, { predicted: true, foodEffects: (id, n) => crumbs.push(n), sound: n => sounds.push(n) }).use;
+  assert.ok(use, 'the client never finishes the use itself (EntityPlayer.onUpdate: !world.isRemote)');
+  assert.deepEqual(crumbs, [5, 5, 5, 5, 5, 5, 5]);
   assert.deepEqual(sounds, [], 'the burp comes from the server');
   let drink = { id: 343, ticks: 32, drink: true }, finished = 0; const dsounds = [];
-  for (let i = 0; i < 40 && drink; i++) drink = tickPlayerItemUse(drink, 343, s, { predicted: true, finishDrinking: () => { finished++; return true; }, sound: n => dsounds.push(n) }).use;
-  assert.equal(drink, null);
+  for (let i = 0; i < 33 && drink; i++) drink = tickPlayerItemUse(drink, 343, s, { predicted: true, finishDrinking: () => { finished++; return true; }, sound: n => dsounds.push(n) }).use;
+  assert.ok(drink);
   assert.equal(finished, 0);
   assert.equal(dsounds.at(-1), 'random.drink');
-  assert.equal(dsounds.length, 7, '24, 20, 16, 12, 8, 4 and the finish');
+  assert.equal(dsounds.length, 7, '24, 20, 16, 12, 8, 4 and 0');
 });
 
 function joined() {

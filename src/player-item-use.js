@@ -24,12 +24,15 @@ export function tickPlayerItemUse(use, heldId, survival, {
   if (!use.drink && before <= 25 && before % 4 === 0) foodEffects(use.id, 5);
   const remaining = before - 1;
   let next = { ...use, ticks: remaining };
+  // b65 mpuse2 (yz.h bytecode-read): EntityPlayer.onUpdate runs onItemUseFinish only `if (--itemInUseCount == 0 && !world.isRemote)`. A connected client never finishes: its count goes
+  // on below zero (the crumbs / drink sound at every 4th count keep coming) until the server's S2F replaces the held stack, the held item changes or the button is released.
+  const finishes = !predicted;
 
   if (!use.drink) {
-    if (remaining <= 0) {
+    if (remaining <= 0 && finishes) {
       // updateItemUse(16) precedes ItemFood.onEaten, including its chance roll.
       foodEffects(use.id, 16);
-      if (predicted) { /* the server eats and sends the burp */ } else if (survival.eat(use.id, random)) {
+      if (survival.eat(use.id, random)) {
         sound("random.burp", { volume: 0.5 });
         renderHotbar();
         markUnsaved();
@@ -42,9 +45,9 @@ export function tickPlayerItemUse(use, heldId, survival, {
   // Drink's cadence is based on the pre-decrement count (32 through 1).
   if (before <= 25 && before % 4 === 0)
     sound("random.drink", { volume: 0.5, pitch: random() * 0.1 + 0.9 });
-  if (remaining <= 0) {
+  if (remaining <= 0 && finishes) {
     sound("random.drink", { volume: 0.5, pitch: random() * 0.1 + 0.9 });
-    if (!predicted && finishDrinking(survival)) {
+    if (finishDrinking(survival)) {
       renderHotbar();
       markUnsaved();
     }
