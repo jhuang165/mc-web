@@ -32,6 +32,7 @@ The port: `leashStep` (pure rules), `leashTick` (sets the home with `setHomeArea
 
 - The leash catenary (`leashStrip`) is still the recalled vanilla algorithm; it is not bytecode verified or pixel compared.
 - The player UUID is not a real UUID (single player); a mob held by a player at load only checks the 10-block box.
+- Batch 70 (docs sweep): stale. Export writes the player's real UUID (`exportPlayerUuid`, `owner-links.js`: the imported `playerUuid`, else the offline UUID of `Player`) into `Leash.UUIDMost/UUIDLeast` and `OwnerUUID` (`region-export.js`, `playerLeashTag`); import compares a holder UUID with it and drops a lead held by another UUID (`leads2.test.js`). Single player still has exactly one possible holder.
 - The browser does not ray-test the knot's 9-pixel box nor route left clicks to knots, so a hit on a knot (`knotAttack`) is only reachable from code, and a click on the fence acts on the knot.
 - The navigator's path budget (per-tick search count) applies to leash searches, so a crowded tick can delay a path by a tick; 1.7.10 has no such budget.
 - Not run in a browser; verified by the native probe, unit tests and the build.

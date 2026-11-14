@@ -27,6 +27,7 @@ Internal block 86 is the append-only live mapping for original block/item 116 (`
 - **Book and names (batch 10).** The table book, the GUI book and the `EnchantmentNameParts` option names are live; see [enchanting book](enchanting-book.md). The glyph shapes and the book texture are original, not the vanilla art.
 - **No enchantment hover text.** 1.7.10 has none; the native screen shows no preview either.
 - The book tile state is runtime only (not saved), and the table has no custom name.
+- Batch 70 (docs sweep): confirmed by code reading: `region-import.js` and `region-export.js` have no `EnchantTable` tile at all, so neither the table's `CustomName` (set natively by `BlockEnchantmentTable.onBlockPlacedBy` from an anvil-renamed item) nor the tile itself is read or written; the table works from the block alone. Gap stands.
 - Enchantment effects on tools, weapons and armor follow whichever other work has landed; this change only creates the enchantments. The glint is not part of this change.
 - `tools/verify-shadows.mjs` writes the anvil bounds as the full cube. The checked-in `shadow-reference.json` keeps the existing 0.125 anvil entry by hand next to the new table entry.
 - The screen layout (title position, button states and colours) follows the `GuiEnchantment` bytecode and the sheet; it has not been compared pixel by pixel in a browser.

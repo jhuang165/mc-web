@@ -27,6 +27,7 @@ Original classes: `ya` EntityEnderman (over `yg` EntityMob, `td` EntityCreature,
 - The original is legacy AI with no task list (`td.bq`). This build drives chase, wander and swimming through the shared task AI (`AttackOnCollide`, `Wander`, `Swim`, hurt-by) and takes the stare target from `enderman-live.js`; path choice and attack timing are therefore not bytecode-exact. `ya.bR` (target search), `ya.e()` (the tick rules) and `ya.a` (hurt) are exact.
 - The rules run on the entity's own `JavaRandom`, not a replayed world seed. Particles are not native-Random draws.
 - A pumpkin cannot be worn as a helmet in this build, so the exemption is tested but unreachable in play; the jack-o-lantern does not exempt.
+- Batch 70 (docs sweep): this bullet is stale. A carved pumpkin can be worn: `wearable-heads.js` (`armorTypeOf`, used by `inventory.js`) accepts it in the helmet slot, `main.js` draws the pumpkin blur, and `enderman-live.js` `playerView` passes `armor[3]` with id 67 as `helmet`, so the pumpkin exemption is reachable in play. The jack-o-lantern still does not exempt (as natively).
 - `renderAsNormalBlock` is approximated by `normalCube`; burning means `fire > 0`.
 - The hurt sound's pitch draw counts before the pitch (4 floats for entity-sourced hits, 0 for drown, 2 for generic) are empirical from the probe, not derived.
 - Sun, rain and drown rules are replayed on a world double, not the full `sv.e` base class; the probe's player has no inventory, so a held-block interaction (item use on enderman) is not covered.

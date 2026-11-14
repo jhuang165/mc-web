@@ -36,4 +36,5 @@ Not full parity. This covers the live armor and bow effects listed below, nothin
 ## Known limits
 
 - The Resistance potion step is not ported. Lightning (weather-simulation.js) still sets `survival.fire` directly, so Fire Protection does not shorten it. Damage reasons not in the source map count as generic (only Protection applies).
+- Batch 70 (docs sweep): both halves are stale. Resistance is applied for the player in `survival.js` (`applyPotionDamageCalculations`: `25 - (amplifier + 1) * 5` over 25, not for the void or absolute sources); the `armor-enchantments.js` comment saying it is not ported is out of date. Lightning shortens its fire time by Fire Protection: `weather.js` `struckByLightning` calls `setFireTicks(armor, 0, 8)` (pinned by `src/docs-sweep-b70.test.js`, Fire Protection IV gives 64 ticks). Whether mobs apply their own Resistance was not checked.
 - The glint rendering was syntax-checked and the logic replayed, but not visually checked in a browser.

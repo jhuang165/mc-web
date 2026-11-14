@@ -26,6 +26,7 @@ event, loot stack/wear/enchantments, orb, statistic, drop position and velocity)
 ## Known differences
 
 - Batch 69 (docs sweep): a statistics system exists (`stats.js` has `fishCaught`, `junkFished`, `treasureFished`) and the dedicated server stores them (`multiplayer/server-fishing.js`). Whether the single-player fishing path adds them was not verified.
+- Batch 70 (docs sweep): single player adds them. `fishing.js` marks each catch with `STAT[kind]` (`stat.fishCaught`, `stat.junkFished`, `stat.treasureFished`), `fishing-simulation.js` queues the event, and `statsLive.fishing(fishing)` (`stats-live.js`) increments the statistic; `main.js` calls it every tick and after `useFishingRod`.
 - The `wake` particle (EntityFishWakeFX) has no browser particle; the bubble and splash particles are drawn.
 - Batch 69 (docs sweep): batch 64 and 67 added server fishing and `ownFishingAngler` (`main.js`); the angler-hook claim was not re-checked. Older text: the hook cannot hook its own angler; hooked entities are mobs only, pulled by adding to their velocity.
 - The line tip for other views uses the camera yaw instead of renderYawOffset; the rod model does not use the mirrored

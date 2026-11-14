@@ -25,6 +25,7 @@ Original classes: Blaze `xx`, Ghast `yd` (extends `sr`/EntityFlying), EntityFire
 - Models, renderers, crackle and smoke, level-event sounds and the small-fireball block case were not run against the original.
 - The ghast render scale is a constant 4.5, assuming the client copy's attack counters never change.
 - Audio files are not imported (the lead imports them); the media importer regex only gained `blaze|ghast`. Missing sounds fail silently.
+- Batch 70 (docs sweep): stale. The files are in `public/audio/1.7.10/mob/blaze` (breathe1-4, death, hit1-4) and `mob/ghast` (moan1-7, scream1-5, charge, fireball4, death, affectionate_scream) and listed in `public/audio/1.7.10/manifest.json`.
 - Hover offsets after the first gaussian pair are not replayed in the probe (shared Entity.rand).
 - Not checked in a browser. Full parity is not claimed.
 
