@@ -32,7 +32,7 @@ import { entityBrightness } from "./display-light.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, flatFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-render.js";
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
-import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
+import { hasVoidParticles, voidFogYFactor, voidFogFar, dimensionFogRange } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
 import { PostProcessor, anaglyphFog } from "./post-shaders.js";
 import { installAnaglyphUpload, meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js"; // 3D Anaglyph at the native conversion points
@@ -701,6 +701,9 @@ export class VoxelScene {
         far = voidFogFar({ far: this.distance, skyLight: sky, y, creative: !!pv.creative, hasVoid: hasVoidParticles({ worldType: this.world.worldType, dimension: this.dimension ?? 0 }) });
       if (far < this.distance) { u.fogFar.value = far; u.fogNear.value = far * 0.75; }
     }
+    // setupFog tail (b72 cakefog72): the Nether and the End (WorldProvider.doesXZShowFog) fog from far * 0.05 to min(far, 192) * 0.5 in the plain-air branch.
+    const dimFog = !bf && !underwater && !lava ? dimensionFogRange({ far: u.fogFar.value, dimension: this.dimension ?? 0 }) : null;
+    if (dimFog) { u.fogNear.value = dimFog.start; u.fogFar.value = dimFog.end; }
     const sky = underwater || lava || blind ? fog : (this.post.anaglyphOn && !this.post.legacyAnaglyph ? anaglyphFog : (c) => c)(skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial));
     this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), anaglyph: this.post.anaglyphOn && !this.post.legacyAnaglyph, moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
     this.clouds.setFancy(render.fancy);

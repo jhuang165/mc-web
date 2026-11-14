@@ -24,3 +24,4 @@ Saved device settings: `graphics` (true = Fancy), `ao` 0..2, `clouds`, `mipmapLe
 ## 3D Anaglyph (batch 27)
 Converted at texture upload and for fog/sky/cloud colours, merged by channel masks; toggling refreshes resources. Details and numbers in `post-shaders.md`. Vertex-colour conversion (RenderBlocks), the font colour table and the DOM GUI are not ported.
 - Batch 71: the Fancy-only vignette is drawn now: `src/vignette.js` (smoothing: start 1.0, target clamp(1 - brightness), +1 % per drawn HUD frame, bytecode-read from `bbv.a(FII)`), `ScreenOverlays.renderVignette` (misc/vignette.png, blend ZERO / ONE_MINUS_SRC_COLOR, grey = the smoothed value). No world border tint exists in 1.7.10. Only a browser would show the look.
+- Batch 72 (2026-11-14): Nether and End fog now start at `far * 0.05` and end at `min(far, 192) * 0.5` (`dimensionFogRange`, see `void-fog.md`); the Overworld keeps `far * 0.75` .. `far`.

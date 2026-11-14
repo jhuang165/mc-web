@@ -26,6 +26,14 @@ export function voidFogFar({ far, skyLight, y, creative = false, hasVoid = true 
   }
   return far;
 }
+// aqo.b(II)Z (WorldProvider.doesXZShowFog): false by default, true in the Nether (aqp) and the End (aqr), bytecode-read b72.
+export const doesXZShowFog = (dimension = 0) => dimension === -1 || dimension === 1;
+// EntityRenderer.setupFog (blt) offsets 587-637, run after the linear far plane (and the void term) is set in the plain-air branch: where the provider shows XZ fog the
+// start becomes far * 0.05 and the end min(far, 192) * 0.5 (all in float). Null elsewhere. Water, lava and Blindness branches never reach it.
+export function dimensionFogRange({ far, dimension = 0 }) {
+  if (!doesXZShowFog(dimension)) return null;
+  return { start: f(far * f(0.05)), end: f(Math.min(far, 192) * f(0.5)) };
+}
 // WorldClient.doVoidFogParticles: `roll` is World.rand.nextInt(8) drawn before the provider test.
 export function voidParticleSpawns(roll, y, hasVoid = true) {
   return !(roll <= y) && hasVoid;
