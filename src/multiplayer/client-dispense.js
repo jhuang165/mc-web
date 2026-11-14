@@ -7,7 +7,7 @@ import { GaussianRandom } from '../projectiles.js';
 const ARROW_FIELDS = ['yaw', 'pitch'];
 
 export class RemoteDispense {
-  // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row)
+  // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row), eyeTrail(row, vx, vy, vz)
   constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; }
   clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; }
   apply(message) {
@@ -31,6 +31,7 @@ export class RemoteDispense {
         row.kind = d.k === 'r' ? 'firework' : d.kind; row.damage = d.damage ?? 0;
         if (d.scale !== undefined) { row.scale = d.scale; row.fullbright = true; } // a fire charge: RenderFireball scale, full brightness
         if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
+        if (d.kind === 'eyeOfEnder') this.hooks.eyeTrail?.(row, row.x - row.px, row.y - row.py, row.z - row.pz); // b65 mpdragon2: the copy draws the flying eye's portal trail itself (EntityEnderEye.onUpdate)
         next.b.push(row);
       }
     }

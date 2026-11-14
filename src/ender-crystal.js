@@ -20,7 +20,7 @@ export function crystalTick(e, end, getBlock, setBlock) {
 }
 
 // EntityEnderCrystal.attackEntityFrom: invulnerable -> false; otherwise true. On the server a
-// living crystal drops to health 0, dies and explodes at power 6 with fire (flaming). The client
+// living crystal drops to health 0, dies and explodes at power 6 (createExplosion: smoking, NOT flaming; b65 bytecode). The client
 // copy changes nothing. A dead crystal answers true without a second explosion.
 // Returns { result, explode }.
 export function crystalHit(e, remote) {

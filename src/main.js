@@ -176,7 +176,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
-import { EyesOfEnder, spawnEyeShatter } from "./eye-of-ender-live.js";
+import { EyesOfEnder, spawnEyeShatter, spawnEyeTrail } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
@@ -715,6 +715,7 @@ function makeRemoteDispense() {
     spark: (...a) => fireworkFx.spawnSpark(...a),
     poof: row => projectiles.clientImpact(row),
     shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
+    eyeTrail: (row, vx, vy, vz) => spawnEyeTrail(scene.fx, row, vx, vy, vz), // b65 mpdragon2: the flying eye's portal trail (the copy draws it, as EntityEnderEye.onUpdate does)
     // b63 (mpprojectiles2): S0D collect for an arrow: EntityPickupFX flies it to whoever took it (this player, or another one from the last player rows)
     collect: (i, by, at) => {
       const who = by === multiplayer?.id ? position : mpPlayerRows.find(q => q.id === by);

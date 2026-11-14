@@ -198,12 +198,12 @@ const flat = (isEnd) => ({ numericSeed: 1, isEnd, sets: [], solid: (x, y, z) => 
 const crystalWorld = (isEnd) => new EntityWorld(flat(isEnd), [{ id: "c0", type: "ender_crystal", x: 64.5, y: 1, z: 64.5, health: 5, innerRotation: 7 }], () => 0.5);
 const surv = { health: 20, creative: false, time: 6000, damage() {}, scaledDamage() {}, count: () => 0 };
 
-test("EntityWorld: a hit explodes the crystal once at power 6 with fire and removes it", () => {
+test("EntityWorld: a hit explodes the crystal once at power 6 without fire (createExplosion: flaming false) and removes it", () => {
   const w = crystalWorld(false), e = w.entities[0];
   assert.equal(w.attackEntityFrom(e, 1), true);
   const ex = w.events.filter((v) => v.explode);
   assert.equal(ex.length, 1);
-  assert.deepEqual([ex[0].explode.size, ex[0].explode.flaming, ex[0].explode.smoking], [6, true, true]);
+  assert.deepEqual([ex[0].explode.size, ex[0].explode.flaming, ex[0].explode.smoking], [6, false, true]);
   assert.equal(w.attackEntityFrom(e, 1), true);
   assert.equal(w.events.filter((v) => v.explode).length, 1);
   w.tick({ x: 0, y: 0, z: 0 }, surv);

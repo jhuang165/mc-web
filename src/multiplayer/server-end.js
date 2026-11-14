@@ -110,6 +110,7 @@ export class ServerEnd {
   conquer(p) {
     if (p.conquered) return true;
     p.conquered = true;
+    this.n?.mobs.removePlayer(p.id); // b65 mpdragon2: travelToDimension(1 -> 1) calls World.removeEntity(player) (ahb.e, bytecode-read): the waiting player leaves the End's mob view (no target, no blast or wing hit); finishCredits re-adds it elsewhere
     this.dims.sim.achievements.award(p, 'theEnd2');
     (p.dimOut ??= []).push({ type: 'dragonCredits', reason: 4 });
     return true;

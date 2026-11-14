@@ -23,6 +23,15 @@ export function spawnEyeShatter(fx, x, y, z, random = new JavaRandom(Math.floor(
   for (const p of shatterEffects(x, y, z, random)) fx.spawn(p.name, p.x, p.y, p.z, p.vx, p.vy, p.vz);
 }
 
+// b65 mpdragon2: EntityEnderEye.onUpdate draws its trail on the client copy too (zd.h, bytecode-read: the portal/bubble code after the isRemote-guarded homing runs on both sides, the server's
+// spawnParticle is a no-op). A multiplayer copy knows its position and last tick's, so the motion is their difference. `inWater(x, y, z)` picks the 4 bubbles over the portal particle.
+export function spawnEyeTrail(fx, eye, vx, vy, vz, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), inWater = false) {
+  const x = eye.x - vx * 0.25, y = eye.y - vy * 0.25, z = eye.z - vz * 0.25;
+  if (inWater) { for (let i = 0; i < 4; i++) fx.spawn("bubble", x, y, z, vx, vy, vz); return; }
+  const r1 = random.nextDouble(), r2 = random.nextDouble();
+  fx.spawn("portal", x + r1 * 0.6 - 0.3, y - 0.5, z + r2 * 0.6 - 0.3, vx, vy, vz);
+}
+
 const ROWS = new WeakMap(); // one renderer row per entity (or view)
 export class EyesOfEnder {
   constructor(random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
