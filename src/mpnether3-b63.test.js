@@ -95,6 +95,7 @@ test('a blaze spawner in the Nether spawns blazes near a Nether player only', { 
 
 test('a spawner does nothing with no player of its dimension in range', { timeout: 120000 }, () => {
   const { s, a, n, w } = fixture({ mobs: true });
+  s.gameRules.doMobSpawning = 'false'; // b72 lead: no natural Nether spawns (a fortress blaze could appear by chance once the caps went, spawncaps72); spawners ignore the rule, as natively
   w.put(70, 70, 64, MOB_SPAWNER, 0, false);
   n.tileEntities.spawners.add({ x: 70, y: 70, z: 64, EntityId: 'Blaze' });
   a.position.copy({ x: 45.5, y: 70, z: 45.5 }); // 25+ blocks away

@@ -124,13 +124,15 @@ test('WebSocket path: dig messages break the block, the item shows in the tick, 
   ws.send(JSON.stringify({ type: 'dig', status: 0 }));
   await new Promise(r => setTimeout(r, 60));
   ws.send(JSON.stringify({ type: 'dig', status: 2 }));
-  const withItem = await until(m => m.type === 'tick' && m.items?.length === 1, 'tick with an item');
-  assert.equal(withItem.items[0].stack.id, 2);
+  // b72 lead: the server sends items as cadence `itrack` packets (mpcadence72), not the per-tick items list
+  const withItem = await until(m => m.type === 'tick' && m.itrack?.some(r => r.k === 'item' && r.p.some(q => q.type === 'spawn')), 'tick with an item');
+  const row = withItem.itrack.find(r => r.k === 'item');
+  assert.equal(sim.items.items.length, 1); assert.equal(sim.items.items[0].stack.id, 2);
   assert.equal(sim.world.get(64, 11, 61), 0);
   const item = sim.items.items[0];
   item.delay = 0; item.mx = item.mz = 0;
   player.position.copy({ x: item.x, y: 10, z: item.z });
-  ws.send(JSON.stringify({ type: 'pickup', ids: [withItem.items[0].i] }));
+  ws.send(JSON.stringify({ type: 'pickup', ids: [row.i] }));
   const collect = await until(m => m.type === 'collect', 'collect');
   assert.deepEqual([collect.stack.id, collect.stack.count], [2, 1]);
   ws.close();

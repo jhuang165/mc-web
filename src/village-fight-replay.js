@@ -7,6 +7,7 @@ import { fromOriginal } from "./block-registry.js";
 import { revengeOf } from "./revenge-target.js"; // the raw field: a dead target is cleared on the target's next own update, as natively
 import { Arrows, arrowTargets } from "./bow.js";
 import { mobTargets } from "./projectiles.js";
+import { candidateOrder } from "./candidate-order.js";
 import { reinforcementBase } from "./difficulty.js";
 import { setPathNodeCap } from "./pathfinding.js";
 
@@ -74,7 +75,8 @@ function plain(blocks = []) {
 
 export function replayFight(r, hooks = {}) {
   const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 30000 expanded points)
-  try { return replayFightUncapped(r, hooks); } finally { setPathNodeCap(was); }
+  const flat = candidateOrder.flat; candidateOrder.flat = true; // b72 lead: VillagerProbe's world double keeps one flat entity list (World.entities), not chunk lists (candidate-order.js)
+  try { return replayFightUncapped(r, hooks); } finally { setPathNodeCap(was); candidateOrder.flat = flat; }
 }
 function replayFightUncapped(r, hooks) {
   const legacyRows = r.bright !== undefined; // batch 38 records: a spider's and a pigman's row has entityToAttack (td.bm); older ones the AI-task target (always none for them)

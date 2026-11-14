@@ -215,12 +215,12 @@ test("a thrown egg hits the ground, bursts eight particles and hatches a chick t
   assert.ok(hatched >= 1);
 });
 
-test("hatch checks the 40-mob cap and the sample chick of the probe is a child at the egg's position", () => {
+test("hatch has no 40-mob cap (b72 spawncaps72: EntityEgg spawns the chick unconditionally) and the sample chick of the probe is a child at the egg's position", () => {
   const s = reference.hatch.sample;
   assert.deepEqual([s.age, s.child, s.x, s.y, s.z, s.yaw, s.pitch], [-24000, true, 10.5, 20.25, 30.75, 135, 0]);
   const list = Array.from({ length: 40 }, (_, i) => ({ id: "mob-" + (i + 1), type: "pig", x: 64 + i * 0.01, y: 0, z: 64, health: 10 }));
   const ew = chickenWorld({}, () => 0.5, list);
-  assert.equal(ew.hatch(10.5, 1, 30.5, 0), null);
+  assert.ok(ew.hatch(10.5, 1, 30.5, 0), "40 mobs no longer block a hatch (only the runaway guard does)");
   const open = new EntityWorld(grass, [], () => 0.5), c = open.hatch(s.x, s.y, s.z, s.yaw);
   assert.deepEqual([c.x, c.y, c.z], [s.x, s.y, s.z]);
 });

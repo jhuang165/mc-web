@@ -1002,8 +1002,8 @@ export class EntityWorld {
     });
   }
   // EntityEgg.onImpact (zl.a): a chick (EntityChicken, setGrowingAge(-24000)) at the
-  // egg's position with the egg's rotationYaw (Java degrees) and pitch 0. Capped at
-  // the 40 mobs a save keeps.
+  // egg's position with the egg's rotationYaw (Java degrees) and pitch 0. No mob cap
+  // natively (b72 spawncaps72); only the runaway guard stops it.
   hatch(x, y, z, yawDegrees) {
     if (this.entities.length >= SPAWN_RUNAWAY_GUARD) return null;
     const chick = this.create("chicken", x, y, z);
