@@ -74,7 +74,7 @@ test('trackers: an item in a column not yet sent is not tracked; once the column
   s.snapshot('a');
   const item = s.items.spawn(makeStack(3, 1, 0), 40.5, 70.5, 40.5, { delay: 0, motion: [0, 0, 0] }); // column 2,2, 45 blocks from the player: in range
   const seen = [], sees = [];
-  for (let i = 0; i < 7; i++) { const m = s.tick(); sees.push(s.chunkViews.sees('a', 2, 2)); seen.push(!!s.objectTracker.messageFor('a', m, 0).items?.some(r => r.i === item.eid)); }
+  for (let i = 0; i < 7; i++) { const m = s.tick(); sees.push(s.chunkViews.sees('a', 2, 2)); s.objectTracker.messageFor('a', m, 0); seen.push(!!s.objectTracker.state(0).views.get('a')?.tracked.has(`item:${item.eid}`)); } // b72 lead: cadence mode (mpcadence72) sends itrack packets, not the items list, so read the tracked set
   assert.equal(seen[0], false, 'first tick: the column is not out');
   assert.deepEqual(seen, sees, 'listed exactly while the column is sent');
   assert.equal(seen.at(-1), true);
