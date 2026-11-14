@@ -25,7 +25,7 @@ import { runCartCommand, setCartCommand } from "./multiplayer/server-cart-comman
 import { pickedAchievement } from "./achievements-live.js";
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
-export const SERVER_COMMANDS = new Set(["tell", "me", "say", "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", ...SERVER_WORLD_COMMANDS]);
+export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", ...SERVER_WORLD_COMMANDS]);
 export const SERVER_UNSUPPORTED_TEXT = (name) => `The /${name} command is not available on this server`;
 
 /** An S02PacketChat of this build: the component as JSON beside the legacy text older clients print. */
@@ -43,13 +43,13 @@ export function chatDisplay(message) {
 }
 /** A player's plain chat line: NetHandlerPlayServer sends ChatComponentTranslation("chat.type.text", player component, text) to everyone. */
 // `name` and `text` stay for clients that build the line themselves; `json` is the component.
-export const playerChatMessage = (name, line) => ({ type: "chat", name, text: line, json: serializeComponent(chatTextComponent(name, line)) });
+export const playerChatMessage = (name, line, formatted = name) => ({ type: "chat", name, text: line, json: serializeComponent(chatTextComponent(formatted, line, name)) });
 
 /** The CombatTracker message of a void death (Entity.G: attackEntityFrom(outOfWorld, 4), or /kill's 1000 damage). */
-export function voidDeathComponent(name) {
+export function voidDeathComponent(name, rawName = name) {
   const tracker = new CombatTracker();
   tracker.record(damageSource("void"), 20, 1000, 0, { alive: false });
-  return deathComponent(tracker, name, { rawName: name });
+  return deathComponent(tracker, name, { rawName });
 }
 
 const unsupported = (text) => new CommandException("commands.generic.exception", [text], "unsupported");
@@ -70,19 +70,26 @@ export class ServerSocial {
   everyone(message) { for (const id of this.simulation.players.keys()) this.deliver(id, message); }
   toPlayer(name, message) { const id = this.idOf(name); if (id !== undefined) this.deliver(id, message); }
 
+  /** The team-formatted name of EntityPlayer.func_145748_c_ (prefix + name + suffix, b64 mpscoreboard); the plain name without a team. */
+  formatted(name) { return this.simulation.scoreboard?.formatName(name) ?? name; }
   /** A plain chat line, to every player. */
-  chat(id, line) { this.everyone(playerChatMessage(this.simulation.players.get(id).name, line)); }
+  chat(id, line) { const name = this.simulation.players.get(id).name; this.everyone(playerChatMessage(name, line, this.formatted(name))); }
+  /** b64 mpscoreboard: the S3B / S3C / S3D / S3E packets the scoreboard queued, to every player, in order. */
+  flushScoreboard() { const packets = this.simulation.scoreboard?.take(); if (packets?.length) this.everyone({ type: "sb", packets }); }
+  /** ServerConfigurationManager.func_96456_a: a joining player receives the whole scoreboard. */
+  scoreboardJoin(id) { const sb = this.simulation.scoreboard, packets = sb ? sb.joinPackets() : []; if (packets.length) this.deliver(id, { type: "sb", packets }); }
   /** EntityPlayerMP.onDeath: the death message to every player. */
   death(id, component = null) {
     const p = this.simulation.players.get(id);
-    if (p) this.everyone(chatMessage(component ?? voidDeathComponent(p.name)));
+    if (p) this.everyone(chatMessage(component ?? voidDeathComponent(this.formatted(p.name), p.name)));
   }
   /** EntityPlayer.triggerAchievement: a locked-parent or repeated one is silent; the first unlock is announced to every player. */
   achievementsOf(id) {
     let a = this.achievements.get(id);
     if (!a) {
       const p = this.simulation.players.get(id);
-      a = new Achievements({ onUnlock: (ach) => { p.achievementsSaved = a.save(); this.everyone(chatMessage(achievementComponent(p.name, ach.id))); } });
+      a = new Achievements({ onUnlock: (ach) => { p.achievementsSaved = a.save(); this.everyone(chatMessage(achievementComponent(p.name, ach.id, this.formatted(p.name)))); } });
+      a.onTrigger = (achId) => this.simulation.scoreboard?.achievement(p.name, achId); // b64: the achievement.* criteria count every trigger
       if (p.achievementsSaved) a.load(p.achievementsSaved);
       this.achievements.set(id, a);
     }
@@ -96,6 +103,7 @@ export class ServerSocial {
   setCartCommand(id, key, command) { return setCartCommand(this, id, key, command); }
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
+    for (const p of this.simulation.players.values()) this.simulation.scoreboard?.tickHealth(p); // b64 mpscoreboard: EntityPlayerMP.onUpdate health criteria
     for (const cart of this.simulation.vehicles?.cartCommands?.splice(0) ?? []) if (!cart.dead) runCartCommand(this, cart, { commands: SERVER_COMMANDS, chatMessage }); // b63: command block carts that an activator rail triggered this tick
     const events = this.simulation.events?.splice(0) ?? [];
     for (const e of events) {
@@ -103,6 +111,7 @@ export class ServerSocial {
       else if (e.type === "award") this.award(e.id, e.achievement); // server-achievements.js: crafted, smelted, thrown diamonds, mob kills
       else if (e.type === "pickup") { const a = pickedAchievement(e.item); if (a) this.award(e.id, a); } // EntityItem.onCollideWithPlayer (xk.b_)
     }
+    this.flushScoreboard();
     return events.length;
   }
 
@@ -116,7 +125,7 @@ export class ServerSocial {
     const rights = (name) => this.isOp(name);
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
     const host = Object.assign(Object.create(forPlayer(sender.name)), {
-      name: sender.name, playerName: sender.name, cheats: op,
+      name: sender.name, playerName: sender.name, cheats: op, scoreboard: sim.scoreboard, // b64 mpscoreboard: /scoreboard acts on the shared board
       canUse: (command) => (op ? SERVER_COMMANDS.has(command.name) : canUse(command, false) || command.name === "list"),
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
@@ -137,6 +146,7 @@ export class ServerSocial {
     host.listPlayers = (uuids) => ({ names: [...sim.players.values()].map((q) => (uuids ? `${q.name} (${q.resumeKey})` : q.name)), max: host.maxPlayers });
     host.printTo = (name, component) => to(name, component);
     createCommandRunner(host).run(line);
+    this.flushScoreboard();
     // The per-player achievements of a target are reached through forPlayer (below); deliver everything collected in order.
     for (const { to: name, message } of out) {
       const wire = typeof message === "string" || isComponent(message) ? chatMessage(message) : message;

@@ -185,6 +185,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
           joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
+          social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;
         }

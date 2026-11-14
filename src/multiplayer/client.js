@@ -19,8 +19,8 @@ export function restoreReplica(snapshot) {
 const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: window 0 (server-inventory.js)
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose']);
 export class DedicatedClient {
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {} } = {}) {
-    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {}, onScoreboard = () => {} } = {}) {
+    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onScoreboard, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -58,6 +58,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
+    if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
@@ -99,6 +100,7 @@ export class DedicatedClient {
     if (message.type === 'tick' && message.tick > this.lastTick) { message = expandChunks(message); this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
     if (message.type === 'stats') this.onStats(message); // b63 mpstats: S37
+    if (message.type === 'sb') this.onScoreboard(message); // b64 mpscoreboard: S3B / S3C / S3D / S3E
   }
   // C12 update sign: the four lines of a sign this player placed (the server checks it is the editor).
   updateSign(x, y, z, text) { this.send({ type: 'sign', x, y, z, text }); }

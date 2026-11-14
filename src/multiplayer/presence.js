@@ -8,6 +8,7 @@ import { itemCrumbs, burst } from '../fx.js';
 import { stepRemoteDeath } from './remote-death.js';
 import { stepRemoteHurt } from './remote-hurt.js';
 import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
+import { drawScoreLabel } from './remote-labels.js'; // b64 mpscoreboard
 
 // EntityOtherPlayerMP with the item-in-use flag (entity metadata 0, bit 4): the pose follows the held stack's EnumAction, so a sword blocks and a bow aims;
 // eating and drinking change no third-person pose.
@@ -15,7 +16,8 @@ export const useFlags = p => ({ blocking: !!p.using && ITEMS[p.held?.id]?.kind =
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
-  constructor(scene, { skinUrl = () => null } = {}) {
+  constructor(scene, { skinUrl = () => null, board = null } = {}) {
+    this.board = board; // b64 mpscoreboard: the replica Scoreboard (team-coloured names, the belowName score)
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
     this.skinUrl = skinUrl; this.skins = new Map(); // hash → Promise<texture | null>
   }
@@ -62,7 +64,7 @@ export class RemotePlayers {
       }
       this.applySkin(entry.renderer, p.skin);
       { const d = stepRemoteDeath(entry, p.dead); if (d.burst && this.scene.fx) burst(this.scene.fx, 'explode', 20, { x: p.x, y: p.y - (p.ySize ?? 0), z: p.z, width: 0.6, height: 1.8 }, entry.rand); } // b60: S19 status 3 copy, 20 ticks of tilt then the poof
-      if (entry.name !== p.name) { entry.name = p.name; this.drawLabel(entry); }
+      if (entry.name !== p.name || (this.board && entry.sbRev !== this.board.revision)) { entry.name = p.name; this.drawLabel(entry); }
       stepRemoteHurt(entry, p.hurt === true, entry.body); // b61: S19 status 2 on the copy: limbSwingAmount 1.5 and hurtTime 10, before its onUpdate
       entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0, riding: !!p.riding });
       entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
@@ -81,6 +83,7 @@ export class RemotePlayers {
   }
   // Plain canvas text is only a name tag; untrusted names are never HTML.
   drawLabel(entry) {
+    if (this.board) { entry.sbRev = this.board.revision; drawScoreLabel(entry, this.board); return; } // b64 mpscoreboard
     const c = entry.canvas.getContext('2d');
     c.clearRect(0, 0, 256, 40); c.fillStyle = 'rgba(0,0,0,.4)'; c.fillRect(0, 0, 256, 40);
     c.fillStyle = '#fff'; c.font = '24px monospace'; c.textAlign = 'center'; c.fillText(entry.name, 128, 28);
