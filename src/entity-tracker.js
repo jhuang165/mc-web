@@ -87,10 +87,10 @@ export const packetSeq = (p) => SEQ.get(p) ?? 0;
 
 // The tracker entry for one mob and one player. `view` is { player, watches(cx, cz) }.
 export class TrackerEntry {
-  constructor(e, { range, frequency = MOB_UPDATE_FREQUENCY, velocity = true, size = 2, arrow = false, object = null }, view) {
+  constructor(e, { range, frequency = MOB_UPDATE_FREQUENCY, velocity = true, size = 2, arrow = false, object = null, limit = TRACKER_LIMIT }, view) { // b69 serverprops: `limit` is trackerLimit(view-distance)
     this.e = e;
     this.object = object; // not a mob: { kind, data } of the S0E spawn packet, or { orb: true } for S11 (object-tracker.js)
-    this.range = Math.min(range, TRACKER_LIMIT);
+    this.range = Math.min(range, limit);
     this.frequency = frequency;
     this.velocity = velocity;
     this.size = size;
@@ -490,7 +490,7 @@ export class MobTracker {
   // `order`: the HashSet of tracked entries. Natively one EntityTracker holds every entity (mobs and objects alike) in one HashSet, so the mob tracker and the object tracker of
   // a world can be given the same JavaHashSetOrder (`shareOrder`); each walks only its own entries, in the relative order of the one set.
   constructor(viewChunks = 10, order = new JavaHashSetOrder()) {
-    this.watch = new PlayerWatch(viewChunks);
+    this.watch = new PlayerWatch(viewChunks); this.limit = TRACKER_LIMIT; // b69 serverprops: the dedicated server sets trackerLimit(view-distance) (the watch radius alone does not change it, see the chunkGate probe)
     this.view = { player: null, watches: (cx, cz) => this.watch.watches(cx, cz), log: null };
     this.ctx = { clientOf: (live) => this.clientIfTracked(live), holderOf: (d) => this.holderClient(d) };
     this.entries = new Map();
@@ -592,7 +592,7 @@ export class MobTracker {
   create(e, size) {
     // EntityTracker.trackEntity: an ender crystal is tracked at 256 (clamped), every Integer.MAX_VALUE ticks, with no velocity (bytecode-read, mn.a(sa))
     const crystal = e.type === "ender_crystal";
-    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: this.newClient(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, horse: e.type === "horse" ? horseFlagsOf(e) : 0, wasGround: !!e.onGround };
+    return { entry: new TrackerEntry(e, { range: trackingRange(e.type), limit: this.limit, size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: this.newClient(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, horse: e.type === "horse" ? horseFlagsOf(e) : 0, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) {

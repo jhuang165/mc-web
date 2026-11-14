@@ -14,6 +14,7 @@ import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
 import { installServerRules } from '../src/servercommands-b59.js';
+import { loadServerProperties, loadFavicon, hardcoreRespawn, overridesFrom, FULL_TEXT } from '../src/multiplayer/server-properties.js'; // b69 serverprops
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -24,13 +25,13 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], rules = null /* b69 serverprops: a ServerRules */, newPlayerMode = null, adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp, commandBlocks, legacyOwner, ...adminOptions }); // b64: enable-command-block, legacyOwner
+    simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp, commandBlocks, legacyOwner, rules, newPlayerMode, ...adminOptions }); // b64: enable-command-block, legacyOwner
   }
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   const pings = new ServerPings({ send: (pid, m) => { const ws = sockets.get(pid); if (ws) send(ws, m); } }); // b68 mpping: keep-alive pings and the tab list's S38 items
@@ -156,11 +157,12 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   simulation.admin.directory = (name) => { const a = accounts.byName(name); return a ? { uuid: a.id, name: a.name } : null; };
   simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save(), stop: () => { void close().then(() => onStop?.()); } };
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
+  simulation.rules.opSource = { any: () => social.ops.size > 0 || simulation.admin.ops.size > 0, is: name => social.isOp(name) }; // b69 serverprops: spawn-protection counts MC_WEB_OPS and the saved ops
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
     let pathname;
     try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { socket.destroy(); return; }
-    if (closing || pathname !== '/multiplayer' || !origins.includes(req.headers.origin) || wss.clients.size >= 12) {
+    if (closing || pathname !== '/multiplayer' || !origins.includes(req.headers.origin) || wss.clients.size >= Math.max(12, simulation.rules.maxPlayers + 4)) {
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return;
     }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
@@ -180,7 +182,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (--budget < 0 || binary) return ws.close(1008, 'Message rate or format rejected');
         const m = JSON.parse(data.toString());
         if (!m || typeof m !== 'object') return ws.close(1008, 'Invalid message');
-        if (!joined && handleStatus(m, r => send(ws, r), () => ({ motd, online: sockets.size, max: 8, names: [...simulation.players.values()].map(p => p.name), favicon }))) return; // b68 mpping: pre-login status request and ping (NetHandlerStatusServer)
+        if (!joined && handleStatus(m, r => send(ws, r), () => ({ motd, online: sockets.size, max: simulation.rules.maxPlayers, names: [...simulation.players.values()].map(p => p.name), favicon }))) return; // b68 mpping: pre-login status request and ping (NetHandlerStatusServer)
         if (!joined) {
           if (m.type !== 'join' || m.protocol !== PROTOCOL) return ws.close(1008, 'This game version differs from the server. Reload the page.');
           const account = accounts.authenticate(m.session);
@@ -191,7 +193,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           if (refused) return ws.close(1008, closeReason(refused));
           // NetHandlerLoginServer: a second login replaces the first connection.
           const previous = [...owners].find(([, owner]) => owner === account.id)?.[0];
-          if (previous === undefined && sockets.size >= 8) return ws.close(1008, 'World is full (8 players)');
+          if (previous === undefined && simulation.rules.full(sockets.size)) return ws.close(1008, FULL_TEXT); // b69 serverprops: max-players, "The server is full!"
           if (previous !== undefined) {
             const old = sockets.get(previous);
             pings.leave(previous); // b68 mpping
@@ -200,7 +202,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           }
           simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
-          send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
+          send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.snapshot(id), self: simulation.savePlayer(simulation.players.get(id)) });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
           social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
@@ -214,7 +216,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
         else if (m.type === 'pickup' && Array.isArray(m.ids)) simulation.pickup(id, m.ids, m.fit); // item entities the client reaches (Survival)
         else if (m.type === 'use' && typeof m.active === 'boolean') simulation.queueUse(id, m.active); // right button down / up: EntityPlayer.setItemInUse
-        else if (m.type === 'respawn') simulation.serverSurvival.respawn(simulation.players.get(id)); // C16 client status 0, perform respawn
+        else if (m.type === 'respawn') { if (!hardcoreRespawn(simulation, id)) simulation.serverSurvival.respawn(simulation.players.get(id)); } // b69 serverprops: a hardcore death bans and kicks // C16 client status 0, perform respawn
         else if (m.type === 'attack' && Number.isInteger(m.mob)) simulation.queueAttack(id, m.mob); // C02 UseEntity (attack) on a mob, the wire id of its S0F spawn
         else if (m.type === 'attackPlayer' && typeof m.player === 'string') simulation.queuePvpAttack(id, m.player); // b63 mppvp: C02 UseEntity (attack) on another player
         else if (m.type === 'animUse' && Number.isInteger(m.mob)) simulation.queueAnimUse(id, m.mob, m.claim); // b61: C02 UseEntity (interact) on an animal
@@ -314,8 +316,12 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), argument = (key, fallback) => { const at = args.indexOf(key); return at < 0 ? fallback : args[at + 1]; };
+  // b69 serverprops: server.properties next to the world file (created with the native defaults when missing); a flag or MC_WEB_<KEY> variable overrides a key without changing the file
+  const dataFile = argument('--data', path.join(ROOT, 'server-data/world.json')), settings = await loadServerProperties(path.dirname(dataFile), { overrides: overridesFrom(args, process.env) });
+  if (settings.created) console.log(`Created ${settings.path} with the native defaults`);
+  const favicon = await loadFavicon(path.dirname(dataFile), { warn: m => console.warn(m) });
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: argument('--gamemode', 'creative'), motd: argument('--motd', process.env.MC_WEB_MOTD ?? DEFAULT_MOTD), /* b68 mpping */ difficulty: Number(argument('--difficulty', 2)), pvp: String(argument('--pvp', process.env.MC_WEB_PVP ?? 'true')).toLowerCase() !== 'false', /* b63 mppvp: server.properties pvp */ commandBlocks: String(argument('--command-blocks', process.env.MC_WEB_COMMAND_BLOCKS ?? 'false')).toLowerCase() === 'true', /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile: argument('--data', path.join(ROOT, 'server-data/world.json')), ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: Number(process.env.MC_WEB_OP_LEVEL ?? 4), whitelist: String(process.env.MC_WEB_WHITELIST ?? 'false').toLowerCase() === 'true' }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }

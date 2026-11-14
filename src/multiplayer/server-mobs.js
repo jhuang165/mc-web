@@ -9,6 +9,7 @@
 import { EntityWorld } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
 import { SharedMobTracker } from './server-mob-entries.js';
+import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
 import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
@@ -88,7 +89,7 @@ export class ServerMobs {
     this.host = host;
     const world = host.world;
     // undefined list: EntityWorld.seedAnimals, the opening animals of a finite world below generation 11; a saved list (even empty) is restored as it was
-    const list = Array.isArray(saved) ? saved.filter(r => SUPPORTED.has(r?.type)) : undefined;
+    const list = Array.isArray(saved) ? saved.filter(r => SUPPORTED.has(r?.type)) : (host.rules?.spawnAnimals === false ? [] : undefined); // b69 serverprops: spawn-animals false seeds no opening animals (WorldServer.a(Entity, boolean) removes them)
     const mobs = this.mobs = new EntityWorld(world, list, undefined, new EntityIds());
     stampLegacy(mobs.entities, legacyOwner); // b63: wolves and ocelots tamed in a single-player save belong to the named player
     mobs.tracker = new IdleTracker();
@@ -132,7 +133,7 @@ export class ServerMobs {
     installServerGolems(this, MOB_LIMIT); // b66 mpgolems: golem statuses, silverfish puffs
     installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
-    this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
+    const rules = host.rules; this.tracker = new SharedMobTracker(rules?.chunkRadius ?? 10); if (rules) this.tracker.limit = rules.trackerLimit; // b69 serverprops: view-distance (chunk radius clamped 3..20, tracker limit from the raw value) // b61: the world's one EntityTracker (server half)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
   }
@@ -264,7 +265,17 @@ export class ServerMobs {
     ctx.rand = mobs.worldRandom;
     const point = (mobs.cachedSpawnPoint ??= world.spawn());
     ctx.spawn = { x: Math.floor(point.x), y: Math.floor(point.y), z: Math.floor(point.z) };
-    return findChunksForSpawning(ctx, mobs.difficulty !== PEACEFUL, true, (mobs.worldTicks ?? 0) % 400 === 0);
+    return findChunksForSpawning(ctx, mobs.difficulty !== PEACEFUL && this.host.rules?.spawnMonsters !== false, this.host.rules?.spawnAnimals !== false, // b69 serverprops: spawn-monsters / spawn-animals (ahb.a(hostile, peaceful))
+       (mobs.worldTicks ?? 0) % 400 === 0);
+  }
+  // b69 serverprops: WorldServer.a(Entity, boolean) (mt.a) removes an animal, water mob or INpc as it is spawned when spawn-animals / spawn-npcs is false. Anything that appears after the
+  // first tick (eggs, breeding, dispensers, spawners) is checked here; mobs loaded from the save are not (chunk loading does not call spawnEntityInWorld(Entity, boolean)).
+  sweepSpawns() {
+    const rules = this.host.rules;
+    if (!rules?.restrictsSpawns) return;
+    const list = this.mobs.entities;
+    if (!this.seen) { this.seen = new WeakSet(list); return; }
+    for (let i = list.length - 1; i >= 0; i--) { const e = list[i]; if (this.seen.has(e)) continue; if (removedAtSpawn(rules, e.type)) list.splice(i, 1); else this.seen.add(e); }
   }
   // One game tick. Nothing runs while nobody is in the world.
   tick() {
@@ -295,6 +306,7 @@ export class ServerMobs {
       eatGrass: g => this.eatGrass(g),
     });
     for (const c of statusSounds) this.noteStatus(c);
+    this.sweepSpawns(); // b69 serverprops
     this.track();
   }
   // The size of eligibleChunksForSpawning: the distinct chunks of the 17 x 17 windows around the players.

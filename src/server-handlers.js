@@ -51,14 +51,14 @@ export const heldSlot = (sent, selected) => (Number.isInteger(sent) && sent >= 0
 const sq = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 // nh.a(jo): the clicked block centre within 8 blocks of the player's feet (squared < 64) and the player has moved; a click on y >= 255
 // (top face) or y >= 256 (any face) is refused with a chat message instead. Face 255 is use-item and never places.
-export function placementOutcome({ player, pos, face, hasMoved }) {
+export function placementOutcome({ player, pos, face, hasMoved, limit = 256 }) { // b69 serverprops: `limit` is MinecraftServer.af() (max-build-height)
   if (face === 255) return 'useItem';
-  if (pos[1] >= 255 && (face === 1 || pos[1] >= 256)) return 'tooHigh';
+  if (pos[1] >= limit - 1 && (face === 1 || pos[1] >= limit)) return 'tooHigh';
   return hasMoved && sq(player, [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5]) < 64 ? 'place' : 'refuse';
 }
 // nh.a(ji) statuses 0, 1, 2: block centre within 6 blocks of the eye (squared <= 36, eye = feet + 1.5) and below the build limit.
-export function digAllowed({ player, pos }) {
-  if (pos[1] >= 256) return false;
+export function digAllowed({ player, pos, limit = 256 }) {
+  if (pos[1] >= limit) return false;
   const dx = player[0] - (pos[0] + 0.5), dy = player[1] - (pos[1] + 0.5) + 1.5, dz = player[2] - (pos[2] + 0.5);
   return dx * dx + dy * dy + dz * dz <= 36;
 }
@@ -89,16 +89,17 @@ export function faceOf(block, adjacent) {
   return f !== null && d.reduce((n, v) => n + Math.abs(v), 0) === 1 ? f : null;
 }
 export const BUILD_HEIGHT_MESSAGE = 'Height limit for building is 256 blocks';
+export const buildHeightMessage = (limit = 256) => `Height limit for building is ${limit} blocks`; // build.tooHigh with af()
 // What the integrated server does with one block click or entity click. The single-player owner has no spawn protection: the integrated
 // server keeps MinecraftServer.isBlockProtected (always false, the probe's Srv double returns it unchanged). `player` is the feet [x, y, z].
 // Returns { accept } plus `message` (chat line the server sends) when the click is refused for height; a refused click resends the block.
 // An entity click may pass `lineBlocked` (and `eyeHeight`) instead of `visible`; sight is then traced only when the answer can change (36 > d^2 >= 9).
-export function serverClick({ kind, player, pos, adjacent = null, entity = null, visible = true, hasMoved = true, lineBlocked = null, eyeHeight = 0, action = 'interact', entityKind = 'mob' }) {
+export function serverClick({ limit = 256, kind, player, pos, adjacent = null, entity = null, visible = true, hasMoved = true, lineBlocked = null, eyeHeight = 0, action = 'interact', entityKind = 'mob' }) {
   if (kind === 'place') {
-    const out = placementOutcome({ player, pos, face: faceOf(pos, adjacent) ?? 0, hasMoved });
-    return out === 'place' ? { accept: true } : { accept: false, message: out === 'tooHigh' ? BUILD_HEIGHT_MESSAGE : null };
+    const out = placementOutcome({ player, pos, face: faceOf(pos, adjacent) ?? 0, hasMoved, limit });
+    return out === 'place' ? { accept: true } : { accept: false, message: out === 'tooHigh' ? buildHeightMessage(limit) : null };
   }
-  if (kind === 'dig') return { accept: digAllowed({ player, pos }) };
+  if (kind === 'dig') return { accept: digAllowed({ player, pos, limit }) };
   if (kind === 'entity') {
     const d = sq(player, entity);
     const seen = lineBlocked && d >= 9 && d < 36 ? canEntityBeSeen(lineBlocked, player, entity, eyeHeight) : visible;
