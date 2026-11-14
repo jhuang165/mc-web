@@ -22,7 +22,7 @@ Durability costs are one for ordinary tools on nonzero-hardness blocks and two f
 
 ## Further content
 
-Shears can be crafted from two diagonal iron ingots, collect leaves/tall grass, and cut wool faster. Snow requires a shovel and drops four snowballs; four snowballs craft a snow block. Snowballs stack to 16; throwing is not yet implemented. Gravel has a one-in-ten flint drop, and bookshelves drop three books. Six planks and three books craft a bookshelf.
+Shears can be crafted from two diagonal iron ingots, collect leaves/tall grass, and cut wool faster. Snow requires a shovel and drops four snowballs; four snowballs craft a snow block. Snowballs stack to 16; throwing is ported since this line was written (`src/projectiles.js`, [projectiles](projectiles.md); Batch 69 docs sweep). Gravel has a one-in-ten flint drop, and bookshelves drop three books. Six planks and three books craft a bookshelf.
 
 ## Original-tool verification
 
