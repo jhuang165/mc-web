@@ -44,7 +44,7 @@ import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { visualRandom } from "./village-ai.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape, golemCollideRetargets, golemTail } from "./iron-golem.js";
-import { createVillages, PLAYER_NAME, villageAttacker } from "./village-host.js";
+import { createVillages, createSiege, PLAYER_NAME, villageAttacker } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
 import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
@@ -1883,6 +1883,10 @@ export class EntityWorld {
     if (this.fx) burst(this.fx, name, 5, { x: e.x, y: e.y, z: e.z, width: size.width, height: size.height }, rand, 1);
   }
   // The village collection (World.villageCollectionObj), made on first use.
+  // b67 sieges: WorldServer.tick runs VillageSiege after the village tick; the clock and the players are what the host supplies (the server replaces both)
+  get siege() { return (this.villageSiege ??= createSiege(this)); }
+  siegeTime() { return this.siegeClock ?? 0; }
+  siegePlayers() { return this.ai.player ? [this.ai.player] : []; }
   get villages() {
     return (this.villageCollection ??= createVillages(this));
   }
@@ -2249,6 +2253,7 @@ export class EntityWorld {
     }
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
+    this.siegeClock = survival?.time; this.siege.tick(); // b67 sieges: VillageSiege (village-siege.js), after the village tick as in WorldServer.tick
     // Leash knots, witch potions, wither skulls and snow golem snowballs tick in the walk below when `walks` holds their kind (entity-simulation.js entityWalkers).
     if (!this.walks?.has("knot")) this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
     if (!this.walks?.has("potion")) this.potions?.tick(player, survival); // witch-potions.js; main.js attaches it

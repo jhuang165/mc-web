@@ -178,7 +178,7 @@ export class DedicatedSimulation {
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
     this.mobs = new ServerMobs(this, saved.mobs, { naturalSpawning: options.mobs !== false, legacyOwner: options.legacyOwner ?? saved.legacyOwner ?? null }); // b63: legacyOwner names the single-player save's owner of untagged wolves
-    loadVillages(this.mobs, saved, this.world, MOB_LIMIT); // b66 mpvillage: saved village collection, villagers of generated villages
+    loadVillages(this.mobs, saved, this.world, MOB_LIMIT, options.legacyOwner ?? saved.legacyOwner ?? null); // b66 mpvillage: saved village collection, villagers of generated villages
     this.vehicles = new ServerVehicles(this, saved.vehicles); // b61 mpvehicles
     this.trade = new ServerTrade(this); // b66 mptrade
     this.mobs.villagerUse ??= installTrade(this); // b66 mptrade: the villager click entry mpvillage's interact path calls (true = handled)
