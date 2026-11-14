@@ -25,7 +25,7 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 ## Gaps
 
 - Magma cubes follow the same flow (jump delay, boost, split, no fall damage); the probe covers them, the renderer and spawn rules are not probed.
-- Slimes spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)), with the slime chunk and swamp `getCanSpawnHere` above; no seeded replay reached a slime spawn. The 40-mob cap applies to splitting.
+- Slimes spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)), with the slime chunk and swamp `getCanSpawnHere` above; seeded replays reach slimes (`spawn-replay2/3/4-reference.json`; round 4 varies world seed, moon phase and size draws, `src/spawnreplays-b69.test.js`). The 40-mob cap applies to splitting.
 - `mob.attack` (the slime's melee) is emitted as an event with the native two pitch draws; the manifest has no audio for it, so it stays silent.
 - The original may play the landing sound twice in single-player; the port plays it once.
 - Legacy worlds have no biome or Java seed, so the swamp and slime chunk rules do not apply there.
