@@ -2,6 +2,37 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 66
+
+Batch 66 covered these areas:
+- **Villages on a server.** Villagers and the village's iron golems are server mobs; the profession and age ride in the mob state and the spawn packet; the village collection and its reputation are saved, by player name; a hit on a village villager costs that player's reputation and the golem's target lookup finds a connected player by name; zombie kills convert villagers on Hard and a golden apple starts a cure; villagers of generated village structures join a fresh world once.
+- **Trading on a server.** A villager click opens the merchant window (`openWindow` kind `merchant`), the offers go as `tradeList` (MC|TrList) and `tradeSelect` is MC|TrSel; the customer is released on close or disconnect. Bytecode-read `EntityVillager.interact`: no sneak or name-tag test; `useRecipe` gives no XP orb in 1.7.10.
+- **Pistons on a server.** Extending and retracting pistons push players, mobs and items, S24 block events and the moving tile entity reach clients within 64 blocks (`pistonTiles`), piston sounds within 16, in the Overworld and the Nether.
+- **Lightning on a server.** Thunderstorm bolts roll per chunk as WorldServer does, hurt and set fire to players and mobs (pig to pigman, charged creeper), burn items and orbs, and go to clients within 512 blocks (`boltSpawn`), with the sky flash and thunder. Found wrong: a villager does not become a witch in 1.7.10 (only Entity, EntityPig and EntityCreeper override onStruckByLightning).
+- **Golems and silverfish on a server.** Pumpkins build snow golems and player-made iron golems; the golem's strike and poppy (S19 status 4 and 11) are drawn; golem snowballs are on the wire; monster eggs release silverfish (one in Creative, two in Survival), and their hide and call puffs reach clients. Found wrong: building a golem sends no break particles natively (flag 2 and the server's empty spawnParticle).
+- **Books, jukeboxes and note blocks on a server.** MC|BEdit and MC|BSign with the server's author name and the native "Invalid book tag!" kick; book tags survive window clicks; records play and eject with level event 1005; note blocks run in all three dimensions and send their sound and S24.
+- **Beds on a server.** The native refusals, the Nether and End bed blast with fire, the all-asleep night skip (clock to the next morning, rain and thunder cleared), Leave Bed, bed respawn at y + 0.1 with `tile.bed.notValid` on a missing bed. Found wrong: a fishing bobber wakes a sleeper (the wake comes before the zero-damage refusal); single player's bed mob check let blazes and withers through and wrongly counted slimes and magma cubes; `/spawnpoint` respawned at y exactly.
+- **Bone meal.** One IGrowable module for single player and the server: mushrooms (40% into a huge mushroom), tall grass and ferns, double plants, cocoa, with saplings, grass, crops and stems; checked against 223 executed `BoneMealProbe` records; the server sends the 2005 sparkles. Found wrong: 1.7.10 has no per-block sparkle count (data 0, 15 particles).
+- **The End, finished.** Ends saved by 0.93.0 now upgrade into the 256 window on load (stored coordinates move by +103, +32, the new area is generated from the seed, crystals added only while the dragon lives). Found wrong: the eye of ender does nothing in the Nether and End natively, which the server already did.
+- **Item atlas.** Block sprites share the terrain atlas texture; held, dropped, worn, carried and framed block meshes rebake their uv after a pack switch, and a chunk meshed under an older layout is dropped; `flatBlockTileUrl` and `flatTileImpl` are gone. Found wrong: tinted item sprites keep their raw tint under Anaglyph natively (RenderItem and ItemRenderer never read the flag), as the port does.
+
+Still open from batch 66:
+- **Multiplayer.**
+  - Villages: the default server world (generation 9) has no generated villages; zombie sieges are missing in single player and on the server; the Nether and End village collections are not saved; a single-player village's legacy "Player" reputation is not mapped to a name.
+  - Trading: a villager removed mid-trade leaves the window open (as natively); custom names as the window title wait for server name tags.
+  - Pistons: players do not collide with a moving block (block 130); a push that lands a player gives no fall damage; carts and boats are not pushed; a client arriving mid-move misses that tile.
+  - Lightning: boats, carts and projectiles in the bolt box are not hurt; thunder may be heard twice on a native client (recalled), here once.
+  - Golems: a golem snowball hitting a player gives no knockback; blasts do not release silverfish (single player too, recalled); the golem's walking dust is not drawn on copies.
+  - Beds: the weather re-rolls a zero rain or thunder time at once (native waits a tick); a sleeping player's block clicks are not refused.
+  - End: thin island tails past 128 blocks are cut on some seeds (measured to about 166; a 336 window would cover 48 of 48 seeds).
+  - Stats: the revenge fallback ignores whether the attacker still lives.
+  - Spawners: a spawner cart only arrives by a Riding chain or saved data (no `/summon` on the server); the 80- and 64-block ranges of the cart status and puff are recalled.
+  - Not seen in a browser: villager skins and the merchant screen over a connection; moving pistons, bolts and the flash; golem arm swings and silverfish puffs; the book screen and "Now playing"; lying in a bed, the fade and other players in beds; bone meal sparkles and huge mushrooms; a legacy End after its upgrade; shared atlas siblings and HD flat block items. Still unseen from batch 65: the 256 End replica's meshing and fog; invisible players and name tags; the eye trail; spawner smoke, flame, spin and burst; the status 9 burst; HD terrain packs; tinted and animated item sprites; the fishing line in three views.
+- **Bone meal.** A dispenser still fertilises only saplings and wheat-family crops; the sapling and grass gates draw from their own Random rather than the world's.
+- **Rendering.** No native pixel capture.
+- **Connected client.** The own bobber's third-person line falls back to the camera eye.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 65
 
 Batch 65 covered these areas:
@@ -14,15 +45,7 @@ Batch 65 covered these areas:
 - **Rendering.** The terrain atlas re-stitches at an HD pack's sprite sizes (`terrain-layout.js`, executed Stitcher cases; the vanilla layout is pinned); tinted flat block items draw from the blocks sheet times their colour; item sprites play `.mcmeta` animation in the atlas; first-person map mode matches 67 executed cases.
 - **Client replays.** The fishing line matches 96 executed `RenderFish` cases (`fishing-line.js`: swing offsets, eye height 0.12 for others, no sneak term, the curve's end); the Java 7 effect order has a port checked against 52 sequences but the game stays on the Java 8 order. Found wrong: no client copy pushes (`EntityLivingBase.onLivingUpdate` pushes only when `!isRemote`, bytecode-read, lead-checked), so the controlled player is no longer pushed by mobs (`CLIENT_PUSHES_PLAYER = false`); the dragon's crystal search and silent growl were already closed.
 
-Still open from batch 65:
-- **Multiplayer.**
-  - End: Ends saved by 0.93.0 keep the 128 window; thin island tails past 128 blocks are cut on some seeds; the eye of ender is Overworld only.
-  - Stats: bone meal on mushrooms, double plants and cocoa (single player lacks them too); the revenge fallback ignores whether the attacker still lives.
-  - Spawners: a spawner cart only arrives by a Riding chain or saved data (no `/summon` on the server); the 80- and 64-block ranges of the cart status and puff are recalled.
-  - Not seen in a browser: the 256 End replica's meshing, fog and first light flood; invisible players and name tags; the eye trail; spawner smoke, flame, spin and burst; the status 9 burst; HD terrain packs; tinted and animated item sprites; the fishing line in three views. Still unseen from batch 64: the dragon, crystal beams, boss bar and credits over a connection; the sidebar; other players' bobbers; the eye's flight and shatter; the 1012/1014 sounds; the connected eat bob.
-- **Rendering.** Meshes that bake `tileRect` (held and dropped items, hand models) may keep old uv after a pack switch; the item atlas still stitches its own blocks sheet; `flatBlockTileUrl` / `flatTileImpl` in `block-textures.js` are dead code; tinted sprites are not Anaglyph-converted (recalled native); no native pixel capture.
-- **Connected client.** The own bobber's third-person line falls back to the camera eye.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 65: carried into the batch 66 list above, except the items batch 66 closed or found wrong.
 
 ## Done in batch 64
 

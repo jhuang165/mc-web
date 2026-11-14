@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 66 (2026-11-13, ten Sonnet tracks in `../wt66-<name>` on `batch66-<name>`, cut from 7b61f6b49, merged --no-ff on `batch66-lead`; shared track rules `../artifacts/b66-lead/track-rules.md`; lead note `b66-lead-track.md`; no browser checks by request):
+- 0.95.0, by track:
+  - mpvillage: `multiplayer/server-villagers.js`: villagers and village iron golems are server kinds (profession and age in the mob state), the village collection saved by player name, reputation hits, golem target lookup by name, generated-structure villagers once; `serverAnimalUse` takes a `villager` hook.
+  - mptrade: `multiplayer/server-trade.js` / `client-trade.js`: the merchant window over a connection (`openWindow` kind `merchant`, `tradeList`, `tradeSelect`), installed as `sim.mobs.villagerUse`.
+  - mppistons: `multiplayer/server-pistons.js` / `client-pistons.js`: pushes of players, mobs and items, S24 and moving tiles (`pistonTiles`), Overworld and Nether.
+  - mplightning: `multiplayer/server-lightning.js` / `client-lightning.js`, `strikeMobs` in `weather-simulation.js`: bolts per chunk, entity hits, `boltSpawn` within 512; villager to witch found wrong for 1.7.10.
+  - atlasunify: `bindTerrainAtlas` (item sprites of terrain tiles share the terrain texture), `uv-rebake.js` + `onTerrainRelayout` / `terrainLayoutVersion`, stale worker meshes dropped, flat tile dead code removed.
+  - mpgolems: `multiplayer/server-golems.js` / `client-golems.js`: pumpkin-built golems, statuses 4/11, golem snowballs, silverfish release and puffs.
+  - mpbooks: `multiplayer/server-books.js`, `server-music.js`, `client-books.js`, `client-music.js`: MC|BEdit / MC|BSign, records (1005), note blocks in three dimensions (`musicEvent`); book tags kept by `cleanStack`.
+  - bonemeal2: `bone-meal.js` (one IGrowable path for single player and server, 223 executed `BoneMealProbe` records), server 2005 sparkles.
+  - mpend3: `multiplayer/server-end-upgrade.js`: 0.93.0 Ends upgrade into the 256 window on load (+103, +32); island tails kept at 256.
+  - mpsleep: `multiplayer/server-sleep.js` / `client-sleep.js`: beds, night skip, Leave Bed, bed respawn, Nether/End bed blasts (`flaming` explode); `ENTITY_MOB` in `bed.js` fixes single player's sleep check; bobbers wake sleepers.
+- Lead joins: the mob cap keeps villagers and golems; `onAux` carries both 1005 and 2005; the night skip runs before the lightning tick (WorldServer.tick order); mplightning's client bolt reset was inside a comment.
+- Open: "Still open from batch 66" in `public/research/remaining-gaps.md`.
+
 Batch 65 (2026-11-13, ten Sonnet tracks in `../wt65-<name>` on `batch65-<name>`, cut from 800542e52, merged --no-ff on `batch65-lead`; shared track rules `../artifacts/b65-lead/track-rules.md`; lead note `b65-lead-track.md`; no browser checks by request):
 - 0.94.0, by track:
   - mpendwindow: per-world grid width (`World.size`, `LightVolume.size`, default 128); a new server End is 256x256 (native = local - 128), with every spike's crystal; Ends saved by 0.93.0 stay 128 (`window: legacy`).
