@@ -86,6 +86,7 @@ import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
 import { ForeignTicks, attachTickTree } from "./tile-ticks.js";
 import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
+import { stepBlock } from "./step-block.js"; // b71 steps71
 import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
 import { Trees } from "./trees.js";
@@ -3890,7 +3891,8 @@ function movementTick(controls) {
     if (spawned.length) { handleEntityEvents(); saved = false; }
   }
   // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.
-  const onLadderStep = !flying && countsVertical(world, position.x, position.y, position.z);
+  const stepB = stepBlock(world, position.x, position.y - motion.ySize, position.z); // b71 steps71: Entity.moveEntity's block (fence-likes replace the cell above them)
+  const onLadderStep = !flying && stepB.ladder;
   const distance = Math.hypot(
     position.x - oldPosition.x,
     onLadderStep ? position.y - oldPosition.y : 0,
@@ -3905,17 +3907,17 @@ function movementTick(controls) {
   wasInWater = inWater;
   if (stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
     stepDistance = 0;
-    const sx = Math.floor(position.x), sy = Math.floor(position.y - 0.05), sz = Math.floor(position.z);
-    const b = onLadderStep ? LADDER : world.get(sx, sy, sz);
+    const sx = stepB.x, sy = stepB.y, sz = stepB.z; // b71 steps71: floor(posY - 0.2 - yOffset), not the old y - 0.05
+    const b = stepB.id;
     if (inWater) sounds.play("game.player.swim", { volume: 0.3 });
     else {
       // Entity.func_145780_a: Block.SoundType volume * 0.15 at its frequency; a snow layer on top substitutes the snow
       // type and liquids stay silent (block-sounds.js).
       const s = footstepSound(b, onLadderStep ? 0 : world.get(sx, sy + 1, sz));
-      if (s) sounds.play(s.name, { volume: s.volume, pitch: s.pitch });
+      if (s && b) sounds.play(s.name, { volume: s.volume, pitch: s.pitch }); // air plays no step (material check)
     }
-    // Entity.moveEntity: Block.onEntityWalking runs with the step sound, on the cell 0.2 below the feet (redstone ore lights up).
-    touchRedstoneOre(Math.floor(position.x), Math.floor(position.y - 0.2), Math.floor(position.z));
+    // Entity.moveEntity: Block.onEntityWalking runs with the step sound, on the cell 0.2 below the feet (redstone ore lights up); a fence below replaces the block, so no ore is touched.
+    if (!stepB.replaced) touchRedstoneOre(sx, sy, sz);
   }
   playHurtSounds();
   eating = tickPlayerItemUse(eating, heldId(), survival, {

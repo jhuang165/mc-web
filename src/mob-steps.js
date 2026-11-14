@@ -14,7 +14,7 @@
 //   Horse                      mob.horse.soft / wood / gallop (horseStep)
 //   Creeper, villager, witch   no override: Entity.func_145780_a, the block's SoundType (block-sounds.js)
 import { footstepSound } from "./block-sounds.js";
-import { countsVertical } from "./ladders.js";
+import { stepBlock } from "./step-block.js"; // b71 steps71
 
 const f = Math.fround;
 const own = (name, volume) => ({ name, volume: f(volume), pitch: 1 });
@@ -72,9 +72,9 @@ export function mobStepSound(type, block, above = 0, e = {}) {
 export function mobStepEvents(world, e, from, { hostile = false, random, onWalk, nextInt } = {}) {
   if (!canTriggerWalking(e.type) || e.riding) return [];
   const dx = e.x - from.x, dz = e.z - from.z;
-  const dy = countsVertical(world, e.x, e.y, e.z) ? e.y - from.y : 0;
+  const sb = stepBlock(world, e.x, e.y, e.z), dy = sb.ladder ? e.y - from.y : 0; // b71: the fence-replaced block, ladders only
   e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
-  const x = Math.floor(e.x), y = Math.floor(e.y - 0.2), z = Math.floor(e.z), block = world.get(x, y, z);
+  const { x, y, z, id: block } = sb;
   if (!(e.stepDistance > (e.nextStep ?? 1)) || !block) return [];
   e.nextStep = Math.floor(e.stepDistance) + 1;
   const position = { x: e.x, y: e.y, z: e.z }, events = [];
@@ -89,6 +89,6 @@ export function mobStepEvents(world, e, from, { hostile = false, random, onWalk,
   if (s) events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position });
   // EntityHorse.func_145780_a: a gallop step of a horse (type 0) then draws nextInt(10) on Entity.rand and on 0 breathes at 0.6 x the block's volume (b47h records: executed).
   if (s?.name === "mob.horse.gallop" && (e.horse?.type ?? 0) === 0 && nextInt && nextInt(10) === 0) events.push({ sound: "mob.horse.breathe", volume: f(f(s.volume / f(0.15)) * f(0.6)), pitch: s.pitch, position });
-  onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
+  if (!sb.replaced) onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
   return events;
 }
