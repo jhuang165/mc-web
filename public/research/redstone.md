@@ -159,7 +159,7 @@ Scenarios: single push and sticky pull, 12 blocks, 13 refused, a 13th placed aft
 
 Limits:
 
-- Entity pushing (TileEntityPiston moving entities) is not ported or recorded. The probe's entity list is empty.
+- Entity pushing (TileEntityPiston moving entities): Batch 68 (docs sweep): ported later in `src/piston-live.js` and `src/piston-push.js` (see `piston-live.md`, `src/piston-live.test.js`; the server side is `src/multiplayer/server-pistons.js`). The original probe's entity list was empty, so the redstone replay itself still records none.
 - Creative-mode head removal (the harvest skip) is not ported.
 - Only block 36 is a tile-entity provider for the k/K bookkeeping. Chests and comparators keep the older sidecar maps.
 - No client rendering, no piston textures, no live world, chunk loading or saving. Not wired into `main.js`.

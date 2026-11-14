@@ -1,6 +1,6 @@
 # Nether groundwork (portal, nether wart, terrain generator)
 
-Target: Minecraft Java 1.7.10 (client SHA-1 e80d9b3bf5085002218d4be59e668bac718abbc6). Pure, probe-verified modules; there is no dimension switch yet (the lead wires it). This does not claim Nether parity.
+Target: Minecraft Java 1.7.10 (client SHA-1 e80d9b3bf5085002218d4be59e668bac718abbc6). Pure, probe-verified modules; there was no dimension switch when this was written; Batch 68 (docs sweep): it exists now (`src/dimension-live.js`, see `dimensions.md`). This does not claim Nether parity.
 
 ## Portal block (original 90, port slot 164)
 

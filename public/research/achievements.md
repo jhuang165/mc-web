@@ -25,8 +25,7 @@ from the `beh` / `bei` / `pq` / `aax` / `aak` bytecode). Regenerate with
 ## Gaps (parity is not claimed)
 
 - diamondsToYou needs another player to pick up a diamond you dropped; it cannot happen in singleplayer.
-- No Statistics screen and no stats file: general statistics are not recorded, and the "Downloading statistics" loading state is
-  skipped. The region export (`region-*.js`) does not write `stats/<uuid>.json`; it is owned by other work and was left alone.
+- Batch 68 (docs sweep): the Statistics screen and the stats file exist now (`src/stats-screen.js`, `src/stats-live.js`, `src/stats.js`, `src/stats.test.js`), and the region export writes `stats/<uuid>.json` (`src/region-export.js`, StatisticsFile). The old line here said neither existed; whether the "Downloading statistics" loading state is shown was not re-read.
 - Event approximations: onARail counts the rider's position each tick instead of `addMovementStat` increments; ghast does not
   distinguish small and large fireballs; killWither fires on a player-sourced death; breedCow does not check who fed the animals;
   snipeSkeleton uses the player's position at the skeleton's death, not at the arrow's launch; mobs killed by the player count

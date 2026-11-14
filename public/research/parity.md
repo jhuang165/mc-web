@@ -144,6 +144,8 @@ See the [accepted roadmap and execution tracker](parity-roadmap.md) and [origina
 
 ## Systems not yet implemented or still incomplete
 
+Batch 68 (docs sweep): this list is the state of an early release and is mostly stale. Since then the build has live redstone power ([redstone live](redstone-live.md)), pistons ([piston live](piston-live.md)), brewing and potions ([brewing](brewing.md), [potions](potions.md)), villager trading ([villager trading live](villager-trading-live.md)), witches ([witch](witch.md)), iron golems ([iron golem](iron-golem.md)), the Nether and End ([dimensions](dimensions.md)), music ([music](music.md)), commands and gamerules ([commands](commands.md), [game rules](game-rules.md)), statistics ([stats](stats.md)) and a dedicated multiplayer server with its own protocol ([multiplayer](multiplayer.md)). Java protocol compatibility is still not provided. The generated `*-parity-catalogue.md` files and `remaining-gaps.md` carry the current state; the list below is kept as history.
+
 - Complete block and item registries, metadata variants, block shapes, fluids and block update rules.
 - Full mob roster, original spawning, remaining animal interactions, bosses and advanced entity interactions (skeleton archers are in; see [bows](bows.md)). Pigs, cows, sheep, chickens and zombies run the original AI task lists with pathfinding; cows and sheep breed with wheat, chickens with seeds and pigs with carrots.
 - Remaining crops/plant growth (sugar cane and cactus are in; see [plants](plants.md)) and animal-derived resources. Wheat, carrot and potato farming are implemented with the limits above.

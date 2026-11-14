@@ -28,7 +28,7 @@ MCP mappings identify `bly` as ItemRenderer, `blt` as EntityRenderer, `bhm` as M
 | Creature gait | `bhw.a(...)`: cosine of phase × 0.6662, multiplied by 1.4 and limb amplitude | Opposing leg pairs on the animal rigs and a related biped gait |
 | Eating | `acx.d(ItemStack)` returns 32 ticks | Food is consumed after 1.6 seconds, with a hand/item eating motion and original effects |
 | Block damage | Ten original `destroy_stage_0..9` PNGs | Frames advance with actual mining progress; cancellation removes the overlay |
-| Water | Original 16 × 512 water sheet | The 32 original frames advance at 10 Hz, matching `frametime: 2`; fluid simulation is not implemented |
+| Water | Original 16 × 512 water sheet | The 32 original frames advance at 10 Hz, matching `frametime: 2`; fluid simulation: Batch 68 (docs sweep): implemented since this table was written (see `fluids.md`) |
 
 Java's trigonometric lookup table and all floating-point intermediates are not emulated bit for bit. Model geometry, camera transforms, eating presentation and creature death presentation remain adaptations. These are recovered curves and original frames in a new renderer, not every animation copied exactly.
 

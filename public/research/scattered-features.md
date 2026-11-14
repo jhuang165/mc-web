@@ -26,7 +26,7 @@ Replayed exactly by the test:
 
 ## Limits
 
-- No NBT round trip (`describe()` lists the fields the native piece would save); MapGenStructureData persistence is not modelled.
+- No NBT round trip (`describe()` lists the fields the native piece would save); MapGenStructureData persistence: Batch 68 (docs sweep): the save/import path now exists in `src/structure-data.js` (see `structure-data.md`); the piece classes themselves still have no NBT round trip.
 - The World double (the standalone generator checks) has no native Chunk storage, notifications, lighting, entity ticking, block updates, redstone power simulation or flower pot tile entity (the pot contents are not modelled). Live worlds run the traps through `src/redstone.js` instead.
 - Native terrain/surface/cave chunks were not used as input; terrain comes from synthetic fixtures. `World.func_72825_h` is implemented as in 1.7.10 over the fixture, so interaction with real generated terrain is unverified here.
 - Start and population records inject a forced biome or start for per-type coverage; natural placement is verified separately with the real biome manager (grid records).

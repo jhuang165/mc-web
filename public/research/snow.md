@@ -67,11 +67,11 @@ Evidence key: **probe** = replayed against the original classes in `snow-referen
 - **Random-tick set.** `Chunk` tick counts are approximated by the `ticksRandomly` table of this build's blocks; blocks it has no counterpart of (packed ice 174, fence 85) are not in the fixtures.
 - **Light.** The freeze and melt rules read block light only (as `getSavedLightValue(Block)` does). At generation the block light is a lava breadth-first fill; in play it is the scene's light volume.
 - **Temperature and height.** The 1.7.10 height term of `getFloatTemperature` never applies: the world is 64 blocks high.
-- **Renderer.** The snow branch of `renderRainSnow` is from bytecode only (LWJGL is not available to execute it); the fast-graphics variant is not ported.
+- **Renderer.** The snow branch of `renderRainSnow` is from bytecode only (LWJGL is not available to execute it); the fast-graphics variant: Batch 68 (docs sweep): now ported (`src/render-settings.test.js` "fast graphics").
 - **Stacking collision.** Adding a layer checks the player's box with `collides`, not every entity's box (`checkNoEntityCollision`).
 - **Ice in creative.** Breaking ice in creative removes it without water, as the original does (`harvestBlock` is not called); the Nether (`isHellWorld`) rule does not apply.
-- **Silk touch** is not in the game, so ice never drops itself and a snow layer or snow block is never kept whole.
-- **Packed ice, snow golems, frostbitten mobs** are not implemented. `tools/verify-mining.mjs` has a wear check that already failed before this work (it reads a `durability` field `Survival` no longer has); its speed, harvest, progress and break-tick checks passed for the new blocks, but `mining-reference.json` was not regenerated.
+- **Silk touch.** Batch 68 (docs sweep): Silk Touch is in the game now (`getSilkTouchModifier`, `src/enchantment-effects.js`), so the old statement that ice never drops itself no longer holds; the ice and snow drop rules with Silk Touch were not re-read in this sweep.
+- **Packed ice, snow golems, frostbitten mobs.** Batch 68 (docs sweep): packed ice (item 174, `command-data.js`) and snow golems (`src/mooshroom-golem-live.js`) exist now; "frostbitten mobs" is not a 1.7.10 feature. Original line: `tools/verify-mining.mjs` has a wear check that already failed before this work (it reads a `durability` field `Survival` no longer has); its speed, harvest, progress and break-tick checks passed for the new blocks, but `mining-reference.json` was not regenerated.
 
 ## Regenerating the reference
 

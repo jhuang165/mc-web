@@ -14,7 +14,7 @@ Evidence: `tools/probes/EyeOfEnderProbe.java` runs the unchanged original classe
 
 ## Gaps
 
-- No End dimension. The original collision calls `travelToDimension(1)` (probe: free entities only; riding, ridden and remote do nothing). The port does nothing on contact; this is not implemented.
+- Batch 68 (docs sweep): the End dimension exists now. Contact with the end portal block calls `travel(END)` for free entities only (`src/dimension-live.js`, `DimensionLive` per-tick portal check; riding and remote do nothing, as in the probe); see `dimensions.md`. The eye is also saved in flight, `/summon`ed (and `/give`n, both in `command-data.js`) and run on the server (`src/multiplayer/server-eyes.js`).
 - Generated stronghold starts are not consulted, only the coordList (as in a fresh world).
 - The base `Entity.onEntityUpdate` is not modelled in the pure tick; the in-water flag arrives through a hook.
 - Creative restoration of the used eye is bytecode-derived (ItemInWorldManager), not probed.
@@ -22,4 +22,4 @@ Evidence: `tools/probes/EyeOfEnderProbe.java` runs the unchanged original classe
 - Aux 2003 shatter particles are bytecode-derived.
 - Sounds, particles and rendering are not verified in a browser (no dev server was run).
 - Java sin/cos intrinsics differ from V8 by one ulp, so tests use tolerances on flight rotation.
-- No /give or /summon hooks were added in `commands.js`.
+- Batch 68 (docs sweep): `/summon` of the eye and the server `/summon` exist (see the catalogue row `EyeOfEnderSignal`); the old note that no hooks were added is stale.

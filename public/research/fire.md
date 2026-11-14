@@ -48,12 +48,12 @@ Vanilla fire is id 51; here it is internal block 45 (hidden, after "Red flower")
 
 ## Gaps
 
-- **Difficulty and humidity.** Difficulty is fixed at Normal (2) because this build has no difficulty setting, and `isBlockHighHumidity` is always false (the probe also covers a humid jungle fixture for the original).
+- **Difficulty and humidity.** Batch 68 (docs sweep): difficulty is no longer fixed; `main.js` sets `L.difficulty` from the Difficulty setting (`src/difficulty.js`, `src/fire.js` `DIFFICULTY` is only the default). Still true: `isBlockHighHumidity` is always false (the probe also covers a humid jungle fixture for the original).
 - **Not ported blocks.** No End, netherrack or portal fire rules, TNT ignition is supported ([creepers](creepers.md)); remaining flammable blocks are absent (the build has no stairs, slabs, fences, carpet, hay, coal block and so on). The table covers the blocks that exist here.
 - **Random tick set.** The original ticks every loaded chunk section that contains a randomly ticking block. The game routes fire/lava, tree and plant random ticks through Weather.tickChunk using the finite world’s section refcounts. Fire’s standalone test loop still uses per-section marks rescanned every 20 ticks. Full Java loaded-chunk selection and cross-system ordering remain unfinished.
 - **Persistence.** Since 0.22.1 scheduled fire ticks retain relative delays and tie order through `Fire.save()`/`load()`. Only legacy/unsupported snapshots use `wake()` to reschedule saved fires. Fire age persists as metadata. Since 0.22.4 the regression tests restore the weather random snapshot; other random streams and unified cross-system scheduling remain unfinished. This does not implement Anvil/TileTicks interoperability.
 - **Contact and damage.** Fire/lava burning-box contact uses the shared moveEntity tail with negative counters ([player step](player-step.md)); lava also applies its onEntityUpdate damage/ignition ([lava](lava.md)). Full damage, hurt-resistance and difficulty acceptance remain unfinished.
-- **No visuals for burning.** No first-person fire overlay (`ItemRenderer.renderFireInFirstPerson`), no flames drawn on burning mobs, and no flame or smoke particles from `randomDisplayTick` (only the crackle sound).
+- **Visuals for burning.** Batch 68 (docs sweep): no longer missing. The first-person fire overlay and the flames on burning entities are in `src/fire-fx.js` (tested by `src/fire-fx.test.js`), and `BlockFire.randomDisplayTick` flame and smoke particles run from `src/display-ticks.js`.
 - **Bytecode only.** `WorldServer` random ticks and `tickUpdates`, `ItemFlintAndSteel.onItemUse`, and the scene animation order are transcribed from `javap`, not run against the original.
 
 ## Player counter persistence (0.22.4)

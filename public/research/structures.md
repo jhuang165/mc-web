@@ -4,7 +4,7 @@ Current live status (0.25.0): new Java worlds use **generation version 11** with
 
 Status: **partial**. GEN-05a ports the shared structure framework and mineshafts as standalone
 modules, checked against the unchanged pinned 1.7.10 classes. They are not yet called from
-live world generation. Village/stronghold/temple placement predicates are standalone (below). Since 2026-11-03 their buildings and population are also standalone ports replayed against native classes: [villages](villages.md) (GEN-05c), [strongholds](strongholds.md) (GEN-05d) and [desert/jungle temples and swamp huts](scattered-features.md) (GEN-05e). None is called from live generation; nether fortresses are not ported.
+live world generation (Batch 68 docs sweep: stale; generation versions 11 and later call them, see the "Current live status" paragraph above and `population-live.md`). Village/stronghold/temple placement predicates are standalone (below). Since 2026-11-03 their buildings and population are also standalone ports replayed against native classes: [villages](villages.md) (GEN-05c), [strongholds](strongholds.md) (GEN-05d) and [desert/jungle temples and swamp huts](scattered-features.md) (GEN-05e). None is called from live generation; nether fortresses are not ported.
 This is not a parity claim for structures.
 
 ## Native village, temple and stronghold placement research (0.32.0)
@@ -68,7 +68,7 @@ byte-identical). Recorded JVM: 19.0.1.
 - HashMap order is the probe JVM's (Java 8+ HashMap). The 2014 launcher often ran Java 6/7, whose
   HashMap hashing and iteration differ. This only matters when two starts populate the same chunk,
   where iteration order decides write and RNG order. Treeified buckets are not modelled and throw.
-- MapGenStructureData persistence (load/save of starts, `Children`/`BB`/`Entrances`/`hr`/`sc`/`hps`/`Num`
+- Batch 68 (docs sweep): saving and importing the start data is ported for versions 14/15 (`src/structure-data.js`, `structure-data.md`); rebuilding live piece state from reloaded NBT is not shown to be ported. Original line: MapGenStructureData persistence (load/save of starts, `Children`/`BB`/`Entrances`/`hr`/`sc`/`hps`/`Num`
   NBT), MapGenStructureIO and reloading starts are not ported. A reloaded native world rebuilds
   piece state from NBT, including spawner and removal flags, so live parity needs that save path.
 - placeDoorAtCurrentPosition (ItemDoor.placeDoorBlock), dispenser contents and
