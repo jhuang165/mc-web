@@ -16,7 +16,7 @@
 - Executed (by test, not a Java probe): an away run with a hopper above a chest cart moves items into the cart; it fails with the `cartAt` line removed (checked).
 
 ## Verification
-- `node --test src/mpreach71-b71.test.js`: 10 pass. `mpclicks-b70` 4, `carts-b70` 9, `mpvehicles-b61` 10, `mpvehicles3-b63` 13, `mpvehiclehits-b67` 8, `mpriding2-b62` 15: pass (one at a time).
+- `node --test src/mpreach71-b71.test.js`: 10 pass. `mpclicks-b70` 4, `carts-b70` 9, `mpvehicles-b61` 10, `mpvehicles3-b63` 13, `mpvehiclehits-b67` 8, `mpriding2-b62` 15, `pvp-b63` 14, `away-entities` 11: pass (one at a time). `mpnether3-b63`, `away-order-b50` and `object-tracker-vehicles` were not completed (the machine load was above 50 and they timed out; stopped). `npm run build` passes.
 - `node --check` on each touched file. Full npm test not run (batch rule). No browser check.
 
 ## Follow-ups
