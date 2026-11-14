@@ -25,6 +25,13 @@ export function capePngError(bytes) {
   if (!size || size.width !== CAPE_WIDTH || size.height !== CAPE_HEIGHT) return { status: 400, message: 'Upload a 64 × 32 PNG cape.' };
   return null;
 }
+// b73 skins73: the check for a skin kept in single player (already cleaned up and cropped to 64 x 32 by skinCanvas + canvasPng). Null when fine, else { status, message }.
+export function skinPngError(bytes) {
+  if (!bytes || bytes.length > MAX_SKIN_BYTES) return { status: 413, message: 'Skins must be at most 16 KB.' };
+  const size = pngSize(bytes);
+  if (!size || size.width !== SKIN_WIDTH || size.height !== SKIN_HEIGHT) return { status: 400, message: 'Upload a 64 × 32 PNG skin.' };
+  return null;
+}
 export const acceptedSkinSize = (width, height) => width === 64 && (height === 32 || height === 64);
 
 // ImageBufferDownload.setAreaOpaque / setAreaTransparent on RGBA bytes, in place.
@@ -35,14 +42,32 @@ function transparent(px, x1, y1, x2, y2) {
   for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) if (px[(y * SKIN_WIDTH + x) * 4 + 3] < 128) return;
   for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) px[(y * SKIN_WIDTH + x) * 4 + 3] = 0;
 }
-// `rgba`: 64 x height source pixels. Returns new 64 x 32 RGBA bytes.
-export function normalizeSkinPixels(rgba, height) {
-  if (!acceptedSkinSize(SKIN_WIDTH, height) || rgba.length !== SKIN_WIDTH * height * 4) throw new Error("A skin must be 64 × 32 or 64 × 64 pixels.");
-  const px = new Uint8ClampedArray(rgba.subarray(0, SKIN_WIDTH * SKIN_HEIGHT * 4));
+// Java2D's 8-bit alpha maths (AlphaMath.c, executed through the probe): a partly transparent pixel drawn onto the empty buffer is premultiplied
+// and divided back, which moves its colour by a few steps (and by a lot at tiny alphas).
+const mul8 = (a, b) => Math.floor((a * b * 0x10101 + 0x800000) / 0x1000000);
+const div8 = (a, b) => (b >= a ? 255 : Math.floor((b * Math.floor((0xff000000 + (a >> 1)) / a) + 0x800000) / 0x1000000));
+// b73 skins73: ImageBufferDownload.parseUserSkin (bmc.a, executed: skin-parse-reference.json). The source (any size, RGBA bytes, not premultiplied)
+// is drawn at 0,0 into a transparent 64 x 32 ARGB buffer (clipped or padded), then the head base and the body/limb areas are forced opaque and the
+// hat area is cleared unless it already holds a pixel below alpha 128. A fully transparent source pixel loses its colour in the draw, and partial alphas go through Java2D's
+// premultiply and divide (see above). Returns new 64 x 32 RGBA bytes.
+export function userSkinPixels(rgba, width, height) {
+  const px = new Uint8ClampedArray(SKIN_WIDTH * SKIN_HEIGHT * 4);
+  for (let y = 0; y < Math.min(height, SKIN_HEIGHT); y++) for (let x = 0; x < Math.min(width, SKIN_WIDTH); x++) {
+    const s = (y * width + x) * 4, d = (y * SKIN_WIDTH + x) * 4;
+    const a = rgba[s + 3];
+    if (a === 0) continue;
+    px[d + 3] = a;
+    for (let k = 0; k < 3; k++) px[d + k] = a === 255 ? rgba[s + k] : div8(a, mul8(a, rgba[s + k]));
+  }
   opaque(px, 0, 0, 32, 16);
   transparent(px, 32, 0, 64, 32);
   opaque(px, 0, 16, 64, 32);
   return px;
+}
+// `rgba`: 64 x height source pixels (the sizes the port accepts). Returns new 64 x 32 RGBA bytes.
+export function normalizeSkinPixels(rgba, height) {
+  if (!acceptedSkinSize(SKIN_WIDTH, height) || rgba.length !== SKIN_WIDTH * height * 4) throw new Error("A skin must be 64 × 32 or 64 × 64 pixels.");
+  return userSkinPixels(rgba, SKIN_WIDTH, height);
 }
 
 // Front and back "paper doll" views, each 16 x 32 skin pixels, 4 apart:

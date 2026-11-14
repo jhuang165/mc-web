@@ -316,12 +316,14 @@ export class FirstPerson {
     this.scene.add(this.pivot);
     this.arm = new THREE.Group();
     const armGeometry=firstPersonArmGeometry();
-    const armMesh=new THREE.Mesh(armGeometry,this.material({map:pixelTexture('/media/1.7.10/entity/steve.png')},true));
+    this.armMaterial=this.material({map:pixelTexture('/media/1.7.10/entity/steve.png')},true);const armMesh=new THREE.Mesh(armGeometry,this.armMaterial);
     armMesh.position.set(-1/16,4/16,0);this.arm.add(armMesh);this.arm.position.set(-5/16,2/16,0);this.arm.rotation.z=.1;
     this.pivot.add(this.arm);
     this.item = null;
     this.last = -1;
   }
+  // b73 skins73: the bare hand wears the player's skin texture (RenderPlayer.renderFirstPersonArm binds the skin); the body renderer's current map.
+  setSkin(texture) { const u = this.armMaterial.uniforms.map; if (texture && u.value !== texture) u.value = texture; }
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
     const leather = itemPasses(id, meta, color),
