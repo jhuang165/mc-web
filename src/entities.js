@@ -1,5 +1,5 @@
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
-import { orderTargets } from "./candidate-order.js"; // b72
+import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
 import { noteGoneMobs } from "./tracker-transient.js";
 import { copyWaterEnter, copyWaterAfterMove, copyBreathe } from "./copy-water.js"; // batch 61: the copies' water and air draws
@@ -209,12 +209,12 @@ export function mobPose(e, partial) {
 // the zombie's EntityAIAttackOnCollide (us) and EntityAIWander 1.0. A sheep has no
 // `drop`: wool comes from its own dropFewItems (wp.b), and mutton does not exist yet.
 export const ENTITY_TYPES = {
-  pig: { health: 10, width: 0.9, height: 0.9, movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.2, follow: 1.1 }, drop: 202 },
-  cow: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
+  pig: { health: 10, width: f(0.9), height: f(0.9), movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.2, follow: 1.1 }, drop: 202 },
+  cow: { health: 10, width: f(0.9), height: f(1.3), movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
   // EntityMooshroom (wm) extends EntityCow; EntitySnowman (wr): 0.4 x 1.8, 4 health, speed 0.2 (snow-golem.js, mooshroom-golem-live.js).
-  mooshroom: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
+  mooshroom: { health: 10, width: f(0.9), height: f(1.3), movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
   snow_golem: { health: 4, width: f(0.4), height: f(1.8), movement: f(0.2), ai: { wander: 1 }, drop: 0 },
-  sheep: { health: 8, width: 0.9, height: 1.3, movement: f(0.23), ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.1, follow: 1.1 }, drop: 0 },
+  sheep: { health: 8, width: f(0.9), height: f(1.3), movement: f(0.23), ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.1, follow: 1.1 }, drop: 0 },
   // EntityChicken (wg): 0.3 x 0.7, 4 health, speed 0.25; panic 1.4, mate 1.0, tempt
   // (wheat seeds, ade.N) 1.0, follow parent 1.1, wander 1.0. No `drop`: feathers and
   // chicken come from its own dropFewItems (wg.b(ZI)).
@@ -227,8 +227,8 @@ export const ENTITY_TYPES = {
   ocelot: { health: OCELOT_HEALTH, width: OCELOT_WIDTH, height: OCELOT_HEIGHT, movement: OCELOT_SPEED, ai: { wander: 0.8, mate: 0.8 }, damage: 3, drop: 0 },
   zombie: {
     health: 20,
-    width: 0.6,
-    height: 1.8,
+    width: f(0.6),
+    height: f(1.8),
     movement: f(0.23),
     ai: { wander: 1, chase: 1 },
     damage: 3,
@@ -242,13 +242,13 @@ export const ENTITY_TYPES = {
   // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
-  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, damage: 2, drop: 0 },
+  skeleton: { health: 20, width: f(0.6), height: f(1.8), movement: 0.25, ai: { wander: 1 }, damage: 2, drop: 0 },
   wither_skeleton: WITHER_SKELETON_STATS, // EntitySkeleton type 1 (wither-skeleton.js)
   // EntityCreeper (xz): 0.6 x 1.8, EntityMob's 20 health, speed 0.25; EntityAIAttackOnCollide
   // 1.0 and EntityAIWander 0.8. `damage` is EntityMob's attackDamage 2, which the swell
   // task (mutex 1, ahead of the attack) keeps from ever being dealt. Gunpowder comes from
   // `kill` (creeper.js creeperDrops).
-  creeper: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
+  creeper: { health: 20, width: f(0.6), height: f(1.8), movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
   // EntityVillager (yv): 0.6 x 1.8, 20 health, speed 0.5, no drops or experience (villager.js).
   villager: VILLAGER_TYPE,
   // EntityIronGolem (wt): 1.4 x 2.9, 100 health, speed 0.25; the attack, drops and AI are iron-golem.js / village-ai.js.
@@ -262,9 +262,9 @@ export const ENTITY_TYPES = {
   // EntityWitch (yp): 0.6 x 1.8, 26 health, speed 0.25; the potion attack (witch.js, witch-potions.js) replaces melee. Drops in combat.js.
   witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
-  slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
+  slime: { health: 1, width: f(0.6), height: f(0.6), movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
   // EntityMagmaCube (yf): a slime with its own numbers (nether-melee.js); health, damage and armour follow the size.
-  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: f(0.2), ai: {}, damage: 3, drop: 0 },
+  magma_cube: { health: 1, width: f(0.6), height: f(0.6), movement: f(0.2), ai: {}, damage: 3, drop: 0 },
   // EntityPigZombie (yh): 0.6 x 1.8, 20 health, speed 0.5 (+0.45 while it has a target), attack 5, armour 2; legacy AI (nether-melee-live.js).
   pigman: { health: PIGMAN.health, width: PIGMAN.width, height: PIGMAN.height, movement: PIGMAN.movement, ai: { wander: 1 }, damage: PIGMAN.attackDamage, drop: 0 },
   // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
@@ -761,7 +761,7 @@ export function addVelocity(e, x, y, z) {
 }
 export function entityHit(origin, dir, e, reach) {
   if (e.type === "ender_dragon") return dragonHit(origin, dir, e, reach); // dragon-mobs.js: its seven parts are the targets
-  const base = ENTITY_TYPES[e.type], scale=mobScale(e),t={width:base.width*scale,height:base.height*scale};
+  const base = ENTITY_TYPES[e.type], scale=mobScale(e),t={width:f(base.width*scale),height:f(base.height*scale)};
   let near = 0,
     far = reach;
   for (const [axis, min, max] of [
@@ -2297,15 +2297,16 @@ export class EntityWorld {
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
     const order = this.tickOrder = liveOrder(this, this.withBalls(ridingOrder(this.entities.slice()))); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
+    if (this.walks?.size) for (const q of order) if (q && !q.lateHook && !hasCell(q)) stampWalked(q); // b73: a walked entity not yet filed gets its cell (stampEntity keeps those it knows)
     trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
-    const sections = () => { if (prevEntity) trackSections(this, [prevEntity]); prevEntity = null; };
+    const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
-      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); } // the player's place in the list: his mount no longer lists him
+      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); } // the player's place in the list: his mount no longer lists him
       clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
       this.beforeMob?.(e); // host hook (multiplayer/server-mobs.js): the nearest of several players is the AI's player for this mob
       seat();
@@ -2455,7 +2456,7 @@ export class EntityWorld {
       this.turnBody(e);
       this.swingLimbs(e);
     }
-    if (!playerTurn) releaseSeats(seats); // the player's place is after every entity of this pass
+    if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); } // the player's place is after every entity of this pass
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();

@@ -26,7 +26,7 @@ export function gravelDrop(random, fortune = 0) {
 export const FALL_DELAY = 2;
 export const MAX_TICKS = 1000;
 // EntityFallingBlock: setSize(0.98F, 0.98F), yOffset = height / 2.
-export const FALLING_SIZE = 0.98, FALLING_Y_OFFSET = f(0.49);
+export const FALLING_SIZE = f(0.98), FALLING_Y_OFFSET = f(0.49);
 
 const NEIGHBOURS = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
 const key = (x, y, z) => `${x},${y},${z}`;

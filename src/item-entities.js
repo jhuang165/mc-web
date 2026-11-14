@@ -16,6 +16,7 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { entityPushOut } from "./entities.js";
 import { freshEntityRandom } from "./java-random.js";
+import { orderTargets } from "./candidate-order.js"; // b73
 import { mhSin, mhCos } from "./lighting.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
@@ -317,22 +318,33 @@ export class ItemEntities {
   // with items; EntityItem.onCollideWithPlayer stores what fits once the
   // pickup delay is over. Returns the items that gave anything.
   collect(feet, width, height, add) {
-    const r = width / 2 + 1, picked = [];
+    const picked = [];
+    for (const c of orderTargets(this.pickupCandidates(feet, width, height))) { const got = this.takeOne(c.ref, add); if (got) picked.push(got); } // b73: the world's list order (candidate-order.js)
+    this.items = this.items.filter((e) => !e.dead);
+    return picked;
+  }
+  // The items EntityPlayer.onLivingUpdate's grown box (1, 0.5, 1) meets (pickup delay over, not frozen), as order-sortable targets. `width` is the player's width (the box uses its float).
+  pickupCandidates(feet, width, height) {
+    const r = f(width) / 2 + 1, out = [];
     for (const e of this.items) {
       if (e.dead || e.delay > 0 || isFrozen(e)) continue;
       const [a, b, c, d, g, h] = this.box(e);
-      if (!(d > feet.x - r && a < feet.x + r && g > feet.y - 0.5 && b < feet.y + height + 0.5 && h > feet.z - r && c < feet.z + r)) continue;
-      const before = e.stack.count;
-      // InventoryPlayer.addItemStackToInventory refuses exactly stackSize 0, so a Count 0 item stays (probed, itemRead EntityItem count 0). A negative
-      // stack is added anyway (a new -n slot, or it lowers a matching stack) and the stack size goes to 0, but the call reports false: no pickup event,
-      // and the entity lives on with Count 0 (neg-stacks2-reference.json pickup).
-      if (before === 0) continue;
-      if (!add(e.stack) || before < 0) continue;
-      picked.push({ item: e, count: before - e.stack.count });
-      if (e.stack.count <= 0) e.dead = true;
+      if (!(d > feet.x - r && a < feet.x + r && g > feet.y - 0.5 && b < feet.y + f(height) + 0.5 && h > feet.z - r && c < feet.z + r)) continue;
+      out.push({ key: e, ref: e, box: [a, b, c, d, g, h], posY: e.y + W });
     }
-    this.items = this.items.filter((e) => !e.dead);
-    return picked;
+    return out;
+  }
+  // EntityItem.onCollideWithPlayer for one item: what fits goes into the inventory through `add`; returns { item, count } when it gave anything.
+  takeOne(e, add) {
+    if (e.dead) return null;
+    const before = e.stack.count;
+    // InventoryPlayer.addItemStackToInventory refuses exactly stackSize 0, so a Count 0 item stays (probed, itemRead EntityItem count 0). A negative
+    // stack is added anyway (a new -n slot, or it lowers a matching stack) and the stack size goes to 0, but the call reports false: no pickup event,
+    // and the entity lives on with Count 0 (neg-stacks2-reference.json pickup).
+    if (before === 0) return null;
+    if (!add(e.stack) || before < 0) return null;
+    if (e.stack.count <= 0) e.dead = true;
+    return { item: e, count: before - e.stack.count };
   }
   clear() {
     this.items = [];

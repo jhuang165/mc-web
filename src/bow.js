@@ -467,23 +467,29 @@ export class Arrows {
   // both boxes grown (1, 0, 1), else the player's box grown (1, 0.5, 1); the candidates meet the player in chunk list order (candidate-order.js), which decides who
   // gets the last free inventory slot.
   collect(playerBox, survival, take = (n) => survival.inventory?.add ? survival.inventory.add(makeStack(ARROW, n)) : survival.add(ARROW, n), ridingBox = null) {
+    let n = 0;
+    for (const { ref: a } of orderTargets(this.pickupCandidates(playerBox, ridingBox), () => this.list.map((q) => ({ key: q, ref: q, box: box(q) })))) if (this.takeOne(a, survival, take)) n++;
+    if (n) this.list = this.list.filter((a) => !a.dead);
+    return n;
+  }
+  // The stuck arrows EntityPlayer.onLivingUpdate's trigger box meets, as order-sortable targets (b73: the pickup pass interleaves them with items, pickup-order.js).
+  pickupCandidates(playerBox, ridingBox = null) {
     const near = ridingBox
       ? [Math.min(playerBox[0], ridingBox[0]) - 1, Math.min(playerBox[1], ridingBox[1]), Math.min(playerBox[2], ridingBox[2]) - 1, Math.max(playerBox[3], ridingBox[3]) + 1, Math.max(playerBox[4], ridingBox[4]), Math.max(playerBox[5], ridingBox[5]) + 1]
       : [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];
-    let n = 0;
     const cands = [];
     for (const a of this.list) if (!a.dead && !isFrozen(a) && overlap(box(a), near)) cands.push({ key: a, ref: a, box: box(a) });
-    for (const { ref: a } of orderTargets(cands, () => this.list.map((q) => ({ key: q, ref: q, box: box(q) })))) {
-      if (a.dead || !a.inGround || a.shake > 0) continue;
-      let ok = a.pickup === 1 || (a.pickup === 2 && survival.creative);
-      if (a.pickup === 1 && !take(1)) ok = false;
-      if (!ok) continue;
-      this.sound(a, "random.pop", f(0.2), f(f(f(f(a.rand.nextFloat() - a.rand.nextFloat()) * f(0.7)) + 1) * 2));
-      a.dead = true;
-      n++;
-    }
-    if (n) this.list = this.list.filter((a) => !a.dead);
-    return n;
+    return cands;
+  }
+  // EntityArrow.onCollideWithPlayer for one arrow; true when the player took it.
+  takeOne(a, survival, take = (n) => survival.inventory?.add ? survival.inventory.add(makeStack(ARROW, n)) : survival.add(ARROW, n)) {
+    if (a.dead || !a.inGround || a.shake > 0) return false;
+    let ok = a.pickup === 1 || (a.pickup === 2 && survival.creative);
+    if (a.pickup === 1 && !take(1)) ok = false;
+    if (!ok) return false;
+    this.sound(a, "random.pop", f(0.2), f(f(f(f(a.rand.nextFloat() - a.rand.nextFloat()) * f(0.7)) + 1) * 2));
+    a.dead = true;
+    return true;
   }
   // EntityArrow.writeEntityToNBT: the tile (shorts), inTile, inData, shake, inGround, pickup
   // (bytes), life (ticksInGround), damage and the base Entity's position, motion, rotation

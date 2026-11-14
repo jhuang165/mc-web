@@ -27,9 +27,10 @@ test("passive spawns are seeded, stand on the surface, and survive reload withou
 });
 test("mob boxes use the 1.7.10 setSize dimensions", () => {
   const size = (t) => [ENTITY_TYPES[t].width, ENTITY_TYPES[t].height];
-  assert.deepEqual(size("pig"), [0.9, 0.9]);
-  assert.deepEqual(size("cow"), [0.9, 1.3]);
-  assert.deepEqual(size("zombie"), [0.6, 1.8]);
+  const F = Math.fround; // b73: the table holds the setSize floats
+  assert.deepEqual(size("pig"), [F(0.9), F(0.9)]);
+  assert.deepEqual(size("cow"), [F(0.9), F(1.3)]);
+  assert.deepEqual(size("zombie"), [F(0.6), F(1.8)]);
 });
 test("entity ray selection respects reach and block occlusion", () => {
   const a = new EntityWorld(flat, [

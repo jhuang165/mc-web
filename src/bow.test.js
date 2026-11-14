@@ -369,7 +369,7 @@ const mobs = (list, random = () => 0.5) => new EntityWorld(grass, list.map((m, i
 
 test("the skeleton is 0.6 x 1.8 with 20 health at speed 0.25", () => {
   const t = ENTITY_TYPES.skeleton;
-  assert.deepEqual([t.health, t.width, t.height, t.movement], [20, 0.6, 1.8, 0.25]);
+  assert.deepEqual([t.health, t.width, t.height, t.movement], [20, Math.fround(0.6), Math.fround(1.8), 0.25]); // setSize(0.6F, 1.8F) (b73: the table holds the floats)
 });
 
 test("a skeleton's arrow leaves from the eye, with the target a third of its height up, and random.bow plays", () => {

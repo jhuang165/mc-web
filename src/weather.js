@@ -107,7 +107,7 @@ export const strikeBox = (b) => [b.x - 3, b.y - 3, b.z - 3, b.x + 3, b.y + 9, b.
 // AxisAlignedBB.intersectsWith for [x0, y0, z0, x1, y1, z1] boxes, and an entity's
 // box from its feet position.
 export const overlaps = (a, b) => a[0] < b[3] && a[3] > b[0] && a[1] < b[4] && a[4] > b[1] && a[2] < b[5] && a[5] > b[2];
-export const entityBox = (e, width, height) => [e.x - width / 2, e.y, e.z - width / 2, e.x + width / 2, e.y + height, e.z + width / 2];
+export const entityBox = (e, width, height) => { const w = Math.fround(width) / 2, h = Math.fround(height); return [e.x - w, e.y, e.z - w, e.x + w, e.y + h, e.z + w]; }; // setSize(float, float): the float edges (b73)
 
 // EntityLightningBolt (xh), as ticked on the client with the server's damage hook.
 export class LightningBolt {

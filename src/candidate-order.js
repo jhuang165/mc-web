@@ -24,6 +24,16 @@ export function stampEntity(ref, x, y, z, first = false, lookup = false) {
   }
   return e;
 }
+// Batch 73 (mobcells73): the re-slice of one walked entity right after its update (the single-player walk in EntityWorld.tickMobs calls this for every mob, item, orb, arrow, vehicle),
+// so its cell and list place are current when a sweep or pick looks. An entity with a non-finite position is left alone. `posY` is the entity's own y (an orb's `y` is its box bottom).
+export function stampWalked(e, first = false) {
+  const y = e?.posY ?? (e?.stack && e.hover !== undefined ? e.y + 0.125 : e?.y); // an item's y is its box bottom, its posY the centre (yOffset 0.125)
+  if (!e || !Number.isFinite(e.x) || !Number.isFinite(y) || !Number.isFinite(e.z)) return;
+  stampEntity(e, e.x, y, e.z, first);
+}
+// The player (key "player", the first entity in the world's list) at his own turn in the walk.
+export const stampPlayerCell = (p) => { if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) stampEntity("player", p.x, p.y + Math.fround(1.62), p.z, true); }; // his posY is the eye
+export const hasCell = (ref) => cellStore(ref).has(ref);
 export const forgetEntity = (ref) => cellStore(ref).delete(ref);
 
 // The position natively stored for a target: the entity's own x and z when they agree with the box centre (a centre recomputed from the box can land on the other
@@ -32,7 +42,7 @@ const posOf = (t) => {
   if (t.pos) return t.pos; // a candidate without a box names its position
   const cx = (t.box[0] + t.box[3]) / 2, cz = (t.box[2] + t.box[5]) / 2, k = t.key ?? t.ref ?? t.target;
   const own = k !== null && typeof k === "object" && Number.isFinite(k.x) && Number.isFinite(k.z) && Math.abs(k.x - cx) < 1e-6 && Math.abs(k.z - cz) < 1e-6;
-  return [own ? k.x : cx, t.posY ?? t.box[1], own ? k.z : cz];
+  return [own ? k.x : cx, t.posY ?? (k === "player" ? t.box[1] + Math.fround(1.62) : t.box[1]), own ? k.z : cz]; // the player's posY is his eye
 };
 const keyOf = (t) => t.key ?? t.ref ?? t.target ?? t;
 

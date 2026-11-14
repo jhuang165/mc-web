@@ -271,8 +271,8 @@ export const PHYSICS = Object.freeze({
   gravity: 0.08,
   drag: Math.fround(0.98),
   jump: Math.fround(0.42),
-  width: 0.6,
-  height: 1.8,
+  width: Math.fround(0.6), // Entity.setSize(0.6F, 1.8F): the float box edges (batch 73 mobcells73)
+  height: Math.fround(1.8),
   eye: 1.62,
 });
 export function fallingVelocity(v) {

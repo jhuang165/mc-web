@@ -4,6 +4,7 @@
 import { isFrozen } from "./saved-order.js"; // b62
 import { tickTnt, TNT_POWER } from "./explosion.js";
 import { hangingArrowTargets } from "./hanging.js";
+import { collectPickups } from "./pickup-order.js"; // b73
 import { ringEntityActive } from './streaming-ticks.js';
 import { tickMinecartOne, finishMinecartSimulation, tickBoatOne, finishBoatSimulation, pushMobOnVehicles } from "./structure-simulation.js";
 
@@ -74,14 +75,32 @@ function collectItems(state, hooks) {
   if (picked.length) itemsCollected(picked);
 }
 
-function collectArrows(state, hooks) {
-  const { arrows, survival, position, width, height } = state, { arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
+// The player's box and the ridden entity's (EntityPlayer.onLivingUpdate's trigger box inputs).
+function pickupBoxes(state) {
+  const { arrows, position, width, height } = state;
   const { x, y, z } = position, half = Math.fround(width) / 2; // b72: setSize(0.6F, 1.8F) keeps the floats (ChunkOrderProbe trigger scenes sit on the box edges)
   const playerBox = [x - half, y, z - half, x + half, y + Math.fround(height), z + half];
   // b72: a living ridden entity (cart, boat or mount) widens the pickup box to the union (EntityPlayer.onLivingUpdate; executed in ArrowTriggerProbe)
   const v = state.rider?.vehicle, mob = v && !v.bb && state.mobs?.size ? state.mobs.size(v) : null;
   const ridingBox = !v || v.dead ? null : v.bb ?? (mob ? [v.x - mob[0] / 2, v.y, v.z - mob[0] / 2, v.x + mob[0] / 2, v.y + mob[1], v.z + mob[0] / 2] : null);
+  return { playerBox, ridingBox };
+}
+function collectArrows(state, hooks) {
+  const { arrows, survival } = state, { arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
+  const { playerBox, ridingBox } = pickupBoxes(state);
   if (survival.health > 0 && arrows.collect(playerBox, survival, undefined, ridingBox)) arrowsCollected();
+  flushArrows();
+}
+// b73 (pickup-order.js): after the list walk items and stuck arrows are taken in ONE pass, in the world's list order, as EntityPlayer.onLivingUpdate does; each arrow's pop sound
+// is flushed at once so it stays between the items' sounds.
+function collectItemsAndArrows(state, hooks) {
+  const { items, arrows, survival, position, width, height } = state, { itemPicked = () => {}, itemsCollected = () => {}, arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
+  if (survival.health > 0) {
+    const { playerBox, ridingBox } = pickupBoxes(state);
+    const got = collectPickups({ items, arrows, survival, feet: position, width, height, playerBox, ridingBox, add: (stack) => survival.inventory.add(stack) }, { itemPicked, arrowTaken: flushArrows });
+    if (got.items.length) itemsCollected(got.items);
+    if (got.arrows) arrowsCollected();
+  }
   flushArrows();
 }
 
@@ -96,11 +115,11 @@ export const isWalked = (mobs) => !!mobs?.walks?.size;
 export function finishEntitySimulation(state, hooks = {}) {
   if (!isWalked(state.mobs)) return;
   const { projectiles, mobs } = state, { projectileEvent = () => {}, handleEntityEvents = () => {} } = hooks;
-  collectItems(state, hooks);
+  collectItemsAndArrows(state, hooks); // b73: one pass (the arrows used to follow the events below)
   projectiles.tickEffects?.(state.world);
   for (const event of projectiles.drain()) projectileEvent(event);
   if (mobs) handleEntityEvents();
-  collectArrows(state, hooks);
+  hooks.flushArrows?.(); // the arrow redraw after the events, as collectArrows ended before
   // The vehicles' pushes on the player and the mobs (their own collideWithNearbyEntities) and the leftover drops of the hanging entities.
   if (mobs.walks.has("cart")) finishMinecartSimulation(state, hooks.carts ?? {});
   if (mobs.walks.has("boat")) finishBoatSimulation(state, hooks.boats ?? {});

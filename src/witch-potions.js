@@ -101,7 +101,7 @@ export class WitchPotions {
       const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
       victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: isUndeadMob(e), applicable: (id) => isPotionApplicable(e, id), ref: e, direct: hit === e });
     }
-    if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: 0.6, height: 1.8, undead: false, ref: "player", direct: hit === "player" });
+    if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: f(0.6), height: f(1.8), undead: false, ref: "player", direct: hit === "player" });
     for (const r of splashImpact(damage, { x, y, z }, victims, owner, custom)) {
       if (r.ref === "player") {
         // EntityPlayer: magic damage ignores armour; slowness/weakness/speed/strength live in status-effects.js and feed movement, FOV and melee damage (player-knockback.md).
