@@ -10,7 +10,7 @@ Still true: death throw and bed/TNT knockback nudge absent, adventure/frame rule
 Code reading only (grep of `src/` and `server/`); nothing executed, no bytecode read, no browser. Browser-only: item-hand motion, command block editor layout, F3+C dialog layout.
 
 ## Verification
-`npm run build`: see the track report. Full npm test not run (batch rule). No catalogue edits, so catalogue tests not rerun.
+`npm run build`: ok (7.25s). Full npm test not run (batch rule). No catalogue edits, so catalogue tests not rerun.
 
 ## Follow-ups (real code gaps still open, code reading)
 1. No death throw on player death: no motion write in `src/survival.js` or `src/player-knockback.js` (native `EntityPlayer.onDeath`).
