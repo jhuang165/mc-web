@@ -4,6 +4,7 @@
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
 import { pickMinecart } from '../structure-simulation.js';
+import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
 
 export class RemoteVehicles {
   constructor(world) {
@@ -12,9 +13,11 @@ export class RemoteVehicles {
     this.boats = new Boats();
     this.copies = new Map(); // key -> { v (record), target (state) }
     this.renderers = null;
+    this.hanging = new ClientHanging(); // b68 mppaintings: paintings, item frames and knots (the message's hset / hdel)
   }
   // The `vehicles` message: the newest state of each vehicle in range, and the keys that left.
   apply(message) {
+    this.hanging.apply(message); // b68 mppaintings
     for (const s of message.set ?? []) {
       if (typeof s?.v !== 'string' || ![s.x, s.y, s.z, s.yaw, s.pitch].every(Number.isFinite)) continue;
       let c = this.copies.get(s.v);
@@ -53,15 +56,17 @@ export class RemoteVehicles {
   // EntityRenderer.getMouseOver on the copies' boxes: the nearest vehicle the ray reaches (the 0.1 border included). Returns { key, vehicle, distance } or null.
   pick(origin, dir, reach, wall = reach, ignore = null) { // `ignore`: the key of the vehicle the player sits in
     const skip = ignore && this.copies.get(ignore)?.v, a = pickMinecart(this.carts, origin, dir, reach, wall, skip), b = pickMinecart(this.boats, origin, dir, reach, wall, skip), best = a && (!b || a.distance <= b.distance) ? a : b;
-    return best ? { key: this.keyOf(best.cart), vehicle: best.cart, distance: best.distance } : null;
+    const veh = best ? { key: this.keyOf(best.cart), vehicle: best.cart, distance: best.distance } : null, hang = this.hanging.pick(origin, dir, reach, wall); // b68 mppaintings
+    return hang && (!veh || hang.distance < veh.distance) ? hang : veh;
   }
   draw(partial, hidden = false) {
     if (!this.renderers) return;
     this.renderers.minecart.update(hidden ? [] : this.carts.carts, partial, this.world);
     this.renderers.boat.update(hidden ? [] : this.boats.carts, partial, this.world);
+    this.renderers.hanging?.update(hidden ? [] : this.hanging.list()); // b68 mppaintings
   }
   clear() {
-    this.renderers?.minecart.clear(); this.renderers?.boat.clear();
+    this.renderers?.minecart.clear(); this.renderers?.boat.clear(); this.renderers?.hanging?.clear(); this.hanging.clear();
     this.copies.clear(); this.carts.carts.length = 0; this.boats.carts.length = 0;
   }
 }

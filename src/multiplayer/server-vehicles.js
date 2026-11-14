@@ -25,6 +25,7 @@ import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
 import { syncVehiclePassengers } from '../vehicle-riders.js';
+import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5, 6]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
@@ -62,6 +63,7 @@ export class ServerVehicles {
       runCommand: cart => { this.cartCommands.push(cart); }, // b63: xn.a(x, y, z, powered) -> CommandBlockLogic.func_145755_a
     };
     registerBoatWorld(host.world, this.boats); setWorldEntityBoxes(worldBoatBoxes); // b67 boatstand: players and mobs stand on and bump into this world's boats (World.getCollidingBoundingBoxes)
+    this.hanging = new ServerHanging(host, ids, saved?.hanging ?? null); // b68 mppaintings: this dimension's paintings and item frames (leash knots come from the mobs)
     this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
   }
@@ -88,8 +90,8 @@ export class ServerVehicles {
     const system = key[0] === 'b' ? this.boats : this.carts, id = Number(key.slice(1));
     return system.carts.find(c => c.id === id && !c.dead) ?? null;
   }
-  addPlayer(p) { this.views.set(p.id, { known: new Map() }); }
-  removePlayer(p) { this.dismount(p); this.views.delete(p.id); }
+  addPlayer(p) { this.views.set(p.id, { known: new Map() }); this.hanging.addPlayer(p); }
+  removePlayer(p) { this.dismount(p); this.views.delete(p.id); this.hanging.removePlayer(p); }
 
   // A vehicle placed at a position by something other than a player (a dispenser, a command): kind 'minecart' | 'chest_minecart' | 'furnace_minecart' | 'tnt_minecart' | 'hopper_minecart' | 'boat'.
   // Cart records are the rail cell centre as ItemMinecart makes them; a boat's `y` is its box bottom, as ItemBoat passes it. Returns the vehicle or null.
@@ -133,11 +135,12 @@ export class ServerVehicles {
   // C02 UseEntity as the server queues it: `{ v, hit }`. Reach is the server's, from the player's eye to the vehicle's box centre.
   queue(id, m) {
     const host = this.host;
-    if (!host.players.has(id) || typeof m?.v !== 'string' || !/^[bc]\d+$/.test(m.v) || host.actions.filter(a => a.id === id).length >= 4) return false;
+    if (!host.players.has(id) || typeof m?.v !== 'string' || !/^[bchk]\d+$/.test(m.v) || host.actions.filter(a => a.id === id).length >= 4) return false;
     host.actions.push({ id, veh: { v: m.v, hit: m.hit === true } });
     return true;
   }
   act(p, { v: key, hit }) {
+    if (/^[hk]/.test(key)) return this.hanging.act(p, key, hit); // b68 mppaintings: a painting, item frame or leash knot
     const host = this.host, v = this.find(key);
     if (!v || p.survival.health <= 0 || p.mount?.key === key) return false; // a rider cannot hit or use the vehicle it sits in
     const b = v.bb, dx = (b[0] + b[3]) / 2 - p.position.x, dy = (b[1] + b[4]) / 2 - (p.position.y + PHYSICS.eye), dz = (b[2] + b[5]) / 2 - p.position.z;
@@ -200,6 +203,7 @@ export class ServerVehicles {
   // One world tick, after the players' own update: riders let go (sneak, death, a broken vehicle), boats take the input, both lists tick, pushes, drops, seats, achievements.
   tick() {
     const host = this.host, world = host.world;
+    this.hanging.tick(); // b68 mppaintings: the 101st-update surface check
     this.riderInput();
     const any = this.carts.carts.length || this.boats.carts.length || [...host.players.values()].some(p => p.mount);
     if (!any) { this.track(); return; }
@@ -268,8 +272,9 @@ export class ServerVehicles {
       for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); del.push(key); }
       if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}) };
     }
+    for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel
     this.carts.reap(); this.boats.reap();
   }
 
-  save() { return { carts: this.carts.toJSON(), boats: this.boats.toJSON() }; }
+  save() { return { carts: this.carts.toJSON(), boats: this.boats.toJSON(), hanging: this.hanging.save() }; }
 }

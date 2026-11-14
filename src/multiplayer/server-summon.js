@@ -7,7 +7,7 @@
 // ServerVehicles, arrows / snowballs / pearls / potions / eyes through ServerProjectiles (`adopt` adds the one entity, so a live ghast ball or arrow keeps its owner and id), blaze and
 // ghast fireballs and wither skulls into the mobs' own Fireballs, primed TNT into the dispenser's `primed`, falling blocks into the dimension's FallingBlocks, items and orbs into the
 // dimension's lists (an orb takes a world entity id), rockets into the dispenser's FireworkRockets.
-// A kind the server cannot keep is a failed creation (`commands.summon.failed`, also as a Riding mount, which ends the chain): the mobs outside SUPPORTED (the giant), and the hanging entities (paintings, item frames, leash knots: the server has no hanging system).
+// A kind the server cannot keep is a failed creation (`commands.summon.failed`, also as a Riding mount, which ends the chain): the mobs outside SUPPORTED (the giant); paintings, item frames and leash knots are kept by server-hanging.js since batch 68 (mppaintings).
 // Coordinates are native (b68 summon2): `~` starts from the sender's native position and the End's origin maps them into the shifted window; the "out of world" refusal tests the mapped cell.
 // No mob cap: native /summon creates past the natural spawn limit (the b67 MOB_LIMIT refusal is gone; the new mobs carry summonKeep so ServerMobs' cull leaves them).
 import { createCommandHost } from '../command-host.js';
@@ -25,9 +25,9 @@ import { JavaRandom } from '../java-random.js';
 export const nativeOrigin = world => ({ x: world?.originX ?? 0, z: world?.originZ ?? 0 });
 export const toLocal = (world, x, z) => { const o = nativeOrigin(world); return [x - o.x, z - o.z]; };
 export const toNative = (world, x, z) => { const o = nativeOrigin(world); return [x + o.x, z + o.z]; };
-// Named place for the paintings track: push `(sim, player, dim, world) => ({ hanging: <host> })` here and delete 'Painting' / 'ItemFrame' / 'LeashKnot' from UNKEPT_ENTITIES once kept.
+// Extra hosts by kind: push `(sim, player, dim, world) => ({ <host>: ... })` here (b68 summon2); mppaintings sets `hanging` on the hosts directly.
 export const SUMMON_HOSTS = [];
-export const UNKEPT_ENTITIES = new Set(['Painting', 'ItemFrame', 'LeashKnot']);
+export const UNKEPT_ENTITIES = new Set([]); // b68 mppaintings: paintings, item frames and leash knots are kept now (server-hanging.js)
 
 // Adds one converted projectile record (java-projectiles.js) to the live list of `d`, the dimension's ServerProjectiles. Returns false when the list is not kept here.
 export function adoptProjectile(sim, d, mobs, dim, list, record) {
@@ -82,7 +82,7 @@ export function summonHost(sim, p) {
       d.hook?.(); // the witch's potion lane and the skeleton's bow are wired on first use
       const orbs = { get orbs() { return { push: o => { if (xp.ids) o.id = xp.ids.take(); xp.orbs.push(o); xp.joined?.(o); } }; } };
       const hosts = {
-        items: sim.items, xpOrbs: orbs, primed: d.primed, falling: sim.falling, boats: sim.vehicles?.boats, projectiles: d.balls, arrows: d.arrows, mobs, eyes: null, hanging: null, dimension: dim,
+        items: sim.items, xpOrbs: orbs, primed: d.primed, falling: sim.falling, boats: sim.vehicles?.boats, projectiles: d.balls, arrows: d.arrows, mobs, eyes: null, hanging: sim.vehicles?.hanging?.h ?? null /* b68 mppaintings: the dimension's Hanging */, dimension: dim,
         adopt: (list, record) => adoptProjectile(sim, d, mobs, dim, list, record),
       };
       for (const extra of SUMMON_HOSTS) Object.assign(hosts, extra(sim, p, dim, w)); // b68 summon2: the hook of mppaintings (hanging entities)

@@ -93,9 +93,9 @@ test("a data tag: Health, CustomName, Equipment and a two-step Riding chain are 
   assert.equal(by("spider").ridingEntity, by("chicken"));
 });
 
-test("the paintings hook is a named place: SUMMON_HOSTS is empty and the three hanging kinds are still refused", () => {
+test("hanging kinds are kept since mppaintings (b68 lead); the giant is still refused", () => {
   assert.deepEqual(SUMMON_HOSTS, []);
-  assert.deepEqual([...UNKEPT_ENTITIES].sort(), ["ItemFrame", "LeashKnot", "Painting"]);
+  assert.deepEqual([...UNKEPT_ENTITIES], []);
   const f = fixture(); assert.deepEqual(f.say("/summon Giant"), [FAILED]);
 });
 
