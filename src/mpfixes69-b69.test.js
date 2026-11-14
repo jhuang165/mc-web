@@ -8,7 +8,7 @@ import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { ServerSocial, chatDisplay } from "./server-broadcast.js";
 import { langReady } from "./chat-component.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
-import { MOB_LIMIT } from "./multiplayer/server-mobs.js";
+const MOB_LIMIT = 80; // the b63-b72 server cap, gone in b73 (mpspawn73): the tests keep their count past it
 import { useOnBlock } from "./multiplayer/server-use.js";
 import { tagToLocal } from "./multiplayer/server-summon.js";
 import { Hanging, PAINTING_ITEM, FRAME_ITEM } from "./hanging.js";

@@ -9,7 +9,7 @@ import { langReady } from "./chat-component.js";
 import { KillCredit } from "./multiplayer/server-combat-tracker.js";
 import { trackerLimit, clampTrackRange } from "./ring-events.js";
 import { TRACKER_LIMIT } from "./entity-tracker.js";
-import { MOB_LIMIT } from "./multiplayer/server-mobs.js";
+const MOB_LIMIT = 80; // the b63-b72 server cap, gone in b73 (mpspawn73): the tests keep their count past it
 import { nativeOrigin, toLocal, toNative, SUMMON_HOSTS, UNKEPT_ENTITIES } from "./multiplayer/server-summon.js";
 import { sendSpawnerFx } from "./multiplayer/server-spawners.js";
 
