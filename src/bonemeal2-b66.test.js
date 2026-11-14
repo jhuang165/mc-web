@@ -95,10 +95,11 @@ test('the server fertilises a mushroom (stack spent and counted whether or not i
   assert.equal(click(s, p, 64, 10, 64), true);
   assert.equal(used(p), 1);
   assert.equal(p.survival.held.count, 39);
-  put(s.world, 66, 10, 64, 31, 1); // tall grass on the grass floor (web id 1)
-  assert.equal(click(s, p, 66, 10, 64), true);
-  assert.deepEqual(native(s.world, 66, 10, 64), [175, 2]);
-  assert.deepEqual(native(s.world, 66, 11, 64), [175, 8]);
+  // b70: the tall grass sits 4 blocks off the mushroom's row; at (66, 10, 64) a grown red mushroom's cap side (radius 2, from y 11) could fill the cell above (Math.random, about 1 run in 8).
+  put(s.world, 64, 10, 68, 31, 1); // tall grass on the grass floor (web id 1)
+  assert.equal(click(s, p, 64, 10, 68), true);
+  assert.deepEqual(native(s.world, 64, 10, 68), [175, 2]);
+  assert.deepEqual(native(s.world, 64, 11, 68), [175, 8]);
   put(s.world, 68, 10, 64, 31, 0); // dead bush
   const before = p.survival.held.count;
   assert.equal(click(s, p, 68, 10, 64), false);
