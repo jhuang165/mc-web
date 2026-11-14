@@ -18,7 +18,9 @@ import { settleFacing } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
 
 export const FURNACE = 14;
-const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color'];
+const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color', 'pages', 'author', 'title']; // b66 mpbooks: the book tags (books.js)
+// b66 mpbooks: a book's tags as a client can have made them (GuiScreenBook: at most 50 pages of 256 chars, a title of 16 chars; the author is a string).
+const validBookExtra = e => (e.pages === undefined || (Array.isArray(e.pages) && e.pages.length <= 50 && e.pages.every(t => typeof t === 'string' && t.length <= 256))) && (e.title === undefined || (typeof e.title === 'string' && e.title.length <= 16)) && (e.author === undefined || (typeof e.author === 'string' && e.author.length <= 64));
 const REACH_SQ = 64, PENDING_TICKS = 100;
 // A stack from the wire: id, count and damage are checked, the tag fields are kept from a short whitelist.
 export function cleanStack(s) {
@@ -28,7 +30,8 @@ export function cleanStack(s) {
   if (!Number.isInteger(damage) || damage < 0 || damage > 32767) return undefined;
   const extra = {};
   for (const k of EXTRAS) if (s[k] !== undefined) extra[k] = s[k];
-  if (JSON.stringify(extra).length > 1500) return undefined;
+  if (extra.pages !== undefined || extra.author !== undefined || extra.title !== undefined) { if (!validBookExtra(extra)) return undefined; }
+  else if (JSON.stringify(extra).length > 1500) return undefined;
   return makeStack(s.id, s.count, damage, undefined, extra);
 }
 export const wireStack = s => (s ? JSON.parse(JSON.stringify(s)) : null);

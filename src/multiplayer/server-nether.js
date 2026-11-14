@@ -22,6 +22,7 @@ import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
 import { LiveRedstone } from '../redstone-live.js';
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
+import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
 import { tickWorldSystems } from '../world-tick.js';
 import { tickBeacons } from '../pyramid-live.js';
@@ -81,6 +82,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
     skyLight: () => 0,
   });
   n.redstone.restore(saved.redstone);
+  installMusic(sim, n.redstone, n.dim ?? NETHER, saved.redstone); // b66 mpbooks: note blocks and jukeboxes of this dimension
   n.containers = new ServerContainers(sim); n.containers.dim = n.dim ?? NETHER; // b63: the End is built by the same function with n.dim = 1
   n.light = new LightVolume(w, (x, y, z, b) => lightEmission(b, n.redstone.lit.has(`${x},${y},${z}`) || n.containers.litFurnaces.has(`${x},${y},${z}`)));
   w.blockLight = (x, y, z) => n.light.blockAt(x, y, z);

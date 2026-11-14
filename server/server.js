@@ -10,6 +10,7 @@ import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial } from '../src/server-broadcast.js';
+import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { installServerRules } from '../src/servercommands-b59.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -201,6 +202,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'vehUse' || m.type === 'vehHit') simulation.queueVehicle(id, { v: m.v, hit: m.type === 'vehHit' }); // b61: C02 on a minecart or boat
         else if (m.type === 'vehCmd') social.setCartCommand(id, m.v, m.command); // b63: MC|AdvCdm on a command block minecart (Creative operator)
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
+        else if (m.type === 'bookEdit' || m.type === 'bookSign') { if (!bookPacket(simulation, id, m)) ws.close(1008, 'Invalid book tag!'); } // b66 mpbooks: MC|BEdit / MC|BSign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
         else if (m.type === 'beaconPayment') simulation.setBeaconPayment(id, m); // click on the beacon window's payment slot
         else if (m.type === 'achDrop') simulation.dropHeld(id, m.all === true); // b60: Q / Ctrl+Q, the item entity carries the thrower
