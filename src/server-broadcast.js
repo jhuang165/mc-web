@@ -23,9 +23,10 @@ import { itemComponent } from "./item-component.js";
 import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
 import { runCartCommand, setCartCommand } from "./multiplayer/server-cart-commands.js"; // b63
 import { pickedAchievement } from "./achievements-live.js";
+import { summonHost } from "./multiplayer/server-summon.js"; // b67 mpsummon
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
-export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", ...SERVER_WORLD_COMMANDS]);
+export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", "summon" /* b67 mpsummon */, ...SERVER_WORLD_COMMANDS]);
 export const SERVER_UNSUPPORTED_TEXT = (name) => `The /${name} command is not available on this server`;
 
 /** An S02PacketChat of this build: the component as JSON beside the legacy text older clients print. */
@@ -145,6 +146,7 @@ export class ServerSocial {
     Object.defineProperties(host, Object.getOwnPropertyDescriptors(worldHost(sim)));
     host.listPlayers = (uuids) => ({ names: [...sim.players.values()].map((q) => (uuids ? `${q.name} (${q.resumeKey})` : q.name)), max: host.maxPlayers });
     host.printTo = (name, component) => to(name, component);
+    Object.defineProperties(host, Object.getOwnPropertyDescriptors(summonHost(sim, sender))); // b67 mpsummon: inWorld, summon (CommandSummon, level 2)
     createCommandRunner(host).run(line);
     this.flushScoreboard();
     // The per-player achievements of a target are reached through forPlayer (below); deliver everything collected in order.

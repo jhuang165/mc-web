@@ -11,6 +11,7 @@ import { commandBlockSender } from '../command-block.js';
 import { cartCommandPosition } from '../command-cart.js';
 import { worldHost, SERVER_WORLD_COMMANDS } from '../servercommands-b59.js';
 import { isComponent } from '../chat-component.js';
+import { summonHost } from './server-summon.js'; // b67 mpsummon
 
 // The wire form of a line, as ServerSocial.command delivers it (chatMessage is passed in to avoid a module cycle).
 const wire = (chatMessage, message) => (typeof message === 'string' || isComponent(message) ? chatMessage(message) : message);
@@ -39,6 +40,7 @@ export function runCartCommand(social, cart, { commands, chatMessage }) {
   Object.defineProperties(base, Object.getOwnPropertyDescriptors(worldHost(sim)));
   base.listPlayers = uuids => ({ names: [...sim.players.values()].map(q => (uuids ? `${q.name} (${q.resumeKey})` : q.name)), max: base.maxPlayers });
   base.printTo = (name, component) => social.toPlayer(name, wire(chatMessage, component));
+  Object.defineProperties(base, Object.getOwnPropertyDescriptors(summonHost(sim, near))); // b67 mpsummon: /summon from a command block cart (near is an Overworld player)
   const sender = commandBlockSender(base, tile, pos);
   tile.outputChanged = () => { tile.watch24 = tile.lastOutput; };
   try { tile.successCount = tile.command ? (createCommandRunner(sender).run(tile.command) ? 1 : 0) : 0; } finally { delete tile.outputChanged; }

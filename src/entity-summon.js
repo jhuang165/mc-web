@@ -52,6 +52,10 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     const made = javaProjectileFromNbt(entity, { convertItem, dimension: hosts.dimension ?? 0 });
     if (!made.record) return { ignored: [`${id} (${made.lost})`], spawned: false };
     const record = made.record;
+    if (hosts.adopt) { // b67 mpsummon: the dedicated server adds the one new entity to its live lists instead of reloading them (a reload would drop owners and ids)
+      if (!hosts.adopt(made.list, record)) return { ignored: [`${id} (not kept)`], spawned: false };
+      return { ignored: [...t.keys()].filter((k) => !known.has(k) && !PROJECTILE_KEYS.has(k)), spawned: true };
+    }
     const append = (holder, extra = {}) => holder.load([...holder.serialize(...(extra.args ?? [])), record], ...(extra.args ?? []));
     if (made.list === "projectiles") append(hosts.projectiles);
     else if (made.list === "arrows") append(hosts.arrows);
