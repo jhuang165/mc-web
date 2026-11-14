@@ -43,6 +43,7 @@ import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragon
 import { DRAGON_EGG } from '../dragon-egg.js';
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
+import { ServerLightning } from './server-lightning.js'; // b66 mplightning: thunderstorm bolts
 import { ServerItems } from './server-items.js';
 import { ServerAchievements } from './server-achievements.js';
 import { ServerWither } from './server-wither.js'; // b63 mpwither
@@ -153,6 +154,7 @@ export class DedicatedSimulation {
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
     this.farming.rained = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y + 1, z);
     this.weather.fire = this.fire.strikes;
+    this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b);
     // Instance hook sees *every* write, including untracked and fluid/redstone
     // writes. Store only the final cell value per tick; never wrap World globally.
@@ -540,6 +542,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();
     this.weather.tick(this.world);
+    this.lightning.tick(); // b66 mplightning
     this.weather.drain();
     this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, hoppers: this.containers.ticks.hoppers },

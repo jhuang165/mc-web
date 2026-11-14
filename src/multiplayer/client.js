@@ -82,6 +82,7 @@ export class DedicatedClient {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
+    if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)
     if (message.type === 'blocks') this.onBlocks(message);
     if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'effect') this.onEffect(message);
