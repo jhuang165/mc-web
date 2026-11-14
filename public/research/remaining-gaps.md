@@ -2,6 +2,42 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 71
+
+Batch 71 covered these areas:
+- **Step sounds.** The player and mobs take the step block from the native cell, with the fence, wall and gate rule (7776 executed cases); mobs on fences are no longer silent.
+- **Mob rules.** Weakness lowers mob damage (executed); slimes split without a cap; spawners take squid, bats, magma cubes and villagers; server XP orbs keep their target.
+- **Mob rendering.** Slimes, magma cubes and falling blocks cast shadows; mobs wear skulls; owned heads show loaded player skins; `jeb_` sheep cycle colours.
+- **HUD and effects.** The vignette is drawn with fancy graphics; witches show their magic particles; the brewing stand selection box follows the native shared bounds (executed); glowstone takes Fortune (executed). The stem darkness pop was found wrong.
+- **Server reach and carts.** PvP reach measures from posY; away-run hoppers find carts; cart positions go out on the native tracker cadence.
+- **Server item and orb ranges.** Players only receive items within 64 blocks and orbs within 160 (clamped by the view distance).
+- **Server chunk loading.** Columns load and unload around each player by the view distance in the native order (executed).
+- **Capes.** Accounts can upload a cape; capes and the Show Cape choice travel over the connection; the Show Cape button works.
+- **Server admin lists.** List commands print in native order; the four JSON list files are read at start-up and written atomically; `generate-structures=false` works on generation 10+ worlds.
+- **Research docs.** 32 more docs swept; four claims were wrong.
+
+Still open from batch 71:
+- **Multiplayer.**
+  - Chunks: the join snapshot carries the first square at once instead of streaming it; block changes still go to every player and the client drops those for absent columns; the legacy End window is never limited; entities in an unloaded column stay on the client.
+  - Trackers: item and orb positions are sent every tick, not on the 20-tick cadence; the `dimRespawn` snapshot is not cut; a look-only cart update sends the full position.
+  - server.properties: the default generation 9 server world builds no villages or other structures whatever `generate-structures` says; list file write order is recalled, not executed. Key names and defaults are recalled.
+  - Capes: single player has no cape source; the other C15 fields (language, view distance) are not ported.
+  - The brewing stand selection flag is kept separately by the server and the client.
+  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
+  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: walking at a short view distance, items appearing at range edges, cart smoothness at the 3-tick cadence, capes on remote players and the profile screen layout. Earlier unseen items from batches 67 to 70 still stand.
+- **Single player.**
+  - Left click on cake does not eat a slice; Nether fog distances use the Overworld values; a mob rider's fall distance is zeroed; boat and cart riders fall silently.
+  - Spawn eggs and `/summon` stop at 40 entities and natural spawning at 256 (native has no cap); the spawn-box test skips the dragon and End crystals.
+  - Stem growth uses its own random; chicken jockeys search mobs in the wrong order; legacy 64-high worlds keep the oak stand-in for big oaks; only one flower pot entry is compared with native.
+  - Step block: `ySize` decay at the start of a move is not modelled; `statsLive` still counts vines as climbing; a riding player's step is bytecode-read only.
+  - Held and dropped skulls are flat icons (native); a head named after a player the game has not loaded stays Steve; mob render changes are bytecode-read only.
+  - Spawners: zombie/pigman and cow/mooshroom counts ignore subclasses. Away-run droppers have no transfer host.
+- **Projectiles.** Candidate order for several fireballs at equal distance is not reproduced; the client arrow trigger box is not executed.
+- **Research docs.** `structure-seeds.md` and its generator still say the streamed spawn is origin + 64 (stale for generation 18+).
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 70
 
 Batch 70 covered these areas:
@@ -15,26 +51,7 @@ Batch 70 covered these areas:
 - **Player rendering.** Cape chase and deadmau5 ears are drawn; no cape texture source yet.
 - **Research docs.** About 40 more docs swept; the dragon egg claim was wrong.
 
-Still open from batch 70:
-- **Multiplayer.**
-  - server.properties: items and XP orbs have no tracking-range filter (no server object tracker); chunks are not limited by view distance and the client ignores the welcome `viewDistance`; `generate-structures` changes nothing. Key names and defaults are recalled, not executed.
-  - PvP reach in `server-pvp.js` still measures from `position.y`, not a sleeper's posY; vehicle posY is taken as the box centre.
-  - User lists: `/banlist` and `/whitelist list` print insertion order; `whitelist.json` is not read at start-up and is not written atomically.
-  - Carts: away-world and ring hoppers do not find carts; the server sends cart states every changed tick, not at the native cadence.
-  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
-  - Villages: the default server world (generation 9) has no generated villages.
-  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: single-player Tab, cart smoothness, clicking from a bed edge, a boat jamming against a painting, a short view distance on distant carts. Earlier unseen items from batches 67 to 69 still stand.
-- **Single player.**
-  - Player footstep cell uses `floor(y - 0.05)`, native `floor(y - 0.2 - yOffset)` with the fence rule; mobs on fence tops are silent.
-  - Weakness does not reduce mob damage; the slime split stops at 40 entities (native has no cap); no spawners for squid, bat, magma cube or villager.
-  - No shadows for slimes, magma cubes or falling blocks; skulls in a mob's helmet slot and SkullOwner skins are not drawn; no vignette or stem darkness pop; no `jeb_` rainbow sheep.
-  - XP orbs re-pick the nearest player every tick; glowstone Fortune is unresolved; the brewing stand selection box is 0.875 high (native may keep the 0.125 slab; needs a probe).
-  - No cape texture source, `hideCape` flag or cape on the wire; the `witchMagic` particle is absent.
-- **Projectiles.** Candidate order for several fireballs at equal distance is not reproduced; the client arrow trigger box is not executed.
-- **Research docs.** Docs only skimmed (listed in the researchdocs4 note) are not cleared.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 70: carried into the batch 71 list above, except the items batch 71 closed or found wrong.
 
 ## Done in batch 69
 
