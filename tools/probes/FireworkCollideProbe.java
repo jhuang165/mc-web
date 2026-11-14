@@ -44,10 +44,12 @@ public class FireworkCollideProbe extends FireworksProbe {
     for (int k = 0; k < blocks.length; k++) bl.append(k > 0 ? "," : "").append(Arrays.toString(blocks[k]));
     bl.append("]");
     System.out.println("{\"case\":\"rocket-blocks\",\"name\":" + q(name) + ",\"remote\":" + remote + ",\"seed\":" + pre + ",\"flight\":" + flight + ",\"start\":[" + sx + "," + sy + "," + sz + "],\"blocks\":" + bl
-      + ",\"lifetime\":" + life0 + ",\"ticks\":" + ticks + ",\"rows\":[" + rows + "],\"states\":" + states + "}");
+      + extra + ",\"lifetime\":" + life0 + ",\"ticks\":" + ticks + ",\"rows\":[" + rows + "],\"states\":" + states + "}");
   }
 
-  public static void main(String[] args) throws Exception {
+  static String extra = ""; // b69 projectiles4: extra JSON members (entities) a subclass probe adds to a record
+
+  static void init() throws Exception {
     Field uf = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
     uf.setAccessible(true);
     U = (sun.misc.Unsafe) uf.get(null);
@@ -81,6 +83,10 @@ public class FireworkCollideProbe extends FireworksProbe {
     for (Method m : add.class.getDeclaredMethods()) if (m.getReturnType() == dh.class && m.getParameterCount() == 0) { m.setAccessible(true); stackTag = m; break; }
     for (Field f : aae.class.getDeclaredFields()) if (f.getType() == add[].class) { f.setAccessible(true); gridStacks = f; }
     if (itemById == null || stackTag == null) throw new IllegalStateException("reflection lookup failed");
+  }
+
+  public static void main(String[] args) throws Exception {
+    init();
     int[][] none = {};
     // a stone ceiling one block above the launch (y 66): the box stops under it, motionY is zeroed each tick, the rocket hangs there until its lifetime ends
     for (int pass = 0; pass < 2; pass++) {

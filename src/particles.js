@@ -77,7 +77,7 @@ function collisionBoxes(world, x0, y0, z0, x1, y1, z1) {
 // boxes (AxisAlignedBB.calculate*Offset), posX/posZ from the box centre and posY
 // from its bottom + yOffset, onGround, motion zeroed on blocked axes, then
 // doBlockCollisions (BlockWeb.onEntityCollidedWithBlock sets isInWeb).
-export function moveParticleEntity(world, p, dx, dy, dz) {
+export function moveParticleEntity(world, p, dx, dy, dz, entityBoxes = null) {
   // noClip: the box is offset and the position follows; nothing else runs.
   if (p.noClip) {
     const b = p.box;
@@ -101,6 +101,8 @@ export function moveParticleEntity(world, p, dx, dy, dz) {
   }
   const b = p.box, ox = dx, oy = dy, oz = dz,
     list = collisionBoxes(world, dx < 0 ? b[0] + dx : b[0], dy < 0 ? b[1] + dy : b[1], dz < 0 ? b[2] + dz : b[2], dx > 0 ? b[3] + dx : b[3], dy > 0 ? b[4] + dy : b[4], dz > 0 ? b[5] + dz : b[5]);
+  // World.getCollidingBoundingBoxes' entity part (b69: a rocket meets boats; `entityBoxes(box)` returns the other entities' sa.J boxes, executed in firework-fluid-reference.json)
+  if (entityBoxes) list.push(...entityBoxes([dx < 0 ? b[0] + dx : b[0], dy < 0 ? b[1] + dy : b[1], dz < 0 ? b[2] + dz : b[2], dx > 0 ? b[3] + dx : b[3], dy > 0 ? b[4] + dy : b[4], dz > 0 ? b[5] + dz : b[5]]));
   for (const o of list)
     if (b[3] > o[0] && b[0] < o[3] && b[5] > o[2] && b[2] < o[5]) {
       if (dy > 0 && b[4] <= o[1] && o[1] - b[4] < dy) dy = o[1] - b[4];

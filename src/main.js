@@ -185,7 +185,7 @@ import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder, spawnEyeShatter, spawnEyeTrail } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
-import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
+import { FireworkRockets, dispenseFirework, setRocketEntityBoxes } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
 import { BEACON, Beacons, validPrimary, validSecondary } from "./pyramid.js";
@@ -525,6 +525,7 @@ let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = nul
 let boats = new Boats({ ids: entityIds }), boatRenderer = null;
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
 setEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } }));
+setRocketEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } })); // b69: a firework rocket stops against boats (fireworks-live.js)
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
 let hanging = new Hanging({ ids: entityIds }), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
