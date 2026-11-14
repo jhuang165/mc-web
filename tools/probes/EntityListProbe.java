@@ -93,6 +93,7 @@ public class EntityListProbe {
       case "cart": e = new xs(w, x, y, z); PlayerStepProbe.field(sa.class, "c").setInt(e, 1); break; // EntityMinecartEmpty (id set as VehicleProbe does)
       case "boat": { xi bt = new xi(w, x, y, z); bt.y = Float.parseFloat(s[7]); bt.A = bt.y; PlayerStepProbe.field(sa.class, "c").setInt(bt, 1); e = bt; break; }
       case "painting": { HangingProbe.seed = 1; HangingProbe.P pt = new HangingProbe.P(w, (int) x, (int) y, (int) z, Integer.parseInt(s[7])); PlayerStepProbe.field(ss.class, "e").setInt(pt, Integer.parseInt(s[8])); e = pt; break; }
+      case "frame": { HangingProbe.seed = 1; HangingProbe.F fr = new HangingProbe.F(w, (int) x, (int) y, (int) z, Integer.parseInt(s[7])); PlayerStepProbe.field(ss.class, "e").setInt(fr, Integer.parseInt(s[8])); if (s.length > 10 && s[10].equals("1")) fr.a(HangingProbe.mk(4, 1, 0)); e = fr; break; } // batch 67: an item frame at the wall tile; s[10] = 1 holds a cobblestone
       case "potion": e = new zo(w, x, y, z, Integer.parseInt(s[7])); break; // EntityPotion (a dispenser's form: no thrower)
       case "snowball": e = new zj(w, x, y, z); break;
       case "pthrow": { // a snowball (0), egg (1), ender pearl (2), potion (3) thrown by a player shell: the constructor takes the thrower (EntityThrowable(World, EntityLivingBase)); b = 1 for a Creative thrower
@@ -113,7 +114,7 @@ public class EntityListProbe {
       default: throw new RuntimeException(s[0]);
     }
     PlayerStepProbe.field(sa.class, "Z").set(e, new Random(7));
-    if (s[0].equals("painting") || s[0].equals("skull")) return e; // placed by their constructors; a fireball starts with no motion
+    if (s[0].equals("painting") || s[0].equals("frame") || s[0].equals("skull")) return e; // placed by their constructors; a fireball starts with no motion
     e.b(x, y, z); // setPosition: the entity constructors differ in yOffset use; the listed point is the feet/box position as the port's records use it
     e.v = Double.parseDouble(s[4]); e.w = Double.parseDouble(s[5]); e.x = Double.parseDouble(s[6]);
     return e;
@@ -127,6 +128,7 @@ public class EntityListProbe {
     else if (e instanceof sv) b.append("," + ((sv) e).aS());
     else if (e instanceof xl) b.append("," + num(e.y) + "," + num(e.z) + (detail ? "," + num(((xl) e).j()) + "," + ((xl) e).k() + "," + ((xl) e).l() : ""));
     else if (e instanceof xi) b.append("," + num(e.y) + "," + num(((xi) e).f()) + (detail ? "," + num(((xi) e).e()) : ""));
+    else if (e instanceof st) b.append("," + (((st) e).j() == null ? 0 : ((st) e).j().b));
     else if (e instanceof zp) b.append("," + (((zp) e).f() ? 1 : 0));
     if (e instanceof zm && detail && ((zm) e).j() instanceof Sp) { Sp p = (Sp) ((zm) e).j(); b.append("," + num(p.s) + "," + num(p.t) + "," + num(p.u) + "," + num(p.dmg)); } // the thrower after the pearl: where it stands and the fall damage it took
     return b.append("]").toString();
@@ -240,6 +242,7 @@ public class EntityListProbe {
   // type 4: an experience bottle. `seed` is the Entity.rand seed (Random(7) when omitted: the egg's hatch roll is false, 5)
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join, long seed) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join, "" + seed}; }
   static String[] pthrow(double x, double y, double z, double vx, double vy, double vz, int type, int creative, int join) { return new String[] {"pthrow", "" + x, "" + y, "" + z, "" + vx, "" + vy, "" + vz, "" + type, "" + creative, "" + join}; }
+  static String[] frame(int tx, int ty, int tz, int dir, int counter, int join, int held) { return new String[] {"frame", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "" + counter, "" + join, "" + held}; }
   static String[] skull(double x, double y, double z, double ax, double ay, double az, int join) { return new String[] {"skull", "" + x, "" + y, "" + z, "" + ax, "" + ay, "" + az, "0", "0", "" + join}; }
   static String[] wall(int dir, int tx, int ty, int tz) { return new String[] {"wall", "" + tx, "" + ty, "" + tz, "0", "0", "0", "" + dir, "0", "0"}; }
   static String[] setBlock(int x, int y, int z, int id, int tick) { return new String[] {"set", "" + x, "" + y, "" + z, "0", "0", "0", "" + id, "0", "" + tick}; }
