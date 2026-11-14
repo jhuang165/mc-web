@@ -1306,8 +1306,11 @@ class PlayerView {
     this.sneaking = false;
     this.invisible = false;
     this.armorPieces = 0;
+    this.sleeping = false; // set by the host: EntityPlayer.sleepInBedAt setSize(0.2, 0.2) (bytecode-read, b67); no AI class reads isPlayerSleeping
   }
   update(player, survival, held) {
+    this.width = f(this.sleeping ? 0.2 : 0.6);
+    this.height = f(this.sleeping ? 0.2 : 1.8);
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
     // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
     const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;

@@ -207,6 +207,9 @@ export class BedSleep {
     this.pos = { x: Math.fround(px), y: Math.fround(y + 0.9375), z: Math.fround(pz) };
     return 'OK';
   }
+  // Entity.setPosition: boundingBox.minY = posY - yOffset, with posY = bed y + 0.9375 and yOffset 0.2 while lying (EntityPlayer.sleepInBedAt, bytecode-read, b67). The 0.2 x 0.2 box
+  // sits at y + 0.7375, not on the mattress top (0.5625); mobs and bobbers see the sleeper there.
+  get boxY() { return this.pos.y - Math.fround(0.2); }
   // EntityPlayer.func_71013_b: the model offset while lying (-1.8 along the head direction).
   get offset() { const [dx, dz] = BED_DIR[this.facing]; return [-1.8 * dx, 0, -1.8 * dz]; }
   // EntityPlayer.isPlayerFullyAsleep.

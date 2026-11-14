@@ -2134,8 +2134,8 @@ function enterSleep(ease = false) {
   mining = null; mineHeld = false; eating = null;
   keys.clear();
   if (document.pointerLockElement) document.exitPointerLock();
-  // The body lies on the mattress (top 9/16); the camera override in the frame loop supplies the lying view.
-  position.set(bedSleep.pos.x, bedSleep.bed[1] + 0.5625, bedSleep.pos.z);
+  // The 0.2-high lying box sits at posY - yOffset = y + 0.7375 (bed.js boxY); the camera override in the frame loop supplies the lying view.
+  position.set(bedSleep.pos.x, bedSleep.boxY, bedSleep.pos.z);
   previous.copy(position);
   velocity.set(0, 0, 0);
   showBedScreen();
@@ -3831,7 +3831,7 @@ function movementTick(controls) {
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
-    playerTicks, width: PHYSICS.width, height: PHYSICS.height };
+    playerTicks, width: PHYSICS.width, height: PHYSICS.height, sleeping: bedSleep.sleeping }; // b67: a lying player is a 0.2 x 0.2 target (ai.js PlayerView)
   playerTicks = tickLivingSimulation(living, {
     ...mobEventHooks(),
     heldItem: heldId,
