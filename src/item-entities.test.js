@@ -119,11 +119,11 @@ test("thrown items leave along the view with a 40-tick delay; death drops scatte
   const items = new ItemEntities(seeded(17)),
     t = items.dropPlayer(dirt(), { x: 0, y: 10, z: 0 }, 0, 0);
   assert.equal(t.delay, 40);
-  assert.ok(Math.abs(t.y - (10 + 1.32 - 0.125)) < 1e-9);
+  assert.ok(Math.abs(t.y - (10 + 1.32 - 0.125)) < 1e-8, "posY - 0.3 + the float 1.62 eye height: 1.3199999928...");
   assert.ok(t.mz < -0.25, "yaw 0 looks towards -z");
   const d = items.dropPlayer(dirt(), { x: 0, y: 10, z: 0 }, 0, 0, true, true);
   assert.ok(Math.hypot(d.mx, d.mz) <= 0.5);
-  assert.equal(d.my, 0.2);
+  assert.equal(d.my, 0.20000000298023224); // func_146097_a stores the double 0.2F
   assert.ok(d.death);
 });
 
