@@ -54,3 +54,5 @@ All 453 JavaScript tests and the production build pass. Browser verification ran
 ## Remaining limits
 
 Full parity is unfinished. Batch 69 (docs sweep): vines exist (`VINE` in `doors-panes.js` imports from `world.js`) and zombie step sounds exist (`mob-steps.js`, `zombie: own("mob.zombie.step", 0.15)`, `mob-steps.test.js`); whether zombies play them on ladders was not checked. Older text: vines do not exist yet and this build has no zombie step sounds. The player still uses the simplified collision and step-sound controller rather than the native `moveEntity`. The step sound keeps its existing 1.667-block cadence and now counts ladder climbs. Liquid flow vectors (`getFlowVector`) treat every collision-box cell as a wall. The original only does that for materials that block movement, so water beside a ladder can push slightly differently. Natural ladders (strongholds, villages) need structures, which are absent.
+
+- Batch 72: `countsVertical` (0.2 below the feet, ladder or vine) matches neither native test; `main.js` no longer uses it (climb stat: `isOnLadder`; step distance: `step-block.js`, ladder only). The helper stays exported for its old test.
