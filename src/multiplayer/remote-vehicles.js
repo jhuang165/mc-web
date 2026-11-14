@@ -6,6 +6,31 @@ import { Boats } from '../boats.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
 
+// b70 carts70: EntityMinecart.setPositionAndRotation2 (xl.a(DDDFFI)V, bytecode-read): the client copy stores the target (minecartX/Y/Z, yaw, pitch) and
+// turnProgress = increments + 2; NetHandlerPlayClient passes 3 for the move and teleport packets of an entity (bjb.a(ik) and a(hf)), so 5 ticks.
+// EntityMinecart.onUpdate on the client (xl.h): while turnProgress > 0 the position moves (target - pos) / turnProgress, yaw by wrapAngleTo180(target - yaw)
+// / turnProgress and pitch likewise, then turnProgress--; otherwise it only re-sets its position. The server tracker (EntityTrackerEntry) sends a minecart
+// every 3 ticks (EntityTracker.addEntityToTracker(EntityMinecart, 80, 3, true)), so the newest server state is taken at most that often.
+export const CART_TURN_INCREMENTS = 3, CART_TURN_EXTRA = 2, CART_SEND_INTERVAL = 3;
+const wrap180 = (a) => { a %= 360; if (a >= 180) a -= 360; if (a < -180) a += 360; return a; }; // MathHelper.wrapAngleTo180_double (qh.g(D))
+const fl = Math.fround;
+export function cartSetPositionAndRotation2(c, s, increments = CART_TURN_INCREMENTS) {
+  c.mx = s.x; c.my = s.y; c.mz = s.z; c.myaw = fl(s.yaw); c.mpitch = fl(s.pitch);
+  c.turn = increments + CART_TURN_EXTRA;
+}
+// One client tick of a cart copy's onUpdate (remote branch). `place(v, x, y, z)` is Minecarts.setPosition.
+export function cartClientStep(c, place) {
+  const v = c.v;
+  v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch; // World.updateEntityWithOptionalForce: lastTickPos and prevRotation
+  if (c.turn > 0) {
+    const t = c.turn, x = v.x + (c.mx - v.x) / t, y = v.posY + (c.my - v.posY) / t, z = v.z + (c.mz - v.z) / t;
+    v.yaw = fl(v.yaw + wrap180(c.myaw - v.yaw) / t);
+    v.pitch = fl(v.pitch + (c.mpitch - v.pitch) / t);
+    c.turn--;
+    place(v, x, y, z);
+  } else place(v, v.x, v.posY, v.z);
+}
+
 export class RemoteVehicles {
   constructor(world) {
     this.world = world;
@@ -26,10 +51,11 @@ export class RemoteVehicles {
         const v = boat ? this.boats.spawnBoat({ x: s.x, y: s.y, z: s.z, yaw: s.yaw }) : this.carts.spawnCart(Number.isInteger(s.t) ? s.t : 0, { x: s.x, y: s.y, z: s.z, items: [] });
         (boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
         Object.assign(v, { px: s.x, py: s.y, pz: s.z, yaw: s.yaw, pitch: s.pitch, prevYaw: s.yaw, prevPitch: s.pitch });
-        c = { v, target: s };
+        c = { v, target: s, turn: 0, since: CART_SEND_INTERVAL, pending: null };
         this.copies.set(s.v, c);
       }
       c.target = s;
+      if (!c.v.boat) c.pending = s; // b70: a cart takes it through cartSetPositionAndRotation2 on the tracker's cadence (tick)
       const v = c.v;
       if (v.boat) { v.timeSinceHit = s.th ?? 0; v.damage = s.dm ?? 0; v.forwardDir = s.fd ?? 1; } else {
         if (v.type === 6 && v.command && typeof s.cmd === 'string') v.command.command = s.cmd; // b63: watcher 23, what the command cart's GUI shows
@@ -46,7 +72,14 @@ export class RemoteVehicles {
   }
   // One client tick: the previous state is kept, the copy moves to the newest.
   tick() {
-    for (const { v, target: s } of this.copies.values()) {
+    for (const c of this.copies.values()) {
+      const { v, target: s } = c;
+      if (!v.boat) { // b70 carts70: the native client copy interpolates over turnProgress ticks
+        c.since++;
+        if (c.pending && c.since >= CART_SEND_INTERVAL) { cartSetPositionAndRotation2(c, c.pending); c.pending = null; c.since = 0; }
+        cartClientStep(c, (cv, x, y, z) => this.carts.setPosition(cv, x, y, z));
+        continue;
+      }
       v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
       (v.boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
       v.yaw = s.yaw; v.pitch = s.pitch;

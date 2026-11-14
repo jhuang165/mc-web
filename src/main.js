@@ -1,4 +1,5 @@
 import { refreshResources, onResourcesRefreshed } from "./resource-refresh.js"; // first: registers every pack-dependent texture as it loads
+import { cartInventoryAt } from "./cart-inventory.js";
 import { heldLightCell } from "./held-light.js";
 import { isStemCake, popDrops } from './stems-cake.js';
 import { maxHealthOf } from "./mob-riding.js";
@@ -551,6 +552,7 @@ const hopperTiles = new Hoppers({
   maxStack: (s) => survival.inventory.maxStack(s),
   burnTime,
   items: () => items.items,
+  cartAt: (x, y, z) => cartInventoryAt(minecarts?.carts, x, y, z), // b70 carts70: chest and hopper minecarts in the cell (TileEntityHopper.func_145893_b)
   active: (x, z) => hopperActive(world, x, z), // the window, and ring columns that take writes (hopper.js)
   changed: (keys) => { saved = false; redstoneRuntime?.containerClosed(keys); },
 });

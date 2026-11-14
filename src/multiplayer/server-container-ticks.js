@@ -6,6 +6,7 @@
 // sendToAllNear 64 blocks, bytecode-read). Batch 61: the entities a dispense creates live in server-dispense.js; only carts and boats (no server entity yet)
 // put the stack back and send nothing, as away-world.js does.
 import { Hoppers, hopperBehaviour } from '../hopper.js';
+import { cartInventoryAt } from '../cart-inventory.js';
 import { installDispensers } from '../dispense.js';
 import { trappedPower, trappedStrongPower } from '../chest-blocks.js';
 import { burnTime } from '../survival.js';
@@ -22,7 +23,7 @@ export class ContainerTicks {
     this.hoppers = new Hoppers({
       get world() { return sim.world; }, chests: () => tiles().chests, furnaces: () => tiles().furnaces, dispensers: () => tiles().dispensers,
       hoppers: () => tiles().hoppers, brewing: () => tiles().brewing, maxStack: s => tiles().inventory.maxStack(s), burnTime,
-      items: () => sim.items.items, active: () => true, changed: keys => this.changed(keys),
+      items: () => sim.items.items, cartAt: (x, y, z) => cartInventoryAt(sim.vehicles?.carts.carts, x, y, z), /* b70 carts70: func_145893_b entity half */ active: () => true, changed: keys => this.changed(keys),
     });
     live.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
     const viewers = (x, y, z) => tiles().chests[`${x},${y},${z}`]?.users ?? 0;
