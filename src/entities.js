@@ -76,7 +76,7 @@ import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
 import { noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
 import { summonedMobRecord, importedMobType } from "./java-mobs.js";
-import { mountMobOnVehicle } from "./vehicle-riders.js";
+import { mountMobOnVehicle, takeVehicleFalls } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
@@ -2291,7 +2291,7 @@ export class EntityWorld {
     const peacefulGone = [];
     // Entity.updateRidden ends with updateRiderPosition: the seat is taken right after the rider's own update, before the next mob of the list moves (b36 records: a mob after the mount pushes the rider at its new seat).
     let rider = null;
-    const seat = () => { if (rider?.ridingEntity) endRidden(rider, (m) => this.size(m)[1]); rider = null; };
+    const seat = () => { if (rider) endRidden(rider, (m) => this.size(m)[1]); rider = null; }; // b72: endRidden zeroes the rider's fallDistance even when the mount let it go (sv.ab)
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
@@ -2328,7 +2328,7 @@ export class EntityWorld {
       if (e.removedNow || !this.isActive(e)) continue;
       // Loot queued before this entry (a kill outside the tick: a horse's saddle at onDeath) is flushed first, so the far mob's flushLoot cannot shrink the list below the mark (holes in events)
       if (this.ring && !this.world.isTicking(e.x, e.z)) { this.flushLoot(); farMark = this.events.length; }
-      if (e.ridingEntity) { rider = e; beginRidden(e); }
+      if (e.ridingEntity) { rider = e; beginRidden(e); for (const d of takeVehicleFalls(e)) this.fall(e, d); } // b72: a boat or cart under a mob rider fell (Entity.fall hands it to riddenByEntity)
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
