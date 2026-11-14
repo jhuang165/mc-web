@@ -60,7 +60,8 @@ export const doorPassable = (world, x, y, z) => doorIsOpen(world, x, y, z);
 // or a full snow layer (hoppers are not in this build).
 export function solidTopSurface(world, x, y, z) {
   const b = world.get(x, y, z), meta = world.getMeta(x, y, z);
-  if (normalCube(b)) return true;
+  // Batch 72: the redstone block (123) is solid here (Material.iron opaque + renderAsNormalBlock, executed in pot-sweep-reference.json) although normalCube excludes it.
+  if (normalCube(b) || b === 123) return true;
   if (isStair(b)) return stairSolidTop(meta);
   if (b === STONE_SLAB || b === 165) return (meta & 8) !== 0; // 165: the wood slab (shaped-blocks.js)
   if (b === 133) return true; // BlockHopper (blocks-0-40.js)
