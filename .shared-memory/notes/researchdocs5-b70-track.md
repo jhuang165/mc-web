@@ -15,7 +15,7 @@ Verdicts:
 
 ## Verification
 - `node --test src/docs-sweep-b70.test.js`: 3 pass.
-- `node --test src/catalogue-consistency.test.js src/content-catalogue.test.js` and `npm run build`: see the lead report.
+- `node --test src/catalogue-consistency.test.js src/content-catalogue.test.js` and `npm run build`: 6 pass, 0 fail; build ok.
 - Full npm test not run (batch rule). Nothing here needs a browser; brewing outline targeting could only be judged in one.
 
 ## Follow-ups
@@ -24,4 +24,4 @@ Real code gaps found:
 - Brewing stand selection: native keeps the shared bounds at the 0.125 base slab (`ajq.g()` runs last in `addCollisionBoxes`, no `setBlockBoundsBasedOnState`); the port selects 0.875 high (`BREWING_SELECTION`). Needs a probe (before-first-query state is the unit cube) before changing targeting.
 - Bane of Arthropods slowness is never applied (`info.slowness`), owned by `spfixes70`.
 - Stale source comment: `armor-enchantments.js` line 65 says Resistance is not ported; `survival.js` applies it for the player. Mob Resistance not checked. Left as is (comment only, not in my doc scope).
-- `main.js` step: `lava.md` "water eye test" and "flammable blocks lava flows into" bullets were not re-checked.
+- `lava.md` "water eye test" and "flammable blocks lava flows into" bullets were not re-checked.
