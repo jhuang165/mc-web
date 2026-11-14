@@ -25,12 +25,12 @@ import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
 import { syncVehiclePassengers } from '../vehicle-riders.js';
+import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5, 6]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
 export const RANGE = 80; // EntityTracker range of a minecart and a boat
-const REACH_SQ = 36; // 6 blocks, as the mob attack
 export const keyOf = v => (v.boat ? 'b' : 'c') + v.id;
 const r4 = v => Math.round(v * 1e4) / 1e4;
 
@@ -143,8 +143,9 @@ export class ServerVehicles {
     if (/^[hk]/.test(key)) return this.hanging.act(p, key, hit); // b68 mppaintings: a painting, item frame or leash knot
     const host = this.host, v = this.find(key);
     if (!v || p.survival.health <= 0 || p.mount?.key === key) return false; // a rider cannot hit or use the vehicle it sits in
-    const b = v.bb, dx = (b[0] + b[3]) / 2 - p.position.x, dy = (b[1] + b[4]) / 2 - (p.position.y + PHYSICS.eye), dz = (b[2] + b[5]) / 2 - p.position.z;
-    if (dx * dx + dy * dy + dz * dz > REACH_SQ) return false;
+    // b70: getDistanceSqToEntity from posY; a boat's and cart's posY is the box centre (yOffset = height / 2), eye height 0 (Entity default)
+    const b = v.bb;
+    if (!useEntityInReach(host.world, p, { x: (b[0] + b[3]) / 2, y: (b[1] + b[4]) / 2, z: (b[2] + b[5]) / 2, eye: 0 })) return false;
     const system = this.systemOf(v);
     if (hit) { // Minecraft.clickMouse swings, then EntityMinecart / EntityBoat.attackEntityFrom with the held weapon's damage
       p.swing = 6;

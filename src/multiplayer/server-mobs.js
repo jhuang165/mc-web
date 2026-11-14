@@ -14,6 +14,8 @@ import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
 import { explodeMobs } from '../explosion-simulation.js';
+import { livingEyeHeight } from '../ai.js';
+import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
 import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fixes68: a lying player's posY, eye and 0.2 box
 import { entityBox, isWet, canSeeSky } from '../weather.js';
 import { hurtOf, deathOf } from '../entities.js';
@@ -407,8 +409,7 @@ export class ServerMobs {
   attack(p, wireId) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
-    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - serverEyeY(p.position.y, p.sleeping), dz = mob.z - p.position.z;
-    if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : dx * dx + dy * dy + dz * dz > 36) return false; // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
+    if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : !useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     try { return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }); } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
@@ -417,8 +418,7 @@ export class ServerMobs {
   interact(p, wireId, claim = false) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
-    const dx = mob.x - p.position.x, dy = mob.y + 0.9 - serverEyeY(p.position.y, p.sleeping), dz = mob.z - p.position.z;
-    if (dx * dx + dy * dy + dz * dz > 36) return false;
+    if (!useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY
     this.use(v);
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
