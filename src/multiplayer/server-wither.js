@@ -39,7 +39,7 @@ export class ServerWither {
   }
   place(p, target) {
     const sim = this.sim;
-    return placeSkull({ world: sim.world, survival: p.survival, yaw: p.yaw }, { id: p.survival.held.id, damage: p.survival.held?.damage ?? 0, target }, this.hooks(p)).placed;
+    return placeSkull({ world: sim.world, survival: p.survival, yaw: p.yaw }, { id: p.survival.held.id, damage: p.survival.held?.damage ?? 0, target, stack: p.survival.held }, this.hooks(p)).placed;
   }
   // BlockSkull.func_149965_a's spawn: the entity joins the world (EntityWorld.spawnWither: Invul 220, a third of the health) and the players near it get `spawnWither`.
   spawn(x, y, z, yaw) {
