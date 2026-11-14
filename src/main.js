@@ -85,7 +85,7 @@ import {
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
 import { ForeignTicks, attachTickTree } from "./tile-ticks.js";
-import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
+import { ladderBounds, ladderSupported, isOnLadder } from "./ladders.js";
 import { stepBlock } from "./step-block.js"; // b71 steps71
 import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
@@ -3107,7 +3107,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
-  statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
+  statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: isOnLadder(world, position.x, position.y, position.z) /* b72: EntityPlayer.k uses isOnLadder (ladder or vine at floor(minY)), no flying test */, grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);

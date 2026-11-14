@@ -19,3 +19,5 @@ Internal ids: dropper block 132, item 1132 (recipe: 7 cobblestone and redstone).
 - The per-item Random of live projectiles and the item yaw are unseeded as in the original and not compared; dispensed entities use the browser entity systems' own flight and impact code.
 - One slot-choice Random stream is shared by all dispensers (the original has one per tile).
 - Parity with the whole 1.7.10 dispenser registry is not claimed.
+
+- Batch 72: away runs (`away-world.js`) give the redstone game a `transfer` host (the run's `Hoppers` host), so a powered dropper pushes into the container it faces (chest, furnace, hopper, dropper, cart) as in the live game; before, away droppers always threw an item.

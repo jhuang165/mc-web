@@ -20,3 +20,5 @@ Evidence: `tools/probes/StatsProbe.java` + `tools/verify-stats.mjs` (run with `M
 - damageTaken is counted in `Survival.damage` from the amount it receives (difficulty scaling happens in callers); damageDealt is the mob's health drop.
 - animalsBred counts any breeding, not only the one the player fed. Batch 69 (docs sweep): playerKills is awarded on the dedicated server through the combat tracker and PvP (`src/multiplayer/server-combat-tracker.js`, `server-scoreboard.js`); single player has no PvP.
 - GuiStats item names and column headers use `title` tooltips, not the vanilla tooltip box; hover states were not compared pixel for pixel and the screen was not browser-checked.
+
+- Batch 72: bytecode-read: `EntityPlayer.addMovementStat` (`yz.k`) takes the climb branch on `isOnLadder` (`sv.h_`: ladder `ajn.ap` or vine `ajn.bd` at floor(minY)), with no flying test, so the climb stat now uses `isOnLadder` (vines count). The step distance in `Entity.moveEntity` keeps the ladder-only test at `floor(posY - 0.2 - yOffset)` (`step-block.js`).

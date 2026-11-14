@@ -32,7 +32,9 @@ public class StepBlockProbe {
       for (Object[] lo : BLOCKS)
         for (double feet : FEET)
           for (float yOffset : new float[] {0f, 1.62f})
-            for (String kind : new String[] {"step", "dist", "sneak"}) {
+            for (String kind : new String[] {"step", "dist", "sneak", "ysize"}) {
+              // b72 smallfixes72: "ysize" is a step with ySize 0.2 (a sneak drop) set before the move; only stone/air/fence floors, standing yOffset 1.62
+              if (kind.equals("ysize") && (yOffset != 1.62f || !(lo[1].equals(1) || lo[1].equals(85)) || !(up[1].equals(0) || up[1].equals(1) || up[1].equals(44)))) continue;
               int cy = (int) Math.floor(feet - 0.2);
               PlantProbe.unsafe = u;
               PlantProbe.W w = PlantProbe.world((x, y, z) -> new int[] {y < -3 ? 1 : 0, 0});
@@ -42,6 +44,7 @@ public class StepBlockProbe {
               boolean sneak = kind.equals("sneak");
               Rec e = (Rec) PlayerStepProbe.spawn(u, w, Rec.class, 64.5, 64.5, 0f, sneak, sneak, 0f);
               PlayerStepProbe.field(sa.class, "L").setFloat(e, yOffset);
+              if (kind.equals("ysize")) PlayerStepProbe.field(sa.class, "V").setFloat(e, 0.2f);
               place.invoke(e, 64.5, feet + yOffset, 64.5);
               boolean dist = kind.equals("dist");
               PlayerStepProbe.field(sa.class, "Q").setFloat(e, dist ? 0f : 5f);
@@ -51,7 +54,7 @@ public class StepBlockProbe {
               move.invoke(e, 0.001, dist ? 0.25 : -0.01, 0.001);
               System.out.println("{\"upper\":\"" + up[0] + "\",\"lower\":\"" + lo[0] + "\",\"feet\":" + feet + ",\"yOffset\":" + Float.toString(yOffset) + ",\"kind\":\"" + kind
                 + "\",\"cy\":" + cy + ",\"upperId\":" + up[1] + ",\"lowerId\":" + lo[1] + ",\"endY\":" + PlayerStepProbe.num(PlayerStepProbe.d(e, "t")) + ",\"startY\":" + PlayerStepProbe.num(y0)
-                + ",\"onGround\":" + PlayerStepProbe.b(e, "D") + ",\"q\":" + Float.toString(PlayerStepProbe.field(sa.class, "Q").getFloat(e)) + ",\"next\":" + PlayerStepProbe.field(sa.class, "d").getInt(e)
+                + ",\"v\":" + Float.toString(PlayerStepProbe.field(sa.class, "V").getFloat(e)) + ",\"onGround\":" + PlayerStepProbe.b(e, "D") + ",\"q\":" + Float.toString(PlayerStepProbe.field(sa.class, "Q").getFloat(e)) + ",\"next\":" + PlayerStepProbe.field(sa.class, "d").getInt(e)
                 + ",\"step\":" + (logged == null ? "null" : logged) + "}");
             }
   }
