@@ -63,3 +63,41 @@ test("a rocket's splash draws 32 Entity.rand floats the first update after it en
   assert.ok(splashes > 0);
   assert.equal(replay(rec("water-still-inside-client")).sparks[0].splash, undefined);
 });
+
+// ---- the ghast's ExplosionPower tag reaching its fireball, and the EntityList ids of the thrown projectiles (tools/probes/GhastPowerProbe.java, ghast-power-reference.json) ----
+import * as B from "./blaze-ghast.js";
+import { summonedMobRecord } from "./java-mobs.js";
+import { NBT } from "./nbt.js";
+import { ENTITY_NAMES } from "./command-data.js";
+const gp = JSON.parse(readFileSync(new URL("../public/research/ghast-power-reference.json", import.meta.url))).records;
+test("7 executed records: six ghast ExplosionPower tags and the EntityList", () => assert.equal(gp.length, 7));
+for (const c of gp.filter((r) => r.case === "ghastPower")) {
+  test(`native ghast ExplosionPower tag ${c.tag}: read ${c.ghastRead}, the first fireball (tick ${c.tick}) has power ${c.fireball.power}`, () => {
+    const tag = c.tag < 0 ? new Map() : new Map([["ExplosionPower", { type: NBT.INT, value: c.tag }]]);
+    const power = summonedMobRecord("ghast", tag).record.explosionPower;
+    assert.equal(power, c.ghastRead); // the port reads the tag as EntityGhast.readEntityFromNBT does
+    const rand = new JavaRandom(11), s = B.ghastState(), me = { x: 64.5, y: 40, z: 64.5, vx: 0, vy: 0, vz: 0 };
+    s.explosionPower = power;
+    const view = () => ({ x: 64.5, minY: 40, z: 84.5, height: Math.fround(1.8), distSq: (64.5 - me.x) ** 2 + (40 - me.y) ** 2 + (84.5 - me.z) ** 2 });
+    let fired = null;
+    for (let tick = 1; tick <= 300 && !fired; tick++) {
+      const out = B.ghastStep(s, rand, me, { pathClear: () => true, findPlayer: () => (view().distSq < 10000 ? {} : null), target: view, canSee: () => true, event: () => {} });
+      if (out.fireball) fired = { tick, power: out.fireball.power };
+      for (const k of ["vx", "vy", "vz"]) me[k] *= Math.fround(0.91);
+      me.x += me.vx; me.y += me.vy; me.z += me.vz;
+    }
+    assert.deepEqual(fired, { tick: c.tick, power: c.fireball.power });
+  });
+}
+test("the ghast's power is the ball's, a ball's power is the explosion's (fireballs-reference p3 record: power 3, flaming)", () => {
+  const ref = JSON.parse(readFileSync(new URL("../public/research/fireballs-reference.json", import.meta.url))).records;
+  assert.ok(ref.some((r) => r.rows.some((x) => x[2].some((b) => b[3] === 3 && b[4] === 1))));
+});
+const list = gp.find((r) => r.case === "entityList");
+test("an EntityEgg has no EntityList id or name (executed); the port's entity names match EntityList's 57 names exactly", () => {
+  assert.equal(list.eggName, null);
+  assert.equal(list.eggId, 0);
+  assert.equal(list.createdByName, false);
+  assert.deepEqual([list.snowballName, list.snowballId, list.pearlName, list.pearlId], ["Snowball", 11, "ThrownEnderpearl", 14]);
+  assert.deepEqual([...ENTITY_NAMES.map((e) => e[0])].sort(), [...list.names].sort());
+});
