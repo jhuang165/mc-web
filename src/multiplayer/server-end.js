@@ -1,4 +1,4 @@
-// Batch 63 mpend: the End on the dedicated multiplayer server.
+// Batch 63 mpend: the End on the dedicated multiplayer server. (b66 mpend3: an End saved in the 128 window described below is upgraded into the 256 window when the save loads, server-end-upgrade.js.)
 //
 // ServerDimensions (server-dimensions.js) owns the player's dimension, the world swap (`within` / `swap`), the trip (`arrive`) and the per-dimension tick message; it asks this module for
 // everything that is only the End's. What is here, and the evidence behind it:
@@ -29,7 +29,7 @@ import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, useEyeOnFrame, hasEye } from '../e
 import { GAME_IDS, transferTarget } from '../dimensions.js';
 import { FiniteDimensionWorld, END } from './client-dimensions.js';
 import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
-import { setupEnd, dragonState } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
+import { setupEnd, dragonState, addEndCrystals, legacyCrystalKeys } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
 
 const OVERWORLD = 0, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
 // b65 mpendwindow: the replica's own origin says where it lies in the End (native = local + origin), for the 256 window and for a 0.93.0 save's 128 window alike.
@@ -87,6 +87,7 @@ export class ServerEnd {
     this.n = n;
     dims.swap(n, () => buildNetherInside(sim, n, saved));
     setupEnd(n, source, fresh); // b64 mpdragon: crystals and the dragon of a new End; the fight's centre and portal clamp for every End
+    if (saved.upgradedFrom === 'legacy' && saved.dragon === 'alive') addEndCrystals(n, source, legacyCrystalKeys(source)); // b66 mpend3: the spikes the 128 window did not hold (server-end-upgrade.js)
     dims.sim.dispense?.adopt?.(n.dispense); // b64 mpend2: saved End arrows, balls and potions (the Overworld's stand-in lane for dimension 1) move to the End's own instance
     return n;
   }
