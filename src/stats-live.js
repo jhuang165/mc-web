@@ -124,8 +124,8 @@ export function watchMobStats(mobs, { live }) {
     return result;
   };
   mobs.attack = function (e, tool, ...rest) {
-    const before = e.health, landed = attack.call(this, e, tool, ...rest);
-    if (landed && before > e.health) stats.increment(STAT.damageDealt, round(f32(before - e.health) * 10));
+    const landed = attack.call(this, e, tool, ...rest);
+    if (landed) stats.increment(STAT.damageDealt, round(f32(this.lastAttackDamage * 10))); // b64: EntityPlayer.attackTargetEntityWithCurrentItem addStat(damageDealt, round(f * 10)), f the pre-armour damage of a landed hit (bytecode-read), not the health lost
     if (landed && toolUses(tool)) stats.use(originalItem(tool)); // ItemStack.hitEntity
     return landed;
   };

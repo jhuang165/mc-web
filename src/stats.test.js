@@ -122,7 +122,7 @@ test("StatsLive ticks, ignores teleports, deaths and binds survival", () => {
 });
 test("mob watchers award kills, damage and breeding to the player only", () => {
   const s = new Stats(), live = new StatsLive(s);
-  const mobs = { onDeath() {}, attack(e) { e.health -= 4; return true; }, spawnBaby() { return true; }, hitPlayer() { return true; } };
+  const mobs = { onDeath() {}, attack(e) { e.health -= 4; this.lastAttackDamage = 4; return true; }, spawnBaby() { return true; }, hitPlayer() { return true; } };
   watchMobStats(mobs, { live });
   const cow = { type: "cow", health: 10 };
   mobs.attack(cow, 0); mobs.onDeath(cow, {}); mobs.onDeath(cow, { player: true }); mobs.spawnBaby({}, {}); mobs.hitPlayer({ type: "creeper" }, {});

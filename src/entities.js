@@ -1527,6 +1527,7 @@ export class EntityWorld {
     if (!(damage > 0 || weapon.damage > 0)) return false;
     if (critical) damage = criticalDamage(damage);
     damage = f(damage + weapon.damage);
+    this.lastAttackDamage = damage; // b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
