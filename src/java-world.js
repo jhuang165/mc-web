@@ -312,7 +312,7 @@ export function generateJavaWorld(world) {
     generateLivePopulation(world, {seed, originals, ringTerrain: (x,z) => {
       const chunk=gen.provideChunk(x,z); caves.generate(x,z,chunk.blocks); ravines.generate(x,z,chunk.blocks); return chunk;
     }});
-  else if (originals)
+  else if (originals && world.mapFeatures !== false) // b71 mpadmin71: no mineshafts with MapFeatures off
     generateLiveMineshafts(world, {
       seed,
       originals,

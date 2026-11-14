@@ -468,12 +468,13 @@ export class World {
   // (streaming-population.js); 15 adds villages, strongholds and temples; 16 compares mutated biomes by their base class
   // in the biome layers (biome-layers.js biomeClassOf; 15 and older keep the earlier map). Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '') {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '', mapFeatures = true) {
     if (biome === 'javaStreamed' && ![12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
     if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
+    this.mapFeatures = mapFeatures !== false; // b71 mpadmin71: WorldInfo.mapFeaturesEnabled for finite Java worlds (java-world.js / population-world.js skip every MapGen structure when false)
     this.streaming = biome === 'javaStreamed';
     // WorldType of the generator (java-world.js streamedWorldType); finite Java landscapes derive it from the biome.
     this.worldType = this.streaming ? streamedWorldType(worldType) : (JAVA_LANDSCAPES[biome] ?? 'default');
