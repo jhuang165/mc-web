@@ -230,7 +230,7 @@ export class ServerDimensions {
   // The Nether's items tick and its cell changes become a tick message (the same fields the Overworld's carries, without weather, redstone or XP).
   netherMessage(base, n = this.nether, dim = NETHER) {
     const sim = this.sim, w = n.world, here = [...sim.players.values()].filter(p => p.dimension === dim);
-    if (here.length) this.swap(n, () => tickNether(sim, n, here)); // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
+    if (here.length && sim.rules?.allowNether !== false) this.swap(n, () => tickNether(sim, n, here)); /* b70 serverprops2: MinecraftServer.v (bytecode-read) ticks world i only if i == 0 || getAllowNether(): allow-nether false stops the Nether and the End ticking */ // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
     else { n.changes.clear(); n.dirtyTiles.clear(); }
     const final = [...n.changes.values()].map(([x, y, z]) => [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
     n.changes.clear();

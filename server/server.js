@@ -14,7 +14,7 @@ import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
 import { installServerRules } from '../src/servercommands-b59.js';
-import { loadServerProperties, loadFavicon, hardcoreRespawn, overridesFrom, FULL_TEXT } from '../src/multiplayer/server-properties.js'; // b69 serverprops
+import { loadServerProperties, saveProperty, loadFavicon, hardcoreRespawn, overridesFrom, FULL_TEXT } from '../src/multiplayer/server-properties.js'; // b69 serverprops
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -319,6 +319,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // b69 serverprops: server.properties next to the world file (created with the native defaults when missing); a flag or MC_WEB_<KEY> variable overrides a key without changing the file
   const dataFile = argument('--data', path.join(ROOT, 'server-data/world.json')), settings = await loadServerProperties(path.dirname(dataFile), { overrides: overridesFrom(args, process.env) });
   if (settings.created) console.log(`Created ${settings.path} with the native defaults`);
+  settings.rules.persistIdleTimeout = n => saveProperty(settings, 'player-idle-timeout', n, { warn: m => console.warn(m) }); // b70 serverprops2: /setidletimeout writes the property back
   const favicon = await loadFavicon(path.dirname(dataFile), { warn: m => console.warn(m) });
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
     gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });

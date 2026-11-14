@@ -37,7 +37,7 @@ export function chainSupported(spawnData) {
 
 // `mobs`: the dimension's ServerMobs. `spawners`: its MobSpawners. `players`: the server players of this dimension. `light`: { sky, block, thunder, thundering }, the dimension's reads.
 // `vehicles`: the dimension's ServerVehicles (spawner minecarts tick here; a SpawnData Riding minecart or boat is made in it). Returns the mobs spawned.
-export function tickSpawners({ mobs, spawners, random, players, light, time = 0, vehicles = null }) {
+export function tickSpawners({ mobs, spawners, random, players, light, time = 0, vehicles = null, viewDistance = VIEW_DISTANCE }) { // b70 serverprops2: `viewDistance` (sim.rules.viewDistance) sets the tracker clamp of the puff and the cart status
   const carts = liveCartSpawners(vehicles?.carts);
   if ((!spawners?.size && !carts.length) || !players.length) return [];
   const world = mobs.mobs, events = [], cartOf = new Map();
@@ -50,14 +50,14 @@ export function tickSpawners({ mobs, spawners, random, players, light, time = 0,
   const ctx = {
     ...hooks, random, players: living,
     spawnParticles: (x, y, z) => events.push({ k: 'spawnerBurst', x, y, z }), // playAuxSFX 2004
-    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h, sq: clampTrackRange(mobTrackRange(mob.type), VIEW_DISTANCE) }); }, // entity status 20 (spawnExplosionParticle)
+    explosionParticles: mob => { const [w, h] = world.size(mob); events.push({ k: 'spawnerPuff', x: mob.x, y: mob.y, z: mob.z, w, h, sq: clampTrackRange(mobTrackRange(mob.type), viewDistance) }); }, // entity status 20 (spawnExplosionParticle)
   };
   const run = (s, key = null) => {
     const own = {
       ...ctx,
       // A kind the server has no client copy for, or a Riding mount of one, is refused: the rolls are spent and nothing spawns.
       createMob: (type, ...rest) => (SUPPORTED.has(type) && chainSupported(s.spawnData) ? create(type, ...rest) : null),
-      blockEvent: key ? () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z, v: key, sq: CART_RANGE }) : () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z }), // addBlockEvent(1, 0) / setEntityState 1
+      blockEvent: key ? () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z, v: key, sq: clampTrackRange(CART_RANGE, viewDistance) }) : () => events.push({ k: 'spawnerDelay', x: s.x, y: s.y, z: s.z }), // addBlockEvent(1, 0) / setEntityState 1
     };
     return updateSpawner(s, own);
   };

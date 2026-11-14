@@ -258,13 +258,14 @@ export class ServerVehicles {
 
   // The `vehicles` message of each player (a copy per vehicle within RANGE whose state changed, the keys that left). Packets wait on `p.vehPackets` for the connection.
   track() {
+    const range = Math.min(RANGE, this.host.rules?.trackerLimit ?? RANGE); // b70 serverprops2: EntityTracker's v*16-16 clamp of the 80 range
     const all = this.all.filter(v => !v.dead), states = new Map(all.map(v => [v, vehicleState(v)]));
     for (const [id, view] of this.views) {
       const p = this.host.players.get(id);
       if (!p) { view.known.clear(); continue; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
       const set = [], del = [], seen = new Set();
       for (const v of all) {
-        if (Math.abs(v.x - p.position.x) > RANGE || Math.abs(v.z - p.position.z) > RANGE) continue;
+        if (Math.abs(v.x - p.position.x) > range || Math.abs(v.z - p.position.z) > range) continue;
         const key = keyOf(v), json = JSON.stringify(states.get(v));
         seen.add(key);
         if (view.known.get(key) !== json) { view.known.set(key, json); set.push(states.get(v)); }

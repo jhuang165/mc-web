@@ -206,7 +206,7 @@ export class ServerAdmin {
         if (a.length !== 1) throw usage('commands.setidletimeout.usage');
         if (!/^[+-]?\d+$/.test(a[0]) || Math.abs(Number(a[0])) > 2147483647) throw new Fail('commands.generic.num.invalid', a[0]);
         const n = Number(a[0]); if (n < 0) throw new Fail('commands.generic.num.tooSmall', n, 0);
-        this.idleMinutes = n;
+        this.idleMinutes = n; this.onIdleTimeout?.(n); // b70 serverprops2: DedicatedServer.func_143006_e also writes player-idle-timeout to server.properties (server.js sets the hook)
         return ctx.feedback('commands.setidletimeout.success', n);
       }
       default: throw new Fail('commands.generic.notFound');
