@@ -56,7 +56,7 @@ const S = {
   SNOOPER_ENABLED: ['Out of scope', 'Mojang snooper telemetry; this build sends no usage data. The Snooper Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips snooperEnabled.'],
   USE_FULLSCREEN: ['Partial', 'The Video Settings button, the HUD button and key.fullscreen (F11, dispatchKeypresses) use the Fullscreen API (main.js); the options.txt mirror writes fullscreen:false (a browser cannot start in fullscreen).'],
   ENABLE_VSYNC: ['Partial', 'Use VSync toggles and saves enableVsync; requestAnimationFrame is always synchronized to the display, so turning it off cannot unlock frames above the refresh rate (controls.md).'],
-  SHOW_CAPE: ['Partial', 'Button drawn disabled in Chat Settings (ON, the default); there are no skins or capes.'],
+  SHOW_CAPE: ['Partial', 'Button drawn disabled in Chat Settings (ON, the default). The cape model and motion are ported (cape.js) but the browser has no cape source, so the setting changes nothing yet.'],
   TOUCHSCREEN: ['Missing', 'Mobile on-screen controls exist but are not the native touchscreen option; the Touchscreen Mode button in Controls is drawn disabled with a reason (menus.js) and options.txt round-trips touchscreen.'],
   CHAT_SCALE: ['Partial', 'Slider, saved; wrap width floor(width / scale) and the drawn scale follow GuiNewChat; label OFF at 0 else (int)(f * 100)%.'],
   CHAT_WIDTH: ['Partial', 'Slider, saved; floor(f * 280 + 40) px (probe-replayed) and rewrapped; label in px.'],

@@ -33,7 +33,7 @@ export const UNAVAILABLE = {
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
-  showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
+  showCape: "The browser build has no cape source (accounts carry skins only), so the Show Cape button is drawn disabled.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
   languages: "Only English (US) is installed (npm run lang:fetch).",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",

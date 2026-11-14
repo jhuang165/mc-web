@@ -21,6 +21,7 @@ import { glintMesh, blockItemGeometry, blockItemTurn } from "./first-person.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
+import { newCapeState, capeTick, capeAngles, capeVisible, earsVisible, earTransform, CLOAK_BOX, EARS_BOX, CLOAK_OFFSET_Z } from "./cape.js"; // b70 playerrender70
 export { LEATHER_COLOR } from "./leather-dye.js";
 
 // Third-person player: EntityRenderer.orientCamera (blt.h), RenderPlayer (bop)
@@ -98,6 +99,7 @@ export class PlayerBody {
       rotationPitch: p, prevRotationPitch: p, limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0,
       growingAge: 0, death: 0, age: 0,
     });
+    this.cape = newCapeState(position); // b70: chasing position, cameraYaw and walked distance for the cape
   }
   // func_110146_f: the body follows the walking direction (or the head while
   // swinging), turning 30% of the way each tick and never more than 75 degrees
@@ -109,7 +111,8 @@ export class PlayerBody {
     this.renderYawOffset = f(this.rotationYaw - d);
     if (d * d > 2500) this.renderYawOffset = f(this.renderYawOffset + f(d * f(0.2)));
   }
-  tick({ position, previous, yaw, pitch, swinging = false, riding = false }) {
+  // `motion` ({ x, y, z, onGround, frozen }) is the locally simulated player's motionX/Y/Z; a remote player passes none (b70 cape).
+  tick({ position, previous, yaw, pitch, swinging = false, riding = false, motion = null }) {
     this.prevRenderYawOffset = this.renderYawOffset;
     this.prevRotationYawHead = this.rotationYawHead;
     this.prevRotationPitch = this.rotationPitch;
@@ -132,6 +135,7 @@ export class PlayerBody {
     const speed = Math.min(f(Math.sqrt(d2) * 4), 1);
     this.limbSwingAmount = riding ? 0 : f(this.limbSwingAmount + f(f(speed - this.limbSwingAmount) * f(0.4)));
     this.limbSwing = f(this.limbSwing + this.limbSwingAmount);
+    capeTick(this.cape, { position, motion, riding, frozen: !!motion?.frozen, delta: { x: position.x - previous.x, z: position.z - previous.z } }); // b70
     this.age++;
   }
 }
@@ -436,6 +440,20 @@ export class PlayerRenderer {
       this.pivots[name] = pivot;
       this.model.add(pivot);
     }
+    // b70 playerrender70: bipedEars (deadmau5) share the skin material; the cloak gets its own material once a cape texture exists.
+    this.earGroups = [0, 1].map(() => {
+      const outer = new THREE.Group(), inner = new THREE.Group(), pivot = new THREE.Group();
+      outer.rotation.order = "YXZ"; inner.rotation.order = "XYZ"; pivot.rotation.order = "ZYX";
+      pivot.add(new THREE.Mesh(modelBox(...EARS_BOX.uv, ...EARS_BOX.box), this.base));
+      outer.add(inner); inner.add(pivot); outer.visible = false; this.model.add(outer);
+      return { outer, inner, pivot };
+    });
+    this.name = ""; this.hasSkin = false; this.capeMaterial = null;
+    this.cloak = new THREE.Group(); this.cloak.position.set(0, 0, CLOAK_OFFSET_Z); this.cloak.visible = false;
+    this.cloakX = new THREE.Group(); this.cloakZ = new THREE.Group(); this.cloakY = new THREE.Group();
+    this.cloakX.rotation.order = this.cloakZ.rotation.order = this.cloakY.rotation.order = "XYZ";
+    this.cloak.add(this.cloakX); this.cloakX.add(this.cloakZ); this.cloakZ.add(this.cloakY);
+    this.model.add(this.cloak);
     this.fire = new EntityFireRenderer(scene);
     this.armorKey = "";
     this.armorNodes = [];
@@ -450,6 +468,13 @@ export class PlayerRenderer {
     this.heldOverlayMaterial = null;
     this.heldGeometry = null;
     scene.add(this.root);
+  }
+  // A loaded cape texture (AbstractClientPlayer.locationCape); null removes the cloak.
+  setCape(texture) {
+    if (!texture) { this.cloakY.clear(); if (this.capeMaterial) this.forget(this.capeMaterial); this.capeMaterial = null; return; }
+    if (this.capeMaterial) { this.capeMaterial.uniforms.map.value = texture; return; }
+    this.capeMaterial = this.material({ map: texture });
+    this.cloakY.add(new THREE.Mesh(modelBox(...CLOAK_BOX.uv, ...CLOAK_BOX.box), this.capeMaterial));
   }
   material(options) {
     const m = entityMaterial(this.view.lighting, { ...options, side: THREE.DoubleSide });
@@ -602,7 +627,7 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, ghost = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, ghost = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0, hideCape = false } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
     // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
@@ -637,6 +662,25 @@ export class PlayerRenderer {
       pivot.children[0].visible = !invisible || ghost; // b65: ghost = invisible but not invisible to this viewer (a teammate with seeFriendlyInvisibles): drawn at alpha 0.15
       pivot.position.set(point[0] / 16, point[1] / 16, point[2] / 16);
       pivot.rotation.set(rot[0], rot[1], rot[2]);
+    }
+    // b70 RenderPlayer.renderSpecials: deadmau5 ears, then the cape (not drawn for a sleeper's transform changes; native draws both there too).
+    {
+      const showEars = earsVisible({ name: this.name, hasSkin: this.hasSkin });
+      for (let i = 0; i < 2; i++) {
+        const g = this.earGroups[i]; g.outer.visible = showEars;
+        if (!showEars) continue;
+        const t = earTransform(pose.headYaw, pose.headPitch, i);
+        g.outer.rotation.set(t.outer.x, t.outer.y, 0); g.inner.position.set(...t.position); g.inner.scale.setScalar(t.scale);
+        g.inner.rotation.set(t.inner.x, t.inner.y, 0);
+        g.pivot.rotation.set(parts.head.rot[0], parts.head.rot[1], 0);
+      }
+      const showCape = capeVisible({ hasCape: !!this.capeMaterial, invisible, hideCape });
+      this.cloak.visible = showCape;
+      if (showCape && body.cape) {
+        const p = partial, at = { x: body.px + (body.x - body.px) * p, y: body.py + (body.y - body.py) * p, z: body.pz + (body.z - body.pz) * p };
+        const a = capeAngles(body.cape, { at, bodyYaw: pose.bodyYaw, partial, sneak: sneak && !sleeping });
+        this.cloakX.rotation.x = a.x * RAD; this.cloakZ.rotation.z = a.z * RAD; this.cloakY.rotation.y = a.y * RAD;
+      }
     }
     // Entity.getBrightnessForRender samples feet + 0.66 * height. Hurt tints
     // red like RendererLivingEntity (brightness, 0, 0, 0.4).
