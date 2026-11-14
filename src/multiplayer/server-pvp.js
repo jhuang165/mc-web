@@ -17,6 +17,7 @@ import { ITEMS } from '../survival.js';
 import { mhSin, mhCos } from '../lighting.js';
 import { STAT } from '../stats.js';
 import { OVERKILL_DAMAGE } from '../achievements.js';
+import { serverPosY } from '../sleeper-eye.js'; // b71 mpreach71
 
 const f = Math.fround, EYE = 1.62, TOOLS = ['sword', 'axe', 'pickaxe', 'shovel'];
 
@@ -36,8 +37,10 @@ export class ServerPvp {
    */
   inReach(p, v) {
     if (!v || v === p || v.dead || v.survival.health <= 0 || (v.dimension | 0) !== (p.dimension | 0)) return false;
-    const dx = v.position.x - p.position.x, dy = v.position.y - p.position.y, dz = v.position.z - p.position.z;
-    const seen = !rayTraceBlocks(p.world, [p.position.x, p.position.y + EYE, p.position.z], [v.position.x, v.position.y + EYE, v.position.z], false, false);
+    // b71 mpreach71: Entity.getDistanceSqToEntity reads posY of both, and a sleeper's posY is minY + 0.2 (serverPosY); the eye height of both is the fixed 1.62 (also lying)
+    const py = serverPosY(p.position.y, !!p.sleeping), vy = serverPosY(v.position.y, !!v.sleeping);
+    const dx = v.position.x - p.position.x, dy = vy - py, dz = v.position.z - p.position.z;
+    const seen = !rayTraceBlocks(p.world, [p.position.x, py + EYE, p.position.z], [v.position.x, vy + EYE, v.position.z], false, false);
     return dx * dx + dy * dy + dz * dz < (seen ? 36 : 9);
   }
   /** C02 attack by player `p` on the player with wire id `targetId`. True when the hit landed (health damage dealt). */

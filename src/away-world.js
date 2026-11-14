@@ -17,6 +17,7 @@ import { Fire } from "./fire.js";
 import { FallingBlocks } from "./falling.js";
 import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { Hoppers } from "./hopper.js";
+import { cartInventoryAt } from "./cart-inventory.js"; // b71 mpreach71
 import { Survival, burnTime } from "./survival.js";
 import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
 import { Weather } from "./weather.js";
@@ -156,6 +157,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const hoppers = new Hoppers({
     world, chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing,
     maxStack: (s) => maxStackOf(s.id ?? s), burnTime, items: () => ents?.items.items ?? [], active: ticking, changed: (keys) => rt.containerClosed(keys),
+    cartAt: (x, y, z) => cartInventoryAt(ents?.minecarts?.carts, x, y, z), // b71 mpreach71: block hoppers find chest and hopper carts
   });
   sv.furnaces = tiles.furnaces; // the run mutates the plan's own maps
   sv.furnaceActive = (k) => { const [x, , z] = k.split(",").map(Number); return ticking(x, z); };
