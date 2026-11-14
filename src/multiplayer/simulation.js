@@ -41,6 +41,7 @@ import { ServerSurvival, vitalsOf } from './server-survival.js';
 import { ServerPvp } from './server-pvp.js'; // b63 mppvp
 import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragonEgg clicks
 import { DRAGON_EGG } from '../dragon-egg.js';
+import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js'; // b66 mpbooks: note blocks and jukeboxes
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerItems } from './server-items.js';
@@ -145,6 +146,7 @@ export class DedicatedSimulation {
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
     });
     this.redstone.restore(saved.redstone);
+    installMusic(this, this.redstone, 0, saved.redstone); // b66 mpbooks: note blocks and jukeboxes (server-music.js)
     this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
     this.dispense = new ServerProjectiles(this, saved.projectiles); // b61: what dispensers fire (arrows, potions, TNT...), sent to clients as dispEnts / dispFx
     this.containers.ticks = new ContainerTicks(this); // hoppers, dispensers, trapped chest power (server-container-ticks.js)
@@ -293,6 +295,7 @@ export class DedicatedSimulation {
       if (status === 0) {
         p.swing = 6;
         if (this.world.get(cell[0], cell[1], cell[2]) === DRAGON_EGG) serverDragonEgg(this.world, cell[0], cell[1], cell[2]); // b65 mpdragon2: onBlockClicked (Survival; mining then continues on the cell)
+        serverNoteClick(this, cell); // b66 mpbooks: BlockNote.onBlockClicked
         const rate = this.digRate(p, cell);
         p.dig.start(cell, rate);
         if (rate !== null && Math.fround(rate) >= 1) this.breakDug(p, cell);
@@ -381,6 +384,7 @@ export class DedicatedSimulation {
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
+    if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     if (place && isFence(b) && this.leads.fence(p, [x, y, z])) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot
     if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water

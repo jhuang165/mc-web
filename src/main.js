@@ -219,6 +219,8 @@ import { potionColor as damageColor, POTION_TYPES, durationString } from "./poti
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
+import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
+import { recordAux, noteEvent } from "./multiplayer/client-music.js"; // b66 mpbooks
 import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, inventoryWire, litFurnaceData, dispenserAux } from "./multiplayer/client-containers.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
@@ -858,7 +860,7 @@ async function joinMultiplayer(settings) {
     onTick: applyMultiplayerTick, onMobs: packets => remoteMobs?.apply(packets), onVehicles: m => remoteVehicles?.apply(m), onDisp: message => (message.type === 'fishHooks' || message.type === 'fishFx' ? remoteFishing : remoteDispense)?.apply(message), onBlocks: message => applyMultiplayerCells(message.changes),
     onCollect: message => collectMultiplayerStack(message.stack),
     onSlot: message => { applySlots(survival.inventory, message, mpInv); if (eating && slotReplacesUse(message, survival.inventory.current)) eating = null; /* b65 mpuse2: S2F replaces the held stack object, which ends the item use */ renderHotbar(); }, // S2F set slot
-    onAux: message => { for (const e of message.events ?? []) if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a), listener: () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }) }); }, // b63 listener: the wither spawn 1013; 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
+    onAux: message => { for (const e of message.events ?? []) if (recordAux(e, mpRecord)) { /* b66 mpbooks: S28 1005 */ } else if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a), listener: () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }) }); }, // b63 listener: the wither spawn 1013; 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
     onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
@@ -872,6 +874,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
+  client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   multiplayer = client; mpBoard.reset(); // b64 mpscoreboard: a fresh replica for this server
   try {
@@ -1104,6 +1107,8 @@ function icon(id, damage = 0, stack) {
 }
 const heldId = () => survival.held?.id || 0;
 const recordHud = createRecordHud(document.body);
+// b66 mpbooks: S28 1005 (RenderGlobal.playRecord) and S24 on a note block over a connection (multiplayer/client-music.js)
+const mpRecord = { play: (item, x, y, z) => { if (item) recordHud.show(item); sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z); } };
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
@@ -3479,9 +3484,19 @@ function multiplayerDigStart() {
   if (playerMiningState(survival, block, id, clientEyeInWater(), grounded).progress >= 1) { multiplayerBreakFx(target.block); return; } // instant: no timer, no delay
   mining = { block: [...target.block], type: block, progress: 0, tool: id, auto: !mineHeld };
 }
+// b66 mpbooks: ItemWritableBook / ItemEditableBook.onItemRightClick over a connection: the screen opens on the client, a finished edit or signature is applied to the client's own stack
+// and sent as MC|BEdit / MC|BSign (bookEdit / bookSign); the server's slot correction then carries the authoritative book.
+function openMultiplayerBook() {
+  const held = survival.held;
+  if (!held || !multiplayer) return;
+  screen = "inventory"; mining = null; mineHeld = false;
+  const name = multiplayer.players?.find(q => q.id === multiplayer.id)?.name ?? PLAYER_NAME;
+  openBookUi({ show: (title, html) => containerShell("book", html, "book-modal", { noLabels: true }, "screen"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => {} },
+    { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: name, send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, name); multiplayer?.send(bookMessage(channel, packet)); renderHotbar(); } });
+}
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (!eating) eating = predictUse(survival.held, survival); /* b63/b64: the draw, eat, drink and block look from this player's own use state (client-use-predict.js; the server decides) */ } animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); if (place && bookOpensOnUse({ held: survival.held, sneaking: !!motion.sneaking, targetBlock: target ? world.get(...target.block) : 0, aimedEntity: !!(aimedEntity || aimedCart || aimedHanging) })) { openMultiplayerBook(); animation.swing(); return; } /* b66 mpbooks: GuiScreenBook opens on the client */ multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (!eating) eating = predictUse(survival.held, survival); /* b63/b64: the draw, eat, drink and block look from this player's own use state (client-use-predict.js; the server decides) */ } animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
