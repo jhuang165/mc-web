@@ -164,19 +164,33 @@ export class Fireballs {
     if (e === "player") return this.mobs.playerLook?.() ?? null;
     return lookVector(e.rotationYaw ?? 0, e.rotationPitch ?? 0, mhSin, mhCos);
   }
-  // The first ball a player's ray meets, grown by the collision border 1.0 (ze.ao), nearer than `wallDistance`.
-  pick(origin, dir, reach, wallDistance = reach) {
-    let best = null;
-    const o = [origin.x ?? origin[0], origin.y ?? origin[1], origin.z ?? origin[2]], d = [dir.x ?? dir[0], dir.y ?? dir[1], dir.z ?? dir[2]], limit = Math.min(reach, wallDistance);
+  // The ball EntityRenderer.getMouseOver picks (blt.a(F), composed over the real objects in FireballPickProbe, fireball-pick-reference.json): the ray is `reach` long
+  // (3, or 6 in Creative), each large ball (EntityFireball.canBeCollidedWith; the small ball answers false) is grown by its collision border 1.0 (ze.af), and a hit
+  // counts when Vec3.distanceTo (a float: MathHelper.sqrt_double) is below `wallDistance`, the block hit's distance. Candidates come from the viewer box grown by the
+  // ray and (1, 1, 1) when `viewerBox` is given. A box that contains the eye answers at once with distance 0 and, as natively, any later ball the ray touches replaces it.
+  pick(origin, dir, reach, wallDistance = reach, viewerBox = null) {
+    const o = [origin.x ?? origin[0], origin.y ?? origin[1], origin.z ?? origin[2]], d = [dir.x ?? dir[0], dir.y ?? dir[1], dir.z ?? dir[2]];
+    const end = [o[0] + d[0] * reach, o[1] + d[1] * reach, o[2] + d[2] * reach];
+    const search = viewerBox && [
+      Math.min(viewerBox[0], viewerBox[0] + d[0] * reach) - 1, Math.min(viewerBox[1], viewerBox[1] + d[1] * reach) - 1, Math.min(viewerBox[2], viewerBox[2] + d[2] * reach) - 1,
+      Math.max(viewerBox[3], viewerBox[3] + d[0] * reach) + 1, Math.max(viewerBox[4], viewerBox[4] + d[1] * reach) + 1, Math.max(viewerBox[5], viewerBox[5] + d[2] * reach) + 1,
+    ];
+    const far = (v) => Math.fround(Math.sqrt((v[0] - o[0]) ** 2 + (v[1] - o[1]) ** 2 + (v[2] - o[2]) ** 2));
+    let best = null, pickDist = 0, d2 = wallDistance;
     for (const b of this.list) {
       if (b.dead || !b.large) continue;
-      const h = b.width / 2 + PICK_BORDER, box = [b.x - h, b.y - PICK_BORDER, b.z - h, b.x + h, b.y + b.width + PICK_BORDER, b.z + h];
-      const r = intercept(box, o, [o[0] + d[0] * limit, o[1] + d[1] * limit, o[2] + d[2] * limit]);
-      if (!r) continue;
-      const dist = Math.hypot(r.vec[0] - o[0], r.vec[1] - o[1], r.vec[2] - o[2]);
-      if (!best || dist < best.distance) best = { entity: b, distance: dist };
+      const raw = this.boxOf(b);
+      if (search && !(raw[3] > search[0] && raw[0] < search[3] && raw[4] > search[1] && raw[1] < search[4] && raw[5] > search[2] && raw[2] < search[5])) continue;
+      const box = [raw[0] - PICK_BORDER, raw[1] - PICK_BORDER, raw[2] - PICK_BORDER, raw[3] + PICK_BORDER, raw[4] + PICK_BORDER, raw[5] + PICK_BORDER];
+      const r = intercept(box, o, end);
+      if (o[0] > box[0] && o[0] < box[3] && o[1] > box[1] && o[1] < box[4] && o[2] > box[2] && o[2] < box[5]) { // AxisAlignedBB.isVecInside
+        if (d2 >= 0) { best = b; pickDist = r ? far(r.vec) : 0; d2 = 0; }
+      } else if (r) {
+        const dist = far(r.vec);
+        if (dist < d2 || d2 === 0) { best = b; pickDist = dist; d2 = dist; }
+      }
     }
-    return best;
+    return best && d2 < wallDistance ? { entity: best, distance: pickDist } : null;
   }
   // The inGround branch of EntityFireball.onUpdate (executed in FireballProbe, fireballs-b41-reference.json), after super.onUpdate: while the block at the
   // stored tile is still the stored block the ball only counts ticksAlive (setDead on the 600th) and does nothing else; otherwise it lets go: inGround off,
