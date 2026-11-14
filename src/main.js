@@ -909,7 +909,7 @@ async function joinMultiplayer(settings) {
     const record = { id: 'remote-' + client.id, remote: true, name: 'ledoge0 — Multiplayer', seed: snapshot.seed,
       biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
       position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time }, experience: welcome.self.experience,
-      entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
+      entities: [], weather: snapshot.weather, allowCommands: false, edits: [], worldSpawn: snapshot.worldSpawn /* b68: the server's /setworldspawn (S05) */ };
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
@@ -956,7 +956,7 @@ async function multiplayerDimension(client, settings, m) {
     const record = { id: 'remote-' + client.id, remote: true, name: active?.name ?? 'ledoge0 — Multiplayer', seed: snapshot.seed,
       biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
       position: { ...self, yaw: m.self.yaw, pitch: m.self.pitch }, player: { ...m.self.player, time: snapshot.time }, experience: m.self.experience,
-      entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
+      entities: [], weather: snapshot.weather, allowCommands: false, edits: [], worldSpawn: snapshot.worldSpawn /* b68: the server's /setworldspawn (S05) */ };
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;

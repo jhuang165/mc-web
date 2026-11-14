@@ -63,6 +63,7 @@ import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats 
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
+import { setWorldSpawn } from './server-worldcmds.js'; // b68 mpworldcmds: /setworldspawn
 import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 
@@ -113,6 +114,7 @@ export class DedicatedSimulation {
     this.gameRules = { ...(saved.gameRules ?? {}) }; if (Number.isInteger(saved.difficulty)) this.difficulty = saved.difficulty; this.newPlayerMode = saved.newPlayerMode ?? null; // a saved difficulty wins over the --difficulty option
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
+    this.worldSpawn = null; if (Array.isArray(saved.worldSpawn) && saved.worldSpawn.length === 3) setWorldSpawn(this, saved.worldSpawn); // b68: a /setworldspawn saved with the world (the dimensions are not built yet: the Overworld is this.world)
     // Item entities (EntityItem): a Survival break, drops from a container and the like. Each gets a wire id (`eid`); clients see them in `tick.items` and ask
     // to collect them with `pickup` (the client's own inventory is the authority, as for the hotbar).
     this.items = new ItemEntities();
@@ -615,12 +617,12 @@ export class DedicatedSimulation {
   presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
-  snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
+  snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
-      edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
+      edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, newPlayerMode: this.newPlayerMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(),
       admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
