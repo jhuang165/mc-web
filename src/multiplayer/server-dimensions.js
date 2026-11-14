@@ -66,7 +66,7 @@ export class ServerDimensions {
     }
     // A Nether player who respawns starts at the Overworld spawn (their bed or the world spawn), so the world swap follows ServerSurvival.respawn.
     const respawn = sim.serverSurvival.respawn.bind(sim.serverSurvival);
-    sim.serverSurvival.respawn = p => { const was = p?.dimension; const done = respawn(p); if (done && was) this.arrive(p, OVERWORLD, { at: p.position }); return done; };
+    sim.serverSurvival.respawn = p => { if (p?.conquered && !p.dead) return this.end.finishCredits(p); if (p) p.conquered = false; /* b64 mpdragon: C16 after the credits */ const was = p?.dimension; const done = respawn(p); if (done && was) this.arrive(p, OVERWORLD, { at: p.position }); return done; };
     // Each tick the simulation finishes, the portals are checked and the Nether (items, cell changes) is ticked and described: `alt` is its message.
     const tick = sim.tick.bind(sim);
     sim.tick = () => { const message = tick(); this.afterTick(message); return message; };

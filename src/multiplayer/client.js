@@ -57,6 +57,7 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
+    if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
     if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
@@ -79,6 +80,7 @@ export class DedicatedClient {
   apply(message) {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
+    if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
     if (message.type === 'blocks') this.onBlocks(message);
     if (message.type === 'signEditor') this.onSignEditor(message);
     if (message.type === 'effect') this.onEffect(message);

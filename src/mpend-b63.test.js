@@ -6,6 +6,7 @@ import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { restoreReplica } from './multiplayer/client.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { END_OFFSET } from './multiplayer/client-dimensions.js';
+import { buildExitPortal } from './multiplayer/server-end.js';
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const FRAME = 104, EYE = 1960, END_PORTAL = 149, OBSIDIAN = 22;
@@ -77,16 +78,21 @@ test('an end portal sends the player to the End platform (theEnd); the exit port
   assert.equal(b.dimension | 0, 0, 'Bob stays');
   assert.deepEqual(s.dimensions.alt[1].players.map(x => x.id), ['a'], 'only End players in the End message');
   assert.ok(!s.presence(0).some(x => x.id === 'a'));
-  // the exit portal (a stand-in until the dragon exists) is at the origin, in the window
+  // b64: the exit portal is the dying dragon's now; build its structure by hand (the dragon's death is tested in mpdragon-b64.test.js)
   const [ex, ez] = [END_OFFSET.x, END_OFFSET.z];
+  buildExitPortal(w);
   assert.equal(w.get(ex + 2, 64, ez), END_PORTAL);
   a.dimOut = null;
   a.position.copy({ x: ex + 2.5, y: 64, z: ez + 0.5 }); a.previous.copy(a.position);
   s.input('a', input());
   s.tick();
+  assert.equal(a.dimension, 1, 'b64: the player waits in the End while the credits roll');
+  assert.ok(a.dimOut.some(m => m.type === 'dragonCredits' && m.reason === 4));
+  assert.ok(s.events.some(e => e.achievement === 'theEnd2'));
+  a.dimOut = null;
+  s.serverSurvival.respawn(a); // C16 after the credits
   assert.equal(a.dimension | 0, 0);
   assert.equal(a.world, world);
-  assert.ok(s.events.some(e => e.achievement === 'theEnd2'));
   assert.ok(a.dimOut.some(m => m.type === 'dimRespawn' && !m.world.dimension));
 });
 
@@ -101,7 +107,7 @@ test('the End has terrain and spawns only enderman-type mobs; it is saved and re
   w.set(10, 100, 10, 1, true, 0);
   s.input('a', input());
   for (let i = 0; i < 40; i++) s.tick();
-  for (const e of s.dimensions.end.n.mobs.mobs.entities) assert.equal(e.type, 'enderman');
+  for (const e of s.dimensions.end.n.mobs.mobs.entities) assert.ok(['enderman', 'ender_dragon', 'ender_crystal'].includes(e.type), e.type); // b64: + the dragon and its crystals
   const saved = s.save?.() ?? s.snapshotSave?.();
   assert.ok(saved?.dimensions?.end?.edits?.length, 'end edits saved');
   assert.equal(s.dimensions.savedFields(a).dimension, 1);

@@ -100,7 +100,7 @@ export function movementOffsets(e, n, p) {
 
 // EntityDragon.setNewTarget (bQ).
 export function setNewTarget(e, host) {
-  const s = e.dragon, rand = host.rand;
+  const s = e.dragon, rand = host.rand, centre = host.center ?? { x: 0, z: 0 }; // b64 mpdragon: the server's End is stored shifted, so its fight is centred on (centre.x, centre.z); single player's is (0, 0)
   s.force = false;
   if (rand.nextInt(2) === 0 && host.players.length > 0) {
     s.target = host.players[rand.nextInt(host.players.length)];
@@ -108,9 +108,9 @@ export function setNewTarget(e, host) {
   }
   let far = false;
   do {
-    s.tx = 0;
+    s.tx = centre.x;
     s.ty = f(70 + f(rand.nextFloat() * 50));
-    s.tz = 0;
+    s.tz = centre.z;
     s.tx += f(f(rand.nextFloat() * 120) - 60);
     s.tz += f(f(rand.nextFloat() * 120) - 60);
     const dx = e.x - s.tx, dy = e.y - s.ty, dz = e.z - s.tz;

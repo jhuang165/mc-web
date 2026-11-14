@@ -24,10 +24,12 @@ import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
 import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from './server-owners.js'; // b63
 import { installServerWither, boundedSkullResistance } from './server-wither.js'; // b63 mpwither
+import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
 export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'slime', 'witch', 'cave_spider', 'squid', 'bat', 'wolf', 'ocelot', 'horse', 'mooshroom', 'pigman', 'ghast', 'magma_cube', 'blaze', 'wither_skeleton', 'wither']); // b63: the wither (server-wither.js); b62: the Nether's kinds (Overworld spawn lists never name them)
+for (const k of DRAGON_KINDS) SUPPORTED.add(k); // b64 mpdragon: the Ender Dragon and the End crystals (the End's mobs)
 export const MOB_LIMIT = 80; // mobs kept in one dedicated world, a safety cap for the wire and the tick
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
@@ -119,6 +121,7 @@ export class ServerMobs {
     // b62: the puppy or kitten of a tamed parent belongs to the parent's owner (EntityTameable.func_152115_b(parent owner UUID)); puppyFields / kittenFields only copy the flag.
     const made = mobs.makeBaby;
     mobs.makeBaby = function (a, b) { const baby = made.call(this, a, b); if (baby?.owner && a.ownerUuid) baby.ownerUuid = a.ownerUuid; return baby; };
+    installServerDragon(this); // b64 mpdragon: the dragon sees every player of its world
     installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
     this.tracker = new SharedMobTracker(10); // b61: the world's one EntityTracker (server half)
@@ -362,7 +365,7 @@ export class ServerMobs {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
     const dx = mob.x - p.position.x, dy = mob.y + 0.9 - (p.position.y + PHYSICS.eye), dz = mob.z - p.position.z;
-    if (dx * dx + dy * dy + dz * dz > 36) return false; // 6 blocks, a little over the creative reach of 5
+    if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : dx * dx + dy * dy + dz * dz > 36) return false; // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     try { return this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }); } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
@@ -384,5 +387,5 @@ export class ServerMobs {
     p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; // a click the client did not predict is followed by its item-use message: dropped for two ticks
     return done;
   }
-  save() { return this.mobs.entities.filter(e => e.health > 0).map(e => this.mobs.serializeOne(e)); }
+  save() { return this.mobs.entities.filter(e => e.health > 0 || (e.type === 'ender_dragon' && !e.dragonGone)) /* b64: a dying dragon restarts its death */.map(e => this.mobs.serializeOne(e)); }
 }
