@@ -1,3 +1,4 @@
+import { makeStack } from "./inventory.js";
 import { isFrozen } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { ringEntityActive } from './streaming-ticks.js';
 // ItemBow (abm), EntityArrow (zc) and the arrow half of EntitySkeleton (yl) from the
@@ -456,7 +457,8 @@ export class Arrows {
   // EntityArrow.onCollideWithPlayer (zc.b_): the player's box grown by (1, 0.5, 1) touches a
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one
   // arrow is added), 2 works in Creative only; the pickup sound is random.pop at 0.2.
-  collect(playerBox, survival, take = (n) => survival.add(ARROW, n)) {
+  // addItemStackToInventory answers true for Creative even when nothing fits (arrow-pickup-reference.json), so the default asks the inventory, not Survival.add's stored count.
+  collect(playerBox, survival, take = (n) => survival.inventory?.add ? survival.inventory.add(makeStack(ARROW, n)) : survival.add(ARROW, n)) {
     const near = [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];
     let n = 0;
     for (const a of this.list) {

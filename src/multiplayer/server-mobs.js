@@ -159,7 +159,8 @@ export class ServerMobs {
     const reach = p.survival.creative ? 6 : 3, eye = { x: p.position.x, y: serverEyeY(p.position.y, p.sleeping), z: p.position.z };
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const wall = raycast(this.host.world, eye, dir, p.survival.creative ? 5 : 4.5);
-    const hit = fb.pick(eye, dir, reach, wall ? wall.distance : reach);
+    const pos = p.position, lying = !!p.sleeping, w2 = (lying ? SLEEP_BOX : 0.6) / 2, py = serverPosY(pos.y, lying), viewer = [pos.x - w2, py, pos.z - w2, pos.x + w2, py + (lying ? SLEEP_BOX : 1.8), pos.z + w2]; // the viewer's box (getMouseOver's entity search area)
+    const hit = fb.pick(eye, dir, reach, wall ? wall.distance : reach, viewer);
     if (!hit) return false;
     hit.entity.punchedBy = p;
     return fb.punch(hit.entity, [dir.x, dir.y, dir.z]);
