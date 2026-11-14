@@ -41,7 +41,7 @@ One world per JVM is used because native class statics make a second run in one 
 
 ## Limits
 
-- Fortress/Nether starts and pieces are not ported: decode skips them but cannot keep them.
+- Batch 69 (docs sweep): Fortress and Nether starts and pieces are ported (`src/structure-nbt.js` line 223: every id `MapGenStructureIO` registers has a port; see the batch 16 section below).
 - `ViW` and `SHRT` are covered only by synthetic round trips; the five census worlds are search-only on the JS side because JS village population is still missing door neighbour updates, so their populated NBT is native-only evidence.
 - The temple world's native call stream is 319 calls longer than the port's (existing GEN-05g limit); its ordered writes and RNG streams agree.
 - HashMap order is modelled for Java 8+ only. Failure behaviour of malformed data matches the accessors, not the native warning logs; `NBTSizeTracker` accounting is not ported (see `nbt.md`).

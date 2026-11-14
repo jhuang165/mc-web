@@ -34,7 +34,7 @@ No framework file was edited. Everything needed existed in `structure-framework.
 
 ## Limits and remaining work
 
-- Not wired into `ChunkProviderGenerate`/`java-world.js`/live generation, and no `MapGenStructureData` or NBT save/load of starts or pieces (`describe()` is a test format, not the NBT layout).
+- Batch 69 (docs sweep): strongholds are wired into live generation for finite generation 14 and streamed generation 15 worlds (`src/main.js` version note, `src/population-world.js` imports `MapGenStronghold`); structure NBT save/load of pieces exists per [structure NBT](structure-nbt.md). Not re-checked here: `MapGenStructureData` in the live save folder.
 - The stronghold position search is the existing `strongholdPositions` (covered by its own reference); only default world type with positions for 3 strongholds per seed is exercised here, and positions beyond the first ring are not re-verified for other counts.
 - The test world is a recording double, not the game chunk store: no neighbour-chunk lighting, block updates or notifications, and spawner/chest tiles are represented by the fixture's tile objects.
 - Silverfish `setEntityName` is checked through the tile, not through an entity spawn pipeline; monster eggs (block 97) behaviour and stronghold spawn lists are outside this module.
