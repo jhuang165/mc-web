@@ -478,7 +478,7 @@ export class PlayerWatch {
     if (i - (Math.trunc(this.managed.x) >> 4) === 0 && j - (Math.trunc(this.managed.z) >> 4) === 0) return;
     this.managed = { x: p.x, z: p.z }; this.cx = i; this.cz = j;
   }
-  watches(cx, cz) { return Math.abs(cx - this.cx) <= this.radius && Math.abs(cz - this.cz) <= this.radius; }
+  watches(cx, cz) { return Math.abs(cx - this.cx) <= this.radius && Math.abs(cz - this.cz) <= this.radius && (!this.gate || this.gate(cx, cz)); } // b72 mpstream72: `gate` = the chunk was sent to the player (dedicated server)
 }
 
 // The tracker of an EntityWorld: one entry and one client entity per mob. update() is EntityTracker.updateTrackedEntities followed by

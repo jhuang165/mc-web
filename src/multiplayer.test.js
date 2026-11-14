@@ -129,7 +129,7 @@ test('two WebSocket clients share authority, chat and departure; saves survive c
   const [legacyCode] = await once(legacy.ws, 'close'); assert.equal(legacyCode, 1008, 'the shared key no longer admits players');
   const alice = await connect('Alice'), bob = await connect('Bob');
   const a = await alice.next(m => m.type === 'welcome'), b = await bob.next(m => m.type === 'welcome');
-  assert.equal(a.world.columns.length, 64); assert.equal(b.world.players.length, 2);
+  assert.deepEqual(a.world.columns, []); assert.equal(a.world.chunkView, true); assert.ok((await alice.next(m => m.type === 'chunkBulk')).columns.length > 0, 'b72: the world streams in after the welcome'); assert.equal(b.world.players.length, 2);
   alice.ws.send(JSON.stringify({ type: 'chat', text: 'hello Bob' }));
   assert.equal((await bob.next(m => m.type === 'chat' && m.text === 'hello Bob')).name, 'Alice');
   // Chat spam gate (NetHandlerPlayServer): the 11th quick message is delivered, then the sender is kicked.
@@ -139,6 +139,7 @@ test('two WebSocket clients share authority, chat and departure; saves survive c
   assert.deepEqual([spamCode, String(spamReason)], [1008, 'Kicked for spamming']);
   const bob2 = await connect('Bob'); await bob2.next(m => m.type === 'welcome');
   Object.assign(bob, bob2);
+  await bob.next(m => m.type === 'chunkBulk' && m.columns.some(c => c.x === 4 && c.z === 3)); // b72: a cell only goes to a player that was sent its column
   app.simulation.world.set(64, 11, 61, 3);
   alice.ws.send(JSON.stringify(input())); alice.ws.send(JSON.stringify({ type: 'edit', place: true }));
   const update = await bob.next(m => m.type === 'tick' && m.changes.some(c => c[0] === 64 && c[1] === 11 && c[2] === 62 && c[3] === 3));

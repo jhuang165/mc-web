@@ -125,6 +125,8 @@ export class RemoteMobs {
       this.factory.swingLimbs(mob);
     }
   }
+  // b72 mpstream72: Chunk.onChunkUnload: the copies standing in an unloaded column (keys `cx,cz`) leave the client world; later packets for them are ignored (no copy).
+  dropColumns(columns) { for (const [id, c] of [...this.copies]) if (columns.has(`${Math.floor(c.client.x / 16)},${Math.floor(c.client.z / 16)}`)) this.copies.delete(id); }
   // The stand-ins to draw, with the client copy's position for RenderManager's partial tick.
   list() { return [...this.copies.values()].map(c => c.mob); }
   clientOf(mob) { for (const c of this.copies.values()) if (c.mob === mob) return c.client; return null; }

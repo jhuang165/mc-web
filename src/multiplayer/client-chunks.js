@@ -46,12 +46,16 @@ function refresh(scene, world, x, z) {
 export function applyChunkMessage(message, host) {
   const { world } = host;
   if (message.type === 'chunkUnload') {
+    const gone = new Set();
     for (const [x, z] of message.columns ?? []) {
       const column = world.chunks.get(keyOf(x, z));
       if (!column) continue;
-      blank(column); (world.absentColumns ??= new Set()).add(keyOf(x, z));
+      blank(column); (world.absentColumns ??= new Set()).add(keyOf(x, z)); gone.add(keyOf(x, z));
       refresh(host.scene, world, x, z);
     }
+    // b72 mpstream72: Chunk.onChunkUnload (bytecode-read, bjd.b(II) -> apx.d()) hands the column's entities to World.unloadEntities: the client copies in it are gone, the server's tracker
+    // entry is not told (it ends by range). `host.entities` removes the mob and vehicle copies; items and orbs ride the per-tick list the server cuts to sent columns.
+    if (gone.size) host.entities?.(gone);
   } else if (message.type === 'chunkBulk') {
     for (const packet of message.columns ?? []) {
       const key = keyOf(packet.x, packet.z), column = world.chunks.get(key);

@@ -163,7 +163,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   // b61 mpnether: `alt` maps a dimension to the tick message for the players in it (server-dimensions.js); everyone else gets `message`.
   const broadcast = (message, alt) => {
     const plain = new Map(), expanded = m => m.chunks ? (plain.has(m) ? plain.get(m) : (plain.set(m, expandChunks(m)), plain.get(m))) : m;
-    for (const [pid, ws] of sockets) { const dim = simulation.players.get(pid)?.dimension | 0, m = alt?.[dim] ?? message; send(ws, simulation.objectTracker.messageFor(pid, ws.chunks ? m : expanded(m), dim, m)); /* b71 mptrackers71: items and orbs this player tracks */ }
+    for (const [pid, ws] of sockets) { const dim = simulation.players.get(pid)?.dimension | 0, m = alt?.[dim] ?? message; send(ws, simulation.chunkViews.messageFor(pid, simulation.objectTracker.messageFor(pid, ws.chunks ? m : expanded(m), dim, m))); /* b71 mptrackers71: items and orbs this player tracks; b72 mpstream72: cells of columns this player was sent */ }
   };
   // Chat, commands, death and achievement broadcasts (src/server-broadcast.js); `ops` names the players who may run commands.
   installServerRules(simulation); // /gamerule values reach the fire, griefing and tick readers of this process
@@ -288,6 +288,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     try {
       const tick = simulation.tick();
       simulation.dimensions.flush((pid, m) => { const ws = sockets.get(pid); if (ws) send(ws, m); }); // b61: `dimRespawn` goes before that player's next tick
+      // b72 mpstream72: the S21 / S26 messages go before this tick's block changes (the bulk holds the columns as they stood when it was taken, the cells that follow repeat or add to it)
+      for (const [pid, player] of simulation.players) { const ws = sockets.get(pid); for (const m of player.chunkOut ?? []) if (ws) send(ws, m); player.chunkOut = null; }
       broadcast(tick, simulation.dimensions.alt);
       for (const pid of simulation.admin.idle(simulation.ticks)) simulation.admin.host.kick(pid, 'You have been idle for too long!'); // b68 mpadmin: /setidletimeout
       pings.tick(); // b68 mpping: keep-alives every 40 ticks, one S38 per tick in rotation

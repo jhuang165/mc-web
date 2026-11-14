@@ -45,6 +45,7 @@ export class ObjectTracker {
       // EntityTracker.updateTrackedEntities: the player's own entry re-lists every entity when the player moved more than 4 blocks from where it last did (and at the join)
       let moved = false;
       if (!v) { s.views.set(pid, v = { ref: { x: pos.x, y: pos.y, z: pos.z }, tracked: new Set(), view: { player: pos, watches: (cx, cz) => this.watches(pid, cx, cz), log: null } }); moved = true; }
+      else if (this.host.chunkViews?.takeFresh(pid, 'objects')) moved = true; // b72 mpstream72: a column was sent or unloaded: re-list (PlayerManager's tracker call after S26)
       else { const dx = pos.x - v.ref.x, dy = pos.y - v.ref.y, dz = pos.z - v.ref.z; if (dx * dx + dy * dy + dz * dz > 16) { v.ref = { x: pos.x, y: pos.y, z: pos.z }; moved = true; } }
       v.view.player = pos;
       const next = new Set();

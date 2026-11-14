@@ -16,6 +16,7 @@ function fixture(mode = 'creative') {
   for (let x = 40; x <= 100; x++) for (let z = 50; z <= 80; z++) for (let y = 9; y <= 40; y++) world.put(x, y, z, y === 9 ? 3 : 0, 0, false);
   world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
   const s = new DedicatedSimulation({}, { world, gameMode: mode, mobs: false });
+  s.rules.chunkStream = false; // b72: these tests read the snapshot columns (the streaming join is tested in mpstream72-b72)
   // a 4 x 5 obsidian frame in the x axis plane z = 64, interior x 61..62, y 11..13
   for (let x = 60; x <= 63; x++) for (let y = 10; y <= 14; y++) if (x === 60 || x === 63 || y === 10 || y === 14) world.set(x, y, 64, OBSIDIAN, true, 0);
   return { s, world };

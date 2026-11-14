@@ -18,11 +18,23 @@
 //     covers the whole world from anywhere, so only view-distance 3..7 changes anything.
 //   * the welcome snapshot (and a `dimRespawn` snapshot) carries the player's first square at once instead of streaming it over ticks (the replica is built from the snapshot): found different.
 //   * wire (all prefixed `chunk`): `chunkBulk` { columns: [{ x, z, runs }], tiles? } (S26 and the S35 that follow; x / z are LOCAL column coordinates) and `chunkUnload` { columns: [[x, z]] } (S21 empty).
-//   * a world whose native origin is not a multiple of 16 (the legacy End window) is never limited: every column is sent in the snapshot and no view is kept.
+//   * (b72) a world whose native origin is not a multiple of 16 (the legacy End window, origin -25 / -96) cannot line up with native chunks (a replica column is 16 cells of the local grid).
+//     It now follows the same view on its LOCAL 16 grid (player chunk = local position >> 4): same radius, order and batching, but the chunk borders sit 7 blocks off the native ones in x.
+// Batch 72 mpstream72:
+//   * the join (and a `dimRespawn`) snapshot carries NO columns (`columns: []`, `chunkView: true`); the first square is queued exactly as addPlayer does and streams through `tick()`
+//     five columns per tick (S26), spiral order, the player's own column first. The client builds a blank replica and fills it from `chunkBulk`.
+//     `rules.chunkStream = false` returns the old behaviour (the square in the snapshot).
+//   * PlayerInstance.sendToAllPlayersWatchingChunk skips a player whose loadedChunks still holds the chunk (recalled): block changes, chunk resends and tile descriptions of a column
+//     go only to players that were SENT it (`entry.sent`, local column keys): `messageFor`.
+//   * EntityTracker's tryStartWachingThis needs PlayerManager.isPlayerWatchingChunk, i.e. the chunk sent and not unloaded (recalled): `sees(pid, cx, cz)` gates the mob, item, orb and
+//     vehicle trackers, and `takeFresh(pid)` re-lists the entries of a player whose columns changed this tick (PlayerManager's entity tracker call after the chunk was sent).
+//   * the native client unloads a column with ChunkProviderClient.unloadChunk -> Chunk.onChunkUnload: tile entities and every entity of the column leave the client world (bytecode-read:
+//     bjd.b(II) -> apx.d() -> ahb.a(aor) per tile, ahb.b(List) per entity list). client-chunks.js does the same for mob and vehicle copies.
 import { encodeColumn } from './protocol.js';
 import { describeTiles } from '../tile-sync.js';
 
 export const CHUNK_BULK_MAX = 5; // gz.c()
+const FRESH = ['mobs', 'objects']; // the trackers that re-list when columns change
 export const CHUNK_MOVE_SQ = 64; // mq.d: less than 8 blocks from the managed position changes nothing
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export const chunkOf = v => Math.trunc(v) >> 4; // d2i, then ishr 4
@@ -80,40 +92,67 @@ export class ServerChunkViews {
   worldOf(player) { return player.dimension ? this.sim.dimensions.state(player.dimension).world : this.sim.world; }
   storesOf(player) { return player.dimension ? this.sim.dimensions.state(player.dimension).tileEntities : this.sim.tileEntities; }
   // Native coordinates -> the local column of a world, or null when none lines up with the 16 grid.
-  static limits(world) { const ox = world.originX ?? 0, oz = world.originZ ?? 0; return ox % 16 === 0 && oz % 16 === 0 ? { ox, oz } : null; }
+  // b72: a window that does not line up with the native 16 grid (legacy End) uses its own local grid (origin 0), so it is limited too.
+  static limits(world) { const ox = world.originX ?? 0, oz = world.originZ ?? 0; return ox % 16 === 0 && oz % 16 === 0 ? { ox, oz } : { ox: 0, oz: 0 }; }
   existsIn(world) {
     const { ox, oz } = ServerChunkViews.limits(world);
     return (x, z) => world.chunks.has(`${x - ox / 16},${z - oz / 16}`);
   }
   local(world, [x, z]) { const { ox, oz } = ServerChunkViews.limits(world); return [x - ox / 16, z - oz / 16]; }
-  nativePos(world, p) { return [p.position.x + (world.originX ?? 0), p.position.z + (world.originZ ?? 0)]; }
-  // A snapshot for a player: the first square (spiral order) of encoded columns, or every column for a world that cannot be limited. Resets the player's view.
+  nativePos(world, p) { const { ox, oz } = ServerChunkViews.limits(world); return [p.position.x + ox, p.position.z + oz]; }
+  // A snapshot for a player: no columns while streaming (b72; the square is queued and `tick` sends it), else the first square (spiral order) of encoded columns. Resets the player's view.
   columnsFor(playerId, world) {
     const p = this.sim.players.get(playerId);
-    if (!p || !ServerChunkViews.limits(world) || this.sim.rules.chunkView === false) { this.watches.delete(playerId); return [...world.chunks.values()].map(encodeColumn); }
+    if (!p || this.sim.rules.chunkView === false) { this.watches.delete(playerId); return [...world.chunks.values()].map(encodeColumn); }
     const [nx, nz] = this.nativePos(world, p), exists = this.existsIn(world), watch = new ChunkWatch(this.radius, nx, nz, exists);
+    const entry = { world, watch, sent: new Set(), fresh: new Set(FRESH) };
+    this.watches.set(playerId, entry);
+    if (this.sim.rules.chunkStream !== false) return []; // the first square streams from the next tick, five columns at a time
     const first = watch.take(watch.queue.length); // the whole square is in the snapshot
-    this.watches.set(playerId, { world, watch });
+    for (const c of first) entry.sent.add(this.local(world, c).join(','));
     return first.map(c => encodeColumn(world.chunks.get(this.local(world, c).join(','))));
+  }
+  // Whether the player was sent (and still holds) the column at local chunk (cx, cz): PlayerManager.isPlayerWatchingChunk. A player without a view sees everything.
+  sees(playerId, cx, cz) {
+    const entry = this.watches.get(playerId);
+    if (!entry) return true;
+    const p = this.sim.players.get(playerId);
+    if (p && entry.world !== this.worldOf(p)) return true; // not this player's current world: nothing to gate
+    return entry.sent.has(`${cx},${cz}`);
+  }
+  // True once per consumer (`who`: 'mobs' | 'objects') after the player's columns changed (sent or unloaded): the tracker re-lists its entries for the player.
+  takeFresh(playerId, who) { const entry = this.watches.get(playerId); return !!entry && entry.fresh.delete(who); }
+  // A tick message cut to the columns the player holds: cells, resent chunks and tile descriptions of other columns are dropped (PlayerInstance only sends to its watchers).
+  messageFor(playerId, message) {
+    const entry = this.watches.get(playerId);
+    if (!entry || !message || !(message.changes?.length || message.chunks?.length || message.tiles?.length)) return message;
+    const have = (x, z) => entry.sent.has(`${x},${z}`);
+    const changes = message.changes?.filter(c => have(c[0] >> 4, c[2] >> 4)), chunks = message.chunks?.filter(c => have(c.x, c.z)), tiles = message.tiles?.filter(t => have(t.x >> 4, t.z >> 4));
+    if (changes?.length === message.changes?.length && chunks?.length === message.chunks?.length && tiles?.length === message.tiles?.length) return message;
+    const out = { ...message };
+    if (changes) out.changes = changes;
+    if (chunks) { if (chunks.length) out.chunks = chunks; else delete out.chunks; }
+    if (tiles) { if (tiles.length) out.tiles = tiles; else delete out.tiles; }
+    return out;
   }
   leave(playerId) { this.watches.delete(playerId); }
   // After the players moved: per player (list order) updatePlayerInstances, then the onUpdate loop. Messages go to `player.chunkOut` (sent by server.js).
   tick() {
     for (const [id, p] of this.sim.players) {
       const world = this.worldOf(p);
-      if (!ServerChunkViews.limits(world)) continue;
       let entry = this.watches.get(id);
       if (!entry || entry.world !== world) { // no snapshot went through here (a test, a dimension change): the client is taken to hold everything
         const [nx, nz] = this.nativePos(world, p);
-        this.watches.set(id, entry = { world, watch: new ChunkWatch(this.radius, nx, nz, this.existsIn(world), { sent: true }) });
+        this.watches.set(id, entry = { world, watch: new ChunkWatch(this.radius, nx, nz, this.existsIn(world), { sent: true }), sent: new Set(world.chunks.keys()), fresh: new Set() });
         continue;
       }
       const [nx, nz] = this.nativePos(world, p), out = [];
       const unload = entry.watch.move(nx, nz);
-      if (unload.length) out.push({ type: 'chunkUnload', columns: unload.map(c => this.local(world, c)) });
+      if (unload.length) { out.push({ type: 'chunkUnload', columns: unload.map(c => this.local(world, c)) }); for (const c of unload) entry.sent.delete(this.local(world, c).join(',')); for (const w of FRESH) entry.fresh.add(w); }
       const taken = entry.watch.take();
       if (taken.length) {
-        const locals = taken.map(c => this.local(world, c)), stores = this.storesOf(p), tiles = [];
+        const locals = taken.map(c => this.local(world, c)); for (const [x, z] of locals) entry.sent.add(`${x},${z}`); for (const w of FRESH) entry.fresh.add(w);
+        const stores = this.storesOf(p), tiles = [];
         for (const [x, z] of locals) tiles.push(...describeTiles(stores, x, z, 0xffff));
         out.push({ type: 'chunkBulk', columns: locals.map(([x, z]) => encodeColumn(world.chunks.get(`${x},${z}`))), ...(tiles.length ? { tiles } : {}) });
       }

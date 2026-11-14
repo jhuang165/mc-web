@@ -14,6 +14,7 @@ const frames = (s, k = 1) => { for (let i = 0; i < k; i++) s.tick(); };
 // A Nether player `a` standing on a netherrack slab at y 69 (a flat floor), and an Overworld player `b` when asked.
 function fixture({ mobs = false, mode = 'creative', other = false } = {}) {
   const s = new DedicatedSimulation({}, { world: flat(), gameMode: mode, mobs });
+  s.rules.chunkStream = false; // b72: tracking needs the column sent; the whole square is in the snapshot here
   const a = s.addPlayer('a', 'Alice', key(1));
   s.dimensions.arrive(a, -1, { at: { x: 64.5, y: 70, z: 64.5 } });
   const n = s.dimensions.nether, w = n.world;

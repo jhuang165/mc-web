@@ -179,6 +179,7 @@ export class ServerMobs {
     });
     // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
     const watcher = this.tracker.addWatcher(p.id, () => p.position);
+    const views = this.host.chunkViews; if (views) { watcher.watch.gate = (cx, cz) => views.sees(p.id, cx, cz); watcher.fresh = () => views.takeFresh(p.id, 'mobs'); } // b72 mpstream72: tracking needs the column sent
     this.views.set(p.id, { player: p, view, survival, watcher, known: new Map(), destroys: [] });
     // b62: the creature that hurts this player is what the player's tamed wolves hit back (Survival.damage -> onRevenge; ai.js playerHurtBy would write to whichever view is current).
     p.survival.onRevenge = record => Object.assign(view, { hurtBy: record, hurtByTime: mobs.ai.clock });

@@ -272,6 +272,7 @@ export class ServerVehicles {
       const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map());
       for (const v of all) {
         if (Math.abs(v.x - p.position.x) > range || Math.abs(v.z - p.position.z) > range) continue;
+        if (!this.host.chunkViews?.sees(id, Math.floor(v.x / 16), Math.floor(v.z / 16))) continue; // b72 mpstream72: the column was not sent (or was unloaded)
         const key = keyOf(v), json = JSON.stringify(states.get(v));
         seen.add(key);
         if (view.known.get(key) !== json) {
