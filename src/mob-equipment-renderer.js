@@ -11,7 +11,7 @@ import { entityMaterial } from "./light-material.js";
 import { headItemMatrix } from "./wearable-heads.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { toLiveStack, GEAR_TYPES } from "./mob-equipment-live.js";
-import { heldSprite } from "./held-sprite.js";
+import { heldSprite, heldBlock } from "./held-sprite.js";
 
 const LIMB = { rightArm: 0, leftArm: 1, rightLeg: 2, leftLeg: 3 };
 
@@ -122,7 +122,7 @@ export function syncMobEquipment(renderer, r, e) {
     r.gearNodes.push(flip);
   }
   // The held item in the right hand (RenderBiped.renderEquippedItems: both passes of a spawn egg or a potion).
-  const held = live[0], sprite = held && heldSprite(held.id, held.damage, material);
+  const held = live[0], sprite = held && (heldSprite(held.id, held.damage, material) ?? heldBlock(held.id, held.damage, material, atlas)); // a block item is the cube or box list (RenderBiped.renderEquippedItems 3D branch)
   if (sprite) {
     const group = new THREE.Group(), flip = new THREE.Group();
     group.matrixAutoUpdate = false;
