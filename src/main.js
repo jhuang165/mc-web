@@ -148,6 +148,7 @@ import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { pickPlayer } from "./multiplayer/server-pvp.js"; // b63 mppvp: the client's aim at another player (C02 attack)
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
+import { ClientPistons } from "./multiplayer/client-pistons.js"; // b66 mppistons
 import { applySpawnerDelay } from "./multiplayer/client-spawners.js"; // b65 mpspawners2
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
@@ -645,6 +646,7 @@ function applyServerPlayerOp(message) {
 let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair (multiplayer/server-pvp.js pickPlayer)
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
+let remotePistons = null; // b66 mppistons: the dedicated world's moving piston blocks (multiplayer/client-pistons.js)
 let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
 
 function multiplayerDefaults() {
@@ -661,7 +663,7 @@ function showMultiplayer() {
     profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
 }
 function leaveMultiplayer() {
-  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; aimedRemoteMob = null;
+  multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
 }
@@ -767,6 +769,7 @@ function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
   applyMultiplayerCells(message.changes);
+  remotePistons?.tick(message.changes); // b66 mppistons: TileEntityPiston.updateEntity of the client's moving blocks
   if (message.blockActions) applyBlockActions(message.blockActions, survival); // S24 chest lids of every viewer
   if (message.contFurnaceLit || Object.keys(mpFurnaces).length) mpFurnaces = litFurnaceData(message.contFurnaceLit); // b60: lit furnaces (block 62 and its light)
   if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // the S33/S35 descriptions that follow a chunk resend
@@ -851,7 +854,7 @@ function onMultiplayerInventory(m) {
   if (r.hotbar) renderHotbar();
   if (r.container && containerView?.remote?.inv) refreshContainer();
 }
-const MP_SOUNDS = new Set(['random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite']); // b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
+const MP_SOUNDS = new Set(['tile.piston.out', 'tile.piston.in', 'random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite']); // b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
@@ -891,6 +894,7 @@ async function joinMultiplayer(settings) {
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz) }); // b60: status sounds, death poof, hearts
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
     remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
+    remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start();
@@ -4545,6 +4549,7 @@ function animate(now) {
   beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
   tntRenderer?.update(screen === "home" ? [] : objectViews(objectTracker, tntRows(), "tnt"), partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
+  remotePistons?.frame(partial); // b66 mppistons: after the local (empty) list, the server's moving blocks
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
     // RenderGlobal draws the view entity in first person too while it is sleeping (isPlayerSleeping).

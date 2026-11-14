@@ -60,6 +60,7 @@ export class DedicatedClient {
     if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
     if (message.type === 'dimRespawn') { this.messages.push(message); this.pending = null; return; } // b61 mpnether: the world swap keeps its place in the queue
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
+    if (message.type === 'pistonTiles') { this.messages.push(message); return; } // b66 mppistons: S24 and the moving blocks, in order
     if (message.type === 'mobs' || message.type === 'vehicles') { this.messages.push(message); return; } // packets must all arrive, in order (mobs spawn once)
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'fishHooks' || message.type === 'fishFx') { this.messages.push(message); return; } // b61: dispensed entities and their effects (client-dispense.js), in order
     if (message.type === 'healthHurt' || message.type === 'healthEffect' || message.type === 'healthEffectEnd') { this.messages.push(message); return; } // b60: S19 / S1D / S1E, all must arrive in order
@@ -97,6 +98,7 @@ export class DedicatedClient {
     if (message.type === 'aux') this.onAux(message);
     if (WINDOW.has(message.type)) this.onWindow(message);
     if (INV.has(message.type)) this.onInv(message);
+    if (message.type === 'pistonTiles') this.onPiston?.(message); // b66 mppistons (client-pistons.js)
     if (message.type === 'mobs') this.onMobs(message.packets);
     if (message.type === 'vehicles') this.onVehicles(message); // b61
     if (message.type === 'dispEnts' || message.type === 'dispFx' || message.type === 'projCollect' || message.type === 'fishHooks' || message.type === 'fishFx') this.onDisp(message); // b61 (b64: the fishing bobbers ride the same hook)
