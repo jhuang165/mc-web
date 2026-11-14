@@ -10,6 +10,7 @@ import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES, MAX_CAPE_BYTES } from '../src/skin.js';
 import { setCapeShow } from '../src/multiplayer/cape-wire.js'; // b71 mpcapes
+import { applyClientSettings, chatDelivered as settingsChatDelivered, chatSendAllowed } from '../src/multiplayer/server-settings.js'; // b72 mpsettings
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial } from '../src/server-broadcast.js';
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
@@ -156,6 +157,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   const send = (ws, message) => {
     if (ws.readyState !== WebSocket.OPEN) return;
+    if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     ws.send(JSON.stringify(message));
   };
@@ -236,6 +238,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
+        else if (m.type === 'settingsClient') { ws.settingsId = id; if (!applyClientSettings(simulation.players.get(id), m)) throw new Error('Invalid client settings'); } // b72 mpsettings: the whole C15
         else if (m.type === 'capeSettings') setCapeShow(simulation.players.get(id), m.show); // b71 mpcapes: C15 showCape -> the hide-cape flag
         else if (m.type === 'sleepLeave') simulation.sleep.leave(id); // b66 mpsleep: C0B action 3, leave bed
         else if (m.type === 'dig' && Number.isInteger(m.status)) simulation.queueDig(id, m.status); // C07 status 0 start / 1 abort / 2 finish, through the server's dig timer
@@ -266,6 +269,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'confirmTransaction') simulation.confirmTransaction(id, m); // C0F
         else if (m.type === 'tabReq' && typeof m.text === 'string') send(ws, { type: 'tabReply', options: socialTabComplete(social, id, m.text) }); // b69 mptabcomplete: C14 -> S3A
         else if (m.type === 'chat' && typeof m.text === 'string') {
+          if (!chatSendAllowed(simulation.players.get(id))) return; // b72 mpsettings: chat visibility HIDDEN refuses chat and commands before the spam counter
           // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
           // The dedicated server has no operators, so nobody is exempt.
           const r = chatPacket(chatSpam, Math.floor(Date.now() / 50), m.text, false);

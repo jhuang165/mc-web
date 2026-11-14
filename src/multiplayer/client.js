@@ -4,6 +4,7 @@ import { ClientPings } from './client-ping.js'; // b68 mpping
 import { SLEEP_TYPES } from './client-sleep.js'; // b66 mpsleep
 import { restoreDimensionReplica } from './client-dimensions.js'; // b61 mpnether: the Nether's finite world
 import { restoreColumns } from './client-chunks.js'; // b71 mpchunks
+import { clientSettingsMessage } from './server-settings.js'; // b72 mpsettings
 export { expandChunks };
 
 export function restoreReplica(snapshot) {
@@ -129,6 +130,7 @@ export class DedicatedClient {
   pickup(ids, fit) { this.send({ type: 'pickup', ids, ...(fit ? { fit } : {}) }); }
   // C16 client status 0: perform respawn after a death.
   capeSettings(show) { this.send({ type: 'capeSettings', show: !!show }); } // b71 mpcapes: C15 ClientSettings.showCape
+  clientSettings(options) { this.send(clientSettingsMessage(options)); } // b72 mpsettings: the whole C15 (replaces capeSettings)
   respawn() { this.send({ type: 'respawn' }); }
   dropHeld(all) { this.send({ type: 'achDrop', all: !!all }); } // b60: EntityPlayer.dropOneItem happens on the server
   requestStats() { this.send({ type: 'requestStats' }); } // b63 mpstats: C16PacketClientStatus REQUEST_STATS (GuiStats opening)
