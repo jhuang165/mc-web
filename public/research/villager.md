@@ -12,9 +12,9 @@ Native records: 3 wander traces, 2 avoid traces (static and chase zombie), 2 doo
 - 20 health, no drops, 0 experience, talk interval 80, sounds mob.villager.idle/hit/death.
 
 ## Not live (limits)
-- Trading (Trade, LookAtTrade, offers, riches use), no Offers written on export.
+- Batch 69 (docs sweep): trading is live (`src/villager-trading.js`, `src/villager-offers.js`, [villager trading live](villager-trading-live.md)). Original text: Trade, LookAtTrade, offers, riches use and Offers on export were not live.
 - Village systems (door records, reputation, mating, golems, MoveIndoors/RestrictOpenDoor/FollowGolem/Play/MoveTowardsRestriction and the home area) now run from `src/village.js` and `src/village-ai.js`; see `village.md` and `iron-golem.md` for what is native-verified and what is approximated.
-- Zombies do not target or infect villagers.
-- Java-save import does not convert mobs; villagers there count as lost like other mobs.
+- Batch 69 (docs sweep): zombies target and infect villagers (`src/zombie-villager.js`, [zombie villager](zombie-villager.md)).
+- Batch 69 (docs sweep): Java-save import converts mobs (`src/java-mobs.js`), including villagers (see [villager trading live](villager-trading-live.md)).
 - Step sounds were not compared with the native trace.
 - Full parity is not claimed.

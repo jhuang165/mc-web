@@ -70,11 +70,11 @@ Gaps worked around inside the village module (not in the framework): the desert-
 
 ## Limits and remaining work
 
-- Not wired into `ChunkProviderGenerate` or `java-world.js`; no live village population, no saved-world impact.
+- Batch 69 (docs sweep): villages are wired into live generation for finite generation 14 and streamed generation 15 worlds (`src/main.js` version note; `src/village-generator.js`).
 - `canSpawnStructureAtCoords` also reseeds `World.rand` natively (`setRandomSeed`); that mutation is not tracked.
 - Neighbour-update callbacks (door placement notifications) are only forwarded to an optional adapter hook; block
   physics, lighting, fluid ticks and farmland/torch tile behaviour are not modelled.
-- Villagers are data records only: no `EntityVillager` AI, trades, breeding, iron golems or village-siege logic, and
+- Batch 69 (docs sweep): villagers have AI, trades, breeding, golems and siege logic (`src/village.js`, `src/village-ai.js`, `src/villager-trading.js`, `src/village-siege.js`; see [village](village.md)). Original text: villagers were data records only.
   no `VillageCollection`/doors tracking.
 - No NBT persistence (`MapGenStructureIO`, `MapGenStructureData`, piece save/load, `ViStart` etc. round trip).
 - Fixtures are synthetic and analytic, not the native terrain generator; ground height, water and leaves reflect what
