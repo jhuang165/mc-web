@@ -2,6 +2,7 @@
 // the layer arrays (or null when the pool cannot serve it: no Worker, a worker error). Workers are made on first use and receive the
 // page's colormaps before their first job. Without Worker the pool is `unavailable` and the scene meshes on the page thread.
 import { colormaps } from "./biome-colors.js";
+import { terrainLayoutState } from "./block-textures.js";
 
 // `?meshWorkers=0` (or localStorage blockworld.meshWorkers = 0) keeps column meshing on the page thread.
 export function meshWorkersEnabled() {
@@ -45,6 +46,9 @@ export class MeshPool {
     const maps = colormaps();
     if (!maps) return Promise.resolve(null);
     if (lane.maps !== maps.grass) { lane.worker.postMessage({ type: "colormaps", grass: maps.grass, foliage: maps.foliage }); lane.maps = maps.grass; }
+    // HD packs: the terrain atlas layout the page stitched (block-textures.js setTerrainSizes) reaches the lane before its next job.
+    const tl = terrainLayoutState();
+    if ((lane.layout ?? 0) !== tl.version) { lane.worker.postMessage({ type: "terrainLayout", sizes: tl.sizes, maxSize: tl.maxSize, mip: tl.mip }); lane.layout = tl.version; }
     job.id = this.nextId++;
     return new Promise((resolve) => {
       this.jobs.set(job.id, { resolve, lane });

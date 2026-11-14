@@ -25,9 +25,9 @@ import {itemSpec,itemBlockId} from './item-boxes.js';
 import {frameTile,blit,multiplyTile,convertTile,overTile,spriteLevels,putTile,rasterIcon,encodePngStored,pngDataUrl,hasTranslucent} from './atlas-texels.js';
 import {decodePng} from './png-codec.js';
 import {setIconResolver} from './gui-anaglyph.js';
-import {NATIVE_ATLAS_WIDTH,NATIVE_ATLAS_HEIGHT,NATIVE_BLOCK_SPRITES} from './atlas-layout.js';
+import {terrainLayout,nonVanillaSizes,DEFAULT_MAX_TEXTURE_SIZE} from './terrain-layout.js';
 // The atlas is laid out as the 1.7.10 TextureMap block atlas (Stitcher, executed: atlas-layout.js, research/atlas-stitcher.md): 512 px wide, 32 cells of 16 px.
-export const ATLAS_COLUMNS=NATIVE_ATLAS_WIDTH/16,TILE_SIZE=16;
+export const TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
 // Item and particle faces for the chest, cut from its entity texture (ModelChest UVs).
 const CHEST_FACES={chest_front:[[14,33,14,10,1,6],[14,14,14,5,1,2],[1,1,2,4,7,5]],chest_side:[[0,33,14,10,1,6],[0,14,14,5,1,2]],chest_top:[[14,0,14,14,1,1]]};
@@ -79,17 +79,29 @@ for(const t of ['portal',...WART_TILES])if(!TILES.includes(t))TILES.push(t); // 
 // BlockGrass overlay (RenderBlocks, Fancy graphics): grey, tinted per vertex by the chunk mesher over the untinted grass_side.
 if(!TILES.includes('grass_side_overlay'))TILES.push('grass_side_overlay');
 for(const t of ['double_plant_sunflower_front','double_plant_sunflower_back'])if(!TILES.includes(t))TILES.push(t); // the sunflower's head quads (RenderBlocks.renderBlockDoublePlant)
-// Tile origins in pixels. A tile named like a registered block sprite sits where the Stitcher put that sprite; the port-only tiles (the chest faces cut
-// from the entity texture) take the first free 16 px cell, row by row, in the area the native atlas leaves empty (below it if that ever runs out).
-export const TILE_ORIGINS=(()=>{
- const busy=new Set(),mark=(x,y,w)=>{for(let j=0;j<w;j+=16)for(let i=0;i<w;i+=16)busy.add((x+i)+','+(y+j));};
- for(const[x,y,w]of Object.values(NATIVE_BLOCK_SPRITES))mark(x,y,w);
- let cx=0,cy=0;
- return TILES.map(name=>{const n=NATIVE_BLOCK_SPRITES[name];if(n)return[n[0],n[1]];
-  while(busy.has(cx+','+cy)){cx+=16;if(cx>=NATIVE_ATLAS_WIDTH){cx=0;cy+=16;}}
-  const o=[cx,cy];busy.add(cx+','+cy);return o;});
-})();
-export const ATLAS_WIDTH=NATIVE_ATLAS_WIDTH,ATLAS_ROWS=Math.max(NATIVE_ATLAS_HEIGHT/16,...TILE_ORIGINS.map(o=>o[1]/16+1)),ATLAS_HEIGHT=ATLAS_ROWS*16;
+// Tile origins and sizes in pixels (terrain-layout.js). With no pack every tile is a 16 px cell: a tile named like a registered block sprite sits where the Stitcher put that
+// sprite; the port-only tiles (the chest faces cut from the entity texture) take the first free cell in the area the native atlas leaves empty. When a resource pack gives
+// sprites another size the blocks map is stitched again at those sizes (setTerrainSizes below); the bindings are live, so every importer sees the new layout.
+let layout=terrainLayout(TILES),layoutVersion=0,knownSizes=new Map(),maxTexture=DEFAULT_MAX_TEXTURE_SIZE,mipSetting=0;
+export let TILE_ORIGINS=layout.origins,TILE_SIZES=layout.sizes,ATLAS_WIDTH=layout.width,ATLAS_HEIGHT=layout.height,ATLAS_ROWS=ATLAS_HEIGHT/16;
+export const tileSize=index=>TILE_SIZES[index];
+const sameLayout=(a,b)=>a.width===b.width&&a.height===b.height&&a.sizes.every((s,i)=>s===b.sizes[i])&&a.origins.every((o,i)=>o[0]===b.origins[i][0]&&o[1]===b.origins[i][1]);
+// Re-lays the atlas out for the pack's sprite sizes: `known` maps tile name -> square sprite size (a Map or object); `opts`: maxSize (GL_MAX_TEXTURE_SIZE), mip (the mipmap setting).
+// Returns true when positions or the atlas size changed (callers re-mesh and re-upload). Vanilla sizes give the executed 512x256 layout.
+export function setTerrainSizes(known=new Map(),opts={}){
+ const map=known instanceof Map?new Map(known):new Map(Object.entries(known));
+ if(opts.maxSize)maxTexture=opts.maxSize;if(opts.mip!==undefined)mipSetting=opts.mip;
+ const next=terrainLayout(TILES,map,{maxSize:maxTexture,mip:mipSetting});
+ knownSizes=map;
+ const changed=!sameLayout(layout,next);
+ if(changed){layout=next;TILE_ORIGINS=next.origins;TILE_SIZES=next.sizes;ATLAS_WIDTH=next.width;ATLAS_HEIGHT=next.height;ATLAS_ROWS=ATLAS_HEIGHT/16;NATIVE_RECTS.length=0;layoutVersion++;}
+ return changed;
+}
+// The current layout, for the mesh workers (src/mesh-pool.js posts it, mesh-worker.js applies it) and for tests.
+export const terrainLayoutState=()=>({version:layoutVersion,sizes:nonVanillaSizes(knownSizes),maxSize:maxTexture,mip:mipSetting});
+// Mipmap levels the atlas supports: the setting capped by the smallest sprite (TextureMap.loadTextureAtlas).
+export const terrainMipCap=()=>layout.mipCap;
+export const terrainLayoutInfo=()=>layout;
 export const tileOrigin=index=>TILE_ORIGINS[index];
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
@@ -218,18 +230,18 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
 const F=Math.fround,SPRITE_INSET=0.009999999776482582;
 export function spriteUv(x,y,w,h,AW,AH){const iu=F(SPRITE_INSET/AW),iv=F(SPRITE_INSET/AH);return{minU:F(F(F(x)/F(AW))+iu),maxU:F(F(F(x+w)/F(AW))-iu),minV:F(F(F(y)/F(AH))+iv),maxV:F(F(F(y+h)/F(AH))-iv)};}
 const NATIVE_RECTS=[];
-export function tileRect(index,inset){const[x,y]=TILE_ORIGINS[index];
- if(inset===undefined){let r=NATIVE_RECTS[index];if(!r){const s=spriteUv(x,y,TILE_SIZE,TILE_SIZE,ATLAS_WIDTH,ATLAS_HEIGHT);r=NATIVE_RECTS[index]={u0:s.minU,u1:s.maxU,v0:1-s.maxV,v1:1-s.minV};}return{...r};}
- return{u0:(x+inset)/ATLAS_WIDTH,u1:(x+TILE_SIZE-inset)/ATLAS_WIDTH,v0:1-(y+TILE_SIZE-inset)/ATLAS_HEIGHT,v1:1-(y+inset)/ATLAS_HEIGHT};}
+export function tileRect(index,inset){const[x,y]=TILE_ORIGINS[index],S=TILE_SIZES[index];
+ if(inset===undefined){let r=NATIVE_RECTS[index];if(!r){const s=spriteUv(x,y,S,S,ATLAS_WIDTH,ATLAS_HEIGHT);r=NATIVE_RECTS[index]={u0:s.minU,u1:s.maxU,v0:1-s.maxV,v1:1-s.minV};}return{...r};}
+ return{u0:(x+inset)/ATLAS_WIDTH,u1:(x+S-inset)/ATLAS_WIDTH,v0:1-(y+S-inset)/ATLAS_HEIGHT,v1:1-(y+inset)/ATLAS_HEIGHT};}
 // The tile whose cell contains the atlas uv (u right, v up as the textures are flipped), or -1: the inverse of tileRect for tests and probes.
-export function tileAtUv(u,v){const x=Math.floor(u*ATLAS_WIDTH),y=Math.floor((1-v)*ATLAS_HEIGHT);return TILE_ORIGINS.findIndex(o=>x>=o[0]&&x<o[0]+TILE_SIZE&&y>=o[1]&&y<o[1]+TILE_SIZE);}
+export function tileAtUv(u,v){const x=Math.floor(u*ATLAS_WIDTH),y=Math.floor((1-v)*ATLAS_HEIGHT);return TILE_ORIGINS.findIndex((o,i)=>x>=o[0]&&x<o[0]+TILE_SIZES[i]&&y>=o[1]&&y<o[1]+TILE_SIZES[i]);}
 // A resource pack tile may be larger than 16 px (HD) or an animation strip (width x n*width): the atlas keeps its 16 px cells and draws the first square frame, scaled.
 function frameSize(source){return Math.max(1,Math.min(source.width||16,source.height||16));}
 function image(name){const url=versioned('/media/1.7.10/'+name+'.png');return retryAsset(attempt=>requestAsset(()=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=retryUrl(url,attempt);})));}
 export function createBlockAtlas(){
  const canvas=document.createElement('canvas');canvas.width=ATLAS_WIDTH;canvas.height=ATLAS_HEIGHT;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;
  // The GL textures are DataTextures filled from exactly decoded PNG pixels (atlas-texels.js); the 2D canvas below only feeds icons and the fallback.
- const AW=ATLAS_WIDTH,AH=ATLAS_HEIGHT,exact=new Map();
+ let AW=ATLAS_WIDTH,AH=ATLAS_HEIGHT;const exact=new Map(),tsz=name=>TILE_SIZES[TILES.indexOf(name)]??TILE_SIZE;
  const atlasTexture=()=>{const t=new THREE.DataTexture(new Uint8Array(AW*AH*4),AW,AH,THREE.RGBAFormat,THREE.UnsignedByteType);t.flipY=true;t.magFilter=t.minFilter=THREE.NearestFilter;t.generateMipmaps=false;t.needsUpdate=true;return t;};
  const texture=atlasTexture();const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0,uploader=null;
  // Two atlases: `canvas`/`texture` carry the item colours (ColorizerGrass.getColor(0.5, 1.0) etc.: GUI icons, held and dropped blocks, particles);
@@ -244,8 +256,8 @@ export function createBlockAtlas(){
  // upload hook leaves the canvas alone (anaglyph.js).
  const agConvert=c=>{const g=c.getContext('2d',{willReadFrequently:true}),d=g.getImageData(0,0,c.width,c.height);anaglyphRgba(d.data);g.putImageData(d,0,0);return c;};
  const agColor=c=>{const m=anaglyphMultiplier(c,true).map(v=>Math.round(v*255));return m[0]<<16|m[1]<<8|m[2];};
- function agFrame(source,frame){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingEnabled=false;const f=frameSize(source);x.drawImage(source,0,(source instanceof HTMLCanvasElement?0:frame)*f,f,f,0,0,16,16);return agConvert(c);}
- function tinted(source,color,frame=0,ag=false){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d',{willReadFrequently:ag});const f=frameSize(source);x.drawImage(source,0,frame*f,f,f,0,0,16,16);if(ag)agConvert(c);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,frame*f,f,f,0,0,16,16);return c;}
+ function agFrame(source,frame,S=16){const c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingEnabled=false;const f=frameSize(source);x.drawImage(source,0,(source instanceof HTMLCanvasElement?0:frame)*f,f,f,0,0,S,S);return agConvert(c);}
+ function tinted(source,color,frame=0,ag=false,S=16){const c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d',{willReadFrequently:ag});const f=frameSize(source);x.drawImage(source,0,frame*f,f,f,0,0,S,S);if(ag)agConvert(c);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,S,S);x.globalCompositeOperation='destination-in';x.drawImage(source,0,frame*f,f,f,0,0,S,S);return c;}
  function pixels(name){const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+name),0,0);return x.getImageData(0,0,256,256).data;}
  async function exactPng(name){if(name.startsWith('colormap/'))return null;try{const url=versioned('/media/1.7.10/'+name+'.png');return await requestAsset(async()=>{const r=await fetch(url);if(!r||!r.ok||!r.arrayBuffer)return null;return decodePng(new Uint8Array(await r.arrayBuffer()));});}catch{return null;}}
  const GRASS_TILES=['grass_top','tallgrass','fern','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'];
@@ -291,23 +303,28 @@ export function createBlockAtlas(){
  const scratch=document.createElement('canvas');scratch.width=scratch.height=TILE_SIZE;const sctx=scratch.getContext('2d',{willReadFrequently:true});sctx.imageSmoothingEnabled=false;
  function exactLevels(terrainMode,name,n){
   const ag=!terrainMode&&canvas.__agDone===true,cv=ag?convertTile:d=>d;
-  if(CHEST_FACES[name]){const img=exact.get('entity/chest/normal');if(!img)return null;const s=img.width/64,t=new Uint8Array(TILE_SIZE*TILE_SIZE*4);for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])blit(t,TILE_SIZE,img,u*s,v*s,w*s,h*s,dx,dy,w,h);return spriteLevels(t,n).map(cv);}
+  const S=tsz(name);if(CHEST_FACES[name]){const img=exact.get('entity/chest/normal');if(!img)return null;const s=img.width/64,k=S/TILE_SIZE,t=new Uint8Array(S*S*4);for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])blit(t,S,img,u*s,v*s,w*s,h*s,dx*k,dy*k,w*k,h*k);return spriteLevels(t,n,S).map(cv);}
   const src=exact.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!src)return null;
-  const chain=spriteLevels(frameTile(src,shown.get(name)??0),n);let mult=null;
+  const chain=spriteLevels(frameTile(src,shown.get(name)??0,S),n,S);let mult=null;
   if(!terrainMode){const col=GRASS_TILES.includes(name)?itemGrassColor():name==='vine'?FOLIAGE_BASIC:name.startsWith('leaves_')?(name==='leaves_spruce'?PINE:name==='leaves_birch'?BIRCH:FOLIAGE_BASIC):name==='waterlily'?LILY_PAD_COLOR:null;if(col!=null)mult=anaglyphMultiplier(col,ag);}
   let levels=chain.map(d=>{d=cv(d);return mult?multiplyTile(d,mult):d;});
   return levels;
  }
- function canvasLevels(terrainMode,name,x,y,n){sctx.setTransform(1,0,0,1,-x,-y);drawAtlas(sctx,terrainMode,new Set([name]));sctx.setTransform(1,0,0,1,0,0);return spriteLevels(Uint8Array.from(sctx.getImageData(0,0,TILE_SIZE,TILE_SIZE).data),n);}
+ function canvasLevels(terrainMode,name,x,y,n){const S=tsz(name);if(scratch.width!==S){scratch.width=scratch.height=S;sctx.imageSmoothingEnabled=false;}sctx.setTransform(1,0,0,1,-x,-y);drawAtlas(sctx,terrainMode,new Set([name]));sctx.setTransform(1,0,0,1,0,0);return spriteLevels(Uint8Array.from(sctx.getImageData(0,0,S,S).data),n,S);}
  const tileLevels=(terrainMode,name,x,y,n)=>exactLevels(terrainMode,name,n)??canvasLevels(terrainMode,name,x,y,n);
  const levelArrays=tex=>tex.mipmaps.length?tex.mipmaps.map(m=>m.data):[tex.image.data];
  // Writes the tile into the CPU level arrays (the source of any whole-texture upload) and, with `sub`, queues it as GPU sub-rects (atlas-upload.js).
- function renderTile(tex,terrainMode,name,x,y,sub){const lv=tileLevels(terrainMode,name,x,y,Math.max(0,tex.mipmaps.length-1));putTile(levelArrays(tex),AW,lv,x,y);if(sub){const conv=!terrainMode&&canvas.__agDone===true;for(let l=0;l<lv.length;l++){const w=Math.max(1,TILE_SIZE>>l);uploader.queue(tex,l,x>>l,y>>l,w,w,lv[l],conv);}}}
- function drawAtlas(g,terrainMode,only=null){const ag=!terrainMode&&canvas.__agDone===true,col=c=>css(ag?agColor(c):c),grass=col(itemGrassColor()),foliage=col(FOLIAGE_BASIC),chestImg=images.get('entity/chest/normal'),chestScale=chestImg.width/64;TILES.forEach((name,i)=>{if(only&&!only.has(name))return;const [x,y]=tileOrigin(i);if(only)g.clearRect(x,y,16,16);const fr=shown.get(name)??0;if(CHEST_FACES[name]){const t=ag?document.createElement('canvas'):null;if(t)t.width=t.height=16;const tg=t?t.getContext('2d',{willReadFrequently:true}):g;if(t)tg.imageSmoothingEnabled=false;for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])tg.drawImage(chestImg,u*chestScale,v*chestScale,w*chestScale,h*chestScale,(t?0:x)+dx,(t?0:y)+dy,w,h);if(t){agConvert(t);g.drawImage(t,x,y);}return;}let source=images.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!terrainMode){if(GRASS_TILES.includes(name))source=tinted(source,grass,fr,ag);else if(name==='vine')source=tinted(source,foliage,fr,ag);else if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?col(PINE):name==='leaves_birch'?col(BIRCH):foliage,fr,ag);else if(name==='waterlily')source=tinted(source,col(LILY_PAD_COLOR),fr,ag);else if(ag)source=agFrame(source,fr);}{const f=frameSize(source),k=source instanceof HTMLCanvasElement?0:fr;g.drawImage(source,0,k*f,f,f,x,y,16,16);}});}
- function redraw(){if(!images.size)return;stale.clear();icons.clear();canvas.__agDone=!!meshAnaglyph.on;setColormaps(pixels('grass'),pixels('foliage'));ctx.clearRect(0,0,canvas.width,canvas.height);drawAtlas(ctx,false);buildLevels(texture,true);buildLevels(terrain,false);texture.needsUpdate=true;terrain.needsUpdate=true;}
+ function renderTile(tex,terrainMode,name,x,y,sub){const lv=tileLevels(terrainMode,name,x,y,Math.max(0,tex.mipmaps.length-1));const S=tsz(name);putTile(levelArrays(tex),AW,lv,x,y,S);if(sub){const conv=!terrainMode&&canvas.__agDone===true;for(let l=0;l<lv.length;l++){const w=Math.max(1,S>>l);uploader.queue(tex,l,x>>l,y>>l,w,w,lv[l],conv);}}}
+ function drawAtlas(g,terrainMode,only=null){const ag=!terrainMode&&canvas.__agDone===true,col=c=>css(ag?agColor(c):c),grass=col(itemGrassColor()),foliage=col(FOLIAGE_BASIC),chestImg=images.get('entity/chest/normal'),chestScale=chestImg.width/64;TILES.forEach((name,i)=>{if(only&&!only.has(name))return;const [x,y]=tileOrigin(i),S=TILE_SIZES[i],k=S/TILE_SIZE;if(only)g.clearRect(x,y,S,S);const fr=shown.get(name)??0;if(CHEST_FACES[name]){const t=ag?document.createElement('canvas'):null;if(t)t.width=t.height=S;const tg=t?t.getContext('2d',{willReadFrequently:true}):g;if(t)tg.imageSmoothingEnabled=false;for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])tg.drawImage(chestImg,u*chestScale,v*chestScale,w*chestScale,h*chestScale,(t?0:x)+dx*k,(t?0:y)+dy*k,w*k,h*k);if(t){agConvert(t);g.drawImage(t,x,y);}return;}let source=images.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!terrainMode){if(GRASS_TILES.includes(name))source=tinted(source,grass,fr,ag,S);else if(name==='vine')source=tinted(source,foliage,fr,ag,S);else if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?col(PINE):name==='leaves_birch'?col(BIRCH):foliage,fr,ag,S);else if(name==='waterlily')source=tinted(source,col(LILY_PAD_COLOR),fr,ag,S);else if(ag)source=agFrame(source,fr,S);}{const f=frameSize(source),kk=source instanceof HTMLCanvasElement?0:fr;g.drawImage(source,0,kk*f,f,f,x,y,S,S);}});}
+ // Sprite sizes of the pack's images: the first square frame of each tile (animation strips are width x n*width); a chest face is 16 px per entity texture pixel scale.
+ function packSizes(){const m=new Map();for(const n of TILES){let s;if(CHEST_FACES[n]){const img=images.get('entity/chest/normal');s=img?TILE_SIZE*Math.max(1,Math.round(img.width/64)):TILE_SIZE;}else{const im=images.get('blocks/'+n);if(!im)continue;s=frameSize(im);if(n.startsWith('leaves_')){const o=images.get('blocks/'+n+'_opaque');if(o)s=Math.max(s,frameSize(o));}}m.set(n,s);}return m;}
+ // Stitches the blocks map again at the pack's sprite sizes (terrain-layout.js) and resizes the canvases and textures when the atlas size changed; `onRelayout` (the scene) re-meshes.
+ function relayout(){if(setTerrainSizes(packSizes(),{mip:mipLevels}))relayoutApply();}
+ function relayoutApply(){AW=ATLAS_WIDTH;AH=ATLAS_HEIGHT;if(canvas.width!==AW||canvas.height!==AH){canvas.width=AW;canvas.height=AH;ctx.imageSmoothingEnabled=false;}for(const t of[texture,terrain]){if(t.image.width===AW&&t.image.height===AH)continue;t.image={data:new Uint8Array(AW*AH*4),width:AW,height:AH};t.mipmaps=[];t.minFilter=THREE.NearestFilter;t.userData.mipKey=null;t.dispose();}api.layoutVersion=terrainLayoutState().version;if(typeof api.onRelayout==='function')api.onRelayout(terrainLayoutState());}
+ function redraw(){if(!images.size)return;relayout();stale.clear();icons.clear();canvas.__agDone=!!meshAnaglyph.on;setColormaps(pixels('grass'),pixels('foliage'));ctx.clearRect(0,0,canvas.width,canvas.height);drawAtlas(ctx,false);buildLevels(texture,true);buildLevels(terrain,false);texture.needsUpdate=true;terrain.needsUpdate=true;}
  // TextureMap mipmaps (render-settings.js atlasMips): per-tile chains, NEAREST_MIPMAP_LINEAR when above level 0.
  // Rebuilds every tile's levels. TextureMap mipmaps (render-settings.js): per-sprite chains, NEAREST_MIPMAP_LINEAR when above level 0. The arrays of the item atlas carry `__agDone` while Anaglyph is on: they are already converted, so the upload hook skips them.
- function buildLevels(tex,item){const n=Math.min(mipLevels,4),conv=item&&canvas.__agDone===true,lv=[tex.image.data];tex.image.data.fill(0);for(let l=1;l<=n;l++)lv.push(new Uint8Array((AW>>l)*(AH>>l)*4));TILES.forEach((name,i)=>{const [x,y]=tileOrigin(i);putTile(lv,AW,tileLevels(!item,name,x,y,n),x,y);});for(const d of lv)d.__agDone=conv;if(n===0){if(tex.mipmaps.length){tex.mipmaps=[];tex.minFilter=THREE.NearestFilter;tex.dispose();}return;}tex.mipmaps=lv.map((d,l)=>({data:d,width:AW>>l,height:AH>>l}));tex.minFilter=THREE.NearestMipmapLinearFilter;const key=lv.length+':'+tex.mipmaps.length;if(tex.userData.mipKey!==key)tex.dispose();tex.userData.mipKey=key;}
+ function buildLevels(tex,item){const n=Math.min(mipLevels,4,terrainMipCap()),conv=item&&canvas.__agDone===true,lv=[tex.image.data];tex.image.data.fill(0);for(let l=1;l<=n;l++)lv.push(new Uint8Array((AW>>l)*(AH>>l)*4));TILES.forEach((name,i)=>{const [x,y]=tileOrigin(i);putTile(lv,AW,tileLevels(!item,name,x,y,n),x,y,TILE_SIZES[i]);});for(const d of lv)d.__agDone=conv;if(n===0){if(tex.mipmaps.length){tex.mipmaps=[];tex.minFilter=THREE.NearestFilter;tex.dispose();}return;}tex.mipmaps=lv.map((d,l)=>({data:d,width:AW>>l,height:AH>>l}));tex.minFilter=THREE.NearestMipmapLinearFilter;const key=lv.length+':'+tex.mipmaps.length;if(tex.userData.mipKey!==key)tex.dispose();tex.userData.mipKey=key;}
  // Icons are tagged with their item so a refresh can rebuild them from the current atlas (gui-anaglyph.js refreshIcons); ':ag' marks an icon
  // drawn from the already converted atlas, which the DOM conversion must not convert again. Chest icons draw the raw entity texture.
  const chestUrls=new Set();
@@ -315,11 +332,11 @@ export function createBlockAtlas(){
  // Blocks whose item is a flat sprite in the inventory (RenderItem draws their icon texture, not a model): levers, plants, panes, rails, crops and so on.
 const SPRITE_ICON=new Set([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141]);
 const flatIcon=id=>SPRITE_ICON.has(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===LILY_PAD||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id);
-flatTileImpl=(id,damage)=>{syncCanvases();const key='flat:'+id+':'+damage;if(icons.has(key))return icons.get(key);const l=exactLevels(false,TILES[blockTile(id,id===141?0:2,false,damage)],0);if(!l)return null;const url=pngDataUrl(encodePngStored(TILE_SIZE,TILE_SIZE,l[0]));icons.set(key,url);return url;};
+flatTileImpl=(id,damage)=>{syncCanvases();const key='flat:'+id+':'+damage;if(icons.has(key))return icons.get(key);const l=exactLevels(false,TILES[blockTile(id,id===141?0:2,false,damage)],0);if(!l)return null;const S=tsz(TILES[blockTile(id,id===141?0:2,false,damage)]),url=pngDataUrl(encodePngStored(S,S,l[0]));icons.set(key,url);return url;};
 // A block item's box model (item-boxes.js itemSpec, or the unit cube) as a 64x64 icon at scale 4: executed boxes, renderItemIntoGUI's matrix, GL pixel-centre edges. null before the tiles load.
 function boxIcon(id,damage){
  const spec=itemSpec(id,damage,blockTile),texOf=new Map();let missing=false;
- const tex=i=>{if(!texOf.has(i)){const l=exactLevels(false,TILES[i],0);texOf.set(i,l&&{data:l[0],w:16,h:16});}const t=texOf.get(i);if(!t)missing=true;return t;};
+ const tex=i=>{if(!texOf.has(i)){const l=exactLevels(false,TILES[i],0);texOf.set(i,l&&{data:l[0],w:TILE_SIZES[i],h:TILE_SIZES[i]});}const t=texOf.get(i);if(!t)missing=true;return t;};
  /* renderBlockAsItem type 13 (the cactus): full top and bottom, sides inset 1/16, not turned (item-render-reference.json) */
  if(id===CACTUS){const cq=cactusIconQuads(fi=>tex(blockTile(id,fi,false,damage)));return missing?null:pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,cq,4,boxModelView(false))));}
  const quads=boxQuads(spec?spec.boxes:[[0,0,0,1,1,1]],(fi,k)=>tex(spec?spec.tileOf(fi,k):blockTile(id,fi,false,damage)),spec?.uvOf);
@@ -328,14 +345,17 @@ function boxIcon(id,damage){
 // A translucent texel (ice, stained glass) drawn on the 2D canvas and read back by toDataURL drifts through premultiplied rounding. An icon
 // with any translucent face texel is composed from the exact tile bytes instead (atlas-texels.js rasterIcon) and written as a PNG that reads
 // back exactly; opaque icons keep the canvas path, which is lossless for them. layers: [tile index, canvas matrix, shade, drop].
-function softIcon(layers,gl=false,H=gl?64:70){const tiles=[];for(const[i]of layers){const l=exactLevels(false,TILES[i],0);if(!l)return null;tiles.push(l[0]);}if(!gl&&!tiles.some(hasTranslucent))return null;return pngDataUrl(encodePngStored(64,H,rasterIcon(64,H,layers.map(([,matrix,shade,drop],k)=>({tile:tiles[k],matrix,shade,drop,gl}))))); }
+function softIcon(layers,gl=false,H=gl?64:70){const tiles=[];let S=TILE_SIZE;for(const[i]of layers){const l=exactLevels(false,TILES[i],0);if(!l)return null;tiles.push(l[0]);S=Math.max(S,TILE_SIZES[i]);}
+ // layers of different sizes (a pack with mixed sprite sizes) are sampled nearest at the largest
+ layers.forEach(([i],k)=>{if(TILE_SIZES[i]!==S)tiles[k]=frameTile({width:TILE_SIZES[i],height:TILE_SIZES[i],data:tiles[k]},0,S);});
+ if(!gl&&!tiles.some(hasTranslucent))return null;return pngDataUrl(encodePngStored(64,H,rasterIcon(64,H,layers.map(([,matrix,shade,drop],k)=>({tile:tiles[k],matrix,shade,drop,gl})),S))); }
 function iconRaw(id,damage=0){syncCanvases();/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */if(blockForItem(id))damage=blockForItem(id)===DISPENSER||blockForItem(id)===DROPPER?3:1;if(flatBlockItem(id)===HOPPER_BLOCK)return HOPPER_ITEM_URL;/* BlockHopper.getItemIconName: the hopper item sprite in slots, not a cube (flat-block-items.js) */id=itemBlockId(id);const chest=chestIconTexture(id),key=id+':'+damage+(chest?':'+chest:'');if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   // Chest family (render type 22): the executed ModelChest quads under the same matrix and GL edges (chest-item-model.js, chest-item-reference.json); drawChestIcon is the fallback before the PNG decodes.
   if(chest){const img=exact.get(chest);let url;if(img)url=pngDataUrl(encodePngStored(64,64,rasterQuads(64,64,chestIconQuads({data:img.data,w:img.width,h:img.height}),4)));else{drawChestIcon(x,images.get(chest));url=c.toDataURL();}icons.set(key,url);chestUrls.add(url);return url;}
   // RenderBlocks.renderBlockAsItem boxes (stairs, fence, gate, beacon, anvil, slabs, plates, buttons, carpet, trapdoor, the dragon egg, ... and the unit cube): the executed
   // item boxes under renderItemIntoGUI's matrix, rasterised with the GL's pixel-centre edges (icon-quads.js, item-render-reference.json). Sprite-like blocks follow below.
   if(!flatIcon(id)){const url=boxIcon(id,damage);if(url){icons.set(key,url);return url;}}
- if(flatIcon(id)){const i=blockTile(id,id===141?0:2,false,damage);{/* RenderItem.renderIcon: one textured quad, so GL pixel-centre edges like the box icons (no 4x4 anti-aliasing), in the sprite icons' 64x70 layout */const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]],true,70);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,...tileOrigin(i),16,16,3,5,58,58);}
+ if(flatIcon(id)){const i=blockTile(id,id===141?0:2,false,damage);{/* RenderItem.renderIcon: one textured quad, so GL pixel-centre edges like the box icons (no 4x4 anti-aliasing), in the sprite icons' 64x70 layout */const url=softIcon([[i,[58/16,0,0,58/16,3,5],0,0]],true,70);if(url){icons.set(key,url);return url;}}x.drawImage(canvas,...tileOrigin(i),TILE_SIZES[i],TILE_SIZES[i],3,5,58,58);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  setIconResolver(icon);
@@ -343,5 +363,6 @@ function iconRaw(id,damage=0){syncCanvases();/* RenderBlocks.renderBlockAsItem: 
  // Resource pack refresh: re-read every image (versioned url, so the service worker's new overrides are fetched) and redraw in place.
  const names=()=>[...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),...CHEST_ICON_TEXTURES,'blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')];
  async function reload(){const nextExact=new Map(),next=new Map(await Promise.all(names().map(async n=>{const img=n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n),e=await exactPng(n);if(e)nextExact.set(n,e);return[n,img];})));images.clear();for(const[k,v]of next)images.set(k,v);exact.clear();for(const[k,v]of nextExact)exact.set(k,v);anims=new Map();shown.clear();redraw();await loadAnimations();}
- return{texture,terrain,canvas,ready,reload,animate,setUploader(u){const old=uploader;uploader=u;return old;},icon,setBiome(value){biome=value;},get biome(){return biome;},get leavesOpaque(){return opaque;},setOpaqueLeaves(v){opaque=!!v;redraw();},setFiltering(levels,aniso,max=1){const a=Math.max(1,Math.min(aniso,max)),changed=levels!==mipLevels;mipLevels=levels;for(const t of[texture,terrain])if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true;}if(changed)redraw();}};
+ const api={texture,terrain,canvas,setMaxTextureSize(n){if(n>0&&n!==terrainLayoutState().maxSize&&setTerrainSizes(packSizes(),{maxSize:n,mip:mipLevels}))relayoutApply();},ready,reload,animate,setUploader(u){const old=uploader;uploader=u;return old;},icon,setBiome(value){biome=value;},get biome(){return biome;},get leavesOpaque(){return opaque;},setOpaqueLeaves(v){opaque=!!v;redraw();},setFiltering(levels,aniso,max=1){const a=Math.max(1,Math.min(aniso,max)),changed=levels!==mipLevels;mipLevels=levels;for(const t of[texture,terrain])if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true;}if(changed)redraw();}};
+ return api;
 }
