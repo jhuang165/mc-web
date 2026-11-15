@@ -27,6 +27,7 @@ import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
+import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
 import { CartTracker } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 
@@ -152,6 +153,7 @@ export class ServerVehicles {
     if (hit) { // Minecraft.clickMouse swings, then EntityMinecart / EntityBoat.attackEntityFrom with the held weapon's damage
       p.swing = 6;
       system.hit(v, heldAttackDamage(p.survival.held?.id ?? 0, p.survival), { creative: p.survival.creative });
+      vehicleSprintPush(p, v); // b75 mpusesweep75: EntityPlayer.attackTargetEntityWithCurrentItem's sprint knockback on a cart or boat
       p.survival.exhaust?.(0.3);
       return true;
     }

@@ -81,3 +81,21 @@ test("firework rocket on the top of a block launches a rocket and is spent", () 
   assert.equal(side.s.dispense.rockets.rockets.length, 1);
   assert.equal(held(side).count, 1);
 });
+
+test("armour equipped by a right click leaves the hand and fills the armour slot", () => {
+  const side = makeSide(); given(side, 408, 0, 1); side.s.tick();
+  side.s.queueEdit(side.p.id, { place: true }); side.s.tick();
+  assert.equal(side.p.survival.inventory.armor.filter(Boolean).length, 1);
+  assert.equal(held(side), null);
+});
+
+test("a sprinting hit on a minecart pushes it, slows the attacker and turns sprinting off", () => {
+  const side = makeSide(), s = side.s, p = side.p;
+  const sys = s.vehicles.carts, cart = sys.spawnEmpty({ x: 64.5, y: 10.5, z: 62.5 });
+  s.tick();
+  p.motion.sprinting = true; p.velocity.x = 1; p.velocity.z = 1;
+  const before = Math.hypot(cart.vx, cart.vz);
+  s.vehicles.act(p, { v: "c" + cart.id, hit: true });
+  assert.ok(Math.hypot(cart.vx, cart.vz) > before || cart.dead);
+  assert.equal(p.motion.sprinting, false); assert.equal(p.velocity.x, 0.6);
+});
