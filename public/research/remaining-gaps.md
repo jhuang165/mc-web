@@ -2,6 +2,41 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 74
+
+Batch 74 covered these areas:
+- **Server player positions.** Remote players move on the native 2-tick tracker cadence and the client smooths them over 3 steps; a player arriving from another dimension only receives the players they track.
+- **Server place sounds.** Every block placement sends the native place sound to players within 16 blocks, the placer included; the client now plays server block sounds; seeds and nether wart place silently.
+- **Server pickup order.** Items and stuck arrows are taken in one pass in list order on the server (700 executed scenes replayed); a partial item take sends no collect packet (found wrong before).
+- **Server combat.** Sprinting player hits knock mobs back further and slow the attacker; crit particles follow the live entity.
+- **Server performance.** Tick time measured with up to 600 mobs (about 20 ms per tick); see `server-performance.md`.
+- **Server leftovers.** `/debug stop` writes the native profile file; only the native packet set resets the idle timer (movement does not, bytecode-read). The separate brewing flag was found native for a dedicated server.
+- **Single player.** The death throw; falling anvils hit items, orbs, boats, carts, frames and paintings; bonus torches use the normal-cube rule. Item farmland trampling was found wrong (only living entities trample).
+- **Custom names.** Chests, furnaces, dispensers, droppers, hoppers, brewing stands and enchanting tables keep `CustomName` (placement, saves, NBT, window titles, server), checked by an executed probe.
+- **Order and skins.** Orb sounds and xp follow the pickup list order; a mob rider takes the vehicle's fall at once; skin PNGs decode without premultiplication (13 executed images).
+- **Lighting.** The client recheckGaps gap was wrong: the client runs the pass (one column per tick) and it changes no light (executed, 8 scripts).
+
+Still open from batch 74:
+- **Multiplayer.**
+  - Players: a jump or sneak change does not force an off-beat position send; the head angle is the body yaw; the death throw motion is not sent to the client; the client's own sprint flag is not cleared after a hit.
+  - The server has no bucket placement or pickup (only milk drinking).
+  - Combat: remote player crits follow position only (no velocity on the player wire).
+  - Performance: the mob push scan is O(n^2) (34% of a 600-mob tick); real sockets, many players and the Nether/End are not measured.
+  - Idle time counts ticks, not wall-clock milliseconds.
+  - Server commands: /publish stays off.
+  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: remote player smoothing and aim at moving players, place sounds on two clients, partial pickups, named container titles. Earlier unseen items from batches 67 to 73 still stand.
+- **Single player.**
+  - Seeds and nether wart play `step.grass` when planted (native is silent); the double plant skips its place sound.
+  - A bonus torch that cannot stay is not placed (native drops a torch item); the death throw angle uses the attacker's position at death, not at the hit.
+  - Exploded enchanting tables keep their name record; chunk-resident saves keep table names in metadata.
+  - The normalised skin is still drawn through a canvas (hat pixels below alpha 128 are re-premultiplied).
+  - Flower pots: native stacks with damage values the port cannot hold are not representable.
+  - Sound volume and pitch were compared by hand for a few call sites only; run-time built names are prefix rows.
+  - Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 73
 
 Batch 73 covered these areas:
@@ -16,27 +51,7 @@ Batch 73 covered these areas:
 - **Sounds.** Every 1.7.10 sound event is listed; cake and cauldron are silent as natively; the arrow hit ding plays.
 - **Research docs.** 30 more docs swept.
 
-Still open from batch 73:
-- **Multiplayer.**
-  - Players: positions go out every tick, not at the tracker frequency of 2; the `dimRespawn` snapshot is not cut for players.
-  - Placement: the server sends no place sound for any block.
-  - Pickup: server item and arrow pickup are not interleaved in list order.
-  - Combat: server mob attacks pass no sprint knockback or attacker slowdown; the client crit target is a snapshot.
-  - Not measured: server tick time with several hundred mobs.
-  - The brewing stand selection flag is kept separately by the server and the client.
-  - Server commands: /publish stays off; /debug files are kept in memory; idle activity is approximated.
-  - End: thin island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: players appearing at the tracking edge, signs returning with their column, wake and aura sprites, skin on the arm and heads, the arrow ding. Earlier unseen items from batches 67 to 72 still stand.
-- **Single player.**
-  - No death throw on player death; item entities never trample farmland; bonus chest torches have no orientation; falling anvil damage to non-living targets is unchecked.
-  - `CustomName` on chests, furnaces, dispensers, brewing stands and enchanting tables is not imported or exported.
-  - An orb's sound is queued ahead of item pop sounds within one tick; a mob passenger takes the vehicle's fall at its own turn.
-  - Flower pots: native stacks with damage values the port cannot hold are not representable.
-  - The browser skin decode is premultiplied (one colour step off native on partly transparent pixels).
-  - Sound volume and pitch were compared by hand for a few call sites only; run-time built names are prefix rows.
-  - Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
-- **Rendering.** No native pixel capture; the client lacks the server's `recheckGaps` pass after height-map edits (bytecode-predicted).
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 73: carried into the batch 74 list above, except the items batch 74 closed or found wrong.
 
 ## Done in batch 72
 

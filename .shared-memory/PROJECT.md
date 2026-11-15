@@ -113,6 +113,21 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 74 (2026-11-14, ten Sonnet tracks in `../wt74-<name>` on `batch74-<name>`, cut from 8180cf242, merged --no-ff on `batch74-lead`; shared track rules `../artifacts/b74-lead/track-rules.md`; lead note `b74-lead-track.md`; no browser checks by request):
+- 0.103.0, by track:
+  - mptrack74: `server-player-tracker.js` keeps one shared tracker entry per player and dimension (range 512, frequency 2, 60-tick move, 400-tick resync); `client-ptrack.js` interpolates remote players over 3 steps (`presence.js`); the `dimRespawn` snapshot goes through `playerTracker.snapshot`.
+  - mpsounds74: `server-place-sound.js` sends the ItemBlock place sound ((volume+1)/2, pitch*0.8) to everyone within 16 blocks, placer included; the client `onSound` filter accepts `dig.*`, `step.*`, `random.anvil_land`; server seeds and nether wart are silent. Found: the server has no buckets.
+  - mppickup74: `server-pickup-order.js` (`pickupPass` over `collectPickups` with `keepItem`) takes items and stuck arrows in one list-order pass in the tick and on the `pickup` message; partial item takes send no collect packet (native `addItemStackToInventory` false).
+  - mpcombat74: sprint knockback on server mob hits and the attacker 0.6 slowdown (`server-attack-slowdown.js`); `pfx73` crit events carry `i`/`pl` and `applyCritFx` follows the live entity.
+  - mpperf74: `tools/bench-server-mobs.mjs`, `public/research/server-performance.md` (about 20 ms per tick at 600 mobs; the O(n^2) push scan is the hotspot); two micro-optimisations in `projectiles.js`.
+  - mpmisc74: `server-debugfile.js` writes `debug/profile-results-<date>.txt`; `server-idle.js` resets idle only for the 11 native packets (no movement, bytecode-read, checked by the lead); the brewing flag split was found native for a dedicated server.
+  - spfixes74: `death-throw.js` (EntityPlayer.onDeath motion, dead-body tick), `falling-hurt.js` (anvils hit items, orbs, boats, carts, frames, paintings), bonus torches through `torchAddedMeta`. Found wrong: item farmland trampling, the client attackedAtYaw death tilt.
+  - tilenames74: `tile-names.js`, `CustomName` on seven tile kinds (placement from named stacks, saves, region import/export, window titles, server `named` flag, `survival.tableNames`), `TileNamesProbe` executed.
+  - order74: orbs join the pickup pass (`collectPickups` `orbs`, `orbTaken`); `passFall` hands a mob rider the fall at once (`vehicleFall`); `png-decode.js` decodes skins without premultiplication.
+  - recheckgaps74: found wrong: the client runs `recheckGaps` (one column per tick) and the pass changes no light in 8 executed scripts (`LightGapsProbe`, `light-gaps-reference.jsonl`).
+- Lead joins: `pickup-order.js` keeps mppickup74's `keepItem` filter and order74's `orbs` rows in one signature.
+- Open: "Still open from batch 74" in `public/research/remaining-gaps.md`.
+
 Batch 73 (2026-11-14, ten Sonnet tracks in `../wt73-<name>` on `batch73-<name>`, cut from d20d9666f, merged --no-ff on `batch73-lead`; shared track rules `../artifacts/b73-lead/track-rules.md`; lead note `b73-lead-track.md`; no browser checks by request):
 - 0.102.0, by track:
   - streamfix73: `server-player-tracker.js`: remote players are tracked per viewer (EntityTracker range 512 clamped by the view-distance limit, bytecode-read); untracked players become `far: true` rows (tab list only); the client drops remote players and its tile-entity maps (`client-tiles.js`: signs, skulls, beacons, spawners, chests, ender chests, moving pistons) for unloaded columns and restores them from a re-sent bulk. Player positions still go out every tick.
