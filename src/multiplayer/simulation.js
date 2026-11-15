@@ -227,7 +227,7 @@ export class DedicatedSimulation {
     if (!saved && this.newPlayerMode) survival.mode = this.newPlayerMode; // /defaultgamemode adventure
     if (saved && Object.hasOwn(GAME_MODE_IDS, saved.player?.gameMode)) survival.mode = saved.player.gameMode; // b70 serverprops2: EntityPlayerMP.readEntityFromNBT (bytecode-read mw.a(dh)) restores `playerGameType` when the tag exists, unless force-gamemode
     if (this.rules.forceGamemode) survival.mode = this.newPlayerMode ?? this.gameMode; // b69 serverprops: force-gamemode puts every joining player in the server's mode (oi.a(mw, mw, ahb))
-    for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
+    for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles', 'tableNames']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
       input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, cape, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, spawnForced: saved?.spawnForced, rand: seeded(),

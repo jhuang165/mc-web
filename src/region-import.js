@@ -123,7 +123,11 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
     if (stack) items[slot] = stack;
   }
   const record = { items };
-  if (id === 'Hopper') { record.cooldown = get(tile, 'TransferCooldown', NBT.INT, 0); record.name = get(tile, 'CustomName', NBT.STRING, '') || null; kept.add('TransferCooldown'); kept.add('CustomName'); }
+  // CustomName (every container tile; read when the tag is a string, kept when non-empty): record.name, null for hoppers as before.
+  const customName = get(tile, 'CustomName', NBT.STRING, '') || (id === 'Trap' || id === 'Dropper' ? get(tile, 'CustomName', NBT.STRING, null) : null);
+  if (id === 'Hopper') record.name = customName; else if (customName !== null) record.name = customName;
+  kept.add('CustomName');
+  if (id === 'Hopper') { record.cooldown = get(tile, 'TransferCooldown', NBT.INT, 0); kept.add('TransferCooldown'); }
   if (id === 'Cauldron') { record.brewTime = get(tile, 'BrewTime', NBT.SHORT, 0); kept.add('BrewTime'); }
   if (id === 'Furnace') { record.burn = get(tile, 'BurnTime', NBT.SHORT, 0); record.cook = get(tile, 'CookTime', NBT.SHORT, 0); record.burnTotal = burnTime(items[1]); kept.add('BurnTime'); kept.add('CookTime'); }
   return { name, record, ignored: [...tile.keys()].filter(k => !kept.has(k)).concat(ignored) };
@@ -413,7 +417,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
   const commandBlocks = [], musicTiles = [];
   const pots = [], signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
-  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
+  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, tableNames = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
   const tickList = { fluid: [], fire: [], falling: [], redstone: [], foreign: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [], comparatorSignals = [];
@@ -567,7 +571,10 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (content) pots.push({ x: lx, y, z: lz, id: content.id, damage: content.damage });
         tally(tileConverted, id);
       } else if (inside && ((id === 'DLDetector' && block === fromOriginal(151, 0)?.id) || (id === 'EnchantTable' && block === fromOriginal(116, 0)?.id))) {
-        tally(tileConverted, id); // no saved state in the port: the sensor power is recomputed, a table's CustomName has no storage
+        // The sensor power is recomputed; a table's CustomName (read when a string) goes to player.tableNames (b74).
+        const tableName = id === 'EnchantTable' ? get(tile, 'CustomName', NBT.STRING, '') : '';
+        if (tableName) tableNames[key] = tableName;
+        tally(tileConverted, id);
       } else if (inside && id === 'EnderChest' && block === ENDER_CHEST) {
         tally(tileConverted, id); // no saved data: the lid state is runtime, the inventory is the player's EnderItems
       } else if (inside && id === 'Control' && block === 139) {
@@ -774,7 +781,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     edits: [...world.edits],
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
-    player: { chests, furnaces, dispensers, hoppers, brewing },
+    player: { chests, furnaces, dispensers, hoppers, brewing, ...(Object.keys(tableNames).length ? { tableNames } : {}) },
     pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(pots.length ? { pots } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
     ...tickRecordFields(tickList, litRepeaters, comparatorSignals, Number.isSafeInteger(level?.time) && level.time >= 0 ? level.time : 0),

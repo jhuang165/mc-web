@@ -87,6 +87,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     items.spill(stacks, ...p);
     delete survival.chests[key];
   }
+  if (survival.tableNames?.[key]) delete survival.tableNames[key]; // TileEntityEnchantmentTable goes with the block (CustomName lost, b74)
   if (dispenser) {
     items.spill(dispenser.items.filter(Boolean).map(copyStack), ...p);
     delete survival.dispensers[key];

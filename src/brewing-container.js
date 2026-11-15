@@ -20,6 +20,7 @@ export class BrewingContainer extends Container {
     super(inv);
     this.stand = view;
     this.title = view.customName || title;
+    if (view.customName) this.titleLocalized = true; // isInventoryNameLocalized: shown unchanged
     this.onPotionTaken = null; // (stack) => void, set by the host: single player main.js, the dedicated server window (server-containers.js)
     this.tile = new StackArray(view.slots, onChange);
     this.addSlot(new BottleSlot(this.tile, 0, 56, 46, this));

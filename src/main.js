@@ -186,6 +186,7 @@ import { HopperContainer, Hoppers, HOPPER, hopperActive } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
+import { namedTitle } from "./tile-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -2387,7 +2388,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
         ? '<i class="chest-bottom" aria-hidden="true"></i>'
         : "";
   // GuiContainer shell (container-screens.js): drawDefaultBackground gradient, panel at guiLeft / guiTop, glyph labels, no title bar or close button.
-  const shellTitle = kind === "inventory" || kind === "workbench" ? containerTitle("Crafting") : kind === "creative" ? "" : containerTitle(container.title ?? CONTAINER_TITLES[kind]);
+  const shellTitle = kind === "inventory" || kind === "workbench" ? containerTitle("Crafting") : kind === "creative" ? "" : container.titleLocalized ? container.title : containerTitle(container.title ?? CONTAINER_TITLES[kind]); // titleLocalized: a CustomName shows unchanged (b74)
   containerShell(
     kind,
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
@@ -2806,12 +2807,12 @@ function beaconClick(button) {
 function useEnchantingTable(key) {
   const [x, y, z] = key.split(",").map(Number);
   openContainer(
-    new EnchantingContainer({
+    Object.assign(new EnchantingContainer({
       inventory: survival.inventory, world, x, y, z, creative: () => survival.creative,
       experienceLevel: () => experience.level,
       payExperienceLevels: (cost) => { experience.addLevels(-cost); renderVitals(); saved = false; },
       onUse: () => { saved = false; },
-    }),
+    }), namedTitle(survival.tableNames?.[key])),
     "enchanting",
     key,
   );
@@ -3674,7 +3675,7 @@ function edit(place = false) {
     },
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
     openHorse: (e) => { openHorse(e); syncContainerState(); },
-    openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
+    openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), typeof dispenser.name === "string" ? { title: dispenser.name, titleLocalized: true } : { title }), "dispenser", key); syncContainerState(); },
     breakBlock: breakBlockPacket,
     clientEyeInWater,
     serverTask,

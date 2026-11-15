@@ -21,7 +21,8 @@ import { blockOfItem as shapedItemBlock, WOOD_SLAB, FENCE_GATE, TRAPDOOR, woodSl
 import { blockOfItem as stoneUtilityItemBlock, heldSlabType, planSlabUse, endFrameFacing, STONE_BRICKS, END_PORTAL_FRAME, FLOWER_POT } from './stone-utility.js';
 import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, DROPPER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
 import { newDispenser } from './dispenser-container.js';
-import { brewingItemBlock } from './brewing.js';
+import { nameStoreOf, nameTileFromStack, BREWING, FURNACE } from './tile-names.js';
+import { brewingItemBlock, newBrewingTile } from './brewing.js';
 import { HOPPER, hopperPlacedMeta, newHopperTile } from './hopper.js';
 import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta, ITEM_REDSTONE } from './redstone-blocks.js';
 
@@ -232,6 +233,14 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (id === ENDER_CHEST) (survival.enderTiles ??= {})[p.join(',')] ??= newEnderTile(); // the lid state chest-renderer.js draws
   if (id === DISPENSER || id === DROPPER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
   if (id === HOPPER) (survival.hoppers ??= {})[p.join(',')] ??= newHopperTile();
+  // b74 tilenames: onBlockPlacedBy copies a named stack's display name onto the new tile (chest, furnace, dispenser/dropper, hopper, brewing stand, enchanting table).
+  if (nameStoreOf(id)) {
+    const key = p.join(','), store = nameStoreOf(id);
+    if (id === BREWING) (survival.brewing ??= {})[key] ??= newBrewingTile();
+    if (id === FURNACE) survival.furnace(key);
+    if (store === 'tableNames') delete survival.tableNames?.[key]; // a table placed over a stale entry starts unnamed
+    nameTileFromStack(survival, id, key, survival.held);
+  }
   if (id === ANVIL) scheduleFalling(...p);
   // BlockRailBase.onBlockAdded: the rail takes its shape and reshapes the rails it joins.
   if (isRailId(id)) railAdded(world, ...p);

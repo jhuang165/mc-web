@@ -38,6 +38,7 @@ export function buildWindow(m, { survival, world, station = {}, crafted = null }
   else if (kind === 'merchant') container = buildMerchant(m, inv, { crafted }); // b66 mptrade: the offers follow in `tradeList`
   if (!container || container.slots.length !== m.size) return null;
   container.title = m.title;
+  if (m.named) container.titleLocalized = true; // S2D useProvidedTitle: a CustomName shows unchanged (b74)
   if (crafted && kind === 'workbench') container.onCraft = crafted;
   if (crafted && kind === 'furnace') container.slots[2].onSmelt = crafted; // SlotFurnace.onCrafting
   return { container, kind, key };

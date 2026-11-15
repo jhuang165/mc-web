@@ -47,7 +47,7 @@ export const gameYaw = degrees => Math.PI - degrees * Math.PI / 180;
 export const mcYaw = yaw => (Math.PI - yaw) * 180 / Math.PI;
 const solidId = id => id !== 0 && materialSolid(id);
 const clamp = v => Math.max(MARGIN, Math.min(SIZE - MARGIN, v));
-const TILE_KEYS = ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles'];
+const TILE_KEYS = ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles', 'tableNames'];
 // Simulation methods a player's own message reaches (by player id); each runs inside that player's dimension.
 const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow', 'clickWindow', 'windowInventory', 'confirmTransaction', 'station', 'dropHeld', 'updateSign', 'chooseBeacon', 'tradeSelect', 'setBeaconPayment', 'queueVehicle'];
 

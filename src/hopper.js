@@ -64,6 +64,7 @@ export class HopperContainer extends Container {
     for (let i = 0; i < HOPPER_SLOTS; i++) this.addSlot(new Slot(this.tile, i, 44 + i * 18, 20));
     this.addPlayerSlots(8, 51);
     this.title = tile.name || HOPPER_TITLE;
+    if (tile.name) this.titleLocalized = true;
   }
   // ContainerHopper.transferStackInSlot: the copy is returned like ContainerChest, without onPickup.
   transfer(index) {

@@ -83,7 +83,9 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
  const n={id:str(name==='chests'?'Chest':name==='dispensers'?(dropper?'Dropper':'Trap'):name==='hoppers'?'Hopper':name==='brewing'?'Cauldron':'Furnace'),x:int(x),y:int(y),z:int(z),Items:inventory(e.items,report)};
  if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}
  if(name==='brewing')n.BrewTime=short(e.brewTime??0);
- if(name==='hoppers'){n.TransferCooldown=int(e.cooldown??0);if(e.name)n.CustomName=str(e.name);}
+ if(name==='hoppers')n.TransferCooldown=int(e.cooldown??0);
+ // TileEntityChest/Furnace/Dispenser/Hopper/BrewingStand.writeToNBT: CustomName only when hasCustomInventoryName (b74 tilenames).
+ if(typeof e.name==='string'&&(e.name.length>0||name==='dispensers'))n.CustomName=str(e.name); // a dispenser/dropper counts "" as named (k_ is name != null, probed)
  return new Map(Object.entries(n));
 }
 function payload(state,ox,oz,report,blockAt) {
@@ -200,11 +202,12 @@ function payload(state,ox,oz,report,blockAt) {
 }
 // TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
 const endPortalTiles=(p,cells)=>{for(const [x,y,z] of cells)p.tileEntities.push(new Map(Object.entries({id:str('Airportal'),x:int(x),y:int(y),z:int(z)})));return p;};
-// Tile entities whose block always has one natively: EnchantTable (116, CustomName only when named, which the port cannot hold), EnderChest (130) and
+// Tile entities whose block always has one natively: EnchantTable (116, CustomName only when named, from player.tableNames), EnderChest (130) and
 // DLDetector (151) have no saved fields (bytecode-read, nbtexport73-reference.json); FlowerPot (140) writes Item and Data (stone-utility.js potNbtOf).
 // The pot's plant is the explicit record (record.pots) or the one its block metadata implies.
 const FIELDLESS_TILES={116:'EnchantTable',130:'EnderChest',140:'FlowerPot',151:'DLDetector'};
-const specialTiles=(p,cells,pots,ox,oz)=>{for(const [orig,x,y,z,m] of cells){const n={id:str(FIELDLESS_TILES[orig]),x:int(x+ox),y:int(y),z:int(z+oz)};
+const specialTiles=(p,cells,pots,ox,oz,names={})=>{for(const [orig,x,y,z,m] of cells){const n={id:str(FIELDLESS_TILES[orig]),x:int(x+ox),y:int(y),z:int(z+oz)};
+ if(orig===116&&typeof names[`${x},${y},${z}`]==='string'&&names[`${x},${y},${z}`].length>0)n.CustomName=str(names[`${x},${y},${z}`]); // TileEntityEnchantmentTable.writeToNBT: CustomName only when named (b74)
  if(orig===140){const nbt=potNbtOf(pots.get(`${x},${y},${z}`)??potContentsOfMeta(m));n.Item=int(nbt.Item);n.Data=int(nbt.Data);}
  p.tileEntities.push(new Map(Object.entries(n)));}return p;};
 // level.dat (SaveHandler.saveWorldInfoWithPlayer): WorldInfo.cloneNBTCompound(player) as Data. Key order is free (NBTTagCompound is a
@@ -301,7 +304,7 @@ async function exportRegions({record,w,owned,runtime,baseId,live=false}, files, 
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=base?base.terrainPopulated:true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=base?.biomes?base.biomes[x+z*16]:w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
   const blockAt=(x,y,z)=>chunk.getBlock(x&15,y,z&15);
-  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...specialTiles(endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt),portals),specials,pots,ox,oz)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
+  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...specialTiles(endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt),portals),specials,pots,ox,oz,record.player?.tableNames??{})}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
   await progress();
  }
