@@ -189,8 +189,7 @@ test('roots plant before eating; occupied farmland, crop targets and side clicks
     assert.equal(applyPlayerEdit(f.state, f.request, { playSound: (...a) => sounds.push(a) }).branch, 'plant-crop');
     assert.equal(f.state.survival.count(tool), 2);
     assert.equal(f.state.eating, null);
-    assert.equal(sounds.length, 1);
-    assert.equal(sounds[0][0], 'step.grass');
+    assert.equal(sounds.length, 0, 'ItemSeeds.onItemUse plays no sound (b75 sound sweep)');
     assert.equal(applyPlayerEdit(f.state, f.request).branch, 'plant-seeds-failed');
     assert.equal(f.state.eating, null);
     assert.equal(f.state.survival.count(tool), 2);
@@ -206,17 +205,17 @@ test('roots plant before eating; occupied farmland, crop targets and side clicks
   }
 });
 
-test('successful wheat, melon, pumpkin and nether wart planting sound once; failed planting is silent', () => {
+test('successful wheat, melon, pumpkin and nether wart planting is silent (ItemSeeds plays no sound); failed planting is silent', () => {
   for (const tool of [309, 361, 362, 386]) {
     const target = { block: [...POS], adjacent: [POS[0], POS[1] + 1, POS[2]] };
     const f = fixture({ tool, count: 2, block: tool === 386 ? 151 : 29, target, place: true }), sounds = [];
     const hooks = { playSound: (name) => sounds.push(name) };
     const result = applyPlayerEdit(f.state, f.request, hooks);
     assert.equal(result.branch, tool === 386 ? 'plant-nether-wart' : 'plant-crop');
-    assert.deepEqual(sounds, ['step.grass']);
+    assert.deepEqual(sounds, []);
     assert.equal(f.state.survival.count(tool), 1);
     applyPlayerEdit(f.state, f.request, hooks);
-    assert.deepEqual(sounds, ['step.grass']);
+    assert.deepEqual(sounds, []);
     assert.equal(f.state.survival.count(tool), 1);
   }
 });
@@ -323,7 +322,7 @@ test('ordinary ItemBlock dispatch uses the extracted placement helper with real 
   assert.equal(result.placement.placed, true);
   assert.equal(f.state.world.get(...target.adjacent), 3);
   assert.equal(f.state.survival.count(3), 0);
-  assert.deepEqual(calls, [['update', target.adjacent[0], target.adjacent[2], target.adjacent[1]], 'hotbar', ['sound', true, 3], 'dirty']);
+  assert.deepEqual(calls, [['update', target.adjacent[0], target.adjacent[2], target.adjacent[1]], 'hotbar', ['sound', true, 3, target.adjacent], 'dirty']);
 });
 
 test('station precedence includes chest even when the held item would otherwise be a projectile', () => {

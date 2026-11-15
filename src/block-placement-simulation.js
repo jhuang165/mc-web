@@ -100,7 +100,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     if (!survival.creative) survival.take(id);
     updateBlock(cell[0], cell[2], cell[1]);
     renderHotbar();
-    sound(true, REEDS);
+    sound(true, REEDS, cell);
     markUnsaved();
     return result(true, "reeds", REEDS, cell);
   }
@@ -118,7 +118,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     updateBlock(above[0], above[2], above[1]);
     updateBlock(above[0], above[2], above[1] + 1);
     renderHotbar();
-    sound(true, door);
+    sound(true, door, above);
     markUnsaved();
     return result(true, "door", door, above);
   }
@@ -138,7 +138,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     if(![1,2,29,30].includes(world.get(p[0],p[1]-1,p[2]))||!placementReplaceable(world.get(...p))||world.get(p[0],p[1]+1,p[2])!==0||!withinBounds([p[0],p[1]+1,p[2]]))return result(false,'double-plant-support',id,p);
     if(!survival.creative&&!survival.count(id))return result(false,'empty-stack',id,p);
     world.put(...p,id,survival.held?.damage||0,true);world.set(p[0],p[1]+1,p[2],id,true,8);
-    if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);updateBlock(p[0],p[2],p[1]+1);markUnsaved();return result(true,'double-plant',id,p);
+    if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);updateBlock(p[0],p[2],p[1]+1);sound(true,id,p);markUnsaved();return result(true,'double-plant',id,p);
   }
   // ItemSlab.onItemUse (stone-utility.js planSlabUse): merge into a double slab on the open face or in the adjacent cell, else
   // place the half chosen by the side and the hit height. Item 82 is the sandstone slab (type 1); 1103's damage is the type.
@@ -159,7 +159,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     if (!survival.creative) survival.take(itemId);
     updateBlock(cell[0], cell[2], cell[1]);
     renderHotbar();
-    sound(true, plan.id);
+    sound(true, plan.id, cell);
     markUnsaved();
     return result(true, plan.merge ? "slab-merge" : "slab", plan.id, cell);
   }
@@ -248,7 +248,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (!survival.creative) survival.take(itemId);
   updateBlock(p[0], p[2], p[1]);
   renderHotbar();
-  sound(true, id);
+  sound(true, id, p);
   markUnsaved();
   return result(true, "block", id, p);
 }

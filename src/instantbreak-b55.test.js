@@ -88,7 +88,7 @@ test("b55: a refused placement predicts nothing, the sound hook runs only for a 
   assert.equal(stuck.placed, false); assert.deepEqual(stuck.cells, []); assert.deepEqual(sounds, []);
   r.position = { x: 10.5, y: 30, z: 10.5 };
   const ok = dryPlace(r, { id: 1, item: ITEMS[1], target }, { sound: (...a) => sounds.push(a) });
-  assert.equal(ok.placed, true); assert.deepEqual(sounds, [[true, 1]]);
+  assert.equal(ok.placed, true); assert.deepEqual(sounds, [[true, 1, target.adjacent]]);
   assert.equal(r.survival.held.count, 3, "the stack is the server half's to take");
 });
 
