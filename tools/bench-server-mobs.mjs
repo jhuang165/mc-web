@@ -3,9 +3,11 @@
 // --state prints a hash of a seeded run's end state (mob positions, health, packets), used as the determinism check before and after a performance change.
 import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
-import { World } from '../src/world.js';
+import { World, REDSTONE_BLOCK } from '../src/world.js';
 import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
 import { IDLE_INPUT } from '../src/multiplayer/protocol.js';
+import { mountEntity } from '../src/mob-riding.js';
+import { PISTON } from '../src/dispenser-piston.js';
 
 const arg = (n, d) => (process.argv.find(a => a.startsWith(`--${n}=`)) ?? `=${d}`).split('=')[1];
 const TICKS = +arg('ticks', 200), COUNTS = arg('counts', '0,100,300,600').split(',').map(Number), WARM = +arg('warm', 20);
@@ -15,7 +17,7 @@ const SIZE = 120;
 
 function lcg(seed) { let s = seed >>> 0; return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296; }
 
-function build(count, chunkStream, seed = 1) {
+function build(count, chunkStream, seed = 1, scene = {}) {
   const world = new World('mpperf74');
   for (let x = 4; x < SIZE; x++) for (let z = 4; z < SIZE; z++) { world.put(x, 9, z, 1, 0, false); for (let y = 10; y <= 20; y++) world.put(x, y, z, 0, 0, false); }
   world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
@@ -35,6 +37,17 @@ function build(count, chunkStream, seed = 1) {
     const m = s.mobs.mobs.create(KINDS[i % KINDS.length], 6 + rnd() * (SIZE - 12), 10, 6 + rnd() * (SIZE - 12));
     m.persistent = true; s.mobs.mobs.entities.push(m);
   }
+  // batch 75 mppushgrid75: `scene.riders` skeleton-on-spider pairs and `scene.pistons` pistons powered by a redstone block (toggled by the caller) put mobs moved off their own turn into the run
+  const mobs = s.mobs.mobs;
+  for (let i = 0; i < (scene.riders ?? 0); i++) {
+    const x = 6 + rnd() * (SIZE - 12), z = 6 + rnd() * (SIZE - 12), sp = mobs.create('spider', x, 10, z), sk = mobs.create('skeleton', x, 10, z);
+    sp.persistent = sk.persistent = true; mobs.entities.push(sp, sk); mountEntity(sk, sp, m => mobs.size(m)[1]);
+  }
+  s.pistonList = [];
+  for (let i = 0; i < (scene.pistons ?? 0); i++) {
+    const x = 8 + Math.floor(rnd() * (SIZE - 20)), z = 8 + Math.floor(rnd() * (SIZE - 20));
+    world.put(x, 10, z, PISTON, 5, false); s.pistonList.push([x, z]);
+  }
   // let the join snapshot and first chunk bulks settle
   for (let i = 0; i < 3; i++) { s.tick(); for (const p of s.players.values()) p.chunkOut = null; }
   return s;
@@ -52,6 +65,9 @@ function instrument(s, acc) {
   s.mobs.tick = (...a) => { const t = performance.now(); try { return mt(...a); } finally { acc['mobs.tick(total)'] += performance.now() - t; } };
 }
 
+function togglePistons(s, on) {
+  for (const [x, z] of s.pistonList ?? []) { s.world.put(x, 10, z - 1, on ? REDSTONE_BLOCK : 0, 0, false); if (on) s.redstone.placed?.(x, 10, z - 1); s.redstone.notifyBlocksOfNeighborChange?.(x, 10, z - 1, 0); }
+}
 function stateHash(s, packets) {
   const h = createHash('sha256');
   for (const e of s.mobs.mobs.entities) h.update(`${e.type}|${e.x}|${e.y}|${e.z}|${e.health}|${e.yaw}|${e.motionX ?? e.velocity?.x ?? 0}|${e.motionZ ?? e.velocity?.z ?? 0};`);
@@ -79,10 +95,10 @@ function run(count, chunkStream) {
 
 if (process.argv.includes('--state')) {
   // determinism: a seeded run (Math.random replaced) of 300 mobs for 150 ticks, hashed every 50 ticks
-  let rs = lcg(12345); Math.random = () => rs();
-  const s = build(300, true, 7), hashes = [];
+  let rs = lcg(+arg('rseed', 12345)); Math.random = () => rs();
+  const s = build(+arg('mobs', 300), true, +arg('seed', 7), { riders: +arg('riders', 0), pistons: +arg('pistons', 0) }), hashes = [];
   let packets = [];
-  for (let i = 1; i <= 150; i++) { const t = s.tick(); for (const p of s.players.values()) { if (p.mobPackets) packets.push(p.mobPackets); p.mobPackets = null; p.chunkOut = null; } if (i % 50 === 0) { hashes.push(stateHash(s, packets)); packets = []; } }
+  for (let i = 1; i <= 150; i++) { if (i % 20 === 1) togglePistons(s, (i - 1) % 40 === 0); const t = s.tick(); for (const p of s.players.values()) { if (p.mobPackets) packets.push(p.mobPackets); p.mobPackets = null; p.chunkOut = null; } if (i % 50 === 0) { hashes.push(stateHash(s, packets)); packets = []; } }
   console.log(JSON.stringify(hashes));
 } else {
   const rows = [];
