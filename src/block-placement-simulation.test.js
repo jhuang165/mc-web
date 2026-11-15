@@ -43,7 +43,7 @@ test("ordinary ItemBlock placement preserves silent collision probe, metadata, c
   assert.equal(calls[1], "collides");
   assert.equal(calls[2][4], WOOL);
   assert.equal(calls[2][5], true);
-  assert.deepEqual(calls.slice(-4), [["update", p[0], p[2], p[1]], "hotbar", ["sound", true, WOOL], "dirty"]);
+  assert.deepEqual(calls.slice(-4), [["update", p[0], p[2], p[1]], "hotbar", ["sound", true, WOOL, p], "dirty"]);
 
   const leafBase = [12, 20, 12], leafCell = [12, 21, 12];
   world.set(...leafBase, 1);
@@ -112,7 +112,7 @@ test("reeds replace tall grass only with adjacent water support and consume once
   assert.equal(placed.reason, "reeds");
   assert.equal(world.get(...cell), REEDS);
   assert.equal(survival.count(REEDS_ITEM), 1);
-  assert.deepEqual(events, [["sound", true, REEDS], "dirty"]);
+  assert.deepEqual(events, [["sound", true, REEDS, cell], "dirty"]);
 
   const unsupported = [27, 20, 27];
   world.set(unsupported[0], unsupported[1] - 1, unsupported[2], 1);

@@ -452,7 +452,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (!state.survival.creative) state.survival.take(id);
       hook('updateBlock', x, z, y + 1);
       hook('renderHotbar');
-      hook('playSound', 'step.grass', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 1, z: z + 0.5 } });
+      // b75 spsounds75: ItemSeeds.onItemUse plays no sound (bytecode-read, sound-sweep-reference.json: no sound for seeds or nether wart).
       hook('markUnsaved');
       return act('plant-nether-wart');
     }
@@ -462,7 +462,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         if (item?.food) hook('swing');
         hook('applyFarmUpdates', state.farming.drain());
         hook('renderHotbar');
-        hook('playSound', 'step.grass', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 1, z: z + 0.5 } });
+        // b75 spsounds75: ItemSeeds.onItemUse plays no sound (bytecode-read, sound-sweep-reference.json: no sound for seeds or nether wart).
         hook('markUnsaved');
         return act('plant-crop');
       }
@@ -520,7 +520,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (!cell || (!state.survival.creative && !state.survival.usable(id)) || (state.survival.held?.id === id && state.survival.held.count === 0)) return act('placement-cake');
       state.world.set(cell[0], cell[1], cell[2], CAKE, true, 0);
       if (!state.survival.creative) state.survival.take(id);
-      hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE);
+      hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE, cell);
       return act('place-block', { placement: { placed: true, reason: 'cake', block: CAKE, position: cell } });
     }
     // ItemSkull.onItemUse (skull.js): any face but the bottom of a solid block; the Wither builds when its T completes.
