@@ -17,6 +17,7 @@ import * as THREE from "three";
 import { NATIVE_ITEM_SPRITES, NATIVE_ITEM_ATLAS_WIDTH, NATIVE_ITEM_ATLAS_HEIGHT } from "./item-atlas-layout.js";
 import { NATIVE_BLOCK_SPRITES, NATIVE_ATLAS_WIDTH, NATIVE_ATLAS_HEIGHT } from "./atlas-layout.js";
 import { stitch } from "./stitcher.js";
+import { decodePng } from "./png-decode.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned, unversioned } from "./media-version.js";
 import { tileByName, TILE_ORIGINS, TILE_SIZES, ATLAS_WIDTH, ATLAS_HEIGHT, spriteUv, onTerrainRelayout } from "./block-textures.js";
@@ -112,19 +113,21 @@ export const isTerrainSprite = (tex) => !!tex?.userData?.terrainSibling;
 const sheets = { items: null, blocks: null };
 function getSheet(kind) {
   if (sheets[kind]) return sheets[kind];
-  const layout = sheetLayout(kind), canvas = document.createElement("canvas");
-  canvas.width = layout.width; canvas.height = layout.height;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.magFilter = texture.minFilter = THREE.NearestFilter;
-  return (sheets[kind] = { kind, canvas, texture, layout, known: new Map(), entries: new Map(), generation: 0 });
+  // b75 skintex75: the sheet is a DataTexture of straight-alpha pixels (decoded PNG bytes copied into the cells), not a 2D canvas, which would premultiply translucent texels.
+  const layout = sheetLayout(kind), pixels = new Uint8Array(layout.width * layout.height * 4);
+  const texture = new THREE.DataTexture(pixels, layout.width, layout.height, THREE.RGBAFormat, THREE.UnsignedByteType);
+  texture.flipY = true; texture.premultiplyAlpha = false; texture.unpackAlignment = 4; texture.generateMipmaps = false;
+  texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.needsUpdate = true;
+  return (sheets[kind] = { kind, pixels, texture, layout, known: new Map(), entries: new Map(), generation: 0 });
 }
-function drawEntry(a, e) {
+// e.img is a source { naturalWidth, naturalHeight, data }: data = RGBA straight-alpha bytes of the whole strip (png-decode.js, or a canvas read back when the decoder refused the file).
+export function drawEntry(a, e) {
   if (!e.img) return;
-  const cell = a.layout.cells.get(e.name), ctx = a.canvas.getContext("2d"), w = e.img.naturalWidth, h = Math.min(e.img.naturalHeight, w);
-  const f = Math.min(e.frame, Math.max(0, Math.floor(e.img.naturalHeight / w) - 1)); // frame `e.frame` of an animation strip (0 unless TextureClock / TextureCompass set it)
-  ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(cell[0], cell[1], cell[2], cell[3]);
-  ctx.drawImage(e.img, 0, f * w, w, h, cell[0], cell[1], cell[2], cell[3]);
+  const cell = a.layout.cells.get(e.name), src = e.img, w = src.naturalWidth, h = Math.min(src.naturalHeight, w), W = a.layout.width;
+  const f = Math.min(e.frame, Math.max(0, Math.floor(src.naturalHeight / w) - 1)); // frame `e.frame` of an animation strip (0 unless TextureClock / TextureCompass set it)
+  const cw = Math.min(cell[2], w), ch = Math.min(cell[3], h);
+  for (let y = 0; y < cell[3]; y++) a.pixels.fill(0, ((cell[1] + y) * W + cell[0]) * 4, ((cell[1] + y) * W + cell[0] + cell[2]) * 4);
+  for (let y = 0; y < ch; y++) a.pixels.set(src.data.subarray(((f * w + y) * w) * 4, ((f * w + y) * w + cw) * 4), ((cell[1] + y) * W + cell[0]) * 4);
 }
 function refreshGpu(a, resized) {
   if (resized) { a.texture.dispose(); for (const e of a.entries.values()) e.tex.dispose(); }
@@ -137,7 +140,8 @@ function relayout(a) {
   let layout;
   try { layout = sheetLayout(a.kind, a.known); } catch (err) { console.warn(a.kind + " atlas: " + err.message); return false; }
   a.layout = layout;
-  a.canvas.width = layout.width; a.canvas.height = layout.height;
+  a.pixels = new Uint8Array(layout.width * layout.height * 4);
+  a.texture.image = { data: a.pixels, width: layout.width, height: layout.height }; // the siblings share this Source
   for (const e of a.entries.values()) { applyUv(a, e); drawEntry(a, e); }
   refreshGpu(a, true);
   return true;
@@ -150,11 +154,32 @@ function setImage(a, e, img) {
   if (cell[2] !== w || cell[3] !== h) { if (relayout(a)) return; }
   drawEntry(a, e); refreshGpu(a, false);
 }
-function request(a, e, gen) {
-  const img = new Image();
-  img.onload = () => { if (a.generation <= gen) setImage(a, e, img); };
-  img.src = versioned(KINDS[a.kind].prefix + e.name + ".png", gen);
-  return new Promise((resolve) => { const done = () => resolve(); img.addEventListener("load", done); img.addEventListener("error", done); });
+// A strip as a straight-alpha source: PNG bytes decoded without a canvas; null when the decoder refuses them (the Image path below is the fallback).
+async function decodedSource(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const png = await decodePng(new Uint8Array(await r.arrayBuffer()));
+    return { naturalWidth: png.width, naturalHeight: png.height, data: png.data };
+  } catch { return null; }
+}
+function canvasSource(img) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  return { naturalWidth: c.width, naturalHeight: c.height, data: g.getImageData(0, 0, c.width, c.height).data };
+}
+async function request(a, e, gen) {
+  const url = versioned(KINDS[a.kind].prefix + e.name + ".png", gen);
+  let src = await decodedSource(url);
+  if (!src) src = await new Promise((resolve) => { // fallback: the browser's decoder through a canvas (premultiplied round trip)
+    const img = new Image();
+    img.onload = () => { try { resolve(canvasSource(img)); } catch { resolve(null); } };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+  if (src && a.generation <= gen) setImage(a, e, src);
 }
 function sheetTexture(kind, name) {
   if (kind === "blocks" && terrainTile(name) >= 0) return terrainEntries.get(name) ?? terrainSibling(name);

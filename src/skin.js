@@ -97,14 +97,27 @@ export function drawSkinPreview(ctx, skin) {
 
 // Browser only: decode an untrusted image file or PNG blob into a normalized
 // 64 x 32 canvas. Rejects other sizes instead of guessing at a scale.
-export async function skinCanvas(blob) {
-  // b74 order74: PNG bytes decode here without premultiplying (png-decode.js), as ImageIO does; anything the decoder refuses falls back to the canvas path.
+// b75 skintex75: the normalised 64 x 32 straight-alpha skin pixels of a PNG blob (png-decode.js, no canvas, no premultiply), or null when the decoder refuses the file
+// (the callers then fall back to the canvas path). A decoded file of another size throws the size message, like skinCanvas.
+export async function skinPixels(blob) {
   let decoded = null;
   try { decoded = await decodePng(new Uint8Array(await blob.arrayBuffer())); } catch { decoded = null; }
-  if (decoded) {
-    if (!acceptedSkinSize(decoded.width, decoded.height)) throw new Error(`A skin must be 64 × 32 or 64 × 64 pixels (this is ${decoded.width} × ${decoded.height}).`);
-    return pixelsCanvas(normalizeSkinPixels(decoded.data, decoded.height));
-  }
+  if (!decoded) return null;
+  if (!acceptedSkinSize(decoded.width, decoded.height)) throw new Error(`A skin must be 64 × 32 or 64 × 64 pixels (this is ${decoded.width} × ${decoded.height}).`);
+  return normalizeSkinPixels(decoded.data, decoded.height);
+}
+// The same for a cape: 64 x 32 straight-alpha pixels exactly as stored (no skin opacity rules), null when the decoder refuses the file.
+export async function capePixels(blob) {
+  let decoded = null;
+  try { decoded = await decodePng(new Uint8Array(await blob.arrayBuffer())); } catch { decoded = null; }
+  if (!decoded) return null;
+  if (decoded.width !== CAPE_WIDTH || decoded.height !== CAPE_HEIGHT) throw new Error(`A cape must be 64 × 32 pixels (this is ${decoded.width} × ${decoded.height}).`);
+  return decoded.data;
+}
+export async function skinCanvas(blob) {
+  // b74 order74: PNG bytes decode here without premultiplying (png-decode.js), as ImageIO does; anything the decoder refuses falls back to the canvas path.
+  const px = await skinPixels(blob);
+  if (px) return pixelsCanvas(px);
   let bitmap;
   try { bitmap = await createImageBitmap(blob); }
   catch { throw new Error("That file is not a readable PNG image."); }
