@@ -28,6 +28,7 @@ import { PEACEFUL } from '../difficulty.js';
 import { PHYSICS, raycast, FIRE, opaqueCube } from '../world.js';
 import { makeStack } from '../inventory.js';
 import { serverAnimalUse } from './animal-use.js';
+import { entityUseHooks } from './server-use-entity.js'; // b75 mpusesweep75
 import { resolveOwner, unkeyed, claim as stampOwner, ownedBy, stampLegacy } from './server-owners.js'; // b63
 import { installServerWither, boundedSkullResistance } from './server-wither.js'; // b63 mpwither
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
@@ -418,7 +419,7 @@ export class ServerMobs {
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     // b73 particles73: the jump-attack critical (damage * 1.5F) and its S0B animations 4 / 5 for the players in range
     const critical = serverCritical(p), info = {};
-    try { const landed = this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }, p.motion?.sprinting ? 1 : 0 /* b74 mpcombat74: the sprint knockback */, critical, info); if (landed) { attackerSlowdown(p, info);  const t = this.mobs.fxTarget(mob), at = { x: t.x, y: t.minY, z: t.z, w: t.width, h: t.height, mx: t.mx, my: t.my, mz: t.mz, mob: wireId /* b74: the client follows the live copy */ }; if (critical) sendCritFx(this.host, p, at, false); if (info.enchantCritical) sendCritFx(this.host, p, at, true); } return landed; } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
+    try { const landed = this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }, p.motion?.sprinting ? 1 : 0 /* b74 mpcombat74: the sprint knockback */, critical, info); if (landed) { this.mobs.saddleHit?.(mob, v.survival) /* b75 mpusesweep75: ItemSaddle.hitEntity (single-player pig-saddle-live.js) */; attackerSlowdown(p, info);  const t = this.mobs.fxTarget(mob), at = { x: t.x, y: t.minY, z: t.z, w: t.width, h: t.height, mx: t.mx, my: t.my, mz: t.mz, mob: wireId /* b74: the client follows the live copy */ }; if (critical) sendCritFx(this.host, p, at, false); if (info.enchantCritical) sendCritFx(this.host, p, at, true); } return landed; } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
   }
   // C02 UseEntity, interact (b61, animal-use.js): same reach as the attack; the server's own rules decide, `p.animHandled` tells the network tick to drop the click's item use.
   interact(p, wireId, claim = false) {
@@ -429,7 +430,7 @@ export class ServerMobs {
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
     if (owned) { if (unkeyed(mob)) stampOwner(mob, p); mob.ownerHere = ownedBy(mob, p); if (mob.ownerHere && mob.ownerUuid !== p.resumeKey) stampOwner(mob, p); } // b63: a legacy record is the clicker's (server-owners.js)
-    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), villager: (q, e) => !!this.villagerUse?.(q, e) /* b66: mptrade's installTrade (simulation.js) */, drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
+    const inv = p.survival.inventory, done = serverAnimalUse(this.mobs, p, mob, { extra: entityUseHooks(this.host, this.mobs, p) /* b75 mpusesweep75 */, ride: (q, e) => this.host.vehicles.pigs.mount(q, e), lead: (q, e) => this.host.leads.use(q, e), villager: (q, e) => !!this.villagerUse?.(q, e) /* b66: mptrade's installTrade (simulation.js) */, drop: st => this.host.items.dropPlayer(st, p.position, p.yaw, p.pitch) });
     if (owned && !was && mob.owner) { stampOwner(mob, p); mob.ownerHere = true; } // EntityTameable.func_152115_b(player UUID)
     if (inv.held && inv.held.count <= 0 && !p.survival.creative) inv.main[inv.current] = null; // interactWith destroys a held stack left at size <= 0
     if (!done && claim) p.seen[inv.current] = { id: -1, count: -1 }; // the client predicted a use the server refused: ServerItems.settle sends the real slot

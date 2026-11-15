@@ -20,6 +20,7 @@ const SHEAR_SOUND = 'mob.sheep.shear';
 // The server half. `mobs` is the EntityWorld, `p` the player record, `ctx.drop(stack)` throws an item at the player (a full inventory). Returns true when handled.
 export function serverAnimalUse(mobs, p, e, ctx) {
   const s = p.survival, held = s.held, id = held?.id ?? 0;
+  if (ctx.extra?.first(e)) return true; // b75 mpusesweep75: flint and steel on a creeper, a spawn egg on an ageable mob (server-use-entity.js)
   if (ctx.lead?.(p, e)) return true; // b62: EntityLiving.interactFirst: the lead comes before the mob's own interact (server-leads.js)
   // b62: EntityPig.interact: the feed first, then a saddled pig takes the player (ItemSaddle only reaches a pig that did not).
   if (e.type === 'villager' && ctx.villager?.(p, e)) return true; // b66: the merchant window hook (mptrade fills sm.villagerUse)
@@ -29,6 +30,7 @@ export function serverAnimalUse(mobs, p, e, ctx) {
   if (e.type === 'wolf' && mobs.wolfInteract?.(e, s)) return true; // only when mpmobtypes puts wolves on the server (SUPPORTED); status 6 / 7 are still to be wired (see the track note)
   if (e.type === 'ocelot' && mobs.ocelotInteract?.(e, s)) return true;
   if (e.type === 'mooshroom' && mobs.mooshroomInteract(e, s)) return true;
+  if (ctx.extra?.later(e)) return true; // b75 mpusesweep75: horses and name tags (server-use-entity.js)
   if (mobs.shear(e, id, s)) return true;
   if (isCow(e.type) && e.health > 0 && mobs.entities.includes(e) && milkCow(s, { drop: st => ctx.drop(st) })) return true;
   if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } // EntityAnimal.func_146082_f(player): the breeder is credited with breedCow
