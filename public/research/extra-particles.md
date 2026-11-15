@@ -24,3 +24,5 @@
 - `cloud` and `footstep` have a handler in `RenderGlobal.doSpawnParticle`, but no class of the unchanged 1.7.10 client spawns them (only `bma` contains the strings), so there is no emitter.
 - Touching redstone ore does not light it in this build, so the sparkle only shows for ore that is already lit.
 - Repeater particles read the redstone runtime's lit set. Not browser-checked.
+
+Batch 75 (docs sweep, 2026-11-14): "Touching redstone ore does not light it" is stale: `touchRedstoneOre` runs on left click, right click and walking (`src/redstone-ore.js`, [redstone ore](redstone-ore.md)), so the sparkle also shows for ore lit by touch.

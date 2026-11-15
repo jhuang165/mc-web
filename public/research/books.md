@@ -38,3 +38,5 @@ The probe runs `bfe` with the real FontRenderer (reading the shipped `ascii.png`
 
 ## Page arrows and hover (batch 20, bytecode-read)
 `bff.a(bao, mouseX, mouseY)` (read with javap, not probed): hover = mouse inside x..x+23, y..y+13; the texture is book.png, u 0 (23 when hovered), v 192 for the forward arrow (v 205 for the back arrow, `o` false adds 13). `book-ui.js` already used those offsets; the hover shift is now applied (`.book-arrow:hover` in `menu-screens.css`, checked in headless Chrome: background position 0 -> -23 GUI units).
+
+Batch 75 (docs sweep, 2026-11-14): the fixed local player name "Player" applies to single player only. On the dedicated server `MC|BSign` takes the author from the sending player (`server-books.js`, batch 66).

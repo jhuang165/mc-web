@@ -29,3 +29,5 @@ Code: `src/iron-golem.js` (constants, drops, animation, pumpkin shape), `src/vil
 ## Batch 20: EntityAIDefendVillage (probed)
 
 `EntityAIDefendVillage` (`vm`) is `EntityAITarget(golem, false, true)`: after `Village.findNearestVillageAggressor` (distance squared, `<=` keeps the later of equal distances, alive entities only) or, on a 1 in 20 roll, `findNearestTargetPlayer`, the candidate must pass the nearbyOnly `canEasilyReach` path check. The check and its draw (`nextInt(5)` on the golem's Random, cached for 10 + that many ticks) are now shared with the nearest-monster task; replayed by `src/village-aggressors.test.js` against `village-aggressors-reference.json`. Every living attacker of a villager is an aggressor (see `village.md`, batch 20).
+
+Batch 75 (docs sweep, 2026-11-14): the dedicated server has village golems and player-built golems too (`src/multiplayer/server-golems.js`, `server-villagers.js`, batches 66-67), not only the single-player village host.

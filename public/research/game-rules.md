@@ -28,3 +28,5 @@ so a change applies on the next read without reloading, as `World.getGameRules()
 ## Not covered
 
 The spawn pass the rule gates is the SpawnerAnimals port; its own approximations are in [natural spawning](natural-spawning.md).
+
+Batch 75 (docs sweep, 2026-11-14): the dedicated server reads `sim.gameRules` too: `doMobLoot` gates the server death orbs (`server-survival.js`) and the spawn rules from `server.properties` are in `ServerRules` (batch 69). Check `grep -n gameRules src/multiplayer/*.js` before listing a rule as single-player only.

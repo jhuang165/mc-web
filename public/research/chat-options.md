@@ -32,3 +32,5 @@ Show Cape is enabled (batch 71): accounts can carry an uploaded cape, the settin
 - F1 hide-HUD, `options.txt` persistence of these settings.
 
 Language (batch 15, [languages.md](languages.md)): chat translation keys (`chat.type.*`, `death.*`, `commands.*`, achievements) resolve through the selected language with en_US fallback, and the chat text uses the unicode font when the language or Force Unicode Font asks for it. Chat width wrapping uses the native FontRenderer widths.
+
+Batch 75 (docs sweep, 2026-11-14): the Tab list line "the browser can never have a second player" is stale: the dedicated server has remote players and a Tab list (`src/player-list.js`, multiplayer). The single-player rule (a lone host never shows the list) still holds natively.

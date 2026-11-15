@@ -19,3 +19,5 @@ bft.func_146976_a ends with `GuiInventory.func_147046_a(guiLeft + 51, guiTop + 6
 ## Title
 
 EntityHorse.func_110226_cD (`wi.cN`) builds `AnimalChest("HorseChest", n)` and renames it with `zt.a(getCommandSenderName())`, which also sets the custom-name flag, so the screen shows the name untranslated. `cN` runs in the constructor (type 0, no custom name yet: "Horse"), when a chest is added, and in readEntityFromNBT only for a chested horse. The browser therefore titles an unchested horse "Horse" whatever its type or name, and a chested donkey or mule by its custom name or type name (`horseChestTitle`, escaped in the modal). Renaming a chested horse takes effect immediately here, while native keeps the old title until the next load.
+
+Batch 75 (docs sweep, 2026-11-14): the `.shared-memory/PROJECT.md` line "There is no horse GUI" mentioned above was outdated at the time; the screen is covered by the horse-gear probe records and `horse-preview.js`.

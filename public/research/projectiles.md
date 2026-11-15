@@ -41,3 +41,5 @@ Billboard of the item icon at 0.5 scale about the box's centre; normal (0, 1, 0)
 ## Blast deflection (0.22)
 
 Snowballs and eggs receive `Explosion.doExplosionA` knockback before any blocks are removed. They ignore damage, use posY at the box bottom and inherited eye height 0, and continue their normal flight/impact behavior. Blasts alone do not cause egg hatching or impact particles. Motion remains saved. The original [non-living entity reference](explosion-entities-reference.json) includes 144 snowball/egg targets in open/full/partial cover at explosion powers 3/4/6.
+
+Batch 75 (docs sweep, 2026-11-14): `random.bow` is in the sound manifest now (`public/audio/1.7.10/manifest.json`) and the snowball, egg, pearl, potion, eye and spawn-egg throw paths play it (`player-throw-simulation.js`, `potion-use.js`, `eye-of-ender-live.js`, `spawn-egg-use.js`), so the throw is no longer silent. The line above about the missing clip is stale.
