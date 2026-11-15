@@ -12,6 +12,7 @@ import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { explosionImpact } from "./explosion.js";
+import { enterWater } from "./fx.js"; // b75: Projectiles.step called it without the import, so a ball entering water threw a ReferenceError
 import { acceptsParticle } from "./particle-settings.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";

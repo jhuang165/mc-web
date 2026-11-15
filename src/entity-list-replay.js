@@ -27,7 +27,7 @@ import { mobTargets } from "./projectiles.js";
 // for an arrow), motion, isDead, kind fields], explosions [x, y, z, power], player [xp, xpCooldown], entities spawned in the pass (spawn order)].
 // Batch 44 adds minecarts, boats, paintings, potions, snowballs and wither skulls, and a cow riding a cart (the rider updates right after its mount).
 export const entityListReference = JSON.parse(readFileSync(new URL("../public/research/entity-list-reference.json", import.meta.url))).cases;
-const STONE = 3, PORT_ID = { 1: 3 }, YOFF = { item: 0.125, tnt: TNT_Y_OFFSET };
+const STONE = 3, PORT_ID = { 1: 3, 9: 10 }, YOFF = { item: 0.125, tnt: TNT_Y_OFFSET };
 
 // `without`: "lootInTurn" (batch 48: death loot spawns at the drain after the walk), "throwTargets" (batch 46: the player's balls miss carts and boats); leave one batch 45 behaviour out to show a record needs it: "blast" (a blast reaches only items, as before), "mobPush" (the vehicles do not push mobs in the walk).
 export function replayEntityList(c, onBoom = null, without = null) {
@@ -177,7 +177,7 @@ function view(m, primed, detail = false, player = null, survival = null) {
   if (kind === "potion" || kind === "snowball" || kind === "pthrow" || kind === "mthrow") return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0];
   if (kind === "skull") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead ? 1 : 0, e.blue ? 1 : 0];
   if (kind === "cow" || kind === "dcow") return [e.x, e.y, e.z, e.vx, e.vy, e.vz, e.dead || e.death >= 20 ? 1 : 0, e.health]; // setDead at deathTime 20 (the port lets the mob leave in reap)
-  return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, e.inGround ? 1 : 0, e.pickup];
+  return [e.x, e.y, e.z, e.mx, e.my, e.mz, e.dead ? 1 : 0, e.inGround ? 1 : 0, e.shake]; // the probe's last column is EntityArrow.arrowShake (zc.b), not canBePickedUp (b75: it used to read pickup, 0 in every earlier record)
 }
 
 /** First difference between a record and a replay: [tick, entity index, field] or null. */

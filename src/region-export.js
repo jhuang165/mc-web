@@ -10,7 +10,7 @@ import { CART_ENTITY_IDS, isContainerType, variantNBT } from './cart-variants.js
 import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
 // Browser -> Java 1.7.10 Anvil snapshot. The ZIP also retains the exact browser save.
-import { World } from './world.js';
+import { World, ANVIL } from './world.js';
 import { DimensionWorld } from './dimension-world.js';
 import { dimensionOf, viewRecord } from './dimension-live.js';
 import { readPlayerPortalState } from './dimensions.js';
@@ -91,7 +91,10 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
 function payload(state,ox,oz,report,blockAt) {
  const entities=[],tiles=[],ticks=[],built=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
-  const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  const n=entity(e,name,ox,oz);
+  // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
+  if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);built.push({e,n});continue;}
+  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
@@ -165,9 +168,12 @@ function payload(state,ox,oz,report,blockAt) {
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
- for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)})));
+ for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:e.fire>0?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
- for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
+ for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:e.fire>0?e.fire:0},'FallingSand',ox,oz),
+  // EntityFallingBlock.writeEntityToNBT (object-nbt-reference.json): Tile (the id as a byte), TileID, Data, Time, DropItem, HurtEntities, FallHurtAmount (float, 2.0)
+  // and FallHurtMax (int, 40). BlockAnvil.onStartFalling sets HurtEntities on every anvil it drops (anvil-blocks-reference.json), so a saved anvil carries 1.
+  Tile:byte(o[0]),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40)})));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);

@@ -5,6 +5,7 @@
 import { ENTITY_TYPES, HOSTILE, entityRandom, livingSoundRoll } from "./entities.js";
 import { JavaRandom } from "./java-random.js";
 import { Fireballs } from "./fireballs.js";
+import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { aimPart } from "./dragon-parts.js";
 import { fireballAcceleration } from "./blaze-ghast.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
@@ -166,14 +167,17 @@ export class WitherSkulls extends Fireballs {
     if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
     b.px = b.x; b.py = b.y; b.pz = b.z;
     if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    // Entity.handleWaterMovement (Entity.onUpdate, before the sweep): the box test and the 0.014 flow push, as the fireballs do (b75).
+    const box = this.boxOf(b), waterAcc = waterAcceleration(mobs.world, entityWaterBox(box));
+    b.vx += waterAcc.push[0]; b.vy += waterAcc.push[1]; b.vz += waterAcc.push[2];
     b.ticks++;
     mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
     const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
     let hit = rayTraceBlocks(mobs.world, start, end);
-    const entity = this.sweep(b, start, hit ? hit.vec : end);
+    const entity = this.sweep(b, start, hit ? hit.vec : end, box);
     if (entity) { hit = { entity: entity.target }; aimPart(entity); }
     if (hit) this.impact(b, hit); // the update goes on: the skull still moves (EntityFireball.onUpdate only marks it dead)
-    const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)), wet = water >= 8 && water <= 9, k = wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
+    const k = waterAcc.wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
     b.x += b.vx; b.y += b.vy; b.z += b.vz;
     b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
   }

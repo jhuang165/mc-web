@@ -9,7 +9,7 @@ import { JAVA_PROJECTILES, javaProjectileFromNbt } from "./java-projectiles.js";
 import { primeTnt } from "./explosion.js";
 import { newOrb } from "./experience.js";
 import { spawnFalling, isFallingBlock, FALLING_Y_OFFSET } from "./falling.js";
-import { fromOriginal } from "./block-registry.js";
+import { fallingCellOf } from "./java-objects.js";
 import { ARTS } from "./hanging.js";
 
 export const ENTITY_SUMMON = Object.freeze({
@@ -86,7 +86,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "FallingSand") {
     // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) when present, else Tile & 255; Data; Time.
     const original = hasNumber(t, "TileID") ? nbtGet(t, "TileID", NBT.INT, 0) : nbtGet(t, "Tile", NBT.BYTE, 0) & 255;
-    const cell = fromOriginal(original, nbtGet(t, "Data", NBT.BYTE, 0) & 15);
+    const cell = fallingCellOf(original, nbtGet(t, "Data", NBT.BYTE, 0)); // air or an unregistered id becomes sand (java-objects.js)
     if (!cell || !isFallingBlock(cell.id)) spawned = false; // an unregistered or non-falling block: the entity discards itself or just hangs
     else {
       const e = spawnFalling(cell.id, cell.meta ?? 0, 0, 0, 0, hosts.falling.entityRandom());
