@@ -21,6 +21,7 @@ import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fi
 import { entityBox, isWet, canSeeSky } from '../weather.js';
 import { hurtOf, deathOf } from '../entities.js';
 import { drainKnockback } from '../player-knockback.js';
+import { attackerSlowdown } from './server-attack-slowdown.js';
 import { findChunksForSpawning, chunkPairHash } from '../spawner-animals.js';
 import { skylightSubtracted, celestialAngle } from '../lighting.js';
 import { PEACEFUL } from '../difficulty.js';
@@ -417,7 +418,7 @@ export class ServerMobs {
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     // b73 particles73: the jump-attack critical (damage * 1.5F) and its S0B animations 4 / 5 for the players in range
     const critical = serverCritical(p), info = {};
-    try { const landed = this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }, 0, critical, info); if (landed) { const t = this.mobs.fxTarget(mob), at = { x: t.x, y: t.minY, z: t.z, w: t.width, h: t.height, mx: t.mx, my: t.my, mz: t.mz }; if (critical) sendCritFx(this.host, p, at, false); if (info.enchantCritical) sendCritFx(this.host, p, at, true); } return landed; } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
+    try { const landed = this.mobs.attack(mob, p.survival.held?.id ?? 0, v.survival, { x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw }, p.motion?.sprinting ? 1 : 0 /* b74 mpcombat74: the sprint knockback */, critical, info); if (landed) { attackerSlowdown(p, info);  const t = this.mobs.fxTarget(mob), at = { x: t.x, y: t.minY, z: t.z, w: t.width, h: t.height, mx: t.mx, my: t.my, mz: t.mz, mob: wireId /* b74: the client follows the live copy */ }; if (critical) sendCritFx(this.host, p, at, false); if (info.enchantCritical) sendCritFx(this.host, p, at, true); } return landed; } finally { if (this.host.achievements) this.host.achievements.attacker = null; }
   }
   // C02 UseEntity, interact (b61, animal-use.js): same reach as the attack; the server's own rules decide, `p.animHandled` tells the network tick to drop the click's item use.
   interact(p, wireId, claim = false) {

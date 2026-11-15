@@ -11,7 +11,7 @@ export const serverCritical = (p) => isCritical({ fallDistance: p.fallDistance ?
 
 /** Queue one crit animation for `target` ({ x, y, z, w, h, mx, my, mz }) on every player of the attacker's dimension within 64 blocks. */
 export function sendCritFx(sim, attacker, target, magic) {
-  const dim = attacker.dimension | 0, event = { m: magic ? 1 : 0, x: target.x, y: target.y, z: target.z, w: target.w, h: target.h, mx: target.mx || 0, my: target.my || 0, mz: target.mz || 0 };
+  const dim = attacker.dimension | 0, event = { m: magic ? 1 : 0, x: target.x, y: target.y, z: target.z, w: target.w, h: target.h, mx: target.mx || 0, my: target.my || 0, mz: target.mz || 0, ...(target.mob !== undefined ? { i: target.mob } : {}), ...(target.player !== undefined ? { pl: target.player } : {}) }; // b74: `i` = the mob's wire id, `pl` = the player's, so the client follows the live entity
   for (const q of sim.players.values()) {
     if ((q.dimension | 0) !== dim || !q.position) continue;
     if (q !== attacker && (q.position.x - target.x) ** 2 + (q.position.z - target.z) ** 2 > NEAR) continue;
