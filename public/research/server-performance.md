@@ -22,7 +22,7 @@ CPU profile at 600 mobs (`node --cpu-prof`): `EntityMobs.push` (collideWithNearb
 ## Changes (no behaviour change)
 - `src/projectiles.js`: `rayTraceBlocks` no longer builds closures for the NaN tests, and `rayBounds` uses a Set instead of an array literal built on every call. Same arithmetic, same results.
 - A seeded determinism check (`node tools/bench-server-mobs.mjs --state`: 300 mobs, 150 ticks, `Math.random` replaced, mob state and packet hash every 50 ticks) gave identical hashes before and after: `946bf454b2ab7503 f8ea0cd95773e9c5 7f8b6da45ddf1a7a`.
-- Gain is within the noise of the loaded machine; the profile shows `test` plus `rayTraceBlocks` dropping from about 12.8% to 12.8% of a smaller total (roughly 15% less time in them). Honest result: the 600 mob tick is already under the 50 ms target, and no large exact win was found.
+- Gain is within the noise of the loaded machine (self time of `test` + `rayTraceBlocks` fell from about 1035 ms to 707 ms over a 150 vs 100 tick profile, per tick about 7.0 ms to 7.1 ms: no real change). Honest result: the 600 mob tick is already under the 50 ms target, and no large exact win was found.
 
 ## Not done, and why
 - A spatial grid for `push` would cut the biggest cost, but it must keep list order and the exact candidate set. Entities are moved off their own turn (riders, pistons, carts, teleports, spawns and removals during the loop), so a grid needs a staleness guard that was judged too risky for a no-behaviour-change batch. Next step if 600+ mobs ever exceeds 50 ms: a per-tick grid keyed on (entities array identity, length) with a rebuild on any change and a brute-force check mode run against the existing mob-collision tests.
