@@ -157,6 +157,7 @@ test("/stop, /save-all, /save-on, /save-off and /setidletimeout", async () => {
   const a = f.sim.admin; a.join("p0", 0); a.join("p1", 0);
   assert.deepEqual(a.idle(2400), []); assert.deepEqual(a.idle(2401).sort(), ["p0", "p1"]);
   a.activity("p0", { type: "chat" }, 2400); assert.deepEqual(a.idle(2401), ["p1"]);
-  a.activity("p1", { type: "input", controls: { forward: 0 }, yaw: 1, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), ["p1"], "an idle input only records the view");
-  a.activity("p1", { type: "input", controls: { forward: 1 }, yaw: 1, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), []);
+  a.activity("p1", { type: "input", controls: { forward: 0 }, current: 0, yaw: 1, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), ["p1"], "an idle input only records the state");
+  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 0, yaw: 2, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), ["p1"], "walking and turning are C03, not activity (b74)");
+  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 1, yaw: 2, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), [], "a held slot change is C09");
 });

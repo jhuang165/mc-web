@@ -12,6 +12,7 @@
 import { translation, text as textComponent } from '../chat-component.js';
 import { joinNiceString } from '../commands-scoreboard.js';
 import { UserMap, userListValues, userListKeys } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists; b71 mpadmin71: listings, files and the profile cache use it
+import { idleActivity } from './server-idle.js'; // b74 mpmisc74: which messages reset the idle clock
 
 export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3 };
 export const DEFAULT_OP_LEVEL = 4; // server.properties op-permission-level
@@ -94,14 +95,11 @@ export class ServerAdmin {
   // ---- idle timeout (/setidletimeout, NetHandlerPlayServer.update): minutes without an action; 0 is off ----
   join(id, tick) { this.lastAction.set(id, tick); this.looks.delete(id); }
   leave(id) { this.lastAction.delete(id); this.looks.delete(id); }
-  /** Marks a client message as player activity: anything but input, and input that presses a key or turns the view. */
-  activity(id, message, tick) {
-    if (message.type === 'input') {
-      const c = message.controls ?? {}, look = `${message.yaw}|${message.pitch}`, was = this.looks.get(id);
-      this.looks.set(id, look);
-      if (!(c.forward || c.strafe || c.jump || c.sneak || c.sprint) && (was === undefined || was === look)) return;
-    }
-    this.lastAction.set(id, tick);
+  /** Marks a client message as player activity: only the packets that call EntityPlayerMP.func_143004_u's setter count (server-idle.js). */
+  activity(id, message, tick, chatAllowed = true) {
+    const { reset, state } = idleActivity(message, this.looks.get(id), chatAllowed); // b74 mpmisc74: `looks` holds the input state now
+    if (state !== undefined) this.looks.set(id, state);
+    if (reset) this.lastAction.set(id, tick);
   }
   /** Ids to kick for idling: the timeout is in minutes of game time (20 ticks a second). */
   idle(tick) {

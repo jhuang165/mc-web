@@ -9,6 +9,7 @@ import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
 import { PROTOCOL, expandChunks } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES, MAX_CAPE_BYTES } from '../src/skin.js';
+import { debugFileWriter } from '../src/multiplayer/server-debugfile.js'; // b74 mpmisc74: /debug stop writes debug/profile-results-*.txt
 import { setCapeShow } from '../src/multiplayer/cape-wire.js'; // b71 mpcapes
 import { applyClientSettings, chatDelivered as settingsChatDelivered, chatSendAllowed } from '../src/multiplayer/server-settings.js'; // b72 mpsettings
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
@@ -28,7 +29,7 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], rules = null /* b69 serverprops: a ServerRules */, newPlayerMode = null, adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, debugFs = { mkdirSync, writeFileSync } /* b74 mpmisc74: stubbed by tests */, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], rules = null /* b69 serverprops: a ServerRules */, newPlayerMode = null, adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
@@ -36,6 +37,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     simulation = new DedicatedSimulation(saved, { gameMode, difficulty, pvp, commandBlocks, legacyOwner, rules, newPlayerMode, ...adminOptions }); // b64: enable-command-block, legacyOwner
   }
+  simulation.saveDebugFile ??= debugFileWriter(path.dirname(dataFile), debugFs); // b74 mpmisc74: /debug stop writes the native file under the server directory
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   const pings = new ServerPings({ send: (pid, m) => { const ws = sockets.get(pid); if (ws) send(ws, m); } }); // b68 mpping: keep-alive pings and the tab list's S38 items
   let closing = false, saving = Promise.resolve(), saveError = null;
@@ -234,7 +236,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;
         }
-        simulation.admin.activity(id, m, simulation.ticks); // b68 mpadmin: idle clock (/setidletimeout)
+        simulation.admin.activity(id, m, simulation.ticks, m.type !== 'chat' || chatSendAllowed(simulation.players.get(id))); // b68 mpadmin: idle clock (/setidletimeout)
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
