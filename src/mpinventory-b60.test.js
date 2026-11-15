@@ -138,7 +138,7 @@ test('a broken tool: others hear random.break, the breaker gets invBroke; a worn
   assert.equal(p.survival.broken, 0);
 });
 
-test('a partial pickup reports taken with partial and leaves the rest', () => {
+test('a partial pickup leaves the rest and reports nothing (b74: addItemStackToInventory answers false, no S0D; executed pickup-order-reference.json)', () => {
   const { s, p } = fixture();
   const e = s.items.spawn(makeStack(4, 10), 64.5, 10.2, 64.5, { delay: 0 });
   s.tick();
@@ -147,6 +147,6 @@ test('a partial pickup reports taken with partial and leaves the rest', () => {
   inv.main[3] = makeStack(4, 60); // b61: the server's inventory takes 4 of the 10
   s.pickup(p.id, [item.eid], [4]);
   assert.equal(item.stack.count, 6);
-  const t = s.serverItems.taken.find(x => x.i === item.eid);
-  assert.deepEqual([t.by, t.partial], [p.id, true]);
+  assert.equal(inv.main[3].count, 64);
+  assert.equal(s.serverItems.taken.find(x => x.i === item.eid), undefined);
 });
