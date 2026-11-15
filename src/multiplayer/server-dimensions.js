@@ -222,7 +222,7 @@ export class ServerDimensions {
     p.portal ??= new PortalState(); p.portal.timeUntilPortal = portalCooldown(true); p.portal.inPortal = false;
     if (!this.end.award(p, from, to, exit) && !at) sim.achievements.award(p, 'portal'); // b63: theEnd / theEnd2 for the End's trips // pc.y: every trip that is not to or from the End (bytecode-read)
     sim.serverSurvival?.resendEffects(p); // b61 lead: ServerConfigurationManager.transferPlayerToDimension sends every active effect as S1D (mphealth2's burst)
-    (p.dimOut ??= []).push({ type: 'dimRespawn', dimension: to, world: sim.objectTracker.snapshot(p.id, sim.snapshot(p.id)) /* b72 mpcadence72: cut by the item range */, self: sim.savePlayer(p) });
+    (p.dimOut ??= []).push({ type: 'dimRespawn', dimension: to, world: sim.playerTracker.snapshot(p.id, sim.objectTracker.snapshot(p.id, sim.snapshot(p.id)), to) /* b72 mpcadence72: cut by the item range; b74 mptrack74: and by the player tracker */, self: sim.savePlayer(p) });
     return true;
   }
   // Sent by the connection before the player's next tick message.

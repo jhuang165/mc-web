@@ -9,6 +9,7 @@ import { itemCrumbs, burst } from '../fx.js';
 import { stepRemoteDeath } from './remote-death.js';
 import { stepRemoteHurt } from './remote-hurt.js';
 import { createRemoteUse, tickRemoteUse, remoteEye } from './remote-eating.js';
+import { newInterp, stepInterp } from './client-ptrack.js'; // b74 mptrack74
 import { remoteSleepPose } from './client-sleep.js'; // b66 mpsleep
 import { labelRows, paintTagRow, tagPlan, tagHeights, invisibleToViewer } from './remote-labels.js'; // b64 mpscoreboard, b65 mpinvis
 
@@ -92,8 +93,9 @@ export class RemotePlayers {
       { const d = stepRemoteDeath(entry, p.dead); if (d.burst && this.scene.fx) burst(this.scene.fx, 'explode', 20, { x: p.x, y: p.y - (p.ySize ?? 0), z: p.z, width: 0.6, height: 1.8 }, entry.rand); } // b60: S19 status 3 copy, 20 ticks of tilt then the poof
       if (entry.name !== p.name || (this.board && entry.sbRev !== this.board.revision)) { entry.name = p.name; this.drawLabel(entry); }
       stepRemoteHurt(entry, p.hurt === true, entry.body); // b61: S19 status 2 on the copy: limbSwingAmount 1.5 and hurtTime 10, before its onUpdate
-      entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0, riding: !!p.riding });
-      entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
+      const q = stepInterp(entry.ip ??= newInterp(p), p, !!p.riding); // b74 mptrack74: setPositionAndRotation2 with 3 increments between the tracker's packets
+      entry.body.tick({ position: { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }, previous: entry.last, yaw: q.yaw, pitch: q.pitch, swinging: p.swing > 0, riding: !!p.riding });
+      entry.last = { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }; entry.state = { ...p, x: q.x, y: q.y, z: q.z, yaw: q.yaw, pitch: q.pitch }; // b74: aim (pickPlayer) and tags use the interpolated copy
       // EntityOtherPlayerMP.onUpdate: the crumbs of eating run from the synced item-in-use flag (the sound comes from the server).
       tickRemoteUse(entry.use, { using: !!p.using, held: p.held }, id => this.scene.fx && itemCrumbs(this.scene.fx, 5, 'iconcrack_' + id, remoteEye({ ...p, y: p.y - (p.ySize ?? 0) }), entry.rand));
     }
