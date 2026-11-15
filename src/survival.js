@@ -19,6 +19,7 @@ import { installFishingItems, installFishingRecipes, installFishingSmelting } fr
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
+import {hasTileName,namedTitle} from './tile-names.js';
 import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
 import { mapsCraftingResult } from './maps-clock-live.js';
@@ -651,6 +652,7 @@ export class Survival {
         burnTotal: Math.floor(clamp(f.burnTotal, 0, 20000, 0)),
         cook: Math.floor(clamp(f.cook, 0, 199, 0)),
         ...(typeof f.lit === "boolean" ? { lit: f.lit } : {}), // an imported furnace keeps its block id (61/62) until the burning flag flips
+        ...(hasTileName(f.name) ? { name: f.name } : {}), // TileEntityFurnace CustomName
       };
     }
     // TileEntityChest contents and facing metadata; lid state is not saved.
@@ -659,6 +661,7 @@ export class Survival {
       if (!/^-?\d+,\d+,-?\d+$/.test(key) || !c || typeof c !== "object") continue;
       const chest = newChest(FACING[c.facing] ? c.facing : 3);
       if (Array.isArray(c.items)) c.items.slice(0, CHEST_SLOTS).forEach((s, i) => (chest.items[i] = this.inventory.read(s)));
+      if (hasTileName(c.name)) chest.name = c.name; // TileEntityChest CustomName
       this.chests[key] = chest;
     }
     // InventoryEnderChest (EnderItems of the player record): one 27-slot inventory per player, shared by every ender chest.
@@ -671,6 +674,7 @@ export class Survival {
       if (!/^-?\d+,\d+,-?\d+$/.test(key) || !d || typeof d !== "object") continue;
       const dispenser = newDispenser();
       if (Array.isArray(d.items)) d.items.slice(0, DISPENSER_SLOTS).forEach((s, i) => (dispenser.items[i] = this.inventory.read(s)));
+      if (typeof d.name === "string") dispenser.name = d.name; // TileEntityDispenser.hasCustomInventoryName is name != null: "" counts (probed) // TileEntityDispenser/Dropper CustomName
       this.dispensers[key] = dispenser;
     }
     // TileEntityHopper: five slots, TransferCooldown and CustomName.
@@ -687,8 +691,12 @@ export class Survival {
       if (!/^-?\d+,\d+,-?\d+$/.test(key) || !b || typeof b !== "object") continue;
       const tile = { items: [null, null, null, null], brewTime: Number.isInteger(b.brewTime) ? Math.max(0, Math.min(400, b.brewTime)) : 0 };
       if (Array.isArray(b.items)) b.items.slice(0, 4).forEach((st, i) => (tile.items[i] = this.inventory.read(st)));
+      if (hasTileName(b.name)) tile.name = b.name; // TileEntityBrewingStand CustomName
       this.brewing[key] = tile;
     }
+    // TileEntityEnchantmentTable CustomName (a table has no other saved field).
+    this.tableNames = {};
+    for (const [key, n] of Object.entries(data.tableNames || {})) if (/^-?\d+,\d+,-?\d+$/.test(key) && hasTileName(n)) this.tableNames[key] = n;
     this.hurtTicks = 0;
     // EntityLivingBase.lastDamage (the amount of the hit that opened the window) and the number of
     // fresh hits; EntityPlayerMP.field_147101_bU, the spawn protection main.js sets to 60 on a join.
@@ -933,12 +941,13 @@ export class Survival {
     return new WorkbenchContainer(this.inventory, { craft: craftingResult });
   }
   openFurnace(key, onSmelt) {
-    return new FurnaceContainer(this.inventory, this.furnace(key).items, { smelts: (s) => !!smeltingResult(s), burnTime, onSmelt });
+    const f = this.furnace(key);
+    return Object.assign(new FurnaceContainer(this.inventory, f.items, { smelts: (s) => !!smeltingResult(s), burnTime, onSmelt }), namedTitle(f.name)); // b74: CustomName
   }
   // BlockChest.onBlockActivated: null when the lid is blocked.
   openChest(world, x, y, z) {
     const found = openChest(world, this.chests, x, y, z);
-    return found && Object.assign(new ChestContainer(this.inventory, found.inventory), { title: found.title, keys: found.keys });
+    return found && Object.assign(new ChestContainer(this.inventory, found.inventory), { title: found.title, keys: found.keys }, found.localized ? { titleLocalized: true } : {});
   }
   // BlockEnderChest.onBlockActivated: nothing opens while a normal cube sits above it; otherwise the player's own
   // InventoryEnderChest, with this tile counted as a user (the lid) until the screen closes.
@@ -1081,10 +1090,11 @@ export class Survival {
       inventoryRandom: this.inventory.serializeRandom(),
       current: this.inventory.current,
       furnaces: structuredClone(furnaces),
-      chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack) }])),
+      chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack), ...(hasTileName(c.name) ? { name: c.name } : {}) }])),
       enderItems: this.enderItems.map(copyStack),
-      dispensers: Object.fromEntries(Object.entries(dispensers).map(([key, d]) => [key, { items: d.items.map(copyStack) }])),
-      brewing: Object.fromEntries(Object.entries(this.brewing).map(([key, b]) => [key, { items: b.items.map(copyStack), brewTime: b.brewTime | 0 }])),
+      dispensers: Object.fromEntries(Object.entries(dispensers).map(([key, d]) => [key, { items: d.items.map(copyStack), ...(typeof d.name === "string" ? { name: d.name } : {}) }])),
+      brewing: Object.fromEntries(Object.entries(this.brewing).map(([key, b]) => [key, { items: b.items.map(copyStack), brewTime: b.brewTime | 0, ...(hasTileName(b.name) ? { name: b.name } : {}) }])),
+      ...(Object.keys(this.tableNames ?? {}).length ? { tableNames: { ...this.tableNames } } : {}),
       hoppers: Object.fromEntries(Object.entries(this.hoppers).map(([key, h]) => [key, { items: h.items.map(copyStack), cooldown: h.cooldown, name: h.name }])),
     };
   }

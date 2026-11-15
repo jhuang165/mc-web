@@ -48,7 +48,7 @@ import { tickSpawners, netherLight } from './server-spawners.js'; // b63: blaze 
 const NETHER = -1, noop = () => {};
 const reader = new PlayerInventory(ITEMS);
 // The tile stores a Survival keeps for the world (and saves); the player fields of its serialize() are not part of a dimension.
-const TILE_SAVE = ['furnaces', 'chests', 'dispensers', 'brewing', 'hoppers'];
+const TILE_SAVE = ['furnaces', 'chests', 'dispensers', 'brewing', 'hoppers', 'tableNames'];
 // What `sim.<key>` is while the Nether runs (the existing systems read these through `sim`).
 export const NETHER_CONTEXT = ['world', 'items', 'changes', 'farming', 'trees', 'containers', 'redstone', 'tileEntities', 'dirtyTiles', 'tiles', 'fluids', 'fire', 'falling', 'light', 'dispense', 'mobs', 'vehicles', 'leads']; // b63: + vehicles, leads
 

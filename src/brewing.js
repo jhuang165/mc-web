@@ -159,6 +159,7 @@ export function brewingView(data) {
   view = new BrewingStand();
   view.slots = data.items;
   Object.defineProperty(view, "brewTime", { get: () => data.brewTime | 0, set: (v) => { data.brewTime = v; }, configurable: true });
+  Object.defineProperty(view, "customName", { get: () => (typeof data.name === "string" && data.name ? data.name : null), set: (v) => { data.name = v; }, configurable: true }); // CustomName
   view.lastBits = view.bottleBits();
   VIEWS.set(data, view);
   return view;

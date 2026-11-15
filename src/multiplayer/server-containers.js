@@ -56,12 +56,12 @@ export class ServerContainers {
     if (!activates) return false;
     const key = `${x},${y},${z}`, s = p.survival, w = this.sim.world;
     let container, kind, title, extra = {}, stationProps = null;
-    if (block === FURNACE) { container = s.openFurnace(key, (st, n) => this.smelted(p, st, n)); kind = 'furnace'; title = 'Furnace'; }
+    if (block === FURNACE) { container = s.openFurnace(key, (st, n) => this.smelted(p, st, n)); kind = 'furnace'; title = container.title ?? 'Furnace'; }
     else if (block === ENDER_CHEST) { container = s.openEnderChest(w, x, y, z); kind = 'chest'; title = 'Ender Chest'; extra = { ender: true }; if (!container) return true; }
     else if (isChestBlock(block)) { container = s.openChest(w, x, y, z); kind = 'chest'; if (!container) return true; title = container.title; }
     else if (block === DISPENSER || block === DROPPER) {
       const tile = (s.dispensers[key] ??= newDispenser());
-      container = new DispenserContainer(s.inventory, tile, null); kind = 'dispenser'; title = block === DROPPER ? DROPPER_TITLE : DISPENSER_TITLE;
+      container = new DispenserContainer(s.inventory, tile, null); kind = 'dispenser'; title = typeof tile.name === 'string' ? tile.name : (block === DROPPER ? DROPPER_TITLE : DISPENSER_TITLE); if (typeof tile.name === 'string') container.titleLocalized = true; // b74 CustomName
     } else if (block === HOPPER) {
       const tile = (s.hoppers[key] ??= newHopperTile());
       container = new HopperContainer(s.inventory, tile, null); kind = 'hopper'; title = container.title;
@@ -79,7 +79,8 @@ export class ServerContainers {
     p.window = { id, kind, container, key: [x, y, z], block, last: [], cursor: '', props: [], pending: 0, ready: false, stationProps };
     container.title = title;
     this.syncLids();
-    this.out(p, { type: 'openWindow', windowId: id, kind, title, x, y, z, size: container.slots.length, rows: container.rows, ...(kind === 'chest' ? { keys: container.keys } : {}), ...extra });
+    if (kind === 'enchanting' && s.tableNames?.[key]) { container.title = title = s.tableNames[key]; container.titleLocalized = true; } // b74: the table's CustomName
+    this.out(p, { type: 'openWindow', windowId: id, kind, title, x, y, z, size: container.slots.length, rows: container.rows, ...(kind === 'chest' ? { keys: container.keys } : {}), ...(container.titleLocalized ? { named: true } : {}), ...extra }); // b74: `named` = S2D useProvidedTitle (a CustomName is not translated)
     return true;
   }
   // b62 mpriding2: a chest or hopper minecart's window (EntityMinecartContainer.interactFirst -> displayGUIChest / displayGUIHopperMinecart). The window is keyed by the

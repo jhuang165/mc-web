@@ -9,6 +9,7 @@ export const CHEST = 41, CHEST_SLOTS = 27;
 // Facing metadata: 2 north (-z), 3 south (+z), 4 west (-x), 5 east (+x).
 export const FACING = { 2: [0, -1], 3: [0, 1], 4: [-1, 0], 5: [1, 0] };
 const SIDES = [[0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+import { largeChestName } from "./tile-names.js";
 export const chestKey = (x, y, z) => `${x},${y},${z}`;
 
 export function newChest(facing = 3) {
@@ -98,7 +99,9 @@ export function openChest(world, chests, x, y, z) {
     keys = first ? [key, ...keys] : [...keys, key];
   };
   pair(-1, 0, true); pair(1, 0, false); pair(0, -1, true); pair(0, 1, false);
-  return { inventory, keys, title: inventory instanceof LargeChestInventory ? "Large Chest" : "Chest" };
+  // InventoryLargeChest.getInventoryName: the first half's CustomName, else the second's, else container.chestDouble (b74 tilenames).
+  const custom = largeChestName(...keys.map((k) => chests[k]?.name));
+  return { inventory, keys, title: custom ?? (inventory instanceof LargeChestInventory ? "Large Chest" : "Chest"), localized: custom !== null };
 }
 // TileEntityChest.checkForAdjacentChests: only the west/north chest of a pair
 // draws the large model and plays sounds; the sound sits between the halves.
