@@ -53,6 +53,7 @@ import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js
 import { ServerMaps } from './server-maps.js'; // b69 mpmaps: empty maps, map data, S34 updates
 import { placedResultSound } from './server-place-sound.js'; // b74 mpsounds74: S29 place sound
 import { placeBlockItem } from './server-place.js'; // b73 mpblocks73: bed, cake, hoe
+import { airUse } from './server-air.js'; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerLightning } from './server-lightning.js'; // b66 mplightning: thunderstorm bolts
@@ -415,7 +416,7 @@ export class DedicatedSimulation {
     const eye = { x: p.position.x, y: aimOriginY(p.position.y, p.sleeping, PHYSICS.eye), z: p.position.z }; // b69 mpfixes69: a sleeper aims from posY (sleeper-eye.js)
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
     const target = raycast(this.world, eye, dir, 5);
-    if (!target) return place && (this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p) || this.maps.useEmpty(p)); /* b64: C08 with the rod */ /* b69 mpmaps: ItemEmptyMap.onItemRightClick */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
+    if (!target) return place && (airUse(this, p, eye, dir, null) /* b75 mpusesweep75 */ || this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p) || this.maps.useEmpty(p)); /* b64: C08 with the rod */ /* b69 mpmaps: ItemEmptyMap.onItemRightClick */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
     // and the has-moved rule can refuse here; the refusal text is kept on the player for the connection to deliver.
@@ -443,6 +444,7 @@ export class DedicatedSimulation {
     if (place && this.vehicles.hanging.useHeld(p, target)) return true; // b68 mppaintings: ItemHangingEntity.onItemUse (painting, item frame) on the clicked wall
     if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water
     const id = state.heldTool;
+    if (place && airUse(this, p, eye, dir, target)) return true; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
