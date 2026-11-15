@@ -50,7 +50,11 @@ test('past the old 80 mobs: animals and monsters of other types still spawn whil
   assert.equal(list.filter(e => e.type === 'pig').length, 90, 'no animal added over the creature cap');
   assert.ok(list.length > before, 'monsters spawned');
   const monsters = count(s, 'monster');
-  assert.ok(monsters > 0 && monsters <= 79 + 4 * 3, `monsters ${monsters}`); // the cap test runs once per type pass, a group adds up to 4 past it
+  // b75 lead: the cap test runs once per type at the start of a pass (spawner-animals.js, as SpawnerAnimals), so the last allowed pass can add groups in many chunks and
+  // overshoot by more than one group (a fixed +12 bound failed at 93 on some random draws). The native property: the count ends past the cap and further passes add none.
+  assert.ok(monsters > 79, `monsters ${monsters}`);
+  for (let i = 0; i < 50; i++) s.mobs.spawnPass();
+  assert.equal(count(s, 'monster'), monsters, 'past the cap no pass adds a monster');
 });
 
 test('the cap uses the union of the players: two players 13 chunks apart raise the monster allowance with the union size', () => {

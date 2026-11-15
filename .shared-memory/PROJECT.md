@@ -113,6 +113,22 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 75 (2026-11-14, ten Sonnet tracks in `../wt75-<name>` on `batch75-<name>`, cut from 4378ce396, merged --no-ff on `batch75-lead`; shared track rules `../artifacts/b75-lead/track-rules.md`; lead note `b75-lead-track.md`; no browser checks by request):
+- 0.104.0, by track:
+  - mpbuckets75: `server-bucket.js` (`bucketUse` over single-player `traceBucket`/`useBucketAt`, `installFluidHooks`), `fluid-wash.js` shared wash drops, server fluid fizz, dispenser buckets replace non-solid cells and fizz in the Nether; `random.fizz` in `MP_SOUNDS`.
+  - mpusesweep75: `tools/sweep-use75.mjs`, `tools/sweep-attack75.mjs`; `server-use-entity.js` (name tags, spawn-egg babies, creeper ignition, horse feeding/chest/saddle/armour), `server-air.js` (`airUse`: armour, glass bottle, egg on water, rocket), `server-vehicle-hit.js` (cart/boat sprint knockback).
+  - mpplayerfx75: `server-death-throw.js`; forced off-beat tracker sends on jumps and watched values, `head` row field; `server-idle.js` in wall-clock ms (injectable clock; `admin.join/activity/idle` take ms); PvP attacker 0.6 slowdown kept (EntityOtherPlayerMP `bll.a(ro,float)` returns true, lead javap), mob hits only clear sprint.
+  - mppushgrid75: `push-grid.js` (8-block cells, list order kept, `markMoved`, `MC_PUSHGRID=verify|off`), used above 200 entities; about 25% off a 600-mob tick.
+  - spsounds75: `SoundSweepProbe` + `sound-sweep-reference.json` (place, break, step for every block); silent seeds/wart, double plant sound, `sound(..., at)` placed-cell position.
+  - skintex75: `straight-texture.js` (DataTexture skins, capes), `skinPixels`/`capePixels`, item sprite sheets as DataTextures in `item-atlas.js`.
+  - spfixes75: bonus torch drops, per-hit death throw angle, table names removed on every path and saved per column (`chunk-runtime.js` `STORES`).
+  - entityaudit75: `ObjectNbtProbe`, `ThrowFlightProbe`; falling block/TNT/crystal export, orb/TNT/falling block import (`java-objects.js`), the missing `enterWater` import in `projectiles.js`, wither skull water test.
+  - guiaudit75: GUI menu probe and `gui-menus-reference.json` (about 40 screens); Difficulty button, Controls list width 252, Open to LAN disabled remotely; 13 catalogue rows.
+  - researchdocs8: `parity.md` and 11 docs corrected.
+- Lead joins: `simulation.js` `edit` runs `bucketUse` before `airUse` (air and block paths).
+- Verification: one full `npm test`, 8629 tests, 8627 pass; the 2 failures were test bugs (mpspawn73 fixed overshoot bound, mpdragon2 egg box off by one), fixed in the release commit. Build and bridge tests ok.
+- Open: "Still open from batch 75" in `public/research/remaining-gaps.md`.
+
 Batch 74 (2026-11-14, ten Sonnet tracks in `../wt74-<name>` on `batch74-<name>`, cut from 8180cf242, merged --no-ff on `batch74-lead`; shared track rules `../artifacts/b74-lead/track-rules.md`; lead note `b74-lead-track.md`; no browser checks by request):
 - 0.103.0, by track:
   - mptrack74: `server-player-tracker.js` keeps one shared tracker entry per player and dimension (range 512, frequency 2, 60-tick move, 400-tick resync); `client-ptrack.js` interpolates remote players over 3 steps (`presence.js`); the `dimRespawn` snapshot goes through `playerTracker.snapshot`.

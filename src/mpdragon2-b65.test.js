@@ -59,7 +59,7 @@ test('a right click on a dragon egg through the simulation teleports it', { time
   assert.equal(s.edit(a, true), true);
   assert.equal(world.get(64, 41, 62), 0, 'the egg left its cell');
   let n = 0;
-  for (let i = 49; i <= 79; i++) for (let j = 33; j <= 47; j++) for (let k = 47; k <= 77; k++) if (world.get(i, j, k) === EGG) n++;
+  for (let i = 49; i <= 79; i++) for (let j = 34; j <= 48; j++) for (let k = 47; k <= 77; k++) if (world.get(i, j, k) === EGG) n++; // b75 lead: the egg is at y 41, so its ±7 box is 34..48 (33..47 missed a draw of +7)
   assert.equal(n, 1, 'exactly one egg in the search box');
 });
 
