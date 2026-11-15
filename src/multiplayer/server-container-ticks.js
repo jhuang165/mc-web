@@ -10,7 +10,8 @@ import { cartInventoryAt } from '../cart-inventory.js';
 import { installDispensers } from '../dispense.js';
 import { trappedPower, trappedStrongPower } from '../chest-blocks.js';
 import { burnTime } from '../survival.js';
-import { WATER, LAVA, YELLOW_FLOWER, RED_FLOWER } from '../world.js';
+import { WATER, LAVA, YELLOW_FLOWER, RED_FLOWER, LADDER } from '../world.js';
+import { fizzSound } from './server-bucket.js';
 import { useBoneMeal } from '../bone-meal.js'; // b67 bonemeal3: BehaviorDispenseBoneMeal -> ItemDye.func_150919_a for every IGrowable
 import { JavaRandom } from '../java-random.js';
 
@@ -35,7 +36,10 @@ export class ContainerTicks {
       rng: () => this.rand,
       spawnItem: (stack, x, y, z, mx, my, mz) => { sim.items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
       ...sim.dispense.host(stop), // b61: arrows, thrown items, fireballs, fireworks, TNT, spawn eggs, armour (server-dispense.js); carts and boats stop until the vehicle track hooks in
-      setLiquid: (x, y, z, id) => { sim.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
+      // b75 mpbuckets75: BehaviorDispenseFilledBucket calls ItemBucket.tryPlaceContainedLiquid: a non-solid block in front is replaced (broken with drops, `breakBlock`), and in the Nether
+      // water only fizzes (random.fizz) while the bucket is still emptied. `isReplaceable` is that Material.isSolid test (a ladder is not solid either).
+      setLiquid: (x, y, z, id) => { if (sim.world.isHell && id !== 10) fizzSound(sim, this.dim, x, y, z); else sim.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
+      isReplaceable: (id, w, x, y, z) => sim.world.get(x, y, z) === LADDER || !sim.world.solid(x, y, z), // (`id` is the original id the engine reads; the port's cell is read here)
       setAir: (x, y, z) => { sim.world.set(x, y, z, 0, true, 0); },
       setFire: (x, y, z) => { sim.fire.ignite(x, y, z); },
       breakBlock: (x, y, z) => { const b = sim.world.get(x, y, z); if (b) sim.fluids.wash(x, y, z, b); },

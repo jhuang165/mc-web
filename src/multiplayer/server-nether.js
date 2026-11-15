@@ -13,6 +13,7 @@
 // Fortress chests and the blaze spawner of the throne room come from the generator's population records (DimensionWorld.netherChunk keeps them per chunk).
 // Batch 63 (mpnether3): experience orbs (`n.xp` is a real ExperienceOrbs, ticked and sent like the Overworld's), spawner ticking (server-spawners.js), minecarts, boats, pig riding, leads and
 // animal clicks (server-nether-vehicles.js), and the Nether's mobs read the server difficulty (server-mobs.js tick). Not here: the End.
+import { installFluidHooks } from './server-bucket.js';
 import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
 import { Farming } from '../farming.js';
@@ -89,6 +90,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   w.fullLight = (x, y, z) => n.light.level(x, y, z, 0);
   n.fluids = new Fluids(w, { random: n.weather.random, nether: (n.dim ?? NETHER) === NETHER, skyless: true });
   n.fluids.load(saved.fluidTicks);
+  installFluidHooks(n.fluids, sim, n.dim ?? NETHER, () => n.items); // b75 mpbuckets75
   n.fire = new Fire(w, { weather: () => n.weather, stillLava: (x, y, z) => !n.fluids.pending.has(n.fluids.key(x, y, z, LAVA)) });
   n.fire.watch(); n.fire.sharedRandomTicks = true; n.fire.load(saved.fireTicks);
   n.trees = new Trees(w, { random: n.weather.random, apply: noop, drop, light: (x, y, z) => n.light.level(x, y, z, 0) }).watch();

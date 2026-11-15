@@ -113,6 +113,7 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
+import { washStacks } from "./fluid-wash.js";
 import { spActiveChunkSource } from "./sp-active-chunks.js"; // b69 spfarming
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, mobInBox, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
@@ -898,7 +899,7 @@ function onMultiplayerInventory(m) {
   if (r.hotbar) renderHotbar();
   if (r.container && containerView?.remote?.inv) refreshContainer();
 }
-const MP_SOUNDS = new Set(['tile.piston.out', 'tile.piston.in', 'random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite', 'random.successful_hit']); // b73: successful_hit is the S2B reason 6 ding to an arrow's player shooter; b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
+const MP_SOUNDS = new Set(['tile.piston.out', 'tile.piston.in', 'random.eat', 'random.drink', 'random.burp', 'random.pop', 'random.orb', 'random.break', 'game.player.hurt', 'game.player.die', 'fire.ignite', 'random.successful_hit', 'random.fizz']); // b75: the server's bucket fizz and lava-water fizz; b73: successful_hit is the S2B reason 6 ding to an arrow's player shooter; b61: fire.ignite: flint and steel is the server's; another player's hurt / death sound (S29)
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
@@ -1634,7 +1635,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
     world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); if (!muteFizzSmoke) for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + Math.random(), z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = washStacks(world, x, y, z, b); if (d.length) items.dropBlock(d, x, y, z); } }); // b75: fluid-wash.js (shared with the server)
     fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
