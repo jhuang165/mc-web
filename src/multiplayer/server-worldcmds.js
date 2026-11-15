@@ -93,6 +93,6 @@ export function worldCommandsHost(sim, p, forPlayer) {
     get profiler() { return debug.profiler; },
     get debugState() { return debug.debugState; },
     tickCounter: () => sim.ticks,
-    saveFile: (name, text) => { debug.files.set(name, text); sim.saveDebugFile?.(name, text); },
+    saveFile: (name, text) => { if (sim.saveDebugFile) sim.saveDebugFile(name, text); else debug.files.set(name, text); }, // b74 mpmisc74: a server with a disk writer keeps no copy (native writes the file only)
   };
 }
