@@ -51,6 +51,7 @@ import { serverDragonEgg } from './server-egg.js'; // b65 mpdragon2: BlockDragon
 import { DRAGON_EGG } from '../dragon-egg.js';
 import { installMusic, serverMusicUse, serverNoteClick } from './server-music.js'; // b66 mpbooks: note blocks and jukeboxes
 import { ServerMaps } from './server-maps.js'; // b69 mpmaps: empty maps, map data, S34 updates
+import { placedResultSound } from './server-place-sound.js'; // b74 mpsounds74: S29 place sound
 import { placeBlockItem } from './server-place.js'; // b73 mpblocks73: bed, cake, hoe
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
@@ -467,6 +468,7 @@ export class DedicatedSimulation {
     }), placed = put.placed;
     if (placed) this.golems.afterPlace(put); // b66 mpgolems: BlockPumpkin.onBlockAdded
     if (placed) this.stats.used(p, id); // b63 mpstats: ItemStack.tryPlaceItemIntoWorld, the use stat
+    placedResultSound(this, p, put); // b74 mpsounds74: ItemBlock.onItemUse's playSoundEffect, to everyone near including the placer
     return placed;
   }
   // Marks the tile entity at a cell for a description packet on the next tick (World.markBlockForUpdate on a tile edit).

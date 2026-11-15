@@ -9,6 +9,7 @@ import { ITEM_BED, placeBed } from '../bed.js';
 import { doorReplaceable } from '../doors-panes.js';
 import { ITEMS } from '../survival.js';
 import { hoeSound } from '../block-sounds.js';
+import { placeSoundOut } from './server-place-sound.js'; // b74 mpsounds74
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland
 
@@ -26,6 +27,7 @@ export function placeBlockItem(sim, p, target, id) {
     if (!cell || (!s.creative && !s.usable(id)) || (s.held?.id === id && s.held.count === 0) || s.adventure) return false;
     w.set(cell[0], cell[1], cell[2], CAKE, true, 0);
     if (!s.creative) s.take(id);
+    placeSoundOut(sim, p, CAKE, cell); // b74 mpsounds74: ItemReed plays the cake block's place sound
     return true;
   }
   if (ITEMS[id]?.kind === 'hoe') {
