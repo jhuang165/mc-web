@@ -2,8 +2,8 @@
 // Steve), so this is a port addition like sp-cape.js: a PNG the player chooses, kept in this browser (localStorage, base64). The browser cleans the
 // file up like ImageBufferDownload.parseUserSkin (skin.js skinCanvas / userSkinPixels) before it is stored, so the store only ever holds a 64 x 32 PNG.
 // It is drawn on the local body, the first-person arm and SkullOwner heads of the player's own name; in multiplayer the account's skin wins.
-import * as THREE from "three";
 import { skinPngError, skinCanvas, canvasPng } from "./skin.js";
+import { skinTextureOf } from "./straight-texture.js";
 
 export const SP_SKIN_KEY = "blockworld.skin";
 
@@ -46,9 +46,7 @@ export function applyLocalSkin(renderer, store, load) {
 
 // Browser only: decode stored PNG bytes into a nearest-filtered skin texture (skinCanvas repeats the cleanup, which is idempotent).
 export async function skinTexture(bytes) {
-  const texture = new THREE.CanvasTexture(await skinCanvas(new Blob([bytes], { type: "image/png" })));
-  texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
-  return texture;
+  return skinTextureOf(new Blob([bytes], { type: "image/png" })); // b75 skintex75: straight-alpha DataTexture, canvas fallback
 }
 
 // Browser only: file picker for the skin (64 x 32 or modern 64 x 64 PNG); resolves a status line for the menu.

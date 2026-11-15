@@ -1,8 +1,8 @@
 // Batch 72 spcapes: a single-player cape. Single player has no accounts, so the cape is a 64 x 32 PNG the player chooses; it is kept in
 // this browser (localStorage, base64) and drawn on the local third-person body through PlayerRenderer.setCape. No Mojang cape ships.
 // Validation is the server's (skin.js capePngError). In multiplayer the account's cape wins (main.js only calls applyLocalCape offline).
-import * as THREE from "three";
-import { capePngError, capeCanvas } from "./skin.js";
+import { capePngError } from "./skin.js";
+import { capeTextureOf } from "./straight-texture.js";
 
 export const SP_CAPE_KEY = "blockworld.cape";
 
@@ -42,9 +42,7 @@ export function applyLocalCape(renderer, store, load) {
 
 // Browser only: decode stored PNG bytes into a nearest-filtered cape texture.
 export async function capeTexture(bytes) {
-  const texture = new THREE.CanvasTexture(await capeCanvas(new Blob([bytes], { type: "image/png" })));
-  texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
-  return texture;
+  return capeTextureOf(new Blob([bytes], { type: "image/png" })); // b75 skintex75: straight-alpha DataTexture, canvas fallback
 }
 
 // Browser only: file picker for the cape; resolves a status line for the menu.

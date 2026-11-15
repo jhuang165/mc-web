@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
-import { skinCanvas, capeCanvas } from '../skin.js';
+import { skinTextureOf, capeTextureOf } from '../straight-texture.js'; // b75 skintex75 (was skinCanvas/capeCanvas)
 import { skinBook } from '../skull-skins.js'; // b71: SkullOwner heads take these skins
 import { ITEMS } from '../survival.js';
 import { BOW } from '../bow.js';
@@ -34,9 +34,7 @@ export class RemotePlayers {
       if (!url) return null;
       const response = await fetch(url);
       if (!response.ok) throw new Error('skin ' + response.status);
-      const texture = new THREE.CanvasTexture(await skinCanvas(await response.blob()));
-      texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
-      return texture;
+      return await skinTextureOf(await response.blob()); // b75 skintex75: straight-alpha DataTexture (canvas fallback)
     })().catch(() => null));
     return this.skins.get(hash);
   }
@@ -58,9 +56,7 @@ export class RemotePlayers {
       if (!url) return null;
       const response = await fetch(url);
       if (!response.ok) throw new Error('cape ' + response.status);
-      const texture = new THREE.CanvasTexture(await capeCanvas(await response.blob()));
-      texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
-      return texture;
+      return await capeTextureOf(await response.blob()); // b75 skintex75
     })().catch(() => null));
     return this.capes.get(hash);
   }
