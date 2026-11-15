@@ -71,7 +71,7 @@ export class ServerPvp {
         hurt: n => sim.damagePlayer(p, n, { name: 'thorns', from: this.fromOf(v), call: () => s.damage(n, 'thorns', true, 'thorns', this.fromOf(v)) }),
         sound: () => sim.soundsOut?.push({ name: 'damage.thorns', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: 1, dim: p.dimension | 0 }),
       });
-      { const at = { x: v.position.x, y: v.position.y, z: v.position.z, w: 0.6, h: 1.8, mx: v.velocity?.x, my: v.velocity?.y, mz: v.velocity?.z }; if (critical) sendCritFx(sim, p, at, false); if (weapon.damage > 0) sendCritFx(sim, p, at, true); } // b73 particles73: S0B animations 4 / 5
+      { const at = { x: v.position.x, y: v.position.y, z: v.position.z, w: 0.6, h: 1.8, mx: v.velocity?.x, my: v.velocity?.y, mz: v.velocity?.z, player: v.id /* b74: the client follows the live copy */ }; if (critical) sendCritFx(sim, p, at, false); if (weapon.damage > 0) sendCritFx(sim, p, at, true); } // b73 particles73: S0B animations 4 / 5
       (sim.events ??= []).push({ type: 'pvpHit', id: p.id, victim: v.id, damage: Math.round(f(damage * 10)), dealt: f(health - vs.health) }); // the damageDealt statistic (mpstats)
       sim.stats?.add(p, STAT.damageDealt, Math.round(f(damage * 10))); // b63 lead: EntityPlayer.attackTargetEntityWithCurrentItem addStat(damageDealtStat, round(f * 10)) for a living target
       if (damage >= OVERKILL_DAMAGE) sim.achievements?.award(p, 'overkill'); // b64: EntityPlayer.r `if (f >= 18.0F) triggerAchievement(overkill)` after the knockback, f = damage after the critical and enchantments (bytecode-read)

@@ -941,7 +941,7 @@ async function joinMultiplayer(settings) {
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ }); // b60: status sounds, death poof, hearts
     remoteDispense = makeRemoteDispense(); // b61: what the server's dispensers fired
     remoteFishing = new RemoteFishing({ particle: (...a) => scene.fx.spawn(...a) }); // b64 mpstats2
-    client.onCritFx73 = m => applyCritFx(m, scene.fx); // b73 particles73: S0B crit animations
+    client.onCritFx73 = m => applyCritFx(m, scene.fx, { mob: id => { const c = remoteMobs?.copies.get(id); return c ? remoteMobs.factory.fxTarget(c.mob) : null; }, player: id => remotePlayers?.entries.get(id)?.state ?? null }); /* b74 mpcombat74: Crit2FX follows the live entity */ // b73 particles73: S0B crit animations
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
