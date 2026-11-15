@@ -33,15 +33,13 @@ export function useOnBlock(sim, p, target, id) {
     if (!((s.creative || s.usable(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && sim.world.get(x, y + 1, z) === 0 && y + 1 < (sim.world.height ?? 128) - 1)) return false;
     sim.world.set(x, y + 1, z, NETHER_WART, true, 0);
     if (!s.creative) s.take(id);
-    sound('step.grass', 0.5, 1, { x: x + 0.5, y: y + 1, z: z + 0.5 });
-    return sim.stats.used(p, id), true;
+    return sim.stats.used(p, id), true; // b74 mpsounds74: ItemSeeds plays no sound (bytecode-read: adw has no playSoundEffect call)
   }
   if (plantedBlock(id)) {
     if ((s.creative || s.usable(id)) && target.adjacent?.[1] === y + 1 && sim.farming.plant(x, y, z, id)) {
       if (!s.creative) s.take(id);
       sim.farming.drain(); // the mesh updates are the clients' own (the cell change goes out with the world's edits)
-      sound('step.grass', 0.5, 1, { x: x + 0.5, y: y + 1, z: z + 0.5 });
-      return sim.stats.used(p, id), true;
+      return sim.stats.used(p, id), true; // b74 mpsounds74: silent, as above
     }
     return !item?.food || block === 29 || block === 30 || isCrop(block); // a blocked planting on farmland or a crop is still a used click (no stat: ItemSeeds returned false)
   }

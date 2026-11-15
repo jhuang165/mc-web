@@ -99,6 +99,7 @@ import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from 
 import { Weather, isWet, canLightningStrikeAt, simulationKey } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { RemoteLightning } from "./multiplayer/client-lightning.js"; // b66 mplightning
+import { isBlockSound } from "./multiplayer/server-place-sound.js"; // b74 mpsounds74: S29 block place sounds
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, STEVE_URL, nextView, thirdPersonCamera, playerShadowCaster, sleeperShadowCaster } from "./player-renderer.js";
@@ -903,7 +904,7 @@ async function joinMultiplayer(settings) {
     onSlot: message => { applySlots(survival.inventory, message, mpInv); if (eating && slotReplacesUse(message, survival.inventory.current)) eating = null; /* b65 mpuse2: S2F replaces the held stack object, which ends the item use */ renderHotbar(); }, // S2F set slot
     onAux: message => { for (const e of message.events ?? []) if (recordAux(e, mpRecord)) { /* b66 mpbooks: S28 1005 */ } else if (e.id === 2001 && Number.isInteger(e.data)) multiplayerBreakFx([e.x, e.y, e.z], e.data & 4095, e.data >> 12); else if ((e.id === 1020 || e.id === 1021) && [e.x, e.y, e.z].every(Number.isFinite)) sounds.play(e.id === 1020 ? 'random.anvil_break' : 'random.anvil_use', { volume: 1, pitch: Math.random() * 0.1 + 0.9, position: { x: e.x + .5, y: e.y + .5, z: e.z + .5 } }); else dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a), listener: () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }), sparkle: (x, y, z) => boneMealSparkles(scene.fx, world.get(x, y, z), x, y, z, sparkleHeight(world, x, y, z), itemRand) }); }, // b66 sparkle: bone meal 2005; b63 listener: the wither spawn 1013; 2001 break; 1020 / 1021 anvil sounds; 1000-1002 and 2000 dispenser effects (b60)
     onCrack: message => { for (const c of message.cracks ?? []) scene.effects.mobCrack(c.id, [c.x, c.y, c.z], c.stage); }, // S25 from other players' digs, one overlay per breaker
-    onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
+    onSound: message => { for (const s of message.sounds ?? []) if ((MP_SOUNDS.has(s.name) || isMobSound(s.name) || isBlockSound(s.name)) && [s.x, s.y, s.z, s.volume, s.pitch].every(Number.isFinite)) sounds.play(s.name, { position: { x: s.x, y: s.y, z: s.z }, volume: s.volume, pitch: s.pitch }); }, // S29 from other players' eating
     onSignEditor: openMultiplayerSign, onBeaconWindow: openMultiplayerBeacon, onWindow: onMultiplayerWindow, onInv: onMultiplayerInventory,
     onScoreboard: message => applyScoreboardMessage(mpBoard, message), // b64 mpscoreboard: S3B / S3C / S3D / S3E
     onStats: message => { applyStatsMessage(stats, message); const w = statsWaiter; statsWaiter = null; w?.(); }, // b63 mpstats: S37 fills the Statistics screen
