@@ -177,8 +177,10 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 // Batch 33: wood slab, fence gate, trapdoor and cobblestone wall (aoe/ala/... collisionRayTrace) ray against their shaped box too, not a full cube.
+// b74 mpperf74: the id list is a Set built once (it was an array literal built on every call)
+const RAY_BOUND_IDS = new Set([107,108,109,110,111,112,113,114,175,176,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,CAKE,138,141,142,165,167,168,169]);
 export const rayBounds = (world, x, y, z, id) =>
-  [107,108,109,110,111,112,113,114,175,176,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,CAKE,138,141,142,165,167,168,169].includes(id) ? blockBounds(world, x, y, z) : (id === FENCE || id === NETHER_FENCE) ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  RAY_BOUND_IDS.has(id) ? blockBounds(world, x, y, z) : (id === FENCE || id === NETHER_FENCE) ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start
@@ -187,7 +189,7 @@ export const rayBounds = (world, x, y, z, id) =>
 // func_147447_a's ignoreBlockWithoutBoundingBox (EntityArrow passes true): only
 // blocks with a collision box count, which leaves out torches and plants.
 export function rayTraceBlocks(world, start, end, hasBox = false) {
-  if (start.some(Number.isNaN) || end.some(Number.isNaN)) return null;
+  if (start[0] !== start[0] || start[1] !== start[1] || start[2] !== start[2] || end[0] !== end[0] || end[1] !== end[1] || end[2] !== end[2]) return null; // b74 mpperf74: NaN tests without the closure calls (the line-of-sight walk is the server's second cost)
   const id = (x, y, z) => (y < 0 && !world.floorBelow ? 0 : world.get(x, y, z)), // floorBelow: a test world whose floor lies at y < 0 (the fight probes)
     // BlockFire.isCollidable is false, so canCollideCheck skips fire like air.
     solid = (b) => b !== 0 && b !== 10 && b !== 42 && b !== FIRE,
@@ -205,7 +207,7 @@ export function rayTraceBlocks(world, start, end, hasBox = false) {
   const first = test(x, y, z, a);
   if (first) return first;
   for (let n = 200; n-- >= 0; ) {
-    if (a.some(Number.isNaN)) return null;
+    if (a[0] !== a[0] || a[1] !== a[1] || a[2] !== a[2]) return null;
     if (x === ex && y === ey && z === ez) return null;
     let mx = true, my = true, mz = true, d0 = 999, d1 = 999, d2 = 999;
     if (ex > x) d0 = x + 1;
