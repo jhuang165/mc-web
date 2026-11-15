@@ -14,6 +14,7 @@ import { entityBox } from "./weather.js";
 import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
+import { forgetTableName } from "./tile-names.js"; // b75: a destroyed table loses its CustomName
 import { serverPosY, serverEyeY, SLEEP_BOX } from "./sleeper-eye.js"; // b68 fixes68
 
 // An EntityMinecart or EntityBoat in the blast: Entity.getEyeHeight is 0, so the eye is posY; attackEntityFrom(explosion source, damage) wobbles it and breaks it
@@ -178,6 +179,7 @@ export function applyExplosion(state, request, hooks = {}) {
     if (!world.set(block.x, block.y, block.z, 0)) continue;
     changes.push([block.x, block.y, block.z, block.id, 0]);
     farming.observe(block.x, block.y, block.z);
+    forgetTableName(survival, key, 0);
     if (furnace) {
       items.spill(furnace.items.filter(Boolean), block.x, block.y, block.z);
       delete survival.furnaces[key];

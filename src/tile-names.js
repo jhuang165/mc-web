@@ -37,3 +37,22 @@ export function nameTileFromStack(survival, id, key, held) {
   record.name = name;
   return true;
 }
+
+/**
+ * b75: a TileEntityEnchantmentTable lives and dies with its block (Chunk.removeTileEntity from World.setBlock / breakBlock), so its CustomName
+ * must go on every removal path. Drops the name at `key` ("x,y,z") unless `blockId` is still a table; returns true when one was dropped.
+ */
+export function forgetTableName(survival, key, blockId) {
+  if (blockId === ENCHANTING_TABLE || !survival?.tableNames || !(key in survival.tableNames)) return false;
+  delete survival.tableNames[key];
+  return true;
+}
+/** Sweep: drop every name whose block is no longer a table. `blockAt(x, y, z)` returns the block id or null for an unloaded cell (kept). */
+export function pruneTableNames(survival, blockAt) {
+  let n = 0;
+  for (const key of Object.keys(survival?.tableNames ?? {})) {
+    const [x, y, z] = key.split(',').map(Number), id = blockAt(x, y, z);
+    if (id != null && forgetTableName(survival, key, id)) n++;
+  }
+  return n;
+}

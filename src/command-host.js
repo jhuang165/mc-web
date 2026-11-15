@@ -231,7 +231,7 @@ export function createCommandHost(env) {
       if (w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       const key = `${x},${y},${z}`, stores = survival();
-      for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
+      for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'tableNames']) delete stores[name]?.[key]; // b75: tableNames, an enchanting table's CustomName goes with the old tile
       if (original === 144) (env.skulls?.() ?? SKULLS).create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), '', profileOfSkullTile(tag)); // TileEntitySkull (skull.js)
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
       if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (pyramid.js)
@@ -246,6 +246,10 @@ export function createCommandHost(env) {
         // keys, SpawnPotentials and SpawnData with its Riding chain. No tag leaves the constructor defaults (Pig, 20).
         env.spawners().add({ ...(tag ? spawnerRecord(tag) : {}), x, y, z });
         this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['EntityId', 'Delay', 'MinSpawnDelay', 'MaxSpawnDelay', 'SpawnCount', 'MaxNearbyEntities', 'RequiredPlayerRange', 'SpawnRange', 'SpawnPotentials', 'SpawnData', 'x', 'y', 'z', 'id'].includes(k)) : [];
+      } else if (original === 116) { // TileEntityEnchantmentTable.readFromNBT: CustomName (a string tag) names the new table
+        const name = tag ? nbtGet(tag, 'CustomName', NBT.STRING, '') : '';
+        if (name) (stores.tableNames ??= {})[key] = name;
+        this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['CustomName', 'x', 'y', 'z', 'id'].includes(k)) : [];
       } else if (id) {
         const loaded = readContainerTile(id, tag ?? new Map());
         stores[loaded.name] ??= {};

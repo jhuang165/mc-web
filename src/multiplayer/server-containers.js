@@ -16,6 +16,7 @@ import { ServerStations, STATION_BLOCKS } from './server-stations.js'; // b60: c
 import { smeltExperience } from '../experience.js';
 import { settleFacing } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
+import { forgetTableName } from '../tile-names.js'; // b75
 
 export const FURNACE = 14;
 const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color', 'pages', 'author', 'title']; // b66 mpbooks: the book tags (books.js)
@@ -238,6 +239,7 @@ export class ServerContainers {
     const gone = (store, ok) => { const e = store[key]; if (e && !ok) { delete store[key]; spill(e.items); this.closeAt(key); } };
     gone(t.chests, isChestBlock(block)); gone(t.furnaces, block === FURNACE); gone(t.dispensers, block === DISPENSER || block === DROPPER);
     gone(t.hoppers, block === HOPPER); gone(t.brewing, block === BREWING_STAND);
+    forgetTableName(t, key, block); // b75: the table's CustomName goes with the block
     if (t.enderTiles[key] && block !== ENDER_CHEST) { delete t.enderTiles[key]; this.closeAt(key); }
   }
   // b60: a chest block with no tile record (a saved world's, or placed by a command) gets the facing onBlockAdded settles; the cell and its chest neighbours

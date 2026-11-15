@@ -186,7 +186,7 @@ import { HopperContainer, Hoppers, HOPPER, hopperActive } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
-import { namedTitle } from "./tile-names.js";
+import { namedTitle, pruneTableNames } from "./tile-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -245,7 +245,7 @@ import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { drainKnockback } from "./player-knockback.js";
-import { deathThrow } from "./death-throw.js";
+import { deathThrow, hitPoseSource } from "./death-throw.js";
 import { hurtNonLiving } from "./falling-hurt.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { sparkleHeight, useBoneMeal } from "./bone-meal.js";
@@ -1493,6 +1493,7 @@ function watchFlowers() {
     if (isSign(old) && !isSign(now)) signs.remove(x, y, z);
     if (old === SKULL && now !== SKULL) SKULLS.remove(x, y, z); // TileEntitySkull goes with its block
     if (old === BEACON || now === BEACON) beacons.sync(x, y, z, now); // TileEntityBeacon goes with its block
+    if (old === ENCHANTING_TABLE && now !== ENCHANTING_TABLE && survival.tableNames) delete survival.tableNames[`${x},${y},${z}`]; // b75: its CustomName goes with the block
     if (old === ENCHANTING_TABLE || now === ENCHANTING_TABLE) enchantBooks.changed(x, y, z, now); // TileEntityEnchantmentTable goes with its block
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       const fx = x + dx, fy = y + dy, fz = z + dz, b = world.get(fx, fy, fz);
@@ -1541,6 +1542,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 }
 // Hydrate only the resident window before constructing block runtimes and lighting.
 let tripLoading = false; // a portal trip is between worlds: screen is "home" for the loop but the music stays the game's
+let pendingBonusDrops = []; // b75: torch items of a bonus chest whose torch cannot stay (WorldGeneratorBonusChest -> BlockTorch.dropTorchIfCantStay)
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
   if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
@@ -1584,7 +1586,7 @@ async function openWorld(record) {
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
     if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
     // WorldServer.initialize: the bonus chest belongs to world creation, after the spawn and before any runtime exists (bonus-world.js).
-    if (bonusChestDue(record, prepared)) pendingBonusChests = placeBonusChest(prepared, record).chests;
+    if (bonusChestDue(record, prepared)) { const bonus = placeBonusChest(prepared, record); pendingBonusChests = bonus.chests; pendingBonusDrops = bonus.drops; }
     dims.applyWrites(prepared, record, { verifyBed: (w, s) => { const cell = verifyRespawn(w, s, false); return cell ? bedRespawnPosition(cell) : null; } }); // portal frame / End platform
     streamStorage?.dispose();streamStorage=storage;
     if (loading) spawnLog.report(prepared.chunks?.size ?? 0, performance.now(), true);
@@ -1597,7 +1599,7 @@ async function openWorld(record) {
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {
-    if (pendingBonusChests) { pendingBonusChests = null; record.bonusChestPlaced = false; } // placed on a world that never launched: owed again
+    if (pendingBonusChests) { pendingBonusChests = null; pendingBonusDrops = []; record.bonusChestPlaced = false; } // placed on a world that never launched: owed again
     // GuiErrorScreen replaces the toast when the load started from the title screen.
     if (trip) { screen = tripFrom; $("#hud").classList.remove("hidden"); gui.hide(); toast('Could not open this world: '+e.message); } // the old world is still the active one
     else if (loading) gui.show(errorScreen({ title: "Could not open this world", message: String(e?.message ?? e), cancel: () => gui.show(menus.mainMenu()) }));
@@ -1953,6 +1955,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       (st) => survival.inventory.read(st, true), // a Count 0 drop is kept (EntityItem.readEntityFromNBT)
       survival.time,
     );
+    for (const d of pendingBonusDrops.splice(0)) items.dropBlock([makeStack(d.id, 1, 0)], d.x, d.y, d.z); // b75: the torch that could not stay (after items.load, which replaces the list)
     projectiles.load(record.projectiles);
     eyes.load(record.eyes);
     if (!mapStore.remote) maps.load(record.maps); // b69 mpmaps: a dimension trip on a server keeps the maps the server sent
@@ -2857,6 +2860,7 @@ function tickChests() {
     const sound = tickLid(tile, true);
     if (sound) sounds.play(sound, { volume: 0.5, pitch: Math.random() * 0.1 + 0.9, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
   }
+  pruneTableNames(survival, (x, y, z) => (world.streaming && !world.isLoaded(x, z) ? null : world.get(x, y, z))); // b75: a table's CustomName goes with the block on any removal path (/setblock, fill, ...)
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "hopper" && containerView.key && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
@@ -2914,6 +2918,7 @@ function deadBodyTick() {
   movePlayer(state, IDLE_INPUT, toast);
   ({ grounded, collidedH, fallDistance, landedFall } = state);
 }
+hitPoseSource.get = () => (multiplayer ? null : { x: position.x, z: position.z, yawDeg: 180 - (yaw * 180) / Math.PI }); // b75: attackedAtYaw is taken at each hit (death-throw.js)
 function die() {
   if (screen === "dead") return;
   if (bedSleep.sleeping) bedWake(true, false, false);
