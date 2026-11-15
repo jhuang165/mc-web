@@ -22,3 +22,5 @@ Anvils share the existing falling entity manager with sand/gravel, but use the n
 - `node --test src/anvil-blocks.test.js src/falling.test.js src/block-placement-simulation.test.js src/block-registry.test.js src/shadows.test.js src/block-textures.test.js src/projectiles.test.js src/media.test.js src/recipe-catalogue.test.js src/population-content.test.js src/creative.test.js`: focused block, placement, falling, mapping, rendering assets, projectile ray, media, recipe, population and Creative checks.
 
 Remaining limits: there is no native GL-render capture comparison; native target-list damage dispatch is inspected from bytecode, with live callbacks covered on the browser side; anvil entity random state is regenerated after reload. Full Minecraft parity is not claimed.
+
+Batch 75 (docs sweep, 2026-11-14): the batch 74 single-player work closed the target-list gap: falling anvils hit items, orbs, boats, carts, frames and paintings (`src/falling.js`, `falling-damage.js`). The 720-case fixture still has an empty target list.

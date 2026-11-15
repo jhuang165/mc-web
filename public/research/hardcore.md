@@ -24,3 +24,5 @@ Evidence label: bytecode-read, not probed. The GUI classes (bdb GuiCreateWorld, 
 - Superseded in batch 15: all three dimensions' region files are imported as stored full columns (a separate IndexedDB store, not a diff against the generator). Pre-Anvil `.mcr` files are ignored.
 - Several player files: the most recently modified one is taken, and the choice is reported.
 - Sleeping and the hardcore kick sequence are bytecode-read only.
+
+Batch 75 (docs sweep, 2026-11-14): the dedicated server also honours hardcore: a hardcore death bans and kicks the player (`hardcoreRespawn` in `src/multiplayer/server-properties.js`, batch 69). The single-player rules above are unchanged.

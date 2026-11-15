@@ -17,3 +17,5 @@ Not full parity; the list below separates what is checked against the 1.7.10 byt
 - Third-person tilt was not changed.
 - The modern red screen vignette (`#damage-flash`) was removed; 1.7.10 has none.
 - Browser check: hearts render and blink on a hit with no console errors (sound off with `?silent`); the camera roll and sounds are covered only by unit tests.
+
+Batch 75 (docs sweep, 2026-11-14): the client `hurtResistantTime` is no longer only emulated in multiplayer: `src/multiplayer/client-health.js` follows the native health packet handler (20 on a drop, 10 on a rise, `damageEntity` on the client, `hurtTime` 10), bytecode-read.
