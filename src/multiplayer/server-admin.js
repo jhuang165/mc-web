@@ -38,8 +38,8 @@ const grayItalic = (c) => { c.style.color = 'gray'; c.style.italic = true; retur
 class Fail extends Error { constructor(key, ...args) { super(key); this.key = key; this.args = args; } }
 
 export class ServerAdmin {
-  constructor(saved = {}, { opLevel = DEFAULT_OP_LEVEL, whitelist = false, now = () => Date.now() } = {}) {
-    this.now = now;
+  constructor(saved = {}, { opLevel = DEFAULT_OP_LEVEL, whitelist = false, now = () => Date.now(), clock = () => Math.floor(performance.now()) } = {}) {
+    this.now = now; this.clock = clock; // b75 mpplayerfx75: `clock` = MinecraftServer.getSystemTimeMillis (System.nanoTime() / 1000000, monotonic), the idle timer's time base
     this.opLevel = Number.isInteger(opLevel) && opLevel >= 1 && opLevel <= 4 ? opLevel : DEFAULT_OP_LEVEL;
     const keyed = (rows) => new UserMap((Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.uuid === 'string').map((r) => [r.uuid, { ...r }]));
     this.ops = keyed(saved.ops); this.bans = keyed(saved.banned); this.allow = keyed(saved.whitelist);
@@ -93,18 +93,20 @@ export class ServerAdmin {
     return null;
   }
   // ---- idle timeout (/setidletimeout, NetHandlerPlayServer.update): minutes without an action; 0 is off ----
-  join(id, tick) { this.lastAction.set(id, tick); this.looks.delete(id); }
+  // b75 mpplayerfx75: wall-clock milliseconds, not ticks (bytecode-read nh.update: `MinecraftServer.getSystemTimeMillis() - player.x() > minutes * 1000 * 60`, only while x() > 0;
+  // x() is set to getSystemTimeMillis when the EntityPlayerMP is created and by each activity packet). A lagging server therefore kicks on real time.
+  join(id, at = this.clock()) { this.lastAction.set(id, at); this.looks.delete(id); }
   leave(id) { this.lastAction.delete(id); this.looks.delete(id); }
   /** Marks a client message as player activity: only the packets that call EntityPlayerMP.func_143004_u's setter count (server-idle.js). */
-  activity(id, message, tick, chatAllowed = true) {
+  activity(id, message, at = this.clock(), chatAllowed = true) {
     const { reset, state } = idleActivity(message, this.looks.get(id), chatAllowed); // b74 mpmisc74: `looks` holds the input state now
     if (state !== undefined) this.looks.set(id, state);
-    if (reset) this.lastAction.set(id, tick);
+    if (reset) this.lastAction.set(id, at);
   }
-  /** Ids to kick for idling: the timeout is in minutes of game time (20 ticks a second). */
-  idle(tick) {
+  /** Ids to kick for idling: more than the timeout's minutes of wall-clock time (`now` in ms, default the injected clock) since the last activity. */
+  idle(now = this.clock()) {
     if (!this.idleMinutes) return [];
-    return [...this.lastAction].filter(([, at]) => (tick - at) * 50 > this.idleMinutes * 60000).map(([id]) => id);
+    return [...this.lastAction].filter(([, at]) => at > 0 && now - at > this.idleMinutes * 1000 * 60).map(([id]) => id);
   }
 
   handles(line) { const w = String(line).trim().replace(/^\//, '').split(' ')[0]; return Object.hasOwn(ADMIN_COMMANDS, w); }

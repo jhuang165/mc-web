@@ -14,12 +14,23 @@ import { TrackerEntry, encodeAxis, encodeY, sizeClass } from '../entity-tracker.
 // sendLocationToAllClients every tick (frequency 2, 4/32 move threshold, look 4/256, the 60th-tick move, the 400-tick teleport resync); the position it last released
 // (the S14/S15/S16/S17/S18 sum, decoded to blocks and degrees) is what the viewers' rows carry, so a row's position only changes on a tick that sent a packet. The client
 // (`client-ptrack.js`) then interpolates the copy over 3 ticks as EntityOtherPlayerMP.setPositionAndRotation2 does. A riding player's row stays live (the mount moves him).
-// Deviations (honest): no airBorne / data-watcher forced sends (a jump or a sneak toggle does not force the off-beat send), the head angle is the body yaw (the copy's head follows
-// it), and a player whose column the viewer no longer holds is untracked at once (natively the entry keeps the entity until the range test fails; the client copy is dropped with the column anyway).
+// Batch 75 mpplayerfx75 (bytecode-read, `my.a(List)`): the location block runs when `ticks % frequency == 0 || entity.isAirBorne || dataWatcher.hasChanges()`, so a jump (Entity.jump sets
+// isAirBorne; NetHandlerPlayServer.processPlayer calls it when the player was on the ground and the packet is airborne with dy > 0) or a changed watched value (sneak, sprint, item in use,
+// burning, invisible: flag byte 0; air 1; health 6; arrows 9; potion colour 7; absorption 17) forces the off-beat send; `advance` passes both (`jumped`, `watcherSig`). In that block the
+// head packet S19 (`ht`) goes out when |headYaw byte - last head byte| >= 4 with its own baseline; a player's rotationYawHead is rotationYaw (EntityLivingBase.onLivingUpdate, the old-AI
+// branch, sv.e), so the head angle equals the body yaw but its baseline differs from the look packets' (a pitch-only look refreshes the body baseline, not the head's): rows carry `head`,
+// the released S19 angle. The client (bjb.a(ik), S18) sets the teleport position at y + 1/64; only a relative move packet (S14/S17) drops it again: `lift` below, in `released`.
+// Deviation (honest): a player whose column the viewer no longer holds is untracked at once (natively the entry keeps the entity until the range test fails; the client copy is dropped with the column anyway).
 export const PLAYER_RANGE = 512, PLAYER_FREQUENCY = 2;
 const everywhere = () => true;
 // the row's yaw and pitch are radians in the port's frame (javaYaw = 180 - yaw * DEG, javaPitch = -pitch * DEG); the entry works in Java degrees
 const javaYawDeg = yaw => 180 - yaw * 180 / Math.PI, javaPitchDeg = pitch => -pitch * 180 / Math.PI;
+// The data watcher values that mark it changed (b75): a different signature than last tick means hasChanges() is true at this tick's sendLocationToAllClients.
+export function watcherSig(p) {
+  const s = p.survival ?? {}, fx = s.effects;
+  const colour = fx?.ordered ? [...fx.ordered()].map(e => `${e.id}.${e.amplifier}.${e.ambient ? 1 : 0}`).join('+') : '';
+  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour].join('|');
+}
 const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 256) / 360)) << 24) >> 24; // S0C: (byte)(int)(angle * 256 / 360)
 
 export class ServerPlayerTracker {
@@ -37,18 +48,24 @@ export class ServerPlayerTracker {
     m.stamp = stamp;
     for (const [id, target] of here) {
       const e = { id, x: target.position.x, y: target.position.y - (target.motion?.ySize ?? 0), z: target.position.z, rotationYaw: javaYawDeg(target.yaw ?? 0), rotationPitch: javaPitchDeg(target.pitch ?? 0), type: 'player' };
+      e.rotationYawHead = e.rotationYaw; // sv.e: rotationYawHead = rotationYaw
+      const sig = watcherSig(target);
       let st = m.byId.get(id);
       if (!st) {
         const entry = new TrackerEntry(e, { range: PLAYER_RANGE, frequency: PLAYER_FREQUENCY, velocity: false, limit: this.limit }, { player: null, watches: () => false });
         entry.tracked = true; // the shared entry: the viewers' own entries decide who is in the list
-        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch) }); // S0C: the spawn packet's position
+        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch), head: spawnByte(e.rotationYawHead), lift: 0, sig, grounded: !!target.grounded, py: target.position.y }); // S0C: the spawn packet's position
       } else Object.assign(st.e, e);
+      // b75: isAirBorne (a jump: on the ground before, off it now and higher) and a changed watched value force the off-beat send
+      const jumped = !!st.grounded && !target.grounded && target.position.y > st.py, changed = sig !== st.sig;
+      st.grounded = !!target.grounded; st.py = target.position.y; st.sig = sig;
       st.entry.packets.length = 0;
-      st.entry.sendLocation(false, false);
+      st.entry.sendLocation(jumped, changed);
       for (const q of st.entry.packets) {
-        if (q.type === 'teleport') { st.cx = q.x; st.cy = q.y; st.cz = q.z; }
-        else if (q.type === 'move' || q.type === 'moveLook') { st.cx += q.dx; st.cy += q.dy; st.cz += q.dz; }
+        if (q.type === 'teleport') { st.cx = q.x; st.cy = q.y; st.cz = q.z; st.lift = 1 / 64; }
+        else if (q.type === 'move' || q.type === 'moveLook') { st.cx += q.dx; st.cy += q.dy; st.cz += q.dz; st.lift = 0; }
         if (q.type === 'look' || q.type === 'moveLook' || q.type === 'teleport') { st.yaw = q.yaw; st.pitch = q.pitch; }
+        if (q.type === 'head') st.head = q.head;
       }
       st.entry.packets.length = 0;
     }
@@ -57,7 +74,7 @@ export class ServerPlayerTracker {
   // The position fields the viewers hold for player `id` in `dim` (what the entry last released), or null.
   released(dim, id) {
     const st = this.masters.get(dim)?.byId.get(id);
-    return st ? { x: st.cx / 32, y: st.cy / 32, z: st.cz / 32, yaw: Math.PI - st.yaw * 360 / 256 * Math.PI / 180, pitch: -(st.pitch * 360 / 256) * Math.PI / 180, ySize: 0 } : null;
+    return st ? { x: st.cx / 32, y: st.cy / 32 + st.lift, z: st.cz / 32, head: Math.PI - st.head * 360 / 256 * Math.PI / 180, yaw: Math.PI - st.yaw * 360 / 256 * Math.PI / 180, pitch: -(st.pitch * 360 / 256) * Math.PI / 180, ySize: 0 } : null;
   }
 
   // The tracker pass of one tick for dimension `dim` (once per `key`): pid -> Set of tracked player ids.

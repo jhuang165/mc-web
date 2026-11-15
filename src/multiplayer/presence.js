@@ -90,7 +90,7 @@ export class RemotePlayers {
       if (entry.name !== p.name || (this.board && entry.sbRev !== this.board.revision)) { entry.name = p.name; this.drawLabel(entry); }
       stepRemoteHurt(entry, p.hurt === true, entry.body); // b61: S19 status 2 on the copy: limbSwingAmount 1.5 and hurtTime 10, before its onUpdate
       const q = stepInterp(entry.ip ??= newInterp(p), p, !!p.riding); // b74 mptrack74: setPositionAndRotation2 with 3 increments between the tracker's packets
-      entry.body.tick({ position: { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }, previous: entry.last, yaw: q.yaw, pitch: q.pitch, swinging: p.swing > 0, riding: !!p.riding });
+      entry.body.tick({ position: { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }, previous: entry.last, yaw: q.yaw, pitch: q.pitch, swinging: p.swing > 0, riding: !!p.riding, head: p.riding ? undefined : p.head /* b75: S19 head angle */ });
       entry.last = { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }; entry.state = { ...p, x: q.x, y: q.y, z: q.z, yaw: q.yaw, pitch: q.pitch }; // b74: aim (pickPlayer) and tags use the interpolated copy
       // EntityOtherPlayerMP.onUpdate: the crumbs of eating run from the synced item-in-use flag (the sound comes from the server).
       tickRemoteUse(entry.use, { using: !!p.using, held: p.held }, id => this.scene.fx && itemCrumbs(this.scene.fx, 5, 'iconcrack_' + id, remoteEye({ ...p, y: p.y - (p.ySize ?? 0) }), entry.rand));

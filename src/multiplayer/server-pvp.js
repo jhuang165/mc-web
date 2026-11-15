@@ -64,7 +64,7 @@ export class ServerPvp {
       if (push > 0 && Number.isFinite(p.yaw)) {
         const rad = f(f(f(180 - p.yaw * (180 / Math.PI)) * f(Math.PI)) / 180); // Java yaw = 180 - the view yaw in degrees
         queueVelocity(vs, f(f(-mhSin(rad) * push) * 0.5), 0.1, f(f(mhCos(rad) * push) * 0.5)); // after the hit's own knockBack, as the queue keeps the order
-        p.velocity.x *= 0.6; p.velocity.z *= 0.6;
+        p.velocity.x *= 0.6; p.velocity.z *= 0.6; // b75: native, the attacker's CLIENT does this (EntityOtherPlayerMP.attackEntityFrom returns true, so the local attack call lands); the port's server moves the player, so it scales the real motion
         if (p.motion) p.motion.sprinting = false;
       }
       vs.thorns?.({ // EnchantmentHelper.func_151384_a(victim, attacker): the victim's Thorns hurt the attacker

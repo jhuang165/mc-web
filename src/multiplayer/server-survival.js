@@ -15,6 +15,7 @@ import { Experience } from '../experience.js';
 import { finishDrinking } from '../buckets.js';
 import { finishPotion } from '../potion-use.js';
 import { setClientHealth } from './client-health.js';
+import { applyDeathThrow } from './server-death-throw.js'; // b75 mpplayerfx75
 
 const APPLE = 260, DEATH_XP_TICKS = 20;
 
@@ -54,6 +55,7 @@ export class ServerSurvival {
     p.dead = true; p.itemInUse = null; p.dig?.abort?.();
     this.sim.stats?.death(p); // b63 mpstats: stat.deaths and the killed-by stat
     this.dropOnDeath(p);
+    applyDeathThrow(p); // b75 mpplayerfx75: EntityPlayer.onDeath's motion (the S12 of the owner and the viewers is the position stream)
     const component = deathComponent(p.survival.combat, this.sim.scoreboard?.formatName(p.name) ?? p.name /* b64 mpscoreboard: team-coloured */, { rawName: p.name });
     const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
     (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });

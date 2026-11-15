@@ -154,10 +154,10 @@ test("/stop, /save-all, /save-on, /save-off and /setidletimeout", async () => {
   assert.match(f.say("Alex", "/setidletimeout x")[0], /not a valid number/i);
   assert.match(f.say("Alex", "/setidletimeout -1")[0], /too small|at least/i);
   assert.match(f.say("Alex", "/setidletimeout 2")[0], /idle timeout to 2 minutes/);
-  const a = f.sim.admin; a.join("p0", 0); a.join("p1", 0);
-  assert.deepEqual(a.idle(2400), []); assert.deepEqual(a.idle(2401).sort(), ["p0", "p1"]);
-  a.activity("p0", { type: "chat" }, 2400); assert.deepEqual(a.idle(2401), ["p1"]);
-  a.activity("p1", { type: "input", controls: { forward: 0 }, current: 0, yaw: 1, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), ["p1"], "an idle input only records the state");
-  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 0, yaw: 2, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), ["p1"], "walking and turning are C03, not activity (b74)");
-  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 1, yaw: 2, pitch: 0 }, 2500); assert.deepEqual(a.idle(2501), [], "a held slot change is C09");
+  const a = f.sim.admin, T = 1000; a.join("p0", T); a.join("p1", T); // b75 mpplayerfx75: wall-clock ms (the old test counted ticks of 50 ms)
+  assert.deepEqual(a.idle(T + 120000), []); assert.deepEqual(a.idle(T + 120001).sort(), ["p0", "p1"]);
+  a.activity("p0", { type: "chat" }, T + 120000); assert.deepEqual(a.idle(T + 120001), ["p1"]);
+  a.activity("p1", { type: "input", controls: { forward: 0 }, current: 0, yaw: 1, pitch: 0 }, T + 125000); assert.deepEqual(a.idle(T + 125050), ["p1"], "an idle input only records the state");
+  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 0, yaw: 2, pitch: 0 }, T + 125000); assert.deepEqual(a.idle(T + 125050), ["p1"], "walking and turning are C03, not activity (b74)");
+  a.activity("p1", { type: "input", controls: { forward: 1 }, current: 1, yaw: 2, pitch: 0 }, T + 125000); assert.deepEqual(a.idle(T + 125050), [], "a held slot change is C09");
 });

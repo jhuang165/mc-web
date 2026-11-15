@@ -39,12 +39,12 @@ test("input resets only when the held slot, sneak or sprint changes (C09, C0B), 
 });
 
 test("ServerAdmin idle kicks use the exact rule: > minutes * 60000 ms since the last activity packet", () => {
-  const a = new ServerAdmin({}); a.idleMinutes = 1; a.join("p", 0);
-  a.activity("p", { type: "input", current: 0, controls: { forward: 1 }, yaw: 0, pitch: 0 }, 10);
-  assert.deepEqual(a.idle(1200), [], "exactly 60000 ms is not over");
-  assert.deepEqual(a.idle(1201), ["p"], "movement did not reset the clock");
-  a.activity("p", { type: "chat", text: "hi" }, 1201, false); assert.deepEqual(a.idle(1201), ["p"]);
-  a.activity("p", { type: "dig", status: 0 }, 1201); assert.deepEqual(a.idle(1201), []);
+  const a = new ServerAdmin({}); a.idleMinutes = 1; const T = 1000; a.join("p", T); // b75 mpplayerfx75: ms, not ticks
+  a.activity("p", { type: "input", current: 0, controls: { forward: 1 }, yaw: 0, pitch: 0 }, T + 500);
+  assert.deepEqual(a.idle(T + 60000), [], "exactly 60000 ms is not over");
+  assert.deepEqual(a.idle(T + 60001), ["p"], "movement did not reset the clock");
+  a.activity("p", { type: "chat", text: "hi" }, T + 60001, false); assert.deepEqual(a.idle(T + 60001), ["p"]);
+  a.activity("p", { type: "dig", status: 0 }, T + 60001); assert.deepEqual(a.idle(T + 60001), []);
 });
 
 test("brewing stand selection flag: one per Block singleton, so one per JVM (found already right)", () => {

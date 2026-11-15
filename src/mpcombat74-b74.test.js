@@ -5,12 +5,12 @@ import { applyCritFx } from "./multiplayer/client-crit-fx.js";
 import { attackerSlowdown } from "./multiplayer/server-attack-slowdown.js";
 import { sendCritFx } from "./multiplayer/server-crit-fx.js";
 
-test("attackerSlowdown: only with knockback, 0.6 on motion and sprint off", () => {
+test("attackerSlowdown: only with knockback, sprint off (b75: the motion stays, the native client keeps its own)", () => {
   const p = { velocity: { x: 1, y: 0.2, z: -1 }, motion: { sprinting: true } };
   assert.equal(attackerSlowdown(p, { knockback: 0 }), false);
   assert.equal(p.motion.sprinting, true);
   assert.equal(attackerSlowdown(p, { knockback: 1 }), true);
-  assert.deepEqual([p.velocity.x, p.velocity.y, p.velocity.z, p.motion.sprinting], [0.6, 0.2, -0.6, false]);
+  assert.deepEqual([p.velocity.x, p.velocity.y, p.velocity.z, p.motion.sprinting], [1, 0.2, -1, false]);
 });
 
 test("crit animation follows the live mob and player, falls back to the snapshot", () => {
@@ -51,7 +51,7 @@ test("dedicated server: a sprinting hit on a pig pushes it and stops the attacke
   const vx = pig.vx;
   assert.equal(s.mobs.attack(a, Number(pig.id.slice(4))), true);
   assert.equal(a.motion.sprinting, false);
-  assert.ok(Math.abs(a.velocity.x - 0.12) < 1e-9);
+  assert.ok(Math.abs(a.velocity.x - 0.2) < 1e-9, 'b75: the real motion is not slowed');
   assert.notEqual(pig.vx, vx);
   assert.equal(a.dispOut?.filter(m => m.type === "pfx73").length ?? 0, 0);
 });
