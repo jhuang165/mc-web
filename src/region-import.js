@@ -35,6 +35,7 @@ import { playerMountable } from './entities.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { relinkMobs } from './owner-links.js';
 import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from './java-projectiles.js';
+import { JAVA_OBJECTS, IMPORT_OBJECT_LIMIT, javaObjectFromNbt } from './java-objects.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
 import { isMapFile, mapsFromFiles } from './maps-nbt.js';
@@ -418,7 +419,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const commandBlocks = [], musicTiles = [];
   const pots = [], signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, tableNames = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
-  const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
+  const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] }, objectLists = { xpOrbs: [], tnt: [], falling: [] };
   const hanging = [], carts = [], boats = [];
   const tickList = { fluid: [], fire: [], falling: [], redstone: [], foreign: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [], comparatorSignals = [];
   let tickDuplicates = 0, tickOutside = 0;
@@ -659,6 +660,14 @@ export async function importJavaRegionArea(regions, options = {}) {
         else tally(entityLost, !inArea ? `${id} (outside area)` : made?.lost ? `${id} (${made.lost})` : `${id} (over projectile limit)`);
         continue;
       }
+      // XPOrb, PrimedTnt and FallingSand (java-objects.js) become the browser's saved orbs, primed TNT and falling blocks (b75: they were counted as lost).
+      if (JAVA_OBJECTS[id] && pos?.every(Number.isFinite)) {
+        const list = objectLists[JAVA_OBJECTS[id]], inArea = inAreaAt(pos);
+        const made = inArea && list.length < IMPORT_OBJECT_LIMIT[JAVA_OBJECTS[id]] ? javaObjectFromNbt(entity, { shiftX, shiftZ }) : null;
+        if (made?.record) { list.push(made.record); tally(entityConverted, id); }
+        else tally(entityLost, !inArea ? `${id} (outside area)` : made?.lost ? `${id} (${made.lost})` : `${id} (over limit)`);
+        continue;
+      }
       // EntityLeashKnot (id LeashKnot) refuses to save in 1.7.10 (su.d returns false; mob-gear-nbt-reference.json), so a native chunk never holds
       // one: a knot is rebuilt from its mobs' Leash X/Y/Z (leashRestore). A foreign save's knot entity is counted, not lost.
       // EntityPainting / EntityItemFrame (EntityHanging.readEntityFromNBT): Direction, else the legacy Dir byte; the wall block
@@ -795,6 +804,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     ...(hanging.length ? { hanging: JSON.parse(JSON.stringify(Hanging.fromJSON(hanging).toJSON())) } : {}),
     ...(carts.length ? { minecarts: { version: 1, carts } } : {}),
     ...(boats.length ? { boats } : {}),
+    ...Object.fromEntries(Object.entries(objectLists).filter(([, list]) => list.length)),
     ...(scoreboard ? { scoreboard } : {}),
   };
   // The player converted with the area's item tallies, in the native frame (levelRecord shifts it).
