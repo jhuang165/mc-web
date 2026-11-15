@@ -10,26 +10,28 @@ import { ORIGINAL_ITEMS } from './original-items.js';
 import { makeStack } from './inventory.js';
 import { settleFacing } from './chest.js';
 import { torchAddedMeta } from './torches.js';
+import { TORCH } from './world.js';
 import { JavaRandom } from './java-random.js';
 
 // True when a record still owes the bonus chest to this world (overworld, spawn known).
 export const bonusChestDue = (record, world) => !!(record?.bonusChest && !record.bonusChestPlaced && !world.dimension && record.worldSpawn);
 
 // Places the chest on `world` around record.worldSpawn (local coordinates); returns { placed, changes, chests } where `changes` are [x, y, z, old, new]
-// block edits for a mesh update and `chests` maps "x,y,z" to the chest tiles written. `random` defaults to an unseeded JavaRandom.
+// block edits for a mesh update, `drops` the torches that could not stay ({x, y, z, id}) and `chests` maps "x,y,z" to the chest tiles written. `random` defaults to an unseeded JavaRandom.
 export function placeBonusChest(world, record, { random = unseededBonusRandom(JavaRandom) } = {}) {
   const solid = (x, y, z) => world.solid(x, y, z), orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[0] ?? 0;
-  const changes = [], chests = {}, access = {
+  const changes = [], chests = {}, drops = [], access = {
     id: orig,
     blocksMovement: (x, y, z) => solid(x, y, z),
     solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
     put(x, y, z, id, meta) {
       // setBlock(torch, 0, 2) runs BlockTorch.onBlockAdded (bytecode-read): metadata 0 takes the first of west (1), east (2), north (3), south (4) whose
       // neighbour is a normal cube (World.isBlockNormalCubeDefault, so leaves and glass do not count), else standing (5) on func_150107_m; a torch that
-      // cannot stay (func_150109_e) is dropped as an item, here simply not placed. torches.js holds that rule.
+      // cannot stay (func_150109_e) is dropped as an item (b75, bytecode-read: dropBlockAsItem then setBlockToAir): the block is set and removed again, so
+      // nothing is placed and a torch item entity is owed at the cell (`drops`, spawned by launch through ItemEntities.dropBlock). torches.js holds that rule.
       if (id === 50 && meta === 0) {
         meta = torchAddedMeta(world, x, y, z, 0);
-        if (meta < 0) return;
+        if (meta < 0) { drops.push({ x, y, z, id: TORCH }); return; }
       }
       const cell = fromOriginal(id, meta);
       if (!cell) return;
@@ -47,5 +49,5 @@ export function placeBonusChest(world, record, { random = unseededBonusRandom(Ja
   const [sx, , sz] = record.worldSpawn;
   const placed = createBonusChest(access, random, sx, sz);
   record.bonusChestPlaced = true;
-  return { placed, changes, chests };
+  return { placed, changes, chests, drops };
 }
