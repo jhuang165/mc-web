@@ -375,7 +375,7 @@ export function createMenus(gui, ctx) {
         g.button(b.returnToGame, t("menu.returnToGame"), () => ctx.resume());
         g.button(b.options, t("menu.options"), () => show(optionsScreen(ingameMenu)));
         // GuiIngameMenu: enabled while singleplayer and the integrated server is not public yet.
-        g.button(b.shareToLan, t("menu.shareToLan"), () => show(shareToLan(ingameMenu)), { enabled: !ctx.lanOpen() });
+        g.button(b.shareToLan, t("menu.shareToLan"), () => show(shareToLan(ingameMenu)), { enabled: !ctx.lanOpen() && !ctx.isRemote?.() });
         g.button(b.achievements, t("gui.achievements"), () => show(achievementsScreen({
           achievements: ctx.achievements, icon: ctx.icon, hash: javaHash(PLAYER_NAME), back: ingameMenu, close, show,
           keyName: () => keyName(keyOf("key.inventory")), inventoryKey: () => keyOf("key.inventory"),
@@ -426,12 +426,11 @@ export function createMenus(gui, ctx) {
         const L = optionsLayout(w, h), b = L.buttons;
         g.text(t("options.title"), ...L.title, { center: true });
         optionWidget(g, "FOV", b.fov);
-        // The difficulty button exists only with a world loaded.
+        // The difficulty button is always there (executed, gui-menus-reference.json GuiOptions+noworld: "Difficulty: Normal", enabled, with no
+        // world loaded; an earlier port comment said it exists only with a world).
         // GuiOptions.initGui: a hardcore world locks the button and shows "Difficulty: Hardcore".
-        if (ctx.inGame()) {
-          if (difficultyLocked(ctx.activeWorld?.())) g.button(b.difficulty, t("options.difficulty") + ": " + t("options.difficulty.hardcore"), null, { reason: UNAVAILABLE.hardcoreDifficulty });
-          else optionWidget(g, "DIFFICULTY", b.difficulty);
-        }
+        if (ctx.inGame() && difficultyLocked(ctx.activeWorld?.())) g.button(b.difficulty, t("options.difficulty") + ": " + t("options.difficulty.hardcore"), null, { reason: UNAVAILABLE.hardcoreDifficulty });
+        else optionWidget(g, "DIFFICULTY", b.difficulty);
         // GuiOptions.actionPerformed 8 (blt.c): the next post shader, and a random sound instead of the normal click.
         g.button(b.superSecret, "Super Secret Settings...", () => ctx.superSecret(), { silent: true });
         g.button(b.sounds, t("options.sounds"), () => show(soundsScreen(screen)));

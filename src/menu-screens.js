@@ -281,8 +281,9 @@ export function controlsLayout(w, h) {
   return {
     title: [c, 8],
     options: CONTROLS_OPTIONS.map((_, i) => btn(c - 155 + (i % 2) * 160, 18 + 24 * (i >> 1), 150)),
-    // GuiKeyBindingList(top 63, bottom h - 32, slot 20); getListWidth 220 + 15, scroll bar 124 + 15.
-    list: { top: 63, bottom: h - 32, slotHeight: 20, width: 235, scrollbarX: c + 124 + 15 },
+    // GuiKeyBindingList(top 63, bottom h - 32, slot 20); getListWidth 220 + 32 = 252 (executed, gui-menus-reference.json GuiControls: entries start at
+    // x = w/2 - 126 + 2; the earlier 235 shifted every label and button 9 right), scroll bar 124 + 15.
+    list: { top: 63, bottom: h - 32, slotHeight: 20, width: 252, scrollbarX: c + 124 + 15 },
     buttons: { done: btn(c - 155, h - 29, 150), resetAll: btn(c - 155 + 160, h - 29, 150) },
   };
 }
