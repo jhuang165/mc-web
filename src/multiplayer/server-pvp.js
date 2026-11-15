@@ -64,7 +64,7 @@ export class ServerPvp {
       if (push > 0 && Number.isFinite(p.yaw)) {
         const rad = f(f(f(180 - p.yaw * (180 / Math.PI)) * f(Math.PI)) / 180); // Java yaw = 180 - the view yaw in degrees
         queueVelocity(vs, f(f(-mhSin(rad) * push) * 0.5), 0.1, f(f(mhCos(rad) * push) * 0.5)); // after the hit's own knockBack, as the queue keeps the order
-        p.velocity.x *= 0.6; p.velocity.z *= 0.6;
+        // b75 mpplayerfx75: the attacker's motion * 0.6 is not applied (the native client keeps its own motion, server-attack-slowdown.js); the sprint flag below is the S1C
         if (p.motion) p.motion.sprinting = false;
       }
       vs.thorns?.({ // EnchantmentHelper.func_151384_a(victim, attacker): the victim's Thorns hurt the attacker

@@ -236,7 +236,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;
         }
-        simulation.admin.activity(id, m, simulation.ticks, m.type !== 'chat' || chatSendAllowed(simulation.players.get(id))); // b68 mpadmin: idle clock (/setidletimeout)
+        simulation.admin.activity(id, m, undefined, m.type !== 'chat' || chatSendAllowed(simulation.players.get(id))); // b68 mpadmin: idle clock (/setidletimeout)
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
@@ -297,7 +297,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       // b72 mpstream72: the S21 / S26 messages go before this tick's block changes (the bulk holds the columns as they stood when it was taken, the cells that follow repeat or add to it)
       for (const [pid, player] of simulation.players) { const ws = sockets.get(pid); for (const m of player.chunkOut ?? []) if (ws) send(ws, m); player.chunkOut = null; }
       broadcast(tick, simulation.dimensions.alt);
-      for (const pid of simulation.admin.idle(simulation.ticks)) simulation.admin.host.kick(pid, 'You have been idle for too long!'); // b68 mpadmin: /setidletimeout
+      for (const pid of simulation.admin.idle()) simulation.admin.host.kick(pid, 'You have been idle for too long!'); // b68 mpadmin: /setidletimeout
       pings.tick(); // b68 mpping: keep-alives every 40 ticks, one S38 per tick in rotation
       social.drain(); // death messages queued by the tick, to every player
       // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).

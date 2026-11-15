@@ -113,7 +113,7 @@ export class PlayerBody {
     if (d * d > 2500) this.renderYawOffset = f(this.renderYawOffset + f(d * f(0.2)));
   }
   // `motion` ({ x, y, z, onGround, frozen }) is the locally simulated player's motionX/Y/Z; a remote player passes none (b70 cape).
-  tick({ position, previous, yaw, pitch, swinging = false, riding = false, motion = null }) {
+  tick({ position, previous, yaw, pitch, swinging = false, riding = false, motion = null, head }) {
     this.prevRenderYawOffset = this.renderYawOffset;
     this.prevRotationYawHead = this.rotationYawHead;
     this.prevRotationPitch = this.rotationPitch;
@@ -122,7 +122,7 @@ export class PlayerBody {
     this.rotationYaw = javaYaw(yaw);
     this.rotationPitch = javaPitch(pitch);
     // The old-AI branch of onLivingUpdate sets rotationYawHead = rotationYaw.
-    this.rotationYawHead = this.rotationYaw;
+    this.rotationYawHead = head === undefined ? this.rotationYaw : javaYaw(head); // b75 mpplayerfx75: a remote copy's head is the S19 angle (client-ptrack / server-player-tracker rows), not interpolated
     const dx = f(position.x - previous.x), dz = f(position.z - previous.z), d2 = riding ? 0 : f(f(dx * dx) + f(dz * dz));
     let target = this.renderYawOffset;
     if (d2 > f(0.0025000002)) target = f(f(Math.atan2(dz, dx) * DEG) - 90);

@@ -235,7 +235,7 @@ export class DedicatedSimulation {
     this.serverItems.join(player, saved);
     this.sleep.join(player); // b66 mpsleep: damage wakes a sleeper
     this.stats.join(player, saved); // b63 mpstats
-    this.admin.seen(resumeKey, name); this.admin.join(id, this.ticks); // b68 mpadmin: profile cache, idle clock
+    this.admin.seen(resumeKey, name); this.admin.join(id); // b68 mpadmin: profile cache, idle clock
     this.players.set(id, player);
     this.mobs.addPlayer(player);
     this.vehicles.addPlayer(player); // b61
