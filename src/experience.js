@@ -93,22 +93,34 @@ export class ExperienceOrbs {
  // sets it to 2, plays random.orb (0.1, 0.5 * ((r - r) * 0.7 + 1.8)) at the player and adds
  // the value. EntityPlayer.onUpdate counts the cooldown down first, so the player takes at most
  // one orb every other tick. Returns the value picked up.
- collect(feet,width=0.6,height=1.8){
-  if(this.cooldown>0)this.cooldown--;
+ // EntityPlayer.onUpdate: xpCooldown counts down once per tick, before the pickup pass.
+ coolDown(){if(this.cooldown>0)this.cooldown--;}
+ // b74 order74: the orbs in the pickup box, for the one pass of pickup-order.js (the list gives every orb; the cooldown is tested in takeOne, as onCollideWithPlayer does).
+ pickupCandidates(feet,width=0.6,height=1.8){
   const r=f(width)/2,a=[feet.x-r-1,feet.y-0.5,feet.z-r-1,feet.x+r+1,feet.y+f(height)+0.5,feet.z+r+1];
   const near=[];
-  if(!this.cooldown)for(const o of this.orbs){
+  for(const o of this.orbs){
    if(o.dead||isFrozen(o))continue;
    const b=o.bb;
    if(b[3]>a[0]&&b[0]<a[3]&&b[4]>a[1]&&b[1]<a[4]&&b[5]>a[2]&&b[2]<a[5])near.push({key:o,ref:o,box:b,posY:o.posY});
   }
-  for(const {ref:o} of orderTargets(near)){ // b73: the world's list order decides which orb is taken first (the cooldown then holds the rest back)
-   if(o.dead||this.cooldown)continue;
-   this.cooldown=2;
-   const rr=this.rng(o),r1=rr(),r2=rr();
-   this.sounds.push({name:'random.orb',volume:f(0.1),pitch:f(f(0.5)*f(f(f(f(r1)-f(r2))*f(0.7))+f(1.8))),x:feet.x,y:feet.y,z:feet.z});
-   o.dead=true;this.orbs=this.orbs.filter(x=>x!==o);
-   return o.value;
+  return near;
+ }
+ // EntityXPOrb.onCollideWithPlayer for one listed orb: nothing while xpCooldown is above 0 (or the orb is gone). Returns the value taken, or null when refused.
+ takeOne(o,feet){
+  if(o.dead||this.cooldown)return null;
+  this.cooldown=2;
+  const rr=this.rng(o),r1=rr(),r2=rr();
+  this.sounds.push({name:'random.orb',volume:f(0.1),pitch:f(f(0.5)*f(f(f(f(r1)-f(r2))*f(0.7))+f(1.8))),x:feet.x,y:feet.y,z:feet.z});
+  o.dead=true;this.orbs=this.orbs.filter(x=>x!==o);
+  return o.value;
+ }
+ collect(feet,width=0.6,height=1.8){
+  this.coolDown();
+  if(this.cooldown)return 0;
+  for(const {ref:o} of orderTargets(this.pickupCandidates(feet,width,height))){ // b73: the world's list order decides which orb is taken first (the cooldown then holds the rest back)
+   const v=this.takeOne(o,feet);
+   if(v!==null)return v;
   }
   return 0;
  }

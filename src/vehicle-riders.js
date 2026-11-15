@@ -42,12 +42,14 @@ export function linkVehicleRiders(mobs, boats, carts, heightOf) {
 
 // Entity.fall (sa.b, bytecode-read): a vehicle that lands hands its fall distance to riddenByEntity, whatever it is (EntityBoat.updateFallState above 3 blocks, the minecart
 // through Entity.updateFallState on any landing with fallDistance > 0). The player rider is called at once (`rider.fall`, with the fall sound hook `state.fallSound` of
-// vehicle-simulation.js); a mob passenger takes it at its own turn of the mob walk (EntityWorld.tickMobs -> takeVehicleFalls -> fall), a little after the native call.
+// vehicle-simulation.js). b74 order74: a mob passenger takes it at once too, through its `vehicleFall` hook (the owning EntityWorld sets it at the mob's first turn
+// aboard); only a mob that has not had a turn yet (it sat down this very pass) still queues the fall for its first turn (EntityWorld.tickMobs -> takeVehicleFalls -> fall).
 const pendingFalls = new WeakMap();
 export function passFall(vehicle, distance) {
   vehicle.rider?.fall?.(distance);
   const p = vehicle.passenger;
-  if (p && p.ridingEntity === vehicle) pendingFalls.set(p, [...(pendingFalls.get(p) ?? []), distance]);
+  if (p && p.ridingEntity === vehicle && typeof p.vehicleFall === "function") p.vehicleFall(distance);
+  else if (p && p.ridingEntity === vehicle) pendingFalls.set(p, [...(pendingFalls.get(p) ?? []), distance]);
 }
 export function takeVehicleFalls(mob) {
   const list = pendingFalls.get(mob);

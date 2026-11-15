@@ -3164,6 +3164,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       scene.drops.pickup(item, position);
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
+    // b74 order74: an orb taken in the one pickup pass (pickup-order.js); the same steps as tickLivingSimulation's orb branch
+    orbTaken: (amount) => { const oldLevel = experience.level; experience.add(amount); const v = experience.levelUp(oldLevel, playerTicks); if (v) sounds.play("random.levelup", { volume: v, pitch: 1 }); renderVitals(); saved = false; },
+    orbSound: (s) => sounds.play(s.name, { volume: s.volume, pitch: s.pitch }),
     // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
     projectileTargets: () => [...mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
     projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
@@ -3878,7 +3881,7 @@ function movementTick(controls) {
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
-    playerTicks, width: PHYSICS.width, height: PHYSICS.height, sleeping: bedSleep.sleeping }; // b67: a lying player is a 0.2 x 0.2 target (ai.js PlayerView)
+    playerTicks, width: PHYSICS.width, height: PHYSICS.height, sleeping: bedSleep.sleeping, orbPass: isWalked(mobs) && !!entityTick }; // orbPass (b74): finishEntitySimulation takes the orbs // b67: a lying player is a 0.2 x 0.2 target (ai.js PlayerView)
   playerTicks = tickLivingSimulation(living, {
     ...mobEventHooks(),
     heldItem: heldId,

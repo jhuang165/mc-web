@@ -2330,7 +2330,7 @@ export class EntityWorld {
       if (e.removedNow || !this.isActive(e)) continue;
       // Loot queued before this entry (a kill outside the tick: a horse's saddle at onDeath) is flushed first, so the far mob's flushLoot cannot shrink the list below the mark (holes in events)
       if (this.ring && !this.world.isTicking(e.x, e.z)) { this.flushLoot(); farMark = this.events.length; }
-      if (e.ridingEntity) { rider = e; beginRidden(e); for (const d of takeVehicleFalls(e)) this.fall(e, d); } // b72: a boat or cart under a mob rider fell (Entity.fall hands it to riddenByEntity)
+      if (e.ridingEntity) { rider = e; beginRidden(e); if (!e.vehicleFall) Object.defineProperty(e, "vehicleFall", { value: (d) => this.fall(e, d), writable: true, configurable: true, enumerable: false }); /* b74 order74: later falls go straight in (vehicle-riders.js passFall) */ for (const d of takeVehicleFalls(e)) this.fall(e, d); } // b72: a boat or cart under a mob rider fell (Entity.fall hands it to riddenByEntity)
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;

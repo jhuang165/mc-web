@@ -97,7 +97,8 @@ function collectItemsAndArrows(state, hooks) {
   const { items, arrows, survival, position, width, height } = state, { itemPicked = () => {}, itemsCollected = () => {}, arrowsCollected = () => {}, flushArrows = () => {} } = hooks;
   if (survival.health > 0) {
     const { playerBox, ridingBox } = pickupBoxes(state);
-    const got = collectPickups({ items, arrows, survival, feet: position, width, height, playerBox, ridingBox, add: (stack) => survival.inventory.add(stack) }, { itemPicked, arrowTaken: flushArrows });
+    const orbs = state.xpOrbs && hooks.orbTaken ? state.xpOrbs : null; // b74 order74: orbs in the same pass (main.js hooks orbTaken, living-simulation.js then leaves them out)
+    const got = collectPickups({ items, arrows, orbs, survival, feet: position, width, height, playerBox, ridingBox, add: (stack) => survival.inventory.add(stack) }, { itemPicked, arrowTaken: flushArrows, orbTaken: (v) => { for (const e of orbs.sounds.splice(0)) hooks.orbSound?.(e); hooks.orbTaken(v); /* random.orb first, then addExperience's level sound */ } });
     if (got.items.length) itemsCollected(got.items);
     if (got.arrows) arrowsCollected();
   }
