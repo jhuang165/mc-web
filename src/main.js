@@ -243,6 +243,8 @@ import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { drainKnockback } from "./player-knockback.js";
+import { deathThrow } from "./death-throw.js";
+import { hurtNonLiving } from "./falling-hurt.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { sparkleHeight, useBoneMeal } from "./bone-meal.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
@@ -1661,6 +1663,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         const intersects=b=>box[3]>b[0]&&box[0]<b[3]&&box[4]>b[1]&&box[1]<b[4]&&box[5]>b[2]&&box[2]<b[5];
         if(intersects(pushBox(position,PHYSICS.width,PHYSICS.height)))survival.anvilDamage(amount,kind);
         for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:kind});}
+        hurtNonLiving(box,amount,kind,{items,xpOrbs,minecarts,boats,hanging},d=>{if(d.stack)items.spawn(copyStack(d.stack),d.x,d.posY,d.z,{delay:d.delay,motion:d.motion});});spawnHangingDrops(); // b74: items, orbs, carts, boats, frames and paintings in the box too (falling-hurt.js)
         saved=false;
       },
     }, record.falling).watch();
@@ -2904,6 +2907,11 @@ function applyHealthFx(m) {
   else applyEffectEnd(survival, m);
   renderVitals();
 }
+function deadBodyTick() {
+  const state = { world: clientWorld(), position, previous, velocity, motion, survival, yaw, eating: null, grounded, collidedH, flying: false, fallDistance, landedFall, sleeping: false };
+  movePlayer(state, IDLE_INPUT, toast);
+  ({ grounded, collidedH, fallDistance, landedFall } = state);
+}
 function die() {
   if (screen === "dead") return;
   if (bedSleep.sleeping) bedWake(true, false, false);
@@ -2928,6 +2936,7 @@ function die() {
   const stacks = keep && !multiplayer ? survival.inventory.takeAll() : []; // over a connection the server drops the items and the client's copy is emptied by healthHurt (client-health.js)
   // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
   for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
+  if (!multiplayer) { survival.knockQueue = []; const t = deathThrow(survival.attackedAt, position, 180 - (yaw * 180) / Math.PI); velocity.set(t.x, t.y, t.z); } // b74: EntityPlayer.onDeath's motion reaches the client by S12 (death-throw.js); the dead loop moves the body
   // EntityLivingBase.onDeathUpdate (not overridden by EntityPlayer) leaves the orbs only while gamerule doMobLoot is true.
   const deathScore=experience.score;if(keep&&!multiplayer){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
@@ -4593,6 +4602,7 @@ function animate(now) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick) {
       gui.tick(); // GuiGameOver / GuiYesNo updateScreen: the 20-tick button delay counts these client ticks
+      if (!multiplayer) deadBodyTick(); // b74: the thrown body keeps moving (idle input) like the client player during GuiGameOver
       survival.hurtTime = Math.max(0, survival.hurtTime - 1);
       { const feet = { x: position.x, y: position.y - motion.ySize, z: position.z }; playerBody.tick({ position: feet, previous: feet, yaw, pitch }); } // limb swing settles; the head and body stay put
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
@@ -4603,6 +4613,7 @@ function animate(now) {
     // degrees about the view axis (the same sign convention as the hurt tilt and view bob).
     const roll = (hurtCameraRoll({ hurtTime: survival.hurtTime, health: 0, deathTime }, Math.min(1, accumulator / PHYSICS.tick)) * Math.PI) / 180;
     scene.camera.rotation.z = roll;
+    scene.camera.position.lerpVectors(previous, position, Math.min(1, accumulator / PHYSICS.tick)); scene.camera.position.y += PHYSICS.eye - motion.drop(1); // b74: the camera follows the thrown body
   } else if (screen === "home") scene.preview(elapsed);
   if (debug && screen !== "home" && !running()) updateDebugOverlay();
   const partial = Math.min(1, accumulator / PHYSICS.tick);

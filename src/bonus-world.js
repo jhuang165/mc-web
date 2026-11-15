@@ -9,6 +9,7 @@ import { fromOriginal, toOriginal } from './block-registry.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
 import { makeStack } from './inventory.js';
 import { settleFacing } from './chest.js';
+import { torchAddedMeta } from './torches.js';
 import { JavaRandom } from './java-random.js';
 
 // True when a record still owes the bonus chest to this world (overworld, spawn known).
@@ -23,11 +24,11 @@ export function placeBonusChest(world, record, { random = unseededBonusRandom(Ja
     blocksMovement: (x, y, z) => solid(x, y, z),
     solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
     put(x, y, z, id, meta) {
-      // BlockTorch.onBlockAdded (bytecode-read): a torch set with metadata 0 takes the first of west (1), east (2), north (3), south (4) whose neighbour has a
-      // solid side facing it, else standing (5) on a solid top; with none it cannot stay (func_150109_e drops it), so it is not placed.
+      // setBlock(torch, 0, 2) runs BlockTorch.onBlockAdded (bytecode-read): metadata 0 takes the first of west (1), east (2), north (3), south (4) whose
+      // neighbour is a normal cube (World.isBlockNormalCubeDefault, so leaves and glass do not count), else standing (5) on func_150107_m; a torch that
+      // cannot stay (func_150109_e) is dropped as an item, here simply not placed. torches.js holds that rule.
       if (id === 50 && meta === 0) {
-        const wall = [[-1, 0, 1], [1, 0, 2], [0, -1, 3], [0, 1, 4]].find(([dx, dz]) => solid(x + dx, y, z + dz) && orig(x + dx, y, z + dz) !== 54);
-        meta = wall ? wall[2] : solid(x, y - 1, z) && orig(x, y - 1, z) !== 54 ? 5 : -1;
+        meta = torchAddedMeta(world, x, y, z, 0);
         if (meta < 0) return;
       }
       const cell = fromOriginal(id, meta);

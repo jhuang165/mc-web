@@ -29,6 +29,7 @@ import { installNetherItems, installNetherMaterials, installNetherRecipes, insta
 import { applyNativeNames } from './item-names.js';
 import { installFoodItems, installFoodRecipes, foodCraftingResult } from './food-items.js';
 import { queueKnockBack } from './player-knockback.js';
+import { attackedAtOf } from './death-throw.js';
 import { CombatTracker, damageSource } from "./combat-tracker.js";
 import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
 import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
@@ -874,6 +875,7 @@ export class Survival {
     this.combat.noteAttacker(hit, this.ticks);
     if (hit.entity?.living && hit.entity.raw) this.onRevenge?.(hit.entity.raw); // the owner's wolves (ai.js beginTick)
     this.combatSite = null; this.combatFall = 0; // sampled per fall, not carried to the next hit
+    this.attackedAt = attackedAtOf(fresh, from); // attackedAtYaw for EntityPlayer.onDeath's throw (death-throw.js)
     if (fresh) {
       this.hurtTicks = 10;
       this.hurtCount++;
