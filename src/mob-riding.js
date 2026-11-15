@@ -7,6 +7,7 @@
 // A mount and its rider are two ordinary mobs joined by two non-enumerable references: `ridingEntity` on the rider
 // (Entity.ridingEntity) and `riddenBy` on the mount (Entity.riddenByEntity). A save keeps one enumerable field,
 // `riding`: the mount's id on the rider, which loading turns back into the references (linkRiders).
+import { markMoved } from "./push-grid.js"; // b75: the push grid files a mob again when a seat or dismount moves it
 import { mhSin, mhCos } from "./lighting.js";
 import { isVehicle, vehicleSeat } from "./vehicle-seat.js";
 import { liveAttribute, healthBoostExtra } from "./mob-attributes.js";
@@ -42,6 +43,7 @@ export function setLocationAndAngles(e, x, y, z, yaw, pitch) {
   e.rotationYaw = e.prevRotationYaw = yaw;
   e.rotationPitch = e.prevRotationPitch = pitch;
   e.yaw = (-yaw * Math.PI) / 180;
+  markMoved(e);
 }
 
 // Entity.mountEntity(mount): null dismounts to (mount.x, mount.minY + mount.height, mount.z) with the rider's own angles. A mount
@@ -122,6 +124,7 @@ export function endRidden(e, heightOf) {
   e.x = seat.x;
   e.y = seat.y;
   e.z = seat.z;
+  markMoved(e);
   if (seat.renderYaw !== undefined && e.health > 0) e.renderYawOffset = seat.renderYaw;
   const d = deltas.get(e) ?? { yaw: 0, pitch: 0 };
   d.yaw += f((m.rotationYaw ?? m.yaw ?? 0) - (m.prevRotationYaw ?? m.prevYaw ?? 0));

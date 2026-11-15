@@ -1,3 +1,4 @@
+import { pushCandidates, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
@@ -2292,7 +2293,7 @@ export class EntityWorld {
     const peacefulGone = [];
     // Entity.updateRidden ends with updateRiderPosition: the seat is taken right after the rider's own update, before the next mob of the list moves (b36 records: a mob after the mount pushes the rider at its new seat).
     let rider = null;
-    const seat = () => { if (rider) endRidden(rider, (m) => this.size(m)[1]); rider = null; }; // b72: endRidden zeroes the rider's fallDistance even when the mount let it go (sv.ab)
+    const seat = () => { if (rider) { endRidden(rider, (m) => this.size(m)[1]); markMoved(rider); } rider = null; }; // b72: endRidden zeroes the rider's fallDistance even when the mount let it go (sv.ab)
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
@@ -2303,6 +2304,7 @@ export class EntityWorld {
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
     const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
+    beginPushGrid(); // b75: the push grid is built by the first push of this loop
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
@@ -2456,6 +2458,7 @@ export class EntityWorld {
       this.turnBody(e);
       this.swingLimbs(e);
     }
+    endPushGrid();
     if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); } // the player's place is after every entity of this pass
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
@@ -2540,7 +2543,8 @@ export class EntityWorld {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
-    for (const o of liveOrder(this, this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
+    const cand = pushCandidates(this.entities, e); // b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
+    for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
