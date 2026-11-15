@@ -3,6 +3,7 @@ import { PlayerInventory, copyStack, makeStack, sameStackItem } from '../invento
 import { ExperienceOrbs, Experience } from '../experience.js';
 import { PHYSICS } from '../world.js';
 import { ServerInventory } from './server-inventory.js';
+import { pickupPass, playerBox, ridingBoxOf } from './server-pickup-order.js'; // b74 mppickup74
 
 // Items, experience and inventory authority of a Survival dedicated server (batch 59).
 //
@@ -119,22 +120,37 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
     const room = new Map(), byStack = new Map(), auth = this.authority(p);
     for (const e of sim.items.items) { const at = eids.indexOf(e.eid); if (at >= 0) { byStack.set(e.stack, e); room.set(e.eid, Number.isInteger(fits?.[at]) ? fits[at] : Infinity); } }
     if (!byStack.size) return false;
-    sim.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => {
-      const e = byStack.get(stack);
-      let n = e ? Math.min(stack.count, room.get(e.eid)) : 0;
-      if (auth && e) { // b61: EntityItem.onCollideWithPlayer -> InventoryPlayer.addItemStackToInventory on the server's own inventory; the client's fit is only a hint
-        const left = copyStack(stack); p.survival.inventory.add(left); n = stack.count - left.count;
+    const lane = sim.dispense;
+    if (auth && lane?.arrows?.list.some(a => a.inGround)) {
+      const was = lane.arrows.list.filter(a => !a.dead);
+      if (pickupPass(sim, lane, p, playerBox(p), ridingBoxOf(sim, p), new Set(byStack.values()))) {
+        for (const a of was) if (a.dead) (lane.collected ??= []).push({ i: lane.id(a), by: p.id, dim: lane.dim, x: a.x, y: a.y, z: a.z });
+        return true;
       }
-      if (!(n > 0)) return false;
-      (p.collectedOut ??= []).push(Object.assign(copyStack({ ...stack, count: n }), auth ? { invAdded: true } : {})); // `invAdded`: the slots follow as `slot`; the client must not add it again
-      (sim.events ??= []).push({ type: 'pickup', id: p.id, item: stack.id }); // the achievement triggers (server-broadcast.js pickedAchievement)
-      sim.achievements.diamondsToYou(p, stack, e); // xk.b_: a diamond thrown by another online player awards the thrower (b60)
-      stack.count -= n;
-      this.taken.push({ i: e.eid, by: p.id, ...(stack.count > 0 ? { partial: true } : {}) }); // S0D goes out for a partial take too (EntityPlayer.onItemPickup runs after any addItemStackToInventory success)
-      // EntityItem.onCollideWithPlayer: random.pop 0.2, pitch ((r - r) * 0.7 + 1) * 2, for everyone in range (the collector's client plays its own).
-      sim.soundsOut.push({ name: 'random.pop', x: p.position.x, y: p.position.y, z: p.position.z, volume: f(0.2), pitch: f(f(f(f(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * f(0.7)) + 1) * 2), except: p.id });
-      return true;
-    });
+    } // b74 mppickup74: stuck arrows in reach join the pass (list order)
+    sim.items.collect(p.position, PHYSICS.width, PHYSICS.height, stack => this.takeItem(p, byStack.get(stack), stack, room.get(byStack.get(stack)?.eid), auth));
+    return true;
+  }
+
+  // One EntityItem.onCollideWithPlayer for player `p` (b74 mppickup74: shared by the client-driven `pickup` and the mixed item/arrow pass in server-pickup-order.js). `e` is the ItemEntities row
+  // of `stack`, `fit` the client's hint (Infinity: all), `auth` whether the server's own inventory takes it. True when something was taken.
+  takeItem(p, e, stack, fit, auth = this.authority(p)) {
+    const sim = this.sim;
+    let n = e ? Math.min(stack.count, fit) : 0;
+    if (auth && e) { // b61: EntityItem.onCollideWithPlayer -> InventoryPlayer.addItemStackToInventory on the server's own inventory; the client's fit is only a hint
+      const left = copyStack(stack); p.survival.inventory.add(left); n = stack.count - left.count;
+      // b74 mppickup74 (executed, PickupOrderProbe / pickup-order-reference.json): a partial take returns false from addItemStackToInventory, so EntityItem.onCollideWithPlayer plays no pop,
+      // sends no S0D and awards nothing; the stack just shrinks (the slots follow through `settle`).
+      if (n > 0 && left.count > 0) { stack.count -= n; return false; }
+    }
+    if (!(n > 0)) return false;
+    (p.collectedOut ??= []).push(Object.assign(copyStack({ ...stack, count: n }), auth ? { invAdded: true } : {})); // `invAdded`: the slots follow as `slot`; the client must not add it again
+    (sim.events ??= []).push({ type: 'pickup', id: p.id, item: stack.id }); // the achievement triggers (server-broadcast.js pickedAchievement)
+    sim.achievements.diamondsToYou(p, stack, e); // xk.b_: a diamond thrown by another online player awards the thrower (b60)
+    stack.count -= n;
+    this.taken.push({ i: e.eid, by: p.id, ...(stack.count > 0 ? { partial: true } : {}) }); // S0D goes out for a partial take too (EntityPlayer.onItemPickup runs after any addItemStackToInventory success)
+    // EntityItem.onCollideWithPlayer: random.pop 0.2, pitch ((r - r) * 0.7 + 1) * 2, for everyone in range (the collector's client plays its own).
+    sim.soundsOut.push({ name: 'random.pop', x: p.position.x, y: p.position.y, z: p.position.z, volume: f(0.2), pitch: f(f(f(f(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * f(0.7)) + 1) * 2), except: p.id });
     return true;
   }
 

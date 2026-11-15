@@ -150,16 +150,15 @@ test('pickup: a partial fit takes part of the stack, the rest stays; a full take
   for (let i = 0; i < 36; i++) inv.main[i] = stack(1, 64);
   inv.main[5] = stack(3, 60); // b61: the server's own inventory decides the fit (4 of the 10)
   assert.equal(s.pickup('a', [eid], [4]), true);
-  assert.deepEqual(a.collectedOut.map(t => t.count), [4]);
-  assert.equal(a.collectedOut[0].invAdded, true, 'the server added it; the client must not');
+  assert.deepEqual(a.collectedOut ?? [], [], 'b74: a partial take sends no collect (addItemStackToInventory answers false natively)');
   assert.equal(inv.main[5].count, 64);
   assert.equal(s.itemList()[0].stack.count, 6, 'the remainder stays on the ground');
-  assert.deepEqual(s.serverItems.taken, [{ i: eid, by: 'a', partial: true }]); // b60: S0D goes out for a partial take too
+  assert.deepEqual(s.serverItems.taken, []); // b74: no S0D for a partial take (executed, pickup-order-reference.json)
   s.serverItems.taken.length = 0;
-  assert.equal(s.pickup('a', [eid], [0]), true); assert.equal(a.collectedOut.length, 1, 'no room, nothing leaves');
+  assert.equal(s.pickup('a', [eid], [0]), true); assert.equal((a.collectedOut ?? []).length, 0, 'no room, nothing leaves');
   inv.main[0] = null;
   s.pickup('a', [eid], [64]);
-  assert.deepEqual(a.collectedOut.map(t => t.count), [4, 6]);
+  assert.deepEqual(a.collectedOut.map(t => t.count), [6]);
   assert.equal(inv.main[0].count, 6);
   const t = s.tick();
   assert.deepEqual(t.taken, [{ i: eid, by: 'a' }]);

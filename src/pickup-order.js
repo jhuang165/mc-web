@@ -7,11 +7,11 @@ import { orderTargets } from "./candidate-order.js";
 
 /**
  * `items` (ItemEntities) and `arrows` (Arrows) give their candidates; `add(stack)` stores an item stack; `take` stores one arrow.
- * Hooks: `itemPicked(result)` after each item that gave anything, `arrowTaken(arrow)` after each arrow, `collected(items, arrows)` once at the end.
+ * `keepItem(e)` (optional) limits the items to those it accepts (the dedicated server's client-named pickups). Hooks: `itemPicked(result)` after each item that gave anything, `arrowTaken(arrow)` after each arrow, `collected(items, arrows)` once at the end.
  * Returns { items: [results], arrows: n }.
  */
-export function collectPickups({ items, arrows, survival, feet, width, height, playerBox, ridingBox = null, add, take }, hooks = {}) {
-  const rows = [...items.pickupCandidates(feet, width, height).map((c) => ({ ...c, kind: "item" })), ...arrows.pickupCandidates(playerBox, ridingBox).map((c) => ({ ...c, kind: "arrow" }))];
+export function collectPickups({ items, arrows, survival, feet, width, height, playerBox, ridingBox = null, add, take, keepItem = null }, hooks = {}) {
+  const rows = [...items.pickupCandidates(feet, width, height).filter((c) => !keepItem || keepItem(c.ref)).map((c) => ({ ...c, kind: "item" })), ...arrows.pickupCandidates(playerBox, ridingBox).map((c) => ({ ...c, kind: "arrow" }))];
   const picked = [];
   let n = 0;
   for (const c of orderTargets(rows)) {

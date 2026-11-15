@@ -6,6 +6,7 @@
 // Clients see them as `dispEnts` (a snapshot of the entities near the player, each tick) and `dispFx` (explosions, potion breaks, rocket bursts, sounds); see client-dispense.js.
 // Not connected: arrows and thrown balls do not hit players, minecarts and boats need the vehicle track (`sim.vehicles.dispenseBoat / dispenseCart`, absent: the stack is kept),
 // nothing here is saved across a restart.
+import { pickupPass } from './server-pickup-order.js'; // b74 mppickup74
 import { Arrows, arrowTargets } from '../bow.js';
 import { impactEnderPearl } from '../ender-pearl.js';
 import { arrowPunch } from '../player-knockback.js';
@@ -228,7 +229,7 @@ export class ServerDispense {
     for (const p of this.sim.players.values()) {
       if (p.dead || !p.survival || p.survival.health <= 0 || (p.dimension | 0) !== lane.dim || !lane.arrows.list.some(a => a.inGround)) continue;
       const hw = q(0.3), at = p.position, was = lane.arrows.list.filter(a => !a.dead);
-      if (!lane.arrows.collect([at.x - hw, at.y, at.z - hw, at.x + hw, at.y + q(1.8), at.z + hw], p.survival, undefined, (lane.dim ? this.dimState(lane.dim)?.vehicles : this.sim.vehicles)?.ridingBox?.(p) ?? null)) continue; // b73 mpriders73: the ridden box widens the pickup box
+      if (!pickupPass(this.sim, lane, p, [at.x - hw, at.y, at.z - hw, at.x + hw, at.y + q(1.8), at.z + hw], (lane.dim ? this.dimState(lane.dim)?.vehicles : this.sim.vehicles)?.ridingBox?.(p) ?? null)) continue; // b73 mpriders73: the ridden box widens the pickup box; b74 mppickup74: with dropped items in reach, one pass in list order
       for (const a of was) if (a.dead) (this.collected ??= []).push({ i: this.id(a), by: p.id, dim: lane.dim, x: a.x, y: a.y, z: a.z });
     }
   }
