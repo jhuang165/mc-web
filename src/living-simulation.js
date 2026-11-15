@@ -97,7 +97,8 @@ export function tickLivingSimulation(state, hooks = {}) {
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;
   if (!mobs.walks?.has("orb")) xpOrbs.tick(world, position); // walked: the orbs updated in mobs.tick's list walk (entity-simulation.js entityWalkers)
-  if (survival.health > 0) {
+  if (state.orbPass) xpOrbs.coolDown(); // b74 order74: the orbs are taken in finishEntitySimulation's pickup pass (list order with the items); the cooldown still counts down here
+  else if (survival.health > 0) {
     const oldLevel = experience.level;
     const amount = xpOrbs.collect(position, width, height);
     if (amount) {

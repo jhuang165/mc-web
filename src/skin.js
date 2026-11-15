@@ -5,6 +5,8 @@
 // Modern 64 x 64 skins keep the same layout in their top half, so cropping them
 // gives the skin 1.7.10 would draw (left limbs mirror the right ones).
 
+import { decodePng } from "./png-decode.js";
+
 export const SKIN_WIDTH = 64, SKIN_HEIGHT = 32;
 export const MAX_SKIN_BYTES = 16384;
 // b71 mpcapes: an uploaded cape is a plain 64 x 32 PNG (the layout AbstractClientPlayer.locationCape is drawn from); the same size limit as skins.
@@ -96,6 +98,13 @@ export function drawSkinPreview(ctx, skin) {
 // Browser only: decode an untrusted image file or PNG blob into a normalized
 // 64 x 32 canvas. Rejects other sizes instead of guessing at a scale.
 export async function skinCanvas(blob) {
+  // b74 order74: PNG bytes decode here without premultiplying (png-decode.js), as ImageIO does; anything the decoder refuses falls back to the canvas path.
+  let decoded = null;
+  try { decoded = await decodePng(new Uint8Array(await blob.arrayBuffer())); } catch { decoded = null; }
+  if (decoded) {
+    if (!acceptedSkinSize(decoded.width, decoded.height)) throw new Error(`A skin must be 64 × 32 or 64 × 64 pixels (this is ${decoded.width} × ${decoded.height}).`);
+    return pixelsCanvas(normalizeSkinPixels(decoded.data, decoded.height));
+  }
   let bitmap;
   try { bitmap = await createImageBitmap(blob); }
   catch { throw new Error("That file is not a readable PNG image."); }
@@ -105,12 +114,14 @@ export async function skinCanvas(blob) {
     source.width = bitmap.width; source.height = bitmap.height;
     const sc = source.getContext("2d", { willReadFrequently: true });
     sc.drawImage(bitmap, 0, 0);
-    const px = normalizeSkinPixels(sc.getImageData(0, 0, bitmap.width, bitmap.height).data, bitmap.height);
-    const out = document.createElement("canvas");
-    out.width = SKIN_WIDTH; out.height = SKIN_HEIGHT;
-    out.getContext("2d").putImageData(new ImageData(px, SKIN_WIDTH, SKIN_HEIGHT), 0, 0);
-    return out;
+    return pixelsCanvas(normalizeSkinPixels(sc.getImageData(0, 0, bitmap.width, bitmap.height).data, bitmap.height));
   } finally { bitmap.close?.(); }
+}
+function pixelsCanvas(px) {
+  const out = document.createElement("canvas");
+  out.width = SKIN_WIDTH; out.height = SKIN_HEIGHT;
+  out.getContext("2d").putImageData(new ImageData(px, SKIN_WIDTH, SKIN_HEIGHT), 0, 0);
+  return out;
 }
 export const canvasPng = (canvas) => new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode the skin."))), "image/png"));
 
