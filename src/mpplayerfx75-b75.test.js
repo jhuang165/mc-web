@@ -113,3 +113,20 @@ test('dedicated server: a killed player flies off with the throw and respawn cle
   s.serverSurvival.respawn(a);
   assert.deepEqual([a.velocity.x, a.velocity.y, a.velocity.z], [0, 0, 0]);
 });
+
+test('PvP: a sprint hit on a remote player slows the attacker (client-side native), a mob hit does not', async () => {
+  const { World } = await import('./world.js');
+  const { DedicatedSimulation } = await import('./multiplayer/simulation.js');
+  const world = new World('mpplayerfx75pvp');
+  for (let x = 20; x <= 110; x++) for (let z = 20; z <= 110; z++) for (let y = 9; y <= 24; y++) world.put(x, y, z, y === 9 ? 1 : 0, 0, false);
+  world.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
+  const s = new DedicatedSimulation({}, { world, gameMode: 'survival', mobs: false });
+  const a = s.addPlayer('a', 'ax', '00000000-0000-0000-0000-000000000001'), v = s.addPlayer('v', 'vx', '00000000-0000-0000-0000-000000000002');
+  a.position.copy({ x: 64.5, y: 10, z: 64.5 }); v.position.copy({ x: 64.5, y: 10, z: 66 }); a.previous.copy(a.position); v.previous.copy(v.position);
+  s.tick(); a.survival.protection = v.survival.protection = 0;
+  a.yaw = Math.PI; // facing +z
+  a.motion.sprinting = true; a.velocity.x = 0.2; a.velocity.z = 0.2;
+  s.pvpRules.attack(a, 'v');
+  assert.ok(Math.abs(a.velocity.x - 0.12) < 1e-9 && Math.abs(a.velocity.z - 0.12) < 1e-9, 'x 0.6');
+  assert.equal(a.motion.sprinting, false);
+});

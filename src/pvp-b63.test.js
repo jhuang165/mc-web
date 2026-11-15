@@ -74,7 +74,6 @@ test('every executed attack (damage, Sharpness, crits, Knockback, sprint, Fire A
       sprint: !!a.motion.sprinting, burning: vs.fire > 0, armor: [0, 1, 2, 3].map(i => vs.inventory.armor[i]?.damage ?? null) };
     const want = { health: r.results.map(x => f(x.health)), weapon: r.results.map(x => x.weapon), motion: r.victimMotion.map(x => Number(x.toFixed(6))), attacker: r.attackerMotion.map(x => Number(x.toFixed(6))),
       sprint: r.attackerSprinting, burning: r.victimBurning, armor: r.armor };
-    want.attacker = [1, 1]; // b75 mpplayerfx75: the reference is the server entity's motion (x 0.6 after a push); the port's velocity is the client's real motion, which the native client does not slow (server-attack-slowdown.js)
     // the reference weapon column is the weapon's damage after its hit; a non-tool (fist, stick) has none
     want.weapon = want.weapon.map((w, i) => (r.hits[i][0] === 0 ? null : r.hits[i][0] === 280 ? 0 : w));
     if (r.death) { s.serverSurvival.settle(v); const e = s.events.find(x => x.type === 'death'); have.death = e ? 'slain' : null; want.death = /slain by/.test(r.death.text) ? 'slain' : r.death.text; }
