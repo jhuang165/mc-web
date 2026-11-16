@@ -53,7 +53,7 @@ test('dyed and undyed leather wash exactly one cauldron level in Survival and Cr
     const before=f.state.survival.held;
     const result=applyPlayerEdit(f.state,f.request,{swing:()=>calls.push('swing'),updateBlock:(...args)=>calls.push(['update',...args]),renderHotbar:()=>calls.push('hotbar'),markUnsaved:()=>calls.push('dirty')});
     if(level===0){
-      assert.equal(result.branch,'equip-armor');assert.equal(f.state.world.getMeta(...POS)&3,0);assert.equal(f.state.survival.held,null);
+      assert.notEqual(result.branch,'equip-armor'); /* b77: a cauldron click (even level 0) is swallowed by the client, so the armor is not worn */ assert.equal(f.state.world.getMeta(...POS)&3,0);assert.notEqual(f.state.survival.held,null);
     }else{
       assert.equal(result.branch,'wash-leather',`${mode} level ${level} dyed ${dyed}`);
       assert.equal(f.state.world.getMeta(...POS)&3,level-1);assert.equal(f.state.survival.held.count,1);assert.equal(f.state.survival.held.color,undefined);

@@ -125,9 +125,9 @@ test('food and swords at an entity still begin their use after the entity declin
   assert.equal(s.state.eating?.id, 200);
 });
 
-test('a sound-less feed claim keeps the stack rule: entity result swings once for non-food', () => {
+test('a sound-less feed claim keeps the stack rule: entity result never swings (b77, bao.am has no entity swing)', () => {
   const s = scene(BOW, cow(), { mode: 'creative', claims: { feed: () => true } });
   let swings = 0;
   assert.equal(run(s, { swing: () => swings++ }).branch, 'interact-entity');
-  assert.equal(swings, 1);
+  assert.equal(swings, 0);
 });

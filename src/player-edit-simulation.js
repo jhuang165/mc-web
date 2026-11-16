@@ -7,6 +7,7 @@ import { BOW, canDraw } from './bow.js';
 import { FISHING_ROD } from './fishing-content.js';
 import { CARROT_ON_A_STICK, SADDLE } from './pig-saddle.js';
 import { plantedBlock } from './crops.js';
+import { swallowsItemUse } from './block-activation.js';
 import { NETHER_WART, ITEM_NETHER_WART } from './nether-wart.js';
 import { useBoneMeal, sparkleHeight } from './bone-meal.js';
 import { isBucket } from './buckets.js';
@@ -63,10 +64,9 @@ export const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER
 // Returns the branch result when the entity (or the item's itemInteractionForEntity) took the click, else null.
 function interactEntityFirst(state, e, { id, item }, hooks, act) {
   // The swing of a taken click (not for food) comes before the click's own effects, but a declined click never swings here.
-  let swung = !!item?.food;
-  const swing = () => { if (!swung) { swung = true; hooks.swing?.(); } };
-  const hook = (name, ...args) => { swing(); return hooks[name]?.(...args); };
-  const ok = (branch, extra) => { swing(); return act(branch, extra); };
+  // b77: Minecraft.rightClickMouse (bao.am) never swings on an entity click; only EntityCreeper.interact calls swingItem itself.
+  const hook = (name, ...args) => hooks[name]?.(...args);
+  const ok = (branch, extra) => act(branch, extra);
   // EntityCow.interact (also the mooshroom's super call): an empty bucket is swapped for milk.
   if ((e.type === 'cow' || e.type === 'mooshroom') && e.health > 0 && id === BUCKET_ITEM) {
     const used = useHeldBucket(state, { id, aimedEntity: { entity: e }, entityOnly: true }, hooks);
@@ -75,6 +75,7 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
   // Flint-and-steel interaction with a live creeper precedes the general entity branch.
   if (e.type === 'creeper' && e.health > 0 && item?.kind === 'flint_and_steel') {
     // EntityCreeper.interact: the pitch is the creeper's own Entity.rand nextFloat (creeper.js creeperIgnite; creeperwitch-b45 records).
+    hooks.swing?.();
     const ignite = creeperIgnite(e, entityRandom(e));
     hook('playSound', ignite.name, { volume: ignite.volume, pitch: ignite.pitch, position: ignite.position });
     if (!state.survival.creative) state.survival.wear(id);
@@ -168,7 +169,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   const cauldronLevel = targetBlock === CAULDRON ? state.world.getMeta(...target.block) & 3 : 0;
   const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, cauldronLevel, true).handled || (id === ITEM_GLASS_BOTTLE && cauldronLevel > 0) || cauldronWash(state.survival.held, cauldronLevel).handled
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
-  const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
+  // b77 spcauldron77: the client-world onBlockActivated answer (block-activation.js) decides whether the held item's right-click runs.
+  const usesBlock = activates && !aimedEntity && target && (swallowsItemUse(state.world.get(...target.block), STATIONS, targetBlock === 178 ? state.world.getMeta(...target.block) !== 0 : false) || usesStoneUtility);
 
   // Minecraft.rightClickMouse: the clicked entity interacts before any item use; only a declined click goes on to the held item.
   if (place && aimedEntity?.entity) { const r = interactEntityFirst(state, aimedEntity.entity, { id, item }, hooks, act); if (r) return r; }
@@ -242,7 +244,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // ItemMonsterPlacer.onItemRightClick: an egg aimed at a water surface (spawn-egg-use.js); other clicks fall through to onItemUse.
   if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && useEggOnWater(state, bucket, hooks)) { hook('swing'); return act('use-spawn-egg-water'); }
   // ItemFood starts the use animation, not an attack swing. A successful planting action swings separately below.
-  if (!place || !item?.food) hook('swing');
+  if (!place || (!item?.food && !aimedEntity)) hook('swing'); // a declined entity click never swings (b77)
   if (!place && aimedEntity?.entity) {
     state.mining = null;
     const critical = isCritical({ fallDistance: state.fallDistance, onGround: state.grounded, inWater: state.wasInWater });
@@ -525,8 +527,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('markUnsaved');
       return act('use-flint-and-steel');
     }
-    if (!state.survival.creative && item?.food) { beginEating(state, id, hook); return act('begin-eating'); }
-    if (item?.kind === 'sword') { beginBlocking(state, id); return act('begin-blocking'); }
+    if (!usesBlock && !state.survival.creative && item?.food) { beginEating(state, id, hook); return act('begin-eating'); }
+    if (!usesBlock && item?.kind === 'sword') { beginBlocking(state, id); return act('begin-blocking'); }
 
     // ItemBed.onItemUse (bed-reference.json): top face only, both cells air with a solid top below.
     if (id === ITEM_BED) {
