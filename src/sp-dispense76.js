@@ -7,6 +7,7 @@
 import { fromLiveStack } from "./mob-equipment-live.js";
 import { toOriginal } from "./block-registry.js";
 import { GenWorld } from "./gen-world.js";
+import { orderTargets } from "./candidate-order.js";
 
 const f = Math.fround;
 // The native Material of the cell (gen-world.js' per-original-id table; a web, a sign and glass are solid, a ladder, torch, carpet and snow layer are not), executed against the probe.
@@ -22,22 +23,35 @@ export function netherFizz(play, x, y, z, random = Math.random) {
 }
 
 // `position` is 4 - armorType (4 helmet .. 1 boots); a player's armour array is boots first (index position - 1), a mob's `equipment` is [hand, boots, legs, chest, helmet].
+// b77 spdispense77: the selector (sp, bytecode-read) runs inside World.getEntitiesWithinAABB, so only qualifying entities are listed and the FIRST in the native list order
+// (chunk x, chunk z, vertical slice, insertion: candidate-order.js) wins; before, the player always went first and the mobs came in the port's own list order. A mob qualifies
+// with canPickUpLoot whatever its type (any EntityLiving has an equipment array): a mob type without gear storage gets an empty one the moment it is dressed.
 export function equipArmor({ player, survival, mobs, size }, [i, j, k], stack, position) {
-  if (player && survival.health > 0) {
+  const cands = [];
+  if (player && survival.health > 0 && !survival.inventory.armor[position - 1]) {
     const q = player.position, hw = f(player.width / 2);
-    if (q.x + hw > i && q.x - hw < i + 1 && q.y + player.height > j && q.y < j + 1 && q.z + hw > k && q.z - hw < k + 1 && !survival.inventory.armor[position - 1]) {
+    if (q.x + hw > i && q.x - hw < i + 1 && q.y + player.height > j && q.y < j + 1 && q.z + hw > k && q.z - hw < k + 1)
+      cands.push({ ref: "player", player: true, box: [q.x - hw, q.y, q.z - hw, q.x + hw, q.y + player.height, q.z + hw] });
+  }
+  const all = [...(player ? [{ ref: "player", player: true, box: [player.position.x, player.position.y, player.position.z, player.position.x, player.position.y, player.position.z] }] : []), ...(mobs?.entities ?? []).map((e) => ({ ref: e, box: [e.x, e.y, e.z, e.x, e.y, e.z] }))];
+  for (const e of mobs?.entities ?? []) {
+    if (!e.canPickUpLoot || !(e.health > 0) || e.equipment?.[position]) continue;
+    const [w, h] = size(e), hw = w / 2;
+    if (!(e.x + hw > i && e.x - hw < i + 1 && e.y + h > j && e.y < j + 1 && e.z + hw > k && e.z - hw < k + 1)) continue;
+    cands.push({ ref: e, box: [e.x - hw, e.y, e.z - hw, e.x + hw, e.y + h, e.z + hw] });
+  }
+  for (const c of orderTargets(cands, all)) {
+    if (c.player) {
       survival.inventory.armor[position - 1] = { ...stack, count: 1 };
       return true;
     }
-  }
-  for (const e of mobs?.entities ?? []) {
-    if (!e.canPickUpLoot || !(e.health > 0) || !e.equipment || e.equipment[position]) continue;
-    const [w, h] = size(e), hw = w / 2;
-    if (!(e.x + hw > i && e.x - hw < i + 1 && e.y + h > j && e.y < j + 1 && e.z + hw > k && e.z - hw < k + 1)) continue;
     const native = fromLiveStack({ ...stack, count: 1 });
-    if (!native) continue;
+    if (!native) return false; // no native id for the piece (the port lists none); the first entity is the one chosen natively, so no later one is tried
+    const e = c.ref;
+    e.equipment ??= [null, null, null, null, null];
+    e.dropChances ??= Array(5).fill(f(0.085));
     e.equipment[position] = native;
-    if (e.dropChances) e.dropChances[position] = 2; // sw.a(position, 2.0F)
+    e.dropChances[position] = 2; // sw.a(position, 2.0F)
     return true;
   }
   return false;

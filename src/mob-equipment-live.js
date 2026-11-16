@@ -35,7 +35,8 @@ export function defaultGear(type) {
 // Entity fields a restored mob takes: Equipment, DropChances and CanPickUpLoot (EntityLiving NBT), or the type's defaults.
 // A pigman saved before this build has only `held`.
 export function gearFieldsFrom(e) {
-  if (!GEAR_TYPES.has(e.type)) return { equipment: undefined, dropChances: undefined, canPickUpLoot: undefined };
+  // b77 spdispense77: any other mob keeps the gear a dispenser put on it or a CanPickUpLoot / Equipment tag gave it (EntityLiving holds the arrays for every type).
+  if (!GEAR_TYPES.has(e.type) && !e.equipment) return { equipment: undefined, dropChances: undefined, canPickUpLoot: undefined };
   if (!e.equipment) {
     const gear = defaultGear(e.type), legacy = e.type === "pigman" ? fromLiveStack(e.held) : null;
     if (e.type === "pigman" && e.held === null) gear.equipment[0] = null;

@@ -128,7 +128,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
       boneMeal: () => false,
       boat: (x, y, z) => { if (ents) ents.boats.spawnBoat({ x, y, z }, { born: true }); else unsupported.hit = true; }, // BehaviorDispenseBoat (b76: the away run threw the boat as an item)
-      isReplaceable: (id, w, x, y, z) => replaceableCell(world, x, y, z), nether: () => !!world.isHell, fizz() {}, // b76: tryPlaceContainedLiquid (sp-dispense76.js); the Nether's water only fizzes (silent away)
+      isReplaceable: (id, w, x, y, z) => replaceableCell(world, x, y, z), nether: () => !!world.isHell, fizz() {}, // b76: tryPlaceContainedLiquid (sp-dispense76.js); the Nether's water only fizzes. b77: silent by design like every away sound (`sound() {}` above): World.playSoundEffect sends S29 to the world's own players and the only player is in another dimension; the event itself is the live path's `netherFizz`
       // Projectile dispenses create the live entities (as main.js does) when the entity run exists; without it the stack is put back.
       arrow: (e) => { if (ents) { const a = ents.arrows.make(e, e.rand, { shooter: null, pickup: 1 }); ents.arrows.list.push(a); ents.arrows.joined(a); } else unsupported.hit = true; },
       thrown: (kind, e) => {

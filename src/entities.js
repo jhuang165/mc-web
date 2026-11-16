@@ -921,7 +921,7 @@ export class EntityWorld {
       // EntitySlime.readEntityFromNBT: Size (size - 1); health is clamped to size * size, the jump and squish start over.
       ...(isSlimeLike(e) ? { ...slimeRestore(e, fresh), health: maxHealthOf({ ...e, size: slimeFieldsFrom(e).size }, t.health) } : {}), // full, modifiers included
       ...(e.type === "pigman" ? pigmanFieldsFrom(e) : {}),
-      ...(GEAR_TYPES.has(e.type) ? mobGearFieldsFrom(e) : {}),
+      ...(GEAR_TYPES.has(e.type) || e.equipment ? mobGearFieldsFrom(e) : {}),
       ...(e.type === "enderman" ? endermanFieldsFrom(e) : {}),
       // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
       ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),

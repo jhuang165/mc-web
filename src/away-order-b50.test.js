@@ -24,7 +24,8 @@ test("a fire charge dispense draws its acceleration from world.rand, not an enti
   const stack = { id: ITEM.FIRE_CHARGE, count: 2, damage: 0 };
   engine.behaviourFor(stack).stack.call(engine, w, 4, 5, 6, 3, stack);
   const ax = mirror.nextGaussian() * 0.05, ay = mirror.nextGaussian() * 0.05, az = mirror.nextGaussian() * 0.05;
-  assert.deepEqual(balls[0], { x: 4.5, y: 5.5, z: 6.5 + 1, ax, ay, az: az + 1 });
+  // b77: the offset beyond the face is the float 0.3F added to the 0.7 face offset (sp-dispense77-reference.json)
+  assert.deepEqual(balls[0], { x: 4.5, y: 5.5, z: 6.5 + 0.7 + Math.fround(Math.fround(0.3)), ax, ay, az: az + 1 });
   assert.equal(stack.count, 1);
   assert.equal(w.rand.nextInt(1000), mirror.nextInt(1000), "the fire charge consumed exactly three gaussians");
 });
