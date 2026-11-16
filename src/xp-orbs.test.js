@@ -93,7 +93,7 @@ test("orb saves keep age, health, fire and motion; older saves convert life to a
   old.tick(world, null);
   assert.equal(old.orbs.length, 0);
   assert.equal(new ExperienceOrbs([{ x: 1, y: 1, z: 1, value: 3, age: 6000 }]).orbs.length, 0);
-  assert.equal(new ExperienceOrbs([{ x: 1, y: 1, z: 1, value: 3, health: 0 }]).orbs.length, 0);
+  assert.equal(new ExperienceOrbs([{ x: 1, y: 1, z: 1, value: 3, health: 0 }]).orbs.length, 1, "b76: native keeps a Health 0 orb until it is hit (object-nbt-reference.json)");
 });
 
 

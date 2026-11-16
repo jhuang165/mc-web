@@ -28,7 +28,7 @@ export function clientCrystalFire(copy, layer) {
 // once and explodes with power 6 (World.createExplosion(null, x, y, z, 6.0F, true) = newExplosion(..., flaming false, smoking true), bytecode-read b65: wz.a calls ahb.a(Lsa;DDDFZ)): no fire, no
 // exploder, so nearby crystals chain. Returns the attackEntityFrom result.
 export function crystalAttack(mobs, e) {
-  const state = { health: e.health, dead: e.health <= 0 || e.death >= 20, invulnerable: false };
+  const state = { health: e.health, dead: e.health <= 0 || e.death >= 20, invulnerable: !!e.invulnerable };
   const out = crystalHit(state, false);
   if (!out.explode) return out.result;
   e.health = 0;
