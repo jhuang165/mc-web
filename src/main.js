@@ -1112,12 +1112,14 @@ function makeRecord(p) {
     // temples; 16 (streamed) uses the native mutated-biome class rule in the biome layers; 18 (streamed) adds the native world spawn walk; 20 (streamed, new worlds) adds the population's neighbour callbacks (java-world.js). Finite worlds stay on 14,
     // the earlier biome rule. Saves retain their existing generator.
     // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
-    generationVersion: p.biome === "javaStreamed" ? 20 : isJavaLandscape(p.biome) ? 14 : 8,
+    generationVersion: p.biome === "javaStreamed" ? (p.mapFeatures === false ? 21 : 20) : isJavaLandscape(p.biome) ? 14 : 8,
     ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
     // Superflat: the FlatGeneratorInfo string (WorldInfo.generatorOptions), normalised as ass.toString writes it.
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
     // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
     ...(p.bonusChest === true ? { bonusChest: true } : {}),
+    // GuiCreateWorld "Generate Structures" off: WorldInfo.isMapFeaturesEnabled false (generation 21: population without structure generators).
+    ...(p.biome === "javaStreamed" && p.mapFeatures === false ? { mapFeatures: false } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -2959,12 +2961,12 @@ function showGameOver() {
   if (document.pointerLockElement) document.exitPointerLock();
   const hardcore = active?.hardcore === true;
   gui.show(gameOverScreen({
-    hardcore, score: gameOverScore, show: (s) => gui.show(s), again: showGameOver, isDead: () => screen === "dead",
+    hardcore, remote: !!multiplayer, score: gameOverScore, show: (s) => gui.show(s), again: showGameOver, isDead: () => screen === "dead",
     respawn: respawnPlayer,
     leave: () => leaveToTitle(true),
     // GuiGameOver.confirmClicked(false): Respawn. In a hardcore world the server kicks the player and deletes the world
     // (NetHandlerPlayServer.processClientStatus).
-    confirmNo: hardcore ? async () => { const record = active; leaveToTitle(false); await deleteWorld(record); toast(HARDCORE_KICK); } : respawnPlayer,
+    confirmNo: hardcore && !multiplayer ? async () => { const record = active; leaveToTitle(false); await deleteWorld(record); toast(HARDCORE_KICK); } : respawnPlayer,
   }));
 }
 async function respawnPlayer() {

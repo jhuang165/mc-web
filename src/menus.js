@@ -37,7 +37,7 @@ export const UNAVAILABLE = {
   languages: "Only English (US) is installed (npm run lang:fetch).",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
-  mapFeatures: "Structure generation is fixed by the world type in this browser build.",
+  mapFeatures: "The browser landscapes have no structures; Generate Structures applies to the four Java world types.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
 const FIXED = { TOUCHSCREEN: false };
@@ -226,6 +226,8 @@ export function createMenus(gui, ctx) {
       // GuiCreateWorld.field_146334_a (the generator string of a Superflat world) and field_146338_v (Bonus Chest).
       options: from?.generatorOptions ?? DEFAULT_FLAT_STRING,
       bonus: from?.bonusChest === true,
+      // GuiCreateWorld.field_146341_s (Generate Structures): true at construction, flipped by button 4, never disabled natively.
+      mapFeatures: from ? from.mapFeatures !== false && !(from.generationVersion >= 17 && from.generationVersion % 2 === 1) : true,
     };
     let name, seed, create;
     const folder = () => folderName(state.name, (s) => ctx.worlds.some((w) => (w.folder || folderName(w.name || "World")) === s));
@@ -241,6 +243,8 @@ export function createMenus(gui, ctx) {
         generatorOptions: state.options,
         // GuiCreateWorld: Hardcore is Survival plus the WorldInfo flag, and drops Allow Cheats and the Bonus Chest.
         ...createdWorldFlags(state),
+        // Only the four Java world types can generate (or omit) structures here; the browser landscapes never have any.
+        ...(types[state.type].biome === "javaStreamed" && !state.mapFeatures ? { mapFeatures: false } : {}),
       }));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
@@ -276,7 +280,11 @@ export function createMenus(gui, ctx) {
           gameMode.set(t("selectWorld.gameMode") + " " + t("selectWorld.gameMode." + state.mode));
           line1.set(t(`selectWorld.gameMode.${state.mode}.line1`));
           line2.set(t(`selectWorld.gameMode.${state.mode}.line2`));
-          mapFeatures.set(t("selectWorld.mapFeatures") + " " + t(types[state.type].biome.startsWith("java") ? "options.on" : "options.off"));
+          // Native: button 4 toggles field_146341_s and the label follows it. The browser landscapes have no structures, so they read Off and stay disabled.
+          const java = types[state.type].biome === "javaStreamed";
+          mapFeatures.set(t("selectWorld.mapFeatures") + " " + t(java && state.mapFeatures ? "options.on" : "options.off"));
+          mapFeatures.enable(java);
+          if (mapFeatures.el.setAttribute) mapFeatures.el.title = java ? "" : UNAVAILABLE.mapFeatures;
           mapType.set(t("selectWorld.mapType") + " " + types[state.type].name);
           bonusItems.set(t("selectWorld.bonusItems") + " " + t(bonusShownOn(state) ? "options.on" : "options.off"));
           allowCommands.set(t("selectWorld.allowCommands") + " " + t(cheatsShownOn(state) ? "options.on" : "options.off"));
@@ -303,7 +311,7 @@ export function createMenus(gui, ctx) {
         // actionPerformed id 2: Survival -> Hardcore -> Creative -> Survival (hardcore.js).
         const gameMode = g.button(b.gameMode, "", () => { cycleCreateMode(state); update(); });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
-        const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
+        const mapFeatures = g.button(b.mapFeatures, "", () => { state.mapFeatures = !state.mapFeatures; update(); });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });
         // actionPerformed id 5: the next type clears field_146334_a (the Superflat string) and re-runs func_146316_a, so Customize follows.
         const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; state.options = DEFAULT_FLAT_STRING; page(); });

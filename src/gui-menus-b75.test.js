@@ -65,7 +65,6 @@ const TS = 'enabled "Touchscreen Mode: OFF" native=true port=false';
 const MP = 'enabled "Multiplayer" native=true port=false', RE = 'enabled "Minecraft Realms" native=true port=false', QT = 'enabled "Quit Game" native=true port=false';
 const LANG = 'native-only "" 20x20'; // the language button is drawn by g.languageButton (asserted separately)
 const IMP = 'port-only "Import" 50x20', EXP = 'port-only "Export" 50x20', END = 'port-only "Endless" 50x20';
-const GS = 'enabled "Generate Structures: ON" native=true port=false';
 const EXPORT = 'port-only "Export World" 200x20';
 const CASES = [
   ["GuiIngameMenu+remote", ({ menus }) => menus.ingameMenu(), { isRemote: () => true }, [EXPORT]],
@@ -83,11 +82,11 @@ const CASES = [
   ["GuiMainMenu", ({ menus }) => menus.mainMenu(), {}, [MP, RE, QT, LANG]],
   ["GuiSelectWorld", ({ menus }) => menus.selectWorld(), {}, [IMP, EXP, END]],
   ["GuiGameOver", () => gameOverScreen({ show() {} }), {}, []],
-  // Remote hardcore shows "Leave server" (deathScreen.leaveServer); the port's death screen has only the singleplayer wording.
-  ["GuiGameOverHardcore", () => gameOverScreen({ hardcore: true, show() {} }), {}, ['label "Leave server" / "Delete world"']],
+  // Remote hardcore shows "Leave server" (deathScreen.leaveServer), fixed in b76.
+  ["GuiGameOverHardcore", () => gameOverScreen({ hardcore: true, remote: true, show() {} }), {}, []],
   ["GuiGameOverHardcore+singleplayer", () => gameOverScreen({ hardcore: true, show() {} }), {}, []],
   ["GuiCreateWorld", ({ menus }) => menus.createWorld({}), {}, []],
-  ["GuiCreateWorld+more", ({ menus }) => { const sc = menus.createWorld({}); press(init(sc), "More World Options..."); return sc; }, {}, [GS]],
+  ["GuiCreateWorld+more", ({ menus }) => { const sc = menus.createWorld({}); press(init(sc), "More World Options..."); return sc; }, {}, []],
 ];
 const only = process.env.ONLY;
 for (const [name, make, ctxOver = {}, allowed = []] of CASES) {
