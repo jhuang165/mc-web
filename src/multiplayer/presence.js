@@ -19,7 +19,8 @@ export const useFlags = p => ({ blocking: !!p.using && ITEMS[p.held?.id]?.kind =
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
-  constructor(scene, { skinUrl = () => null, capeUrl = () => null, board = null } = {}) {
+  constructor(scene, { skinUrl = () => null, capeUrl = () => null, board = null, seatOf = () => null } = {}) {
+    this.seatOf = seatOf; // b77 mpvelocity77: key of the mount -> the rider's feet on the mount's client copy (client-ride-seat.js), or null
     this.board = board; // b64 mpscoreboard: the replica Scoreboard (team-coloured names, the belowName score)
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
     this.skinUrl = skinUrl; this.capeUrl = capeUrl; this.capes = new Map(); /* b71 mpcapes: hash -> Promise<texture | null> */ this.skins = new Map(); // hash → Promise<texture | null>
@@ -72,10 +73,12 @@ export class RemotePlayers {
   sync(players, self) {
     this.at = performance.now();
     const seen = new Set();
-    for (const p of players) {
+    for (let p of players) {
       if (p.far) continue; // b73 streamfix73: an untracked player is a player-list entry only (server-player-tracker.js); no entity
       if (p.id === self) { this.me = p; continue; } // b65 mpinvis: the viewer's own name and position (name tag distance, team visibility)
       seen.add(p.id);
+      const seat = p.riding ? this.seatOf(p.riding) : null; // b77: the attached copy follows its mount, not its own row
+      if (seat) p = { ...p, x: seat.x, y: seat.y, z: seat.z, ySize: 0 };
       let entry = this.entries.get(p.id);
       if (!entry) {
         const body = new PlayerBody(); body.reset(p, p.yaw, p.pitch);
@@ -91,11 +94,25 @@ export class RemotePlayers {
       stepRemoteHurt(entry, p.hurt === true, entry.body); // b61: S19 status 2 on the copy: limbSwingAmount 1.5 and hurtTime 10, before its onUpdate
       const q = stepInterp(entry.ip ??= newInterp(p), p, !!p.riding); // b74 mptrack74: setPositionAndRotation2 with 3 increments between the tracker's packets
       entry.body.tick({ position: { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }, previous: entry.last, yaw: q.yaw, pitch: q.pitch, swinging: p.swing > 0, riding: !!p.riding, head: p.riding ? undefined : p.head /* b75: S19 head angle */ });
+      entry.ride = seat ? p.riding : null;
       entry.last = { ...p, x: q.x, y: q.y - (p.ySize ?? 0), z: q.z }; entry.state = { ...p, x: q.x, y: q.y, z: q.z, yaw: q.yaw, pitch: q.pitch }; // b74: aim (pickPlayer) and tags use the interpolated copy
       // EntityOtherPlayerMP.onUpdate: the crumbs of eating run from the synced item-in-use flag (the sound comes from the server).
       tickRemoteUse(entry.use, { using: !!p.using, held: p.held }, id => this.scene.fx && itemCrumbs(this.scene.fx, 5, 'iconcrack_' + id, remoteEye({ ...p, y: p.y - (p.ySize ?? 0) }), entry.rand));
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
+  }
+  // b77 mpvelocity77: Entity.updateRidden on each client tick: a copy attached to a mount that moved since the last row keeps its seat on it (call after the mounts' own tick).
+  followMounts() {
+    for (const entry of this.entries.values()) {
+      if (!entry.ride) continue;
+      const seat = this.seatOf(entry.ride);
+      if (!seat) continue;
+      const b = entry.body;
+      b.px = b.x; b.py = b.y; b.pz = b.z; b.x = seat.x; b.y = seat.y; b.z = seat.z;
+      Object.assign(entry.last, { x: seat.x, y: seat.y, z: seat.z });
+      if (entry.state) { entry.state.x = seat.x; entry.state.y = seat.y; entry.state.z = seat.z; }
+      if (entry.ip) Object.assign(entry.ip, { x: seat.x, y: seat.y, z: seat.z, tx: seat.x, ty: seat.y, tz: seat.z, inc: 0 });
+    }
   }
   // b73 streamfix73: Chunk.onChunkUnload drops the entities of the column; a remote player standing in an unloaded column leaves (the server stops tracking him with the column)
   dropColumns(columns) { for (const [id, entry] of [...this.entries]) if (columns.has(`${Math.floor(entry.last.x / 16)},${Math.floor(entry.last.z / 16)}`)) { this.dispose(entry); this.entries.delete(id); } }

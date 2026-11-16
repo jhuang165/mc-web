@@ -16,6 +16,7 @@ import { finishDrinking } from '../buckets.js';
 import { finishPotion } from '../potion-use.js';
 import { setClientHealth } from './client-health.js';
 import { applyDeathThrow } from './server-death-throw.js'; // b75 mpplayerfx75
+import { markVelocityChanged } from './server-velocity.js'; // b77 mpvelocity77
 
 const APPLE = 260, DEATH_XP_TICKS = 20;
 
@@ -90,6 +91,7 @@ export class ServerSurvival {
   takeHurt(p) {
     const v = (p.vitals ??= { sent: null }), s = p.survival, sim = this.sim;
     if (s.hurtSounds.includes('game.player.hurt')) v.hurt = true;
+    if (s.hurtSounds.length) markVelocityChanged(p, sim.ticks); // b77 mpvelocity77: setBeenAttacked -> S12 to the player himself (server-velocity.js)
     const name = s.hurtSounds.includes('game.player.die') ? 'game.player.die' : s.hurtSounds.includes('game.player.hurt') ? 'game.player.hurt' : null;
     if (name && sim.soundRand && sim.soundsOut) sim.soundsOut.push({ name, x: p.position.x, y: p.position.y, z: p.position.z, volume: 1, pitch: Math.fround(Math.fround(Math.fround(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * Math.fround(0.2)) + 1), except: p.id });
     s.hurtSounds.length = 0; // taken: the dedicated server plays none itself

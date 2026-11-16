@@ -29,7 +29,7 @@ const javaYawDeg = yaw => 180 - yaw * 180 / Math.PI, javaPitchDeg = pitch => -pi
 export function watcherSig(p) {
   const s = p.survival ?? {}, fx = s.effects;
   const colour = fx?.ordered ? [...fx.ordered()].map(e => `${e.id}.${e.amplifier}.${e.ambient ? 1 : 0}`).join('+') : '';
-  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour, p.experience?.score ?? 0].join('|'); // b76: + the score (watcher 18, EntityPlayer.addScore from addExperience); sleeping and riding are NOT watched values
+  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour, p.experience?.score ?? 0, p.hideCape ? 1 : 0].join('|'); // b76: + the score (watcher 18, EntityPlayer.addScore from addExperience); b77: + the cape-hidden bit (watcher 16 bit 1, C15 showCape via setCapeShow); sleeping and riding are NOT watched values
 }
 const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 256) / 360)) << 24) >> 24; // S0C: (byte)(int)(angle * 256 / 360)
 
@@ -117,6 +117,7 @@ export class ServerPlayerTracker {
     return rows.map(r => {
       if (r.id === pid) return r;
       if (!tracked?.has(r.id)) return { id: r.id, name: r.name, far: true };
+      if (r.vel) { const { vel, ...rest } = r; r = rest; } // b77 mpvelocity77: S12 of another player moves nothing on the copy; only the owner's row keeps `vel`
       const rel = r.riding ? null : this.released(dim, r.id);
       return rel ? { ...r, ...rel } : r;
     });
