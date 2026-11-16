@@ -20,6 +20,7 @@ import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
 import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fixes68: a lying player's posY, eye and 0.2 box
 import { entityBox, isWet, canSeeSky } from '../weather.js';
 import { hurtOf, deathOf } from '../entities.js';
+import { maxHealthOf } from '../mob-riding.js'; // b77 mphorseclient77
 import { drainKnockback } from '../player-knockback.js';
 import { attackerSlowdown } from './server-attack-slowdown.js';
 import { findChunksForSpawning, chunkPairHash } from '../spawner-animals.js';
@@ -79,7 +80,7 @@ export function mobState(e) {
   if (e.type === 'witch' && e.held) s.held = { id: e.held.id, damage: e.held.damage || 0 };
   if (e.type === 'wolf') { s.tamed = e.owner ? 1 : 0; if (e.angry) s.angry = 1; if (e.sitting) s.sitting = 1; s.collar = e.collar ?? 14; s.hp = Math.ceil(e.health); }
   if (e.type === 'ocelot') { s.cat = e.catType | 0; if (e.owner) s.tamed = 1; if (e.sitting) s.sitting = 1; if (e.sneaking) s.sneaking = 1; if (e.sprinting) s.sprinting = 1; }
-  if (e.type === 'horse' && e.horse) s.horse = { type: e.horse.type | 0, variant: e.horse.variant | 0, armor: e.horse.armor | 0, saddled: e.horse.saddled ? 1 : 0, chested: e.horse.chested ? 1 : 0 };
+  if (e.type === 'horse' && e.horse) s.horse = { type: e.horse.type | 0, variant: e.horse.variant | 0, armor: e.horse.armor | 0, saddled: e.horse.saddled ? 1 : 0, chested: e.horse.chested ? 1 : 0, tame: e.horse.tame ? 1 : 0, hp: Math.ceil(e.health), max: maxHealthOf(e, e.horse.maxHealth) }; // b77 mphorseclient77: tame (the inventory key, click prediction), the health row of a rider
   if (e.type === 'bat' && e.batHanging) s.hang = 1;
   if (e.type === 'sheep') { s.color = e.color ?? 0; if (e.sheared) s.sheared = 1; }
   if (e.type === 'pig' && e.saddled) s.saddled = 1; // b61: the saddle on the model (set by the saddle item; riding is mpvehicles)

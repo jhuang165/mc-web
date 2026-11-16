@@ -15,7 +15,9 @@ import { DYE } from '../world.js';
 import { ITEMS } from '../survival.js';
 import { ITEM_SPAWN_EGG, eggOf } from '../spawn-eggs.js';
 import { AGEABLE_EGG_TYPES, isAgeable } from '../entities.js';
-import { originalId, NAME_TAG_ORIGINAL } from '../horse-gear.js';
+import { originalId, NAME_TAG_ORIGINAL, LEAD_ORIGINAL, leashUse } from '../horse-gear.js';
+import { feedHorse, interactHorse } from '../horse.js';
+import { view as horseView } from '../horse-live.js'; // b77 mphorseclient77
 
 export const isCow = type => type === 'cow' || type === 'mooshroom';
 export const ANIMAL_TYPES = new Set(['pig', 'cow', 'sheep', 'chicken', 'mooshroom']);
@@ -42,8 +44,9 @@ export function serverAnimalUse(mobs, p, e, ctx) {
 }
 
 // The client half, on the stand-in `mob` ({ type, growingAge, love, sheared, color, saddled, health }) and the client's Survival. Returns { handled, sound? }.
-export function predictAnimalUse(mob, survival, { drop = () => {} } = {}) {
-  const extra = predictEntityExtras(mob, survival);
+// `selfId`: this player's wire id (the holder a predicted lead is drawn from, remote-leads.js).
+export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null, sneak = false } = {}) {
+  const extra = predictEntityExtras(mob, survival, selfId, sneak);
   if (extra) return extra;
   if (!mob || mob.health <= 0 || !ANIMAL_TYPES.has(mob.type)) return { handled: false };
   const held = survival.held, id = held?.id ?? 0, adult = (mob.growingAge ?? 0) >= 0, creative = !!survival.creative;
@@ -78,18 +81,56 @@ export function predictAnimalUse(mob, survival, { drop = () => {} } = {}) {
 // locally); Creative gets a copy of the held stack, so only a Survival stack shrinks or wears. The sound of a flint and steel is the server's (`except: null` reaches the clicker), so none here.
 // Kinds whose own interact consumes the click first on the client too (an adult villager's trade window, a tamed wolf's or ocelot's sit) are left to the server; a wrong guess is put right by `animResend`.
 const takesClickFirst = (mob) => (mob.type === 'villager' && (mob.growingAge ?? 0) >= 0) || ((mob.type === 'wolf' || mob.type === 'ocelot') && !!mob.owner); // EntityVillager.interact (adult), EntityTameable.interact (tamed)
-function predictEntityExtras(mob, survival) {
+function predictEntityExtras(mob, survival, selfId = null, sneak = false) {
   if (!mob || mob.health <= 0) return null;
   const held = survival.held, id = held?.id ?? 0;
-  if (!id) return null;
   const creative = !!survival.creative, spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
+  if (!id) return mob.type === 'horse' ? predictHorse(mob, survival, spend, sneak) : null; // an empty hand mounts or opens the gear window
   if (mob.type === 'creeper' && ITEMS[id]?.kind === 'flint_and_steel') { mob.ignited = true; if (!creative) survival.wear(id); return { handled: true }; } // EntityCreeper.interact
   if (id === ITEM_SPAWN_EGG && isAgeable(mob.type)) { // EntityAgeable.interact: the click is consumed on any ageable mob (villager included); one egg goes only when its class fits; the baby is the server's spawn
     if (AGEABLE_EGG_TYPES[eggOf(held.damage)?.entity]?.includes(mob.type)) spend();
     return { handled: true };
   }
+  const lead = predictLead(mob, survival, selfId, spend); // EntityLiving.interactFirst: the lead comes before the mob's own interact
+  if (lead) return lead;
+  if (mob.type === 'horse') { const horse = predictHorse(mob, survival, spend, sneak); if (horse) return horse; }
   if (originalId(held) === NAME_TAG_ORIGINAL && typeof held.displayName === 'string' && !takesClickFirst(mob)) { // ItemNameTag.itemInteractionForEntity
     mob.customName = held.displayName.slice(0, 64); mob.persistent = true; spend(); return { handled: true };
   }
   return null;
+}
+
+// b77 mphorseclient77: EntityLiving.interactFirst's lead (sw.c) on the client copy: a lead in hand ties a leashable mob (the copy's `leadWire` is the S1B mode 1 holder), the holder's own click frees it.
+// A tamed wolf or ocelot may refuse (only its owner leads it), which the copy cannot tell, so no tie is predicted there; a wrong guess is put right by `animResend`. The lead item that drops on a
+// free is the server's entity. Port-read: horse-gear-live.js leashInteract, server-leads.js `use` (another holder's lead is not handled).
+function predictLead(mob, survival, selfId, spend) {
+  const wire = mob.leadWire ?? null, mine = wire?.kind === 'player' && (selfId == null || wire.id === selfId);
+  if (wire && !mine) return null;
+  const ownerBlocked = (mob.type === 'wolf' || mob.type === 'ocelot') && !!mob.owner;
+  const out = leashUse({ ownerBlocked, leashed: !!wire, holderIsPlayer: mine, heldLead: originalId(survival.held) === LEAD_ORIGINAL, creative: !!survival.creative, type: mob.type });
+  if (!out.used) return null;
+  if (out.action === 'free') mob.leadWire = null;
+  else { mob.leadWire = { kind: 'player', id: selfId }; spend(); }
+  return { handled: true };
+}
+// EntityHorse.interact (wi.a(yz)) on the copy, run after the lead: feeding (health, growth, love, one item), the chest on a donkey or mule, the wild horse's rear, the gear window and the mount are the
+// server's; here the click is claimed and the stack changes the way horse-live.js horseInteract changes it (apply: health, age, love; one item for food and a chest). The copy has no temper (the wire
+// carries type, variant, armour, saddle, chest, tame, health), so a wild horse at the temper cap would be a wrong guess. A name tag is tried before mounting (wi.a), so it is left to the name tag branch.
+function predictHorse(mob, survival, spend, sneak = false) {
+  if (mob.health <= 0 || !mob.horse) return null;
+  const id = originalId(survival.held), h = horseView(mob);
+  const fed = id != null ? feedHorse(h, id, { creative: !!survival.creative }) : null;
+  if (fed?.used) {
+    mob.health = fed.horse.health; mob.growingAge = fed.horse.age;
+    if (fed.horse.inLove && !(mob.love > 0)) mob.love = 600;
+    if (fed.horse.loveFed) mob.love = 600;
+    if (fed.horse.temper !== undefined) mob.horse.temper = fed.horse.temper;
+    spend();
+    return { handled: true };
+  }
+  const out = interactHorse(h, id, { sneak });
+  if (!out.result) return null;
+  if (out.action === 'chest') { mob.horse.chested = true; spend(); }
+  else if (out.action === 'mount' && originalId(survival.held) === NAME_TAG_ORIGINAL && typeof survival.held?.displayName === 'string') return null;
+  return { handled: true };
 }
