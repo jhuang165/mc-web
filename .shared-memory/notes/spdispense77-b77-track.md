@@ -1,0 +1,22 @@
+# Batch 77 spdispense77: dispensed armour order, away fizz, dispenser sweep
+
+## Summary
+- `src/sp-dispense76.js` `equipArmor`: the selector is applied inside the entity query, so the first qualifying entity in the native list order (chunk x, chunk z, vertical slice, insertion; `candidate-order.js` `orderTargets`) is dressed. Before: the player always first, then mobs in the port's list order. The player is no longer always first (a mob in a lower chunk wins); in one chunk the player (joined first) wins.
+- Qualifying set: any alive mob with canPickUpLoot and an empty slot, whatever its type (a player: alive, empty slot). A mob without gear arrays gets `equipment` / `dropChances` when dressed (drop chance 2.0). To keep that gear: `mob-equipment-live.js gearFieldsFrom`, `entities.js` restore, `java-mobs.js` (`mobGearNbtFields` / `summonedMobRecord`: CanPickUpLoot and worn stacks of non-gear, non-witch mobs are kept when set) and `region-export.js` now carry it. Open: no renderer draws armour on other mob types, and `lootPickupOne` still limits floor pickup to zombie / skeleton / pigman types.
+- `src/multiplayer/server-dispense.js` `equip`: players ordered the same way (candidates through `orderTargets`, eye position).
+- Away Nether fizz: silent by design (`sound() {}` is the away host's only sound path; the native sound goes to the world's own players and the player is in another dimension). Comment added in `away-world.js`; no code change.
+- Fire charge (`dispense.js`): fixed. Native kz adds `(float) fx * 0.3F` to the Y (a 1.7.10 slip: getFrontOffsetX), so up / down charges start at the dispenser face (no 0.3 offset) and west / east ones start 0.3 lower / higher; the offsets are float products (0.3F), not doubles. Updated `away-order-b50.test.js` for the float z.
+- Sweep result, no change needed: arrows / eggs / snowballs / potion (1.375 / 3.0) / exp bottle (position 0.7, velocity and inaccuracy) were replayed in earlier batches (`dispense-reference.json`, `away-dispense-reference.json`); minecarts, TNT (primed, 80 fuse at the centre), flint and steel, bone meal, buckets in `dispense-reference.json`; boats and fireworks match the new executed rows; spawn eggs in `away-dispense-reference.json`.
+
+## Evidence
+- Executed: `tools/probes/SpDispense77Probe.java` + `tools/verify-spdispense77.mjs` -> `public/research/sp-dispense77-reference.json` (94 rows). Registry: the only items with a non-default behaviour are TNT 46, flint and steel 259, arrow 262, armour 298-317, empty / water / lava bucket 325-327, carts 328 342 343 407 408 422, snowball 332, boat 333, egg 344, dye 351, potion 373, spawn egg 383, exp bottle 384, fire charge 385, firework 401. Shears (359), pumpkin (86) and skulls (397) have no dispense behaviour: they are thrown (confirmed). Fire charge: 12 rows (position, normalised acceleration `ze.b/c/d`, aux 1009 then 2000, three world-Random gaussians). Boats: 35 rows (water or flowing water +1.0, air over water +0.0, lava / stone / nothing thrown with both sound pairs; spawn posY = y + 0.3F yOffset). Fireworks: 6 rows (centre + front, y + 0.2F, aux 1002).
+- Bytecode-read: `abc` (ItemArmor dispense behaviour) and `sp` (EntitySelectorArmoredMob): alive, EntityLivingBase, getEquipmentInSlot(position) null, EntityLiving only when canPickUpLoot (`sw.bJ`), player always; first of `ahb.a(Class, AABB, selector)`; the original stack loses one, the copy (count 1) is set through `sv.c(position - isPlayer, copy)` and `sw.a(position, 2.0F)` for an EntityLiving. `yz.q(i)` reads armorInventory[i - 1].
+- Port-read: `candidate-order.js` documents the list order (executed earlier in `chunk-order-reference.json`); armour ordering is not an executed row (the probe world double has no chunks).
+
+## Verification
+- `node --test src/spdispense77-b77.test.js`: 8 pass. Related, all pass: `spdispense76-b76`, `dispense`, `away-dispense-b51`, `mpdispense-b61`, `away-order-b50` (fire charge z updated), `mpbuckets-b75`, `mpcontainers2-b60`, `redstone-live`, `dispenser-container`, `dispenser-piston`, `mob-equipment`, `mob-gear-nbt`, `away-mobs`, `summon-coverage`, `mpsummon-b67`, `horse-gear`. `npm run build` ok. No full npm test, no browser, no audio.
+
+## Follow-ups
+- Armour is not drawn on mob types other than zombie / skeleton / pigman; floor loot pickup of other mob types is not ported.
+- The armour list order is port-read (stamped cells), not an executed dispenser-with-entities row.
+- Server dispensers only dress players (no server mob has canPickUpLoot).

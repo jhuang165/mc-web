@@ -15,7 +15,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 import { GEAR_TYPES, defaultGear } from './mob-equipment-live.js';
-import { DEFAULT_DROP_CHANCE, skullFields } from './mob-equipment.js';
+import { DEFAULT_DROP_CHANCE, skullFields, emptyGear } from './mob-equipment.js';
 
 export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal', Giant: 'giant' });
 // The mobs whose chunk NBT goes through the /summon reader (summonedMobRecord; EntityList.createEntityFromNBT is the same call for
@@ -118,9 +118,14 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
 // (zombie, zombie villager, pigman, skeleton, wither skeleton) take the native stacks `equipment` / `dropChances` / `canPickUpLoot`
 // (mob-equipment.js); a tag with none of the three keys leaves the type's default gear. `convertItem` validates and tallies each stack.
 export const MOB_GEAR_NBT_KEYS = ['Equipment', 'DropChances', 'CanPickUpLoot'];
-export function mobGearNbtFields(tag, type, convertItem = () => null) {
-  if (!GEAR_TYPES.has(type) || !MOB_GEAR_NBT_KEYS.some((k) => tag.has(k))) return {};
-  const gear = defaultGear(type);
+export function mobGearNbtFields(tag, type, convertItem = () => null, other = false) {
+  if (!MOB_GEAR_NBT_KEYS.some((k) => tag.has(k))) return {};
+  if (!other && !GEAR_TYPES.has(type)) { // b77 spdispense77: any other EntityLiving (not the witch's own potion slot) keeps CanPickUpLoot and worn stacks; an all-default tag stays field-free
+    if (type === 'witch') return {};
+    const g = mobGearNbtFields(tag, 'zombie_other', convertItem, true);
+    return g.canPickUpLoot || g.equipment?.some(Boolean) ? g : {};
+  }
+  const gear = other ? emptyGear() : defaultGear(type);
   const equipment = tagValue(tag, 'Equipment', NBT.LIST);
   if (equipment) {
     gear.equipment = [0, 1, 2, 3, 4].map((i) => {
@@ -297,6 +302,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   // Equipment / DropChances / CanPickUpLoot for the equipped mob types (the other types' slots have no live implementation: the witch's
   // potion is slot 0 above, any other stack is reported ignored) and Entity's PortalCooldown.
   if (GEAR_TYPES.has(type)) { Object.assign(record, mobGearNbtFields(tag, type, convertItem)); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); }
+  else if (type !== 'witch') { const g = mobGearNbtFields(tag, type, convertItem); if (g.equipment) { Object.assign(record, g); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); } } // b77 spdispense77: see mobGearNbtFields
   Object.assign(record, portalCooldownFields(tag)); kept.add('PortalCooldown');
   record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
   Object.assign(record, gearNbtFields(tag));

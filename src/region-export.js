@@ -105,7 +105,7 @@ function payload(state,ox,oz,report,blockAt) {
   else if(e.leash)n.Leash=tag(NBT.COMPOUND,playerLeashTag(report.playerUuid??exportPlayerUuid({}))); // the holder is the local player: its exported UUID (owner-links.js)
   // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
   // DropChances (five floats) for every mob, then Entity.writeToNBT's PortalCooldown (the live Entity.timeUntilPortal). mob-gear-nbt-reference.json.
-  {const g=GEAR_TYPES.has(e.type)?gearFieldsFrom(e):null,witchHeld=e.type==='witch'&&e.held?stackNbt(e.held,undefined,report):null;
+  {const g=GEAR_TYPES.has(e.type)||e.equipment?gearFieldsFrom(e):null,witchHeld=e.type==='witch'&&e.held?stackNbt(e.held,undefined,report):null;
    n.CanPickUpLoot=byte(g?.canPickUpLoot?1:0);
    n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>(g?stackNbt(g.equipment[i],undefined,report,true):i===0?witchHeld:null)??new Map()));
    n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(i=>Math.fround(g?.dropChances?.[i]??0.085)));

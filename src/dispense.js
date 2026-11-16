@@ -204,14 +204,17 @@ const PROJECTILE = {
   expBottle: projectile((host, e, s) => host.thrown?.("expBottle", e, s), (r, x, y, z, v, i) => heading(r, x, y, z, v, i), f(PROJECTILE_VELOCITY * f(1.25)), f(PROJECTILE_INACCURACY * f(0.5)), 1002),
 };
 
-// BehaviorDispenseFireball (kz): a small fireball 0.3 beyond the dispenser face (centre + 0.7 facing + 0.3 facing), acceleration the facing plus
+// BehaviorDispenseFireball (kz): a small fireball 0.3 beyond the dispenser face (centre + 0.7 facing + 0.3 facing, see the Y slip below), acceleration the facing plus
 // 0.05 * nextGaussian per axis (x, y, z), sound 1009, one charge used. Bytecode-derived (blaze-ghast.md).
 const FIRE_CHARGE = {
   sound: () => 1009,
   stack(w, x, y, z, facing, stack) {
     const [fx, fy, fz] = FACING[facing], rand = w.rand; // BehaviorDispenseFireball (kz) draws from world.rand, not an entity's own Random (bytecode-read)
     const ax = rand.nextGaussian() * 0.05 + fx, ay = rand.nextGaussian() * 0.05 + fy, az = rand.nextGaussian() * 0.05 + fz;
-    this.host.fireball?.({ x: x + 0.5 + 0.7 * fx + fx * 0.3, y: y + 0.5 + 0.7 * fy + fy * 0.3, z: z + 0.5 + 0.7 * fz + fz * 0.3, ax, ay, az });
+    // b77 (executed, sp-dispense77-reference.json): kz adds (float) fx * 0.3F to the Y as well (a 1.7.10 slip: getFrontOffsetX where the Y belongs), so a fire charge facing up or down
+    // starts at the dispenser face and one facing west / east starts 0.3 lower / higher; the offsets are float products.
+    const c = f(0.3);
+    this.host.fireball?.({ x: x + 0.5 + 0.7 * fx + f(fx * c), y: y + 0.5 + 0.7 * fy + f(fx * c), z: z + 0.5 + 0.7 * fz + f(fz * c), ax, ay, az });
     stack.count--;
     return stack;
   },

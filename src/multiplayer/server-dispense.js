@@ -21,6 +21,7 @@ import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
 import { SUPPORTED } from './server-mobs.js';
 import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
+import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
@@ -86,16 +87,19 @@ export class ServerDispense {
   // BehaviorDefault armour (ItemArmor, abc): the first living entity in the front cell with that armour slot empty. Players only; `position` is getArmorPosition (1 boots .. 4 helmet),
   // the player's armorInventory index `position - 1`. A mob needs canPickUpLoot, which no mob of the server has.
   equip([i, j, k], stack, position) {
+    // b77 spdispense77: the selector sits inside World.getEntitiesWithinAABB, so the first qualifying player in the native list order (chunk x, chunk z, slice, join) is chosen, not the first in the map.
+    const cands = [];
     for (const p of this.sim.players.values()) {
       if (p.dead || !p.survival || (p.dimension | 0) !== this.dim) continue;
       const q = p.position, hw = f(PHYSICS.width / 2);
       if (!(q.x + hw > i && q.x - hw < i + 1 && q.y + PHYSICS.height > j && q.y < j + 1 && q.z + hw > k && q.z - hw < k + 1)) continue;
-      const armor = p.survival.inventory.armor;
-      if (armor[position - 1]) continue; // the selector skips an entity that wears one already
-      armor[position - 1] = { ...stack, count: 1 }; // sv.c(position - 1, copy of count 1); the invSet diff of ServerItems.settle tells the client
-      return true;
+      if (p.survival.inventory.armor[position - 1]) continue; // the selector skips an entity that wears one already
+      cands.push({ ref: p, pos: [q.x, q.y + f(1.62), q.z], player: true });
     }
-    return false;
+    const first = orderTargets(cands, cands, () => false)[0];
+    if (!first) return false;
+    first.ref.survival.inventory.armor[position - 1] = { ...stack, count: 1 }; // sv.c(position - 1, copy of count 1); the invSet diff of ServerItems.settle tells the client
+    return true;
   }
 
 
