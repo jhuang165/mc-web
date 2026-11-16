@@ -12,6 +12,10 @@ import { mooshroomUse, useBowl, SHEARS } from '../mooshroom.js';
 import { SADDLE } from '../pig-saddle.js';
 import { makeStack } from '../inventory.js';
 import { DYE } from '../world.js';
+import { ITEMS } from '../survival.js';
+import { ITEM_SPAWN_EGG, eggOf } from '../spawn-eggs.js';
+import { AGEABLE_EGG_TYPES, isAgeable } from '../entities.js';
+import { originalId, NAME_TAG_ORIGINAL } from '../horse-gear.js';
 
 export const isCow = type => type === 'cow' || type === 'mooshroom';
 export const ANIMAL_TYPES = new Set(['pig', 'cow', 'sheep', 'chicken', 'mooshroom']);
@@ -39,6 +43,8 @@ export function serverAnimalUse(mobs, p, e, ctx) {
 
 // The client half, on the stand-in `mob` ({ type, growingAge, love, sheared, color, saddled, health }) and the client's Survival. Returns { handled, sound? }.
 export function predictAnimalUse(mob, survival, { drop = () => {} } = {}) {
+  const extra = predictEntityExtras(mob, survival);
+  if (extra) return extra;
   if (!mob || mob.health <= 0 || !ANIMAL_TYPES.has(mob.type)) return { handled: false };
   const held = survival.held, id = held?.id ?? 0, adult = (mob.growingAge ?? 0) >= 0, creative = !!survival.creative;
   const spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
@@ -65,4 +71,25 @@ export function predictAnimalUse(mob, survival, { drop = () => {} } = {}) {
     return { handled: true };
   }
   return { handled: false };
+}
+
+// b76 mpclicks76: the right clicks batch 75 put on the server (server-use-entity.js) for every mob kind, predicted on the client copy. Natively EntityPlayer.interactWith (yz.q, bytecode-read)
+// runs `target.interactFirst` (sa.c) and then, for a living target, ItemStack.interactWithEntity (add.a) on BOTH sides (PlayerControllerMP.interactWithEntitySendPacket sends C02 and then calls it
+// locally); Creative gets a copy of the held stack, so only a Survival stack shrinks or wears. The sound of a flint and steel is the server's (`except: null` reaches the clicker), so none here.
+// Kinds whose own interact consumes the click first on the client too (an adult villager's trade window, a tamed wolf's or ocelot's sit) are left to the server; a wrong guess is put right by `animResend`.
+const takesClickFirst = (mob) => (mob.type === 'villager' && (mob.growingAge ?? 0) >= 0) || ((mob.type === 'wolf' || mob.type === 'ocelot') && !!mob.owner); // EntityVillager.interact (adult), EntityTameable.interact (tamed)
+function predictEntityExtras(mob, survival) {
+  if (!mob || mob.health <= 0) return null;
+  const held = survival.held, id = held?.id ?? 0;
+  if (!id) return null;
+  const creative = !!survival.creative, spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
+  if (mob.type === 'creeper' && ITEMS[id]?.kind === 'flint_and_steel') { mob.ignited = true; if (!creative) survival.wear(id); return { handled: true }; } // EntityCreeper.interact
+  if (id === ITEM_SPAWN_EGG && isAgeable(mob.type)) { // EntityAgeable.interact: the click is consumed on any ageable mob (villager included); one egg goes only when its class fits; the baby is the server's spawn
+    if (AGEABLE_EGG_TYPES[eggOf(held.damage)?.entity]?.includes(mob.type)) spend();
+    return { handled: true };
+  }
+  if (originalId(held) === NAME_TAG_ORIGINAL && typeof held.displayName === 'string' && !takesClickFirst(mob)) { // ItemNameTag.itemInteractionForEntity
+    mob.customName = held.displayName.slice(0, 64); mob.persistent = true; spend(); return { handled: true };
+  }
+  return null;
 }
