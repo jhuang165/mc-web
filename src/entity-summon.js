@@ -9,7 +9,7 @@ import { JAVA_PROJECTILES, javaProjectileFromNbt } from "./java-projectiles.js";
 import { primeTnt } from "./explosion.js";
 import { newOrb } from "./experience.js";
 import { spawnFalling, FALLING_Y_OFFSET } from "./falling.js";
-import { fallingCellOf, fallingMetaOf, fallingDataExtra } from "./java-objects.js";
+import { fallingCellOf, fallingMetaOf, fallingDataExtra, fallingTileDataOf } from "./java-objects.js";
 import { ARTS } from "./hanging.js";
 
 export const ENTITY_SUMMON = Object.freeze({
@@ -27,7 +27,7 @@ const KEYS = {
 };
 // What this build keeps of each key set (the rest is reported).
 const KEPT = {
-  Item: ["Age", "Item", "PickupDelay", "Motion"], XPOrb: ["Value", "Motion"], PrimedTnt: ["Fuse"], FallingSand: ["Tile", "TileID", "Data", "Time"], Boat: ["Motion", "Rotation"],
+  Item: ["Age", "Item", "PickupDelay", "Motion"], XPOrb: ["Value", "Motion"], PrimedTnt: ["Fuse"], FallingSand: ["Tile", "TileID", "Data", "Time", "DropItem", "HurtEntities", "FallHurtMax", "FallHurtAmount", "TileEntityData"], Boat: ["Motion", "Rotation"],
   Painting: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Motive"], ItemFrame: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Item", "ItemRotation", "ItemDropChance"], LeashKnot: [],
 };
 
@@ -95,6 +95,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       if (hasNumber(t, "DropItem")) e.dropItem = nbtGet(t, "DropItem", NBT.BYTE, 0) !== 0;
       // EntityFallingBlock.readEntityFromNBT: HurtEntities (a number) reads FallHurtAmount (float) and FallHurtMax (int); without it only an anvil hurts.
       if (hasNumber(t, "HurtEntities")) Object.assign(e, { hurtEntities: nbtGet(t, "HurtEntities", NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(t, "FallHurtAmount", NBT.FLOAT, 0), fallHurtMax: nbtGet(t, "FallHurtMax", NBT.INT, 0) });
+      const tileData = fallingTileDataOf(t); // TileEntityData (compound), copied into the tile entity on landing
+      if (tileData) e.tileData = tileData;
       hosts.falling.entities.push(e);
     }
   } else if (id === "Boat") {

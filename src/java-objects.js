@@ -8,6 +8,7 @@ import { nbtGet, hasNumber } from './nbt-get.js';
 import { fromOriginal } from './block-registry.js';
 import { TNT_Y_OFFSET } from './explosion.js';
 import { FALLING_Y_OFFSET } from './falling.js';
+import { nbtToJson } from './spawner-data.js';
 
 export const JAVA_OBJECTS = Object.freeze({ XPOrb: 'xpOrbs', PrimedTnt: 'tnt', FallingSand: 'falling' });
 export const IMPORT_OBJECT_LIMIT = { xpOrbs: 512, tnt: 1024, falling: 1024 }; // ExperienceOrbs keeps 512
@@ -29,6 +30,13 @@ export function fallingCellOf(original, data) {
 export const fallingMetaOf = (cell, data) => ((data & 240) | ((cell.meta ?? 0) & 15)) & 255;
 // A block the port holds without that Data (stone with Data 15 is port stone, metadata 0) keeps the saved byte as `data`, which the export writes back.
 export const fallingDataExtra = (cell, data) => (fallingMetaOf(cell, data) === data ? {} : { data });
+
+// EntityFallingBlock.readEntityFromNBT keeps TileEntityData when the tag is a compound (Bytecode-read xj.a(dh): dh.b(key, 10) then dh.m). The record holds it as an
+// nbtToJson tree (JSON-safe, typed); landing copies it into the placed tile entity (falling-tiles.js) and the export writes it back whole.
+export const fallingTileDataOf = (entity) => {
+  const tag = entity.get('TileEntityData');
+  return tag?.type === NBT.COMPOUND ? nbtToJson(tag) : null;
+};
 
 // EntityEnderCrystal (a plain Entity, not an EntityLivingBase): readEntityFromNBT and writeEntityToNBT are empty (Bytecode-read wz.a(dh), wz.b(dh); an
 // executed load drops Foo, Health and Attributes alike, object-nbt-reference.json crystal rows), so the tag is Entity.readFromNBT only: Pos, Rotation, Fire
@@ -76,5 +84,7 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
   Object.assign(record, fallingDataExtra(cell, data));
   if (hasNumber(entity, 'DropItem')) record.dropItem = nbtGet(entity, 'DropItem', NBT.BYTE, 0) !== 0;
   if (hasNumber(entity, 'HurtEntities')) Object.assign(record, { hurtEntities: nbtGet(entity, 'HurtEntities', NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(entity, 'FallHurtAmount', NBT.FLOAT, 0), fallHurtMax: nbtGet(entity, 'FallHurtMax', NBT.INT, 0) });
+  const tileData = fallingTileDataOf(entity);
+  if (tileData) record.tileData = tileData;
   return { list, record };
 }

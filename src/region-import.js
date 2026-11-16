@@ -705,6 +705,10 @@ export async function importJavaRegionArea(regions, options = {}) {
       // Saved y is the bounding-box bottom; Pos[1] is posY (yOffset 0.125 above it).
       drops.push({ stack, x, y: pos[1] - 0.125, z, mx: m[0], my: m[1], mz: m[2],
         age: Math.max(0, Math.min(5999, get(entity, 'Age', NBT.SHORT, 0))), delay: Math.max(0, Math.min(40, get(entity, 'PickupDelay', NBT.SHORT, 0))) });
+      // EntityItem.readEntityFromNBT: Owner and Thrower strings (Bytecode-read xk.a(dh): hasKey, then getString) and Entity.readFromNBT's PortalCooldown; the live item
+      // already keeps and saves all three (item-entities.js), the import dropped them before b77.
+      for (const [key, field] of [['Owner', 'owner'], ['Thrower', 'thrower']]) { const text = get(entity, key, NBT.STRING, ''); if (text) drops[drops.length - 1][field] = text; }
+      const portal = get(entity, 'PortalCooldown', NBT.INT, 0); if (portal > 0) drops[drops.length - 1].portalCooldown = portal;
       tally(entityConverted, id);
     }
     report.scheduledTicks += tileTicks?.length ?? 0;
