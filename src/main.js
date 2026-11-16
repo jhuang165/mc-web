@@ -183,6 +183,7 @@ import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
+import { replaceableCell, netherFizz, equipArmor } from "./sp-dispense76.js";
 import { HopperContainer, Hoppers, HOPPER, hopperActive } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
@@ -1760,6 +1761,8 @@ async function launch(record, prepared, { slice = false } = {}) {
       hoppers: () => survival.hoppers ?? {},
       brewing: () => survival.brewing ?? {},
       transfer: () => hopperTiles.host,
+      // b76 spdispense76: World.playAuxSFX of a dispense (1000-1002 sounds, 1009 fire charge, 2000 smoke, 2005 bone meal sparkles), drawn like the multiplayer client does (dispenserAux)
+      auxEffect: (e) => dispenserAux(e, { play: (name, x, y, z, volume, pitch) => sounds.play(name, { position: { x, y, z }, volume, pitch }), smoke: (...a) => scene.fx.spawn('smoke', ...a), sparkle: (x, y, z) => boneMealSparkles(scene.fx, world.get(x, y, z), x, y, z, sparkleHeight(world, x, y, z), itemRand) }),
       // Dispenser / dropper effects (dispense.js host): entities and blocks the engine cannot create itself.
       dispense: {
         rng: () => arrows.rng(),
@@ -1778,6 +1781,9 @@ async function launch(record, prepared, { slice = false } = {}) {
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
         setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
+        // b76 spdispense76 (sp-dispense76.js): the replaceable-block rule and the Nether's fizz of ItemBucket.tryPlaceContainedLiquid, and armour worn by the player or a loot-picking mob in front
+        isReplaceable: (id, w, x, y, z) => replaceableCell(world, x, y, z), nether: () => !!world.isHell, fizz: (x, y, z) => netherFizz((name, px, py, pz, volume, pitch) => sounds.play(name, { volume, pitch, position: { x: px, y: py, z: pz } }), x, y, z),
+        armorType: (stack) => ITEMS[stack.id]?.armor, equip: (cell, stack, slot) => { const ok = equipArmor({ player: { position, width: PHYSICS.width, height: PHYSICS.height }, survival, mobs, size: (m) => mobs.size(m) }, cell, stack, slot); if (ok) saved = false; return ok; },
         setFire: (x, y, z) => { fire.ignite(x, y, z); },
         breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
         boneMeal: (x, y, z, original, rand) => { const g = useBoneMeal({ world, trees, farming, flowers: FLOWERS, grassRandom: boneRandom, items, rand }, x, y, z); for (const q of g.changed) scene.updateBlock(q[0], q[2], q[1]); if (g.farm) applyFarmUpdates(farming.drain()); return g.used; }, // b67 bonemeal3: ItemDye.func_150919_a, world Random from the dispenser
