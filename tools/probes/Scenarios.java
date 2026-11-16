@@ -43,6 +43,17 @@ class Scenarios {
     m.add(new S("GuiSelectWorld", () -> new bdx(null), 0, false, 0));
     m.add(new S("GuiMultiplayer", () -> new bfz(null), 0, false, 0));
     m.add(new S("GuiScreenResourcePacks", () -> new bgf(null), 0, false, 0));
+    // b77 worldflags77: ServerListEntryLanScan dots by clock (Minecraft.getSystemTime() / 300 % 4) and real folder packs in both pack lists.
+    m.add(new S("GuiMultiplayer+t300", () -> { org.lwjgl.Sys.now = 300L; return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+t600", () -> { org.lwjgl.Sys.now = 600L; return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+t900", () -> { org.lwjgl.Sys.now = 900L; return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+t1200", () -> { org.lwjgl.Sys.now = 1200L; return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+servers1", () -> { GuiMenusProbe.serverFixtures(1); return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+servers2", () -> { GuiMenusProbe.serverFixtures(2); return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+servers3", () -> { GuiMenusProbe.serverFixtures(3); return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiMultiplayer+servers4", () -> { GuiMenusProbe.serverFixtures(4); return new bfz(null); }, 0, false, 0));
+    m.add(new S("GuiScreenResourcePacks+packs", () -> { GuiMenusProbe.packFixtures(false); return new bgf(null); }, 0, false, 0));
+    m.add(new S("GuiScreenResourcePacks+packs+selected", () -> { GuiMenusProbe.packFixtures(true); return new bgf(null); }, 0, false, 0));
     m.add(new S("GuiLanguage", () -> new bdj(null, s, GuiMenusProbe.lang), 0, false, 0));
     m.add(new S("GuiScreenAddServer", () -> new bdg(null, new bjn("Minecraft Server", "")), 0, false, 0));
     m.add(new S("GuiScreenAddServer+existing", () -> new bdg(null, new bjn("Home", "play.example.com:25566")), 0, false, 0));

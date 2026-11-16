@@ -4,6 +4,7 @@ import { EN_US } from '../lang-en-us.js';
 import { lang, formatLang } from '../lang.js';
 import { splitLines, textWidth, COLOR } from '../menu-screens.js';
 import { DEFAULT_SERVER } from './protocol.js';
+import { lanScanDots, serverListOffset, LAN_SCAN_LINE_Y } from '../lan-scan.js'; // b77 worldflags77
 import { rowState, newStatus, pingServer, pingAnimationRow } from './client-ping.js';
 
 export const tr = (key, ...args) => formatLang(lang.table ?? EN_US, key, ...args);
@@ -133,6 +134,10 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
       g.button({ x: half(w) + 5, y: Math.trunc(h / 6) + 96, w: 150, h: 20 }, tr('gui.cancel'), reopen);
     } });
   };
+  // The LAN scan dots follow Minecraft.getSystemTime like the native entry (redrawn every frame there; every 100 ms here).
+  let lanDots = null, lanTimer = null;
+  const stopLanDots = () => { if (lanTimer !== null) clearInterval(lanTimer); lanTimer = null; lanDots = null; };
+  const startLanDots = () => { if (lanTimer === null && typeof setInterval === 'function') { lanTimer = setInterval(() => lanDots?.set(lanScanDots(Date.now()), COLOR.gray), 100); lanTimer.unref?.(); } };
   // ServerListEntryNormal.func_148279_a redraws every frame: while a server is pinging its sprite follows Minecraft.getSystemTime (client-ping.pingAnimationRow).
   const stopAnimation = () => { if (animTimer !== null) clearInterval(animTimer); animTimer = null; };
   const startAnimation = () => { if (animTimer === null && typeof setInterval === 'function') { animTimer = setInterval(animate, 50); animTimer.unref?.(); } };
@@ -147,12 +152,20 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
     escape: back,
     init(g, w, h) {
       self.g = g;
-      stopAnimation(); pingSprites = [];
+      stopAnimation(); stopLanDots(); pingSprites = [];
       if (!started) { started = true; refresh(g); }
       const L = serverListLayout(w, h);
-      listUi = g.slotList(L.list, {
-        count: list.entries.length, scroll, selected: i => i === selected,
+      // b77 worldflags77: ServerListEntryLanScan is the last row; the list content is centred while it is shorter than the view (lan-scan.js).
+      const rows = list.entries.length + 1, spec = { ...L.list, headerPadding: serverListOffset(L.list.bottom - L.list.top, rows * L.list.slotHeight) };
+      listUi = g.slotList(spec, {
+        count: rows, scroll, selected: i => i === selected,
         entry(i, y, parent, x) {
+          if (i === list.entries.length) {
+            g.text(tr('lanServer.scanning'), half(w), y + LAN_SCAN_LINE_Y[0], { center: true, parent });
+            lanDots = g.text(lanScanDots(Date.now()), half(w), y + LAN_SCAN_LINE_Y[1], { center: true, color: COLOR.gray, parent });
+            startLanDots();
+            return;
+          }
           const e = list.entries[i], st = statuses[i] ?? newStatus(), r = rowState(st), rowW = 305;
           g.text(e.name, x + 35, y + 1, { parent });
           splitLines(st.motd, rowW - 34).slice(0, 2).forEach((line, k) => g.text(line, x + 35, y + 12 + 9 * k, { color: COLOR.gray, parent }));
@@ -163,7 +176,7 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
           sprite.title = r.hover ? (Array.isArray(r.hover) ? r.hover.join('\n') : r.hover) : r.label;
           if (st.icon) { const icon = g.image('', x, y, 32, 32, parent); icon.style.cssText += `;background:url(${st.icon}) no-repeat;background-size:100% 100%;image-rendering:pixelated`; }
         },
-        click(i, double) { selected = i; for (const k of ['edit', 'delete', 'select']) buttons[k].enable(true); if (double) join(addressUrl(selectedEntry().ip), selectedEntry()); },
+        click(i, double) { if (i >= list.entries.length) return; selected = i; for (const k of ['edit', 'delete', 'select']) buttons[k].enable(true); if (double) join(addressUrl(selectedEntry().ip), selectedEntry()); },
       });
       g.text(tr('multiplayer.title'), ...L.title, { center: true });
       const b = L.buttons;
@@ -178,7 +191,7 @@ export function serverListScreen({ list, ping = pingServer, show, join, back }) 
       };
       for (const k of ['edit', 'delete', 'select']) buttons[k].enable(selected >= 0);
     },
-    close() { scroll = listUi?.scroll ?? 0; stopAnimation(); },
+    close() { scroll = listUi?.scroll ?? 0; stopAnimation(); stopLanDots(); },
   };
   return self;
 }

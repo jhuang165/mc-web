@@ -28,7 +28,7 @@ import { TNT_Y_OFFSET } from './explosion.js';
 import { Experience } from './experience.js';
 import { splitRuntime } from './chunk-runtime.js';
 import { populationBlockMapperReady } from './population-world.js';
-import { streamedWorldType } from './java-world.js';
+import { streamedWorldType, mapFeaturesOn } from './java-world.js';
 import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
@@ -244,7 +244,7 @@ export function levelNbt(record,w,report={unmappedItems:0}) {
  const generatorName=record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default';
  const rules={...DEFAULT_RULES};
  for(const [k,v] of Object.entries(record.gameRules&&typeof record.gameRules==='object'?record.gameRules:{}))if(typeof v==='string')rules[k]=v;
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(generatorName),generatorVersion:int(generatorName==='default'?1:0),generatorOptions:str(w.generatorOptions??''),MapFeatures:byte(record.mapFeatures===false?0:1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(record.hardcore===true?1:0),allowCommands:byte((typeof record.allowCommands==='boolean'?record.allowCommands:creative)?1:0),Time:long(Number.isSafeInteger(record.totalTime)&&record.totalTime>=0?record.totalTime:p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),GameRules:comp(Object.fromEntries(Object.entries(rules).map(([k,v])=>[k,str(v)]))),Player:comp(player)};
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(generatorName),generatorVersion:int(generatorName==='default'?1:0),generatorOptions:str(w.generatorOptions??''),MapFeatures:byte(record.mapFeatures===false||(record.biome==='javaStreamed'&&!mapFeaturesOn(record.generationVersion))?0:1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(record.hardcore===true?1:0),allowCommands:byte((typeof record.allowCommands==='boolean'?record.allowCommands:creative)?1:0),Time:long(Number.isSafeInteger(record.totalTime)&&record.totalTime>=0?record.totalTime:p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),GameRules:comp(Object.fromEntries(Object.entries(rules).map(([k,v])=>[k,str(v)]))),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};

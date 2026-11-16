@@ -25,7 +25,7 @@ class MC extends bao {
   public brr S() { return GuiMenusProbe.lang; }
 }
 // Test double for the TextureManager (bqf): binding a texture only needs to succeed; the bound names are not recorded.
-class bqf { public bqf(bqy m) {} public void a(bqx l) {} public bqx a(String n, bpq t) { return new bqx(n); } }
+class bqf { public bqf(bqy m) {} public void a(bqx l) {} public bqx a(String n, bpq t) { return new bqx(n); } public bqh b(bqx l) { return null; } public void c(bqx l) {} }
 class ProbeFramebuffer extends bmg {
   ProbeFramebuffer() { super(0, 0, false); }
   public void a(int w, int h) {} public void a() {} public void b(int w, int h) {} public void a(int i) {} public void b() {} public void c() {} public void d() {} public void e() {}
@@ -65,6 +65,38 @@ public class GuiMenusProbe {
   static bmg fb;
   static bsx server;
   static brr lang;
+  /** b77: GuiMultiplayer with `n` saved servers (servers.dat in mcDataDir); the LAN-scan entry is drawn after them. */
+  static void serverFixtures(int n) {
+    try {
+      Files.deleteIfExists(((File) get(mc, bao.class, "w")).toPath().resolve("servers.dat"));
+      bjp l = new bjp(mc);
+      for (int i = 0; i < n; i++) l.a(new bjn("Server " + (i + 1), "127.0.0.1:" + (25565 + i)));
+      l.b();
+    } catch (Exception e) { throw new RuntimeException(e); }
+  }
+  static Path packDir;
+  static boolean packsMade = false;
+  static void pack(String name, String mcmeta) throws Exception {
+    Path d = packDir.resolve(name);
+    Files.createDirectories(d);
+    if (mcmeta != null) Files.write(d.resolve("pack.mcmeta"), mcmeta.getBytes("UTF-8"));
+  }
+  /** b77: real folder packs in the repository directory (GuiScreenResourcePacks lists them through ResourcePackRepository). `selected` puts "Alpha Pack" in the selected list. */
+  static void packFixtures(boolean selected) {
+    try {
+      if (!packsMade) {
+        packsMade = true;
+        pack("Alpha Pack", "{\"pack\":{\"pack_format\":1,\"description\":\"A short description.\"}}");
+        pack("Beta Pack With A Very Long Name That Cannot Fit Inside The Pack List Row", "{\"pack\":{\"pack_format\":1,\"description\":\"First line of a long description that should wrap across several lines in the pack row, more than two.\"}}");
+        pack("Gamma", "{\"pack\":{\"pack_format\":1,\"description\":\"\\u00a7aGreen\\u00a7r and plain text\"}}");
+        pack("Broken Pack", null);
+      }
+      packs.a();
+      List<Object> chosen = new ArrayList<>();
+      if (selected) for (Object o : packs.b()) if (((brf) o).d().equals("Alpha Pack")) chosen.add(o);
+      packs.a(chosen);
+    } catch (Exception e) { throw new RuntimeException(e); }
+  }
   static ays info(boolean hardcore, String name) {
     dh t = new dh();
     t.a("LevelName", name);
@@ -100,6 +132,7 @@ public class GuiMenusProbe {
     }
     return b.append('"').toString();
   }
+  static Object get(Object o, Class<?> c, String name) throws Exception { Field f = c.getDeclaredField(name); f.setAccessible(true); return f.get(o); }
   static void set(Object o, Class<?> c, String name, Object v) throws Exception { Field f = c.getDeclaredField(name); f.setAccessible(true); f.set(o, v); }
   static String buttons(bdw g) {
     List<String> bj = new ArrayList<>();
@@ -131,6 +164,7 @@ public class GuiMenusProbe {
       if (world == 0) { mc.f = null; } else world(world == 2);
       MC.single = single;
       MC.shown.clear();
+      org.lwjgl.Sys.now = 0L;
       bdw g = make.get();
       mc.n = g;
       g.a(mc, w, h);
@@ -169,6 +203,7 @@ public class GuiMenusProbe {
     bbj settings = (bbj) u.allocateInstance(bbj.class);
     try { settings = new bbj(mc, tmp.toFile()); } catch (Throwable t) { System.err.println("GameSettings: " + t); settings = (bbj) u.allocateInstance(bbj.class); }
     mc.u = settings;
+    set(mc, bao.class, "w", tmp.toFile()); // mcDataDir: servers.dat for the Multiplayer scenarios below
     font = new F2(settings, false);
     font.a(rm);
     mc.l = font; mc.m = font;
@@ -190,7 +225,10 @@ public class GuiMenusProbe {
       if (m.getReturnType() == boolean.class) return false;
       return null;
     });
-    packs = new brc(tmp.resolve("resourcepacks").toFile(), tmp.resolve("server-resource-packs").toFile(), defaultPack, null, settings);
+    brw metadata = new brw();
+    metadata.a(new bsh(), bsg.class); // Minecraft's constructor registers the pack section serializer the same way
+    packDir = tmp.resolve("resourcepacks");
+    packs = new brc(packDir.toFile(), tmp.resolve("server-resource-packs").toFile(), defaultPack, metadata, settings);
     server = (bsx) u.allocateInstance(bsx.class);
     lang = new brr(new brw(), "en_US");
     set(mc, bao.class, "as", lang);
@@ -200,5 +238,6 @@ public class GuiMenusProbe {
     String[] only = args.length > 1 ? args[1].split(",") : null;
     int[][] sizes = {{320, 240}, {427, 240}, {200, 150}};
     Scenarios.run(only, sizes);
+    System.exit(0); // the server-list ping pool threads are not daemons
   }
 }
