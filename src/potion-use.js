@@ -64,10 +64,15 @@ export function useGlassBottle(state, bucket, hooks = {}) {
 }
 
 /** BlockCauldron.onBlockActivated, glass bottle branch: a water bottle for one level (the bottle stack shrinks after the add). */
-export function bottleFromCauldron(state, level) {
+export function bottleFromCauldron(state, level, at = null) {
   if (level <= 0) return null;
-  const inv = state.survival.inventory, held = inv.held, potion = makeStack(ITEM_POTION, 1, 0);
-  give(state, potion);
-  if (--held.count <= 0) inv.main[inv.current] = null;
+  const inv = state.survival.inventory, held = inv.held;
+  if (!state.survival.creative) { // BlockCauldron (ajw, bytecode-read): Creative keeps the bottle and gets nothing; the level drops either way
+    const potion = makeStack(ITEM_POTION, 1, 0);
+    inv.add(potion);
+    // a full inventory spawns an EntityItem at (x + 0.5, y + 1.5, z + 0.5) with no pickup delay (not dropPlayer's throw)
+    if (potion.count > 0) { if (at && state.items?.spawn) state.items.spawn(potion, at[0] + 0.5, at[1] + 1.5, at[2] + 0.5, { delay: 0 }); else give(state, potion); }
+    if (--held.count <= 0) inv.main[inv.current] = null;
+  }
   return level - 1;
 }
