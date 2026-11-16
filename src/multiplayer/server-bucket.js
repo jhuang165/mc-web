@@ -44,7 +44,8 @@ export function bucketUse(sim, p, eye, dir) {
   const hit = traceBucket(w, [eye.x, eye.y, eye.z], [dir.x, dir.y, dir.z], empty);
   if (!hit) return false;
   if (blockProtected(sim, p, hit.block)) return false; // World.canMineBlock on the traced block (both branches)
-  if (s.adventure) return false; // EntityPlayer.canPlayerEdit: no allowEdit in Adventure (the held stack carries no CanPlaceOn data here)
+  // EntityPlayer.canPlayerEdit(x, y, z, side, stack) = allowEdit || stack != null && Item.canItemEditBlocks (`return true` for every item, bytecode-read yz.a, add.z, adb.v): the bucket is
+  // the stack in hand, so Adventure passes. (b77: the old `if (s.adventure) return false` refused every Adventure bucket; isCurrentToolAdventureModeExempt is for digging only.)
   const dim = p.dimension | 0;
   const before = w.evaporated;
   w.evaporated = (x, y, z) => fizzSound(sim, dim, x, y, z); // placeContainedLiquid's Nether branch (the world is the Nether only where isHell)

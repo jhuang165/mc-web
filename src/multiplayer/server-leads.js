@@ -8,6 +8,7 @@
 // (remote-leads.js) draws it with HorseGearRenderer. Client -> server needs nothing new: the right click is the existing `animUse` (C02 interact) and the fence click the existing edit.
 // Native facts used: a lead breaks when the holder is gone or more than 10 blocks away (leashTick, executed in leash-reference.json); a Nether holder is out of reach of
 // Overworld mobs, so the lead drops (the Nether has no mobs: this port keeps one entity list per dimension).
+import { originalId, LEAD_ORIGINAL } from '../horse-gear.js';
 export class ServerLeads {
   constructor(host) {
     this.host = host;
@@ -25,7 +26,9 @@ export class ServerLeads {
   }
   // A right click on a fence block (BlockFence.onBlockActivated): true when the lead code took the click.
   fence(p, [x, y, z]) {
-    const mobs = this.mobs;
+    const mobs = this.mobs, held = p.survival.held;
+    // ItemInWorldManager.activateBlockOrUseItem: a sneaking player with an item skips BlockFence.onBlockActivated; only the lead's own onItemUse (adf.a, render type 11) still ties (b77 mpknots77).
+    if (p.input?.sneak && held && originalId(held) !== LEAD_ORIGINAL) return false;
     return this.as(p, () => { const v = mobs.ai.player; return v ? !!mobs.leashFence([x, y, z], p.survival) : false; });
   }
   // The view of the player holding `e` (ServerMobs.target), or null when the holder is gone (the lead drops here, once) or left the Overworld.

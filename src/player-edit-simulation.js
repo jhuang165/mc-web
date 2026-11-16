@@ -41,6 +41,7 @@ import { isDoor, activateDoor, doorSound, doorReplaceable } from './doors-panes.
 import { FENCE_GATE, TRAPDOOR, gateUseMeta, trapOpen } from './shaped-blocks.js';
 import { ITEMS } from './survival.js';
 import { mayHitBlock } from './adventure.js';
+import { originalId, LEAD_ORIGINAL } from './horse-gear.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
 import { copyStack, makeStack } from './inventory.js';
 import { HOPPER, newHopperTile } from './hopper.js';
@@ -165,8 +166,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // The cauldron consumes empty-hand, water-bucket and wet-leather activations; the empty flower pot
   // takes a supported plant (BlockCauldron/BlockFlowerPot.onBlockActivated).
   const targetBlock = activates && !aimedEntity && target ? state.world.get(...target.block) : 0;
-  const cauldronLevel = targetBlock === CAULDRON ? state.world.getMeta(...target.block) & 3 : 0;
-  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, cauldronLevel, true).handled || (id === ITEM_GLASS_BOTTLE && cauldronLevel > 0) || cauldronWash(state.survival.held, cauldronLevel).handled
+  const usesStoneUtility = targetBlock === CAULDRON ? true // b77 mpknots77: the client's onBlockActivated is `return true` (bytecode-read ajw), so no item's onItemRightClick follows a cauldron click
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
@@ -275,7 +275,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
 
   // ItemLead.onItemUse / BlockFence.onBlockActivated: the player's leashed mobs tie to the fence (horse-gear-live.js).
-  if (place && activates && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival)) {
+  if (place && (activates || originalId(state.survival.held) === LEAD_ORIGINAL) && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival)) { // b77 mpknots77: sneaking with a lead still ties (ItemLead.onItemUse, adf.a, render type 11)
     hook('renderHotbar'); hook('markUnsaved');
     return act('leash-fence');
   }
@@ -525,8 +525,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('markUnsaved');
       return act('use-flint-and-steel');
     }
-    if (!state.survival.creative && item?.food) { beginEating(state, id, hook); return act('begin-eating'); }
-    if (item?.kind === 'sword') { beginBlocking(state, id); return act('begin-blocking'); }
+    if (!state.survival.creative && item?.food && !(activates && block === CAULDRON)) { beginEating(state, id, hook); return act('begin-eating'); } // b77: a cauldron click is consumed
+    if (item?.kind === 'sword' && !(activates && block === CAULDRON)) { beginBlocking(state, id); return act('begin-blocking'); }
 
     // ItemBed.onItemUse (bed-reference.json): top face only, both cells air with a solid top below.
     if (id === ITEM_BED) {

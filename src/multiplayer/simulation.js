@@ -369,6 +369,7 @@ export class DedicatedSimulation {
   handleUse(p, active) {
     if (!active) { if (p.itemInUse?.bow) this.dispense.shootBow(p, p.itemInUse.ticks); /* b62: C07 release */ p.itemInUse = null; return true; }
     if (p.itemInUse) return false;
+    if (p.useSwallowed !== undefined && this.ticks <= p.useSwallowed + 1) { p.useSwallowed = undefined; return false; } // b77: PlayerControllerMP.onPlayerRightClick returned true, sendUseItem never ran
     const held = p.survival.held, id = held?.id ?? 0, item = ITEMS[id];
     if (item?.kind === 'sword') p.itemInUse = { id, block: true };
     else if (id === BOW && canDraw(p.survival)) p.itemInUse = { id, bow: true, ticks: 0 };
@@ -442,6 +443,7 @@ export class DedicatedSimulation {
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
     if (b === CAKE_BLOCK && !(p.input.sneak && p.survival.held) && serverCakeEat(this.world, p.survival, x, y, z)) return true; // b72 cakefog72: BlockCake.onBlockActivated
+    if (place && clientSwallows(b, p)) p.useSwallowed = this.ticks; // b77 mpknots77: no item use (eat, drink, block, draw) follows a cauldron click
     if (place && b === CAULDRON && !(p.input.sneak && p.survival.held) && cauldronActivate(this, p, x, y, z)) return true; // b76 mpcauldron76: water bucket, glass bottle, leather armour
     const noRightClick = place && clientSwallows(b, p); // b76 mpcauldron76: the client sends no item-use packet after a cauldron click
     if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
