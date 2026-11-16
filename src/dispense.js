@@ -19,6 +19,7 @@
 //   host.armorType(stack) -> 0..3|undefined       ItemArmor.armorType (0 helmet .. 3 boots); host.equip(cell, stack, position) -> boolean puts one piece on an entity in the front cell
 //                                                  (position 4 - armorType, getArmorPosition); false (or no host.equip) throws the item instead
 //   host.setLiquid(x, y, z, originalId) / host.setAir(x, y, z) / host.breakBlock(x, y, z) optional world writers
+//   host.nether() / host.fizz(x, y, z)            b76: in the Nether a water bucket only fizzes at the front cell (no block placed or broken); host.isReplaceable(id, w, x, y, z) is Material.isSolid's negation
 //   host.boneMeal(x, y, z, original, rand) -> boolean  ItemDye.func_150919_a on the facing block with the world Random (b67: every IGrowable; a host that declines keeps the inline wheat family)
 //   host.transfer()                               the inventory-transfer.js host for droppers (omit to always drop)
 //   host.maxStack(stack), host.changed(keys[])
@@ -278,6 +279,8 @@ const ARMOR = {
 function placeLiquid(w, host, x, y, z, liquid) {
   const id = w.getBlock(x, y, z);
   if (id !== 0 && !isLiquidId(id) && !host.isReplaceable?.(id, w, x, y, z)) return false;
+  // b76: the Nether branch comes before the break (bytecode-read abo.a): water there only fizzes (host.fizz), the block in front stays, the bucket is still emptied.
+  if (host.fizz && host.nether?.() && (liquid === FLOWING_WATER || liquid === STILL_WATER)) { host.fizz(x, y, z); return true; }
   if (!isLiquidId(id)) host.breakBlock?.(x, y, z);
   if (host.setLiquid) host.setLiquid(x, y, z, liquid);
   else w.setBlock(x, y, z, liquid, 0, 3);

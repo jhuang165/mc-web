@@ -39,6 +39,7 @@ export class ContainerTicks {
       // b75 mpbuckets75: BehaviorDispenseFilledBucket calls ItemBucket.tryPlaceContainedLiquid: a non-solid block in front is replaced (broken with drops, `breakBlock`), and in the Nether
       // water only fizzes (random.fizz) while the bucket is still emptied. `isReplaceable` is that Material.isSolid test (a ladder is not solid either).
       setLiquid: (x, y, z, id) => { if (sim.world.isHell && id !== 10) fizzSound(sim, this.dim, x, y, z); else sim.world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); },
+      nether: () => !!sim.world.isHell, fizz: (x, y, z) => fizzSound(sim, this.dim, x, y, z), // b76: the Nether branch precedes the break in tryPlaceContainedLiquid (executed, sp-dispense76-reference.json): the block in front stays
       isReplaceable: (id, w, x, y, z) => sim.world.get(x, y, z) === LADDER || !sim.world.solid(x, y, z), // (`id` is the original id the engine reads; the port's cell is read here)
       setAir: (x, y, z) => { sim.world.set(x, y, z, 0, true, 0); },
       setFire: (x, y, z) => { sim.fire.ignite(x, y, z); },

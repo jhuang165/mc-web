@@ -155,13 +155,14 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   });
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
-  // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
-  // aux effects 1000 / 1001 (click) and 1002 (bow); the smoke particles (2000) are not drawn.
+  // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). The level events: game.auxEffect draws 1000-1002,
+  // 1009, 2000 and 2005 (main.js: sound and particles); without it only the sounds play. b76 (bytecode-read RenderGlobal.playAuxSFX): 1000 / 1001 / 1002 sound at the
+  // block's corner (x, y, z), not its centre; 1000 random.click 1.0 / 1.0, 1001 random.click 1.0 / 1.2, 1002 random.bow 1.0 / 1.2.
   const AUX_SOUNDS = { 1000: ["random.click", 1], 1001: ["random.click", 1.2], 1002: ["random.bow", 1.2] };
   const hooks = () => game.dispense ?? {};
   installDispensers(redstone, {
     tile: (x, y, z) => (game.dispensers()[`${x},${y},${z}`] ??= { items: Array(9).fill(null) }),
-    aux: (id, x, y, z) => { const s = AUX_SOUNDS[id]; if (s) game.sound?.(s[0], x + 0.5, y + 0.5, z + 0.5, 1, s[1]); },
+    aux: (id, x, y, z, data) => { if (game.auxEffect) { game.auxEffect({ id, x, y, z, data }); return; } const s = AUX_SOUNDS[id]; if (s) game.sound?.(s[0], x, y, z, 1, s[1]); },
     rng: () => hooks().rng?.(),
     spawnItem: (...a) => hooks().spawnItem?.(...a),
     arrow: (...a) => hooks().arrow?.(...a),
@@ -175,6 +176,11 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     setFire: (...a) => hooks().setFire?.(...a),
     breakBlock: (...a) => hooks().breakBlock?.(...a),
     boneMeal: (...a) => hooks().boneMeal?.(...a),
+    spawnEgg: (...a) => hooks().spawnEgg?.(...a), // BehaviorDispenseSpawnEgg (b76: it was never forwarded, so an egg was spent without a mob)
+    get boat() { return hooks().boat ? (...a) => hooks().boat(...a) : undefined; }, // the engine throws the boat as an item when the host has none
+    armorType: (...a) => hooks().armorType?.(...a), equip: (...a) => hooks().equip?.(...a), // ItemArmor's dispense behaviour (b76)
+    isReplaceable: (...a) => hooks().isReplaceable?.(...a), nether: () => hooks().nether?.() === true, // tryPlaceContainedLiquid: non-solid blocks in front are replaced; Nether water fizzes
+    get fizz() { return hooks().fizz ? (...a) => hooks().fizz(...a) : undefined; },
     transfer: () => game.transfer?.(),
     maxStack: (s) => game.maxStack?.(s) ?? 64,
     changed: () => game.markUnsaved?.(),
