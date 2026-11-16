@@ -2,6 +2,41 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 76
+
+Batch 76 covered these areas:
+- **Server horses.** Riding a horse on the server steers with the single-player rules; taming by riding raises temper by 5 and throws the rider; saddle, armour or sneaking on a tame horse opens the horse window (saddle, armour and chest slots); a horse tamed by riding records its owner; horse distance counts as `stat.horseOneCm`.
+- **Server cauldron.** Water buckets, glass bottles and leather washing work on the server (136 recorded wash rows replayed); a cauldron click consumes the use, so held items no longer act through it. Rain filling already ran on the server.
+- **Server hanging entities.** Frames and paintings replayed against the executed hanging records: entity reach now uses the native rule (it accepted clicks about 2 blocks too far), and hitting a frame, painting or knot no longer costs exhaustion.
+- **Server tracker.** A score change forces the early position send (watched value 18); a riding player runs the native riding branch (S1B attach, look-only sends, a teleport after dismount). Sleeping and riding were found not to be watched values, and a remote player copy never moves by its own velocity (bytecode-read), so those gap lines were wrong.
+- **Client clicks.** The multiplayer client predicts name tags, spawn eggs, flint and steel on creepers and Creative stacks for entity clicks, checked against the real server simulation. The owner already sees the death throw, and server `/setblock` already keeps table names (tests added).
+- **Server speed.** The line-of-sight block walk is about 40% cheaper (3.6 to 2.2 ms per 600-mob tick) with bit-identical results (`MC_RAYTRACE=verify`).
+- **Single-player right click.** The clicked entity is tried first (bytecode-read `rightClickMouse`); bows, buckets, potions, rods and books act only after the entity declines or on a miss. Paintings decline right clicks.
+- **Single-player dispensers.** Executed probe of the filled-bucket dispense (240 records): buckets replace non-solid blocks, Nether water only fizzes; spawn eggs, boats and armour now dispense in single player; smoke and bone-meal particles are drawn; click sounds play at the block corner; the fire-charge sound is added.
+- **Sounds.** Executed sweep of right-click items (62 records): the plant a bucket replaces sounds from its own cell, throw pitches use the native float chain. Hoe, bone meal, lily pad, shears, flint and steel and the dig hit already matched.
+- **Region import.** Orbs with Value 0 or above 2477, falling stone and other non-falling blocks, the full falling-block Data byte and DropItem now import, save and export; crystals read only Entity fields.
+- **Menus.** Generate Structures is a working toggle (bytecode-read GuiCreateWorld); a remote hardcore death shows "Leave server" and deletes no local world; Multiplayer, Add Server, Direct Connect, Disconnected, Rename World and the confirm screens replay the recorded menus; the Add Server pack label gained its trailing `§r`.
+
+Still open from batch 76:
+- **Multiplayer.**
+  - Horses: the client never sends the horse jump or horse window messages (the server counts the held jump key); no rider pose, jump bar or horse preview from server state; rider fall damage and rider restore after rejoin are not ported; wild taming rolls use the port's random streams. Horse and lead clicks are not predicted on the client.
+  - Knot placement and tie/untie were not re-swept; eating or drinking through a cauldron click is unchecked; the server bucket Adventure refusal looks wrong.
+  - A player's S12 velocity (death throw, knockback) is not sent; viewers of a rider get live rows instead of riding along; the cape-hidden watcher bit is not modelled.
+  - Performance: the remaining line-of-sight cost is per-cell double math; real sockets, many players and the Nether/End are not measured.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: horse riding and the horse window, server cauldrons, bucket swaps and fizz, the batch 75 and 76 entity clicks, the owner's camera on a thrown body. Earlier unseen items from batches 67 to 75 still stand.
+- **Single player.**
+  - Items still act through a cauldron click; eating or drinking at an entity still swings.
+  - Dispensed armour goes to the player first and only zombies, skeletons and pigmen take it; the away run's Nether fizz is silent.
+  - Not executed: the bow release, lily pad right click, eye of ender with a stronghold; splash and exp bottle impact sounds are not swept.
+  - A non-falling falling block that cannot land drops by the old rule (not `damageDropped`); falling-block `TileEntityData` is not read.
+  - Pack animation frames and baked tint icons still pass through a canvas.
+  - A world created with Generate Structures off has not been generated and checked; the client does not learn the server's hardcore flag; Resource Packs rows and the LAN scan line are not replayed.
+  - Flower pots: native stacks with damage values the port cannot hold are not representable. Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
+  - Not seen in a browser: dispenser smoke and corner clicks, the Generate Structures toggle, skin orientation and hat blending, item sprites after a pack relayout, the Controls list, the dropped bonus torch.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 75
 
 Batch 75 covered these areas:
@@ -16,25 +51,7 @@ Batch 75 covered these areas:
 - **Menus.** About 40 screens recorded from the real classes; the Difficulty button, the Controls list width and Open to LAN on a server were fixed; 13 catalogue rows settled.
 - **Research docs.** `parity.md` and 11 docs corrected; skeleton-horse traps were checked and are not in 1.7.10 (WorldServer creates no horse).
 
-Still open from batch 75:
-- **Multiplayer.**
-  - Horse riding (steering, jumping, taming by riding) and the horse inventory window on the server; client prediction for the new entity clicks.
-  - The server cauldron; item frames, paintings and knots were read, not swept.
-  - Watched values for sleeping, riding and score do not force a position send; a remote copy's own velocity is not modelled.
-  - Performance: line-of-sight tracing (about 15% of a large tick); real sockets, many players and the Nether/End are not measured.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: bucket swaps and fizz, the new entity clicks, the owner's camera on a thrown body. Earlier unseen items from batches 67 to 74 still stand.
-- **Single player.**
-  - Single player tries bows, buckets, potions, rods and books before the clicked entity (native and the server interact with the entity first).
-  - Single-player dispensers lack the replaceable-block rule and the Nether fizz for buckets.
-  - Sounds not swept: right-click items (buckets, lily pad, bone meal, fire charge), the hoe, dispenser placement, the dig hit sound.
-  - Region import drops orbs with Value 0 or above 2477 and falling non-falling blocks, masks falling-block Data to 4 bits; crystals import through the mob path.
-  - Pack animation frames and baked tint icons still pass through a canvas.
-  - Generate Structures is drawn disabled in Create World; the hardcore death screen lacks the remote "Leave server" text; eight recorded screens (Multiplayer, Resource Packs, Add Server, Direct Connect, Disconnected, Sleep, Rename World, Yes/No) are not replayed yet.
-  - Flower pots: native stacks with damage values the port cannot hold are not representable. Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
-  - Not seen in a browser: skin orientation and hat blending after the straight-alpha upload, item sprites after a pack relayout, the Controls list, the dropped bonus torch.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 75: carried into the batch 76 list above, except the items batch 76 closed or found wrong.
 
 ## Done in batch 74
 

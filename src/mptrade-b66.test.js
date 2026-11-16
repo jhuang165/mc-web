@@ -97,6 +97,8 @@ test('a full trade over the wire: payment, result, uses, the yes sound, the craf
   use(s, p, v);
   const offers = villagerOffers(brain(s, v)), offer = offers[0];
   give(p, offerStackToLive({ ...offer.buy, count: offer.buy.count + 1 }));
+  // a farmer's single first offer can be a two-input one (gravel or raw fish plus an emerald): the second payment goes to hotbar slot 31
+  if (offer.buyB) p.survival.inventory.main[1] = offerStackToLive(offer.buyB);
   st.sync(); assert.ok(p.window.ready);
   assert.equal(st.win.container.merchant.list.length, offers.length, 'client has the offers');
   const c = st.win.container;
@@ -104,6 +106,7 @@ test('a full trade over the wire: payment, result, uses, the yes sound, the craf
   c.click(30, 0, 0); st.deliver(); st.pump();       // pick up the payment stack
   c.click(0, 1, 0); st.deliver(); st.pump();        // one right click: ONE item? use whole: put the rest below
   c.click(0, 0, 0); st.deliver(); st.pump();
+  if (offer.buyB) { c.click(31, 0, 0); st.deliver(); st.pump(); c.click(1, 0, 0); st.deliver(); st.pump(); }
   assert.equal(c.slots[2].stack?.id, offerStackToLive(offer.sell).id, 'client shows the result');
   assert.equal(p.window.container.slots[2].stack?.id, offerStackToLive(offer.sell).id, 'server shows the result');
   c.click(2, 0, 0); st.deliver(); st.pump();

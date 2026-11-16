@@ -113,6 +113,22 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 76 (2026-11-16, ten Sonnet tracks in `../wt76-<name>` on `batch76-<name>`, cut from 45175ffd6, merged --no-ff on `batch76-lead`; lead note `b76-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.105.0, by track:
+  - mphorse76: `server-horses.js` (`ServerVehicles.horses`): riding with `horseRideThink`, taming by riding, the horse window (`openHorse`, `horseJump`/`horseInventory` wire messages, client window build), `stat.horseOneCm`, owner on riding tame.
+  - mpcauldron76: `server-cauldron.js` (bucket, bottle, leather wash, click always consumed); `server-hanging.js` native entity reach, no exhaustion on hanging hits; single-player `bottleFromCauldron` Creative and full-inventory drop (lead javap on `ajw` confirms the Creative skip).
+  - mpwatched76: `server-player-tracker.js` score (watcher 18) forces the off-beat send; riding branch from `p.mount`.
+  - mpclicks76: `animal-use.js` client prediction for name tags, spawn eggs, flint on creepers, Creative; death-throw and server `/setblock` table-name regression tests.
+  - mplos76: allocation-free `rayTraceBlocks` in `projectiles.js` (`rayTraceBlocksReference` kept, `MC_RAYTRACE=verify|off`), `tools/bench-raytrace.mjs`; about 40% off the walk.
+  - spuseorder76: `interactEntityFirst` in `player-edit-simulation.js`; buckets `entityOnly`; paintings decline clicks.
+  - spdispense76: `sp-dispense76.js`, `SpDispense76Probe` + `sp-dispense76-reference.json`; runtime hooks for eggs, boats, armour, replaceable cells; Nether fizz on SP and server; 2000/2005 particles, corner sounds, 1009.
+  - spsounds76: `SpSounds76Probe` + `sound-sweep2-reference.json`; bucket-replaced plant sound cell, float32 throw pitch.
+  - regionimport76: orbs, falling blocks (non-falling, full Data byte, DropItem) and crystals (`javaCrystalFromNbt`) import and export natively.
+  - guireplay76: Generate Structures toggle (generation 21, `mapFeatures:false`), remote hardcore "Leave server", eight recorded screens replayed (`guireplay76-b76.test.js`).
+- Lead: `mptrade-b66.test.js` flaked on main (4/25) when the farmer rolled a two-input offer; the test now places the second payment (0/50).
+- Verification: one full `npm test`, 8737 tests, 8736 pass, the 1 failure the trade flake above. Build and bridge tests ok.
+- Open: "Still open from batch 76" in `public/research/remaining-gaps.md`.
+
 Batch 75 (2026-11-14, ten Sonnet tracks in `../wt75-<name>` on `batch75-<name>`, cut from 4378ce396, merged --no-ff on `batch75-lead`; shared track rules `../artifacts/b75-lead/track-rules.md`; lead note `b75-lead-track.md`; no browser checks by request):
 - 0.104.0, by track:
   - mpbuckets75: `server-bucket.js` (`bucketUse` over single-player `traceBucket`/`useBucketAt`, `installFluidHooks`), `fluid-wash.js` shared wash drops, server fluid fizz, dispenser buckets replace non-solid cells and fizz in the Nether; `random.fizz` in `MP_SOUNDS`.
