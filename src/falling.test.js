@@ -118,8 +118,8 @@ test("a running world: placed sand falls after 2 ticks, a column follows, saves 
   for (let t = 0; t < 30; t++) fb.tick();
   assert.equal(w.get(21, 9, 21), SAND);
   assert.ok(changes.length > 0);
-  // Bad saves are ignored.
-  assert.equal(new FallingBlocks(w, {}, [{ block: 3, x: 1, y: 1, z: 1, vx: 0, vy: 0, vz: 0, ticks: 1 }, null, { block: SAND }]).entities.length, 0);
+  // Bad saves are ignored; a block that does not fall is kept (b76: EntityFallingBlock accepts any block, Executed TileID 1 row).
+  assert.equal(new FallingBlocks(w, {}, [{ block: 3, x: 1, y: 1, z: 1, vx: 0, vy: 0, vz: 0, ticks: 1 }, null, { block: SAND }, { block: 0, x: 1, y: 1, z: 1, vx: 0, vy: 0, vz: 0, ticks: 1 }]).entities.length, 1);
   assert.equal(spawnFalling(SAND, 0, 1, 2, 3).y, 2.5 - FALLING_Y_OFFSET);
 });
 

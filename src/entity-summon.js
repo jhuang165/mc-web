@@ -8,8 +8,8 @@ import { nbtGet, hasNumber } from "./nbt-get.js";
 import { JAVA_PROJECTILES, javaProjectileFromNbt } from "./java-projectiles.js";
 import { primeTnt } from "./explosion.js";
 import { newOrb } from "./experience.js";
-import { spawnFalling, isFallingBlock, FALLING_Y_OFFSET } from "./falling.js";
-import { fallingCellOf } from "./java-objects.js";
+import { spawnFalling, FALLING_Y_OFFSET } from "./falling.js";
+import { fallingCellOf, fallingMetaOf, fallingDataExtra } from "./java-objects.js";
 import { ARTS } from "./hanging.js";
 
 export const ENTITY_SUMMON = Object.freeze({
@@ -77,8 +77,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     else hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) }).age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
   } else if (id === "XPOrb") {
     const value = nbtGet(t, "Value", NBT.SHORT, 0);
-    if (value <= 0) spawned = false; // a 0-value orb has nothing to give; not kept
-    else { const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; hosts.xpOrbs.orbs.push(o); }
+    // EntityXPOrb.readEntityFromNBT keeps any Value, 0 and above 2477 too (Executed, object-nbt-reference.json); b76: a Value 0 orb is kept.
+    const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; hosts.xpOrbs.orbs.push(o);
   } else if (id === "PrimedTnt") {
     const e = primeTnt(x, y, z, { fuse: nbtGet(t, "Fuse", NBT.BYTE, 0) });
     [e.vx, e.vy, e.vz] = motion;
@@ -86,11 +86,13 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "FallingSand") {
     // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) when present, else Tile & 255; Data; Time.
     const original = hasNumber(t, "TileID") ? nbtGet(t, "TileID", NBT.INT, 0) : nbtGet(t, "Tile", NBT.BYTE, 0) & 255;
-    const cell = fallingCellOf(original, nbtGet(t, "Data", NBT.BYTE, 0)); // air or an unregistered id becomes sand (java-objects.js)
-    if (!cell || !isFallingBlock(cell.id)) spawned = false; // an unregistered or non-falling block: the entity discards itself or just hangs
+    const data = nbtGet(t, "Data", NBT.BYTE, 0) & 255, cell = fallingCellOf(original, data); // air or an unregistered id becomes sand (java-objects.js)
+    if (!cell) spawned = false; // no port block for the id
     else {
-      const e = spawnFalling(cell.id, cell.meta ?? 0, 0, 0, 0, hosts.falling.entityRandom());
-      Object.assign(e, { x, y: y - FALLING_Y_OFFSET, z, px: x, py: y - FALLING_Y_OFFSET, pz: z, vx: motion[0], vy: motion[1], vz: motion[2], ticks: Math.max(1, nbtGet(t, "Time", NBT.BYTE, 0) & 255) });
+      const e = spawnFalling(cell.id, fallingMetaOf(cell, data), 0, 0, 0, hosts.falling.entityRandom()); // any block falls; Data keeps its whole byte (b76)
+      Object.assign(e, { x, y: y - FALLING_Y_OFFSET, z, px: x, py: y - FALLING_Y_OFFSET, pz: z, vx: motion[0], vy: motion[1], vz: motion[2], ticks: nbtGet(t, "Time", NBT.BYTE, 0) & 255 });
+      Object.assign(e, fallingDataExtra(cell, data));
+      if (hasNumber(t, "DropItem")) e.dropItem = nbtGet(t, "DropItem", NBT.BYTE, 0) !== 0;
       // EntityFallingBlock.readEntityFromNBT: HurtEntities (a number) reads FallHurtAmount (float) and FallHurtMax (int); without it only an anvil hurts.
       if (hasNumber(t, "HurtEntities")) Object.assign(e, { hurtEntities: nbtGet(t, "HurtEntities", NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(t, "FallHurtAmount", NBT.FLOAT, 0), fallHurtMax: nbtGet(t, "FallHurtMax", NBT.INT, 0) });
       hosts.falling.entities.push(e);

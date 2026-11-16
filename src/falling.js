@@ -225,12 +225,12 @@ export class FallingBlocks {
       }
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
       const old = w.get(i, j, k);
-      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta)) {
+      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta & 15)) { // setBlock stores the low nibble of a Data byte above 15
         this.apply([[i, j, k, old, e.block]]);
         if(e.block===ANVIL)this.sound('random.anvil_land',{x:i+0.5,y:j+0.5,z:k+0.5,volume:1,pitch:1});
-      } else if(!e.brokenOnImpact) this.dropItem(e, posY);
+      } else if(!e.brokenOnImpact && e.dropItem !== false) this.dropItem(e, posY); // DropItem false: no item (Bytecode-read xj.h)
     } else if ((e.ticks > 100 && (j < 1 || j > 256)) || e.ticks > 600) {
-      this.dropItem(e, posY);
+      if (e.dropItem !== false) this.dropItem(e, posY);
       e.dead = true;
     }
   }
@@ -239,13 +239,17 @@ export class FallingBlocks {
     this.drop({ id: e.block, count: 1, damage: e.block === SAND ? e.meta : e.block === ANVIL ? anvilDropDamage(e.meta) : 0 }, e.x, posY, e.z);
   }
   serialize() {
-    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
+    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax, dropItem, data }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
+      ...(dropItem === undefined ? {} : { dropItem }),
+      ...(Number.isInteger(data) ? { data } : {}),
       ...(hurtEntities === undefined ? {} : { hurtEntities, fallHurtAmount, fallHurtMax }) }));
   }
   restoreEntity(s) {
-    if (!s || !isFallingBlock(s.block) || ![s.x, s.y, s.z, s.vx, s.vy, s.vz, s.ticks].every(Number.isFinite)) return;
-    const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 15 : 0, 0, 0, 0, this.entityRandom());
-    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(1, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
+    if (!s || !Number.isInteger(s.block) || s.block <= 0 || ![s.x, s.y, s.z, s.vx, s.vy, s.vz, s.ticks].every(Number.isFinite)) return;
+    const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 255 : 0, 0, 0, 0, this.entityRandom());
+    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(0, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
+    if (Number.isInteger(s.data)) e.data = s.data & 255; // the saved Data byte the port block cannot hold (java-objects.js fallingDataExtra)
+    if (typeof s.dropItem === "boolean") e.dropItem = s.dropItem; // EntityFallingBlock.DropItem
     if (typeof s.hurtEntities === "boolean") Object.assign(e, { hurtEntities: s.hurtEntities, fallHurtAmount: Number.isFinite(s.fallHurtAmount) ? s.fallHurtAmount : 2, fallHurtMax: Number.isInteger(s.fallHurtMax) ? s.fallHurtMax : 40 });
     this.entities.push(e);
   }

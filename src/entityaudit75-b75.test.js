@@ -97,8 +97,8 @@ test('XPOrb tags read as the native orb reads them (Health masked to a byte, Val
   assert.deepEqual([made.record.vx, made.record.vy, made.record.vz], [p.mx, p.my, p.mz]);
   assert.deepEqual([made.record.value, made.record.age, made.record.health], [1237, 5900, 3]);
   assert.equal(read(0).record.value, 7);
-  assert.equal(read(2).lost, 'value outside 1-2477', 'a bare tag reads Value 0 (native keeps that orb; the browser holds 1-2477 only)');
-  assert.equal(read(3).lost, 'value outside 1-2477', 'Value 70000 narrows to 4464');
+  assert.deepEqual([read(2).record.value, read(2).record.health], [0, 0], 'a bare tag reads Value 0 and Health 0; native keeps that orb (b76 closed the gap)');
+  assert.deepEqual([read(3).record.value, read(3).record.health], [4464, 44], 'Value 70000 narrows to 4464, Health 300 to 44');
 });
 
 test('PrimedTnt reads Fuse with getByte', () => {
@@ -122,7 +122,7 @@ test('FallingSand: TileID wins over Tile, air and an unregistered id become sand
     assert.equal(tiles[i].made.record.block, fromOriginal(12, 0).id, `port case ${i}`);
   }
   assert.equal(tiles[6].made.record.block, fromOriginal(13, 0).id, 'the legacy Tile byte');
-  assert.equal(tiles[9].made.lost, 'not a falling block', 'stone (native keeps it as a falling block; open gap)');
+  assert.equal(tiles[9].made.record.block, fromOriginal(1, 0).id, 'stone is kept as a falling block, as native (b76)');
   assert.deepEqual([tiles[4].made.record.hurtEntities, tiles[4].made.record.fallHurtAmount, tiles[4].made.record.fallHurtMax], [true, 3.5, 20]);
   assert.deepEqual([tiles[5].made.record.hurtEntities, tiles[5].made.record.fallHurtAmount, tiles[5].made.record.fallHurtMax], [true, 2, 40], 'the tag already holds the fresh 2.0 and 40');
   assert.equal(tiles[0].made.record.hurtEntities, false, 'every native save writes HurtEntities');

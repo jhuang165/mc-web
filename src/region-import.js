@@ -35,7 +35,7 @@ import { playerMountable } from './entities.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { relinkMobs } from './owner-links.js';
 import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from './java-projectiles.js';
-import { JAVA_OBJECTS, IMPORT_OBJECT_LIMIT, javaObjectFromNbt } from './java-objects.js';
+import { JAVA_OBJECTS, IMPORT_OBJECT_LIMIT, javaObjectFromNbt, javaCrystalFromNbt } from './java-objects.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
 import { isMapFile, mapsFromFiles } from './maps-nbt.js';
@@ -618,7 +618,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const importMob = (member, mid) => {
         const mpos = doubles(member, 'Pos'), mtype = get(member, 'id', NBT.STRING, '?');
         if (!importedMobType(mtype) || !mpos?.every(Number.isFinite)) { if (mid) tally(entityLost, mtype); return null; }
-        const inArea = inAreaAt(mpos), mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? javaMobFromNbt(member, { shiftX, shiftZ, convertItem }) : null;
+        const inArea = inAreaAt(mpos), mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? (mtype === 'EnderCrystal' ? javaCrystalFromNbt(member, { shiftX, shiftZ }) : javaMobFromNbt(member, { shiftX, shiftZ, convertItem })) : null; // b76: a crystal is no mob (java-objects.js)
         if (mob) { if (mid) mob.id = mid; mobs.push(mob); tally(entityConverted, mtype); } else tally(entityLost, !inArea ? `${mtype} (outside area)` : `${mtype} (over mob limit)`);
         return mob;
       };
