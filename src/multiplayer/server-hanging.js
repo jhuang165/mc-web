@@ -15,11 +15,10 @@
 import { Hanging, PAINTING_ITEM, FRAME_ITEM, ARTS, hangingArrowTargets } from '../hanging.js';
 import { hitSide } from '../hanging-interaction.js';
 import { TRACKER_LIMIT } from '../entity-tracker.js';
-import { PHYSICS } from '../world.js';
+import { useEntityInReach } from './use-entity-reach.js'; // b76 mpcauldron76
 import { VIEW_DISTANCE } from './server-chunks.js';
 
 export const HANG_RANGE = TRACKER_LIMIT; // min(160, 144)
-const REACH_SQ = 36; // 6 blocks, as the other entity clicks of the server
 const KEY = /^[hk]\d+$/;
 const copyStack = s => (s ? structuredClone(s) : null);
 
@@ -35,16 +34,6 @@ export function knotRecord(k, id) {
   return { k: 'k' + id, id, p: 'S0E', t: 77, x: Math.floor(c.x * 32), y: Math.floor(c.y * 32), z: Math.floor(c.z * 32), data: 0 };
 }
 export const knotCentre = k => (k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 });
-const knotBox = k => { const c = knotCentre(k); return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
-// The box a hanging entity is clicked through (setDirection's box has min > max on the thickness axis; the click ray grows it by the 0.1 border, so order it).
-const orderBox = b => [Math.min(b[0], b[3]), Math.min(b[1], b[4]), Math.min(b[2], b[5]), Math.max(b[0], b[3]), Math.max(b[1], b[4]), Math.max(b[2], b[5])];
-const near = (p, b) => {
-  const lo = orderBox(b), eye = [p.position.x, p.position.y + PHYSICS.eye, p.position.z];
-  let d = 0;
-  for (let i = 0; i < 3; i++) { const v = Math.max(lo[i] - eye[i], 0, eye[i] - lo[i + 3]); d += v * v; }
-  return d;
-};
-
 export class ServerHanging {
   // `host` is the ServerVehicles' host (world, players, items, mobs, leads); `ids` its EntityIds; `saved` what save() wrote.
   constructor(host, ids, saved = null) {
@@ -86,19 +75,19 @@ export class ServerHanging {
     const mobs = this.host.mobs?.mobs;
     if (key[0] === 'k') {
       const k = this.knotWithId(key);
-      if (!k || near(p, knotBox(k)) > REACH_SQ) return false;
+      const c = k && knotCentre(k);
+      if (!k || !useEntityInReach(this.host.world, p, { x: c.x, y: c.y, z: c.z, eye: 0 })) return false; // b76: NetHandlerPlayServer.processUseEntity, getDistanceSqToEntity from posY < 36 (< 9 without a line of sight)
       p.swing = 6;
-      if (hit) { mobs.knotAttack(k); p.survival.exhaust?.(0.3); return true; }
+      if (hit) { mobs.knotAttack(k); return true; } // b76: EntityHanging.hitByEntity (ss.j) ends EntityPlayer.attackTargetEntityWithCurrentItem: no exhaustion, no sprint knockback
       const leads = this.host.leads;
       return leads ? !!leads.as(p, () => mobs.knotInteract(k, p.survival)) : !!mobs.knotInteract(k, p.survival); // EntityLeashKnot.interactFirst: the clicker's own mobs join
     }
     const e = this.entityWithId(key);
-    if (!e || near(p, e.bb) > REACH_SQ) return false;
+    if (!e || !useEntityInReach(this.host.world, p, { x: e.x, y: e.y, z: e.z, eye: 0 })) return false; // b76: as the knot above
     const s = p.survival;
     if (hit) { // EntityHanging.attackEntityFrom with the player's source: a frame with an item gives only the item
       p.swing = 6;
-      this.h.attack(e, { player: true, creative: !!s.creative });
-      s.exhaust?.(0.3);
+      this.h.attack(e, { player: true, creative: !!s.creative }); // ss.j: attackEntityFrom(player, 0.0F) and return; no exhaustion
       this.drops();
       return true;
     }

@@ -54,6 +54,8 @@ import { ServerMaps } from './server-maps.js'; // b69 mpmaps: empty maps, map da
 import { placedResultSound } from './server-place-sound.js'; // b74 mpsounds74: S29 place sound
 import { placeBlockItem } from './server-place.js'; // b73 mpblocks73: bed, cake, hoe
 import { bucketUse, installFluidHooks } from './server-bucket.js'; // b75 mpbuckets75: ItemBucket on the server
+import { CAULDRON } from '../stone-utility.js';
+import { cauldronActivate, clientSwallows } from './server-cauldron.js'; // b76 mpcauldron76: BlockCauldron.onBlockActivated
 import { airUse } from './server-air.js'; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
 import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
@@ -439,6 +441,8 @@ export class DedicatedSimulation {
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
     if (b === CAKE_BLOCK && !(p.input.sneak && p.survival.held) && serverCakeEat(this.world, p.survival, x, y, z)) return true; // b72 cakefog72: BlockCake.onBlockActivated
+    if (place && b === CAULDRON && !(p.input.sneak && p.survival.held) && cauldronActivate(this, p, x, y, z)) return true; // b76 mpcauldron76: water bucket, glass bottle, leather armour
+    const noRightClick = place && clientSwallows(b, p); // b76 mpcauldron76: the client sends no item-use packet after a cauldron click
     if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
     if (b === BED && !(p.input.sneak && p.survival.held) && this.sleep.use(p, x, y, z)) return true; // b66 mpsleep: BlockBed.onBlockActivated
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
@@ -446,8 +450,8 @@ export class DedicatedSimulation {
     if (place && this.vehicles.hanging.useHeld(p, target)) return true; // b68 mppaintings: ItemHangingEntity.onItemUse (painting, item frame) on the clicked wall
     if (place && this.vehicles.useHeld(p, target)) return true; /* b63: sim.vehicles is the player's dimension's */ // b61: minecart on a rail, boat on water
     const id = state.heldTool;
-    if (place && bucketUse(this, p, eye, dir)) return true; // b75 mpbuckets75: ItemBucket.onItemRightClick after the block's own use
-    if (place && airUse(this, p, eye, dir, target)) return true; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
+    if (place && !noRightClick && bucketUse(this, p, eye, dir)) return true; // b75 mpbuckets75: ItemBucket.onItemRightClick after the block's own use
+    if (place && !noRightClick && airUse(this, p, eye, dir, target)) return true; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
     if (this.dimensions.useItem(p, target, id)) return true; // b61: ItemFlintAndSteel (server-dimensions.js)
     if (id === WATER || id === LAVA) return false;
     // ItemSign.onItemUse / ItemSkull.onItemUse on the server ray (signs.js, skull.js): the placer becomes the sign's editor and gets the S36
@@ -459,10 +463,10 @@ export class DedicatedSimulation {
     if (id === ITEM_SKULL) {
       return placeSkull({ world: this.world, survival: p.survival, yaw: p.yaw }, { id, damage: p.survival.held?.damage ?? 0, target, stack: p.survival.held /* b73 mpblocks73: a player head's SkullOwner */ }, this.wither.hooks(p)).placed; // b63: soul sand and the difficulty are passed, so the T builds a wither (Overworld)
     }
-    if (place && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
-    if (place && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
+    if (place && !noRightClick && this.fishing.use(p)) return true; // b64 mpstats2: ItemFishingRod.onItemRightClick when the click used no block
+    if (place && !noRightClick && this.dispense.throwHeld(p)) return true; // b62: snowball, egg, pearl, splash potion, XP bottle
     if (place && useOnBlock(this, p, target, id)) return true; // b64 mpstats2: seeds, nether wart and spawn eggs on the clicked block (and their use stat)
-    if (place && this.maps.useEmpty(p)) return true; // b69 mpmaps: ItemEmptyMap.onItemRightClick (no block used)
+    if (place && !noRightClick && this.maps.useEmpty(p)) return true; // b69 mpmaps: ItemEmptyMap.onItemRightClick (no block used)
     if (place && placeBlockItem(this, p, target, id)) { this.stats.used(p, id); return true; } // b73 mpblocks73: ItemBed, ItemReed (cake), ItemHoe
     const put = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {

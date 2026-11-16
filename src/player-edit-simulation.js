@@ -375,7 +375,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     // BlockCauldron.onBlockActivated: a water bucket fills it to level 3 and leaves an empty bucket (Survival, below level 3).
     if (activates && block === CAULDRON && id === ITEM_GLASS_BOTTLE && (state.world.getMeta(x, y, z) & 3) > 0) {
-      const level = bottleFromCauldron(state, state.world.getMeta(x, y, z) & 3);
+      const level = bottleFromCauldron(state, state.world.getMeta(x, y, z) & 3, [x, y, z]);
       state.world.set(x, y, z, CAULDRON, true, level);
       hook('updateBlock', x, z, y);
       // BlockCauldron (ajw, bytecode-read) holds no sound string and sounds.json has no liquid.splash: the cauldron is silent.
