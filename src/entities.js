@@ -57,7 +57,7 @@ import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crysta
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
-import { HORSE_ENTITY, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { HORSE_ENTITY, horseArmorValue, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { hurtSoundName as horseHurtSoundName } from "./horse.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
@@ -1144,7 +1144,7 @@ export class EntityWorld {
   // (sv.c: an absolute source returns first, Resistance 20 % per level for every source but outOfWorld, nothing left returns 0, then the enchantments of the worn
   // gear), then the absorption amount (sv.bs / sv.m), then setHealth (a float, clamped at 0). Executed: mob-resist-reference.json (b50mr).
   damageEntity(e, amount, name, source = null) {
-    amount = armorReduced(e.type, amount, name, e.size, e.equipment);
+    amount = armorReduced(e.type, amount, name, e.size, e.equipment, e.type === "horse" ? horseArmorValue(e.horse?.armor) : 0); // EntityHorse.getTotalArmorValue (wi.aV): by[armour type] = 0, 5, 7, 11
     const resistance = mobEffect(e, RESISTANCE);
     if (resistance && name !== "outOfWorld" && !isAbsolute(name)) amount = f(f(amount * (25 - (resistance.amplifier + 1) * 5)) / 25);
     // EnchantmentHelper.getEnchantmentModifierDamage over the worn stacks (the generic protection code of the player's armour).
@@ -1620,6 +1620,7 @@ export class EntityWorld {
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
+    if (e.type === "horse") { this.horseLand(e, distance); return; } // EntityHorse.fall (wi.b, b77): its own damage, the rider's and the land sound (horse-live.js)
     // Entity.fall: the rider falls with its mount (EntityPig calls super.fall; EntityHorse has its own fall).
     // The player's fall plays through the mount's event queue (EntityLivingBase.fall's sounds); a mob rider (the skeleton on a spider) falls as a mob.
     if (e.type === "pig") e.rider?.fall?.(distance, { sound: (s) => this.events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } }) });

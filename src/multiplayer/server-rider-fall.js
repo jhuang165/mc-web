@@ -14,9 +14,11 @@ export function serverRiderFall(host, p) {
     fallSound: s => host.soundsOut?.push({ name: s.name, x: p.position.x, y: p.position.y, z: p.position.z, volume: s.volume, pitch: s.pitch, except: null }) };
   syncRider(state);
   const fall = probe.fall;
-  return distance => {
+  const out = distance => {
     if (p.stats) addFallStat(p.stats, distance, p.survival.creative);
     state.yaw = p.yaw;
     fall(distance);
   };
+  out.hit = points => { state.yaw = p.yaw; probe.fallHit(points); }; // b77 mphorserules77: EntityHorse.fall's damage to the rider
+  return out;
 }

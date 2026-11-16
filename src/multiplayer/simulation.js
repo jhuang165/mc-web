@@ -246,6 +246,7 @@ export class DedicatedSimulation {
     this.mobs.addPlayer(player);
     this.vehicles.addPlayer(player); // b61
     this.dimensions.adopt(player, saved); // b61 mpnether: a player saved in the Nether returns to it
+    this.vehicles.horses.rejoin(player, saved); // b77 mphorserules77: Player.Riding remounts a horse
     return player;
   }
   removePlayer(id) {
@@ -264,7 +265,7 @@ export class DedicatedSimulation {
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { gameMode: p.survival.mode, /* b70 serverprops2: playerGameType (mw.b(dh)) */ slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p) }; }
+    player: { gameMode: p.survival.mode, /* b70 serverprops2: playerGameType (mw.b(dh)) */ slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p), ...this.vehicles.horses.savedFields(p) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;

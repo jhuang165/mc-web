@@ -96,7 +96,7 @@ export class ServerVehicles {
     return system.carts.find(c => c.id === id && !c.dead) ?? null;
   }
   addPlayer(p) { this.views.set(p.id, { known: new Map() }); this.hanging.addPlayer(p); }
-  removePlayer(p) { this.dismount(p); this.views.delete(p.id); this.hanging.removePlayer(p); }
+  removePlayer(p) { this.horses.logout(p); this.dismount(p); this.views.delete(p.id); this.hanging.removePlayer(p); }
 
   // A vehicle placed at a position by something other than a player (a dispenser, a command): kind 'minecart' | 'chest_minecart' | 'furnace_minecart' | 'tnt_minecart' | 'hopper_minecart' | 'boat'.
   // Cart records are the rail cell centre as ItemMinecart makes them; a boat's `y` is its box bottom, as ItemBoat passes it. Returns the vehicle or null.
