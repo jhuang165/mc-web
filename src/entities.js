@@ -1,4 +1,5 @@
 import { pushCandidates, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
+import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
@@ -2506,7 +2507,7 @@ export class EntityWorld {
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of liveOrder(this, this.entities)) { // b61: frozen entities are in no chunk list
-      if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
+      if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
       }
     }
@@ -2531,6 +2532,13 @@ export class EntityWorld {
     this.swingLimbs(e);
     if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
   }
+  // b77 mpperf77: size(o) written into `out` ([width, height]) without a new array; the same two expressions as size().
+  sizeInto(o, out) {
+    if (isVehicle(o)) { const v = vehicleSize(o); out[0] = v[0]; out[1] = v[1]; return out; }
+    const base = ENTITY_TYPES[o.type], s = mobScale(o);
+    out[0] = base.width * s; out[1] = base.height * s;
+    return out;
+  }
   size(o) {
     if (isVehicle(o)) return vehicleSize(o); // a boat or minecart a rider asks the height of (vehicle-seat.js)
     const base = ENTITY_TYPES[o.type], s = mobScale(o);
@@ -2545,7 +2553,7 @@ export class EntityWorld {
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
     const cand = pushCandidates(this.entities, e); // b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
     for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
-      if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
+      if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
       }
