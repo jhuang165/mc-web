@@ -3,20 +3,20 @@
 // RenderBlocks.renderBlockAnvilOrient/Rotate implementations.
 export const anvilDamage = (meta) => (meta & 15) >> 2;
 export const anvilFacing = (meta) => meta & 3;
-export const anvilDropDamage = (meta) => (meta & 15) >> 2;
+export const anvilDropDamage = (meta) => meta >> 2; // BlockAnvil.damageDropped: the whole int (Executed, falling-block77-reference.json)
 
 // EntityFallingBlock.fall(float): the argument is accumulated FallDistance;
 // returns the native entity-damage amount and anvil state after impact.
 export function anvilImpact(meta, fallDistance, random) {
   const i = Math.ceil(fallDistance - 1);
-  if (i <= 0) return { distance: i, damage: 0, meta: meta & 15, broken: false };
+  if (i <= 0) return { distance: i, damage: 0, meta, broken: false }; // the entity keeps its whole Data int; only setBlock stores the low nibble
   const damage = Math.min(Math.floor(i * 2), 40);
   if (random.nextFloat() < 0.05000000074505806 + i * 0.05) {
     const stage = (meta >> 2) + 1;
-    if (stage > 2) return { distance: i, damage, meta: meta & 15, broken: true };
+    if (stage > 2) return { distance: i, damage, meta, broken: true };
     meta = (meta & 3) | (stage << 2);
   }
-  return { distance: i, damage, meta: meta & 15, broken: false };
+  return { distance: i, damage, meta, broken: false };
 }
 
 // ItemAnvil placement receives Minecraft rotationYaw (float degrees). The app

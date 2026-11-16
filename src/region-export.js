@@ -5,7 +5,7 @@ import { writeBookTags } from './books-nbt.js';
 import { saveEnderSlots } from './chest-blocks.js';
 import { writeCommandBlock } from "./command-block.js";
 import { makeSpawner, readNBT as readSpawnerNBT } from './mob-spawner.js';
-import { spawnerPairs } from './spawner-data.js';
+import { spawnerPairs, compoundFromJson } from './spawner-data.js';
 import { CART_ENTITY_IDS, isContainerType, variantNBT } from './cart-variants.js';
 import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
@@ -167,13 +167,13 @@ function payload(state,ox,oz,report,blockAt) {
   const nest=(b,seen)=>{const m=mountOf(b);if(m&&!seen.has(m)){seen.add(m);ridden.add(m);b.n.Riding=tag(NBT.COMPOUND,nest(m,seen));}return new Map(Object.entries(b.n));};
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
- for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
+ for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0)})));}
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:e.fire>0?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:e.fire>0?e.fire:0},'FallingSand',ox,oz),
   // EntityFallingBlock.writeEntityToNBT (object-nbt-reference.json): Tile (the id as a byte), TileID, Data, Time, DropItem, HurtEntities, FallHurtAmount (float, 2.0)
   // and FallHurtMax (int, 40). BlockAnvil.onStartFalling sets HurtEntities on every anvil it drops (anvil-blocks-reference.json), so a saved anvil carries 1.
-  Tile:byte(o[0]),TileID:int(o[0]),Data:byte(Number.isInteger(e.data)?e.data:((e.meta&240)|(o[1]&15))&255),Time:byte(e.ticks&255),DropItem:byte(e.dropItem===false?0:1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40)})));}
+  Tile:byte(o[0]),TileID:int(o[0]),Data:byte(Number.isInteger(e.data)?e.data:((e.meta&240)|(o[1]&15))&255),Time:byte(e.ticks&255),DropItem:byte(e.dropItem===false?0:1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40),...(e.tileData?{TileEntityData:tag(NBT.COMPOUND,compoundFromJson(e.tileData))}:{})})));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);

@@ -10,7 +10,8 @@ import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { ringEntityActive, ringTickActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
 import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
-import { anvilDropDamage, anvilImpact } from './anvil-block.js';
+import { anvilImpact } from './anvil-block.js';
+import { fallingDropStack } from './falling-drops.js';
 import { fallingBlockDamage, fallingBlockSource } from './falling-damage.js';
 
 const f = Math.fround;
@@ -36,12 +37,13 @@ const key = (x, y, z) => `${x},${y},${z}`;
 // 0): one item entity at the falling block's position. `apply(changes)` gets [x, y, z, old, new]
 // entries for the renderer.
 export class FallingBlocks {
-  constructor(world, { drop = () => {}, apply = () => {}, hurt = () => {}, sound = () => {}, entityRandom = () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))) } = {}, saved = []) {
+  constructor(world, { drop = () => {}, apply = () => {}, hurt = () => {}, sound = () => {}, tile = () => {}, entityRandom = () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))) } = {}, saved = []) {
     this.world = world;
     this.drop = drop;
     this.apply = apply;
     this.hurt = hurt;
     this.sound = sound;
+    this.tile = tile; // (x, y, z, block, tileEntityData, data): the landed block's tile entity takes the saved TileEntityData (falling-tiles.js)
     this.entityRandom = entityRandom;
     this.time = 0;
     this.pending = new Map();
@@ -209,12 +211,8 @@ export class FallingBlocks {
       e.vz *= 0.699999988079071;
       e.vy *= -0.5;
       e.dead = true;
-      if(e.block===ANVIL){
-        const impact=anvilImpact(e.meta,landedDistance,e.rand);
-        e.meta=impact.meta;
-        e.brokenOnImpact=impact.broken;
-      }
-      // EntityFallingBlock.fall: hurtEntities (an anvil, or a summoned HurtEntities block) damages the entities in the box (falling-damage.js).
+      // EntityFallingBlock.fall (xj.b(float)): with HurtEntities set and a fall of more than one block the entities in the box are hurt, and only then does an anvil roll
+      // its damage stage (Bytecode-read; Executed falling-block77-reference.json: HurtEntities false never changes the metadata). The roll reads the whole Data int.
       if(e.hurtEntities??e.block===ANVIL){
         const hit=fallingBlockDamage(landedDistance,e.fallHurtAmount,e.fallHurtMax);
         if(hit.damage>0){
@@ -222,11 +220,18 @@ export class FallingBlocks {
             box=[e.x-half,e.y,e.z-half,e.x+half,e.y+FALLING_SIZE,e.z+half];
           this.hurt(box,hit.damage,fallingBlockSource(e.block===ANVIL),e);
         }
+        if(e.block===ANVIL){
+          const impact=anvilImpact(e.meta,landedDistance,e.rand);
+          if(Number.isInteger(e.data)&&impact.meta!==e.meta)e.data=impact.meta; // the saved byte follows the new stage
+          e.meta=impact.meta;
+          e.brokenOnImpact=impact.broken;
+        }
       }
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
       const old = w.get(i, j, k);
       if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta & 15)) { // setBlock stores the low nibble of a Data byte above 15
         this.apply([[i, j, k, old, e.block]]);
+        if(e.tileData)this.tile(i, j, k, e.block, e.tileData, e.data ?? e.meta);
         if(e.block===ANVIL)this.sound('random.anvil_land',{x:i+0.5,y:j+0.5,z:k+0.5,volume:1,pitch:1});
       } else if(!e.brokenOnImpact && e.dropItem !== false) this.dropItem(e, posY); // DropItem false: no item (Bytecode-read xj.h)
     } else if ((e.ticks > 100 && (j < 1 || j > 256)) || e.ticks > 600) {
@@ -234,14 +239,16 @@ export class FallingBlocks {
       e.dead = true;
     }
   }
-  // damageDropped: sand keeps its metadata (red sand), gravel drops metadata 0.
+  // new ItemStack(block, 1, block.damageDropped(meta)) through entityDropItem (falling-drops.js); a block without an item drops nothing.
   dropItem(e, posY) {
-    this.drop({ id: e.block, count: 1, damage: e.block === SAND ? e.meta : e.block === ANVIL ? anvilDropDamage(e.meta) : 0 }, e.x, posY, e.z);
+    const stack = fallingDropStack(e);
+    if (stack) this.drop(stack, e.x, posY, e.z);
   }
   serialize() {
-    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax, dropItem, data }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
+    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax, dropItem, data, tileData }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
       ...(dropItem === undefined ? {} : { dropItem }),
       ...(Number.isInteger(data) ? { data } : {}),
+      ...(tileData ? { tileData } : {}),
       ...(hurtEntities === undefined ? {} : { hurtEntities, fallHurtAmount, fallHurtMax }) }));
   }
   restoreEntity(s) {
@@ -249,6 +256,7 @@ export class FallingBlocks {
     const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 255 : 0, 0, 0, 0, this.entityRandom());
     Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(0, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
     if (Number.isInteger(s.data)) e.data = s.data & 255; // the saved Data byte the port block cannot hold (java-objects.js fallingDataExtra)
+    if (s.tileData && typeof s.tileData === "object") e.tileData = s.tileData; // EntityFallingBlock.TileEntityData (a nbtToJson tree, java-objects.js)
     if (typeof s.dropItem === "boolean") e.dropItem = s.dropItem; // EntityFallingBlock.DropItem
     if (typeof s.hurtEntities === "boolean") Object.assign(e, { hurtEntities: s.hurtEntities, fallHurtAmount: Number.isFinite(s.fallHurtAmount) ? s.fallHurtAmount : 2, fallHurtMax: Number.isInteger(s.fallHurtMax) ? s.fallHurtMax : 40 });
     this.entities.push(e);
