@@ -94,7 +94,7 @@ export class RemoteMobs {
     else if (mob.type === 'witch') mob.held = s.held ? { ...s.held, count: 1 } : null;
     else if (mob.type === 'wolf') { mob.owner = s.tamed ? 'owner' : ''; mob.angry = !!s.angry; mob.sitting = !!s.sitting; mob.collar = s.collar ?? 14; if (!dead && s.hp) mob.health = s.hp; }
     else if (mob.type === 'ocelot') { mob.catType = s.cat ?? 0; mob.owner = s.tamed ? 'owner' : ''; mob.sitting = !!s.sitting; mob.sneaking = !!s.sneaking; mob.sprinting = !!s.sprinting; }
-    else if (mob.type === 'horse' && s.horse) mob.horse = { ...(mob.horse ?? {}), type: s.horse.type, variant: s.horse.variant, armor: s.horse.armor, saddled: !!s.horse.saddled, chested: !!s.horse.chested };
+    else if (mob.type === 'horse' && s.horse) { mob.horse = { ...(mob.horse ?? {}), type: s.horse.type, variant: s.horse.variant, armor: s.horse.armor, saddled: !!s.horse.saddled, chested: !!s.horse.chested, tame: !!s.horse.tame, ...(s.horse.max ? { maxHealth: s.horse.max } : {}) }; if (!dead && s.horse.hp) mob.health = s.horse.hp; } // b77 mphorseclient77: tame, the live maximum and health (the rider's health row, click prediction)
     else if (mob.type === 'bat') mob.batHanging = !!s.hang;
     if (mob.type === 'sheep') { mob.color = s.color ?? 0; mob.sheared = !!s.sheared; }
     if (mob.type === 'pig') mob.saddled = !!s.saddled;

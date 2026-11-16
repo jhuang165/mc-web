@@ -44,13 +44,17 @@ export class ServerHorses {
   input(p) {
     const e = this.horseOf(p);
     if (!e || p.horseJumpWire) return;
+    const was = p.mount.rider.wasJump;
     this.mobs.horseSeats.charge(p.mount.rider, { jump: !!p.input?.jump });
+    if (was && !p.input?.jump) p.horseAutoAt = this.host.ticks; // b77 mphorseclient77: the fallback fired this tick; a `horseJump` just behind it is the same release
   }
   // C0B action 6: wi.w(param). Only a riding player's own horse; the value is the client's (int)(power * 100), clamped here to what a bar can show.
   jump(p, power) {
     const e = this.horseOf(p);
     if (!e || !Number.isInteger(power) || power < -1 || power > 100000) return false;
-    p.horseJumpWire = true;
+    const late = !p.horseJumpWire && p.horseAutoAt != null && (this.host.ticks ?? 0) - p.horseAutoAt <= 3;
+    p.horseJumpWire = true; // b77: from the first wire message on the key fallback is off
+    if (late) { p.horseAutoAt = null; return true; }
     this.mobs.horseJump(e, Math.max(-1, power));
     return true;
   }

@@ -284,6 +284,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
+import { MpHorseRider, mountedHorse, ridesSaddled } from "./multiplayer/client-horse.js"; // b77 mphorseclient77: the jump counter, C0B 6 / 7 and the HUD of a horse the server carries
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { leadViews } from "./multiplayer/remote-leads.js"; // b62
 import { SpamCounter, chatPacket, serverClick } from "./server-handlers.js";
@@ -671,6 +672,7 @@ function applyServerPlayerOp(message) {
   applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack });
 }
 let aimedRemotePlayer = null; // b63 mppvp: the other player under the crosshair (multiplayer/server-pvp.js pickPlayer)
+let mpHorse = null; // b77 mphorseclient77: MpHorseRider
 let remoteVehicles = null, aimedRemoteVeh = null, mpRiding = false; // b61: the dedicated world's minecarts and boats (multiplayer/remote-vehicles.js), the one under the crosshair, and whether the server seats this player
 let mpPlayerRows = []; // b63: the last S0C-style player rows (id, x, y, z), for the arrow pickup fly-in
 let remotePistons = null; // b66 mppistons: the dedicated world's moving piston blocks (multiplayer/client-pistons.js)
@@ -700,7 +702,7 @@ let mpServerList = null; // b68 mpping
 function leaveMultiplayer() {
   disconnectMaps(); // b69 mpmaps
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
-  remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; // b61
+  remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; mpHorse = null; // b61
   remoteLightning = null; // b66 mplightning
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.applyCape(playerRenderer, null); remotePlayers?.clear(); remotePlayers = null; mpBoard.reset(); // b64 mpscoreboard
 }
@@ -2295,6 +2297,7 @@ function leaveToTitle(keep) {
 function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
 function inventory(station = false) {
   // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
+  if (!station && multiplayer?.ready && active?.remote && ridesSaddled(mountedHorse(remoteMobs, mpRiding))) { multiplayer.horseInventory(); return; } // b77: EntityPlayerSP.func_110322_i sends C0B 7; the server's S2D opens the window
   const ridden = !station && riddenHorse(rider);
   if (ridden) { openHorse(ridden); return; }
   if (survival.creative && !station) {
@@ -2696,7 +2699,7 @@ function refreshContainer() {
   }
 }
 function renderVitals() {
-  const jump=jumpBar(rider);$('#jump-hud').classList.toggle('hidden',!jump.visible);$('#jump-fill').style.width=jump.width/182*100+'%';
+  const mpMount = multiplayer && mpRiding ? mountedHorse(remoteMobs, mpRiding) : null, jump = mpMount ? (mpHorse?.bar() ?? { visible: false, width: 0 }) : jumpBar(rider); // b77: a server horse's bar$('#jump-hud').classList.toggle('hidden',!jump.visible);$('#jump-fill').style.width=jump.width/182*100+'%';
   $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);{const lv=$('#experience-level'),k=String(experience.level||'');if(lv.dataset.lv!==k+font.version){lv.dataset.lv=k+font.version;lv.innerHTML=xpLevelHtml(experience.level);}}$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
@@ -2711,7 +2714,7 @@ function renderVitals() {
     popping = Math.max(0, Math.ceil((survival.air * 10) / 300) - bubbles),
     air = survival.air < 300 ? `<div class="air" style="--lift:${vitals.lift}" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   // GuiIngame: the food row is drawn only on foot; a living mount (pig, horse) shows its own hearts there, a cart or boat nothing.
-  const mount = rider.vehicle ? rider.vehicle.entity ?? null : undefined,
+  const mount = rider.vehicle ? rider.vehicle.entity ?? null : mpMount ?? undefined,
     mountMax = mount ? (ENTITY_TYPES[mount.type] ? maxHealthOf(mount, mount.horse?.maxHealth ?? ENTITY_TYPES[mount.type].health) : null) ?? 20 : 0,
     foodRow = mount === undefined
       ? `<div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div>`
@@ -3590,7 +3593,7 @@ function openMultiplayerBook() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival); multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); if (place && bookOpensOnUse({ held: survival.held, sneaking: !!motion.sneaking, targetBlock: target ? world.get(...target.block) : 0, aimedEntity: !!(aimedEntity || aimedCart || aimedHanging) })) { openMultiplayerBook(); animation.swing(); return; } /* b66 mpbooks: GuiScreenBook opens on the client */ multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (!eating) eating = predictUse(survival.held, survival); /* b63/b64: the draw, eat, drink and block look from this player's own use state (client-use-predict.js; the server decides) */ } animation.swing(); return; }
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); if (aimedRemoteVeh) { if (place && survival.creative && aimedRemoteVeh.vehicle?.type === 6) openMpCommandCart(aimedRemoteVeh); /* b63: xn.c opens GuiCommandBlock on the client */ multiplayer.vehicle(aimedRemoteVeh.key, !place); animation.swing(); return; } /* b61: C02 on a minecart or boat */ if (!place && aimedRemotePlayer) { multiplayer.attackPlayer(aimedRemotePlayer.id); animation.swing(); return; } /* b63 mppvp: C02 attack on another player */ if (!place && aimedRemoteMob) { multiplayer.attack(aimedRemoteMob.id); animation.swing(); return; } if (place && aimedRemoteMob) { const used = predictAnimalUse(aimedRemoteMob.entity, survival, { selfId: multiplayer.id, sneak: !!motion.sneaking }); /* b77: lead and horse clicks */ multiplayer.animUse(aimedRemoteMob.id, used.handled); if (used.handled) { if (used.sound) sounds?.play(used.sound, { volume: 1, position: { x: aimedRemoteMob.entity.x, y: aimedRemoteMob.entity.y, z: aimedRemoteMob.entity.z } }); renderHotbar(); return; } } /* b61: C02 interact on an animal, predicted here (multiplayer/animal-use.js), the server decides */ if (!place && !survival.creative) { multiplayerDigStart(); animation.swing(); return; } if (!place && target && !aimedEntity && !aimedCart && !aimedHanging) multiplayerBreakFx(target.block); if (place && bookOpensOnUse({ held: survival.held, sneaking: !!motion.sneaking, targetBlock: target ? world.get(...target.block) : 0, aimedEntity: !!(aimedEntity || aimedCart || aimedHanging) })) { openMultiplayerBook(); animation.swing(); return; } /* b66 mpbooks: GuiScreenBook opens on the client */ multiplayer.send({ type: 'edit', place }); if (place) { multiplayer.use(true); if (!eating) eating = predictUse(survival.held, survival); /* b63/b64: the draw, eat, drink and block look from this player's own use state (client-use-predict.js; the server decides) */ } animation.swing(); return; }
   if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
@@ -3857,7 +3860,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); remoteLightning?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); (mpHorse ??= new MpHorseRider(power => multiplayer?.horseJump(power))).tick(mountedHorse(remoteMobs, mpRiding), screen === 'playing' && !!controls.jump); remoteMobs?.tick(); remoteVehicles?.tick(); remoteLightning?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
