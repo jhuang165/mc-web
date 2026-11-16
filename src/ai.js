@@ -5,6 +5,7 @@
 // ported and what is not. entities.js keeps the data, the physics and the events;
 // each mob gets a `Brain` here (kept in a WeakMap, never saved) that owns the
 // navigator, the helpers and the two task lists.
+import { nearbyLate } from "./mpperf77-fast.js"; // b77 mpperf77
 import { buildBlazeGhastTasks } from "./blaze-ghast-mobs.js";
 import { buildWitherTasks } from "./wither-boss-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
@@ -1206,6 +1207,11 @@ export class Brain {
       if (test(b) && this.ai.overlaps(this, b, rx, ry, rz, base)) out.push(b);
     }
     return out;
+  }
+  // b77 mpperf77: nearby() for a test split in a side-effect-free `cheap` part and a pure expensive `late` part (a line-of-sight ray): the box check runs before `late`, so
+  // the ray is cast for the mobs inside the box only (mpperf77-fast.js nearbyLate; MC_MPPERF77=verify compares with the test-first order).
+  nearbyLate(rx, ry, rz, cheap, late, base = 0, dying = false) {
+    return nearbyLate(this.ai.entities(), (e) => e === this.e || (e.health <= 0 && !(dying && (e.death ?? 0) < 20)), (e) => this.ai.brain(e), cheap, late, (b) => this.ai.overlaps(this, b, rx, ry, rz, base));
   }
   // EntityAnimal.getBlockPathWeight (wf.a(III)F): 10 on grass, else brightness - 0.5;
   // EntityMob (yg): 0.5 - brightness.

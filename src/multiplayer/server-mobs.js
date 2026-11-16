@@ -6,6 +6,7 @@
 // the cap scaled by the union's size / 256. Mob damage to players goes through `host.damagePlayer(player, amount, source)`; the player-state track replaces its no-op.
 // Batch 60: the server's own sounds (S29), status 2 / 3 / 18 (S19) for the clients' hurt and death sounds and hearts, experience orbs of a kill (server-items.js), knockback on the
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
+import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
 import { SharedMobTracker } from './server-mob-entries.js';
@@ -398,14 +399,11 @@ export class ServerMobs {
     }
     for (const en of parts) en.entry.packets.length = 0;
     t.dying.length = 0;
+    const diffs = stateDiffs(this.views.values(), t.entries, stateOf); // b77 mpperf77: per entry's watcher set, not every (view, entry) pair
     for (const v of this.views.values()) {
       const { out, later } = outs.get(v);
       v.destroys = later;
-      for (const [e, en] of t.entries) {
-        if (!en.entry.set.has(v.watcher)) continue;
-        const s = stateOf(e);
-        if (v.known.get(e) !== s) { v.known.set(e, s); out.push({ type: 'state', i: num(e), ...JSON.parse(s) }); }
-      }
+      for (const [e, s] of diffs.get(v) ?? []) { v.known.set(e, s); out.push({ type: 'state', i: num(e), ...JSON.parse(s) }); }
       for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.set.has(v.watcher)) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
       if (out.length) (v.player.mobPackets ??= []).push(...out);
     }

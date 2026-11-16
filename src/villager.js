@@ -114,7 +114,7 @@ function avoidEntityClass(Task) {
     }
     shouldExecute() {
       const m = this.m, d = this.distance;
-      const [threat] = m.nearby(d, 3, d, (b) => b.e.type === "zombie" && b.alive && m.canSee(b));
+      const [threat] = m.nearbyLate(d, 3, d, (b) => b.e.type === "zombie" && b.alive, (b) => m.canSee(b)); // b77 mpperf77: the ray only for zombies inside the box
       if (!threat) return false;
       this.threat = threat;
       const spot = findRandomTargetAwayFrom(m, 16, 7, threat);
