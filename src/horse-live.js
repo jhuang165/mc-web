@@ -6,6 +6,7 @@
 import { JavaRandom } from "./java-random.js";
 import { originalOfLive } from "./item-names.js";
 import { burst } from "./fx.js";
+import { JUMP_BOOST, landingStepSound } from "./damage-fx.js";
 import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom, aiMoveSpeed, resizeBox } from "./entities.js";
@@ -25,6 +26,8 @@ const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 
 // The view horse.js works on: record fields merged with the shared record's age, health and love.
 // `maxHealth` stays the base (createChild averages bases); `liveMaxHealth` is getMaxHealth with saved modifiers (feeding, breeding readiness).
+// EntityHorse.getTotalArmorValue (wi.aV, bytecode-read b77): the static table `by` = { 0, 5, 7, 11 } indexed by the armour type (iron 1, gold 2, diamond 3).
+export const horseArmorValue = (type) => [0, 5, 7, 11][type] ?? 0;
 export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0, liveMaxHealth: maxHealthOf(e, e.horse?.maxHealth) });
 function apply(e, h, world) {
   const was = e.growingAge ?? 0;
@@ -152,11 +155,16 @@ export function horseRideThink(mobs, e) {
   const rider = e.rider, h = e.horse;
   e.rotationYaw = rider.yaw;
   e.yaw = f(-rider.yaw * Math.PI / 180);
+  // wi.e(FF): rotationPitch = rider.rotationPitch * 0.5, then renderYawOffset = rotationYawHead = rotationYaw (bytecode-read b77; a rider record without a pitch leaves the pitch alone).
+  if (Number.isFinite(rider.pitch)) e.rotationPitch = f(f(rider.pitch * f(0.5)) % 360);
+  e.renderYawOffset = e.rotationYawHead = rider.yaw;
   let strafe = f(rider.moveStrafing * f(0.5)), forward = rider.moveForward;
   if (forward <= 0) forward = f(forward * f(0.25));
   if (e.onGround && !(e.jumpPower > 0) && e.rearing && !e.jumpHeld) strafe = forward = 0;
   if (e.jumpPower > 0 && !e.jumpingHorse && e.onGround) {
     e.vy = h.jump * e.jumpPower;
+    const boost = e.effects?.find?.((x) => x.id === JUMP_BOOST); // wi.e(FF): motionY += (amplifier + 1) * 0.1 with Jump Boost (rv.j)
+    if (boost) e.vy += f(f(boost.amplifier + 1) * f(0.1));
     e.jumpingHorse = true;
     if (forward > 0) {
       const sin = Math.sin(e.rotationYaw * Math.PI / 180), cos = Math.cos(e.rotationYaw * Math.PI / 180);
@@ -273,10 +281,20 @@ export function installHorse(EntityWorld) {
     // wi.t(): nextInt(10) == 0 && !isMovementBlocked() (bh: a saddled rider, eating or rearing) rears, so a rearing horse keeps its counter (b47h sound-R-170 records, executed).
     if (out.rearing && !(e.rider && e.horse.saddled) && !e.rearing && !e.horse.eating) this.horseRear(e);
   };
+  // EntityHorse.fall (wi.b(F), bytecode-read b77): over 1 block mob.horse.land at 0.4 / 1.0; points = ceil(distance * 0.5 - 3) (qh.f, floats), none -> return (no step sound); the horse takes
+  // them as the fall source (ro.h: armour is bypassed), the rider (riddenByEntity, `l`) takes the same amount through its own attackEntityFrom(ro.h), then the block under the feet
+  // (floor(y - 0.2 - yOffset)) plays its step sound at volume * 0.5 and pitch * 0.75. No Jump Boost, no game.*.hurt.fall sound (EntityLivingBase.fall is not called).
+  // `rider.fallHit(points)` is the player rider's attackEntityFrom(fall) (vehicle-simulation.js syncRider, server: ServerHorses.mount).
   proto.horseLand = function (e, distance) {
-    if (distance <= 1) return 0;
-    this.events.push({ sound: "mob.horse.land", volume: 0.4, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
-    return H.fallDamage(distance);
+    if (distance > 1) this.events.push({ sound: "mob.horse.land", volume: 0.4, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
+    const points = H.fallDamage(distance);
+    if (points <= 0) return 0;
+    this.hazard(e, points, "fall");
+    if (e.rider?.fallHit) e.rider.fallHit(points);
+    else if (e.riddenBy && e.riddenBy !== e && this.entities.includes(e.riddenBy)) this.hazard(e.riddenBy, points, "fall");
+    const step = landingStepSound(this.world.get(Math.floor(e.x), Math.floor(e.y - 0.20000000298023224), Math.floor(e.z)));
+    if (step) this.events.push({ sound: step.name, volume: step.volume, pitch: step.pitch, position: { x: e.x, y: e.y, z: e.z } });
+    return points;
   };
   // EntityHorse.interact (wi.a(yz)). `ctx` carries what the edit dispatcher knows: `sneak`, `rider` and `horses`.
   proto.horseInteract = function (e, survival, ctx = {}) {

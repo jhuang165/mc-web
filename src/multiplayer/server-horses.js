@@ -15,6 +15,9 @@
 // no rider (or this player) and cc() (tame).
 import { HorseContainer, canInteract, horseChestTitle } from '../horse-gear.js';
 import { horseSeatsFor } from '../horse-live.js';
+import { serverRiderFall } from './server-rider-fall.js';
+
+const f = Math.fround;
 
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
 
@@ -31,6 +34,7 @@ export class ServerHorses {
     const rider = this.vehicles.riderOf(p), seats = horseSeatsFor(this.mobs, rider);
     if (!seats.mount(e, rider)) return false;
     p.mount = { key: 'm' + String(e.id).replace(/^mob-/, ''), mob: e, rider };
+    rider.fallHit ??= serverRiderFall(this.host, p).hit; // b77: EntityHorse.fall damages the rider by the horse's own amount (horse-live.js horseLand)
     p.horseJumpWire = false; // until a `horseJump` arrives the server counts the jump key
     this.vehicles.seat(p);
     return true;
@@ -43,7 +47,10 @@ export class ServerHorses {
   // Each tick before the mobs move (ServerVehicles.riderInput): without a `horseJump` wire message the jump key charges the bar (EntityPlayerSP, horse-live.js charge).
   input(p) {
     const e = this.horseOf(p);
-    if (!e || p.horseJumpWire) return;
+    if (!e) return;
+    // b77: wi.e(FF) copies the rider's pitch * 0.5 (native pitch: positive looks down, the server's `p.pitch` positive looks up).
+    p.mount.rider.pitch = f(-p.pitch * 180 / Math.PI);
+    if (p.horseJumpWire) return;
     this.mobs.horseSeats.charge(p.mount.rider, { jump: !!p.input?.jump });
   }
   // C0B action 6: wi.w(param). Only a riding player's own horse; the value is the client's (int)(power * 100), clamped here to what a bar can show.
@@ -77,5 +84,35 @@ export class ServerHorses {
       const p = [...this.host.players.values()].find(q => q.mount?.mob === e) ?? e.tamedBy;
       if (p?.name) e.horse.owner = p.name;
     }
+  }
+  // wi.a(ro, F) (bytecode-read b77): damage whose source entity is the horse's own rider is ignored. True for a melee hit of `p` on `mob`.
+  rides(p, mob) { return !!mob && mob.type === 'horse' && !!mob.rider && mob.rider === p.mount?.rider; }
+  // Logout (ServerConfigurationManager.playerLoggedOut, oi.e, bytecode-read b77): the player's NBT is written first and Entity.writeToNBT adds `Riding` (the mount's writeMountToNBT: id and data,
+  // only for a live mount), then `removePlayerEntityDangerously(mount)` takes the horse out of the world ("removing player mount"). Here the horse record is kept for the player's saved data and
+  // the horse leaves the list; the caller then lets the rider down as before. Called before ServerVehicles.dismount.
+  logout(p) {
+    const e = this.horseOf(p);
+    if (!e || e.health <= 0 || !this.mobs.entities.includes(e)) return null;
+    const record = JSON.parse(JSON.stringify(this.mobs.serializeOne(e)));
+    for (const k of ['playerRides', 'riding', 'id']) delete record[k];
+    this.mobs.horseSeats.dismount(this.host.world, p.mount.rider, false); // the seat (the saved position) stays where the player sat
+    e.removedNow = true;
+    this.mobs.entities.splice(this.mobs.entities.indexOf(e), 1);
+    p.ridingSave = record;
+    return record;
+  }
+  // The `riding` field of the player's saved record (SaveHandler data: PlayerData `Riding`).
+  savedFields(p) { return p.ridingSave ? { riding: p.ridingSave } : {}; }
+  // Login (oi.a(ej, mw), bytecode-read b77): after the player is in the world, `Riding` -> EntityList.createEntityFromNBT, forceSpawn, spawnEntityInWorld, player.mountEntity. The horse is a new entity
+  // (new id) at the Pos of its record; an unusable record leaves the player unmounted, as a null entity does. Overworld only (a saved dimension lane keeps its own mobs).
+  rejoin(p, saved) {
+    const record = saved?.riding;
+    if (!record || saved.dimension || p.mount) return false;
+    const mobs = this.mobs, e = mobs.restore({ ...record, id: 'mob-' + mobs.nextId }, { summoned: true });
+    if (!e) return false;
+    mobs.entities.push(e);
+    mobs.nextId++;
+    if (!this.mount(p, e)) { mobs.entities.splice(mobs.entities.indexOf(e), 1); return false; }
+    return true;
   }
 }

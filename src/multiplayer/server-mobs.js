@@ -414,6 +414,7 @@ export class ServerMobs {
   attack(p, wireId) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
+    if (this.host.vehicles?.horses.rides(p, mob)) return false; // b77 mphorserules77: wi.a(ro, F) ignores damage from its own rider
     if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : !useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
