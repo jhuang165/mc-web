@@ -101,15 +101,15 @@ test("ItemBucket adds no statistic (bytecode-read)", () => {
   assert.equal(p.survival.held.id, EMPTY, "the bucket was used");
 });
 
-test("Adventure players cannot use a bucket (canPlayerEdit), a protected spawn refuses it (canMineBlock)", () => {
+test("Adventure players use a bucket (canPlayerEdit passes with an item in hand, b77), a protected spawn refuses it (canMineBlock)", () => {
   const r = records.find((q) => q.name === "full326-top");
   const a = probeServer(r); a.p.survival.mode = "adventure";
   click(a.s, a.p);
-  assert.equal(a.world.get(8, 35, 8), 0, "no water in Adventure");
-  assert.equal(a.p.survival.held.id, WATER_B);
+  assert.equal(a.world.get(8, 35, 8), WATER, "water is placed in Adventure");
+  assert.equal(a.p.survival.held.id, EMPTY);
   const e = probeServer(records.find((q) => q.name === "empty-liquid9-m0")); e.p.survival.mode = "adventure";
   click(e.s, e.p);
-  assert.equal(e.world.get(8, 34, 8), WATER, "a source stays in Adventure");
+  assert.equal(e.world.get(8, 34, 8), 0, "the source is taken in Adventure");
 });
 
 test("a placed source is scheduled on the server's Fluids and flows; the picked-up source leaves a dry cell", () => {

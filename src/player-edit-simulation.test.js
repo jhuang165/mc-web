@@ -53,7 +53,8 @@ test('dyed and undyed leather wash exactly one cauldron level in Survival and Cr
     const before=f.state.survival.held;
     const result=applyPlayerEdit(f.state,f.request,{swing:()=>calls.push('swing'),updateBlock:(...args)=>calls.push(['update',...args]),renderHotbar:()=>calls.push('hotbar'),markUnsaved:()=>calls.push('dirty')});
     if(level===0){
-      assert.equal(result.branch,'equip-armor');assert.equal(f.state.world.getMeta(...POS)&3,0);assert.equal(f.state.survival.held,null);
+      // b77 mpknots77: the client's BlockCauldron.onBlockActivated is `return true`, so onPlayerRightClick returns true and sendUseItem (the armour equip) never runs
+      assert.notEqual(result.branch,'equip-armor');assert.equal(f.state.world.getMeta(...POS)&3,0);assert.equal(f.state.survival.held.id,400);assert.equal(f.state.survival.inventory.armor[3],null);
     }else{
       assert.equal(result.branch,'wash-leather',`${mode} level ${level} dyed ${dyed}`);
       assert.equal(f.state.world.getMeta(...POS)&3,level-1);assert.equal(f.state.survival.held.count,1);assert.equal(f.state.survival.held.color,undefined);
@@ -387,4 +388,14 @@ test('doors, crafting tables and furnaces activate before hoe, seed and bone-mea
   sneak.state.motion.sneaking = true;
   assert.equal(applyPlayerEdit(sneak.state, sneak.request, { openInventory: () => calls.push('open') }).branch, 'use-hoe');
   assert.deepEqual(calls, []);
+});
+
+test('b77 mpknots77: a cauldron click with food or a sword starts no eating or blocking (the client consumes the click); sneaking with the item does',()=>{
+  for(const [tool,branch] of [[201,'begin-eating'],[112,'begin-blocking']])for(const sneak of [false,true]){
+    const target={block:[...POS],adjacent:[POS[0],POS[1]+1,POS[2]]},f=fixture({mode:'survival',tool,target,block:CAULDRON,place:true});
+    f.state.world.set(...POS,CAULDRON,true,0);f.state.motion.sneaking=sneak;
+    f.state.survival.inventory.main[0]=makeStack(tool,1);f.state.survival.food=5;
+    const result=applyPlayerEdit(f.state,f.request,{swing(){},updateBlock(){},renderHotbar(){},markUnsaved(){}});
+    assert.equal(result.branch===branch||!!f.state.eating,sneak,`tool ${tool} sneak ${sneak}: ${result.branch}`);
+  }
 });
