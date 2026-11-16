@@ -60,11 +60,12 @@ const sameHit = (a, b) => a === null ? b === null : b !== null && a.side === b.s
 // effects as synchronous hooks: destroyParticles(x, y, z, block, meta) and sound(false, block)
 // after fluids.wash for a replaced plant, updateBlock(x, z, y) per changed cell, then
 // resetEquipped (only when the held stack changed), renderHotbar and markUnsaved.
-export function useHeldBucket(state, { id, aimedEntity = null, bucket = null } = {}, hooks = {}) {
+// entityOnly: only EntityCow.interact (milking) is tried, the fluid trace is left to the later onItemRightClick pass (spuseorder76).
+export function useHeldBucket(state, { id, aimedEntity = null, bucket = null, entityOnly = false } = {}, hooks = {}) {
   const hook = (name, ...args) => hooks[name]?.(...args);
   const { world, survival } = state;
   const before = copyStack(survival.held), drop = (s) => state.items.dropPlayer(s, state.position, state.yaw, state.pitch);
-  if (id === MILK_BUCKET) {
+  if (id === MILK_BUCKET && !entityOnly) {
     // setItemInUse: always starts the 32-tick drink, even in Creative.
     if (!state.eating) state.eating = { id, ticks: DRINK_TICKS, drink: true };
     return { branch: "begin-drinking" };
@@ -73,6 +74,7 @@ export function useHeldBucket(state, { id, aimedEntity = null, bucket = null } =
   if ((aimedEntity?.entity.type === "cow" || aimedEntity?.entity.type === "mooshroom") && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) {
     result = { branch: "milk-cow", cells: [] };
   } else {
+    if (entityOnly) return { branch: "bucket-unused" };
     const kind = tracedBucketKind(id), captured = copyBucketTarget(bucket);
     if (!kind) return { branch: "bucket-unused" };
     if (!captured || captured.liquid !== (kind === "empty")) return { branch: "invalid-bucket-target", skipped: true };
