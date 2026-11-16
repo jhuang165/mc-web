@@ -86,7 +86,7 @@ function delayed(ticks = BUTTON_DELAY_TICKS) {
  * (the hardcore flow deletes the world), `again()` re-shows this screen (Escape on the confirmation: displayGuiScreen(null) with a dead
  * player makes a new GuiGameOver), `isDead()` tells whether the player is still dead after a respawn attempt.
  */
-export function gameOverScreen({ hardcore = false, score = 0, respawn, leave, confirmNo, again, isDead = () => true, show }) {
+export function gameOverScreen({ hardcore = false, remote = false, score = 0, respawn, leave, confirmNo, again, isDead = () => true, show }) {
   const gate = delayed();
   return {
     id: "game-over",
@@ -108,7 +108,8 @@ export function gameOverScreen({ hardcore = false, score = 0, respawn, leave, co
       g.text(`${t("deathScreen.score")}: §e${score}`, L.center, L.scoreY, { center: true });
       const ask = () => show(quitConfirmScreen({ yes: leave, no: confirmNo, again }));
       if (hardcore) {
-        gate.add(g.button(L.buttons.deleteWorld, t("deathScreen.deleteWorld"), ask));
+        // initGui: a remote hardcore world reads deathScreen.leaveServer (executed record GuiGameOverHardcore, single false).
+        gate.add(g.button(L.buttons.deleteWorld, t(remote ? "deathScreen.leaveServer" : "deathScreen.deleteWorld"), ask));
       } else {
         gate.add(g.button(L.buttons.respawn, t("deathScreen.respawn"), async () => {
           gate.reset();

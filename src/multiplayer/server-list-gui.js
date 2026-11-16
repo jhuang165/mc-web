@@ -87,7 +87,7 @@ export function addServerScreen({ entry, done, cancel }) {
     fields(g, L) {
       g.text(tr('addServer.enterName'), ...L.nameLabel, { color: COLOR.label });
       g.text(tr('addServer.enterIp'), ...L.ipLabel, { color: COLOR.label });
-      const label = () => `${tr('addServer.resourcePack')}: ${tr('addServer.resourcePack.' + resourceMode(v.accept))}`;
+      const label = () => `${tr('addServer.resourcePack')}: ${tr('addServer.resourcePack.' + resourceMode(v.accept))}§r`; // ServerData mode text is a ChatComponent: getFormattedText ends in the reset code (executed label "Prompt§r")
       g.button(L.buttons.pack, label(), () => { v.accept = modeAccept(nextResourceMode(v.accept)); g.build(); });
       finish = g.button(L.buttons.done, tr('addServer.add'), () => { if (validEntry(v.name, v.ip)) done({ name: v.name.trim(), ip: v.ip.trim(), acceptTextures: v.accept }); });
       g.button(L.buttons.cancel, tr('gui.cancel'), cancel);

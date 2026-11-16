@@ -37,7 +37,7 @@ export const LANG = {
   "gameMode.hardcore": "Hardcore Mode!", "options.difficulty.hardcore": "Hardcore",
   "deathScreen.title": "You died!", "deathScreen.title.hardcore": "Game over!", "deathScreen.hardcoreInfo": "You cannot respawn in hardcore mode!",
   "deathScreen.score": "Score", "deathScreen.respawn": "Respawn", "deathScreen.titleScreen": "Title screen",
-  "deathScreen.deleteWorld": "Delete world", "deathScreen.quit.confirm": "Are you sure you want to quit?",
+  "deathScreen.deleteWorld": "Delete world", "deathScreen.leaveServer": "Leave server", "deathScreen.quit.confirm": "Are you sure you want to quit?",
   "selectWorld.moreWorldOptions": "More World Options...", "selectWorld.mapFeatures": "Generate Structures:",
   "selectWorld.mapFeatures.info": "Villages, dungeons etc", "selectWorld.mapType": "World Type:",
   "selectWorld.allowCommands": "Allow Cheats:", "selectWorld.allowCommands.info": "Commands like /gamemode, /xp",
