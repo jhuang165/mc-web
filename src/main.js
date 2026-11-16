@@ -155,6 +155,8 @@ import { createCommandRunner, tr } from "./commands.js";
 import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
+import { mountSeat } from "./multiplayer/client-ride-seat.js"; // b77 mpvelocity77
+import { ownVelocity } from "./multiplayer/server-velocity.js"; // b77 mpvelocity77
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { pickPlayer } from "./multiplayer/server-pvp.js"; // b63 mppvp: the client's aim at another player (C02 attack)
 import { RemoteMobs, isMobSound } from "./multiplayer/remote-mobs.js";
@@ -821,6 +823,7 @@ function applyMultiplayerTick(message) {
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
     velocity.set(position.x - previous.x, position.y - previous.y, position.z - previous.z);
+    { const s12 = ownVelocity(self); if (s12) velocity.set(s12.x, s12.y, s12.z); } // b77 mpvelocity77: S12 to the player himself (server-velocity.js)
     flying = self.flying; grounded = self.grounded;
     motion.prevYSize = motion.ySize; motion.ySize = self.ySize ?? 0;
     motion.sneaking = self.sneak;
@@ -950,7 +953,7 @@ async function joinMultiplayer(settings) {
     client.onCritFx73 = m => applyCritFx(m, scene.fx, { mob: id => { const c = remoteMobs?.copies.get(id); return c ? remoteMobs.factory.fxTarget(c.mob) : null; }, player: id => remotePlayers?.entries.get(id)?.state ?? null }); /* b74 mpcombat74: Crit2FX follows the live entity */ // b73 particles73: S0B crit animations
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
-    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
@@ -993,7 +996,7 @@ async function multiplayerDimension(client, settings, m) {
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats), hanging: new HangingRenderer(scene.scene, scene) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
-    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */ });
+    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
@@ -3857,7 +3860,7 @@ async function spawnPosition() {
 function movementTick(controls) {
   // Over a connection the server moves the player; a Survival dig still runs the client's own timer (PlayerControllerMP.onPlayerDamageBlock in runTick) to send C07 status 2.
   if (multiplayer) { tickClientHealth(survival); if (!survival.creative) renderVitals(); } // b60: hurt counters, effect timers (multiplayer/client-health.js)
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); remoteLightning?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); remoteMobs?.tick(); remoteVehicles?.tick(); remotePlayers?.followMounts(); /* b77 mpvelocity77 */ remoteLightning?.tick(); tickSpawnersClient({ spawners, minecarts: remoteVehicles?.carts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } }, { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) }); if (remoteDispense) tickRemoteDispense(); if (remoteFishing) tickRemoteFishing(); if (!survival.creative) tickMining(); return; }
   survival.blocking = !!eating?.block; // EntityPlayer.isBlocking for this tick's damage (survival.js damage)
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
