@@ -1,5 +1,5 @@
 import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
-import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType } from "./java-world.js";
+import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType, mapFeaturesOn } from "./java-world.js";
 import { normalizeFlatOptions } from "./flat-world.js";
 import { playerSpawnPoint, topSolidOrLiquidBlock } from "./world-spawn.js";
 import { JavaRandom } from "./java-random.js";
@@ -474,7 +474,7 @@ export class World {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
-    this.mapFeatures = mapFeatures !== false; // b71 mpadmin71: WorldInfo.mapFeaturesEnabled for finite Java worlds (java-world.js / population-world.js skip every MapGen structure when false)
+    this.mapFeatures = mapFeatures !== false && (biome !== 'javaStreamed' || mapFeaturesOn(generationVersion)); // b77: a streamed record at generation 17/19/21/23 reloads with the flag off even when the caller passes none; b71 mpadmin71: WorldInfo.mapFeaturesEnabled for finite Java worlds (java-world.js / population-world.js skip every MapGen structure when false)
     this.streaming = biome === 'javaStreamed';
     // WorldType of the generator (java-world.js streamedWorldType); finite Java landscapes derive it from the biome.
     this.worldType = this.streaming ? streamedWorldType(worldType) : (JAVA_LANDSCAPES[biome] ?? 'default');

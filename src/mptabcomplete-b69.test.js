@@ -167,7 +167,7 @@ test('the pinging sprite follows the clock without a rebuild, and stops on close
   const sprites = [];
   const g = {
     screen: null, build() {},
-    text: () => ({ style: {} }), button: () => ({ enable() {} }),
+    text: () => ({ style: {}, set() {} }), button: () => ({ enable() {} }), // b77: the LAN row's dots text has set()
     image: () => { const s = { style: { cssText: '', backgroundPosition: '' }, isConnected: true }; sprites.push(s); return s; },
     slotList: (layout, opts) => { for (let i = 0; i < opts.count; i++) opts.entry(i, 0, {}, 0); return { scroll: 0 }; },
   };

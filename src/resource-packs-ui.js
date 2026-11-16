@@ -11,10 +11,18 @@ import {
 } from "./resource-packs.js";
 
 const ROW = 36, HEADER = 13, LIST_W = 200, TEXT_W = 157;
+export { ROW as PACK_ROW, HEADER as PACK_HEADER };
 const px = (n) => `calc(${n}*var(--u))`;
 const at = (x, y, w, h) => `left:${px(x)};top:${px(y)}` + (w != null ? `;width:${px(w)}` : "") + (h != null ? `;height:${px(h)}` : "");
 const div = (cls, style) => { const e = document.createElement("div"); if (cls) e.className = cls; if (style) e.style.cssText = style; return e; };
 const SPRITE = "url('/media/1.7.10/gui/resource_packs.png')";
+// ResourcePackListEntry.drawEntry (bgg) text: the name at (x + 34, y + 1), truncated to 157 with "...", then up to two description lines at
+// y + 12 and y + 22 in gray (0x808080). Executed rows: GuiScreenResourcePacks+packs, +packs+selected (gui-menus-reference.json).
+export function packRowTexts(info, x, y) {
+  let name = info.name;
+  if (textWidth(name) > TEXT_W) name = trimToWidth(name, TEXT_W - textWidth("...")) + "...";
+  return [{ text: name, x: x + 34, y: y + 1 }, ...splitLines(info.description ?? "", TEXT_W).slice(0, 2).map((line, k) => ({ text: line, x: x + 34, y: y + 12 + 10 * k, color: COLOR.gray }))];
+}
 export function resourcePacksLayout(w, h) {
   const c = Math.trunc(w / 2), top = 32, bottom = h - 55 + 4;
   const list = { top, bottom, slotHeight: ROW, headerPadding: HEADER, width: LIST_W };
@@ -164,10 +172,7 @@ export function resourcePacksScreen(ctx, parent, show) {
       } else paint(info.icon ? (urls.push(URL.createObjectURL(new Blob([info.icon], { type: "image/png" }))), urls.at(-1)) : "/media/1.7.10/misc/unknown_pack.png");
       icon.style.imageRendering = "pixelated";
       content.append(icon);
-      let name = info.name;
-      if (textWidth(name) > TEXT_W) name = trimToWidth(name, TEXT_W - textWidth("...")) + "...";
-      g.text(name, x + 34, y + 1, { parent: content });
-      splitLines(info.description ?? "", TEXT_W).slice(0, 2).forEach((line, k) => g.text(line, x + 34, y + 12 + 10 * k, { color: COLOR.gray, parent: content }));
+      for (const r of packRowTexts(info, x, y)) g.text(r.text, r.x, r.y, { ...(r.color !== undefined ? { color: r.color } : {}), parent: content });
       const overlay = div("", at(x, y, 32, 32) + ";display:none;pointer-events:none");
       content.append(overlay);
       rows.push({ info, y, overlay });
