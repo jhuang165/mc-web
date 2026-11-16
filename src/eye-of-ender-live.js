@@ -102,6 +102,8 @@ export function useEyeOfEnder(state, { target, usesBlock }, hooks = {}) {
   if (!goal) return { branch: "no-stronghold" };
   state.eyes.launch(p.x, p.y, p.z, goal);
   hook("playSound", "random.bow", { volume: 0.5, pitch: f(f(0.4) / f(f(f(rand.nextFloat()) * f(0.4)) + f(0.8))) });
+  // world.playAuxSFXAtEntity(player, 1002, (int) x, (int) y, (int) z, 0): RenderGlobal 1002 = random.bow 1.0 / 1.2 at the block corner (b77, executed).
+  hook("playSound", "random.bow", { volume: 1, pitch: 1.2, position: { x: Math.trunc(p.x), y: Math.trunc(p.y), z: Math.trunc(p.z) } });
   if (!creative) state.survival.take(ITEM_EYE_OF_ENDER);
   hook("renderHotbar"); hook("markUnsaved");
   return { branch: "launch-eye", target: goal };
