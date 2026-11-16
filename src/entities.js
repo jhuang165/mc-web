@@ -328,7 +328,7 @@ export const pushBox = (o, width, height) => {
   return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
 };
 // EntityList names of the spawn eggs whose class is assignable from each ageable mob (ItemMonsterPlacer entity ids).
-const AGEABLE_EGG_TYPES = { Pig: ["pig"], Sheep: ["sheep"], Cow: ["cow", "mooshroom"], MushroomCow: ["mooshroom"], Chicken: ["chicken"], Wolf: ["wolf"], Ozelot: ["ocelot"], EntityHorse: ["horse"], Villager: ["villager"] };
+export const AGEABLE_EGG_TYPES = { Pig: ["pig"], Sheep: ["sheep"], Cow: ["cow", "mooshroom"], MushroomCow: ["mooshroom"], Chicken: ["chicken"], Wolf: ["wolf"], Ozelot: ["ocelot"], EntityHorse: ["horse"], Villager: ["villager"] };
 const AGEABLE_TYPES = new Set(Object.values(AGEABLE_EGG_TYPES).flat());
 export const isAgeable = (type) => AGEABLE_TYPES.has(type);
 // Entity.applyEntityCollision(self = mob o, other = the player's server copy, `at` its box position): the mob and the player's motion move apart. `mob` pushes (the
