@@ -36,7 +36,8 @@ test("thrown items: the pitch draw precedes the projectile seed; Survival takes 
     assert.equal(result.kind, id === EGG ? "egg" : "snowball");
     assert.equal(state.projectiles.balls[0], result.ball);
     assert.equal(draws.length, 2, "one sound pitch draw then one Entity.rand seed draw");
-    assert.equal(calls[0][2], 0.4 / (draws[0] * 0.4 + 0.8));
+    const fr = Math.fround; // b76: native float32 0.4F / (nextFloat() * 0.4F + 0.8F)
+    assert.equal(calls[0][2], fr(fr(0.4) / fr(fr(fr(draws[0]) * fr(0.4)) + fr(0.8))));
     // The ball's Entity.rand stream came from the second draw.
     const twin = new Projectiles(() => draws[1]).throwSnowball(feet(), 0.3, -0.2);
     assert.deepEqual([result.ball.mx, result.ball.my, result.ball.mz], [twin.mx, twin.my, twin.mz]);

@@ -22,7 +22,7 @@ export function usePotion(state, hooks = {}) {
   if (isSplashDamage(damage)) {
     const random = hooks.random ?? Math.random;
     if (!state.survival.creative) state.survival.take(ITEM_POTION);
-    hooks.playSound?.("random.bow", { volume: 0.5, pitch: 0.4 / (random() * 0.4 + 0.8) });
+    hooks.playSound?.("random.bow", { volume: 0.5, pitch: Math.fround(Math.fround(0.4) / Math.fround(Math.fround(Math.fround(random()) * Math.fround(0.4)) + Math.fround(0.8))) });
     state.mobs?.potions?.throwFromPlayer(state.position, state.yaw, state.pitch, damage, "potion", 0.5, held.customPotionEffects); // EntityPotion keeps the stack: CustomPotionEffects travel with it
     if (!state.survival.creative) { hooks.resetEquipped?.(); hooks.renderHotbar?.(); hooks.markUnsaved?.(); }
     return "throw";

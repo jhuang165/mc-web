@@ -1137,9 +1137,9 @@ function toast(message) {
 }
 // Block.SoundType through block-sounds.js: RenderGlobal.playAuxSFX 2001 for a break, ItemBlock.onItemUse for a placement
 // (ItemDoor, ItemBed, ItemSign, ItemRedstone and ItemSeeds place silently), both at the cell's centre.
-function sound(place, block = target ? world.get(...target.block) : 3, at) {
+function sound(place, block = target ? world.get(...target.block) : 3, at) { // b76: `at` is also the broken cell for a bucket that replaces a plant
   if (place && (placesSilently(block) || mutePlaceSound)) return; // mutePlaceSound: the client half already played this placement's sound (b55 instantbreak)
-  const s = place ? placeSound(block) : breakSound(block), cell = place ? at ?? target?.adjacent ?? target?.block : target?.block; // b75: `at` is the placed cell (a replaced snow layer or tall grass is the clicked cell)
+  const s = place ? placeSound(block) : breakSound(block), cell = place ? at ?? target?.adjacent ?? target?.block : at ?? target?.block; // b75: `at` is the placed cell (a replaced snow layer or tall grass is the clicked cell)
   sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
 }
 const compassIcon = () => `<span class="vanilla-item-icon creative-strip" style="--strip:url('${COMPASS_STRIP}');--frames:var(--compass-frames,${COMPASS_FRAMES})" aria-hidden="true"></span>`;

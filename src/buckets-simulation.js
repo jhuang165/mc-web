@@ -88,7 +88,7 @@ export function useHeldBucket(state, { id, aimedEntity = null, bucket = null, en
       destroy: (x, y, z, b) => {
         state.fluids.wash(x, y, z, b);
         hook("destroyParticles", x, y, z, b, world.getMeta(x, y, z));
-        hook("sound", false, b);
+        hook("sound", false, b, [x, y, z]); // b76 spsounds76: aux 2001 plays at the replaced cell (executed: SpSounds76Probe), not at the clicked block below it
       },
     });
     if (hit) {

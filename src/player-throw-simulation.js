@@ -23,7 +23,7 @@ export function throwHeldItem(state, id, hooks = {}) {
   // aco.a decrements the survival stack before its sound and spawn calls.
   if (pearl) state.survival.take(id);
   const roll = random(), f = Math.fround;
-  const pitch = pearl ? f(f(0.4) / f(f(f(roll) * f(0.4)) + f(0.8))) : 0.4 / (roll * 0.4 + 0.8);
+  const pitch = f(f(0.4) / f(f(f(roll) * f(0.4)) + f(0.8))); // float32 like the native 0.4F / (nextFloat() * 0.4F + 0.8F) (b76 spsounds76: snowball and egg too)
   hook("playSound", "random.bow", { volume: 0.5, pitch });
   const ball = pearl
     ? state.projectiles.throwEnderPearl(state.position, state.yaw, state.pitch, "player")
