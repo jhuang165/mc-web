@@ -98,6 +98,20 @@ export class ServerContainers {
     this.out(p, { type: 'openWindow', windowId: id, kind, title: container.title, x: p.window.key[0], y: p.window.key[1], z: p.window.key[2], size: container.slots.length, rows: container.rows, cart: key });
     return true;
   }
+  // b76 mphorse76: EntityHorse.openGUI -> displayGUIHorse (ContainerHorseInventory over the horse's AnimalChest). The window is keyed by the horse (`horse` on the wire is its mob id);
+  // the client builds a HorseContainer from `horse` (client-containers.js) and the stacks come from S30.
+  openHorse(p, e, gear, id) {
+    const s = p.survival, container = this.sim.vehicles.horses.container(s.inventory, e);
+    this.sim.serverItems.inv.close(p);
+    this.close(p);
+    s.inventory.cursor = null;
+    const wid = (this.nextWindow % 100) + 1; this.nextWindow++;
+    container.title = this.sim.vehicles.horses.title(e);
+    p.window = { id: wid, kind: 'horse', container, key: [Math.floor(e.x), Math.floor(e.y), Math.floor(e.z)], block: null, horse: e, last: [], cursor: '', props: [], pending: 0, ready: false, stationProps: null };
+    this.out(p, { type: 'openWindow', windowId: wid, kind: 'horse', title: container.title, x: p.window.key[0], y: p.window.key[1], z: p.window.key[2], size: container.slots.length, rows: 0,
+      horse: { id, type: gear.type | 0, chested: !!gear.chested, tame: !!gear.tame } });
+    return true;
+  }
   out(p, m) { (p.windowOut ??= []).push(m); }
   slotsOf(win) { return win.container.slots.map(s => wireStack(s.stack)); }
   sendAll(p) {
@@ -166,6 +180,7 @@ export class ServerContainers {
   afterServerChange(p) { if (!p.window?.ready) return; this.drain(p); this.changes(p); this.sendProps(p, false); }
   canInteract(p) {
     if (p.window.merchant) return p.window.merchant.usable(); // b66 mptrade: ContainerMerchant.canInteractWith (the villager's customer is this player)
+    if (p.window.horse) return this.sim.vehicles.horses.usable(p, p.window.horse); // b76 mphorse76: ContainerHorseInventory.canInteractWith
     if (p.window.cart) return this.sim.vehicles.carts.usable(p.window.cart, p.position); // b62: EntityMinecartContainer.isUseableByPlayer (alive, within 8 blocks)
     const win = p.window, [x, y, z] = win.key, b = this.sim.world.get(x, y, z), ok = win.kind === 'chest' ? (win.container.keys ?? []).every(k => {
       const [a, c, d] = k.split(',').map(Number), bb = this.sim.world.get(a, c, d); return isChestBlock(bb) || bb === ENDER_CHEST;

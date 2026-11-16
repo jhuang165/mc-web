@@ -51,8 +51,9 @@ test("horses, donkeys and mules: wheat heals, a chest goes on a donkey, a saddle
   for (const [id, it] of Object.entries(ITEMS)) if (it.name === "Chest") { given(side, Number(id), 0, 1); break; }
   serverClick(side, d);
   assert.equal(d.horse.chested, true, "chest on a tame donkey");
-  const t = spawn(side, "horse"); t.horse.tame = true; given(side, 363, 0, 1); serverClick(side, t);
-  assert.equal(t.horse.saddled, true); assert.equal(held(side), null);
+  const t = spawn(side, "horse"); t.growingAge = 0; t.horse.tame = true; given(side, 363, 0, 1); serverClick(side, t);
+  // b76 mphorse76: EntityHorse.interact opens the horse window for a saddle (the player puts it in the slot); the quick equip was the stand-in without a window
+  assert.equal(side.p.window?.kind, "horse"); assert.equal(t.horse.saddled, false); assert.equal(held(side).id, 363);
 });
 
 test("armour right click in the air or on a block equips it into the empty slot", () => {

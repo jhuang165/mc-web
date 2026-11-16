@@ -4,7 +4,7 @@
 //   * a spawn egg on an ageable mob (EntityWorld.spawnEggBaby = EntityAgeable.interact: the click is consumed, the baby spawns, a villager does not open its trade window);
 //   * flint and steel on a creeper (creeper.js creeperIgnite, EntityCreeper.interact: the fuse is lit, the tool is worn, fire.ignite sounds);
 //   * horses, donkeys and mules (EntityWorld.horseInteract = EntityHorse.interact: feeding, the chest on a donkey or mule, saddle and armour, rearing of a wild horse).
-// Not done (too large, see the track note): mounting a horse (steering, the jump wire), the horse inventory window.
+// b76 mphorse76: mounting and the horse window are server-horses.js (the ctx it builds).
 import { ITEMS } from '../survival.js';
 import { ITEM_SPAWN_EGG, eggOf } from '../spawn-eggs.js';
 import { isAgeable, entityRandom } from '../entities.js';
@@ -35,7 +35,7 @@ export function entityUseHooks(host, mobs, p) {
     },
     // After the mob's own species interact and before shears / feeding / dyes: EntityHorse.interact, then ItemNameTag.
     later(e) {
-      if (e.type === 'horse' && mobs.horseInteract(e, s, { sneak: !!p.input?.sneak })) return true;
+      if (e.type === 'horse' && mobs.horseInteract(e, s, host.vehicles.horses.ctx(p, !!p.input?.sneak))) return true;
       return !!mobs.nameTagUse?.(e, s);
     },
   };

@@ -25,6 +25,7 @@ import { heldAttackDamage, setWorldEntityBoxes } from '../entities.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
+import { ServerHorses } from './server-horses.js'; // b76 mphorse76
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
@@ -68,6 +69,7 @@ export class ServerVehicles {
     registerBoatWorld(host.world, this.boats); setWorldEntityBoxes(worldBoatBoxes); // b67 boatstand: players and mobs stand on and bump into this world's boats (World.getCollidingBoundingBoxes)
     this.hanging = new ServerHanging(host, ids, saved?.hanging ?? null); // b68 mppaintings: this dimension's paintings and item frames (leash knots come from the mobs)
     this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
+    this.horses = new ServerHorses(host, this); // b76 mphorse76: horses, donkeys, mules (server-horses.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
   }
   // b62: the rail redstone (powered, detector and activator rails: powered-rails.js) and the detector rail's cart touch. The dedicated world never installed them before.
@@ -218,6 +220,7 @@ export class ServerVehicles {
     const host = this.host, world = host.world;
     this.hanging.tick(); // b68 mppaintings: the 101st-update surface check
     this.riderInput();
+    this.horses.stamp(); // b76 mphorse76: the tamer's name on a horse tamed by riding
     const any = this.carts.carts.length || this.boats.carts.length || [...host.players.values()].some(p => p.mount);
     if (!any) { this.track(); return; }
     this.afterRiders();
@@ -231,6 +234,7 @@ export class ServerVehicles {
       if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead || p.input?.sneak) { this.dismount(p); continue; }
       const input = moveInput({ forward: p.input?.forward ?? 0, strafe: p.input?.strafe ?? 0 }); // not slowed: a rider is not using an item (bytecode-read blk.e)
       Object.assign(m.rider, { yaw: f(180 - p.yaw * 180 / Math.PI), moveForward: f(input.forward * f(0.98)), moveStrafing: f(-input.strafe * f(0.98)), dead: false });
+      if (m.mob?.type === 'horse') this.horses.input(p); // b76 mphorse76: the jump bar
     }
   }
   afterRiders() {
