@@ -29,7 +29,7 @@ const javaYawDeg = yaw => 180 - yaw * 180 / Math.PI, javaPitchDeg = pitch => -pi
 export function watcherSig(p) {
   const s = p.survival ?? {}, fx = s.effects;
   const colour = fx?.ordered ? [...fx.ordered()].map(e => `${e.id}.${e.amplifier}.${e.ambient ? 1 : 0}`).join('+') : '';
-  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour].join('|');
+  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour, p.experience?.score ?? 0].join('|'); // b76: + the score (watcher 18, EntityPlayer.addScore from addExperience); sleeping and riding are NOT watched values
 }
 const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 256) / 360)) << 24) >> 24; // S0C: (byte)(int)(angle * 256 / 360)
 
@@ -49,6 +49,7 @@ export class ServerPlayerTracker {
     for (const [id, target] of here) {
       const e = { id, x: target.position.x, y: target.position.y - (target.motion?.ySize ?? 0), z: target.position.z, rotationYaw: javaYawDeg(target.yaw ?? 0), rotationPitch: javaPitchDeg(target.pitch ?? 0), type: 'player' };
       e.rotationYawHead = e.rotationYaw; // sv.e: rotationYawHead = rotationYaw
+      e.ridingEntity = target.mount ? (target.mount.key ?? true) : null; // b76: my.a(List) runs its riding branch (look packets only, S1B(0), `ridden` -> a teleport after the dismount)
       const sig = watcherSig(target);
       let st = m.byId.get(id);
       if (!st) {
