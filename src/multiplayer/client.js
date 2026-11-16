@@ -163,6 +163,8 @@ export class DedicatedClient {
   stationEnchant(windowId, slot) { this.send({ type: 'stationEnchant', windowId, slot }); }
   stationItemName(windowId, name) { this.send({ type: 'stationItemName', windowId, name }); }
   tradeSelect(windowId, index) { this.send({ type: 'tradeSelect', windowId, index }); } // b66 mptrade: MC|TrSel
+  horseJump(power) { this.send({ type: 'horseJump', power }); } // b76 mphorse76: C0B action 6
+  horseInventory() { this.send({ type: 'horseInventory' }); } // b76: C0B action 7
   closeWindow() { this.send({ type: 'closeWindow' }); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }

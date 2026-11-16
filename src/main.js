@@ -2866,7 +2866,7 @@ function tickChests() {
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "hopper" && containerView.key && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
   if (containerView?.kind === "brewing" && world.get(...containerView.key.split(",").map(Number)) !== BREWING_STAND) resume();
-  if (containerView?.kind === "horse") { const m = containerView.horseMob; if (!m || !horseReach(m.health > 0 && mobs.entities.includes(m), Math.hypot(m.x - position.x, m.y - position.y, m.z - position.z))) resume(); }
+  if (containerView?.kind === "horse") { const m = containerView.horseMob; if (!m && containerView.remote?.window) { /* b76 mphorse76: the server window checks its own reach */ } else if (!m || !horseReach(m.health > 0 && mobs.entities.includes(m), Math.hypot(m.x - position.x, m.y - position.y, m.z - position.z))) resume(); }
   if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => { const b = world.get(...k.split(",").map(Number)); return !isChestBlock(b) && b !== ENDER_CHEST; })) resume();
   if (containerView?.kind === "enchanting") {

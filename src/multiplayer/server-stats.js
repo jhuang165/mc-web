@@ -25,7 +25,7 @@ import { PHYSICS } from '../world.js';
 import { KillCredit } from './server-combat-tracker.js';
 
 export const STATS_INTERVAL = 300; // pg.a(mw): ticks between two S37 that carry stats
-const mountKind = m => (m?.mob ? 'pig' : m?.boat ? 'boat' : 'minecart');
+const mountKind = m => (m?.mob ? (m.mob.type === 'horse' ? 'horse' : 'pig') : m?.boat ? 'boat' : 'minecart');
 
 export class ServerStats {
   constructor(sim) { this.sim = sim; }

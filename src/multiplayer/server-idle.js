@@ -12,7 +12,7 @@
 // This port's wire messages map as below. `input` carries movement, the held slot (`current`, C09) and the sneak and sprint flags (C0B when they change).
 
 // Wire types that are one of the activity packets whatever their fields say.
-const ALWAYS = new Set(['edit', 'dig', 'use', 'attack', 'attackPlayer', 'animUse', 'vehUse', 'vehHit', 'sign', 'invCreative', 'stationEnchant', 'respawn', 'requestStats', 'openInventory', 'sleepLeave', 'achDrop']);
+const ALWAYS = new Set(['edit', 'dig', 'use', 'attack', 'attackPlayer', 'animUse', 'vehUse', 'vehHit', 'sign', 'invCreative', 'stationEnchant', 'respawn', 'requestStats', 'openInventory', 'sleepLeave', 'achDrop', 'horseJump', 'horseInventory']);
 
 /**
  * Whether `message` from a player marks them active. `prev` is that player's remembered input state ({ current, sneak, sprint } or undefined) and the

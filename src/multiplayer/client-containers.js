@@ -10,6 +10,7 @@ import { newChest } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
 import { AnvilContainer } from '../anvil-container.js';
 import { EnchantingContainer } from '../enchanting-container.js';
+import { HorseContainer } from '../horse-gear.js'; // b76 mphorse76
 import { buildMerchant, applyTradeList, wireTrade } from './client-trade.js'; // b66 mptrade
 
 const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count === b.count && (a.damage ?? 0) === (b.damage ?? 0));
@@ -25,7 +26,10 @@ export function inventoryWire(inv) {
 export function buildWindow(m, { survival, world, station = {}, crafted = null }) {
   const key = `${m.x},${m.y},${m.z}`, inv = survival.inventory;
   let container, kind = m.kind;
-  if (m.cart) { // b62: a chest or hopper minecart's window; the stacks come from the server (S30), the slots here start blank
+  if (kind === 'horse' && m.horse) { // b76 mphorse76: ContainerHorseInventory; the stacks come from S30
+    const h = { type: m.horse.type | 0, chested: !!m.horse.chested, tame: !!m.horse.tame, saddled: false, armor: 0, items: null };
+    container = new HorseContainer(inv, h, null, '');
+  } else if (m.cart) { // b62: a chest or hopper minecart's window; the stacks come from the server (S30), the slots here start blank
     const n = kind === 'hopper' ? 5 : 27;
     container = kind === 'hopper' ? new HopperContainer(inv, { items: Array(n).fill(null), name: m.title }, null) : new ChestContainer(inv, new StackArray(Array(n).fill(null), null));
   } else if (kind === 'chest') container = m.ender ? survival.openEnderChest(world, m.x, m.y, m.z) : survival.openChest(world, m.x, m.y, m.z);
