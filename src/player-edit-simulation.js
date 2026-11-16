@@ -58,6 +58,101 @@ export const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER
 // buckets (buckets-simulation.js) run headlessly against state.projectiles/items/fluids;
 // their presentation reaches the same playSound/sound/resetEquipped/destroyParticles/
 // updateBlock/renderHotbar/markUnsaved hooks.
+// Minecraft.rightClickMouse (bytecode-read, bao): over an entity, PlayerControllerMP.interactWithEntitySendPacket runs first and a true
+// result ends the click; only a false result (or a miss) reaches ItemStack.useItemRightClick (bow, rod, bucket, potion, book, ...).
+// Returns the branch result when the entity (or the item's itemInteractionForEntity) took the click, else null.
+function interactEntityFirst(state, e, { id, item }, hooks, act) {
+  // The swing of a taken click (not for food) comes before the click's own effects, but a declined click never swings here.
+  let swung = !!item?.food;
+  const swing = () => { if (!swung) { swung = true; hooks.swing?.(); } };
+  const hook = (name, ...args) => { swing(); return hooks[name]?.(...args); };
+  const ok = (branch, extra) => { swing(); return act(branch, extra); };
+  // EntityCow.interact (also the mooshroom's super call): an empty bucket is swapped for milk.
+  if ((e.type === 'cow' || e.type === 'mooshroom') && e.health > 0 && id === BUCKET_ITEM) {
+    const used = useHeldBucket(state, { id, aimedEntity: { entity: e }, entityOnly: true }, hooks);
+    if (used.branch === 'milk-cow') return act('use-bucket', { bucket: used.branch });
+  }
+  // Flint-and-steel interaction with a live creeper precedes the general entity branch.
+  if (e.type === 'creeper' && e.health > 0 && item?.kind === 'flint_and_steel') {
+    // EntityCreeper.interact: the pitch is the creeper's own Entity.rand nextFloat (creeper.js creeperIgnite; creeperwitch-b45 records).
+    const ignite = creeperIgnite(e, entityRandom(e));
+    hook('playSound', ignite.name, { volume: ignite.volume, pitch: ignite.pitch, position: ignite.position });
+    if (!state.survival.creative) state.survival.wear(id);
+    hook('reportBrokenTool');
+    hook('renderHotbar');
+    hook('markUnsaved');
+    return ok('ignite-creeper');
+  }
+
+  {
+    // EntityLiving.interactFirst: a lead in hand ties the mob, the holder's click frees it (horse-gear-live.js).
+    if (state.mobs.leashInteract?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('leash-entity');
+    }
+    // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
+    if (state.mobs.saddleUse?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('saddle-pig');
+    }
+    // EntityAgeable.interact: a spawn egg in hand never reaches the mob's own interact (no trade, no feeding); an egg of the
+    // mob's class spawns a baby of it.
+    if (id === ITEM_SPAWN_EGG && isAgeable(e.type)) {
+      if (state.mobs.spawnEggBaby?.(e, state.survival, eggOf(state.survival.held?.damage))) { hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved'); }
+      return ok('spawn-egg-ageable');
+    }
+    // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
+    if (e.type === 'villager' && hooks.openMerchant?.(e)) return ok('trade-villager');
+    // EntityZombie.interact: a golden apple on a weakened zombie villager starts the cure.
+    if (e.type === 'zombie' && state.mobs.cure(e, id, state.survival, state.survival.held?.damage ?? 0)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('cure-zombie-villager');
+    }
+    // EntityWolf.interact: bones tame, meat heals or breeds, dyes recolour the collar, the owner's other clicks sit it.
+    if (e.type === 'wolf' && state.mobs.wolfInteract(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('interact-wolf');
+    }
+    // EntityOcelot.interact: raw fish tame a tempted ocelot or breed a cat, the owner's other clicks sit it.
+    if (e.type === 'ocelot' && state.mobs.ocelotInteract(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('interact-ocelot');
+    }
+    if (state.mobs.mooshroomInteract?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('interact-mooshroom');
+    }
+    // EntityHorse.interact: feed, tame by riding, saddle, chest and mount (horse-live.js).
+    if (e.type === 'horse' && state.mobs.horseInteract(e, state.survival, { sneak: !!state.motion?.sneaking, horses: state.mobs.horseSeats, open: (h) => hook('openHorse', h) })) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('interact-horse');
+    }
+    // ItemNameTag via ItemStack.interactWithEntity: names the mob once its own interact declined (horse-gear-live.js).
+    if (state.mobs.nameTagUse?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('name-entity');
+    }
+    if (state.mobs.shear(e, id, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return ok('shear-entity');
+    }
+    let took = false;
+    if (state.mobs.feed(e, id, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved'); took = true;
+    } else if (e.type === 'pig' && state.rider && state.mobs.horseSeats && state.mobs.pigMount?.(e, Object.assign(state.mobs.horseSeats, { player: state.rider }))) {
+      // EntityPig.interact after EntityAnimal.interact declined: a saddled pig seats the player (pig-saddle-live.js).
+      hook('markUnsaved');
+      return ok('mount-pig');
+    } else if (state.mobs.dye(e, state.survival.held, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved'); took = true;
+    }
+    if (!took) return null;
+    // EntityPlayer.interactWith / interactFirst returned true: a held stack left at size <= 0 is destroyed outside Creative (leads2-reference.json sizes).
+    if (!state.survival.creative && state.survival.held && state.survival.held.count <= 0) { state.survival.inventory.main[state.survival.inventory.current] = null; hook('renderHotbar'); }
+    return ok('interact-entity');
+  }
+}
+
 export function applyPlayerEdit(state, { place = false, target = null, aimedEntity = null, bucket = null } = {}, hooks = {}) {
   const random = hooks.random ?? Math.random;
   const act = (branch, extra = {}) => ({ handled: true, branch, ...extra }),
@@ -75,6 +170,9 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
+  // Minecraft.rightClickMouse: the clicked entity interacts before any item use; only a declined click goes on to the held item.
+  if (place && aimedEntity?.entity) { const r = interactEntityFirst(state, aimedEntity.entity, { id, item }, hooks, act); if (r) return r; }
+
   // ItemBoat has no onItemUse, so an activated block (chest, door, ...) wins; otherwise onItemRightClick
   // places the boat along the view ray (hooks.placeBoat returns whether one was placed).
   if (place && id === BOAT_ITEM && !usesBlock && !aimedEntity && hook('placeBoat')) return act('place-boat');
@@ -87,7 +185,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && id === ITEM_EXP_BOTTLE && !usesBlock && (state.survival.creative || state.survival.usable(id)) && throwExpBottle(state, hooks)) return act('throw-projectile', { projectile: 'expBottle' });
   // ItemEnderEye: onItemUse on a frame, else onItemRightClick towards the nearest stronghold (eye-of-ender-live.js).
   if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.usable(id))) {
-    const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
+    const used = useEyeOfEnder(state, { target: aimedEntity ? null : target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
   // ItemEmptyMap.onItemRightClick: becomes a filled map centred on the player (maps-clock-live.js).
@@ -100,7 +198,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
   // ItemFirework.onItemUse launches a rocket from the clicked block face (fireworks-live.js).
   if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.usable(id))) {
-    const used = useFirework(state, { target, usesBlock }, hooks);
+    const used = useFirework(state, { target: aimedEntity ? null : target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
   // ItemWritableBook / ItemEditableBook.onItemRightClick: displayGUIBook opens GuiScreenBook (book-ui.js); no onItemUse.
@@ -176,93 +274,17 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('attack-entity');
   }
 
-  // Flint-and-steel interaction with a live creeper precedes the general entity branch.
-  if (place && aimedEntity?.entity?.type === 'creeper' && aimedEntity.entity.health > 0 && item?.kind === 'flint_and_steel') {
-    const e = aimedEntity.entity;
-    // EntityCreeper.interact: the pitch is the creeper's own Entity.rand nextFloat (creeper.js creeperIgnite; creeperwitch-b45 records).
-    const ignite = creeperIgnite(e, entityRandom(e));
-    hook('playSound', ignite.name, { volume: ignite.volume, pitch: ignite.pitch, position: ignite.position });
-    if (!state.survival.creative) state.survival.wear(id);
-    hook('reportBrokenTool');
-    hook('renderHotbar');
-    hook('markUnsaved');
-    return act('ignite-creeper');
-  }
-
   // ItemLead.onItemUse / BlockFence.onBlockActivated: the player's leashed mobs tie to the fence (horse-gear-live.js).
   if (place && activates && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival)) {
     hook('renderHotbar'); hook('markUnsaved');
     return act('leash-fence');
   }
 
+  // Nothing above took the click (Minecraft.rightClickMouse: interactWithEntitySendPacket returned false): the held item's own
+  // onItemRightClick follows. Food and swords begin their use here; the entity itself ignores the click.
   if (place && aimedEntity?.entity) {
-    const e = aimedEntity.entity;
-    // EntityLiving.interactFirst: a lead in hand ties the mob, the holder's click frees it (horse-gear-live.js).
-    if (state.mobs.leashInteract?.(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('leash-entity');
-    }
-    // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
-    if (state.mobs.saddleUse?.(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('saddle-pig');
-    }
-    // EntityAgeable.interact: a spawn egg in hand never reaches the mob's own interact (no trade, no feeding); an egg of the
-    // mob's class spawns a baby of it.
-    if (id === ITEM_SPAWN_EGG && isAgeable(e.type)) {
-      if (state.mobs.spawnEggBaby?.(e, state.survival, eggOf(state.survival.held?.damage))) { hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved'); }
-      return act('spawn-egg-ageable');
-    }
-    // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
-    if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');
-    // EntityZombie.interact: a golden apple on a weakened zombie villager starts the cure.
-    if (e.type === 'zombie' && state.mobs.cure(e, id, state.survival, state.survival.held?.damage ?? 0)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('cure-zombie-villager');
-    }
-    // EntityWolf.interact: bones tame, meat heals or breeds, dyes recolour the collar, the owner's other clicks sit it.
-    if (e.type === 'wolf' && state.mobs.wolfInteract(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('interact-wolf');
-    }
-    // EntityOcelot.interact: raw fish tame a tempted ocelot or breed a cat, the owner's other clicks sit it.
-    if (e.type === 'ocelot' && state.mobs.ocelotInteract(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('interact-ocelot');
-    }
-    if (state.mobs.mooshroomInteract?.(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('interact-mooshroom');
-    }
-    // EntityHorse.interact: feed, tame by riding, saddle, chest and mount (horse-live.js).
-    if (e.type === 'horse' && state.mobs.horseInteract(e, state.survival, { sneak: !!state.motion?.sneaking, horses: state.mobs.horseSeats, open: (h) => hook('openHorse', h) })) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('interact-horse');
-    }
-    // ItemNameTag via ItemStack.interactWithEntity: names the mob once its own interact declined (horse-gear-live.js).
-    if (state.mobs.nameTagUse?.(e, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('name-entity');
-    }
-    if (state.mobs.shear(e, id, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-      return act('shear-entity');
-    }
-    if (state.mobs.feed(e, id, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-    } else if (e.type === 'pig' && state.rider && state.mobs.horseSeats && state.mobs.pigMount?.(e, Object.assign(state.mobs.horseSeats, { player: state.rider }))) {
-      // EntityPig.interact after EntityAnimal.interact declined: a saddled pig seats the player (pig-saddle-live.js).
-      hook('markUnsaved');
-      return act('mount-pig');
-    } else if (state.mobs.dye(e, state.survival.held, state.survival)) {
-      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
-    } else if (!state.survival.creative && item?.food) {
-      beginEating(state, id, hook);
-    } else if (item?.kind === 'sword') {
-      beginBlocking(state, id);
-    }
-    // EntityPlayer.interactWith / interactFirst returned true: a held stack left at size <= 0 is destroyed outside Creative (leads2-reference.json sizes).
-    if (!state.survival.creative && state.survival.held && state.survival.held.count <= 0) { state.survival.inventory.main[state.survival.inventory.current] = null; hook('renderHotbar'); }
+    if (!state.survival.creative && item?.food) beginEating(state, id, hook);
+    else if (item?.kind === 'sword') beginBlocking(state, id);
     return act('interact-entity');
   }
 

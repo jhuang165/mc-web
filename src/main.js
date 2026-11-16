@@ -3617,7 +3617,7 @@ function edit(place = false) {
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
   const bucket = place ? captureBucketTarget(world, state.heldTool, eyeRay) : null;
-  const action = capturePlayerAction({ place, target, aimedEntity, heldTool: state.heldTool, bucket });
+  const action = capturePlayerAction({ place, target: aimedHanging ? null : target, aimedEntity, heldTool: state.heldTool, bucket }); // a painting that declined the click is the ray's hit: no block behind it is clicked (spuseorder76)
   traceAction(action);
   const syncContainerState = () => {
     state.screen = screen;

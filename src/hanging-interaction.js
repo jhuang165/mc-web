@@ -19,8 +19,10 @@ export function applyHangingEdit({ hanging, world, survival, heldId, place, targ
   if (!hanging) return false;
   const spawn = () => { for (const d of hanging.drain()) hooks.drop?.(d); };
   if (aimed) {
-    hooks.swing?.();
     const e = aimed.entity;
+    // EntityPainting has no interactFirst (false): the held item's own use follows (Minecraft.rightClickMouse); only an item frame consumes the click.
+    if (place && e.kind !== "frame") return false;
+    hooks.swing?.();
     if (place) {
       // interactFirst: a frame takes one held item or turns; a painting does nothing.
       const held = survival.held;
