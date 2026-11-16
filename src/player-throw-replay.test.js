@@ -198,7 +198,9 @@ test("bucket, throw and bow-release input replays match the pre-extraction main.
   const old = run(await oldActions(), ["edit", "useBucketItem", "throwSnowball", "releaseBowUse", "flushArrows"].map((n) => reference.functions[n]));
   const next = run(currentActions, ["traceAction", "edit", "releaseBowUse", "flushArrows"].map((n) => extract(currentMain, n)));
   assert.equal(next.states.length, SCRIPT.length);
-  for (let i = 0; i < SCRIPT.length; i++) assert.deepEqual(next.states[i], old.states[i], `step ${i}`);
+  // b76 spsounds76: the throw pitch is now the native float32 chain (the pinned code used doubles); everything else is compared exactly.
+  const bow = (st) => JSON.parse(JSON.stringify(st), (k, v) => (k === "pitch" && typeof v === "number" ? Math.round(v * 1e6) / 1e6 : Array.isArray(v) && v[0] === "sound" && v[1] === false && v.length === 4 ? v.slice(0, 3) : v)); // and the bucket's break sound now carries the replaced cell as a fourth argument
+  for (let i = 0; i < SCRIPT.length; i++) assert.deepEqual(bow(next.states[i]), bow(old.states[i]), `step ${i}`);
   assert.equal(next.draws, old.draws, "Math.random draw count");
 
   // The scenario exercised every path it claims.

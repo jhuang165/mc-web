@@ -113,7 +113,7 @@ export function throwExpBottle(state, hooks = {}) {
   const random = hooks.random ?? Math.random, potions = state.mobs?.potions;
   if (!potions) return null;
   if (!state.survival.creative) { const inv = state.survival.inventory; if (inv.held && inv.held.count <= 0) state.survival.take(inv.held.id); else inv.decr(inv.current, 1); }
-  hooks.playSound?.("random.bow", { volume: 0.5, pitch: 0.4 / (random() * 0.4 + 0.8) });
+  hooks.playSound?.("random.bow", { volume: 0.5, pitch: Math.fround(Math.fround(0.4) / Math.fround(Math.fround(Math.fround(random()) * Math.fround(0.4)) + Math.fround(0.8))) });
   const ball = potions.throwFromPlayer(state.position, state.yaw, state.pitch, 0, "expBottle", 0.7);
   hooks.resetEquipped?.(); hooks.renderHotbar?.(); hooks.markUnsaved?.();
   return ball;

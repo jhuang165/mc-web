@@ -109,7 +109,7 @@ test("a water bucket replaces a flower: wash, particles and sound precede the ce
   assert.equal(f.world.get(X, FLOOR + 1, Z), WATER);
   assert.equal(f.survival.inventory.held.id, BUCKET);
   assert.deepEqual(f.calls, [["wash", X, FLOOR + 1, Z, RED_FLOWER], ["particles", X, FLOOR + 1, Z, RED_FLOWER, 4],
-    ["sound", false, RED_FLOWER], ["update", X, Z, FLOOR + 1], "reset", "hotbar", "dirty"]);
+    ["sound", false, RED_FLOWER, [X, FLOOR + 1, Z]], ["update", X, Z, FLOOR + 1], "reset", "hotbar", "dirty"]);
 
   // Creative keeps the filled bucket, so the equip animation is not reset.
   const c = fixture(LAVA_BUCKET, 1, "creative");

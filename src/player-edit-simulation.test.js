@@ -86,7 +86,7 @@ test('snowball, bow and bucket paths retain their pre-swing precedence', () => {
     playSound: (name, options) => calls.push([name, options.volume, options.pitch]),
     resetEquipped: () => calls.push('reset'),
   }), { handled: true, branch: 'throw-projectile', projectile: 'snowball' });
-  assert.deepEqual(calls, ['unlock', ['random.bow', 0.5, 0.4 / (0.5 * 0.4 + 0.8)]]);
+  assert.deepEqual(calls, ['unlock', ['random.bow', 0.5, Math.fround(0.4 / (0.5 * 0.4 + 0.8))]]);
   assert.equal(snowball.state.projectiles.balls.length, 1);
   assert.equal(snowball.state.survival.count(312), 1, 'Creative keeps the stack');
 
