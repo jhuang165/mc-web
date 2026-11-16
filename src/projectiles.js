@@ -17,7 +17,7 @@ import { acceptsParticle } from "./particle-settings.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { isStair, stairRayTrace } from "./stairs.js";
-import { blockBounds, collisionBoxList, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
+import { World, blockBounds, collisionBoxList, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { CAKE } from "./stems-cake.js";
 import { fenceBounds, fenceMask } from "./fences.js";
@@ -189,7 +189,7 @@ export const rayBounds = (world, x, y, z, id) =>
 // air or water with its ray bounds hit. Below y 0 the world is air. `hasBox` is
 // func_147447_a's ignoreBlockWithoutBoundingBox (EntityArrow passes true): only
 // blocks with a collision box count, which leaves out torches and plants.
-export function rayTraceBlocks(world, start, end, hasBox = false) {
+export function rayTraceBlocksReference(world, start, end, hasBox = false) {
   if (start[0] !== start[0] || start[1] !== start[1] || start[2] !== start[2] || end[0] !== end[0] || end[1] !== end[1] || end[2] !== end[2]) return null; // b74 mpperf74: NaN tests without the closure calls (the line-of-sight walk is the server's second cost)
   const id = (x, y, z) => (y < 0 && !world.floorBelow ? 0 : world.get(x, y, z)), // floorBelow: a test world whose floor lies at y < 0 (the fight probes)
     // BlockFire.isCollidable is false, so canCollideCheck skips fire like air.
@@ -252,6 +252,103 @@ export function rayTraceBlocks(world, start, end, hasBox = false) {
     if (hit) return hit;
   }
   return null;
+}
+
+// b76 mplos76: the same walk without the per-call closures and the working-vector array: the cell test is a helper taking scalars, air/water/lava/fire cells
+// return before anything is built, and the vector is three locals. Same cells in the same order, same double arithmetic (the stepping expressions are copied
+// operation for operation), so every hit and every null is bit-identical to rayTraceBlocksReference. Mode "verify" (env MC_RAYTRACE=verify) runs both on every call
+// and throws on the first difference; "off" uses the reference.
+export const rayTraceConfig = { mode: (typeof process !== "undefined" && process.env?.MC_RAYTRACE) || "on" };
+// A plain World.get (not an override: DimensionWorld, test doubles) is read straight from the column's block array, the column looked up again only when the
+// walk crosses into another one; anything the shortcut cannot answer (non-resident column, undefined cell) goes through world.get itself.
+let rayChunkCx = 0, rayChunkCz = 0, rayChunkBlocks = null, rayDirect = false;
+function rayBlock(world, x, y, z) {
+  if (!rayDirect) return y < 0 && !world.floorBelow ? 0 : world.get(x, y, z);
+  if (y < 0) return world.floorBelow ? world.get(x, y, z) : 0;
+  if (!world.inside(x, y, z)) return 0;
+  const cx = x >> 4, cz = z >> 4;
+  if (rayChunkBlocks === null || cx !== rayChunkCx || cz !== rayChunkCz) {
+    const c = world.chunkAt(cx, cz);
+    if (!c) return world.get(x, y, z);
+    rayChunkCx = cx; rayChunkCz = cz; rayChunkBlocks = c.blocks;
+  }
+  const v = rayChunkBlocks[((x & 15) * 16 + (z & 15)) * world.height + y];
+  return v === undefined ? world.get(x, y, z) : v;
+}
+function rayCell(world, hasBox, end, x, y, z, ax, ay, az) { return rayCellB(world, hasBox, end, rayBlock(world, x, y, z), x, y, z, ax, ay, az); }
+function rayCellB(world, hasBox, end, b, x, y, z, ax, ay, az) {
+  if (b === 0 || b === 10 || b === 42 || b === FIRE || (hasBox && !world.solid(x, y, z))) return null;
+  if (isStair(b)) { const h = stairRayTrace(world.getMeta(x, y, z), x, y, z, [ax, ay, az], end); return h && { block: [x, y, z], side: h.side, vec: h.vec }; }
+  const bb = rayBounds(world, x, y, z, b),
+    hit = intercept([bb[0], bb[1], bb[2], bb[3], bb[4], bb[5]], [ax - x, ay - y, az - z], [end[0] - x, end[1] - y, end[2] - z]);
+  return hit && { block: [x, y, z], side: hit.side, vec: [hit.vec[0] + x, hit.vec[1] + y, hit.vec[2] + z] };
+}
+function rayTraceFast(world, start, end, hasBox) {
+  let ax = start[0], ay = start[1], az = start[2];
+  rayDirect = world.get === World.prototype.get && typeof world.chunkAt === "function" && world.floorBelow === undefined; rayChunkBlocks = null;
+  const e0 = end[0], e1 = end[1], e2 = end[2];
+  if (ax !== ax || ay !== ay || az !== az || e0 !== e0 || e1 !== e1 || e2 !== e2) return null;
+  const ex = Math.floor(e0), ey = Math.floor(e1), ez = Math.floor(e2);
+  let x = Math.floor(ax), y = Math.floor(ay), z = Math.floor(az);
+  const first = rayCell(world, hasBox, end, x, y, z, ax, ay, az);
+  if (first) return first;
+  for (let n = 200; n-- >= 0; ) {
+    if (ax !== ax || ay !== ay || az !== az) return null;
+    if (x === ex && y === ey && z === ez) return null;
+    let mx = true, my = true, mz = true, d0 = 999, d1 = 999, d2 = 999;
+    if (ex > x) d0 = x + 1;
+    else if (ex < x) d0 = x;
+    else mx = false;
+    if (ey > y) d1 = y + 1;
+    else if (ey < y) d1 = y;
+    else my = false;
+    if (ez > z) d2 = z + 1;
+    else if (ez < z) d2 = z;
+    else mz = false;
+    let tx = 999, ty = 999, tz = 999;
+    const dx = e0 - ax, dy = e1 - ay, dz = e2 - az;
+    if (mx) tx = (d0 - ax) / dx;
+    if (my) ty = (d1 - ay) / dy;
+    if (mz) tz = (d2 - az) / dz;
+    let side;
+    if (tx < ty && tx < tz) {
+      side = ex > x ? 4 : 5;
+      ax = d0;
+      ay += dy * tx;
+      az += dz * tx;
+    } else if (ty < tz) {
+      side = ey > y ? 0 : 1;
+      ax += dx * ty;
+      ay = d1;
+      az += dz * ty;
+    } else {
+      side = ez > z ? 2 : 3;
+      ax += dx * tz;
+      ay += dy * tz;
+      az = d2;
+    }
+    x = Math.floor(ax);
+    if (side === 5) x--;
+    y = Math.floor(ay);
+    if (side === 1) y--;
+    z = Math.floor(az);
+    if (side === 3) z--;
+    const b = rayBlock(world, x, y, z); // air is by far the commonest cell: nothing else runs for it
+    if (b === 0) continue;
+    const hit = rayCellB(world, hasBox, end, b, x, y, z, ax, ay, az);
+    if (hit) return hit;
+  }
+  return null;
+}
+export function rayTraceBlocks(world, start, end, hasBox = false) {
+  const mode = rayTraceConfig.mode;
+  if (mode === "off") return rayTraceBlocksReference(world, start, end, hasBox);
+  const got = rayTraceFast(world, start, end, hasBox);
+  if (mode === "verify") {
+    const want = rayTraceBlocksReference(world, start, end, hasBox);
+    if (JSON.stringify(got) !== JSON.stringify(want) || (got && !Object.is(got.vec[0], want.vec[0]))) throw new Error(`rayTraceBlocks mismatch ${JSON.stringify([start, end, hasBox])}: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`);
+  }
+  return got;
 }
 
 // Entity.handleWaterMovement for a 0.25 box (func_72918_a, box.expand(0,
