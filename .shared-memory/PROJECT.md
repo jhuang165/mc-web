@@ -113,6 +113,22 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 77 (2026-11-16, ten Sonnet tracks in `../wt77-<name>` on `batch77-<name>`, cut from 9e7fa94f8, merged --no-ff on `batch77-lead`; shared track rules `../artifacts/b77-lead/track-rules.md`; lead note `b77-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.106.0, by track:
+  - mphorseclient77: `client-horse.js` (`MpHorseRider`: jump charge, `horseJump`, `horseInventory`), HUD jump bar and horse hearts for the server horse, horse `tame/hp/max` on the mob wire, `predictAnimalUse` lead and horse clicks (`selfId`, `sneak`).
+  - mphorserules77: `horseLand` in `horse-live.js` (horse and rider fall damage, land sound), rider pitch, `server-horses.js` `logout`/`savedFields`/`rejoin` (Overworld), `horseArmorValue`, foal aging, own-rider melee ignored.
+  - mpvelocity77: `server-velocity.js` (owner `vel` row field, ±3.9 clamp, 1/8000), `client-ride-seat.js` + `presence.js` `followMounts`, `hideCape` in `watcherSig`.
+  - mpknots77: sneak rule for knot ties (server and SP), cauldron click starts no item use (client, server, SP), server Adventure bucket refusal removed.
+  - spcauldron77: `block-activation.js` (`swallowsItemUse`, bytecode table of every `onBlockActivated`), entity clicks no longer swing.
+  - spdispense77: `SpDispense77Probe` + `sp-dispense77-reference.json`; armour by `candidate-order.js` and `canPickUpLoot`, generic mob `equipment`; fire charge Y offset from X facing.
+  - spsounds77: `SpSounds77Probe` + `sound-sweep3-reference.json` (244 records); eye of ender aux 1002.
+  - fallingblock77: `falling-drops.js` (`damageDropped`), `falling-tiles.js` (TileEntityData on landing), anvil roll rule and full Data; `FallingBlock77Probe` + `falling-block77-reference.json`; item Owner/Thrower/PortalCooldown.
+  - worldflags77: `WorldFlagsProbe` + `world-flags-reference.json`; `World.mapFeatures` from the generation, `MapFeatures:0` export; `hardcore` in server snapshots; Resource Packs rows and LAN line in `gui-menus-reference.json`.
+  - mpperf77: `tools/bench-server-players.mjs`, `mpperf77-scene.js`, `mpperf77-fast.js` (`MC_MPPERF77=on|off|verify`): villager zombie box-first, tracker watcher walk, push box test.
+- Lead joins: `main.js` multiplayer tick (horse jump + `followMounts`) and right click (horse prediction + cauldron rule); `server-horses.js` `input` (pitch copy before the wire-jump return); `player-edit-simulation.js` takes spcauldron77's `swallowsItemUse` over mpknots77's cauldron-only checks (mpknots77's stricter test kept); `simulation.js` keeps both `velocityField` and the `hardcore` snapshot field.
+- Verification: one full `npm test`, 8825 tests, 8825 pass. Build and bridge tests ok.
+- Open: "Still open from batch 77" in `public/research/remaining-gaps.md`.
+
 Batch 76 (2026-11-16, ten Sonnet tracks in `../wt76-<name>` on `batch76-<name>`, cut from 45175ffd6, merged --no-ff on `batch76-lead`; lead note `b76-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.105.0, by track:
   - mphorse76: `server-horses.js` (`ServerVehicles.horses`): riding with `horseRideThink`, taming by riding, the horse window (`openHorse`, `horseJump`/`horseInventory` wire messages, client window build), `stat.horseOneCm`, owner on riding tame.
