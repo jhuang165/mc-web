@@ -39,16 +39,17 @@ export class ServerEyes {
   // ItemEnderEye.onItemRightClick for player `p`. True when the click was an eye (used up either way).
   use(p) {
     const sim = this.dispense.sim, s = p.survival;
-    if ((p.dimension | 0) !== 0) return true; // the Nether's and the End's providers find no stronghold
+    const dim = p.dimension | 0; // b79 mplanes79: the sound, aux and shatter carry the thrower's dimension, not a constant 0
     const world = sim.world, ox = world.originX ?? 0, oz = world.originZ ?? 0, at = p.position, y = f(at.y + 1.62);
-    const goal = nearestStronghold(strongholdsOf(world.seed), Math.trunc(at.x) + ox, Math.trunc(y), Math.trunc(at.z) + oz);
+    // only the Overworld's chunk provider answers findClosestStructure("Stronghold"); the Nether's and the End's find none (recalled, not re-read in b79), so a throw there does nothing
+    const goal = dim === 0 ? nearestStronghold(strongholdsOf(world.seed), Math.trunc(at.x) + ox, Math.trunc(y), Math.trunc(at.z) + oz) : null;
     if (!goal) return true;
     this.system.launch(at.x, y, at.z, [goal[0] - ox, goal[1], goal[2] - oz]);
     const rand = p.rand?.nextFloat ? p.rand : null, r = rand ? rand.nextFloat() : Math.random();
-    this.dispense.fx.push({ k: 'sound', name: 'random.bow', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: f(f(0.4) / f(f(f(r) * f(0.4)) + f(0.8))), dim: 0 });
+    this.dispense.fx.push({ k: 'sound', name: 'random.bow', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: f(f(0.4) / f(f(f(r) * f(0.4)) + f(0.8))), dim });
     // world.playAuxSFXAtEntity(null, 1002, (int) x, (int) y, (int) z, 0) (ItemEnderEye bytecode): the null player excludes nobody, so S28 goes to every player of the dimension under 64 blocks, the thrower included.
     const [ax, ay, az] = [Math.trunc(at.x), Math.trunc(at.y), Math.trunc(at.z)];
-    for (const q of nearPlayers(sim, 0, ax, ay, az)) (q.itemsOut ??= []).push({ type: 'aux', events: [{ id: 1002, x: ax, y: ay, z: az, data: 0 }] });
+    for (const q of nearPlayers(sim, dim, ax, ay, az)) (q.itemsOut ??= []).push({ type: 'aux', events: [{ id: 1002, x: ax, y: ay, z: az, data: 0 }] });
     if (!s.creative) s.take(ITEM_EYE_OF_ENDER);
     p.swing = 6;
     return true;
@@ -61,7 +62,7 @@ export class ServerEyes {
       inWater: (x, y, z) => { return world.get(Math.floor(x), Math.floor(y), Math.floor(z)) === WATER; },
       drop: (stack, x, y, z) => { sim.items.spawn(stack, x, y, z); },
     });
-    for (const e of before) if (e.dead && !e.drops) fx.push({ k: 'eyeShatter', x: Math.floor(e.x + 0.5), y: Math.floor(e.y + 0.5), z: Math.floor(e.z + 0.5), dim: 0 });
+    for (const e of before) if (e.dead && !e.drops) fx.push({ k: 'eyeShatter', x: Math.floor(e.x + 0.5), y: Math.floor(e.y + 0.5), z: Math.floor(e.z + 0.5), dim: this.dispense.dim | 0 });
   }
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = this.dispense.id(e)); return i; }
   // dispEnts rows within 64 blocks of `q`.

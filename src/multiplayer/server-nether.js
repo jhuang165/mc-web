@@ -19,6 +19,7 @@ import { Fire } from '../fire.js';
 import { Farming } from '../farming.js';
 import { FallingBlocks } from '../falling.js';
 import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
+import { CommandBlockTiles } from './server-command-blocks.js'; // b79 mplanes79
 import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
@@ -76,7 +77,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.weather = new Weather(); // no rain, snow or thunder here; it owns the random-tick stream (WorldServer.updateLCG of this dimension)
   n.tiles = new Survival(saved.tiles ?? {}, 'creative');
   const te = saved.tileEntities ?? {};
-  n.tileEntities = { world: w, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), chests: n.tiles.chests, enders: n.tiles.enderTiles };
+  n.tileEntities = { world: w, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), commandBlocks: CommandBlockTiles.fromJSON(te.commandBlocks) /* b79 mplanes79 */, chests: n.tiles.chests, enders: n.tiles.enderTiles };
   if (source.provider) w.fortressSpawns = (x, y, z) => fortressMonsterSpawnList(source.provider.bridge, (bx, by, bz) => (w.get(bx, by, bz) === NETHER_BRICK ? 112 : 0), x, y, z);
   n.redstone = new LiveRedstone(w, {
     entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? n.vehicles?.cartsIn(box, mode) ?? [] : [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
@@ -113,7 +114,7 @@ export function buildNetherInside(sim, n, saved = {}) {
   // The mobs: a ServerMobs whose host is `sim` with the Nether's world, light, items, weather and sound tag (dimension -1) laid over it.
   const host = Object.create(sim, {
     world: { value: n.world }, light: { value: n.light }, items: { value: n.items }, weather: { value: n.weather }, darkness: { value: 0 },
-    serverItems: { value: Object.create(sim.serverItems, { xp: { value: n.xp } }) },
+    serverItems: { value: Object.create(sim.serverItems, { xp: { value: n.xp }, taken: { get: () => n.taken } }) }, // b79 mplanes79: taken is this dimension's S0D list also outside a swap
     soundsOut: { value: { push: s => sim.soundsOut.push({ ...s, dim: n.dim ?? NETHER }) } },
   });
   n.mobs = new ServerMobs(host, Array.isArray(saved.mobs) ? saved.mobs : [], { naturalSpawning: n.overMobs.spawning });
@@ -130,7 +131,7 @@ export function saveNether(n) {
   for (const key of TILE_SAVE) picked[key] = tiles[key];
   return {
     tiles: picked, signs: n.tileEntities.signs.toJSON(), skulls: n.tileEntities.skulls.toJSON(),
-    tileEntities: { beacons: n.tileEntities.beacons.toJSON(), spawners: n.tileEntities.spawners.toJSON() },
+    tileEntities: { beacons: n.tileEntities.beacons.toJSON(), spawners: n.tileEntities.spawners.toJSON(), commandBlocks: n.tileEntities.commandBlocks.toJSON(n.world) },
     items: n.items.serialize(), fluidTicks: n.fluids.save(), fireTicks: n.fire.save(), falling: n.falling.serialize(), fallingTicks: n.falling.save(),
     farms: n.farming.serialize(), redstone: n.redstone.save(), mobs: n.mobs ? n.mobs.save() : [], xpOrbs: n.xp.serialize(), vehicles: n.vehicles?.save(),
   };

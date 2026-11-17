@@ -842,7 +842,7 @@ function applyMultiplayerTick(message) {
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
-    const e = remoteItems.get(t.i), who = t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by && !q.far) /* b73 streamfix73: far rows are list entries only */;
+    const e = remoteItems.get(t.i), who = t.at ?? (t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by && !q.far) /* b73 streamfix73: far rows are list entries only */) /* b79 mplanes79: `at` is a mob collector's place */;
     if (e && who) scene.drops.pickup(e, who);
     if (e && t.partial) takenDrops.add(t.i); // b61: the remainder of a partly taken stack vanishes on every client, as natively
   }
