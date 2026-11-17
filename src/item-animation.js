@@ -8,6 +8,7 @@ import { resolveAnimation, fetchMcmeta } from "./texture-animation.js";
 import { versioned, unversioned, mediaGeneration } from "./media-version.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { setItemAtlasFrame, setFrameUrlResolver, itemSpriteName } from "./item-atlas.js";
+import { fetchDecoded, frameUrl } from "./straight-frames.js";
 import { rawImgSrc } from "./gui-anaglyph.js"; // an icon converted for 3D Anaglyph keeps the page's own src here
 
 const ITEM_URL = /\/media\/1\.7\.10\/items\/[^/]+\.png$/;
@@ -23,30 +24,45 @@ export function onItemFramesReady(fn) { readyHook = fn; }
 setFrameUrlResolver((url) => byData.get(url)?.base);
 const spriteOf = (entry) => itemSpriteName(entry.base);
 
+// Frames are cut from the decoded straight-alpha pixels (straight-frames.js); a PNG the decoder refuses falls back to the canvas cut.
+function install(entry, anim, urls) {
+  entry.anim = anim;
+  entry.urls = urls;
+  for (const url of urls) byData.set(url, entry);
+  entry.state = "anim";
+  const sprite = spriteOf(entry);
+  if (sprite) setItemAtlasFrame(sprite, anim.frame);
+  dirty = true;
+  readyHook?.(entry.urls);
+}
 function load(base, entry) {
   entry.base = base;
-  const gen = mediaGeneration(), img = new Image();
+  const gen = mediaGeneration();
+  fetchDecoded(versioned(base, gen)).then(async (png) => {
+    if (!png) return loadViaImage(base, entry, gen);
+    const text = await fetchMcmeta(base);
+    if (entry.gen !== gen) return;
+    const anim = resolveAnimation(text, png.width, png.height);
+    if (anim.count <= 1 && png.width === png.height) { entry.state = "none"; return; }
+    install(entry, anim, Array.from({ length: anim.count }, (_, i) => frameUrl(png, i)));
+  });
+}
+function loadViaImage(base, entry, gen) {
+  const img = new Image();
   img.onload = async () => {
     const text = await fetchMcmeta(base);
     if (entry.gen !== gen) return;
     const w = img.naturalWidth, h = img.naturalHeight;
     const anim = resolveAnimation(text, w, h);
     if (anim.count <= 1 && w === h) { entry.state = "none"; return; }
-    entry.anim = anim;
-    entry.urls = [];
+    const urls = [];
     for (let i = 0; i < anim.count; i++) {
       const c = document.createElement("canvas");
       c.width = c.height = w;
       c.getContext("2d").drawImage(img, 0, i * w, w, w, 0, 0, w, w);
-      const url = c.toDataURL("image/png");
-      entry.urls.push(url);
-      byData.set(url, entry);
+      urls.push(c.toDataURL("image/png"));
     }
-    entry.state = "anim";
-    const sprite = spriteOf(entry);
-    if (sprite) setItemAtlasFrame(sprite, anim.frame);
-    dirty = true;
-    readyHook?.(entry.urls);
+    install(entry, anim, urls);
   };
   img.onerror = () => { entry.state = "none"; };
   img.src = versioned(base, gen);

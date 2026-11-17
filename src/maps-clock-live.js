@@ -5,6 +5,7 @@ import { toOriginal } from "./block-registry.js";
 import { blockLightOpacity } from "./map-colors.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
+import { fetchDecoded, frameUrl } from "./straight-frames.js";
 import { rawImgSrc } from "./gui-anaglyph.js"; // icons converted for 3D Anaglyph keep the page's own src (data-raw-src)
 import { tickItemAnimations, registerFrameTag } from "./item-animation.js";
 import { setItemAtlasFrame } from "./item-atlas.js";
@@ -26,17 +27,20 @@ export function mapsCraftingResult(cells, size) {
 export const clockState = createClock();
 let epochSeen = 0;
 const frameUrls = new Map(), urlSet = new Set();
-let strip = null;
+let strip = null, stripPng = null, stripFailed = false;
 function loadStrip() {
   if (strip || typeof Image === "undefined") return;
   strip = new Image();
   strip.src = versioned("/media/1.7.10/items/clock.png");
+  // Straight-alpha pixels of the strip (straight-frames.js); the canvas cut below is only the fallback for a PNG the decoder refuses.
+  const mine = strip;
+  fetchDecoded(strip.src).then((png) => { if (strip !== mine) return; if (png) stripPng = png; else stripFailed = true; });
 }
 // Resource pack refresh: forget the cut frames and re-read the strip.
-onResourcesRefreshed(() => { strip = null; frameUrls.clear(); });
+onResourcesRefreshed(() => { strip = null; stripPng = null; stripFailed = false; frameUrls.clear(); });
 export function clockFrameUrl(frame = clockState.frame) {
   loadStrip();
-  if (!strip?.complete || !strip.naturalWidth || typeof document === "undefined") {
+  if (!strip?.complete || !strip.naturalWidth || typeof document === "undefined" || (!stripPng && !stripFailed)) {
     // The raw strip stands in until it loads. It gets its own frame tag (-1) so a framed or dropped clock built meanwhile
     // is rebuilt when frame 0 arrives (tag 0 would equal the raw url's default tag and the first frame never replaced it).
     const raw = "/media/1.7.10/items/clock.png";
@@ -44,9 +48,14 @@ export function clockFrameUrl(frame = clockState.frame) {
     return raw;
   }
   if (!frameUrls.has(frame)) {
-    const c = document.createElement("canvas"); const f = strip.naturalWidth; c.width = c.height = f; // TextureClock cells are square, as wide as the strip
-    c.getContext("2d").drawImage(strip, 0, frame * f, f, f, 0, 0, f, f);
-    const url = c.toDataURL("image/png"); frameUrls.set(frame, url); urlSet.add(url); registerFrameTag(url, frame);
+    let url;
+    if (stripPng) url = frameUrl(stripPng, frame);
+    else {
+      const c = document.createElement("canvas"); const f = strip.naturalWidth; c.width = c.height = f; // TextureClock cells are square, as wide as the strip
+      c.getContext("2d").drawImage(strip, 0, frame * f, f, f, 0, 0, f, f);
+      url = c.toDataURL("image/png");
+    }
+    frameUrls.set(frame, url); urlSet.add(url); registerFrameTag(url, frame);
   }
   return frameUrls.get(frame);
 }
