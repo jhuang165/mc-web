@@ -2,6 +2,40 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 78
+
+Batch 78 covered these areas:
+- **Server horses.** Temper is not a watched value (bytecode-read `wi.c()` registers ids 16 and 19 to 22), so the client no longer guesses temper: a wild-horse feed that only temper would accept is left to the server. Arrows from the rider no longer hurt their own horse (`wi.a(ro,F)`, single player too). A rider who logs out in the Nether or End is remounted on rejoin. A shutdown with riders keeps the horse in the saved world and in `Riding`, as native `stopServer` does.
+- **Horse client view.** A remote rider's body turns by its mount's body yaw, clamped to ±85° (bytecode-read `boh`); the multiplayer horse window preview draws the horse's own variant, armour, saddle and age. The server's rider position rows were found redundant, not wrong: the native tracker sends a riding entity only look packets, and the client already ignores those positions.
+- **Adventure mode and knots.** 1.7.10 never refuses an item use in Adventure when a stack is held (`canPlayerEdit` passes the stack and `Item.v()` is true; the lead confirmed no item overrides it). Wrong refusals were removed for fireworks, fire charges, bone meal, cake and hoes on the server, and for eggs on water and fire charges in single player. A leashed mob in its death animation can be freed and re-tied. A non-lead item on a knot's fence clicks the knot when the ray meets the knot first.
+- **Explosions.** Knockback now reaches the player in the native S27 explosion packet (unreduced push, players within 64 blocks); a creative player is pushed but not hurt, and Blast Protection reduces the server's own motion. Server relighting after a blast is about 15 times cheaper (one flood per merged box) with identical light arrays (`MC_RELIGHT=verify`).
+- **Server speed.** The mob push looks only at entities in nearby 2-block cells; a 400-animal pen tick drops from about 19 ms to 5 ms with identical seeded state (`MC_MPPERF78=verify`). First real-socket bench on localhost: 8 to 16 clients, 19.6 to 19.8 ticks per second, 92 to 292 KB/s per player.
+- **Block right clicks.** A declined block click with an item that cannot be placed no longer swings (bytecode-read `bao.am`, `bje.a`). Multiplayer prediction uses the batch 77 activation table. Clicking a piston-moving block that has lost its tile removes it in single player.
+- **Mob loot.** Every mob with `canPickUpLoot` picks up floor items, and server mobs share the code, so server dispensers now dress mobs. Armour is drawn on zombie villagers; drawing it only on zombies, skeletons, pigmen and zombie villagers is native (only `RenderBiped` subclasses draw armour).
+- **Effects checked against the real game.** Executed probes (208 records) for jukebox aux 1005, snowball, egg and pearl impacts, ghast and blaze fireballs, milking and mooshroom shearing. Three fixes: the pearl particle gaussian uses `StrictMath.log`; a jukebox record shows no "Now playing" line (1.7.10 looks up `records.<name>` in a map keyed by the bare name, lead-checked); fire resistance refuses every fireball damage.
+- **Falling blocks.** `TileEntityData` is applied for spawners, skulls, pots, command blocks, note blocks, jukeboxes, beacons and comparators, and on the server. Water, lava, fire and portal falling blocks drop their native ItemBlock (executed); landing uses the native replaceable set; item Fire exports as native. With fire an item, chainmail crafts from fire blocks as in 1.7.10 (all 312 mapped recipes now replay). The eye of ender's aux 1002 reaches players on a server.
+- **Resource packs.** Pack row descriptions end in `§r` and wrap with the native formatted line split; pack animation frames, clock frames and spawn egg tints no longer pass through a canvas (straight alpha kept).
+
+Still open from batch 78:
+- **Multiplayer.**
+  - Horses: the local player's own body yaw while riding a pig or horse is not clamped to the mount; the horse window preview is read once when the window opens.
+  - The client has no physics of its own, so received velocity and S27 motion only feed bob and cape. The S27 block list does not drive the client's per-block particles. Single player adds the Blast-Protection-reduced push where native sends the unreduced one.
+  - Only a corpse that carries a lead is picked; native picks every dying mob, and the multiplayer client's own pick of corpses was not changed. The server knot box is the live 0.5 cube.
+  - Mob pickups on the server send no collect animation; Nether and End server hosts pick up only with an item list; the server has no command block store, so a falling command block's data is not applied there; the eye aux is sent from the Overworld lane only; server piston-moving clicks are not modelled.
+  - Performance: dense pens are cheap now, but remote links, TLS and compression are not measured.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: rider body yaw, the horse preview, S27 knockback, dressed server mobs. Earlier unseen items from batches 67 to 77 still stand.
+- **Single player.**
+  - The swing for a hoe on untillable ground and bone meal on a non-growable block was not bytecode-read; the swing after a piston-moving removal with a held block is approximated.
+  - The "Diamonds to you!" achievement for a mob picking up a thrown diamond is not ported.
+  - Not executed: a calf mooshroom with a bowl, a pearl landing in water or lava, a dispenser fireball on a client world, the multiplayer paths of the batch 78 effect records; gaussians outside `java-random.js` are not audited.
+  - Falling blocks: the per-kind tile reads are port-read only; flowing water and lava (ids 8 and 10) export as 9 and 11; an item loaded with Age above 0 that never ticks exports Fire -1 where native saves 0.
+  - Pack descriptions given as a styled chat-component object are read as plain text; the `block-textures.js` canvas fallbacks remain.
+  - Flower pots: native stacks the port's item catalogue cannot hold (dandelion, mushroom, cactus or dead bush at damage 1 to 15, red flower 9 to 15, sapling 6 to 15) are dropped; see `packs78-b78-track.md`. Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
+  - Not seen in a browser: zombie villager armour, pack animation frames and spawn egg tints after the canvas change, the swing change, dispenser smoke and corner clicks, the Generate Structures toggle, skin orientation and hat blending, the Controls list, the dropped bonus torch.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 77
 
 Batch 77 covered these areas:
@@ -15,25 +49,7 @@ Batch 77 covered these areas:
 - **World flags.** A world with Generate Structures off matches the native generator (executed, 26 records); region export writes `MapFeatures:0`. The client learns the server's hardcore flag (death screen, hearts). Resource Packs rows and the LAN scan line are recorded and replayed.
 - **Server speed.** Measured 8 to 32 players and the Nether and End (mobs are 70 to 85% of a tick); the villager zombie check tests the box before casting a ray (about 7% to under 2% of a tick), with identical state hashes (`MC_MPPERF77=verify`).
 
-Still open from batch 77:
-- **Multiplayer.**
-  - Horses: temper is not on the wire (a fed wild horse at the cap is mispredicted, then corrected); remote riders' pose and the window's horse preview; arrows from the rider still hurt the horse; riders in the Nether or End are not remounted on rejoin; a shutdown with riders keeps the horse in the world.
-  - The client has no physics of its own, so received velocity only feeds bob and cape; explosion knockback comes via S12, not S27; the server still sends rider rows.
-  - Server Adventure refusals in `server-air.js`, `server-use.js` and `server-place.js` look suspect; a leashed mob in its death animation is not re-tied; a non-lead item on a knot's fence places a block instead of hitting the knot.
-  - Server dispensers only dress players (no server mob can pick up loot); server falling blocks do not apply `TileEntityData`; the eye of ender's aux 1002 is not forwarded.
-  - Performance: explosion relighting is 9 to 11% of some scenes; dense clusters keep the O(n²) push; real sockets are not measured.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: the horse jump bar, horse hearts and window, rider seats, owner knockback, server cauldrons, bucket fizz, entity clicks, the thrown-body camera. Earlier unseen items from batches 67 to 76 still stand.
-- **Single player.**
-  - A declined block click with an item that cannot be placed still swings; piston-moving block clicks are not modelled; multiplayer prediction still uses the older block list.
-  - Armour is drawn only on zombies, skeletons and pigmen; floor loot pickup for other mobs is not ported.
-  - Not executed: jukebox aux 1005, snowball, egg and pearl impacts, the fireball explosion, milking, mooshroom shearing.
-  - Falling blocks: `TileEntityData` for spawners, skulls, pots, command blocks, note blocks, jukeboxes, beacons and comparators; water, lava, fire and portal falling blocks have no port item; the exported item Fire value is not probed.
-  - Pack row descriptions lack the native trailing `§r`; pack animation frames and baked tint icons still pass through a canvas.
-  - Flower pots: native stacks with damage values the port cannot hold are not representable. Held and dropped skulls are flat icons (native); mob render changes from batch 71 are bytecode-read only.
-  - Not seen in a browser: dispenser smoke and corner clicks, the Generate Structures toggle, skin orientation and hat blending, item sprites after a pack relayout, the Controls list, the dropped bonus torch.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 77: carried into the batch 78 list above, except the items batch 78 closed or found wrong.
 
 ## Done in batch 76
 

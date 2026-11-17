@@ -113,6 +113,22 @@ Batch 43 (2026-11-10, eight Sonnet tracks in `../wt43-<name>` on `batch43-<name>
 - `turnBody` keeps the enderman's legacy turn (wanderdraws) and sends every other mob to the shared `bodyTurn` (trackermounts).
 - Verification: see `b43-lead-track.md`. Pushed to github main by the lead.
 
+Batch 78 (2026-11-16, ten Sonnet tracks in `../wt78-<name>` on `batch78-<name>`, cut from 28cb248c2, merged --no-ff on `batch78-lead`; shared track rules `../artifacts/b78-lead/track-rules.md`; lead note `b78-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.107.0, by track:
+  - mphorse78: `animal-use.js` `predictHorse` drops temper (not watched, bytecode-read `wi.c()`); `bow.js` rider's arrows spare the horse; `ServerDimensions.vehiclesOf` for Nether/End logout and rejoin; `simulation.shuttingDown` keeps the horse in the world and `Riding` on shutdown.
+  - mphorseview78: `client-rider-pose.js` (mount body yaw clamp ±85°, `PlayerRenderer.update` `mountYaw`, `RemotePlayers` `mountYawOf`); `previewHorse` fills variant/armour/saddle/age from the client copy; rider rows documented as redundant.
+  - mpadventure78: Adventure item-use refusals removed (server-air, server-use, server-place, `spawn-egg-use.js`); leashed corpse pick and re-tie (`entities.js` pick, `horse-gear-live.js`, `ServerMobs.interact`); `knotRay` for non-lead items on a knot's fence.
+  - mpexplosion78: S27 explosion knockback (unreduced push, 4096 sq range, client `knock` hook); `LightVolume.updateMany` (`MC_RELIGHT=verify|off`).
+  - mpperf78: `push-grid.js` `FineGrid`/`pushNear` (`MC_MPPERF78=on|off|verify`), `markMoved` after every entity turn; `tools/bench-push78.mjs`, `tools/bench-sockets78.mjs`; `server-performance.md`.
+  - spswing78: declined block clicks do not swing (`applyPlayerEdit`); `client-prediction.js` `activatesOnClick` and `client-books.js` use `swallowsItemUse`; piston-moving click removal (`redstone-runtime.js` hook).
+  - loot78: floor pickup for every `canPickUpLoot` mob; server mobs share it (`server-mobs.js` `lootItems`); `sp-dispense76.js` `mobCandidate`/`dressMob` for server dispensers; zombie villager armour.
+  - spexec78: `SpExec78Probe`/`SpExec78Milk`/`SpExec78Jukebox` + `spexec78-reference.json` (208 records); `GaussianRandom` uses java-random's `StrictMath.log` gaussian; no jukebox "Now playing"; fire resistance refuses fireball damage.
+  - falling78: `falling-tiles.js` more tile kinds, `server-falling-tiles.js`; fluid/fire/portal ItemBlocks in `original-items.js` and `MC_IDS`; native replaceable landing; item Fire export; `server-eyes.js` aux 1002; `FallingBlock78Probe` + `falling-block78-reference.json`.
+  - packs78: pack rows end in `§r` with `wrapFormatted`; `straight-frames.js` for animation frames, clock frames and spawn egg tints.
+- Lead: chainmail crafts from fire blocks (`survival.js` Chain ingredient `FIRE`; all 312 mapped recipes replay, catalogue regenerated); `player-throws-b46.test.js` reads `haveNextGaussian`/`nextGaussianValue`.
+- Verification: one full `npm test` on d70e437d5: 8899 tests, 8873 pass, 26 fail (25 throw-launch replays from spexec78's removed `spare` field, 1 recipe count from falling78's fire item); both fixed in 332c5b5ae and the affected files rerun (recipe, catalogue, throws, survival and 13 recipe users pass). Build and bridge tests ok.
+- Open: "Still open from batch 78" in `public/research/remaining-gaps.md`.
+
 Batch 77 (2026-11-16, ten Sonnet tracks in `../wt77-<name>` on `batch77-<name>`, cut from 9e7fa94f8, merged --no-ff on `batch77-lead`; shared track rules `../artifacts/b77-lead/track-rules.md`; lead note `b77-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.106.0, by track:
   - mphorseclient77: `client-horse.js` (`MpHorseRider`: jump charge, `horseJump`, `horseInventory`), HUD jump bar and horse hearts for the server horse, horse `tame/hp/max` on the mob wire, `predictAnimalUse` lead and horse clicks (`selfId`, `sneak`).
