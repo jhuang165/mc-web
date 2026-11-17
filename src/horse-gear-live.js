@@ -112,22 +112,27 @@ export function installHorseGear(EntityWorld) {
   // The box the ray tests: the host's `knotBoxOf(k)` (main.js: the client copy's, object-tracker.js aimKnotBox; null is not aimable), else the live 0.5 cube
   // (EntityLeashKnot's own box around its position: the block centre of a placed knot, the command position of a summoned one, y up from the position).
   const liveKnotBox = (k) => { const c = knotCentre(k); return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
+  // The distance at which the ray meets the knot's box grown by the collision border (EntityRenderer.getMouseOver, sa.af 0.1F), within `limit`; null on a miss.
+  proto.knotRay = function (k, origin, dir, limit) {
+    const border = Math.fround(0.1), b = this.knotBoxOf ? this.knotBoxOf(k) : liveKnotBox(k);
+    if (!b) return null;
+    const box = [[origin.x, dir.x, b[0] - border, b[3] + border], [origin.y, dir.y, b[1] - border, b[4] + border], [origin.z, dir.z, b[2] - border, b[5] + border]];
+    let near = 0, far = limit;
+    for (const [o, d, min, max] of box) {
+      if (Math.abs(d) < 1e-8) { if (o < min || o > max) return null; continue; }
+      const a = (min - o) / d, c = (max - o) / d;
+      near = Math.max(near, Math.min(a, c)); far = Math.min(far, Math.max(a, c));
+    }
+    return far >= near && near <= limit ? near : null;
+  };
   const pick = proto.pick;
   proto.pick = function (origin, dir, reach, wall = reach) {
     let best = pick.call(this, origin, dir, reach, wall);
-    const limit = Math.min(reach, wall), border = Math.fround(0.1); // EntityRenderer.getMouseOver grows the box by getCollisionBorderSize (sa.af, 0.1F)
+    const limit = Math.min(reach, wall);
     for (const k of knotsOf(this)) {
       if (k.dead) continue;
-      const b = this.knotBoxOf ? this.knotBoxOf(k) : liveKnotBox(k);
-      if (!b) continue;
-      const box = [[origin.x, dir.x, b[0] - border, b[3] + border], [origin.y, dir.y, b[1] - border, b[4] + border], [origin.z, dir.z, b[2] - border, b[5] + border]];
-      let near = 0, far = limit;
-      for (const [o, d, min, max] of box) {
-        if (Math.abs(d) < 1e-8) { if (o < min || o > max) { far = -1; break; } continue; }
-        const a = (min - o) / d, c = (max - o) / d;
-        near = Math.max(near, Math.min(a, c)); far = Math.min(far, Math.max(a, c));
-      }
-      if (far >= near && near <= limit && (!best || near < best.distance)) best = { entity: this.knotEntity(`mob-${KNOT_ID_BASE + knotIdOf(k)}`), distance: near };
+      const near = this.knotRay(k, origin, dir, limit);
+      if (near !== null && (!best || near < best.distance)) best = { entity: this.knotEntity(`mob-${KNOT_ID_BASE + knotIdOf(k)}`), distance: near };
     }
     return best;
   };
@@ -153,7 +158,8 @@ export function installHorseGear(EntityWorld) {
   proto.knotAttack = function (k) { if (k.dead) return false; this.knotKill(k); return true; };
   // The mobs the player holds whose bounding box meets the 7-block box around `centre` (ahb.getEntitiesWithinAABB).
   proto.leashedNear = function (centre) {
-    const cands = this.entities.filter((m) => m.health > 0 && m.leash?.holder === "player").map((m) => {
+    // b78: a mob in its death animation is still an EntityLiving of the world (getEntitiesWithinAABB), so it is re-tied too.
+    const cands = this.entities.filter((m) => m.leash?.holder === "player").map((m) => {
       const [w, h] = this.size(m);
       return { x: m.x, y: m.y, z: m.z, halfWidth: w / 2, height: h, leash: m.leash, rec: m };
     });
@@ -251,7 +257,7 @@ export function installHorseGear(EntityWorld) {
   // EntityLiving.interactFirst (sw.c): the holder frees a leashed mob, a lead in hand ties a free one.
   proto.leashInteract = function (e, survival) {
     if (e?.knotRef) return !e.knotRef.dead && this.knotInteract(e.knotRef, survival); // a summoned knot picked by view ray
-    if (!alive(this, e)) return false;
+    if (!this.entities.includes(e)) return false; // b78: no health test; sw.c (EntityLiving.interactFirst) has none, a corpse in its death animation is freed or tied by the click
     const creative = !!survival.creative;
     // sw.c: a tamed wolf or ocelot is leashed only by its owner (EntityTameable.isOwner, leads2-reference.json leadUse).
     const ownerBlocked = (e.type === "wolf" || e.type === "ocelot") && !!e.owner && !ownerPresent(e);
@@ -266,10 +272,12 @@ export function installHorseGear(EntityWorld) {
   // lead or nothing is held goes to the knot). Otherwise ItemLead.func_150909_a (BlockFence.onBlockActivated, ItemLead.onItemUse): the
   // player's leashed mobs whose boxes meet the 7-block box around the fence block move to the existing knot, or to a new one made
   // only when a mob is found. Returns whether it acted (a lead in hand always consumes the click, as ItemLead.onItemUse does).
-  proto.leashFence = function ([x, y, z], survival) {
+  // b78: `knotHit` is whether the click's own ray met the knot first (true: the knot is clicked, whatever the item; false: it did not, so the block's
+  // onBlockActivated runs); left undefined the lead / empty-hand stand-in above applies.
+  proto.leashFence = function ([x, y, z], survival, knotHit) {
     if (!isFence(this.world.get(x, y, z)) || !this.ai?.player) return false;
     const lead = G.originalId(survival.held) === G.LEAD_ORIGINAL, knot = this.knotAt(x, y, z);
-    if (knot && (lead || !survival.held)) return this.knotInteract(knot, survival);
+    if (knot && (knotHit === true || (knotHit === undefined && (lead || !survival.held)))) return this.knotInteract(knot, survival);
     const mobs = this.leashedNear({ x, y, z });
     if (mobs.length) {
       this.knotAt(x, y, z) ?? this.knotCreate(x, y, z);

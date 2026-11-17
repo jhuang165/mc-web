@@ -92,6 +92,7 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return ok('leash-entity');
     }
+    if (e.health <= 0) return null; // b78: a corpse in its death animation (picked only while it carries a lead) takes no other interaction
     // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
     if (state.mobs.saddleUse?.(e, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
@@ -289,7 +290,7 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
   }
 
   // ItemLead.onItemUse / BlockFence.onBlockActivated: the player's leashed mobs tie to the fence (horse-gear-live.js).
-  if (place && (activates || originalId(state.survival.held) === LEAD_ORIGINAL) && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival)) { // b77 mpknots77: sneaking with a lead still ties (ItemLead.onItemUse, adf.a, render type 11)
+  if (place && (activates || originalId(state.survival.held) === LEAD_ORIGINAL) && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival, false)) { // b77 mpknots77: sneaking with a lead still ties (ItemLead.onItemUse, adf.a, render type 11)
     hook('renderHotbar'); hook('markUnsaved');
     return act('leash-fence');
   }

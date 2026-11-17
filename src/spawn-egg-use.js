@@ -81,7 +81,7 @@ export function useEggOnWater(state, bucket, hooks = {}) {
   const now = traceBucket(state.world, captured.ray.origin, captured.ray.dir, true);
   if (!now) return false;
   const [x, y, z] = now.block;
-  if (state.world.get(x, y, z) !== WATER || state.survival.adventure) return false;
+  if (state.world.get(x, y, z) !== WATER) return false;
   if (!eggOf(held.damage)) return false;
   const mob = spawnEggMob(state, held.damage, eggWaterPoint([x, y, z]), customName(held), hooks.random ?? worldRoll(state));
   if (!mob) return false;
@@ -95,7 +95,6 @@ export function useEggOnWater(state, bucket, hooks = {}) {
 export function useFireCharge(state, target, hooks = {}) {
   const held = state.survival.held;
   if (!held || held.id !== ITEM_FIRE_CHARGE || !target?.block) return false;
-  if (state.survival.adventure) return true; // canPlayerEdit is false
   const q = target.adjacent, random = hooks.random ?? Math.random;
   if (q && q[1] >= 0 && q[1] < (state.world.height ?? 256) && (!state.world.inside || state.world.inside(...q)) && state.world.get(...q) === 0) {
     hooks.playSound?.("fire.ignite", { volume: 1, pitch: random() * 0.4 + 0.8, position: { x: q[0] + 0.5, y: q[1] + 0.5, z: q[2] + 0.5 } });

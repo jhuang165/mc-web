@@ -41,7 +41,7 @@ test("cake item: ItemReed places a cake on the clicked top face and takes one", 
   assert.ok(msg.changes.some(c => c[0] === 64 && c[1] === 10 && c[2] === 64 && c[3] === CAKE), "the change is broadcast");
 });
 
-test("cake item: refused on a non-solid support (cake over air next to a cliff) and in Adventure; kept in the stack", () => {
+test("cake item: refused on a non-solid support (cake over air next to a cliff); kept in the stack (Adventure: see mpadventure78-b78.test.js)", () => {
   const { s, a, world } = fixture();
   world.put(64, 9, 64, 0, 0, false); // nothing below the cell
   world.put(64, 8, 64, 0, 0, false);
@@ -49,10 +49,6 @@ test("cake item: refused on a non-solid support (cake over air next to a cliff) 
   assert.equal(world.get(64, 10, 64), 0);
   assert.equal(world.get(64, 9, 64), 0);
   assert.equal(a.survival.held?.count, 1);
-  const f = fixture("adventure");
-  f.a.survival.mode = "adventure";
-  click(f.s, f.a, ITEM_CAKE, 1);
-  assert.equal(f.world.get(64, 10, 64), 0);
 });
 
 test("cake item: Creative keeps the stack", () => {

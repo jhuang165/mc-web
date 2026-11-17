@@ -1,7 +1,7 @@
 // Batch 75 mpusesweep75: item uses that the dedicated server's edit path did not reach (sweep: every item id right-clicked in the air and on a block, tools/sweep-use75.mjs).
 // Each calls the single-player module with the server's own ray:
 //   * armour (ItemArmor.onItemRightClick): the piece moves into its empty armour slot (player-edit-simulation.js equip-armor);
-//   * a glass bottle on water (ItemGlassBottle.onItemRightClick, potion-use.js useGlassBottle): a water bottle; spawn protection and Adventure refuse it;
+//   * a glass bottle on water (ItemGlassBottle.onItemRightClick, potion-use.js useGlassBottle): a water bottle; spawn protection refuses it (Adventure does not: canPlayerEdit is true with a stack in hand, b78);
 //   * a spawn egg aimed at water (ItemMonsterPlacer.onItemRightClick, spawn-egg-use.js useEggOnWater);
 //   * a firework rocket on a block (ItemFirework.onItemUse, fireworks-live.js useFirework): the dimension's rockets launch it.
 // `eye` and `dir` are the ray edit() already built. `target` is the solid-block hit or null. Returns true when the click was used.
@@ -32,7 +32,6 @@ export function airUse(sim, p, eye, dir, target) {
     return useEggOnWater({ world: sim.world, survival: s, mobs: sim.mobs?.mobs }, bucket, { mobSpawned: e => { e.summonKeep = true; } });
   }
   if (id === ITEM_FIREWORK_ROCKET && target) {
-    if (s.adventure) return false;
     const rockets = sim.dispense?.laneFor?.(p.dimension | 0)?.rockets;
     if (!rockets || !useFirework({ rockets, survival: s }, { target, usesBlock: false })) return false;
     return sim.stats.used(p, id), true;

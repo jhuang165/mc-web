@@ -1,0 +1,22 @@
+# Batch 78 mpadventure78: Adventure refusals, leashed corpses, non-lead item on a knot's fence
+
+## Summary
+- Adventure: removed every item-use refusal that 1.7.10 does not make. Server: `server-air.js` (firework), `server-use.js` (fire charge, bone meal), `server-place.js` (cake, hoe). Single player had the same wrong refusals in `spawn-egg-use.js` (egg on water, fire charge); removed. Native Adventure only refuses digging (`isCurrentToolAdventureModeExempt`, already modelled in `adventure.js` / `player-edit-simulation.js`). Server and single player now agree: no use refusal in Adventure.
+- Corpse re-tie: a mob in its death animation that carries a lead is now picked (`entities.js pick`: `e.health > 0 || e.leash`), freed by the holder's click or re-tied by a lead click (`horse-gear-live.js leashInteract` no longer tests health, `leashedNear` no longer filters health), server `ServerMobs.interact` lets a leashed corpse through to the lead code only. A corpse takes no other interaction (`player-edit-simulation.js` returns null after the lead branch).
+- Knot's fence: new `knotRay` (`horse-gear-live.js`, the box test `pick` already used) and `ServerLeads.fence(p, cell, {eye, dir, distance})`: when the click's own ray meets the knot box (grown 0.1) before the block, EntityLeashKnot.interactFirst runs for any item and any sneak state (nothing to attach -> the knot dies, no block placed). A ray that passes below the box meets the post: BlockFence.onBlockActivated runs (the b77 sneak rule applies) and the block item is placed. Single player already picked knots by ray (entity first); its fence stand-in no longer fires after a missed ray (`leashFence(..., knotHit=false)`).
+- Tests: `src/mpadventure78-b78.test.js` (8). Updated old-gap tests: `mpblocks73-b73` (Adventure cake refusal removed), `mpstats3-b65` (Adventure fire charge now lights).
+
+## Evidence
+- Bytecode-read (javap -c -p, whole jar dumped): `yz.a(IIIILadd)` canPlayerEdit = `allowEdit || (stack != null && add.z())`; `add.z()` = `adb.v()` = `iconst_1`; no Item subclass overrides `adb.v()`. All 20 callers (abg ItemBlock, abh, abi, abl ItemReed, abo ItemBucket, ach, acj, acn, acq, acw, acz, ada, ads, adv, adw, adz, aec, aee, aeg, aej) load the stack argument (aload_1 of onItemUse / onItemRightClick), never null, so canPlayerEdit is always true with an item in hand.
+- Bytecode-read: `mx` (ItemInWorldManager) `a(yz, ahb, add)` tryUseItem and `a(yz, ahb, add, IIIIFFF)` activateBlockOrUseItem read no game type. `ahk.c()` = isAdventure (field d), `ahk.d()` = isCreative. `yz.d(III)` isCurrentToolAdventureModeExempt is called only by `mx.a(IIII)` and `mx.b(III)` (dig), `bje` / `bao` (client dig) and `nh` (server dig).
+- Bytecode-read: `sw.c(yz)` (EntityLiving.interactFirst) tests `bN`/`bO` (leashed to this player -> clearLeashed), then a lead in hand and `bM` (allowLeashing), then `a(yz)`; no health or isDead test. `nh.a(ja)` (processUseEntity) tests entity != null, `mw.p` (sight) or distance, nothing about health. Dying mobs are not `isDead`, so `canBeCollidedWith` holds and the ray picks them.
+- Prior (b77, bytecode-read): `su.c` knot interactFirst, `akz`/`adf` fence click, getMouseOver entity-before-block.
+- Port-read: server glue; the knot ray box is the port's `liveKnotBox` (0.5 cube from the block centre up), the server has no client copy.
+
+## Verification
+- `node --test src/mpadventure78-b78.test.js`: 8 pass. Targeted (263 tests): adventure, knot-splash-b50, leads2/3, leash, leash-raw, b60-b65 lead, mpblocks73, mpbuckets-b75, mpcauldron76, mpclicks-b70/76, mphorse76, mphorseclient77, mphorserules77, mpknots77, mpriding2, mpstats/2/3, mpusesweep-b75, player-edit-simulation, spawn-eggs, spawn-egg-rolls, spcauldron77, spuseorder76: all pass. Pick users (entities, entity-tracker, mppaintings-b68, mpsmall2, mpvehicles-b61, projectiles5/6): 89 pass. No full npm test, no browser.
+
+## Follow-ups
+- Only a corpse that carries a lead is picked or clickable; native picks every dying mob (and a lead in hand would tie an unleashed one). The MP client's own copy pick (client-side entity pick) was not changed; it may still skip corpses, so the click may never be sent.
+- Other Adventure use paths not swept for hidden `adventure` checks outside `src/` use sites listed above (grep found none left).
+- The server knot box is the live 0.5 cube; the single-player client copy box (`aimKnotBox`) is more exact.
