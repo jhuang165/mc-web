@@ -286,6 +286,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
+import { mountBodyYaw } from "./multiplayer/client-rider-pose.js";
 import { MpHorseRider, mountedHorse, ridesSaddled } from "./multiplayer/client-horse.js"; // b77 mphorseclient77: the jump counter, C0B 6 / 7 and the HUD of a horse the server carries
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { leadViews } from "./multiplayer/remote-leads.js"; // b62
@@ -878,7 +879,7 @@ function onMultiplayerWindow(m) {
   if (!client?.ready || !active?.remote) return;
   if (m.type === 'openWindow') {
     if (screen !== 'playing') { client.closeWindow(); return; }
-    const built = buildWindow(m, { survival, world, station: mpStation, crafted: (stack, n) => statsLive.crafted(stack, n) });
+    const built = buildWindow(m, { survival, world, station: mpStation, crafted: (stack, n) => statsLive.crafted(stack, n), mobs: remoteMobs });
     if (!built) { client.closeWindow(); return; }
     openContainer(built.container, built.kind, built.key);
     containerView.remote = { client, window: true };
@@ -956,7 +957,7 @@ async function joinMultiplayer(settings) {
     client.onCritFx73 = m => applyCritFx(m, scene.fx, { mob: id => { const c = remoteMobs?.copies.get(id); return c ? remoteMobs.factory.fxTarget(c.mob) : null; }, player: id => remotePlayers?.entries.get(id)?.state ?? null }); /* b74 mpcombat74: Crit2FX follows the live entity */ // b73 particles73: S0B crit animations
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
-    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */ });
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */, mountYawOf: (key, t) => mountBodyYaw(key, remoteMobs, t) /* b78 */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
@@ -999,7 +1000,7 @@ async function multiplayerDimension(client, settings, m) {
     remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); xpOrbs.orbs = []; aimedRemoteMob = null; mpWindow = null;
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats), hanging: new HangingRenderer(scene.scene, scene) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
-    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */ });
+    remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */, mountYawOf: (key, t) => mountBodyYaw(key, remoteMobs, t) /* b78 */ });
     applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);

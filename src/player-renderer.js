@@ -13,6 +13,7 @@ import { blockTile, tileRect } from "./block-textures.js";
 import { trackCubeUv, trackUv } from "./uv-rebake.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { mobPose, wrapDegrees, nearAngle } from "./entities.js";
+import { ridingPose } from "./multiplayer/client-rider-pose.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
@@ -628,12 +629,13 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, ghost = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0, hideCape = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, blocking = false, aimedBow = false, hurt = false, sneak = false, riding = false, invisible = false, ghost = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0, hideCape = false, mountYaw = null } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
     // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
     body.death = deathTime;
     let pose = mobPose(body, partial);
+    if (riding && !sleeping && mountYaw !== null) pose = ridingPose(pose, mountYaw); // b78 RendererLivingEntity.doRender: a rider on a living mount turns by the mount's body
     if (sleeping) {
       const at = sleepingTransform(sleeping);
       // A sleeper does not walk; its entity position (not the corpse offset) is where light and fire sample.
