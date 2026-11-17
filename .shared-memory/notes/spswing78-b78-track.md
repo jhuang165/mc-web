@@ -9,7 +9,7 @@
 ## Evidence
 - Bytecode-read `bao.am` (rightClickMouse): the block branch calls `bje.a(player, world, stack, x, y, z, side, hit)`; only a true result calls `bjk.ba` (swingItem). Otherwise the still-set flag reaches `bje.a(player, world, stack)` (sendUseItem), no swing.
 - Bytecode-read `bje.a(yz,ahb,add,int,int,int,int,azw)` (onPlayerRightClick): activated = block.onBlockActivated unless sneaking with an item; if not activated and the item is an ItemBlock (abh) whose canPlaceItemBlockOnSide fails, returns false without sending the packet; sends C08; returns true when activated, false for a null stack, else `ItemStack.tryPlaceItemIntoWorld` (`add.a(yz,ahb,int,int,int,int,float,float,float)`, which returns `Item.onItemUse`).
-- Bytecode-read `apr` (BlockPistonMoving) onBlockActivated: `if (!world.isRemote && world.getTileEntity(x,y,z) == null) { world.setBlockToAir; return true } return false`. So the CLIENT answer is always false. The b77 comment in block-activation.js ("apr true when its tile is gone") is wrong for the client; the table code was right to omit it.
+- Bytecode-read `apr` (BlockPistonMoving) onBlockActivated: `if (!world.isRemote && world.getTileEntity(x,y,z) == null) { world.setBlockToAir; return true } return false`. So the CLIENT answer is always false. The b77 comment in block-activation.js ("apr true when its tile is gone") is wrong for the client; the table code was right to omit it; the header comment is corrected.
 - Executed: b59 pot records (`prediction5-b59.test.js`, `pot-hold1-d0` result false) agree with the pot rule.
 
 ## Verification
@@ -20,4 +20,3 @@
 - Swing for the hoe on an untillable block, bone meal on a non-growable block and a few other `Item.onItemUse` results was not bytecode-read; they keep swinging as before.
 - The piston-moving removal swing for a held ItemBlock is approximated with `ITEMS[id].block` (the client world places and swings, the server then refuses).
 - Server-side (multiplayer) piston-moving click removal is not modelled in the dedicated simulation (server-use.js is another track's).
-- The old comment in block-activation.js header about apr should be corrected by whoever next edits it (not changed here).
