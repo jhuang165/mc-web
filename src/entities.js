@@ -1092,7 +1092,7 @@ export class EntityWorld {
     }
     const rand = entityRandom(e), name = source.name ?? "generic";
     // Potion.fireResistance: fire damage is refused. Entity.isImmuneToFire is no part of attackEntityFrom (hazard / dealFireDamage checks it); executed: mob-victims-reference.json (b51mv).
-    if ((name === "onFire" || name === "inFire" || name === "lava") && e.effects?.some((x) => x.id === 12)) return false;
+    if ((name === "onFire" || name === "inFire" || name === "lava" || source.fireball) && e.effects?.some((x) => x.id === 12)) return false;
     // An anvil or falling block wears the helmet slot's stack (a broken one stays at size 0) and deals 0.75 (mob-equipment.js fallingBlockHelmet).
     if ((name === "anvil" || name === "fallingBlock") && e.equipment) amount = fallingBlockHelmet(e.equipment, amount, rand, () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(rand); });
     e.limbSwingAmount = 1.5;

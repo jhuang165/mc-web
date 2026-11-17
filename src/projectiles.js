@@ -36,24 +36,9 @@ const HW = 0.125, HEIGHT = 0.25, THROWER = "player";
 // height / 2), 0.04 x blockParticleGravity (1.0 for snow) per tick.
 const P_HW = f(0.2 / 2), P_H = f(0.2), P_YOFF = f(P_H / 2), PARTICLES = 8;
 
-// java.util.Random.nextGaussian (the polar method); Entity.rand is one of these.
+// Entity.rand is one of these: java-random.js nextGaussian (the polar method with StrictMath.log; the override here used Math.log, an ulp off for 0.6 % of the
+// draws: the ender pearl portal particles of spexec78-reference.json).
 export class GaussianRandom extends JavaRandom {
-  nextGaussian() {
-    if (this.spare !== undefined) {
-      const g = this.spare;
-      this.spare = undefined;
-      return g;
-    }
-    let v1, v2, s;
-    do {
-      v1 = 2 * this.nextDouble() - 1;
-      v2 = 2 * this.nextDouble() - 1;
-      s = v1 * v1 + v2 * v2;
-    } while (s >= 1 || s === 0);
-    const m = Math.sqrt((-2 * Math.log(s)) / s);
-    this.spare = v2 * m;
-    return v1 * m;
-  }
   // java.util.Random.nextBoolean.
   nextBoolean() {
     return this.next(1) !== 0;
