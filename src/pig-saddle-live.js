@@ -45,7 +45,7 @@ export function installPigSaddle(EntityWorld) {
   };
   // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, after interactFirst): true for any pig.
   proto.saddleUse = function (e, survival) {
-    if (!alive(this, e) || survival.held?.id !== P.SADDLE) return false;
+    if (!e || !this.entities.includes(e) || survival.held?.id !== P.SADDLE) return false; // b79: ItemSaddle.itemInteractionForEntity has no health test (a corpse pig is saddled)
     return saddle.call(this, e, survival, false);
   };
   // ItemSaddle.hitEntity from attackTargetEntityWithCurrentItem, once the attack has landed.

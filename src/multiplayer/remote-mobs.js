@@ -134,7 +134,8 @@ export class RemoteMobs {
   pick(origin, dir, reach) {
     let best = null;
     for (const [id, { mob }] of this.copies) {
-      if (mob.health <= 0) continue;
+      // b79: a dying mob is not isDead until its 20-tick animation ends, so canBeCollidedWith holds and the ray picks the corpse (the copy leaves with S13)
+      if (mob.health <= 0 && mob.type === 'ender_dragon') continue; // the dragon's death sequence keeps the old rule (open)
       const distance = entityHit(origin, dir, mob, reach);
       if (distance !== null && (!best || distance < best.distance)) best = { id, entity: mob, distance };
     }

@@ -69,12 +69,12 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
   const hook = (name, ...args) => hooks[name]?.(...args);
   const ok = (branch, extra) => act(branch, extra);
   // EntityCow.interact (also the mooshroom's super call): an empty bucket is swapped for milk.
-  if ((e.type === 'cow' || e.type === 'mooshroom') && e.health > 0 && id === BUCKET_ITEM) {
+  if ((e.type === 'cow' || e.type === 'mooshroom') && id === BUCKET_ITEM) {
     const used = useHeldBucket(state, { id, aimedEntity: { entity: e }, entityOnly: true }, hooks);
     if (used.branch === 'milk-cow') return act('use-bucket', { bucket: used.branch });
   }
   // Flint-and-steel interaction with a live creeper precedes the general entity branch.
-  if (e.type === 'creeper' && e.health > 0 && item?.kind === 'flint_and_steel') {
+  if (e.type === 'creeper' && item?.kind === 'flint_and_steel') {
     // EntityCreeper.interact: the pitch is the creeper's own Entity.rand nextFloat (creeper.js creeperIgnite; creeperwitch-b45 records).
     hooks.swing?.();
     const ignite = creeperIgnite(e, entityRandom(e));
@@ -92,7 +92,7 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return ok('leash-entity');
     }
-    if (e.health <= 0) return null; // b78: a corpse in its death animation (picked only while it carries a lead) takes no other interaction
+    // b79: a corpse in its death animation is picked like any mob and every interact runs on it (bytecode-read; villager trade, wolf, ocelot, horse, mooshroom and pig mount keep their own live tests below)
     // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
     if (state.mobs.saddleUse?.(e, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');

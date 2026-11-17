@@ -71,7 +71,7 @@ export function useHeldBucket(state, { id, aimedEntity = null, bucket = null, en
     return { branch: "begin-drinking" };
   }
   let result = null;
-  if ((aimedEntity?.entity.type === "cow" || aimedEntity?.entity.type === "mooshroom") && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) {
+  if ((aimedEntity?.entity.type === "cow" || aimedEntity?.entity.type === "mooshroom") && milkCow(survival, { drop })) {
     result = { branch: "milk-cow", cells: [] };
   } else {
     if (entityOnly) return { branch: "bucket-unused" };
