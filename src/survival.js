@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT, FENCE, RAIL, MOB_SPAWNER } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT, FENCE, RAIL, MOB_SPAWNER, FIRE } from "./world.js";
 import { SPAWNER_HARDNESS, spawnerXp } from "./spawner-block.js";
 import { ENCHANTED_BOOK_ITEM } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
@@ -227,7 +227,7 @@ for (const item of [
 // damage-reduction points; armorType 0 helmet, 1 chestplate, 2 leggings, 3 boots.
 export const ARMOR_MATERIALS = [
   ["Leather", 5, [1, 3, 2, 1], 315, "leather"],
-  ["Chain", 15, [2, 5, 4, 1], 0, "chainmail"],
+  ["Chain", 15, [2, 5, 4, 1], FIRE, "chainmail"], // b78: CraftingManager crafts chainmail from fire blocks (recipe-registry-reference.json 25, 26, 125, 126); fire is an item since falling78
   ["Iron", 15, [2, 6, 5, 2], 302, "iron"],
   ["Golden", 7, [2, 5, 3, 1], 304, "gold"],
   ["Diamond", 33, [3, 8, 6, 3], 303, "diamond"],

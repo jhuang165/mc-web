@@ -36,7 +36,7 @@ const COUNTERPARTS = [
 // Keyed by the first cell of the row that may stay Missing/Unmapped/Not replayed, with the reason it is not a counterpart bug.
 const KNOWN_ABSENT = {
   'settings-parity-catalogue.md': { SATURATION: 'no 1.7.10 screen or renderer reads it', TOUCHSCREEN: 'native touch mode not ported; mobile controls differ' },
-  'recipe-parity-catalogue.md': { C25: 'fire block ingredient', C26: 'fire block ingredient', C125: 'fire block ingredient', C126: 'fire block ingredient' },
+  // b78: the fire-block chainmail recipes C25, C26, C125, C126 replay now (fire is an item since falling78).
 };
 
 const rowFor = (catalogue, key) => text[catalogue].split('\n').find(line => line.startsWith('|')

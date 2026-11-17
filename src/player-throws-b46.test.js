@@ -27,11 +27,11 @@ function throwAs(rec, rng) {
 for (const rec of launches) {
   test(`native player throw launch ${rec.name}`, () => {
     const rng = new GaussianRandom(0);
-    rng.seed = BigInt(rec.seed); rng.spare = undefined; // the state before the constructor's aim
+    rng.seed = BigInt(rec.seed); rng.haveNextGaussian = false; // the state before the constructor's aim (b78: GaussianRandom uses java-random.js's cached-gaussian fields)
     const ball = throwAs(rec, rng), [ex, ey, ez, evx, evy, evz, eyaw, epitch] = rec.entity;
     assert.deepEqual([ball.x, ball.y, ball.z, ball.mx, ball.my, ball.mz, ball.yaw, ball.pitch], [ex, ey, ez, evx, evy, evz, eyaw, epitch]);
     assert.equal(rng.seed.toString(), rec.after.seed, "the same draws leave the random in the same state");
-    assert.equal(rng.spare ?? null, rec.after.gaussian);
+    assert.equal(rng.haveNextGaussian ? rng.nextGaussianValue : null, rec.after.gaussian);
   });
 }
 
