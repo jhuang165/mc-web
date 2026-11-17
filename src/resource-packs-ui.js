@@ -23,7 +23,7 @@ const SPRITE = "url('/media/1.7.10/gui/resource_packs.png')";
 // missing. The Default row (bgh) reads the same getter from the bundled pack. Executed: "A short description.\u00a7r", "\u00a7aGreen\u00a7r and plain text\u00a7r".
 export function packRowDescription(info) {
   if (info.valid === false || info.description == null) return "\u00a7c" + INVALID_META;
-  return info.description + "\u00a7r";
+  return info.formatted ?? info.description + "\u00a7r"; // a parsed description carries its getFormattedText (b79); a bare one is plain text + reset
 }
 // FontRenderer.func_78259_e / sizeStringToWidth (Bytecode-read in 1.7.10): the break index. A formatting code takes no width, bold (\u00a7l) adds one
 // per glyph until \u00a7r, a space is remembered as the break point, a newline breaks there.

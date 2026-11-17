@@ -298,7 +298,7 @@ export function createBlockAtlas(){
  const stale=new Set();
  function syncCanvases(){if(!stale.size)return;for(const n of stale)drawAtlas(ctx,false,new Set([n]));stale.clear();}
  // One tile's level 0 and mip levels as exact RGBA bytes. The source is the decoded PNG (exact: straight alpha, no canvas rounding); only a
- // texture the PNG codec cannot read (16-bit, interlaced, colour-keyed) or a failed byte fetch falls back to the 2D canvas, drawn into a 16 px
+ // file png-decode.js refuses (corrupt or truncated data; 16-bit, interlaced, palette and colour-keyed PNGs all decode, b79) or a failed byte fetch falls back to the 2D canvas, drawn into a 16 px
  // scratch canvas and read from there. Item atlas (not terrainMode) order, as natively: mip chain of the raw sprite, then the Anaglyph
  // conversion per level when on (TextureUtil upload), then the tint multiplier (converted when Anaglyph is on), then the grass overlay.
  const scratch=document.createElement('canvas');scratch.width=scratch.height=TILE_SIZE;const sctx=scratch.getContext('2d',{willReadFrequently:true});sctx.imageSmoothingEnabled=false;

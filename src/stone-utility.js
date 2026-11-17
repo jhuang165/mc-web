@@ -159,15 +159,27 @@ export const potContentsOfMeta = (meta) => { const c = POT_META_CONTENTS[meta & 
 // draw (single-icon plants ignore Data, flowers and saplings need a representable damage), else null (empty or not drawable).
 export function potNbtOf(content) {
   const native = content ? potPlantOf(content.id, content.damage) : null;
-  return native ? { Item: native[0], Data: native[1] } : { Item: 0, Data: 0 };
+  // `data` is the exact native TileEntityFlowerPot Data a pot kept from an import or save; the plant drawn and dropped stays the one `damage` names.
+  return native ? { Item: native[0], Data: Number.isInteger(content.data) ? content.data : native[1] } : { Item: 0, Data: 0 };
+}
+// What the unchanged client draws for a native (Item, Data) (b79, bytecode-read RenderBlocks.func_147752_a -> getIcon(0, Data)): BlockFlower (dandelion, red
+// flower) takes icons[Data] and falls back to icons[0] when Data >= the array length (1 and 9 entries), a negative index throws, BlockSapling uses
+// clamp(Data & 7, 0, 5), mushrooms, dead bush and cactus ignore Data. Returns the port's drawable damage, or null when the client would throw.
+export function potDrawDamage(item, data) {
+  if (item === 38) return data < 0 ? null : data <= 8 ? data : 0;
+  if (item === 37) return data < 0 ? null : 0;
+  if (item === 6) return Math.min(data & 7, 5);
+  return 0;
 }
 const NATIVE_TO_POT = { 37: 43, 38: 44, 6: 48, 39: 75, 40: 76, 81: 53, 32: 79, 31: 84 };
 export function potFromNbt(tag) {
   const item = tag?.Item, data = tag?.Data | 0, id = NATIVE_TO_POT[item];
   if (id === undefined) return null;
   if (item === 31) return data === 2 ? { id, damage: 0 } : null;
-  const damage = id === 44 || id === 48 ? data : 0;
-  return potPlantOf(id, damage) ? { id, damage } : null;
+  const damage = potDrawDamage(item, data);
+  if (damage === null || !potPlantOf(id, damage)) return null;
+  // The exact native Data rides along when it differs from the drawn damage, so export and save keep it (b79).
+  return data === damage ? { id, damage } : { id, damage, data };
 }
 const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
@@ -177,10 +189,10 @@ export function potContents(world, x, y, z) {
 }
 export function setPotContents(world, x, y, z, content) {
   const pots = (world.pots ??= new Map());
-  if (content) pots.set(potKey(x, y, z), { id: content.id, damage: content.damage | 0 });
+  if (content) pots.set(potKey(x, y, z), { id: content.id, damage: content.damage | 0, ...(Number.isInteger(content.data) ? { data: content.data } : {}) });
   else pots.delete(potKey(x, y, z));
 }
-export const serializePots = (world) => [...(world.pots ?? [])].map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, id: v.id, damage: v.damage }; });
+export const serializePots = (world) => [...(world.pots ?? [])].map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, id: v.id, damage: v.damage, ...(Number.isInteger(v.data) ? { data: v.data } : {}) }; });
 export function restorePots(world, list) {
   world.pots = new Map();
   for (const p of Array.isArray(list) ? list : [])

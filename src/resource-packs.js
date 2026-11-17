@@ -26,18 +26,59 @@ export function overrideUrls(entryName) {
   return [];
 }
 
-// PackMetadataSection via the lenient Gson reader: { "pack": { "pack_format": 1, "description": "..." } }. The description may be
-// a plain string or a chat component with "text".
+// IChatComponent.Serializer (fk) + ChatStyle (fn) + getFormattedText (fj.d) for a pack description. Executed (tools/probes/PackDescProbe.java, rows in
+// public/research/pack-description-reference.json): a JSON string or number is plain text; an object needs "text" (a number or boolean reads as its
+// text); "extra" must be a non-empty array and its components become siblings that inherit the parent's style; a top-level array makes its first
+// element the root and appends the rest as siblings; "color" is EnumChatFormatting.getValueByName over all 22 lowercase names (so "bold" or "reset"
+// is accepted in the colour slot, "RED" or an unknown name is no colour); bold/italic/underlined/strikethrough/obfuscated read as Boolean.parseBoolean
+// of a string (a number is false). getFormattedText is, for the root and then each sibling depth-first, the style's code (colour, then l o n k m, each
+// attribute resolved through the parents) + the text + "\u00a7r". "translate" components are not supported here (needs the lang table): invalid.
+const FORMAT_NAMES = { black: "0", dark_blue: "1", dark_green: "2", dark_aqua: "3", dark_red: "4", dark_purple: "5", gold: "6", gray: "7", dark_gray: "8", blue: "9", green: "a", aqua: "b", red: "c", light_purple: "d", yellow: "e", white: "f", obfuscated: "k", bold: "l", strikethrough: "m", underline: "n", italic: "o", reset: "r" };
+const STYLE_KEYS = [["bold", "l"], ["italic", "o"], ["underlined", "n"], ["obfuscated", "k"], ["strikethrough", "m"]];
+const prim = (v) => (typeof v === "string" || typeof v === "number" || typeof v === "boolean");
+const asString = (v) => { if (!prim(v)) throw new Error("not a primitive"); return String(v); };
+const asBool = (v) => (typeof v === "boolean" ? v : typeof v === "string" && v.toLowerCase() === "true");
+function chatComponent(el, parentStyle) {
+  if (Array.isArray(el)) {
+    if (!el.length) throw new Error("empty array of components");
+    const root = chatComponent(el[0], parentStyle);
+    for (let i = 1; i < el.length; i++) root.sib.push(chatComponent(el[i], root.style));
+    return root;
+  }
+  if (prim(el)) return { text: asString(el), style: { parent: parentStyle }, sib: [] };
+  if (!el || typeof el !== "object") throw new Error("not a component");
+  if (!Object.hasOwn(el, "text")) throw new Error("unsupported component");
+  const style = { parent: parentStyle };
+  if (Object.hasOwn(el, "color") && el.color !== null) { const code = FORMAT_NAMES[asString(el.color)]; if (code) style.color = code; }
+  for (const [k] of STYLE_KEYS) if (Object.hasOwn(el, k) && el[k] !== null) style[k] = asBool(el[k]);
+  const c = { text: asString(el.text), style, sib: [] };
+  if (Object.hasOwn(el, "extra")) {
+    if (!Array.isArray(el.extra) || !el.extra.length) throw new Error("bad extra");
+    for (const e of el.extra) c.sib.push(chatComponent(e, style));
+  }
+  return c;
+}
+const styleValue = (st, k) => { for (let s = st; s; s = s.parent) if (s[k] !== undefined) return s[k]; return undefined; };
+const formattingCode = (st) => { const c = styleValue(st, "color"); return (c ? "\u00a7" + c : "") + STYLE_KEYS.map(([k, f]) => (styleValue(st, k) ? "\u00a7" + f : "")).join(""); };
+function flatten(c, out = []) { out.push(c); for (const s of c.sib) flatten(s, out); return out; }
+// Returns { formatted, text } (getFormattedText, getUnformattedText) or throws for what the native deserialiser refuses.
+export function descriptionText(el) {
+  const parts = flatten(chatComponent(el, null));
+  return { formatted: parts.map((c) => formattingCode(c.style) + c.text + "\u00a7r").join(""), text: parts.map((c) => c.text).join("") };
+}
+
+// PackMetadataSection via the lenient Gson reader: { "pack": { "pack_format": 1, "description": ... } }. The description is an IChatComponent
+// (descriptionText); `formatted` is its getFormattedText and `description` the unformatted text.
 export function parsePackMcmeta(text) {
+  const invalid = { valid: false, packFormat: 0, description: INVALID_META };
   try {
-    const pack = JSON.parse(String(text).replace(/^﻿/, ""))?.pack;
-    if (!pack || typeof pack !== "object") return { valid: false, packFormat: 0, description: INVALID_META };
-    const d = pack.description;
-    const description = typeof d === "string" ? d : typeof d?.text === "string" ? d.text : INVALID_META;
+    const pack = JSON.parse(String(text).replace(/^\uFEFF/, ""))?.pack;
+    if (!pack || typeof pack !== "object") return invalid;
+    const d = descriptionText(pack.description);
     const packFormat = Number.isInteger(pack.pack_format) ? pack.pack_format : 0;
-    return { valid: typeof d === "string" || typeof d?.text === "string", packFormat, description };
+    return { valid: true, packFormat, description: d.text, formatted: d.formatted };
   } catch {
-    return { valid: false, packFormat: 0, description: INVALID_META };
+    return invalid;
   }
 }
 
