@@ -126,3 +126,24 @@ export function freshEntityRandom() {
   const r = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
   return () => r.nextFloat();
 }
+
+/**
+ * Random.nextGaussian over any `() => double in [0, 1)` source (a host's injected `random`, Math.random): the same polar method as JavaRandom.nextGaussian, StrictMath.log
+ * included, and the second value of each pair cached. Returns the `() => gaussian`. Every gaussian outside a JavaRandom goes through here (b79 spexec79 audit).
+ */
+export function gaussianFrom(nextDouble) {
+  let have = false, cached = 0;
+  return () => {
+    if (have) { have = false; return cached; }
+    let v1, v2, s;
+    do {
+      v1 = 2 * nextDouble() - 1;
+      v2 = 2 * nextDouble() - 1;
+      s = v1 * v1 + v2 * v2;
+    } while (s >= 1 || s === 0);
+    const multiplier = Math.sqrt((-2 * strictLog(s)) / s);
+    cached = v2 * multiplier;
+    have = true;
+    return v1 * multiplier;
+  };
+}

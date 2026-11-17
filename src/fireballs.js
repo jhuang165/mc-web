@@ -86,13 +86,17 @@ export class Fireballs {
     const was = b.inGround;
     if (was && this.stick(b)) return;
     if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
-    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
     const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
     let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
     const entity = this.sweep(b, start, stop, box);
     if (entity) { hit = { entity: entity.target }; aimPart(entity); }
     if (hit) this.impact(b, hit); // the update goes on: the ball still moves (it is only marked dead)
+    // ze.h after the move: in water four bubbles at the new position minus a quarter of the old motion (moving with it), then the motion update, then the smoke at
+    // (x, y + 0.5, z) of the NEW position (executed: spexec79 fire79; b79 moved the smoke here from before the move and added the bubbles).
+    const [ovx, ovy, ovz] = [b.vx, b.vy, b.vz];
     fireballStep(b, water.wet);
+    if (water.wet) for (let i = 0; i < 4; i++) mobs.fx?.spawn("bubble", b.x - ovx * 0.25, b.y - ovy * 0.25, b.z - ovz * 0.25, ovx, ovy, ovz);
+    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
   }
   // ze.h's entity pass: every collidable entity box grown by 0.3 against the swept segment, the shooter skipped for 25 ticks; nearest wins.
   sweep(b, a, z, own = this.boxOf(b)) {

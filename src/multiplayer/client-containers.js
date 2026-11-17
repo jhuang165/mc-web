@@ -2,6 +2,7 @@
 // slotClick run locally as the prediction; each top-level click goes to the server as C0E with the stack the local click returned, and the server's
 // S30 / S2F / S32 / S31 bring the authoritative contents back.
 import { makeStack, ChestContainer, StackArray } from '../inventory.js';
+import { gaussianFrom } from '../java-random.js';
 import { DispenserContainer, newDispenser } from '../dispenser-container.js';
 import { HopperContainer, newHopperTile } from '../hopper.js';
 import { BrewingContainer } from '../brewing-container.js';
@@ -149,7 +150,7 @@ export function dispenserAux(e, { play, smoke, random = Math.random, listener = 
   else if (e.id === 2005) sparkle?.(e.x, e.y, e.z); // b66 bonemeal2: ItemDye bone meal (func_150918_a, 15 happyVillager; the data is always 0 in 1.7.10)
   else if (e.id === 1013) { if (!listener) return false; const at = witherSpawnAt(listener(), e.x, e.y, e.z); play('mob.wither.spawn', at.x, at.y, at.z, 1, 1); }
   else if (e.id === 2000) {
-    const gauss = () => { let a, b, s; do { a = 2 * random() - 1; b = 2 * random() - 1; s = a * a + b * b; } while (s >= 1 || s === 0); return a * Math.sqrt(-2 * Math.log(s) / s); };
+    const gauss = gaussianFrom(random); // World.rand.nextGaussian: polar method, StrictMath.log, cached pair (java-random.js)
     const i = e.data % 3 - 1, k = Math.trunc(e.data / 3) % 3 - 1, cx = e.x + i * 0.6 + 0.5, cy = e.y + 0.5, cz = e.z + k * 0.6 + 0.5;
     for (let n = 0; n < 10; n++) {
       const d = random() * 0.2 + 0.01;
