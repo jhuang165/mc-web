@@ -259,7 +259,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     redstone.touched = new Set();
     let result;
     try {
-      result = applyPlayerEdit(state, request, hooks);
+      // b78 spswing78: BlockPistonMoving.onBlockActivated asks World.getTileEntity (the engine's moving tile) for the block clicked.
+      result = applyPlayerEdit(state, request, { ...hooks, pistonMovingTile: (x, y, z) => !!redstone.getTileEntity(x, y, z) });
       const placement = result?.placement;
       if (placement?.placed && placement.position) {
         const [x, y, z] = placement.position, cells = placement.reason === "door" ? [[x, y, z], [x, y + 1, z]] : [[x, y, z]];

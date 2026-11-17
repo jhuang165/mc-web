@@ -81,7 +81,8 @@ test("b59: a flower pot takes the plant on the client: its tile content, the met
   assert.equal(named("activate", "pot-hold37-d0").held[1], 1, "one of two taken");
   assert.deepEqual(heldPlan({ kind: "pot", stack: { id: 44, count: 2, damage: 0 }, creative: false, placed: true }), { dCount: -1 });
   assert.equal(heldPlan({ kind: "pot", stack: { id: 44, count: 2, damage: 0 }, creative: true, placed: true }), null);
-  assert.equal(useKind({ world: w, target, heldId: 1, sneaking: false, aimed: false }), null);
+  // b78 spswing78: the pot's executed result for a held block is false ('pot-hold1-d0' above), so the client goes on to place the block (it used to be treated as taking every click).
+  assert.equal(useKind({ world: w, target, heldId: 1, sneaking: false, aimed: false }), "place");
 });
 
 test("b59: the overlay answers the view's pots with the predicted plant and drops it with its entry", () => {
