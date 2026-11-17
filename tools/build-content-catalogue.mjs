@@ -60,7 +60,7 @@ const ITEM_TECHNICAL = {
   401: 'Partial; [fireworks rocket](fireworks.md), unlisted natively (configured stacks only)',
   422: 'Partial; [command block minecart](polish.md), unlisted natively',
 };
-const technicalStatus = id => ITEM_TECHNICAL[id] ?? (id < 256 && internalIdsFor(id).length ? 'Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively' : 'Unmapped; technical/unlisted audit');
+const technicalStatus = id => ITEM_TECHNICAL[id] ?? (id < 256 && internalIdsFor(id).length ? 'Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json))' : 'Unmapped; technical/unlisted audit');
 const rows = [];
 for (const item of native.items) {
   const variants = item.variants.concat(native.searchEnchantedBooks.filter(s => s.id === item.id));

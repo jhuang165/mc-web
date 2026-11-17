@@ -25,6 +25,8 @@ Evidence key: **probe** = replayed against the original classes in `fire-referen
 
 Vanilla fire is id 51; here it is internal block 45 (hidden, after "Red flower"). The item is 126 (Flint and steel).
 
+Batch 79 (docs sweep, 2026-11-16): `Item.getItemFromBlock` for fire (51), water, lava and portal returns an `ItemBlock` natively (executed, `falling-block78-reference.json`), so fire has an item id for falling-block drops, NBT export and import and for the chainmail recipes (`ORIGINAL_ITEMS`, batch 78). Whether the browser lets a player hold or place it was not rechecked.
+
 ## Ported, and how it is checked
 
 | Part | File | Evidence |
