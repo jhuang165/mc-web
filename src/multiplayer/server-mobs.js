@@ -118,7 +118,7 @@ export class ServerMobs {
     mobs.dimensionBlockLight = (x, y, z) => host.light.blockAt(x, y, z);
     mobs.lightSubtracted = () => host.darkness;
     mobs.loadTotalTime(host.ticks ?? 0);
-    mobs.explodeInline = ev => this.explode(ev.explode);
+    mobs.explodeInline = ev => { this.explode(ev.explode); const e = ev.explode; this.burst(e.x, e.y, e.z, e.size); }; // b79 explfx79: a creeper's blast inside its own update sends its S27 and sound too (it used to leave only the knock record behind)
     Object.defineProperty(mobs, 'lootItems', { get: () => host.items }); // b78 loot78: EntityLiving.onLivingUpdate's pickup loop sees the server's item entities (host.items is built after this object)
     // b79 mplanes79: EntityLiving.onLivingUpdate's pickup calls onItemPickup, so the tracker sends S0D (collect) with the mob as collector: the row carries the mob's wire id and its place
     // (the client has no player to fly the item to). The list is the lane's (`host.serverItems.taken`; the Nether's and the End's hosts point it at their own list).
@@ -242,8 +242,8 @@ export class ServerMobs {
       for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
       knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
     }
-    this.s27 = { x, y, z, size, map: knock };
     const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, opaque: opaqueCube, resistance: ev.blue ? boundedSkullResistance : undefined }); // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
+    this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three
     for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
@@ -341,12 +341,14 @@ export class ServerMobs {
   burst(x, y, z, size) {
     if (!(size > 0)) return;
     const d = this.host.dispense;
-    if (d) d.fx.push({ k: 'explode', x, y, z, size, knock: this.takeKnock(x, y, z, size) });
+    if (d) d.fx.push({ k: 'explode', x, y, z, size, ...this.takeS27(x, y, z, size) });
   }
   // b78 mpexplosion78: the per-player motion `explode` collected for this blast (S27's motion fields), or null when it was another blast's.
-  takeKnock(x, y, z, size) {
+  takeKnock(x, y, z, size) { return this.takeS27(x, y, z, size).knock; }
+  // b79 explfx79: the whole S27 payload of this blast: the motion map and the affected positions (for the offset bytes).
+  takeS27(x, y, z, size) {
     const k = this.s27; this.s27 = null;
-    return k && k.x === x && k.y === y && k.z === z && k.size === size ? k.map : null;
+    return k && k.x === x && k.y === y && k.z === z && k.size === size ? { knock: k.map, blocks: k.list } : { knock: null, blocks: null };
   }
   // b63: S28 with the broadcast flag, to every player of the server (WorldServer.func_82739_e: sendPacketToAllPlayers, recalled).
   broadcastAux({ id, x, y, z, data = 0 }) {

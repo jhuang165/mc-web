@@ -757,7 +757,7 @@ function makeRemoteDispense() {
   return new RemoteDispense({
     sound: play,
     knock: (mx, my, mz) => { velocity.x += mx; velocity.y += my; velocity.z += mz; }, // b78 mpexplosion78: S27 motion (NetHandlerPlayClient.handleExplosion)
-    explode: (x, y, z, size) => { scene.explosionParticles.burst(x, y, z, size, [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] }); play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
+    explode: (x, y, z, size, cells) => { scene.explosionParticles.burst(Math.fround(x), Math.fround(y), Math.fround(z), Math.fround(size), cells ?? [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] }); play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
     splash: (x, y, z, damage) => splashBreak(scene.fx, scene.fx.worldRandom, damage, x, y, z),
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),

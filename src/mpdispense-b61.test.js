@@ -202,7 +202,7 @@ test("RemoteDispense keeps one row per entity, moves px to the old x, drops the 
   assert.equal(rd.balls.length, 0);
   rd.apply({ type: "dispFx", events: [{ k: "sound", name: "game.tnt.primed", x: 0, y: 0, z: 0 }, { k: "sound", name: "mob.wither.spawn", x: 0, y: 0, z: 0 }, { k: "explode", x: 1, y: 2, z: 3, size: 4 }, { k: "splash", x: 1, y: 2, z: 3, damage: 16396 }] });
   assert.deepEqual(sounds, ["game.tnt.primed", "game.potion.smash"]);
-  assert.deepEqual(bursts, [[1, 2, 3, 4]]);
+  assert.deepEqual(bursts, [[1, 2, 3, 4, []]]); // b79 explfx79: the fifth argument is the S27 cells (none sent here)
   assert.deepEqual(splashes, [[1, 2, 3, 16396]]);
 });
 

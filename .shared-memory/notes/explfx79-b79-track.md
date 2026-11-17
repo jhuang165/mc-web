@@ -1,0 +1,20 @@
+# Batch 79 explfx79: S27 block offsets, single-player push, creeper blasts
+
+## Summary
+- `server-explosion-packet.js`: `s27Encode` / `s27Decode` / `s27Loopback`. The affected cells ride the `dispFx` explode event as `bl`, base64 of signed bytes (position - (int)centre), one encoding per blast for all players. `ServerMobs.explode` keeps the affected list (empty when `smoking` is false) in `takeS27`; `server-dispense.explode` and `ServerMobs.burst` attach it.
+- Client (`client-dispense.js`): decodes `bl` and passes the cells to the `explode` hook; `main.js` (1 line) hands them to `explosionParticles.burst` with the float centre and size, so the per-cell explode and smoke particles come from the packet, not from the port's own sampling. Client-side block clearing is not done (block changes still travel as cells).
+- Single player (`explosion-simulation.js`): the burst now goes through `s27Loopback` (float centre and size, offset bytes), the same data a remote client gets. The player push: a hit that opens a fresh hurt window sets the client motion to the server copy's motion (Blast Protection applied, S12 quantisation); creative or a hurt-window-refused blast leaves the unreduced float S27 push on the client. The server copy always gets the reduced push.
+- Creeper: `ServerMobs` set `mobs.explodeInline = ev => this.explode(ev.explode)` with no `burst`, so a dedicated-server creeper blast sent no S27 and no particles or sound. It calls `burst` now. Single player's creeper path (`explodeEvent` -> `explodeAt` -> `applyExplosion`) already drew particles and sound.
+
+## Evidence
+- Bytecode-read (javap -c -p, 1.7.10 jar): `gu.b` writes x,y,z,size floats, count int, then per position `(pos - d2i(centre))` as writeByte x3, then motion floats; `gu.a` reads the floats into doubles and adds the bytes to d2i of the float-widened centre (d2i truncates toward zero; a centre that rounds up as a float shifts every cell). `agw.<init>` sets `b` (isSmoking) true, so the client's `doExplosionB(true)` always plays the huge particle for size >= 2 and `largeexplode` below, then for each listed cell: particle position `cell + nextFloat` x3 on the client's `world.rand`, `explode` at (p + centre) / 2 and `smoke` at p, speed `0.5 / (d / size + 0.1) * (nextFloat * nextFloat + 0.3)`, then for non-air cells `setBlock(air)` (the client drop call is a no-op). `bjb.a(gu)`: `new Explosion(world, null, x, y, z, size)`, `h = list`, `doExplosionB(true)`, then `motion += (double) float`. `bjb.a(hy)` (handleEntityVelocity) calls `sa.i(DDD)V`, which ASSIGNS motion (v, w, x). The S12 after S27 for a hurt player: b77 note (`my.a`, `my.b`).
+- Port-read: `survival.damage` returns true for the partial hurt-window case too; `hurtCount` rises only for a fresh window, which is the only case with `setBeenAttacked` (flag true), so it is the S12 condition used. The old code already fed the particle code the real list; the port's burst model (explosion-particles.js) is unchanged.
+- Not executed: no probe of the whole integrated-server S27 + S12 ordering; the claim that both arrive before the next client tick rests on the b77 bytecode read and the single-thread tick assumption.
+
+## Verification
+- `node --test src/explfx79-b79.test.js`: 8 pass. Related: mpexplosion78, explosion-simulation, explosion-particles, explosion, player-knockback, ring-events, hurt-drops-b49, block-actions-replay, game-rules, spfixes75, mpvelocity77, mpdispense-b61 (updated: the explode hook gets a fifth argument, the cells), mpwither, mpmobs, mpmobs2, mpgolems, mpmobtypes, mpvillage, projectiles5, mpspawn73: all pass. No full npm test, no browser.
+
+## Follow-ups
+- The client does not clear the listed blocks itself (native `doExplosionB(true)` does); the server's block changes arrive as cells.
+- The S12 value used in single player is the server copy's motion at the explosion, not at the tracker tick after the tick's move.
+- Other server explosion sources outside `ServerMobs.explodeInline` / dispenser TNT (wither skulls, ghast fireballs, crystals on the server) were not re-audited for `burst`.
