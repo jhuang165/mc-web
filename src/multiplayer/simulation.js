@@ -246,7 +246,7 @@ export class DedicatedSimulation {
     this.mobs.addPlayer(player);
     this.vehicles.addPlayer(player); // b61
     this.dimensions.adopt(player, saved); // b61 mpnether: a player saved in the Nether returns to it
-    this.vehicles.horses.rejoin(player, saved); // b77 mphorserules77: Player.Riding remounts a horse
+    (this.dimensions.vehiclesOf(player) ?? this.vehicles).horses.rejoin(player, saved); // b77 mphorserules77: Player.Riding remounts a horse (b78: in the player's own dimension)
     return player;
   }
   removePlayer(id) {

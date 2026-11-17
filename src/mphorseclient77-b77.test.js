@@ -107,8 +107,8 @@ test("prediction: a chest on a tame donkey is used, sneaking adults and a horse 
   assert.equal(don.r.handled, true); assert.equal(don.copy.horse.chested, true); assert.equal(don.e.horse.chested, true);
   agree("chest horse", (e) => tame(e), CHEST);
 });
-test("prediction: an empty hand mounts, the saddle and a sneak open the window, a wild horse rears; each is a claimed click", () => {
-  for (const [label, setup, id, o] of [["empty", tame, 0, {}], ["saddle", tame, SADDLE, {}], ["sneak", tame, 0, { sneak: true }], ["wild rear", (e) => { e.growingAge = 0; }, WHEAT, {}]]) {
+test("prediction: an empty hand mounts, the saddle and a sneak open the window, each is a claimed click (b78: a wild horse's wheat is temper, not on the wire, and is left to the server: mphorse78-b78.test.js)", () => {
+  for (const [label, setup, id, o] of [["empty", tame, 0, {}], ["saddle", tame, SADDLE, {}], ["sneak", tame, 0, { sneak: true }]]) {
     const { r } = agree(label, setup, id, 0, o);
     assert.equal(r.handled, true, label);
   }

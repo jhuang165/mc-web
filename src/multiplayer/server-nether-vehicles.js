@@ -37,6 +37,8 @@ export function pinOverworldVehicles(sim, dims) {
   const v = sim.vehicles;
   v.host = Object.create(sim, { players: { value: dimensionPlayers(sim, 0) } });
   const dismount = v.dismount.bind(v);
+  const logout = v.horses.logout.bind(v.horses);
+  v.horses.logout = p => { const other = p?.dimension ? dims.vehiclesOf(p) : null; return other && other !== v ? other.horses.logout(p) : logout(p); }; // b78 mphorse78: a Nether / End rider's horse is that dimension's
   v.dismount = p => { const other = p?.dimension === NETHER ? dims.nether?.vehicles : p?.dimension ? dims.end?.n?.vehicles : null; return other ? other.dismount(p) : dismount(p); }; // b63 lead: the End's vehicles too
 }
 
