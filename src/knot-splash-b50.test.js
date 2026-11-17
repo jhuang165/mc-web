@@ -82,7 +82,7 @@ test("a knot clicked with nothing to attach dies", () => {
 test("left click on a placed or summoned knot breaks it (EntityHanging.attackEntityFrom), with no damage events", () => {
   const w = world([{ x: 90 }]);
   w.knotCreate(66, 0, 64); const s = w.knotSummon(70.5, 1, 64.5);
-  const a = w.pick({ x: 66.5, y: 0.75, z: 60 }, south, 6).entity, b = w.pick({ x: 70.5, y: 1.25, z: 60 }, south, 6).entity;
+  const a = w.pick({ x: 66.5, y: 0.75, z: 60 }, south, 6).entity, b = w.pick({ x: 70.5, y: 1.75, z: 60 }, south, 6).entity /* b79: the host-less box is the copy's, on the floored tile (1.5 to 2) */;
   assert.equal(b.knotRef, s);
   assert.equal(w.attack(a), false); assert.equal(w.attack(b), false);
   assert.equal(w.leashKnots().length, 0);
@@ -155,7 +155,7 @@ test("an aimed knot's C02 check uses Entity.getEyeHeight 0, not a mob brain (a k
   const line = src.split("\n").find((l) => l.includes("const aimed = aimedEntity ?"));
   assert.ok(line && /knotRef \? 0 : mobs\.ai\.brain\(aimedEntity\.entity\)\.eyeHeight/.test(line), line);
   const w = new EntityWorld({ numericSeed: 1, solid: (x, y) => y < 0, get: (x, y) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 0, y: 0, z: 0 }) }, []);
-  const k = w.knotSummon(0.5, 1, 0.5), hit = w.pick({ x: 0.5, y: 1.6, z: 3 }, { x: 0, y: -0.1, z: -1 }, 4.5);
+  const k = w.knotSummon(0.5, 1, 0.5), hit = w.pick({ x: 0.5, y: 2.0, z: 3 }, { x: 0, y: -0.1, z: -1 }, 4.5);
   assert.ok(hit?.entity?.knotRef === k);
   assert.throws(() => w.ai.brain(hit.entity)); // what serverAcceptsClick called before the batch 50 lead fix
 });

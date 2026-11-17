@@ -19,7 +19,7 @@ export function entityUseHooks(host, mobs, p) {
     first(e) {
       const id = s.held?.id ?? 0;
       // EntityCreeper.interact (flint and steel): single-player applyPlayerEdit ignite-creeper
-      if (e.type === 'creeper' && e.health > 0 && ITEMS[id]?.kind === 'flint_and_steel') {
+      if (e.type === 'creeper' && ITEMS[id]?.kind === 'flint_and_steel') {
         const ignite = creeperIgnite(e, entityRandom(e));
         at(ignite.name, ignite.volume, ignite.pitch, ignite.position);
         if (!s.creative) s.wear(id);

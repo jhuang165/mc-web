@@ -63,7 +63,7 @@ test("flint and steel on a creeper: ignited copy, tool worn, Creative keeps it, 
   const sv = me(FLINT, 1), cr = { type: "creeper", health: 20 };
   assert.equal(predictAnimalUse(cr, sv).handled, true); assert.equal(cr.ignited, true); assert.equal(sv.inventory.main[0].damage, 1);
   const c = me(FLINT, 1, 0, "creative"); predictAnimalUse({ type: "creeper", health: 20 }, c); assert.equal(c.inventory.main[0].damage, 0);
-  assert.equal(predictAnimalUse({ type: "creeper", health: 0 }, me(FLINT, 1)).handled, false);
+  assert.equal(predictAnimalUse({ type: "creeper", health: 0 }, me(FLINT, 1)).handled, true); // b79: xz (EntityCreeper.interact) has no health test; a corpse is lit too
 });
 
 test("the prediction agrees with the server on the held stack (name tag, egg, flint)", () => {

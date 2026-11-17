@@ -111,7 +111,10 @@ export function installHorseGear(EntityWorld) {
   };
   // The box the ray tests: the host's `knotBoxOf(k)` (main.js: the client copy's, object-tracker.js aimKnotBox; null is not aimable), else the live 0.5 cube
   // (EntityLeashKnot's own box around its position: the block centre of a placed knot, the command position of a summoned one, y up from the position).
-  const liveKnotBox = (k) => { const c = knotCentre(k); return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
+  // b79: the host-less box is the CLIENT copy's (bytecode-read: EntityLeashKnot(world, x, y, z) is built from the spawn packet's tile and setPosition(tile + 0.5), so a summoned knot is aimed at on
+  // its floored tile, object-tracker.js line 575's rule); a placed knot's tile centre is its own position. The server has no client copy and aims with this box.
+  const copyCentre = (k) => k.summoned ? { x: Math.floor(k.px) + 0.5, y: Math.floor(k.py) + 0.5, z: Math.floor(k.pz) + 0.5 } : knotCentre(k);
+  const liveKnotBox = (k) => { const c = copyCentre(k); return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
   // The distance at which the ray meets the knot's box grown by the collision border (EntityRenderer.getMouseOver, sa.af 0.1F), within `limit`; null on a miss.
   proto.knotRay = function (k, origin, dir, limit) {
     const border = Math.fround(0.1), b = this.knotBoxOf ? this.knotBoxOf(k) : liveKnotBox(k);
@@ -290,7 +293,7 @@ export function installHorseGear(EntityWorld) {
   proto.leashKnots = function () { return knotsOf(this).filter((k) => !k.dead).map((k) => ({ x: k.x, y: k.y, z: k.z, ...(k.summoned ? { px: k.px, py: k.py, pz: k.pz, id: k.id } : {}) })); };
   // ItemNameTag.itemInteractionForEntity: the tag's display name becomes the mob's CustomName and the mob stops despawning.
   proto.nameTagUse = function (e, survival) {
-    if (!alive(this, e) || G.originalId(survival.held) !== G.NAME_TAG_ORIGINAL) return false;
+    if (!this.entities.includes(e) || G.originalId(survival.held) !== G.NAME_TAG_ORIGINAL) return false; // b79: ItemNameTag.itemInteractionForEntity has no health test
     const out = G.nameTagUse({ stackName: survival.held.displayName, isMob: true, isPlayer: false });
     if (!out.used) return false;
     if (out.name) e.customName = out.name.slice(0, 64);

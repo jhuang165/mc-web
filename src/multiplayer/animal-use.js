@@ -31,14 +31,14 @@ export function serverAnimalUse(mobs, p, e, ctx) {
   // b62: EntityPig.interact: the feed first, then a saddled pig takes the player (ItemSaddle only reaches a pig that did not).
   if (e.type === 'villager' && ctx.villager?.(p, e)) return true; // b66: the merchant window hook (mptrade fills sm.villagerUse)
   if (e.type === 'zombie' && e.villager && mobs.cure(e, id, s, held?.damage ?? 0)) return true; // b66: EntityZombie.interact, a golden apple on a weakened zombie villager
-  if (e.type === 'pig' && e.saddled && ctx.ride) { if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } if (ctx.ride(p, e)) return true; }
+  if (e.type === 'pig' && e.saddled && ctx.ride) { if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } if (e.health > 0 && ctx.ride(p, e)) return true; } // b79: boarding a corpse stays open (the seat code is live-only)
   if (e.type === 'pig' && mobs.saddleUse?.(e, s)) return true;
   if (e.type === 'wolf' && mobs.wolfInteract?.(e, s)) return true; // only when mpmobtypes puts wolves on the server (SUPPORTED); status 6 / 7 are still to be wired (see the track note)
   if (e.type === 'ocelot' && mobs.ocelotInteract?.(e, s)) return true;
   if (e.type === 'mooshroom' && mobs.mooshroomInteract(e, s)) return true;
   if (ctx.extra?.later(e)) return true; // b75 mpusesweep75: horses and name tags (server-use-entity.js)
   if (mobs.shear(e, id, s)) return true;
-  if (isCow(e.type) && e.health > 0 && mobs.entities.includes(e) && milkCow(s, { drop: st => ctx.drop(st) })) return true;
+  if (isCow(e.type) && mobs.entities.includes(e) && milkCow(s, { drop: st => ctx.drop(st) })) return true;
   if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } // EntityAnimal.func_146082_f(player): the breeder is credited with breedCow
   return mobs.dye(e, held, s);
 }
@@ -48,7 +48,7 @@ export function serverAnimalUse(mobs, p, e, ctx) {
 export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null, sneak = false } = {}) {
   const extra = predictEntityExtras(mob, survival, selfId, sneak);
   if (extra) return extra;
-  if (!mob || mob.health <= 0 || !ANIMAL_TYPES.has(mob.type)) return { handled: false };
+  if (!mob || (mob.health <= 0 && mob.type === 'mooshroom') || !ANIMAL_TYPES.has(mob.type)) return { handled: false }; // b79: a corpse takes these uses too (the mooshroom's own interact stays live-only)
   const held = survival.held, id = held?.id ?? 0, adult = (mob.growingAge ?? 0) >= 0, creative = !!survival.creative;
   const spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
   const wear = () => { if (!creative && survival.count(SHEARS)) survival.wear(SHEARS, 1); };
@@ -82,7 +82,7 @@ export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null
 // Kinds whose own interact consumes the click first on the client too (an adult villager's trade window, a tamed wolf's or ocelot's sit) are left to the server; a wrong guess is put right by `animResend`.
 const takesClickFirst = (mob) => (mob.type === 'villager' && (mob.growingAge ?? 0) >= 0) || ((mob.type === 'wolf' || mob.type === 'ocelot') && !!mob.owner); // EntityVillager.interact (adult), EntityTameable.interact (tamed)
 function predictEntityExtras(mob, survival, selfId = null, sneak = false) {
-  if (!mob || mob.health <= 0) return null;
+  if (!mob || (mob.health <= 0 && mob.type === 'villager')) return null; // b79: only EntityVillager.interact tests isEntityAlive; a corpse takes the lead, name tag, egg and flint the same way
   const held = survival.held, id = held?.id ?? 0;
   const creative = !!survival.creative, spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
   if (!id) return mob.type === 'horse' ? predictHorse(mob, survival, spend, sneak) : null; // an empty hand mounts or opens the gear window

@@ -1043,7 +1043,8 @@ export class EntityWorld {
   pick(origin, dir, reach, wallDistance = reach) {
     let result = null;
     const cands = [];
-    for (const e of this.entities) if (e.health > 0 || e.leash) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
+    // b79: canBeCollidedWith is !isDead and a dying mob is not dead until its 20-tick animation ends, so the ray picks every corpse still in the list (the dragon's own 200-tick death keeps the old rule, open).
+    for (const e of this.entities) if (e.health > 0 || e.type !== "ender_dragon") { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
     for (const { key: e, c } of orderTargets(cands)) { // b72: the client world lists entities in chunk order, which decides equal distances (candidate-order.js)
       // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
       // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
@@ -1729,7 +1730,7 @@ export class EntityWorld {
   // EntityAnimal.interact (leads2-reference.json sizes): the check is the held stack itself, whatever its size (a stack of size <= 0 still feeds);
   // `--stackSize` and the emptying of a slot left at size <= 0 run outside Creative only.
   feed(e,id,survival){
-    if(!this.entities.includes(e)||e.health<=0||!isBreedingItem(e.type,id)||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
+    if(!this.entities.includes(e)||!isBreedingItem(e.type,id)||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
     if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
@@ -1769,7 +1770,7 @@ export class EntityWorld {
   // when the egg's class is assignable from the mob's (Cow also takes a mooshroom) the mob's createChild(itself) is spawned
   // as a baby (growing age -24000) at its position and one egg is used up outside Creative. `egg` is the SPAWN_EGGS row.
   spawnEggBaby(e, survival, egg) {
-    if (!egg || !AGEABLE_EGG_TYPES[egg.entity]?.includes(e.type) || e.health <= 0) return false;
+    if (!egg || !AGEABLE_EGG_TYPES[egg.entity]?.includes(e.type) ) return false;
     let baby;
     if (e.type === "villager") baby = this.spawnVillagerChild(e);
     else this.entities.push(baby = this.makeBaby(e, e));
@@ -1946,7 +1947,7 @@ export class EntityWorld {
   // motionY += rand * 0.05 and motionX/Z += (rand - rand) * 0.1), plays mob.sheep.shear
   // and the shears lose 1 durability (not in Creative).
   shear(e,id,survival){
-    if(!this.entities.includes(e)||e.health<=0||e.type!=='sheep'||id!==125||e.sheared||e.growingAge<0)return false;
+    if(!this.entities.includes(e)||e.type!=='sheep'||id!==125||e.sheared||e.growingAge<0)return false;
     if(!survival.creative&&!survival.count(id))return false;
     const r=this.random,n=1+Math.floor(r()*3);e.sheared=true;
     for(let i=0;i<n;i++){const my=f(r()*f(0.05)),mx=f(f(r()-r())*f(0.1)),mz=f(f(r()-r())*f(0.1));
@@ -1960,7 +1961,7 @@ export class EntityWorld {
   // unsheared sheep's sets it and loses one item (Creative restores the stack). Lambs
   // are dyed too. Returns true for any sheep, as the original does.
   dye(e,stack,survival){
-    if(!this.entities.includes(e)||e.health<=0||e.type!=='sheep'||stack?.id!==DYE)return false;
+    if(!this.entities.includes(e)||e.type!=='sheep'||stack?.id!==DYE)return false;
     const colour=~stack.damage&15;
     if(!e.sheared&&e.color!==colour){
       e.color=colour;

@@ -135,8 +135,8 @@ test("cows take an empty Survival bucket before the ray; milk starts the drink i
 
   const dead = fixture(BUCKET, 1);
   assert.equal(useHeldBucket(dead.state, { id: BUCKET, aimedEntity: { entity: { type: "cow", health: 0 } },
-    bucket: { ray: null, liquid: true, hit: null } }, dead.hooks).branch, "no-eye-ray");
-  assert.deepEqual(dead.calls, []);
+    bucket: { ray: null, liquid: true, hit: null } }, dead.hooks).branch, "milk-cow"); // b79: EntityCow.interact (wh.a) has no health test; a dying cow is milked
+  assert.ok(dead.calls.length > 0);
 
   for (const mode of ["survival", "creative"]) {
     const m = fixture(MILK_BUCKET, 1, mode);

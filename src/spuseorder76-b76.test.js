@@ -47,7 +47,7 @@ test('empty bucket at a cow milks it before any fluid trace; Creative falls thro
   assert.equal(run(c).bucket, 'invalid-bucket-target'); // the cow gives nothing in Creative; the item's own (trace-less) use follows
   assert.equal(c.state.survival.held.id, BUCKET);
   const dead = scene(BUCKET, { ...cow(), health: 0 });
-  assert.equal(run(dead).bucket, 'invalid-bucket-target');
+  assert.equal(run(dead).bucket, 'milk-cow'); // b79: wh.a (EntityCow.interact) has no health test; a dying cow is milked
 });
 
 test('milk bucket at a cow still starts the drink (cows only take the empty bucket)', () => {
