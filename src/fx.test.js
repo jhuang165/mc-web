@@ -21,8 +21,7 @@ const state = (raw) => {
   r.seed = BigInt(raw);
   return r;
 };
-// Gaussian velocities (indices 4-6) can differ by an ulp: JavaRandom.nextGaussian uses
-// Math.log where java.util.Random has StrictMath.log. Everything else is exact.
+// Gaussian velocities (indices 4-6) were an ulp apart while JavaRandom used Math.log; it uses StrictMath.log's port now (b78), the 1e-16 slack is kept.
 function gaussianCalls(actual, expected, what) {
   assert.equal(actual.length, expected.length, what);
   actual.forEach((call, i) => {

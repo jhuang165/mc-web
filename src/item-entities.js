@@ -15,7 +15,7 @@ import { LAVA } from "./world.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { entityPushOut } from "./entities.js";
-import { freshEntityRandom } from "./java-random.js";
+import { freshEntityRandom, gaussianFrom } from "./java-random.js";
 import { orderTargets } from "./candidate-order.js"; // b73
 import { mhSin, mhCos } from "./lighting.js";
 
@@ -84,8 +84,8 @@ export class ItemEntities {
   // 0.1-0.9 inside the block in pieces of 10-30, with gaussian motion x 0.05
   // (+0.2 up) and no pickup delay.
   spill(stacks, bx, by, bz) {
-    const r = this.random,
-      gauss = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+    const r = this.random, // Block.rand.nextGaussian: the polar method with StrictMath.log (java-random.js), the cached second value kept per host
+      gauss = (this.spillGauss ??= gaussianFrom(r));
     for (const s of stacks) {
       if (!s?.count) continue;
       const ox = f(f(r() * 0.8) + 0.1), oy = f(f(r() * 0.8) + 0.1), oz = f(f(r() * 0.8) + 0.1);

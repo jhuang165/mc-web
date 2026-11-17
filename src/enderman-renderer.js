@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { mhCos, mhSin } from "./lighting.js";
+import { JavaRandom } from "./java-random.js";
 import { fromOriginal } from "./block-registry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { trackCubeUv, trackUv } from "./uv-rebake.js";
@@ -86,7 +87,8 @@ function setHeld(r, renderer, e, material) {
   st.held.add(new THREE.Mesh(g, material));
 }
 
-const gaussian = () => (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.7;
+const shake = new JavaRandom(Math.floor(Math.random() * 2 ** 48)); // RenderEnderman's own java.util.Random
+const gaussian = () => shake.nextGaussian();
 export function animateEnderman(r, e, pose, renderer) {
   const st = r.enderman, carrying = (e.carried ?? 0) > 0;
   if (!st.material) {
