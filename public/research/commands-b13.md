@@ -131,3 +131,4 @@ The probe also confirms these rules:
 - **friendlyfire and seeFriendlyInvisibles.** They are stored and saved, but have no effect: there is no second player.
 - **Tab score.** The Tab score column reads a missing score as 0 and does not add it to the saved scoreboard. Natively the score is created, but only in the client's copy.
 - **Integrated-server details.** Scoreboard packets, multiplayer sync and other players' scores do not exist in the port.
+  - Batch 79 (docs sweep, 2026-11-16): the four lines above describe single player, which has one player. On the dedicated server the scoreboard exists with its packets (`src/multiplayer/server-scoreboard.js`, `client-scoreboard.js`, batch 64): belowName is drawn on remote name labels (`remote-labels.js`) and friendlyFire decides PvP (`server-pvp.js`).

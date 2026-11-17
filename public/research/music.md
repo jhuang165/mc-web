@@ -85,6 +85,8 @@ both stop the record. The port's `jukebox.js` already called `play(null)` on bot
 listener every tick. Records do not count toward the 18-sound effect cap. A record never resumes after a reload; the
 original starts one only when the disc is inserted.
 
+Batch 79 (docs sweep, 2026-11-16): the "sets the GuiIngame record line from `ItemRecord.getRecord(name)`" sentence above does not hold: `playRecord` passes `records.<name>` to `getRecord`, whose map is keyed by the bare name, so it returns null and no record line is set (bytecode-read, `spexec78-b78-track.md`). The port shows no "Now playing" text for a jukebox.
+
 ## Cave mood sound (World.func_147467_a, ahb.a(IILapx;)V)
 
 This step runs first in WorldServer's per-chunk loop (`func_147456_g`). The lightning roll, ice/snow and the random

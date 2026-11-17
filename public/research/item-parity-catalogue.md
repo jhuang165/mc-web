@@ -41,10 +41,10 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 6 | minecraft:sapling | 4 | — | 48:4 | Partial; listed, behavior audit | I, B |
 | 6 | minecraft:sapling | 5 | — | 48:5 | Partial; listed, behavior audit | I, B |
 | 7 | minecraft:bedrock | 0 | — | 11:0 | Partial; listed, behavior audit | I, B |
-| 8 | minecraft:flowing_water | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 9 | minecraft:water | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 10 | minecraft:flowing_lava | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 11 | minecraft:lava | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 8 | minecraft:flowing_water | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 9 | minecraft:water | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 10 | minecraft:flowing_lava | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 11 | minecraft:lava | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 12 | minecraft:sand | 0 | — | 6:0 | Partial; listed, behavior audit | I, B |
 | 12 | minecraft:sand | 1 | — | 6:1 | Partial; listed, behavior audit | I, B |
 | 13 | minecraft:gravel | 0 | — | 25:0 | Partial; listed, behavior audit | I, B |
@@ -106,7 +106,7 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 40 | minecraft:red_mushroom | 0 | — | 76:0 | Partial; listed, behavior audit | I, B |
 | 41 | minecraft:gold_block | 0 | — | 27:0 | Partial; listed, behavior audit | I, B |
 | 42 | minecraft:iron_block | 0 | — | 26:0 | Partial; listed, behavior audit | I, B |
-| 43 | minecraft:double_stone_slab | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 43 | minecraft:double_stone_slab | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 44 | minecraft:stone_slab | 0 | — | 1103:0 | Partial; listed, behavior audit | I, B |
 | 44 | minecraft:stone_slab | 1 | — | 82:0 | Partial; listed, behavior audit | I, B |
 | 44 | minecraft:stone_slab | 3 | — | 1103:3 | Partial; listed, behavior audit | I, B |
@@ -120,16 +120,16 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 48 | minecraft:mossy_cobblestone | 0 | — | 74:0 | Partial; listed, behavior audit | I, B |
 | 49 | minecraft:obsidian | 0 | — | 22:0 | Partial; listed, behavior audit | I, B |
 | 50 | minecraft:torch | 0 | — | 20:0 | Partial; listed, behavior audit | I, B |
-| 51 | minecraft:fire | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 52 | minecraft:mob_spawner | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 51 | minecraft:fire | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 52 | minecraft:mob_spawner | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 53 | minecraft:oak_stairs | 0 | — | 87:0 | Partial; listed, behavior audit | I, B |
 | 54 | minecraft:chest | 0 | — | 41:0 | Partial; listed, behavior audit | I, B |
 | 56 | minecraft:diamond_ore | 0 | — | 17:0 | Partial; listed, behavior audit | I, B |
 | 57 | minecraft:diamond_block | 0 | — | 28:0 | Partial; listed, behavior audit | I, B |
 | 58 | minecraft:crafting_table | 0 | — | 13:0 | Partial; listed, behavior audit | I, B |
-| 60 | minecraft:farmland | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 60 | minecraft:farmland | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 61 | minecraft:furnace | 0 | — | 14:0 | Partial; listed, behavior audit | I, B |
-| 62 | minecraft:lit_furnace | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 62 | minecraft:lit_furnace | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 65 | minecraft:ladder | 0 | — | 52:0 | Partial; listed, behavior audit | I, B |
 | 66 | minecraft:rail | 0 | — | 61:0 | Partial; listed, behavior audit | I, B |
 | 67 | minecraft:stone_stairs | 0 | — | 88:0 | Partial; listed, behavior audit | I, B |
@@ -150,7 +150,7 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 87 | minecraft:netherrack | 0 | — | 150:0 | Partial; listed, behavior audit | I, B |
 | 88 | minecraft:soul_sand | 0 | — | 151:0 | Partial; listed, behavior audit | I, B |
 | 89 | minecraft:glowstone | 0 | — | 1131:0 | Partial; listed, behavior audit | I, B |
-| 90 | minecraft:portal | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 90 | minecraft:portal | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 91 | minecraft:lit_pumpkin | 0 | — | 1148:0 | Partial; listed, behavior audit | I, B |
 | 95 | minecraft:stained_glass | 0 | — | 1140:0 | Partial; listed, behavior audit | I, B |
 | 95 | minecraft:stained_glass | 1 | — | 1140:1 | Partial; listed, behavior audit | I, B |
@@ -179,8 +179,8 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 98 | minecraft:stonebrick | 1 | — | 1101:1 | Partial; listed, behavior audit | I, B |
 | 98 | minecraft:stonebrick | 2 | — | 1101:2 | Partial; listed, behavior audit | I, B |
 | 98 | minecraft:stonebrick | 3 | — | 1101:3 | Partial; listed, behavior audit | I, B |
-| 99 | minecraft:brown_mushroom_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 100 | minecraft:red_mushroom_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 99 | minecraft:brown_mushroom_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 100 | minecraft:red_mushroom_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 101 | minecraft:iron_bars | 0 | — | 99:0 | Partial; listed, behavior audit | I, B |
 | 102 | minecraft:glass_pane | 0 | — | 1100:0 | Partial; listed, behavior audit | I, B |
 | 103 | minecraft:melon_block | 0 | — | 81:0 | Partial; listed, behavior audit | I, B |
@@ -194,19 +194,19 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 113 | minecraft:nether_brick_fence | 0 | — | 154:0 | Partial; listed, behavior audit | I, B |
 | 114 | minecraft:nether_brick_stairs | 0 | — | 155:0 | Partial; listed, behavior audit | I, B |
 | 116 | minecraft:enchanting_table | 0 | — | 86:0 | Partial; listed, behavior audit | I, B |
-| 119 | minecraft:end_portal | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 119 | minecraft:end_portal | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 120 | minecraft:end_portal_frame | 0 | — | 1104:0 | Partial; listed, behavior audit | I, B |
 | 121 | minecraft:end_stone | 0 | — | 152:0 | Partial; listed, behavior audit | I, B |
-| 122 | minecraft:dragon_egg | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 122 | minecraft:dragon_egg | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 123 | minecraft:redstone_lamp | 0 | — | 1121:0 | Partial; listed, behavior audit | I, B |
-| 125 | minecraft:double_wooden_slab | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 125 | minecraft:double_wooden_slab | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 126 | minecraft:wooden_slab | 0 | — | 1165:0 | Partial; listed, behavior audit | I, B |
 | 126 | minecraft:wooden_slab | 1 | — | 1165:1 | Partial; listed, behavior audit | I, B |
 | 126 | minecraft:wooden_slab | 2 | — | 1165:2 | Partial; listed, behavior audit | I, B |
 | 126 | minecraft:wooden_slab | 3 | — | 1165:3 | Partial; listed, behavior audit | I, B |
 | 126 | minecraft:wooden_slab | 4 | — | 1165:4 | Partial; listed, behavior audit | I, B |
 | 126 | minecraft:wooden_slab | 5 | — | 1165:5 | Partial; listed, behavior audit | I, B |
-| 127 | minecraft:cocoa | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 127 | minecraft:cocoa | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 128 | minecraft:sandstone_stairs | 0 | — | 90:0 | Partial; listed, behavior audit | I, B |
 | 129 | minecraft:emerald_ore | 0 | — | 66:0 | Partial; listed, behavior audit | I, B |
 | 130 | minecraft:ender_chest | 0 | — | 1941:0 | Partial; listed, behavior audit | I, B |
@@ -215,12 +215,12 @@ Each row inherits the gates in its last column. Evidence here verifies native re
 | 134 | minecraft:spruce_stairs | 0 | — | 91:0 | Partial; listed, behavior audit | I, B |
 | 135 | minecraft:birch_stairs | 0 | — | 92:0 | Partial; listed, behavior audit | I, B |
 | 136 | minecraft:jungle_stairs | 0 | — | 93:0 | Partial; listed, behavior audit | I, B |
-| 137 | minecraft:command_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 137 | minecraft:command_block | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 138 | minecraft:beacon | 0 | — | 173:0 | Partial; listed, behavior audit | I, B |
 | 139 | minecraft:cobblestone_wall | 0 | — | 1169:0 | Partial; listed, behavior audit | I, B |
 | 139 | minecraft:cobblestone_wall | 1 | — | 1169:1 | Partial; listed, behavior audit | I, B |
-| 141 | minecraft:carrots | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
-| 142 | minecraft:potatoes | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); no item form natively | I, B |
+| 141 | minecraft:carrots | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
+| 142 | minecraft:potatoes | — | — | — | Partial; technical block registration, browser block mapped (see [block catalogue](block-parity-catalogue.md)); native ItemBlock exists but is not in the Creative lists (executed Item.getItemFromBlock, [item-form79-reference.json](item-form79-reference.json)) | I, B |
 | 143 | minecraft:wooden_button | 0 | — | 1124:0 | Partial; listed, behavior audit | I, B |
 | 145 | minecraft:anvil | 0 | — | 85:0 | Partial; listed, behavior audit | I, B |
 | 145 | minecraft:anvil | 1 | — | 85:1 | Partial; listed, behavior audit | I, B |

@@ -40,6 +40,7 @@ Not exact
 ## Gaps
 
 - Standing in a portal does nothing: no dimension switch, no Teleporter, no portal-cooldown or nausea overlay.
+  - Batch 79 (docs sweep, 2026-11-16): stale. Standing in a portal switches dimension through `PortalState` and `Teleporter` with the portal overlay (`src/dimension-live.js`, [dimensions](dimensions.md)).
 - Live pigman spawning from portals (batch 14): `NetherLive.randomTick` runs `portalSpawnPosition` on a portal block's random tick (Overworld only, `doMobSpawning`, `nextInt(2000) < difficulty id`, no draw when gated) and `EntityWorld.spawnPortalPigman` creates the pig zombie (random yaw, `onSpawnWithEgg`, portal cooldown 300). The roll and position are probe-replayed; the probe also records a second entity ("wg", a chicken jockey) on one spawn, which the port's `onSpawnWithEgg` draws and drops.
 - The `portal.portal` sound file is not in public/audio (the importer regex now includes `portal\/`, the importer was NOT run). The ambient call is silent until it is imported.
 - `portalDisplayTick` (particles and ambience) was written from the decompile and is not probe-verified.

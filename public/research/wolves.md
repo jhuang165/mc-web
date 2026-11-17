@@ -26,6 +26,7 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 ## Gaps
 
 - The owner is "the player" (a non-empty string); a Java UUID or name is read as the player. There is no multiplayer owner lookup.
+  - Batch 79 (docs sweep, 2026-11-16): single player only. The dedicated server has an owner store (`src/multiplayer/server-owners.js`; batch 76 added horse owners to it, wolf owners were not rechecked). The "No leash, no horses" line below is stale: leads and horses exist ([leash](leash.md), [horses](horses.md)); whether a wolf can take a lead was not rechecked.
 - Batch 69 (docs sweep): the wolf spawn egg exists (`src/spawn-eggs.js`, id 95) and natural spawning runs through `src/spawner-animals.js`.
 - Pathfinding and target-search exactness is that of the existing AI framework, not a byte-for-byte replay of `PathFinder` or `EntityAITarget` timing.
 - Arrows and explosions are not recorded as owner-hurt or attacker events. HurtByTarget's call for help skips a tamed wolf when the target is its owner, as the original does (`vn` checks `isOnSameTeam`, and `EntityTameable.c` is true for the owner).
