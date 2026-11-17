@@ -16,6 +16,7 @@ import { StructureCache } from '../population-world.js';
 import { WorldChunkManager } from '../biome-layers.js';
 import { javaSeed } from '../java-world.js';
 import { WATER } from '../world.js';
+import { nearPlayers } from './server-music.js';
 
 const f = Math.fround, caches = new Map();
 const NEAR = 64 * 64;
@@ -45,6 +46,9 @@ export class ServerEyes {
     this.system.launch(at.x, y, at.z, [goal[0] - ox, goal[1], goal[2] - oz]);
     const rand = p.rand?.nextFloat ? p.rand : null, r = rand ? rand.nextFloat() : Math.random();
     this.dispense.fx.push({ k: 'sound', name: 'random.bow', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: f(f(0.4) / f(f(f(r) * f(0.4)) + f(0.8))), dim: 0 });
+    // world.playAuxSFXAtEntity(null, 1002, (int) x, (int) y, (int) z, 0) (ItemEnderEye bytecode): the null player excludes nobody, so S28 goes to every player of the dimension under 64 blocks, the thrower included.
+    const [ax, ay, az] = [Math.trunc(at.x), Math.trunc(at.y), Math.trunc(at.z)];
+    for (const q of nearPlayers(sim, 0, ax, ay, az)) (q.itemsOut ??= []).push({ type: 'aux', events: [{ id: 1002, x: ax, y: ay, z: az, data: 0 }] });
     if (!s.creative) s.take(ITEM_EYE_OF_ENDER);
     p.swing = 6;
     return true;
