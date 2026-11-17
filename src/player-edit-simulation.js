@@ -20,7 +20,7 @@ import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BEACON } from './pyramid.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
-import { REDSTONE_ORE, LIT_REDSTONE_ORE } from './world.js';
+import { REDSTONE_ORE, LIT_REDSTONE_ORE, PISTON_MOVING } from './world.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { ITEM_EMPTY_MAP } from './maps.js';
 import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
@@ -155,7 +155,17 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
   }
 }
 
-export function applyPlayerEdit(state, { place = false, target = null, aimedEntity = null, bucket = null } = {}, hooks = {}) {
+// b78 spswing78: Minecraft.rightClickMouse (bao.am, bytecode-read) swings (bjk.ba) only when PlayerControllerMP.onPlayerRightClick (bje.a) returns true: the
+// client-world Block.onBlockActivated answered true, or ItemStack.tryPlaceItemIntoWorld (add.a) did. A declined click whose held item cannot be placed (food, sword,
+// armour, a refused ItemBlock, seeds that did not plant, a click on nothing) falls to sendUseItem, which never swings. Items that swing on their own (rod, map) do so above.
+const NO_SWING = /^(begin-eating|begin-blocking|no-block-target|equip-armor|plant-seeds-failed|hoe-no-item|bone-meal-no-item|flint-invalid-position|interact-entity|placement-.*)$/;
+export function applyPlayerEdit(state, req = {}, hooks = {}) {
+  const ctx = { swingPlace: false, clientActivated: false, declined: false };
+  const result = applyEditInner(state, req, hooks, ctx);
+  if (ctx.swingPlace && result?.handled && (ctx.clientActivated || !(ctx.declined || NO_SWING.test(result.branch)))) hooks.swing?.();
+  return result;
+}
+function applyEditInner(state, { place = false, target = null, aimedEntity = null, bucket = null } = {}, hooks = {}, ctx = {}) {
   const random = hooks.random ?? Math.random;
   const act = (branch, extra = {}) => ({ handled: true, branch, ...extra }),
     hook = (name, ...args) => hooks[name]?.(...args);
@@ -171,6 +181,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   // b77 spcauldron77: the client-world onBlockActivated answer (block-activation.js) decides whether the held item's right-click runs.
   const usesBlock = activates && !aimedEntity && target && (swallowsItemUse(state.world.get(...target.block), STATIONS, targetBlock === 178 ? state.world.getMeta(...target.block) !== 0 : false) || usesStoneUtility);
+
+  ctx.clientActivated = !!usesBlock;
 
   // Minecraft.rightClickMouse: the clicked entity interacts before any item use; only a declined click goes on to the held item.
   if (place && aimedEntity?.entity) { const r = interactEntityFirst(state, aimedEntity.entity, { id, item }, hooks, act); if (r) return r; }
@@ -244,7 +256,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // ItemMonsterPlacer.onItemRightClick: an egg aimed at a water surface (spawn-egg-use.js); other clicks fall through to onItemUse.
   if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && useEggOnWater(state, bucket, hooks)) { hook('swing'); return act('use-spawn-egg-water'); }
   // ItemFood starts the use animation, not an attack swing. A successful planting action swings separately below.
-  if (!place || (!item?.food && !aimedEntity)) hook('swing'); // a declined entity click never swings (b77)
+  if (!place) hook('swing'); else if (!aimedEntity) { if (ctx.clientActivated) hook('swing'); else ctx.swingPlace = true; } // a declined entity click never swings (b77); a block click swings after its outcome is known (b78, applyPlayerEdit)
   if (!place && aimedEntity?.entity) {
     state.mining = null;
     const critical = isCritical({ fallDistance: state.fallDistance, onGround: state.grounded, inWater: state.wasInWater });
@@ -457,6 +469,16 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('openHopper', hopper, key, target.block);
       return act('open-hopper');
     }
+    // BlockPistonMoving.onBlockActivated (apr, bytecode-read): `if (!world.isRemote && world.getTileEntity(x, y, z) == null) { setBlockToAir; return true }` else false.
+    // The client world is remote, so it never activates here (no swing from it); the server removes a moving block whose tile is gone and refuses the item use.
+    // A held ItemBlock still places on the client and swings (approximated by ITEMS[id].block); with a tile the server's answer is false and the item use goes on.
+    if (activates && block === PISTON_MOVING && hook('pistonMovingTile', x, y, z) === false) {
+      state.world.set(x, y, z, 0, true, 0);
+      hook('updateBlock', x, z, y);
+      hook('markUnsaved');
+      ctx.declined = !item?.block;
+      return act('remove-piston-moving');
+    }
     if (item?.kind === 'hoe') {
       if (!state.survival.creative && !state.survival.usable(id)) return act('hoe-no-item');
       if (target.adjacent?.[1] !== y - 1 && state.farming.till(x, y, z)) {
@@ -483,7 +505,6 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (plantedBlock(id)) {
       if ((state.survival.creative || state.survival.usable(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
         if (!state.survival.creative) state.survival.take(id);
-        if (item?.food) hook('swing');
         hook('applyFarmUpdates', state.farming.drain());
         hook('renderHotbar');
         // b75 spsounds75: ItemSeeds.onItemUse plays no sound (bytecode-read, sound-sweep-reference.json: no sound for seeds or nether wart).

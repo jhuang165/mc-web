@@ -12,7 +12,7 @@
 //   akn door (wood and iron), akp dragon egg, aks enchanting table, akv ender chest, akz fence (wood and nether brick: remote check),
 //   ala fence gate, ale furnace, aln hopper, alv lever, amj note block, anf repeater, aoe trapdoor (wood and iron).
 //   conditional: alq jukebox (false with metadata 0), ald flower pot (true only when a held plant is accepted), aob TNT (true only
-//   with flint and steel; fire charge does not count), apr piston moving (true when its tile is gone).
+//   with flint and steel; fire charge does not count), apr piston moving (false on the client: `!isRemote && no tile` removes the block and answers true only on the server; b78 spswing78).
 //   false: aji (the default), amz redstone ore (sparkles, then false), app piston base, ans stairs (the base block's answer, false).
 import { CAULDRON, FLOWER_POT, FENCE } from './world.js';
 import { NETHER_FENCE } from './nether-blocks.js';

@@ -96,7 +96,8 @@ test('client: a right click opens the book unless a block takes it first (sneaki
   assert.equal(bookOpensOnUse({ held, targetBlock: 1 }), true);
   assert.equal(bookOpensOnUse({ held, targetBlock: 41 }), false); // chest (internal id)
   assert.equal(bookOpensOnUse({ held, targetBlock: 41, sneaking: true }), true);
-  assert.equal(bookOpensOnUse({ held, targetBlock: JUKEBOX }), false);
+  assert.equal(bookOpensOnUse({ held, targetBlock: JUKEBOX }), true); // b78: an empty jukebox (meta 0) answers false on the client
+  assert.equal(bookOpensOnUse({ held, targetBlock: JUKEBOX, jukeboxLoaded: true }), false);
   assert.equal(bookOpensOnUse({ held: { id: 4 } }), false);
   assert.equal(bookOpensOnUse({ held: { id: ITEM_WRITTEN_BOOK }, aimedEntity: true }), false);
   assert.deepEqual(bookMessage('MC|BSign', { a: 1 }), { type: 'bookSign', packet: { a: 1 } });

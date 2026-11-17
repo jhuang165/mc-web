@@ -35,9 +35,10 @@ import { ITEM_SKULL } from './skull.js';
 import { ITEM_CAKE } from './stems-cake.js';
 import { CAULDRON, FLOWER_POT, ITEM_CAULDRON, ITEM_FLOWER_POT } from './stone-utility.js';
 import { STATIONS } from './player-edit-simulation.js';
+import { swallowsItemUse } from './block-activation.js';
 import { traceBucket, placeContainedLiquid } from './buckets.js';
 import { canPlace as fireCanPlace } from './fire.js';
-import { potInsertion, potContents } from './stone-utility.js';
+import { potInsertion, potContents, potUse } from './stone-utility.js';
 import { makeStack } from './inventory.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { isSplashDamage, ITEM_POTION } from './potions.js';
@@ -286,19 +287,23 @@ export function dryUse(state, request) {
   return [];
 }
 
-// Cells whose target block takes the click as a use (applyPlayerEdit's station and activation branches), so a held block is not placed there.
-export function activatesOnClick(block) {
-  return STATIONS.has(block) || block === 178 || block === CAULDRON || block === FLOWER_POT || isDoor(block) || isChestBlock(block);
+// b78 spswing78: blocks whose CLIENT-world onBlockActivated answers true, so PlayerControllerMP.onPlayerRightClick skips the held item's own use (block-activation.js
+// swallowsItemUse, the b77 bytecode-read table). It replaces the older list (STATIONS, any jukebox, any flower pot, doors, chests). Rows that changed: fence, nether
+// brick fence, wooden button and both comparators now swallow; an unloaded jukebox (meta 0) no longer does; a flower pot swallows only when the held item is a plant it accepts.
+// `at` is the block's cell and `heldId` / `heldDamage` the stack, needed for the jukebox and the pot; without them a jukebox counts as empty and a pot as declining.
+export function activatesOnClick(block, world = null, at = null, heldId = 0, heldDamage = 0) {
+  if (block === FLOWER_POT) return !!(world && at && heldId && potUse(world, at[0], at[1], at[2], heldId, heldDamage | 0));
+  return swallowsItemUse(block, STATIONS, block === 178 && !!world && !!at && world.getMeta(at[0], at[1], at[2]) !== 0);
 }
 // Items that are not ItemBlocks (no ITEMS[id].block) but that placeHeldBlock places: door items, reeds, redstone, repeater, brewing stand, cauldron, flower pot.
 export const PLACED_ITEMS = new Set([WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, REEDS_ITEM, ITEM_REDSTONE, ITEM_REPEATER, ITEM_BREWING_STAND, ITEM_CAULDRON, ITEM_FLOWER_POT]);
 const NOT_PLAIN = new Set([ITEM_BED, ITEM_SIGN, ITEM_SKULL, ITEM_CAKE]);
 // A held ItemBlock whose right click on a plain block reaches placeHeldBlock (no entity, no activated block, not sneaking past one).
-export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
+export function predictsPlacement({ world, target, heldId, heldDamage = 0, sneaking, aimed }) {
   if (aimed || !target || !heldId) return false;
   const item = ITEMS[heldId];
   if (!item?.block || NOT_PLAIN.has(heldId) || isLiquid(heldId)) return false;
-  return sneaking || !activatesOnClick(world.get(...target.block));
+  return sneaking || !activatesOnClick(world.get(...target.block), world, target.block, heldId, heldDamage);
 }
 
 // What a right click on a block draws at once: 'activate' (door, trapdoor, gate toggle, button, repeater), 'bucket' (ItemBucket's own trace), 'place' (placeHeldBlock)
@@ -307,18 +312,19 @@ export function predictsPlacement({ world, target, heldId, sneaking, aimed }) {
 export function useKind({ world, target, heldId, heldDamage = 0, sneaking, aimed }) {
   if (aimed) return null;
   const item = heldId ? ITEMS[heldId] : null, b = target ? world.get(...target.block) : 0;
+  const takes = () => activatesOnClick(b, world, target.block, heldId, heldDamage);
   if (target && (!sneaking || !item)) { // Block.onBlockActivated that acts on the client: the egg's particles, the command block's screen, a pot taking a plant
     if (b === DRAGON_EGG) return 'egg';
     if (b === COMMAND_BLOCK) return 'command';
     if (b === FLOWER_POT && heldId && !potContents(world, ...target.block) && potInsertion(heldId, heldDamage | 0)) return 'pot';
   }
-  if (target && isFlintAndSteel(heldId) && (sneaking || !activatesOnClick(b))) return 'flint';
+  if (target && isFlintAndSteel(heldId) && (sneaking || !takes())) return 'flint';
   if (target && (!sneaking || !item) && (isDoor(b) || b === TRAPDOOR || b === FENCE_GATE || b === STONE_BUTTON || b === WOODEN_BUTTON || b === REPEATER || b === COMPARATOR || b === COMPARATOR_POWERED)) return 'activate';
-  if (tracedBucket(heldId)) return !target || sneaking || !activatesOnClick(b) ? 'bucket' : null; // the trace needs no block under the cursor (water)
+  if (tracedBucket(heldId)) return !target || sneaking || !takes() ? 'bucket' : null; // the trace needs no block under the cursor (water)
   if (!target) return null;
-  if (predictsPlacement({ world, target, heldId, sneaking, aimed }) || (PLACED_ITEMS.has(heldId) && (sneaking || !activatesOnClick(b)))) return 'place';
-  if (heldId === ITEM_DYE && heldDamage === 3 && (sneaking || !activatesOnClick(b))) return 'place'; // cocoa beans on a jungle log (ItemDye.onItemUse, probe 'cocoa')
-  if (!heldId || (!sneaking && activatesOnClick(b))) return null;
+  if (predictsPlacement({ world, target, heldId, heldDamage, sneaking, aimed }) || (PLACED_ITEMS.has(heldId) && (sneaking || !takes()))) return 'place';
+  if (heldId === ITEM_DYE && heldDamage === 3 && (sneaking || !takes())) return 'place'; // cocoa beans on a jungle log (ItemDye.onItemUse, probe 'cocoa')
+  if (!heldId || (!sneaking && takes())) return null;
   return heldId === ITEM_CAKE || wartPlantedBy(heldId) || plantedBlock(heldId) ? 'use' : null;
 }
 const ITEM_DYE = 351;
