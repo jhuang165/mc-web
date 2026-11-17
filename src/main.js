@@ -1174,7 +1174,8 @@ function icon(id, damage = 0, stack) {
 const heldId = () => survival.held?.id || 0;
 const recordHud = createRecordHud(document.body);
 // b66 mpbooks: S28 1005 (RenderGlobal.playRecord) and S24 on a note block over a connection (multiplayer/client-music.js)
-const mpRecord = { play: (item, x, y, z) => { if (item) recordHud.show(item); sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z); } };
+// RenderGlobal.playRecord (bma.a, bytecode-read + executed: spexec78-reference.json): the HUD lookup ItemRecord.getRecord("records.<name>") finds nothing (the map is keyed by the bare name), so no "Now playing" line.
+const mpRecord = { play: (item, x, y, z) => { sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z); } };
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
@@ -1735,10 +1736,9 @@ async function launch(record, prepared, { slice = false } = {}) {
       commandHost: () => commandHost,
       music: {
         particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
-        // RenderGlobal.playRecord: stop the record at the jukebox; a disc sets the HUD line and plays "records.<name>" there
+        // RenderGlobal.playRecord: stop the record at the jukebox; a disc plays "records.<name>" there (no HUD line: the lookup misses, spexec78)
         // (music.js recordSound; silent unless npm run music:fetch installed the streams, public/research/music.md).
         play: (item, x, y, z) => {
-          if (item) recordHud.show(item);
           sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z);
         },
         spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
