@@ -424,9 +424,11 @@ export class ServerMobs {
   // C02 UseEntity, interact (b61, animal-use.js): same reach as the attack; the server's own rules decide, `p.animHandled` tells the network tick to drop the click's item use.
   interact(p, wireId, claim = false) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
-    if (!mob || mob.health <= 0 || p.survival.health <= 0) return false;
+    if (!mob || p.survival.health <= 0 || (mob.health <= 0 && !mob.leash)) return false;
     if (!useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY
     this.use(v);
+    // b78: nh.a(ja) has no health test and EntityLiving.interactFirst (sw.c) none either: a lead's click works on a corpse in its death animation (the mob's own interact does not run here).
+    if (mob.health <= 0) { const done = !!this.host.leads.use(p, mob); if (!done && claim) p.seen[p.survival.inventory.current] = { id: -1, count: -1 }; p.animHandled = done && !claim ? (this.host.ticks ?? 0) + 1 : 0; return done; }
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
     if (owned) { if (unkeyed(mob)) stampOwner(mob, p); mob.ownerHere = ownedBy(mob, p); if (mob.ownerHere && mob.ownerUuid !== p.resumeKey) stampOwner(mob, p); } // b63: a legacy record is the clicker's (server-owners.js)

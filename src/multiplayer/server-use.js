@@ -53,7 +53,6 @@ export function useOnBlock(sim, p, target, id) {
   // b65 mpstats3: ItemFireball.onItemUse (bytecode-read): returns false only when the player may not edit; otherwise the cell on the clicked face takes fire when it is air,
   // the charge is spent outside Creative and the click is `true` whatever the cell held, so ItemStack.tryPlaceItemIntoWorld counts the use stat every time.
   if (id === ITEM_FIRE_CHARGE) {
-    if (s.adventure) return false;
     const q = target.adjacent, w = sim.world;
     if (q && q[1] >= 0 && q[1] < (w.height ?? 256) && (!w.inside || w.inside(...q)) && w.get(...q) === 0) {
       sound('fire.ignite', 1, Math.fround(Math.fround(sim.soundRand.nextFloat() * Math.fround(0.4)) + Math.fround(0.8)), { x: q[0] + 0.5, y: q[1] + 0.5, z: q[2] + 0.5 });
@@ -66,7 +65,7 @@ export function useOnBlock(sim, p, target, id) {
   // grass block always, a crop or stem below its last stage). The stack is spent and the use stat counted whether or not the growth roll then succeeds (a sapling's 45 %).
   // b66 bonemeal2: bone-meal.js is the single-player module (mushrooms, tall grass, double plants and cocoa too); S28 2005 (ItemDye: playAuxSFX data 0) shows the sparkles.
   if (id === DYE && s.held?.damage === 15) {
-    if (s.adventure || (!s.creative && !s.usable(id))) return false;
+    if (!s.creative && !s.usable(id)) return false;
     sim.boneRandom ??= new JRandom(Date.now());
     const grown = useBoneMeal({ world: sim.world, trees: sim.trees, farming: sim.farming, flowers: FLOWERS, grassRandom: sim.boneRandom, items: sim.items, rand: sim.weather?.random }, x, y, z); // b68 fixes68: World.rand (the Overworld's Random)
     if (grown.farm) sim.farming.drain();

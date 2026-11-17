@@ -24,12 +24,16 @@ export class ServerLeads {
     if (e.leash && (e.leash.holder !== 'player' || e.leash.holderId !== p.id)) return false; // another player's lead or a knot: not handled here
     return this.as(p, () => !!this.mobs.leashInteract(e, p.survival));
   }
-  // A right click on a fence block (BlockFence.onBlockActivated): true when the lead code took the click.
-  fence(p, [x, y, z]) {
-    const mobs = this.mobs, held = p.survival.held;
+  // A right click on a fence block. `ray` ({ eye, dir, distance }) is the click's own block ray. A knot on that fence is an entity, so the entity-first order applies (b78, Minecraft.getMouseOver
+  // keeps an entity nearer than the block): when the ray meets the knot's box before the block, EntityLeashKnot.interactFirst runs whatever the item and the sneak state (a lead attaches the
+  // holder's mobs, anything else kills the knot). Otherwise BlockFence.onBlockActivated: true when the lead code took the click.
+  fence(p, [x, y, z], ray) {
+    const mobs = this.mobs, held = p.survival.held, knot = mobs.knotAt(x, y, z);
+    const near = knot && ray ? mobs.knotRay(knot, ray.eye, ray.dir, ray.distance) : null, knotHit = near !== null && near < ray.distance;
+    if (knotHit) return this.as(p, () => !!mobs.ai.player && !!mobs.leashFence([x, y, z], p.survival, true));
     // ItemInWorldManager.activateBlockOrUseItem: a sneaking player with an item skips BlockFence.onBlockActivated; only the lead's own onItemUse (adf.a, render type 11) still ties (b77 mpknots77).
     if (p.input?.sneak && held && originalId(held) !== LEAD_ORIGINAL) return false;
-    return this.as(p, () => { const v = mobs.ai.player; return v ? !!mobs.leashFence([x, y, z], p.survival) : false; });
+    return this.as(p, () => { const v = mobs.ai.player; return v ? !!mobs.leashFence([x, y, z], p.survival, ray ? false : undefined) : false; });
   }
   // The view of the player holding `e` (ServerMobs.target), or null when the holder is gone (the lead drops here, once) or left the Overworld.
   holder(e, views) {

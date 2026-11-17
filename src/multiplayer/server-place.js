@@ -24,7 +24,7 @@ export function placeBlockItem(sim, p, target, id) {
   if (id === ITEM_CAKE) {
     const cell = cakePlacement(w, target, doorReplaceable);
     // ItemReed refuses a size-0 stack in either mode (attributes2-reference.json use, cake).
-    if (!cell || (!s.creative && !s.usable(id)) || (s.held?.id === id && s.held.count === 0) || s.adventure) return false;
+    if (!cell || (!s.creative && !s.usable(id)) || (s.held?.id === id && s.held.count === 0)) return false; // b78: no Adventure refusal (canPlayerEdit is true with a stack in hand)
     w.set(cell[0], cell[1], cell[2], CAKE, true, 0);
     if (!s.creative) s.take(id);
     placeSoundOut(sim, p, CAKE, cell); // b74 mpsounds74: ItemReed plays the cake block's place sound
@@ -32,7 +32,7 @@ export function placeBlockItem(sim, p, target, id) {
   }
   if (ITEMS[id]?.kind === 'hoe') {
     const [x, y, z] = target.block;
-    if (s.adventure || (!s.creative && !s.usable(id))) return false;
+    if (!s.creative && !s.usable(id)) return false;
     if (target.adjacent?.[1] !== y - 1 && sim.farming.till(x, y, z)) {
       s.wear(id);
       sim.farming.drain();

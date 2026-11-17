@@ -29,7 +29,7 @@ const hold = (p, stack) => { p.survival.inventory.main[0] = stack; p.survival.in
 const use = (p, id) => p.stats.get(`stat.useItem.${id}`);
 const tgt = (x, y, z, adjacent) => ({ block: [x, y, z], adjacent });
 
-test('a fire charge counts the use stat whatever the clicked face held, is spent outside Creative, and is refused in Adventure (ItemFireball.onItemUse, bytecode-read)', () => {
+test('a fire charge counts the use stat whatever the clicked face held, is spent outside Creative, and works in Adventure (ItemFireball.onItemUse, bytecode-read; b78: canPlayerEdit is true with a stack in hand)', () => {
   const s = fixture(), p = join(s);
   hold(p, makeStack(ITEM_FIRE_CHARGE, 5));
   assert.equal(useOnBlock(s, p, tgt(64, 9, 64, [64, 10, 64]), ITEM_FIRE_CHARGE), true);
@@ -42,12 +42,15 @@ test('a fire charge counts the use stat whatever the clicked face held, is spent
   assert.equal(p.survival.held.count, 3);
   assert.equal(use(p, 385), 2);
   p.survival.mode = 'adventure';
-  assert.equal(useOnBlock(s, p, tgt(64, 9, 64, [64, 10, 65]), ITEM_FIRE_CHARGE), false);
-  assert.equal(use(p, 385), 2);
+  s.world.put(64, 10, 65, 0, 0, false);
+  assert.equal(useOnBlock(s, p, tgt(64, 9, 65, [64, 10, 65]), ITEM_FIRE_CHARGE), true);
+  assert.equal(s.world.get(64, 10, 65) !== 0, true, 'Adventure lights it too');
+  assert.equal(use(p, 385), 3);
+  assert.equal(p.survival.held.count, 2);
   p.survival.mode = 'creative';
   assert.equal(useOnBlock(s, p, tgt(64, 9, 68, [64, 10, 68]), ITEM_FIRE_CHARGE), true);
-  assert.equal(p.survival.held.count, 3, 'Creative keeps the stack');
-  assert.equal(use(p, 385), 3);
+  assert.equal(p.survival.held.count, 2, 'Creative keeps the stack');
+  assert.equal(use(p, 385), 4);
 });
 
 test('bone meal counts the use stat on a sapling, grass or an unfinished crop (spent even when the roll fails) and nothing on a full crop or bare ground', () => {

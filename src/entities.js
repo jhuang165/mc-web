@@ -1045,7 +1045,7 @@ export class EntityWorld {
   pick(origin, dir, reach, wallDistance = reach) {
     let result = null;
     const cands = [];
-    for (const e of this.entities) if (e.health > 0) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
+    for (const e of this.entities) if (e.health > 0 || e.leash) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
     for (const { key: e, c } of orderTargets(cands)) { // b72: the client world lists entities in chunk order, which decides equal distances (candidate-order.js)
       // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
       // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
