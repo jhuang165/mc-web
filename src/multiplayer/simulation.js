@@ -641,7 +641,7 @@ export class DedicatedSimulation {
       const [x, y, z] = key.split(',').map(Number);
       this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     }
-    for (const [x, y, z] of this.changes.values()) this.light.update(x, y, z);
+    this.light.updateMany(this.changes.values()); // b78 mpexplosion78: one flood per merged box (lighting.js)
     const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
     for (const [x, y, z, b] of final) this.dropTiles(x, y, z, b);

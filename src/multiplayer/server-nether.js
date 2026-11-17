@@ -167,5 +167,5 @@ export function tickNether(sim, n, players) {
     const [x, y, z] = key.split(',').map(Number);
     n.changes.set(key, [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
   }
-  for (const [x, y, z] of n.changes.values()) n.light.update(x, y, z);
+  n.light.updateMany(n.changes.values()); // b78 mpexplosion78
 }

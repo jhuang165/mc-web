@@ -292,6 +292,7 @@ function lightTables() {
 // cells at or above the column height map see the sky at 15. `emission` refines
 // lightEmission by position (a lit furnace) and is only asked about blocks that
 // can emit. A world with columnBlocks(x, z) (World) is read a column at a time.
+export const RELIGHT = { mode: (typeof process !== "undefined" && process.env?.MC_RELIGHT) || "on" }; // b78 mpexplosion78: on | off | verify (LightVolume.updateMany)
 export class LightVolume {
   // `defer`: the columns and the first flood are not run here; `buildSteps()` runs them in slices (scene.js, main.js openWorld).
   constructor(world, emission = (x, y, z, b) => lightEmission(b), { defer = false } = {}) {
@@ -351,6 +352,48 @@ export class LightVolume {
     if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return null;
     this.column(x, z);
     return this.relight(Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15));
+  }
+  // b78 mpexplosion78: every changed cell of a tick relit together. update() per cell floods a 31 x 31 column box each time, so a blast's hundred broken blocks
+  // flooded the same cells a hundred times. The sky and block arrays are the unique fixed point of the world (every step costs at least 1), a change moves light
+  // only within 15 columns, and the world already holds all the changes when the relights run, so one flood over the box that covers the overlapping change boxes
+  // ends in the same arrays as the per-cell floods. Overlapping or touching boxes are merged to one rectangle; disjoint ones stay separate (no box is bigger than needed).
+  // `MC_RELIGHT=verify` runs the per-cell floods on a copy of the arrays too and throws on the first differing cell; `off` is the old per-cell loop.
+  updateMany(changes) {
+    const mode = RELIGHT.mode;
+    if (mode === "off") { for (const [x, y, z] of changes) this.update(x, y, z); return; }
+    const SIZE = this.size, boxes = [], cells = [];
+    for (const c of changes) {
+      const x = c[0], z = c[2];
+      if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) continue;
+      cells.push(c);
+    }
+    let ref = null;
+    if (mode === "verify") {
+      const before = { sky: this.sky.slice(), block: this.block.slice(), heights: this.heights.slice() };
+      for (const [x, y, z] of cells) this.update(x, y, z);
+      ref = { sky: this.sky, block: this.block, heights: this.heights };
+      this.sky = before.sky; this.block = before.block; this.heights = before.heights;
+    }
+    for (const [x, , z] of cells) {
+      this.column(x, z);
+      boxes.push([Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15)]);
+    }
+    // Merge to a fixed point: any two boxes that overlap or touch become their bounding rectangle.
+    for (let again = boxes.length > 1; again;) {
+      again = false;
+      for (let i = 0; i < boxes.length; i++) for (let j = boxes.length - 1; j > i; j--) {
+        const a = boxes[i], b = boxes[j];
+        if (a[0] <= b[1] + 1 && b[0] <= a[1] + 1 && a[2] <= b[3] + 1 && b[2] <= a[3] + 1) {
+          a[0] = Math.min(a[0], b[0]); a[1] = Math.max(a[1], b[1]); a[2] = Math.min(a[2], b[2]); a[3] = Math.max(a[3], b[3]);
+          boxes.splice(j, 1); again = true;
+        }
+      }
+    }
+    for (const [x0, x1, z0, z1] of boxes) this.relight(x0, x1, z0, z1);
+    if (ref) for (const ch of ["sky", "block", "heights"]) {
+      const a = this[ch], b = ref[ch];
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) throw new Error(`relight verify: ${ch}[${i}] batched ${a[i]} per-cell ${b[i]}`);
+    }
   }
   relight(x0, x1, z0, z1) { return drain(this.relightSteps(x0, x1, z0, z1)); }
   // relight as a generator: yields between columns and every STEP queue entries and returns the changed box. Driving it to the end
