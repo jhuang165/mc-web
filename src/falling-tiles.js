@@ -9,6 +9,7 @@ import { toOriginal } from './block-registry.js';
 import { compoundFromJson } from './spawner-data.js';
 import { readContainerTile } from './region-import.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
+import { getStringAny } from './nbt-string.js';
 import { readNBT as readSpawner, spawnerJSON, makeSpawner } from './mob-spawner.js';
 import { writeCommandBlock, readCommandBlock } from './command-block.js';
 import { LastOutputError } from './chat-component.js';
@@ -36,10 +37,11 @@ const OTHER = {
     const t = spawnerJSON(spawner);
     for (const [k, v] of tag) {
       if (k === 'x' || k === 'y' || k === 'z') continue;
-      if (k === 'EntityId') t.EntityId = v.type === NBT.STRING ? v.value : '';
+      if (k === 'EntityId') t.EntityId = getStringAny(tag, 'EntityId'); // getString: any tag reads as its toString (b79 falling79, executed)
       else if (k === 'SpawnData') { if (v.type === NBT.COMPOUND) t.SpawnData = v.value; else delete t.SpawnData; }
       else if (k === 'SpawnPotentials') { if (v.type === NBT.LIST) t.SpawnPotentials = v.value.elementType === NBT.COMPOUND ? v.value.items : []; else delete t.SpawnPotentials; }
-      else if (k in t) { if (hasNumber(tag, k)) t[k] = nbtGet(tag, k, NBT.SHORT, 0); else if (!SPAWNER_GATES.has(k)) t[k] = 0; }
+      // A gate key that is not a number (hasKey(k, 99) false) skips its whole group, so it leaves the merged state; a non-number under an open gate reads 0 (getShort).
+      else if (k in t) { if (hasNumber(tag, k)) t[k] = nbtGet(tag, k, NBT.SHORT, 0); else if (SPAWNER_GATES.has(k)) delete t[k]; else t[k] = 0; }
     }
     readSpawner(spawner, t);
     return true;
@@ -110,7 +112,7 @@ export function applyFallingTileData({ block, x, y, z, data, dataByte = 0, host 
     if (!host.signs) return false;
     const tile = host.signs.tile(x, y, z) ?? host.signs.create(x, y, z);
     // TileEntitySign.readFromNBT: Text1-Text4 cut to 15 characters, not editable.
-    tile.text = tile.text.map((old, i) => (tag.has(`Text${i + 1}`) ? String(nbtGet(tag, `Text${i + 1}`, NBT.STRING, '')).slice(0, 15) : old));
+    tile.text = tile.text.map((old, i) => (tag.has(`Text${i + 1}`) ? getStringAny(tag, `Text${i + 1}`).slice(0, 15) : old)); // getString: any tag reads as its toString
     tile.editable = false;
     return true;
   }

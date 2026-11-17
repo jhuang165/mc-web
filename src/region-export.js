@@ -53,7 +53,8 @@ for(const [k,id] of Object.entries(ORIGINAL_ITEMS)) {const [o,damage]=k.split(':
 function stackNbt(s,slot,report,original=false) {
  if(!s)return null;const o=original?s:reverse.get(s.id);
  if(!o){report.unmappedItems++;return null;}
- const entry={id:short(o.id),Count:byte(s.count),Damage:short(Number.isInteger(s.rawDamage)&&s.rawDamage>0?s.rawDamage:o.damage??s.damage??0)};
+ const rawId=(s.rawId===8&&o.id===9)||(s.rawId===10&&o.id===11)?s.rawId:o.id; // b79 falling79: flowing water/lava ItemBlocks
+ const entry={id:short(rawId),Count:byte(s.count),Damage:short(Number.isInteger(s.rawDamage)&&s.rawDamage>0?s.rawDamage:o.damage??s.damage??0)};
  if(slot!==undefined)entry.Slot=byte(slot>127?slot-256:slot);
  const enchantList=values=>list(NBT.COMPOUND,values.map(e=>new Map([['id',short(e.id)],['lvl',short(e.lvl)]])));
  const tagEntries={};
@@ -170,7 +171,7 @@ function payload(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0)})));}
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:e.fire>0?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
- for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:e.fire>0?e.fire:0},'FallingSand',ox,oz),
+ for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15,e.flowing?{flowing:true}:{});entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:e.fire>0?e.fire:0},'FallingSand',ox,oz),
   // EntityFallingBlock.writeEntityToNBT (object-nbt-reference.json): Tile (the id as a byte), TileID, Data, Time, DropItem, HurtEntities, FallHurtAmount (float, 2.0)
   // and FallHurtMax (int, 40). BlockAnvil.onStartFalling sets HurtEntities on every anvil it drops (anvil-blocks-reference.json), so a saved anvil carries 1.
   Tile:byte(o[0]),TileID:int(o[0]),Data:byte(Number.isInteger(e.data)?e.data:((e.meta&240)|(o[1]&15))&255),Time:byte(e.ticks&255),DropItem:byte(e.dropItem===false?0:1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40),...(e.tileData?{TileEntityData:tag(NBT.COMPOUND,compoundFromJson(e.tileData))}:{})})));}

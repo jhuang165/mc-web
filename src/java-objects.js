@@ -82,6 +82,7 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
   // block still stands at the entity's cell (Bytecode-read xj.h) instead of being skipped. DropItem is read when present (default true).
   const record = { block: cell.id, meta: fallingMetaOf(cell, data), x, y: pos[1] - FALLING_Y_OFFSET, z, vx, vy, vz, ticks: nbtGet(entity, 'Time', NBT.BYTE, 0) & 255, onGround, fallDistance };
   Object.assign(record, fallingDataExtra(cell, data));
+  if (cell.state?.flowing) record.flowing = true; // b79 falling79: Tile 8/10 (flowing water/lava) share the still port block; the export and drop read this back
   if (hasNumber(entity, 'DropItem')) record.dropItem = nbtGet(entity, 'DropItem', NBT.BYTE, 0) !== 0;
   if (hasNumber(entity, 'HurtEntities')) Object.assign(record, { hurtEntities: nbtGet(entity, 'HurtEntities', NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(entity, 'FallHurtAmount', NBT.FLOAT, 0), fallHurtMax: nbtGet(entity, 'FallHurtMax', NBT.INT, 0) });
   const tileData = fallingTileDataOf(entity);
