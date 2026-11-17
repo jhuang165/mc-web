@@ -18,7 +18,7 @@ test("the horse looks at the mouse with the func_147046_a pose", () => {
 
 test("main.js shows the preview for the horse screen and tears it down on close", () => {
   const src = readFileSync(new URL("./main.js", import.meta.url), "utf8");
-  assert.match(src, /attachHorsePreview\(kind === "horse" \? container\.horse : null\)/);
+  assert.match(src, /attachHorsePreview\(kind === "horse" \? container\.horse : null[,)]/);
   assert.match(src, /horsePreviewFrame\(\)/);
   assert.match(src, /function closeContainer\(\) \{\n  paperdoll\?\.detach\(\);\n  horsePreview\?\.detach\(\);/);
 });

@@ -41,3 +41,36 @@ export function previewHorse(base, mobs) {
   const live = mob.horse ?? {};
   return { ...base, variant: live.variant, armor: live.armor ?? base.armor ?? 0, saddled: !!live.saddled, age: mob.growingAge ?? 0 };
 }
+
+// b79 riderpose79: the same clamp for the local player (third person, front view, inventory preview). RendererLivingEntity.doRender applies it whenever
+// `ridingEntity instanceof EntityLivingBase` (Bytecode-read, batch 78 note), so a pig or horse counts and a boat or minecart does not.
+// Single player: `vehicle` is `rider.vehicle`, a boat or cart (plain vehicle object) or `{ horse: true, entity }` for a pig or horse; multiplayer: `riding` is the
+// players row's seat key ('m<wire id>' for a mob copy). Returns the mount's interpolated renderYawOffset, or null for no clamp.
+export function localMountYaw({ vehicle = null, riding = null, mobs = null } = {}, partial = 1) {
+  const e = vehicle?.entity;
+  if (e && typeof e.renderYawOffset === 'number') return interpolateRotation(e.prevRenderYawOffset ?? e.renderYawOffset, e.renderYawOffset, partial);
+  if (vehicle) return null;
+  return mountBodyYaw(riding, mobs, partial);
+}
+
+// The live mob behind a horse window (GuiScreenHorseInventory draws the client's own EntityHorse every frame): the single player's record, or the multiplayer copy's stand-in.
+export function windowHorseMob(containerView, mobs) {
+  if (containerView?.horseMob) return containerView.horseMob;
+  const id = containerView?.container?.horse?.id;
+  if (id === undefined || id === null) return null;
+  const c = mobs?.copies?.get(Number(id)) ?? mobs?.copies?.get(String(id));
+  return c?.mob?.type === 'horse' ? c.mob : null;
+}
+
+// What the preview draws this frame. The window's own stacks decide saddle and armour (every change runs syncGear on `h`, so they follow as slots change);
+// without stacks the live mob's flags apply. Growth comes from the mob's growingAge (EntityAgeable datawatcher), which keeps ticking while the window is open;
+// the coat (type, variant) is returned too so the caller can rebuild the rig when it changes.
+export function horseLook(h, mob) {
+  const live = mob?.horse ?? {}, own = Array.isArray(h.items);
+  return {
+    type: live.type ?? h.type, variant: live.variant ?? h.variant ?? 0,
+    saddled: own ? !!h.saddled : !!(live.saddled ?? h.saddled), armor: own ? (h.armor ?? 0) : (live.armor ?? h.armor ?? 0),
+    chested: !!(h.chested ?? live.chested), age: mob?.growingAge ?? h.age ?? 0,
+  };
+}
+export const horseLookKey = (look) => `${look.type}:${look.variant}`;

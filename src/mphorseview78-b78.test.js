@@ -63,7 +63,7 @@ test('mountBodyYaw: interpolated renderYawOffset of a pig or horse copy only', (
 test('horse window preview: layout and pose match GuiScreenHorseInventory (anchor 51,60 scale 17)', () => {
   assert.deepEqual(HORSE_PREVIEW_LAYOUT, { x: 51, y: 60, scale: 17, lookX: 51, lookY: 25, width: 176, height: 166 });
   assert.deepEqual(horsePreviewPose(51, 25), paperdollPose(0, 0));
-  assert.match(main, /attachHorsePreview\(kind === "horse" \? container\.horse : null\)/);
+  assert.match(main, /attachHorsePreview\(kind === "horse" \? container\.horse : null[,)]/);
 });
 
 test('the multiplayer horse window gives the preview the copy\'s look', () => {

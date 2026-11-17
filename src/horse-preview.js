@@ -3,6 +3,7 @@ import { installAnaglyphUpload } from "./anaglyph.js";
 import { guiAnaglyph } from "./gui-anaglyph.js";
 import { createHorseRig } from "./horse-renderer.js";
 import { createLighting } from "./light-material.js";
+import { horseLook, horseLookKey } from "./multiplayer/client-rider-pose.js";
 import { paperdollPose, paperdollMatrix, paperdollLights } from "./inventory-player.js";
 
 // GuiScreenHorseInventory.func_146976_a (bft.a(FII)V, javap -c): after the horse.png quads it calls
@@ -41,10 +42,14 @@ export class HorsePreviewView {
     this.size = "";
   }
   // Show `horse` (the mob record's `horse` state) in `host`, before `before` so the slots draw over the model.
-  attach(host, before, horse) {
+  // `source` (b79): a getter for the live mob, read every frame so armour, saddle, growth and coat follow while the window is open.
+  attach(host, before, horse, source = null) {
     this.dispose();
     this.horse = horse;
-    this.rig = createHorseRig({ scene: this.holder, view: this.view }, { horse });
+    this.source = source;
+    this.look = horseLook(horse, source?.());
+    this.lookKey = horseLookKey(this.look);
+    this.rig = createHorseRig({ scene: this.holder, view: this.view }, { horse: { ...horse, ...this.look } });
     this.mounted = true;
     if (this.canvas.parentNode !== host || this.canvas.nextSibling !== before) host.insertBefore(this.canvas, before ?? null);
     this.canvas.style.setProperty("--w", HORSE_PREVIEW_LAYOUT.width);
@@ -75,7 +80,8 @@ export class HorsePreviewView {
       Object.assign(this.camera, { left: 0, right: L.width, top: 0, bottom: L.height });
       this.camera.updateProjectionMatrix();
     }
-    const pose = horsePreviewPose(guiX, guiY), h = this.horse;
+    const pose = horsePreviewPose(guiX, guiY), look = horseLook(this.horse, this.source?.()), h = { ...this.horse, ...look };
+    if (horseLookKey(look) !== this.lookKey) { this.dispose(); this.lookKey = horseLookKey(look); this.rig = createHorseRig({ scene: this.holder, view: this.view }, { horse: h }); return this.frame(guiX, guiY, unit); }
     this.holder.matrix.copy(paperdollMatrix(L, pose.tilt));
     this.holder.matrixWorldNeedsUpdate = true;
     // Saddle, chest bags, ears and armour follow the live record (the stacks change while the screen is open).
