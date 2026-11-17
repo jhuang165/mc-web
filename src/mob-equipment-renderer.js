@@ -71,7 +71,7 @@ function dispose(r) {
 
 // Brings the rig's armour, held item and head block in line with `e.equipment`. Cheap when nothing changed.
 export function syncMobEquipment(renderer, r, e) {
-  if (!e.equipment || !GEAR_TYPES.has(e.type) || !r.neck || r.villager) return;
+  if (!e.equipment || !GEAR_TYPES.has(e.type) || !r.neck) return;
   // The held item (slot 0) also carries its animated icon frame (item-animation.js), so a frame change rebuilds the sprite only then.
   const heldStack = e.equipment[0], heldLive = heldStack ? toLiveStack(heldStack) : null;
   const baby = e.growingAge < 0;
@@ -98,7 +98,10 @@ export function syncMobEquipment(renderer, r, e) {
     const make = (url, tint, order) => {
       const m = material({ map: pixelTexture(url), color: tint });
       for (const name of layer.parts) {
-        const b = BIPED[name], mesh = new THREE.Mesh(modelBox(...b.uv, ...b.box, layer.expand + b.extra, !!b.mirror), m), pivot = pivotOf(r, name);
+        let b = BIPED[name];
+        // RenderZombie.b (bpf, bytecode-read) swaps the armour models to ModelZombieVillager(scale, 0, true) for a zombie villager: its head is an 8 x 6 x 8 box at (-4, -10, -4) on uv (0, 0); the headwear stays the biped's.
+        if (r.villager && name === "head") b = { ...b, box: [-4, -10, -4, 8, 6, 8] };
+        const mesh = new THREE.Mesh(modelBox(...b.uv, ...b.box, layer.expand + b.extra, !!b.mirror), m), pivot = pivotOf(r, name);
         mesh.scale.set(1, -1, -1);
         // The armour model's pivots are the biped's: the skeleton's legs sit 0.1 pixel wider.
         mesh.position.x = (b.point[0] - pivot.position.x * 16) / 16;

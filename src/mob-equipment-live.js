@@ -56,7 +56,7 @@ export function pickUpLoot(e, items, mobBox, itemBox, rand) {
   if (!e.canPickUpLoot || !items?.length) return dropped;
   const [x0, y0, z0, x1, y1, z1] = mobBox;
   for (const item of items) {
-    if (item.dead || !item.stack?.count) continue;
+    if (item.dead || !item.stack) continue; // xk.f() == null only: a size 0 or negative stack is picked up too (bytecode-read sw.e)
     const [a, b, c, d, g, h] = itemBox(item);
     if (!(d > x0 - 1 && a < x1 + 1 && g > y0 && b < y1 && h > z0 - 1 && c < z1 + 1)) continue;
     const native = fromLiveStack(item.stack);

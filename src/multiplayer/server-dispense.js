@@ -22,6 +22,7 @@ import { SUPPORTED } from './server-mobs.js';
 import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
 import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
+import { mobCandidate, dressMob } from '../sp-dispense76.js'; // b78 loot78: the single-player mob selector and dressing
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
@@ -85,7 +86,7 @@ export class ServerDispense {
     } else this.balls.balls.push(ball);
   }
   // BehaviorDefault armour (ItemArmor, abc): the first living entity in the front cell with that armour slot empty. Players only; `position` is getArmorPosition (1 boots .. 4 helmet),
-  // the player's armorInventory index `position - 1`. A mob needs canPickUpLoot, which no mob of the server has.
+  // the player's armorInventory index `position - 1`. b78 loot78: a mob qualifies with canPickUpLoot (zombies, skeletons, pigmen roll it at spawn, any mob can carry it from NBT), as in single player.
   equip([i, j, k], stack, position) {
     // b77 spdispense77: the selector sits inside World.getEntitiesWithinAABB, so the first qualifying player in the native list order (chunk x, chunk z, slice, join) is chosen, not the first in the map.
     const cands = [];
@@ -96,8 +97,10 @@ export class ServerDispense {
       if (p.survival.inventory.armor[position - 1]) continue; // the selector skips an entity that wears one already
       cands.push({ ref: p, pos: [q.x, q.y + f(1.62), q.z], player: true });
     }
+    for (const e of this.mobs.entities) { const c = mobCandidate(e, [i, j, k], position, m => this.mobs.size(m)); if (c) cands.push(c); }
     const first = orderTargets(cands, cands, () => false)[0];
     if (!first) return false;
+    if (!first.player) return dressMob(first.ref, stack, position);
     first.ref.survival.inventory.armor[position - 1] = { ...stack, count: 1 }; // sv.c(position - 1, copy of count 1); the invSet diff of ServerItems.settle tells the client
     return true;
   }

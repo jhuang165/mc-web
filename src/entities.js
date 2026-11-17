@@ -1229,7 +1229,10 @@ export class EntityWorld {
   lootPickupOne(e) {
     const items = this.lootItems;
     if (!items?.items?.length || !gameRule("mobGriefing")) return;
-    if (!e.canPickUpLoot || !(e.health > 0) || !GEAR_TYPES.has(e.type)) return;
+    // b78 loot78: sw.e (EntityLiving.onLivingUpdate) tests only canPickUpLoot, so every living mob that carries the flag (a spawn roll of zombie / pigman / skeleton, any type through the
+    // CanPickUpLoot tag or a dispenser-dressed gear array) picks up; a type without gear storage gets the arrays now.
+    if (!e.canPickUpLoot || !(e.health > 0)) return;
+    if (!e.equipment) { e.equipment = [null, null, null, null, null]; e.dropChances ??= Array(5).fill(Math.fround(0.085)); }
     const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
     const held = e.equipment?.[0];
     for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
