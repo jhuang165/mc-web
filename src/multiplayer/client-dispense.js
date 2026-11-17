@@ -4,6 +4,7 @@
 // the list no longer names; a snowball or egg that vanished plays its poof (Projectiles.clientImpact, EntityThrowable.onUpdate runs onImpact on the client too).
 // `dispFx` is the one-shot effects: explode, splash (potion or bottle glass), firework (burst), spark (rocket trail), sound. The hooks do the drawing and playing (main.js).
 import { GaussianRandom } from '../projectiles.js';
+import { s27Decode } from "./server-explosion-packet.js"; // b79 explfx79
 const ARROW_FIELDS = ['yaw', 'pitch'];
 
 export class RemoteDispense {
@@ -45,7 +46,7 @@ export class RemoteDispense {
     const h = this.hooks;
     for (const e of list) {
       if (!e || ![e.x, e.y, e.z].every(Number.isFinite)) continue;
-      if (e.k === 'explode') { h.explode?.(e.x, e.y, e.z, e.size); if ([e.mx, e.my, e.mz].every(Number.isFinite)) h.knock?.(Math.fround(e.mx), Math.fround(e.my), Math.fround(e.mz)); } // b78: S27 handleExplosion: effects, then motion += the floats
+      if (e.k === 'explode') { h.explode?.(e.x, e.y, e.z, e.size, s27Decode(e.x, e.y, e.z, e.bl)); if ([e.mx, e.my, e.mz].every(Number.isFinite)) h.knock?.(Math.fround(e.mx), Math.fround(e.my), Math.fround(e.mz)); } // b78: S27 handleExplosion: effects, then motion += the floats
       else if (e.k === 'splash') { h.splash?.(e.x, e.y, e.z, e.damage | 0); h.sound?.('game.potion.smash', e.x + .5, e.y + .5, e.z + .5, e.volume ?? 1, e.pitch ?? 1); }
       else if (e.k === 'firework') h.firework?.(e.x, e.y, e.z, e.vx, e.vy, e.vz, e.fireworks ?? null);
       else if (e.k === 'spark') h.spark?.(e.x, e.y, e.z, e.vx, e.vy, e.vz);

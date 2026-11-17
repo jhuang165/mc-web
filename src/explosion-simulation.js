@@ -13,6 +13,8 @@ import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
 import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
+import { s27Loopback } from "./multiplayer/server-explosion-packet.js"; // b79 explfx79: the integrated client sees the blast as S27 does
+import { velocityPacket } from "./multiplayer/server-velocity.js"; // S12 quantisation
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
 import { forgetTableName } from "./tile-names.js"; // b75: a destroyed table loses its CustomName
 import { serverPosY, serverEyeY, SLEEP_BOX } from "./sleeper-eye.js"; // b68 fixes68
@@ -153,23 +155,33 @@ export function applyExplosion(state, request, hooks = {}) {
       entityBox(position, sleeping ? SLEEP_BOX : PHYSICS.width, sleeping ? SLEEP_BOX : PHYSICS.height),
     );
     if (playerHit) {
+      const hurtBefore = survival.hurtCount | 0;
       if (!survival.creative && survival.scaledDamage(
         playerHit.damage,
         attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", { source: "explosion", from: attacker && attacker !== "player" ? attacker : undefined },
       )) brokenTool();
+      // A hit that opened a fresh hurt window is Entity.setBeenAttacked: the integrated server sends S12 (the server copy's motion) after the S27, and S12 SETS the client's motion.
+      const s12 = !survival.creative && (survival.hurtCount | 0) > hurtBefore;
       // The source entity (Explosion.getExplosivePlacedBy: a creeper or other living exploder) knocks back first (attackEntityFrom), then the
       // explosion velocity is added on top (doExplosionA), so the queue is applied before it.
       drainKnockback(survival, velocity, position);
-      // Explosion.doExplosionA: knockback is impact less floor(impact * Blast Protection level * 0.15F).
+      // Explosion.doExplosionA: the server's own motion gets the push less floor(impact * Blast Protection level * 0.15F); the S27 to the client carries the unreduced push.
       const kick = blastKnockback(survival.inventory?.armor ?? [], playerHit.impact), scale = playerHit.impact && kick !== playerHit.impact ? kick / playerHit.impact : 1;
-      velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale;
       const server = survival.serverPlayer?.motion; // the server's EntityPlayerMP gets the same Explosion.func_77277_b push (its motion leads a witch's aim); the hit's own knockback reached it in queueKnockBack
       if (server) { server.x += playerHit.push[0] * scale; server.y += playerHit.push[1] * scale; server.z += playerHit.push[2] * scale; }
+      // b79 explfx79 (bytecode-read bjb.a(gu), bjb.a(hy)): handleExplosion adds the float push to the client motion; handleEntityVelocity then replaces that motion with the server copy's (quantised).
+      // So a hurt player ends with the server copy's motion (Blast Protection applied, the unreduced push overwritten), a creative or hurt-window-refused one keeps the unreduced S27 push.
+      if (s12 && server) { const v = velocityPacket(server); velocity.x = v.x; velocity.y = v.y; velocity.z = v.z; }
+      else if (s12) { velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale; } // no server copy to read: the reduced push
+      else { velocity.x += Math.fround(playerHit.push[0]); velocity.y += Math.fround(playerHit.push[1]); velocity.z += Math.fround(playerHit.push[2]); }
     }
   }
 
   // S27 reaches only a player within 64 blocks (WorldServer.newExplosion), and the client's huge explosion particle has no other range test (ring-events.js).
-  if (explosionReaches(x, y, z, position)) burst(x, y, z, size, smoking ? explosion.list : [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+  if (explosionReaches(x, y, z, position)) {
+    const wire = s27Loopback(x, y, z, size, smoking ? explosion.list : []); // b79 explfx79: float centre, offset bytes (the integrated client reads S27, not the server's list)
+    burst(wire.x, wire.y, wire.z, wire.size, wire.list, { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+  }
   sound("random.explode", { volume: 4, pitch: explosion.pitch, position: { x, y, z } });
 
   const changes = [];

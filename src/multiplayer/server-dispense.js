@@ -246,7 +246,7 @@ export class ServerDispense {
   // Explosion.doExplosionA / B (ServerMobs.explode: mobs, players, blocks, drops), then the clients' burst and the random.explode sound (World.newExplosion plays it).
   explode(x, y, z, size, ctx = {}) {
     this.sim.mobs.explode({ x, y, z, size, source: ctx.exploder ?? null });
-    this.fx.push({ k: 'explode', x, y, z, size, knock: this.sim.mobs.takeKnock?.(x, y, z, size) ?? null });
+    this.fx.push({ k: 'explode', x, y, z, size, ...(this.sim.mobs.takeS27?.(x, y, z, size) ?? { knock: null, blocks: null }) });
   }
   // EntityPotion.onImpact / EntityExpBottle.onImpact. The splash on mobs is WitchPotions.impact (it also queues the loot events the mobs' drain turns into orbs);
   // the players in range take the same splashImpact steps (instant health or harm, then the timed effects). The glass break goes to the clients as `splash`.
