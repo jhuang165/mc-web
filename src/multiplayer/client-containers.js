@@ -11,6 +11,7 @@ import { newEnderTile } from '../chest-blocks.js';
 import { AnvilContainer } from '../anvil-container.js';
 import { EnchantingContainer } from '../enchanting-container.js';
 import { HorseContainer } from '../horse-gear.js'; // b76 mphorse76
+import { previewHorse } from './client-rider-pose.js';
 import { buildMerchant, applyTradeList, wireTrade } from './client-trade.js'; // b66 mptrade
 
 const same = (a, b) => (!a && !b) || (!!a && !!b && a.id === b.id && a.count === b.count && (a.damage ?? 0) === (b.damage ?? 0));
@@ -23,11 +24,11 @@ export function inventoryWire(inv) {
 }
 // The local container for an S2D message, or null when this client cannot build it.
 // `crafted(stack, count)`: the client's own statistics (StatList.objectCraftStats; the server keeps no statistics) for a crafting or furnace output take (b61).
-export function buildWindow(m, { survival, world, station = {}, crafted = null }) {
+export function buildWindow(m, { survival, world, station = {}, crafted = null, mobs = null }) {
   const key = `${m.x},${m.y},${m.z}`, inv = survival.inventory;
   let container, kind = m.kind;
   if (kind === 'horse' && m.horse) { // b76 mphorse76: ContainerHorseInventory; the stacks come from S30
-    const h = { type: m.horse.type | 0, chested: !!m.horse.chested, tame: !!m.horse.tame, saddled: false, armor: 0, items: null };
+    const h = previewHorse({ id: m.horse.id, type: m.horse.type | 0, chested: !!m.horse.chested, tame: !!m.horse.tame, saddled: false, armor: 0, items: null }, mobs); // b78: variant, armour, saddle and age of the copy for the preview
     container = new HorseContainer(inv, h, null, '');
   } else if (m.cart) { // b62: a chest or hopper minecart's window; the stacks come from the server (S30), the slots here start blank
     const n = kind === 'hopper' ? 5 : 27;

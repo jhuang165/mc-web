@@ -19,7 +19,8 @@ export const useFlags = p => ({ blocking: !!p.using && ITEMS[p.held?.id]?.kind =
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
-  constructor(scene, { skinUrl = () => null, capeUrl = () => null, board = null, seatOf = () => null } = {}) {
+  constructor(scene, { skinUrl = () => null, capeUrl = () => null, board = null, seatOf = () => null, mountYawOf = () => null } = {}) {
+    this.mountYawOf = mountYawOf; // b78 mphorseview78: the mount's interpolated renderYawOffset (client-rider-pose.js) for the riding yaw clamp
     this.seatOf = seatOf; // b77 mpvelocity77: key of the mount -> the rider's feet on the mount's client copy (client-ride-seat.js), or null
     this.board = board; // b64 mpscoreboard: the replica Scoreboard (team-coloured names, the belowName score)
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
@@ -121,7 +122,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       const invisible = !!p.invisible, viewer = this.me?.name ?? null; // b65 mpinvis
-      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0, hideCape: !!p.hideCape /* b71: the wire carries it (cape-wire.js) */ });
+      entry.renderer.update(entry.body, t, { invisible, ghost: invisible && !invisibleToViewer(true, p.name, viewer, this.board), visible: !entry.hidden, deathTime: entry.deathTime || 0, held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sleeping: remoteSleepPose(p.sleep), hurt: (entry.hurtTime || 0) > 0, ...useFlags(p), sneak: p.sneak, riding: !!p.riding, mountYaw: entry.ride ? this.mountYawOf(entry.ride, t) : null, ...useFlags(p), swing: p.swing > 0 ? (6 - p.swing) / 6 : 0, hideCape: !!p.hideCape /* b71: the wire carries it (cape-wire.js) */ });
       this.placeTags(entry, p, invisible, viewer);
     }
   }
