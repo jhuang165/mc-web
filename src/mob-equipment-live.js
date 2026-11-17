@@ -51,7 +51,7 @@ export const gearOf = (e) => (e.equipment ? e : null);
 // (1, 0, 1), in the list's order, that it prefers to what it carries. `items` is ItemEntities.items, `box`
 // the mob's [x0, y0, z0, x1, y1, z1], `box(item)` the item's. Taken items are marked dead; the replaced
 // stacks come back as native stacks for the caller to drop. Returns the dropped stacks.
-export function pickUpLoot(e, items, mobBox, itemBox, rand) {
+export function pickUpLoot(e, items, mobBox, itemBox, rand, onTake = null) {
   const dropped = [];
   if (!e.canPickUpLoot || !items?.length) return dropped;
   const [x0, y0, z0, x1, y1, z1] = mobBox;
@@ -66,6 +66,7 @@ export function pickUpLoot(e, items, mobBox, itemBox, rand) {
     if (taken.dropped) dropped.push(cloneStack(taken.dropped));
     e.persistent = true;
     item.dead = true;
+    onTake?.(item); // b79 mplanes79: EntityLiving.onItemPickup (the tracker's S0D)
   }
   return dropped;
 }

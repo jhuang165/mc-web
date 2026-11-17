@@ -15,6 +15,7 @@ import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { FallingBlocks } from '../falling.js';
 import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
+import { CommandBlockTiles } from './server-command-blocks.js'; // b79 mplanes79
 import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
@@ -58,7 +59,7 @@ import { bucketUse, installFluidHooks } from './server-bucket.js'; // b75 mpbuck
 import { CAULDRON } from '../stone-utility.js';
 import { cauldronActivate, clientSwallows } from './server-cauldron.js'; // b76 mpcauldron76: BlockCauldron.onBlockActivated
 import { airUse } from './server-air.js'; // b75 mpusesweep75: armour, glass bottle, egg on water, firework rocket
-import { useOnBlock } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
+import { useOnBlock, pistonMovingClick } from './server-use.js'; // b64 mpstats2: seeds, nether wart, spawn eggs
 import { ServerFishing } from './server-fishing.js'; // b64 mpstats2: the fishing rod
 import { ServerLightning } from './server-lightning.js'; // b66 mplightning: thunderstorm bolts
 import { ServerItems } from './server-items.js';
@@ -159,7 +160,7 @@ export class DedicatedSimulation {
     // marks its cell (`tileChanged`) and the next tick sends the description packet (S33 / S35) with the cell changes.
     this.dirtyTiles = new Set();
     const te = saved.tileEntities ?? {};
-    this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), chests: this.tiles.chests, enders: this.tiles.enderTiles }; // chests/enders: the contChest descriptions (tile-sync.js)
+    this.tileEntities = { world: this.world, signs: Signs.fromJSON(te.signs), skulls: Skulls.fromJSON(te.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), commandBlocks: CommandBlockTiles.fromJSON(te.commandBlocks) /* b79 mplanes79 */, chests: this.tiles.chests, enders: this.tiles.enderTiles }; // chests/enders: the contChest descriptions (tile-sync.js)
     this.weather = new Weather().restore(saved.weather).restoreSimulation(saved.worldRandom);
     this.farming = new Farming(this.world, saved.farms);
     this.fluids = new Fluids(this.world, { random: this.weather.random });
@@ -443,6 +444,7 @@ export class DedicatedSimulation {
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }
     // BlockBeacon.onBlockActivated: a sneak-free click opens ContainerBeacon (S2D open window), described to the player by `openBeacon`.
     if (b === BEACON && !p.input.sneak) return this.openBeacon(p, x, y, z);
+    if (place && pistonMovingClick(this, p, x, y, z, b)) return true; // b79 mplanes79: a moving block whose tile is gone is removed
     if (b === DRAGON_EGG && !(p.input.sneak && p.survival.held)) return serverDragonEgg(this.world, x, y, z) || true; // b65 mpdragon2: BlockDragonEgg.onBlockActivated
     if (b === CAKE_BLOCK && !(p.input.sneak && p.survival.held) && serverCakeEat(this.world, p.survival, x, y, z)) return true; // b72 cakefog72: BlockCake.onBlockActivated
     if (place && clientSwallows(b, p)) p.useSwallowed = this.ticks; // b77 mpknots77: no item use (eat, drink, block, draw) follows a cauldron click
@@ -674,6 +676,6 @@ export class DedicatedSimulation {
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, gameRules: this.gameRules, difficulty: this.difficulty, hardcore: this.hardcore, generateStructures: this.rules.generateStructures, newPlayerMode: this.newPlayerMode, ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
       redstone: this.redstone.save(), tiles: this.tiles.serialize(), ...this.serverItems.save(), mobs: this.mobs.save(), villages: saveVillages(this.mobs), projectiles: this.dispense.save(), vehicles: this.vehicles.save(), ...this.dimensions.saveField(), ...this.maps.saveField() /* b69 mpmaps */,
-      admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON() }, players: [...this.savedPlayers] };
+      admin: this.admin.save(), /* b68 mpadmin */ scoreboard: this.scoreboard.save(), tileEntities: { signs: this.tileEntities.signs.toJSON(), skulls: this.tileEntities.skulls.toJSON(), beacons: this.tileEntities.beacons.toJSON(), spawners: this.tileEntities.spawners.toJSON(), commandBlocks: this.tileEntities.commandBlocks.toJSON(this.world) }, players: [...this.savedPlayers] };
   }
 }

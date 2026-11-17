@@ -7,7 +7,7 @@
 import { plantedBlock } from '../crops.js';
 import { NETHER_WART, ITEM_NETHER_WART } from '../nether-wart.js';
 import { SOUL_SAND } from '../nether-blocks.js';
-import { SAPLING, isCrop, DYE, FIRE, YELLOW_FLOWER, RED_FLOWER } from '../world.js';
+import { SAPLING, isCrop, DYE, FIRE, YELLOW_FLOWER, RED_FLOWER, PISTON_MOVING } from '../world.js';
 import { JRandom } from '../flowers.js';
 import { useBoneMeal } from '../bone-meal.js';
 import { ITEM_SPAWN_EGG, ITEM_FIRE_CHARGE } from '../spawn-eggs.js';
@@ -75,4 +75,14 @@ export function useOnBlock(sim, p, target, id) {
     return sim.stats.used(p, id), true;
   }
   return false;
+}
+
+// b79 mplanes79: BlockPistonMoving.onBlockActivated (apr, bytecode-read in b78 spswing78): `if (!world.isRemote && world.getTileEntity(x, y, z) == null) { setBlockToAir; return true }`.
+// Runs for a click that is not a sneak with an item in hand (PlayerControllerMP / NetHandlerPlayServer: ItemStack.tryPlaceItemIntoWorld is skipped when activated). `sim.redstone` is the
+// player's dimension's engine, which owns the moving block's tile. True when the moving block was removed (the click is used up; the item use is refused).
+export function pistonMovingClick(sim, p, x, y, z, block) {
+  if (block !== PISTON_MOVING || (p.input?.sneak && p.survival?.held)) return false;
+  if (sim.redstone.getTileEntity(x, y, z)) return false;
+  sim.world.set(x, y, z, 0, true, 0);
+  return true;
 }

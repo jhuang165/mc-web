@@ -1233,7 +1233,7 @@ export class EntityWorld {
     if (!e.equipment) { e.equipment = [null, null, null, null, null]; e.dropChances ??= Array(5).fill(Math.fround(0.085)); }
     const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
     const held = e.equipment?.[0];
-    for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
+    for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e), (item) => this.itemPickedUp?.(e, item))) {
       const live = toLiveStack(stack);
       if (live) this.events.push({ drop: live.id, count: 1, ...(live.damage ? { damage: live.damage } : {}), ...(live.enchantments ? { enchantments: live.enchantments } : {}), position: { x: e.x, y: e.y, z: e.z } });
     }
