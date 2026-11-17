@@ -69,7 +69,7 @@ test('NBT import follows TileEntityFlowerPot.readFromNBT', () => {
     if (c) assert.ok(potPlantOf(c.id, c.damage));
     if (nativeAccept.has(key(item, data)) && itemFromOriginal(item, data)) assert.ok(c, `${item}:${data} imports`);
   }
-  assert.deepEqual(potFromNbt({ Item: 37, Data: 5 }), { id: 43, damage: 0 });
+  assert.deepEqual(potFromNbt({ Item: 37, Data: 5 }), { id: 43, damage: 0, data: 5 }); // b79: the exact Data rides along
   assert.deepEqual(potFromNbt({ Item: 38, Data: 3 }), { id: 44, damage: 3 });
   assert.equal(potFromNbt({ Item: 1, Data: 0 }), null);
   assert.equal(potFromNbt({}), null);

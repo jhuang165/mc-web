@@ -50,7 +50,7 @@ test("zip reader rejects non-zip data", () => {
 });
 
 test("pack.mcmeta parsing", () => {
-  assert.deepEqual(parsePackMcmeta('{"pack":{"pack_format":1,"description":"Hi"}}'), { valid: true, packFormat: 1, description: "Hi" });
+  assert.deepEqual(parsePackMcmeta('{"pack":{"pack_format":1,"description":"Hi"}}'), { valid: true, packFormat: 1, description: "Hi", formatted: "Hi\u00a7r" }); // b79: formatted = getFormattedText
   assert.equal(parsePackMcmeta('{"pack":{"pack_format":1,"description":{"text":"Chat"}}}').description, "Chat");
   assert.equal(parsePackMcmeta("{}").description, INVALID_META);
   assert.equal(parsePackMcmeta("not json").valid, false);
