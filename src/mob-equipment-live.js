@@ -66,7 +66,7 @@ export function pickUpLoot(e, items, mobBox, itemBox, rand, onTake = null) {
     if (taken.dropped) dropped.push(cloneStack(taken.dropped));
     e.persistent = true;
     item.dead = true;
-    onTake?.(item); // b79 mplanes79: EntityLiving.onItemPickup (the tracker's S0D)
+    onTake?.(item); // b79 mplanes79: EntityLiving.onItemPickup (the tracker's S0D); spswing79: sw.e's diamondsToYou check on the thrown stack rides the same callback
   }
   return dropped;
 }

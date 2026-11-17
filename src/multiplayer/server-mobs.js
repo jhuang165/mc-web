@@ -123,6 +123,7 @@ export class ServerMobs {
     // b79 mplanes79: EntityLiving.onLivingUpdate's pickup calls onItemPickup, so the tracker sends S0D (collect) with the mob as collector: the row carries the mob's wire id and its place
     // (the client has no player to fly the item to). The list is the lane's (`host.serverItems.taken`; the Nether's and the End's hosts point it at their own list).
     mobs.itemPickedUp = (e, item) => { if (item?.eid != null) host.serverItems.taken.push({ i: item.eid, by: null, mob: num(e), at: { x: e.x, y: e.y, z: e.z } }); };
+    mobs.thrownDiamond = (name) => { const q = [...(host.players?.values() ?? [])].find(x => x.name === name); if (q) host.achievements?.award(q, 'diamondsToYou'); }; // b79 spswing79: sw.e, the mob picks a thrown diamond up
     mobs.spawnLoot = events => { for (const ev of events) { if (ev.drop) host.items.dropMob(ev.drop, ev.count, ev.position, ev.damage, ev); if (ev.xp) host.serverItems.xp.spawn(ev.xp, ev.position); } }; // the orbs of a kill (b60), sent by server-items.js tickFields
     this.statuses = []; // S19 entity status of this tick: { e (live mob), status }
     this.capacity = 16; // the eligibleChunksForSpawning table size (grows with the union, never shrinks)

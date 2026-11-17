@@ -1833,6 +1833,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
+    mobs.thrownDiamond = (name) => { if (name === PLAYER_NAME) achievements.trigger("diamondsToYou"); }; // b79 spswing79: sw.e picks a thrown diamond up -> the thrower's achievement
     mobs.fx = scene.fx;
     awayIdle = !world.dimension && record.transit ? dims.takeIdle() : null; // b59/b60: the Overworld's spawn-area entities kept their tracker phase while the player was in the Nether/End (caught up below, once the object lists are loaded)
     for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
@@ -2732,9 +2733,9 @@ function renderVitals() {
 }
 // EntityPlayer.dropOneItem / closing a screen with held items: thrown along
 // the view with a 40-tick pickup delay.
-function throwStacks(stacks) {
+function throwStacks(stacks, thrower) {
   if (!world) return;
-  for (const s of stacks) if (s?.count) items.dropPlayer(copyStack(s), position, yaw, pitch); // func_146097_a refuses only an exact size 0
+  for (const s of stacks) if (s?.count) { const e = items.dropPlayer(copyStack(s), position, yaw, pitch); if (e && thrower) e.thrower = thrower; } // func_146097_a refuses only an exact size 0
   saved = false;
 }
 function useFurnace(key) {
@@ -3786,7 +3787,7 @@ function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
   if (!s) return;
   if (multiplayer) { multiplayer.dropHeld(all); return; } // b60: the server drops it (thrower name) and corrects the slot
-  throwStacks([inv.decr(inv.current, all ? s.count : 1)]);
+  throwStacks([inv.decr(inv.current, all ? s.count : 1)], PLAYER_NAME); // b79 spswing79: EntityPlayer.dropOneItem tags the thrower (xk.c)
   eating = null;
   renderHotbar();
 }
