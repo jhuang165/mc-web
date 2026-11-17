@@ -5,6 +5,7 @@
 // Browser ids 383-385 are glowstone dust, glass bottle and potion, so the three originals take 1950-1952 (original-items.js).
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
+import { fetchDecoded, eggUrl } from "./straight-frames.js";
 export const ITEM_SPAWN_EGG = 1950, ITEM_EXP_BOTTLE = 1951, ITEM_FIRE_CHARGE = 1952;
 export const SPAWN_EGG_ITEMS = Object.freeze({ 383: ITEM_SPAWN_EGG, 384: ITEM_EXP_BOTTLE, 385: ITEM_FIRE_CHARGE });
 
@@ -75,19 +76,30 @@ export function installSpawnEggRecipes({ shapeless }) {
 // Two-layer egg icon for the 3D item views (drops, first and third person): spawn_egg tinted by the primary colour under spawn_egg_overlay
 // tinted by the secondary, composed once per damage on a canvas. Before both images have loaded (and outside a browser) the untinted base is used.
 const BASE = "/media/1.7.10/items/spawn_egg.png", OVERLAY = "/media/1.7.10/items/spawn_egg_overlay.png", composed = new Map();
-let images = null;
+let images = null, decoded = null, decodeFailed = false, loadGen = 0;
 function loadImages() {
   if (images || typeof Image === "undefined" || typeof document === "undefined") return images;
   images = [BASE, OVERLAY].map((src) => { const img = new Image(); img.src = versioned(src); return img; });
+  // Straight-alpha pixels of both layers (straight-frames.js); the canvas compose below is only the fallback for a PNG the decoder refuses.
+  const gen = ++loadGen;
+  Promise.all([BASE, OVERLAY].map((src) => fetchDecoded(versioned(src)))).then((both) => {
+    if (gen !== loadGen) return;
+    if (both.every(Boolean)) decoded = both; else decodeFailed = true;
+  });
   return images;
 }
-onResourcesRefreshed(() => { images = null; composed.clear(); loadImages(); });
+onResourcesRefreshed(() => { images = null; decoded = null; decodeFailed = false; composed.clear(); loadImages(); });
 loadImages();
 export function spawnEggTexture(damage = 0) {
   const e = eggOf(damage), key = e ? e.damage : -1;
   if (composed.has(key)) return composed.get(key);
   const imgs = loadImages();
-  if (!imgs || !imgs.every((i) => i.complete && i.naturalWidth)) return BASE;
+  if (decoded) {
+    const url = eggUrl(decoded[0], decoded[1], eggColor(damage, 0), eggColor(damage, 1));
+    composed.set(key, url);
+    return url;
+  }
+  if (!imgs || !decodeFailed || !imgs.every((i) => i.complete && i.naturalWidth)) return BASE;
   const url = composeEgg(imgs, eggColor(damage, 0), eggColor(damage, 1));
   composed.set(key, url);
   return url;

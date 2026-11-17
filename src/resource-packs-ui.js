@@ -4,10 +4,10 @@
 // a 32 x 32 icon, the name at (x + 34, y + 1) and two description lines at y + 12 and y + 22 (wrapped at 157, gray);
 // buttons 150 x 20 at y = height - 48. The folder button opens a file picker here (a web page has no pack folder).
 import { guiAnaglyph, convertPngBytes } from "./gui-anaglyph.js";
-import { t, textWidth, trimToWidth, splitLines, slotMetrics, COLOR } from "./menu-screens.js";
+import { t, textWidth, trimToWidth, charWidth, slotMetrics, COLOR } from "./menu-screens.js";
 import {
   packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker, deleteStoredPack,
-  DEFAULT_DESCRIPTION,
+  DEFAULT_DESCRIPTION, INVALID_META,
 } from "./resource-packs.js";
 
 const ROW = 36, HEADER = 13, LIST_W = 200, TEXT_W = 157;
@@ -18,10 +18,55 @@ const div = (cls, style) => { const e = document.createElement("div"); if (cls) 
 const SPRITE = "url('/media/1.7.10/gui/resource_packs.png')";
 // ResourcePackListEntry.drawEntry (bgg) text: the name at (x + 34, y + 1), truncated to 157 with "...", then up to two description lines at
 // y + 12 and y + 22 in gray (0x808080). Executed rows: GuiScreenResourcePacks+packs, +packs+selected (gui-menus-reference.json).
+// ResourcePackListEntryFound.func_148311_a (brf.e) is `bsg.a().getFormattedText()` (fj.d): the text plus a trailing "\u00a7r" (ChatComponentText with
+// an empty style, Bytecode-read), or "\u00a7c" + "Invalid pack.mcmeta (or missing 'pack' section)" with no reset when the metadata section is
+// missing. The Default row (bgh) reads the same getter from the bundled pack. Executed: "A short description.\u00a7r", "\u00a7aGreen\u00a7r and plain text\u00a7r".
+export function packRowDescription(info) {
+  if (info.valid === false || info.description == null) return "\u00a7c" + INVALID_META;
+  return info.description + "\u00a7r";
+}
+// FontRenderer.func_78259_e / sizeStringToWidth (Bytecode-read in 1.7.10): the break index. A formatting code takes no width, bold (\u00a7l) adds one
+// per glyph until \u00a7r, a space is remembered as the break point, a newline breaks there.
+function sizeStringToWidth(str, width) {
+  const len = str.length; let k = 0, l = 0, space = -1, bold = false;
+  for (; l < len; l++) {
+    const c = str[l];
+    if (c === "\n") { space = l; break; }
+    if (c === "\u00a7") {
+      if (l < len - 1) { l++; const c1 = str[l]; if (c1 === "l" || c1 === "L") bold = true; else if (c1 === "r" || c1 === "R") bold = false; }
+    } else { if (c === " ") space = l; k += charWidth(c); if (bold) k++; }
+    if (k > width) break;
+  }
+  return l !== len && space !== -1 && space < l ? space : l;
+}
+// FontRenderer.getFormatFromString: the last colour code, then every later special code (k-o, r) appended.
+function formatOf(str) {
+  let out = "";
+  for (let i = str.indexOf("\u00a7"); i !== -1; i = str.indexOf("\u00a7", i + 1)) {
+    if (i >= str.length - 1) continue;
+    const c = str[i + 1].toLowerCase();
+    if (/[0-9a-f]/.test(c)) out = "\u00a7" + c; else if (/[k-or]/.test(c)) out += "\u00a7" + c;
+  }
+  return out;
+}
+// FontRenderer.listFormattedStringToWidth (bbu.c): wrapFormattedStringToWidth split on "\n"; each continuation line starts with the format in force.
+export function wrapFormatted(str, width) {
+  const lines = [];
+  while (true) {
+    const j = sizeStringToWidth(str, width);
+    if (str.length <= j) { lines.push(str); break; }
+    const head = str.slice(0, j), c = str[j], skip = c === " " || c === "\n";
+    lines.push(head);
+    str = formatOf(head) + str.slice(j + (skip ? 1 : 0));
+  }
+  return lines.flatMap((l) => l.split("\n"));
+}
+// ResourcePackListEntry.drawEntry (bgg) text: the name at (x + 34, y + 1), truncated to 157 with "...", then up to two description lines at
+// y + 12 and y + 22 in gray (0x808080). Executed rows: GuiScreenResourcePacks+packs, +packs+selected (gui-menus-reference.json).
 export function packRowTexts(info, x, y) {
   let name = info.name;
   if (textWidth(name) > TEXT_W) name = trimToWidth(name, TEXT_W - textWidth("...")) + "...";
-  return [{ text: name, x: x + 34, y: y + 1 }, ...splitLines(info.description ?? "", TEXT_W).slice(0, 2).map((line, k) => ({ text: line, x: x + 34, y: y + 12 + 10 * k, color: COLOR.gray }))];
+  return [{ text: name, x: x + 34, y: y + 1 }, ...wrapFormatted(packRowDescription(info), TEXT_W).slice(0, 2).map((line, k) => ({ text: line, x: x + 34, y: y + 12 + 10 * k, color: COLOR.gray }))];
 }
 export function resourcePacksLayout(w, h) {
   const c = Math.trunc(w / 2), top = 32, bottom = h - 55 + 4;
