@@ -119,6 +119,7 @@ export class ServerMobs {
     mobs.loadTotalTime(host.ticks ?? 0);
     mobs.explodeInline = ev => this.explode(ev.explode);
     Object.defineProperty(mobs, 'lootItems', { get: () => host.items }); // b78 loot78: EntityLiving.onLivingUpdate's pickup loop sees the server's item entities (host.items is built after this object)
+    mobs.thrownDiamond = (name) => { const q = [...(host.players?.values() ?? [])].find(x => x.name === name); if (q) host.achievements?.award(q, 'diamondsToYou'); }; // b79 spswing79: sw.e, the mob picks a thrown diamond up
     mobs.spawnLoot = events => { for (const ev of events) { if (ev.drop) host.items.dropMob(ev.drop, ev.count, ev.position, ev.damage, ev); if (ev.xp) host.serverItems.xp.spawn(ev.xp, ev.position); } }; // the orbs of a kill (b60), sent by server-items.js tickFields
     this.statuses = []; // S19 entity status of this tick: { e (live mob), status }
     this.capacity = 16; // the eligibleChunksForSpawning table size (grows with the union, never shrinks)

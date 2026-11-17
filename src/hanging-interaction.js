@@ -40,6 +40,9 @@ export function applyHangingEdit({ hanging, world, survival, heldId, place, targ
   if (!place || (id !== PAINTING_ITEM && id !== FRAME_ITEM) || !target?.block) return false;
   const side = hitSide(target);
   if (side < 0) return false;
+  // b79 spswing79: ItemHangingEntity.onItemUse (acz, bytecode-read) returns false for side 0 and 1 (the click then goes on as an ordinary use), and true for every
+  // other side whether or not the entity fits (canEdit false aside); the hand swings only on that true.
+  if (side < 2) return false;
   hooks.swing?.();
   // The sneak flag does not matter: ItemHangingEntity handles the click itself.
   const used = hanging.use(id === PAINTING_ITEM ? "painting" : "frame", world, ...target.block, side);
@@ -48,5 +51,5 @@ export function applyHangingEdit({ hanging, world, survival, heldId, place, targ
     hooks.renderHotbar?.();
     hooks.markUnsaved?.();
   }
-  return used.used;
+  return true;
 }

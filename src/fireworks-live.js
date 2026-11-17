@@ -68,7 +68,7 @@ export function useFirework(state, { target, usesBlock }, hooks = {}) {
   const stack = state.survival.held, creative = state.survival.creative;
   const [bx, by, bz] = target.block, hit = target.hit ?? [bx + 0.5, by + 0.5, bz + 0.5];
   state.rockets.launch(bx + f(hit[0] - bx), by + f(hit[1] - by), bz + f(hit[2] - bz), stack);
-  hooks.swing?.();
+  // b79 spswing79: ItemFirework.onItemUse (acs, bytecode-read) returns !world.isRemote, false on the client world, so the hand does not swing.
   if (!creative) state.survival.take(ITEM_FIREWORK_ROCKET);
   hooks.renderHotbar?.(); hooks.markUnsaved?.();
   return { branch: 'launch-firework' };
