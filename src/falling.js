@@ -5,7 +5,8 @@ import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entitie
 import { explosionImpact } from "./explosion.js";
 import { WATER, LAVA, FIRE, SAND, GRAVEL, ANVIL } from "./world.js";
 import { moveEntity } from "./entities.js";
-import { replaceable } from "./plants.js";
+import { doorReplaceable as replaceable } from "./doors-panes.js"; // Material.isReplaceable of the original blocks: air, liquids, fire, snow layer, vines, tall grass, ferns, dead bushes (replaceable-reference.json)
+import { canPlace as fireCanPlace } from "./fire.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { ringEntityActive, ringTickActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
@@ -229,7 +230,8 @@ export class FallingBlocks {
       }
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
       const old = w.get(i, j, k);
-      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta & 15)) { // setBlock stores the low nibble of a Data byte above 15
+      // Fire is the one block whose canPlaceBlockAt looks past the cell: a solid top below or a burnable neighbour (falling-block78-reference.json, executed).
+      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && (e.block !== FIRE || fireCanPlace(w, i, j, k)) && w.set(i, j, k, e.block, true, e.meta & 15)) { // setBlock stores the low nibble of a Data byte above 15
         this.apply([[i, j, k, old, e.block]]);
         if(e.tileData)this.tile(i, j, k, e.block, e.tileData, e.data ?? e.meta);
         if(e.block===ANVIL)this.sound('random.anvil_land',{x:i+0.5,y:j+0.5,z:k+0.5,volume:1,pitch:1});

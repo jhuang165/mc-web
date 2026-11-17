@@ -14,6 +14,7 @@ import { Weather, canLightningStrikeAt } from '../weather.js';
 import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { FallingBlocks } from '../falling.js';
+import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
 import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
@@ -172,7 +173,7 @@ export class DedicatedSimulation {
     this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: this.serverItems.stacksDrop,
       light: (x, y, z) => this.light.level(x, y, z, this.darkness) }).watch();
     this.plants = new Plants(this.world, { drop: this.serverItems.stacksDrop, broken: noop, apply: noop }).watch();
-    this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop }, saved.falling).watch();
+    this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop, tile: serverFallingTile(this) /* b78 falling78 */ }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
     this.redstone = new LiveRedstone(this.world, {

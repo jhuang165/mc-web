@@ -18,6 +18,7 @@ import { Fluids } from '../fluids.js';
 import { Fire } from '../fire.js';
 import { Farming } from '../farming.js';
 import { FallingBlocks } from '../falling.js';
+import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
 import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
@@ -95,7 +96,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.fire.watch(); n.fire.sharedRandomTicks = true; n.fire.load(saved.fireTicks);
   n.trees = new Trees(w, { random: n.weather.random, apply: noop, drop, light: (x, y, z) => n.light.level(x, y, z, 0) }).watch();
   n.plants = new Plants(w, { drop, broken: noop, apply: noop }).watch();
-  n.falling = new FallingBlocks(w, { drop: (...a) => sim.serverItems.fallingDrop(...a), apply: noop }, saved.falling).watch();
+  n.falling = new FallingBlocks(w, { drop: (...a) => sim.serverItems.fallingDrop(...a), apply: noop, tile: serverFallingTile(n) /* b78 falling78 */ }, saved.falling).watch();
   n.falling.load(saved.fallingTicks);
   n.farming = new Farming(w, saved.farms);
   n.farming.lightLevel = (x, y, z) => n.light.level(x, y, z, 0);
