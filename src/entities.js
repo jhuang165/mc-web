@@ -1,4 +1,4 @@
-import { pushCandidates, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
+import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -341,6 +341,8 @@ function pushServerPlayer(p, o, at = p, playerCollides = false) {
   m.x = copy.vx;
   m.z = copy.vz;
 }
+// b78: an upper bound of the half width pushMeets can read for o (type width x slime size / 2; vehicles 0.75; a type without a table entry is "big", always a candidate).
+export const pushHalf = (o) => (isVehicle(o) ? 0.75 : ENTITY_TYPES[o.type] ? (ENTITY_TYPES[o.type].width * (isSlimeLike(o) ? o.size : 1)) / 2 : Infinity);
 export const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && o.type !== "ender_dragon" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
@@ -2305,7 +2307,7 @@ export class EntityWorld {
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
     // The step flushes the entry's death loot (flushLoot) even after a `continue`, before the length is read again: an item or orb appended in this entry's turn is walked in this pass.
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
-    const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
+    const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); markMoved(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
     beginPushGrid(); // b75: the push grid is built by the first push of this loop
     for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
@@ -2552,7 +2554,7 @@ export class EntityWorld {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
-    const cand = pushCandidates(this.entities, e); // b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
+    const cand = pushNear(this.entities, e, near, pushHalf, (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, this, pushBox)) ?? pushCandidates(this.entities, e); // b78 (push-grid.js FineGrid): only the entities whose box can reach this one's; b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
     for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
