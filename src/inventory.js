@@ -68,6 +68,7 @@ export class PlayerInventory {
     if (typeof s.displayName === "string") metadata.displayName = s.displayName;
     if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;
     if (Number.isInteger(s.color) && s.color >= 0 && s.color <= 0xFFFFFF) metadata.color = s.color;
+    if ((s.id === 10 && s.rawId === 8) || (s.id === 42 && s.rawId === 10)) metadata.rawId = s.rawId; // b79 falling79: flowing water/lava ItemBlock (original 8/10) shares the still item; rawId writes the saved id back
     Object.assign(metadata, readFireworkTags(s), readBookTags(s), readItemTags(s));
     const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
     return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);

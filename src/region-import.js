@@ -139,6 +139,8 @@ export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } 
   const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), Math.max(0, get(compound, 'Damage', NBT.SHORT, 0))), count = get(compound, 'Count', NBT.BYTE, 0);
   if (!mapped || (!allowEmpty && count <= 0)) return null; // allowEmpty keeps Count 0 and negative bytes as loadItemStackFromNBT does
   const stack = { id: mapped.id, damage: mapped.damage, count };
+  const savedId = get(compound, 'id', NBT.SHORT);
+  if (savedId === 8 || savedId === 10) stack.rawId = savedId; // b79 falling79: flowing water/lava items share the still item's port id; export writes 8/10 back
   const nbt = get(compound, 'tag', NBT.COMPOUND);
   if (nbt) ignored.push(...readItemTag(stack, nbt));
   return stack;
@@ -704,7 +706,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const m = motion && motion.every(Number.isFinite) ? motion : [0, 0, 0];
       // Saved y is the bounding-box bottom; Pos[1] is posY (yOffset 0.125 above it).
       drops.push({ stack, x, y: pos[1] - 0.125, z, mx: m[0], my: m[1], mz: m[2],
-        age: Math.max(0, Math.min(5999, get(entity, 'Age', NBT.SHORT, 0))), delay: Math.max(0, Math.min(40, get(entity, 'PickupDelay', NBT.SHORT, 0))) });
+        age: Math.max(0, Math.min(5999, get(entity, 'Age', NBT.SHORT, 0))), delay: Math.max(0, Math.min(40, get(entity, 'PickupDelay', NBT.SHORT, 0))), fire: get(entity, 'Fire', NBT.SHORT, 0) }); // b79 falling79: Entity.fire is saved as is; an unticked item exports it back
       // EntityItem.readEntityFromNBT: Owner and Thrower strings (Bytecode-read xk.a(dh): hasKey, then getString) and Entity.readFromNBT's PortalCooldown; the live item
       // already keeps and saves all three (item-entities.js), the import dropped them before b77.
       for (const [key, field] of [['Owner', 'owner'], ['Thrower', 'thrower']]) { const text = get(entity, key, NBT.STRING, ''); if (text) drops[drops.length - 1][field] = text; }

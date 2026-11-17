@@ -4,12 +4,13 @@ import { createCommandRunner } from './commands.js';
 import { ruleOn } from './game-rules.js';
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
+import { getStringAny } from './nbt-string.js'; // Command is NBTTagCompound.getString: any tag reads as its toString (b79 falling79, executed)
 import { serializeComponent, translation, text as textComponent, componentFromLegacy, normalizeLastOutput, lastOutputPlainText, LastOutputError } from './chat-component.js';
 export const COMMAND_BLOCK = 139, COMMAND_BLOCK_ITEM = 1139, COMMAND_BLOCK_ID = 137;
 export const newCommandBlock = () => ({ command: '', successCount: 0, customName: '@', trackOutput: true, lastOutput: null });
 export { normalizeLastOutput, lastOutputPlainText };
 export function readCommandBlock(tag) {
-  return { command: nbtGet(tag, 'Command', NBT.STRING, ''), successCount: nbtGet(tag, 'SuccessCount', NBT.INT, 0), customName: nbtGet(tag, 'CustomName', NBT.STRING, '@'), trackOutput: tag.get('TrackOutput')?.type === NBT.BYTE ? !!nbtGet(tag, 'TrackOutput', NBT.BYTE, 1) : true, lastOutput: normalizeLastOutput(nbtGet(tag, 'LastOutput', NBT.STRING, null)) };
+  return { command: getStringAny(tag, 'Command'), successCount: nbtGet(tag, 'SuccessCount', NBT.INT, 0), customName: nbtGet(tag, 'CustomName', NBT.STRING, '@'), trackOutput: tag.get('TrackOutput')?.type === NBT.BYTE ? !!nbtGet(tag, 'TrackOutput', NBT.BYTE, 1) : true, lastOutput: normalizeLastOutput(nbtGet(tag, 'LastOutput', NBT.STRING, null)) };
 }
 export function writeCommandBlock(tile, x, y, z) {
   const t = (type, value) => ({ type, value });

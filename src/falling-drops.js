@@ -23,14 +23,14 @@ export const damageDropped = (original, data) => (DAMAGE_DROPPED[original]?.(dat
 // The whole Data byte of a falling record: the saved byte the port cell cannot hold, else the high nibble kept at import plus the original low nibble of the port cell (the export's formula).
 export function fallingData(e) {
   if (Number.isInteger(e.data)) return e.data & 255;
-  const o = toOriginal(e.block, e.meta & 15);
+  const o = toOriginal(e.block, e.meta & 15, e.flowing ? { flowing: true } : {});
   return ((e.meta & 240) | ((o?.[1] ?? e.meta) & 15)) & 255;
 }
 // The ItemStack of the drop, or null (a block without an item, or an unknown cell).
 export function fallingDropStack(e) {
-  const o = toOriginal(e.block, e.meta & 15);
+  const o = toOriginal(e.block, e.meta & 15, e.flowing ? { flowing: true } : {});
   if (!o) return null;
   if (NO_BLOCK_ITEM.has(o[0])) return null;
   const id = itemForBlock(e.block) || itemOfBlock2(e.block) || blockItemId(e.block);
-  return { id, count: 1, damage: damageDropped(o[0], fallingData(e)) };
+  return { id, count: 1, damage: damageDropped(o[0], fallingData(e)), ...(o[0] === 8 || o[0] === 10 ? { rawId: o[0] } : {}) }; // b79 falling79: the flowing fluid ItemBlock (native ids 8/10 are distinct from 9/11, Executed)
 }
