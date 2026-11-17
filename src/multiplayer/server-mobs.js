@@ -7,6 +7,7 @@
 // Batch 60: the server's own sounds (S29), status 2 / 3 / 18 (S19) for the clients' hurt and death sounds and hearts, experience orbs of a kill (server-items.js), knockback on the
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
+import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
 import { SharedMobTracker } from './server-mob-entries.js';
@@ -187,20 +188,17 @@ export class ServerMobs {
     // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
     const watcher = this.tracker.addWatcher(p.id, () => p.position);
     const views = this.host.chunkViews; if (views) { watcher.watch.gate = (cx, cz) => views.sees(p.id, cx, cz); watcher.fresh = () => views.takeFresh(p.id, 'mobs'); } // b72 mpstream72: tracking needs the column sent
+    dropViewList(this.views);
     this.views.set(p.id, { player: p, view, survival, watcher, known: new Map(), destroys: [] });
     // b62: the creature that hurts this player is what the player's tamed wolves hit back (Survival.damage -> onRevenge; ai.js playerHurtBy would write to whichever view is current).
     p.survival.onRevenge = record => Object.assign(view, { hurtBy: record, hurtByTime: mobs.ai.clock });
   }
-  removePlayer(id) { this.views.delete(id); this.tracker.removeWatcher(id); }
+  removePlayer(id) { dropViewList(this.views); this.views.delete(id); this.tracker.removeWatcher(id); }
   // Survival.scaledDamage of a mob's hit: the host decides (the player-state track); true means the hit landed.
   hurt(p, amount, source) { return this.host.damagePlayer(p, amount, source) !== false; }
   // World.getClosestPlayerToEntity for this mob: the AI reads `ai.player` and `ai.survival` for everything it does with the player.
   target(e) {
-    let best = null, bd = Infinity;
-    for (const v of this.views.values()) {
-      const p = v.player.position, d = (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2;
-      if (d < bd) { bd = d; best = v; }
-    }
+    let best = nearestView(this.views, e); // b79 mpperf79: first strictly nearest, as the plain loop
     // b62: a tamed wolf or ocelot serves its own owner: the owner's view is the AI's player while that player is here (ownerHere, owner-links.js), so following, sitting, defending
     // (EntityAIOwnerHurtByTarget / HurtTarget read the owner's view) and teleporting go to the owner and not to the nearest player. An owner who is offline: getOwner() is null.
     if (e.owner && (e.type === 'wolf' || e.type === 'ocelot')) { // b63: by key, name or legacy save (server-owners.js); a stale record is stamped for the nearest player
@@ -386,7 +384,7 @@ export class ServerMobs {
   // it, so the entry's `ticks` phase, its last sent position and the S12 velocity flags are the entity's, as natively. Packets leave in the order they were queued (packetSeq).
   track() {
     const mobs = this.mobs, states = new Map(), size = e => mobs.size(e), t = this.tracker;
-    const stateOf = e => { let s = states.get(e); if (s === undefined) states.set(e, s = JSON.stringify(mobState(e))); return s; };
+    const stateOf = e => { let s = states.get(e); if (s === undefined) states.set(e, s = mobStateJson(e, mobState)); return s; };
     t.serverStep(mobs.entities, size);
     const byWatcher = new Map(), outs = new Map();
     for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
