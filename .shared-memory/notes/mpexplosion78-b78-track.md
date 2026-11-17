@@ -14,7 +14,7 @@
 
 ## Verification
 - `node --test src/mpexplosion78-b78.test.js`: 7 pass (incl. batched vs per-cell on three random worlds with torches, roofs, world edges).
-- Related server files under `MC_RELIGHT=verify` (dispense, combat74, nether 1-3, sleep, end, wither, velocity77, perf77, pistons, blocks73, lightning, golems, b62-lead, light-client-server, game-rules, health, dragon): see lead reply for the count. `npm run build` once at the end. No full npm test, no browser.
+- Related server files under `MC_RELIGHT=verify` (dispense, combat74, nether 1-3, sleep, end, wither, velocity77, perf77, pistons, blocks73, lightning, golems, b62-lead, light-client-server, game-rules, health, dragon): 200 pass, 0 fail. `npm run build` once at the end. No full npm test, no browser.
 
 ## Follow-ups
 - Deviation: the port client has no physics, so the S27 motion only feeds its `velocity` (bob, cape) and the next tick's position delta or S12 replaces it; the knockback is already in the server-integrated position.
