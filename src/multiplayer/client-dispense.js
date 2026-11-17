@@ -45,7 +45,7 @@ export class RemoteDispense {
     const h = this.hooks;
     for (const e of list) {
       if (!e || ![e.x, e.y, e.z].every(Number.isFinite)) continue;
-      if (e.k === 'explode') h.explode?.(e.x, e.y, e.z, e.size);
+      if (e.k === 'explode') { h.explode?.(e.x, e.y, e.z, e.size); if ([e.mx, e.my, e.mz].every(Number.isFinite)) h.knock?.(Math.fround(e.mx), Math.fround(e.my), Math.fround(e.mz)); } // b78: S27 handleExplosion: effects, then motion += the floats
       else if (e.k === 'splash') { h.splash?.(e.x, e.y, e.z, e.damage | 0); h.sound?.('game.potion.smash', e.x + .5, e.y + .5, e.z + .5, e.volume ?? 1, e.pitch ?? 1); }
       else if (e.k === 'firework') h.firework?.(e.x, e.y, e.z, e.vx, e.vy, e.vz, e.fireworks ?? null);
       else if (e.k === 'spark') h.spark?.(e.x, e.y, e.z, e.vx, e.vy, e.vz);

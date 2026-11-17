@@ -23,6 +23,7 @@ import { entityBox, isWet, canSeeSky } from '../weather.js';
 import { hurtOf, deathOf } from '../entities.js';
 import { maxHealthOf } from '../mob-riding.js'; // b77 mphorseclient77
 import { drainKnockback } from '../player-knockback.js';
+import { blastKnockback } from '../armor-enchantments.js'; // b78 mpexplosion78
 import { attackerSlowdown } from './server-attack-slowdown.js';
 import { findChunksForSpawning, chunkPairHash } from '../spawner-animals.js';
 import { skylightSubtracted, celestialAngle } from '../lighting.js';
@@ -227,15 +228,19 @@ export class ServerMobs {
     if (!(size > 0)) return;
     explodeMobs({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null });
     this.host.vehicles?.hanging?.explode(x, y, z, size); // b68 mppaintings: paintings and item frames in the blast
+    const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival;
-      if (s.creative || s.health <= 0) continue;
+      if (s.health <= 0) continue;
       const lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)
       const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
       if (!hit) continue;
-      this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null });
-      for (const k of ['x', 'y', 'z']) v.player.velocity[k] += hit.push[k === 'x' ? 0 : k === 'y' ? 1 : 2];
+      if (!s.creative) this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null }); // a creative player takes no damage but is pushed all the same (the push is in doExplosionA, not attackEntityFrom)
+      const kick = blastKnockback(s.inventory?.armor ?? [], hit.impact), scale = hit.impact && kick !== hit.impact ? kick / hit.impact : 1; // agi.a: Blast Protection on the server's own motion only
+      for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
+      knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
     }
+    this.s27 = { x, y, z, size, map: knock };
     const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, opaque: opaqueCube, resistance: ev.blue ? boundedSkullResistance : undefined }); // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three
@@ -334,7 +339,12 @@ export class ServerMobs {
   burst(x, y, z, size) {
     if (!(size > 0)) return;
     const d = this.host.dispense;
-    if (d) d.fx.push({ k: 'explode', x, y, z, size });
+    if (d) d.fx.push({ k: 'explode', x, y, z, size, knock: this.takeKnock(x, y, z, size) });
+  }
+  // b78 mpexplosion78: the per-player motion `explode` collected for this blast (S27's motion fields), or null when it was another blast's.
+  takeKnock(x, y, z, size) {
+    const k = this.s27; this.s27 = null;
+    return k && k.x === x && k.y === y && k.z === z && k.size === size ? k.map : null;
   }
   // b63: S28 with the broadcast flag, to every player of the server (WorldServer.func_82739_e: sendPacketToAllPlayers, recalled).
   broadcastAux({ id, x, y, z, data = 0 }) {

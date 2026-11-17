@@ -24,6 +24,7 @@ import { PHYSICS } from '../world.js';
 import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
+import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
 const f = Math.fround;
 
@@ -242,7 +243,7 @@ export class ServerDispense {
   // Explosion.doExplosionA / B (ServerMobs.explode: mobs, players, blocks, drops), then the clients' burst and the random.explode sound (World.newExplosion plays it).
   explode(x, y, z, size, ctx = {}) {
     this.sim.mobs.explode({ x, y, z, size, source: ctx.exploder ?? null });
-    this.fx.push({ k: 'explode', x, y, z, size });
+    this.fx.push({ k: 'explode', x, y, z, size, knock: this.sim.mobs.takeKnock?.(x, y, z, size) ?? null });
   }
   // EntityPotion.onImpact / EntityExpBottle.onImpact. The splash on mobs is WitchPotions.impact (it also queues the loot events the mobs' drain turns into orbs);
   // the players in range take the same splashImpact steps (instant health or harm, then the timed effects). The glass break goes to the clients as `splash`.
@@ -306,7 +307,7 @@ export class ServerDispense {
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)
-      const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < (e.k === 'explode' ? NEAR_TNT : NEAR));
+      const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.k === 'explode' ? s27Reaches(e, p.position) : (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < NEAR)).map(e => e.k === 'explode' ? s27Of(e, p) : e);
       const msgs = p.dispOut ??= [];
       if (ents.length || p.dispSeen) msgs.push({ type: 'dispEnts', ents });
       p.dispSeen = ents.length > 0;
