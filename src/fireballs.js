@@ -5,6 +5,7 @@
 import { JavaRandom } from "./java-random.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
+import { sweepBox } from "./mpperf79-fast.js"; // b79 mpperf79
 import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
 import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell, lookVector } from "./blaze-ghast.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
@@ -102,7 +103,7 @@ export class Fireballs {
     for (const e of mobs.entities) {
       if (e === b.owner && b.ticks < FIREBALL.ownerGrace) continue; // ticksInAir < 25, the ball's own counter (a punch does not reset it)
       if (e.type === "ender_dragon") boxes.push(...dragonPartTargets(e)); // the parts are the collidable entities, not the 16 x 8 box
-      else { const box = pushBox(e, ...mobs.size(e)); if (near(box)) boxes.push({ target: e, key: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
+      else { const box = sweepBox(mobs, e, q, pushBox); if (box) boxes.push({ target: e, key: e, box }); } // a corpse still counts until it is removed (canBeCollidedWith = !isDead)
     }
     // b64: the dedicated server lists every player of the dimension (`mobs.sweepPlayers`, World.getEntitiesWithinAABBExcludingEntity sees them all); `view` names the one hit so the impact can hurt that player.
     for (const p of mobs.sweepPlayers ? mobs.sweepPlayers() : [mobs.ai?.player]) {

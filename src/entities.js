@@ -1,5 +1,6 @@
 import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
+import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
@@ -383,12 +384,7 @@ function collisionBoxes(world, b, e) {
   const out = entityBoxes && e ? entityBoxes(b, e) : [];
   if (worldEntityBoxes && e) out.push(...worldEntityBoxes(b, e, world));
   out.push(...movingBoxes(b, world));
-  for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
-    for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
-      for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
-        // Block.addCollisionBoxesToList: a fence gives its post and each arm as separate boxes.
-        for (const [a, c, d, g, h, i] of cellCollisionBoxes(world, bx, by, bz))
-          if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
+  blockBoxes(world, b, out, cellCollisionBoxes); // b79 mpperf79: the cell scan, air cells skipped (Block.addCollisionBoxesToList: fence arms etc. stay separate boxes)
   return out;
 }
 // Entity.func_145771_j [sa.j(DDD)Z], used by items and XP orbs (the player overrides it,
