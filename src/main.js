@@ -286,7 +286,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
-import { mountBodyYaw } from "./multiplayer/client-rider-pose.js";
+import { mountBodyYaw, localMountYaw, windowHorseMob } from "./multiplayer/client-rider-pose.js";
 import { MpHorseRider, mountedHorse, ridesSaddled } from "./multiplayer/client-horse.js"; // b77 mphorseclient77: the jump counter, C0B 6 / 7 and the HUD of a horse the server carries
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { leadViews } from "./multiplayer/remote-leads.js"; // b62
@@ -2419,7 +2419,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   );
   if (kind === "inventory") $("#modal .container-screen")?.insertAdjacentHTML("beforeend", '<div class="effect-list" id="effect-list"></div>');
   attachPaperdoll(kind === "inventory" ? "inventory" : null);
-  attachHorsePreview(kind === "horse" ? container.horse : null);
+  attachHorsePreview(kind === "horse" ? container.horse : null, () => windowHorseMob(containerView, remoteMobs)); // b79 live look
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   drawLabels($("#modal")); // titles and the "Inventory" label in FontRenderer glyphs, 0x404040 without a shadow
@@ -2552,6 +2552,7 @@ function paperdollFrame() {
       heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       hurt: survival.hurtTime > 0,
       sneak: motion.sneaking,
+      riding: !!rider.vehicle || !!mpRiding, mountYaw: localMountYaw({ vehicle: rider.vehicle, riding: mpRiding, mobs: remoteMobs }, 1), // b79 riderpose79
       arrowCount: survival.arrowCount,
       arrowEntityId: playerBody.entityId,
       burning: survival.fire > 0,
@@ -2564,11 +2565,11 @@ function paperdollFrame() {
 }
 // GuiScreenHorseInventory draws the horse through func_147046_a (horse-preview.js).
 let horsePreview = null;
-function attachHorsePreview(horse) {
+function attachHorsePreview(horse, source) {
   const slots = $("#modal .container-screen .container-slots");
   if (!horse || !slots || !scene) return horsePreview?.detach();
   horsePreview ??= new HorsePreviewView(scene);
-  horsePreview.attach(slots.parentNode, slots, horse);
+  horsePreview.attach(slots.parentNode, slots, horse, source);
 }
 function horsePreviewFrame() {
   const box = $("#modal .container-screen")?.getBoundingClientRect();
@@ -4689,6 +4690,7 @@ function animate(now) {
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
     riding: !!rider.vehicle || !!mpRiding,
+    mountYaw: localMountYaw({ vehicle: rider.vehicle, riding: mpRiding, mobs: remoteMobs }, partial), // b79 riderpose79
     arrowCount: survival.arrowCount,
     arrowEntityId: playerBody.entityId,
     burning: survival.fire > 0,
