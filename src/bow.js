@@ -455,6 +455,8 @@ export class Arrows {
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
     if (a.fire > 0 && ref.type !== "enderman") setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection; never on an enderman (offset 906: instanceof ya, bytecode-read)
+    // wi.a(ro, F) (bytecode-read b78): damage whose source entity (ro.j(), an arrow's shooter) is the horse's own rider is refused; the arrow ricochets. After setFire above, as zc.h.
+    if (a.shooter === "player" && ref.type === "horse" && ref.rider && (!a.owner || a.owner.mount?.rider === ref.rider)) return false;
     const s = a.shooter, from = s === "player" ? a.owner?.position ?? ctx.player ?? a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
     return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });

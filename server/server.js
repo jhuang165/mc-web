@@ -341,6 +341,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (closing) return;
     closing = true;
     clearInterval(tickTimer); clearInterval(saveTimer); clearInterval(heartbeatTimer);
+    simulation.shuttingDown = true; // b78 mphorse78: the sockets' close events are not logouts (stopServer never runs playerLoggedOut), a rider's horse stays in the world
     for (const ws of wss.clients) ws.terminate();
     await new Promise(resolve => wss.close(resolve));
     await new Promise(resolve => server.close(resolve));

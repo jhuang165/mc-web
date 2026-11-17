@@ -100,18 +100,21 @@ export class ServerHorses {
     const record = JSON.parse(JSON.stringify(this.mobs.serializeOne(e)));
     for (const k of ['playerRides', 'riding', 'id']) delete record[k];
     this.mobs.horseSeats.dismount(this.host.world, p.mount.rider, false); // the seat (the saved position) stays where the player sat
-    e.removedNow = true;
-    this.mobs.entities.splice(this.mobs.entities.indexOf(e), 1);
+    // b78 mphorse78: a server shutdown (MinecraftServer.stopServer: saveAllPlayerData, removeAllPlayers, saveAllWorlds) never reaches playerLoggedOut: the horse stays in the world and is also in `Riding`.
+    if (!this.host.shuttingDown) {
+      e.removedNow = true;
+      this.mobs.entities.splice(this.mobs.entities.indexOf(e), 1);
+    }
     p.ridingSave = record;
     return record;
   }
   // The `riding` field of the player's saved record (SaveHandler data: PlayerData `Riding`).
   savedFields(p) { return p.ridingSave ? { riding: p.ridingSave } : {}; }
   // Login (oi.a(ej, mw), bytecode-read b77): after the player is in the world, `Riding` -> EntityList.createEntityFromNBT, forceSpawn, spawnEntityInWorld, player.mountEntity. The horse is a new entity
-  // (new id) at the Pos of its record; an unusable record leaves the player unmounted, as a null entity does. Overworld only (a saved dimension lane keeps its own mobs).
+  // (new id) at the Pos of its record; an unusable record leaves the player unmounted, as a null entity does. b78: called on the instance of the player's dimension (Nether / End).
   rejoin(p, saved) {
     const record = saved?.riding;
-    if (!record || saved.dimension || p.mount) return false;
+    if (!record || p.mount) return false;
     const mobs = this.mobs, e = mobs.restore({ ...record, id: 'mob-' + mobs.nextId }, { summoned: true });
     if (!e) return false;
     mobs.entities.push(e);

@@ -145,6 +145,8 @@ export class ServerDimensions {
     const n = this.nether;
     n.overMobs.removePlayer(p.id); n.mobs.addPlayer(p); // the Overworld's mobs must not target a player who is not there; the Nether's do
   }
+  // b78 mphorse78: the ServerVehicles instance that owns this player's dimension (the Overworld's `sim.vehicles` is not swapped in outside an action).
+  vehiclesOf(p) { return p?.dimension === NETHER ? this.nether?.vehicles : p?.dimension ? this.end.n?.vehicles : this.sim.vehicles; }
   // A player who disconnects leaves the Nether's mob view as well (simulation.removePlayer hook).
   removePlayer(id) { this.nether?.mobs.removePlayer(id); this.nether?.vehicles?.views.delete(id); this.end.n?.mobs.removePlayer(id); this.end.n?.vehicles?.views.delete(id); }
   savedFields(p) { return p.dimension ? { dimension: p.dimension } : {}; }

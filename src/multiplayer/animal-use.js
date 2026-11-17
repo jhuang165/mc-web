@@ -16,7 +16,7 @@ import { ITEMS } from '../survival.js';
 import { ITEM_SPAWN_EGG, eggOf } from '../spawn-eggs.js';
 import { AGEABLE_EGG_TYPES, isAgeable } from '../entities.js';
 import { originalId, NAME_TAG_ORIGINAL, LEAD_ORIGINAL, leashUse } from '../horse-gear.js';
-import { feedHorse, interactHorse } from '../horse.js';
+import { feedHorse, interactHorse, MAX_TEMPER } from '../horse.js';
 import { view as horseView } from '../horse-live.js'; // b77 mphorseclient77
 
 export const isCow = type => type === 'cow' || type === 'mooshroom';
@@ -119,12 +119,14 @@ function predictLead(mob, survival, selfId, spend) {
 function predictHorse(mob, survival, spend, sneak = false) {
   if (mob.health <= 0 || !mob.horse) return null;
   const id = originalId(survival.held), h = horseView(mob);
-  const fed = id != null ? feedHorse(h, id, { creative: !!survival.creative }) : null;
+  // b78 mphorse78: temper is no watched value (EntityHorse.c() registers only 16 flags, 19 type, 20 variant, 21 owner, 22 armour), so the copy never knows it: feed with the cap assumed, which leaves only
+  // the health / growth / love uses. A wild horse such a feed does not use may still take it through the temper rule, so no claim is made and the server's answer stands.
+  const fed = id != null ? feedHorse({ ...h, temper: MAX_TEMPER }, id, { creative: !!survival.creative }) : null;
+  if (fed && !fed.used && !h.tame && feedHorse({ ...h, temper: 0 }, id, { creative: !!survival.creative })?.used) return null;
   if (fed?.used) {
     mob.health = fed.horse.health; mob.growingAge = fed.horse.age;
     if (fed.horse.inLove && !(mob.love > 0)) mob.love = 600;
     if (fed.horse.loveFed) mob.love = 600;
-    if (fed.horse.temper !== undefined) mob.horse.temper = fed.horse.temper;
     spend();
     return { handled: true };
   }
