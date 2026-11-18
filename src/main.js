@@ -322,6 +322,7 @@ import { CartSounds } from "./cart-sounds.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
+import { placementEntityBlocker } from "./placement-entities.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
 import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists, liveOrder } from "./saved-order.js";
@@ -548,6 +549,7 @@ let sounds,
 let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 // Boats (boats.js): their own system and renderer next to the minecarts.
 let boats = new Boats({ ids: entityIds }), boatRenderer = null;
+const placementEntities = placementEntityBlocker(() => ({ mobs, vehicles: [minecarts?.carts, boats?.carts], falling: falling?.entities, primed })); // b81 collide81 (block placement)
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
 setEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } }));
 setRocketEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } })); // b69: a firework rocket stops against boats (fireworks-live.js)
@@ -3670,6 +3672,7 @@ function edit(place = false) {
     playSound: (name, options) => { if (!mutePlaceSound) sounds.play(name, options); }, // mutePlaceSound: the click's own sound already played with the prediction
     particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
     scheduleFalling:(x,y,z)=>falling.schedule(x,y,z,ANVIL),
+    placement: { entities: placementEntities }, // b81 collide81: World.checkNoEntityCollision sees the mobs, carts, boats, falling blocks and primed TNT
     sound,
     reportBrokenTool,
     toast,
