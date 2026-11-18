@@ -1043,8 +1043,10 @@ export class EntityWorld {
   pick(origin, dir, reach, wallDistance = reach) {
     let result = null;
     const cands = [];
-    // b79: canBeCollidedWith is !isDead and a dying mob is not dead until its 20-tick animation ends, so the ray picks every corpse still in the list (the dragon's own 200-tick death keeps the old rule, open).
-    for (const e of this.entities) if (e.health > 0 || e.type !== "ender_dragon") { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
+    // b79: canBeCollidedWith is !isDead and a dying mob is not dead until its 20-tick animation ends, so the ray picks every corpse still in the list.
+    // b80: the dragon is never the target (xa.R() is false); its parts are (wy.R() is true, bytecode-read), and a dying dragon's parts stay where its last living tick put them
+    // (xa.e returns after the death puff before updating them), so they are aimed at for all 200 ticks of its death.
+    for (const e of this.entities) if (!e.dragonGone) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
     for (const { key: e, c } of orderTargets(cands)) { // b72: the client world lists entities in chunk order, which decides equal distances (candidate-order.js)
       // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
       // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
@@ -1536,7 +1538,8 @@ export class EntityWorld {
   // level * 4 s. `info` receives {knockback, enchantCritical, slowness} for the caller (the player's
   // own slowdown, the magic-crit particles, the hotbar).
   attack(e, tool, survival, player, extraKnockback = 0, critical = false, info = {}) {
-    if (!this.entities.includes(e) || e.health <= 0) return false;
+    // b80: a dying dragon is still hit through its part: wy.a(ro, F) -> xa.a(wy, ro, F) returns true at any health (bytecode-read), so the weapon wears and the hunger cost is paid.
+    if (!this.entities.includes(e) || (e.health <= 0 && e.type !== "ender_dragon")) return false;
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0,
       held = owned && survival.held?.id === tool ? survival.held : null,
@@ -1551,7 +1554,7 @@ export class EntityWorld {
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
-      this.ai.playerHit(e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget)
+      this.ai.playerHit(e.type === "ender_dragon" ? null : e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
       mobThornsOnPlayerHit(e, entityRandom(e), {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
@@ -2528,7 +2531,8 @@ export class EntityWorld {
     if (e.type === "witch") this.witchUpdate(e, t); // EntityWitch.onLivingUpdate (yp.e) runs for a corpse too: the drink roll draws and can still start a drink (creeperwitch-b45 records)
     e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
     if (slime) e.moveForward = 0;
-    this.walk(e, t, 0);
+    // b80: sv.e then calls moveEntityWithHeading, and EntityHorse's (wi.e(FF), bytecode-read) takes a saddled rider's input in place of the zeroed one, so the rider steers a dying horse.
+    this.walk(e, t, 0, e.type === "horse" && e.rider && e.horse?.saddled ? () => horseRideThink(this, e) : undefined);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
     this.push(e, t);
     if (e.type === "chicken") this.chickenUpdate(e);
@@ -3054,7 +3058,7 @@ export class EntityWorld {
   // EntityWolf.interact (wv.a(yz)) for the player holding `survival.held` (wolf.js interact): bones tame, meat heals or
   // breeds, dye recolours the collar, anything else lets the owner toggle sitting. Returns whether the click was used.
   wolfInteract(e, survival) {
-    if (e.type !== "wolf" || e.health <= 0 || !this.entities.includes(e)) return false;
+    if (e.type !== "wolf" || !this.entities.includes(e)) return false; // b80: wv.a(yz) has no health test (a corpse is fed, dyed, sat or tamed; taming's setHealth(20) revives it, the deathTime stays)
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.wolf.width, height: ENTITY_TYPES.wolf.height };
     const out = wolfClick(e, held, ownerPresent(e), creative, rand), brain = this.ai.brain(e);
@@ -3083,7 +3087,7 @@ export class EntityWorld {
   // EntityOcelot.interact (wn.a(yz)) for the player holding `survival.held` (ocelot.js interact): raw fish tame a tempted
   // wild ocelot (1 in 3), breed a cat, and the owner's other clicks sit it. Returns whether the click was used.
   ocelotInteract(e, survival) {
-    if (e.type !== "ocelot" || e.health <= 0 || !this.entities.includes(e)) return false;
+    if (e.type !== "ocelot" || !this.entities.includes(e)) return false; // b80: wn.a(yz) has no health test
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.ocelot.width, height: ENTITY_TYPES.ocelot.height };
     const brain = this.ai.brain(e), p = this.ai.player, worldRand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));

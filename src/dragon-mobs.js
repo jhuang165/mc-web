@@ -171,12 +171,13 @@ export function installDragonMobs(EntityWorld) {
   const around = (name, wrapper) => { const base = P[name]; P[name] = function (...args) { return wrapper.call(this, base, ...args); }; };
   around("attackEntityFrom", function (base, e, amount, source = {}) {
     if (e?.type !== ENDER_DRAGON) return base.call(this, e, amount, source);
-    if (!this.entities.includes(e) || !e.dragon || e.health <= 0) return false;
+    if (!this.entities.includes(e) || !e.dragon || e.dragonGone) return false;
     const name = source.name ?? "generic";
     // Only parts take hits (xa.a(ro, F) is a no-op): fire, falling and the like never reach the dragon.
     if (!source.player && name !== "explosion" && !source.attacker) return false;
     const idx = partFor(e, source), host = dragonHost(this, e, { player: this.ai?.player, survival: this.ai?.survival });
-    if (source.player) e.recentlyHit = 100;
+    // b80: xa.a(wy, ro, F) has no health test (bytecode-read): a dying dragon's part still draws the new flight target and answers true; the hurt (sv.a, livingHurt) refuses it, so no recentlyHit.
+    if (source.player && e.health > 0) e.recentlyHit = 100;
     return attackFromPart(e, idx, { player: !!source.player, explosion: name === "explosion" }, amount, host);
   });
   around("serialize", function (base) {

@@ -34,8 +34,8 @@ export class ServerRiding {
     if (!p.mount) { p.mount = { key: 'm' + String(e.id).replace(/^mob-/, ''), mob: e, rider }; sv.seat(p); }
     return true;
   }
-  // The pig is alive and still holds this rider.
-  keeps(p) { const m = p.mount, e = m.mob; return e.health > 0 && this.mobs.entities.includes(e) && e.rider === m.rider; }
+  // The pig is not yet dead (b80: Entity.updateRidden lets go once the mount isDead, so a corpse keeps its rider until its deathTime 20) and still holds this rider.
+  keeps(p) { const m = p.mount, e = m.mob; return (e.health > 0 || (e.death ?? 0) < 20) && this.mobs.entities.includes(e) && e.rider === m.rider; }
   // After the mobs' tick: the seat follows the pig.
   follow(p) { this.mobs.horseSeats.updateRiderPosition(p.mount.rider.vehicle); }
   leave(p) { this.mobs.horseSeats.dismount(this.host.world, p.mount.rider, true); }

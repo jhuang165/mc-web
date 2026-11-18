@@ -5,8 +5,6 @@ import * as P from "./pig-saddle.js";
 import { copyStack } from "./inventory.js";
 import { entityRandom } from "./entities.js";
 
-const alive = (mobs, e) => e && e.health > 0 && mobs.entities.includes(e);
-
 // ub.e and abp.a: a stick used up becomes `new ItemStack(Items.fishing_rod)` carrying the old stack's tag.
 export function rodFrom(old) {
   const rod = { ...copyStack(old), id: P.FISHING_ROD, count: 1, damage: 0 };
@@ -55,7 +53,7 @@ export function installPigSaddle(EntityWorld) {
   };
   // EntityPig.interact after EntityAnimal.interact declined: a saddled pig with a free seat mounts the player.
   proto.pigMount = function (e, seats) {
-    if (!alive(this, e) || e.type !== "pig" || !seats?.player) return false;
+    if (!e || !this.entities.includes(e) || e.type !== "pig" || !seats?.player) return false; // b80: wo.a(yz) has no health test: a saddled corpse pig takes the player until its deathTime 20 setDead
     const rider = seats.player;
     if (!P.pigMounts({ saddled: !!e.saddled, riderFree: !e.rider, riderIsPlayer: e.rider === rider })) return false;
     if (e.rider !== rider && !rider.vehicle) seats.mount(e, rider);
@@ -66,7 +64,7 @@ export function installPigSaddle(EntityWorld) {
   proto.stickUse = function (survival, rider) {
     const s = survival.held, pig = rider?.vehicle?.entity;
     if (s?.id !== P.CARROT_ON_A_STICK) return false;
-    const ridingPig = !!pig && pig.type === "pig" && alive(this, pig);
+    const ridingPig = !!pig && pig.type === "pig" && this.entities.includes(pig); // b80: ItemCarrotOnAStick tests only ridingEntity instanceof EntityPig (a corpse pig keeps its last control state)
     const control = ridingPig ? this.ai.brain(pig).control : null;
     const out = P.stickUse({ ridingPig: !!control, controlled: !!control && P.controlledByPlayer(control.t), damage: s.damage ?? 0 });
     if (!out.boost) return false;

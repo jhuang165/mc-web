@@ -29,7 +29,7 @@ export class ServerHorses {
   horseOf(p) { const m = p.mount?.mob; return m && m.type === 'horse' && m.rider === p.mount.rider ? m : null; }
   // EntityHorse.interact's mount: true when the horse took (or already holds) the player. Unsaddled horses are mounted too (a wild one runs around, RunAround).
   mount(p, e) {
-    if (e.type !== 'horse' || e.health <= 0 || !this.mobs.entities.includes(e)) return false;
+    if (e.type !== 'horse' || !this.mobs.entities.includes(e)) return false; // b80: wi.i(yz) / mountEntity have no health test
     if (p.mount) return p.mount.mob === e;
     const rider = this.vehicles.riderOf(p), seats = horseSeatsFor(this.mobs, rider);
     if (!seats.mount(e, rider)) return false;
@@ -69,7 +69,7 @@ export class ServerHorses {
   inventory(p) { const e = this.horseOf(p); return !!e && this.open(p, e); }
   // wi.g(player): !isRemote, no rider (or this player) and tame; the screen is the horse's AnimalChest window.
   open(p, e) {
-    if (e.type !== 'horse' || !e.horse?.tame || (e.rider && e.rider !== p.mount?.rider) || e.health <= 0 || !this.mobs.entities.includes(e)) return false;
+    if (e.type !== 'horse' || !e.horse?.tame || (e.rider && e.rider !== p.mount?.rider) || !this.mobs.entities.includes(e)) return false; // b80: wi.g(yz) has no health test; the window's canInteractWith (usable) closes it on a corpse
     return this.host.containers.openHorse(p, e, this.mobs.horseGear(e), num(e));
   }
   // The window's reach test (ContainerHorseInventory.canInteractWith: alive and getDistanceToEntity < 8).

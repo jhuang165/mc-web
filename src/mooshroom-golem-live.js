@@ -79,12 +79,13 @@ export function installMooshroomGolem(EntityWorld) {
   Object.defineProperty(P, "golemBalls", { get() { return (this._golemBalls ??= new GolemBalls(this)); }, configurable: true });
   // EntityMooshroom.interact (wm.a(yz)): a bowl gives stew, shears turn it into a cow with 5 red mushrooms. True when handled.
   P.mooshroomInteract = function (e, survival) {
-    if (e.type !== "mooshroom" || !this.entities.includes(e) || e.health <= 0) return false;
+    if (e.type !== "mooshroom" || !this.entities.includes(e)) return false; // b80: wm.a(yz) has no health test (bytecode-read): a corpse gives stew, and shears turn it into a cow
     const held = survival.held, use = mooshroomUse(held?.id, e.growingAge);
     if (use === "bowl") return useBowl(survival, makeStack);
     if (use !== "shear") return false;
     const cow = this.create("cow", e.x, e.y, e.z);
-    cow.yaw = e.yaw; cow.pitch = e.pitch; cow.bodyYaw = e.bodyYaw ?? e.yaw; cow.health = e.health;
+    cow.yaw = e.yaw; cow.pitch = e.pitch; cow.bodyYaw = e.bodyYaw ?? e.yaw; cow.health = Math.max(0, Math.min(cow.health, e.health)); // wh.g(aS()): setHealth clamps to 0..max, so a dying mooshroom leaves a cow at 0 that runs its own 20-tick death (no onDeath: no loot, no xp)
+    if (cow.health <= 0) cow.death = 0; // a new entity's deathTime
     for (const k of ["yaw", "bodyYaw", "headYaw"]) if (e[k] !== undefined) cow[k] = e[k];
     e.removedHealth = e.health; e.health = 0; e.death = 20; // setDead keeps the mooshroom's health (b53so)
     this.entities.push(cow);

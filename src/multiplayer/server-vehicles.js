@@ -186,7 +186,7 @@ export class ServerVehicles {
   ridingBox(p) {
     const m = p.mount;
     if (!m) return null;
-    if (m.mob) { if (m.mob.health <= 0) return null; const [w, h] = this.host.mobs.mobs.size(m.mob); return [m.mob.x - w / 2, m.mob.y, m.mob.z - w / 2, m.mob.x + w / 2, m.mob.y + h, m.mob.z + w / 2]; }
+    if (m.mob) { if (m.mob.health <= 0 && (m.mob.death ?? 0) >= 20) return null; /* b80: the pickup box tests ridingEntity.isDead */ const [w, h] = this.host.mobs.mobs.size(m.mob); return [m.mob.x - w / 2, m.mob.y, m.mob.z - w / 2, m.mob.x + w / 2, m.mob.y + h, m.mob.z + w / 2]; }
     const v = this.find(m.key);
     return v && !v.dead ? v.bb ?? null : null;
   }

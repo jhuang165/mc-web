@@ -119,7 +119,7 @@ export function interact(e, item, isOwner, creative, rand) {
       const heal = WOLF_MEAT.get(item.id);
       if (heal !== undefined && e.dwHealth < 20) {
         if (!creative) out.consume = 1;
-        e.health = Math.min(maxHealth(e), f(e.health + heal));
+        if (e.health > 0) e.health = Math.min(maxHealth(e), f(e.health + heal)); // b80: EntityLivingBase.heal (sv.f(F), bytecode-read) does nothing at health <= 0; the meat is still used
         out.handled = true;
         out.heal = heal;
         return out;

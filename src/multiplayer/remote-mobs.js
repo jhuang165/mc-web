@@ -135,7 +135,7 @@ export class RemoteMobs {
     let best = null;
     for (const [id, { mob }] of this.copies) {
       // b79: a dying mob is not isDead until its 20-tick animation ends, so canBeCollidedWith holds and the ray picks the corpse (the copy leaves with S13)
-      if (mob.health <= 0 && mob.type === 'ender_dragon') continue; // the dragon's death sequence keeps the old rule (open)
+      // b80: the dragon copy's parts (wy.R() true) freeze at the last living tick during its 200-tick death (entity-tracker.js dragonUpdate returns before updateParts), and are aimed at
       const distance = entityHit(origin, dir, mob, reach);
       if (distance !== null && (!best || distance < best.distance)) best = { id, entity: mob, distance };
     }
