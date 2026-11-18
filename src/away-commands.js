@@ -245,7 +245,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   const onShadow = (tile, position, before) => {
     try {
       const shadowSender = commandBlockSender(shadowHost, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * (plan.wallStep ?? 50)) } : undefined);
-      tile.successCount = createCommandRunner(shadowSender).run(tile.command) ? 1 : 0;
+      tile.successCount = createCommandRunner(shadowSender).count(tile.command); // b81 mpcmd81: z.a's run count
       stats.shadow = (stats.shadow ?? 0) + 1;
       return true;
     } catch { tile.successCount = before.successCount; tile.lastOutput = before.lastOutput; return false; }
@@ -290,9 +290,9 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
       else if (DEFER.has(canon) && parts[at].toLowerCase() === PLAYER_NAME.toLowerCase()) return enqueue(); // a literal name finds the player in any dimension
     }
     const sender = commandBlockSender(host, tile, position, Number.isFinite(plan.wall) ? { now: () => new Date(plan.wall + state.ran * (plan.wallStep ?? 50)) } : undefined); // LastOutput carries the clock time of the firing
-    const ok = createCommandRunner(sender).run(tile.command);
+    const ok = createCommandRunner(sender).count(tile.command);
     if (host.skipped) return reason(host.skipped);
-    tile.successCount = ok ? 1 : 0;
+    tile.successCount = ok;
     stats.run++;
     return tile.successCount;
   }
@@ -367,8 +367,8 @@ export function replayPlayerCommands(queue, { host, records = [], carts = [], gi
     const record = e.cartId !== null && e.cartId !== undefined ? carts.find((c) => c.type === 6 && c.id === e.cartId)?.command : records.find((r) => r.x === e.block?.[0] && r.y === e.block?.[1] && r.z === e.block?.[2]);
     const tile = { command: e.command, successCount: 0, customName: e.name ?? "@", trackOutput: e.trackOutput !== false, lastOutput: null };
     const sender = commandBlockSender(replay, tile, e.position, e.wall != null ? { now: () => new Date(e.wall) } : undefined);
-    const ok = createCommandRunner(sender).run(e.command);
-    tile.successCount = ok ? 1 : 0;
+    const ok = createCommandRunner(sender).count(e.command);
+    tile.successCount = ok;
     out.applied++; if (ok) out.succeeded++; else out.failed++;
     if (record && !(e.shadowRan && byDelta)) { record.successCount = tile.successCount; if (tile.lastOutput != null) record.lastOutput = tile.lastOutput; }
   }
