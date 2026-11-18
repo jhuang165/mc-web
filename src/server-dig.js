@@ -12,7 +12,8 @@ const f = Math.fround;
 export function createServerDig({ crack = () => {} } = {}) {
   // pos is the last C07 status 0 cell (ItemInWorldManager.partiallyDestroyedBlockX/Y/Z start at 0).
   const s = { cur: 0, initial: 0, pos: [0, 0, 0], digging: false, lastCrack: -1, received: false, delayed: [0, 0, 0], delayedInitial: 0 };
-  const stage = (damage) => Math.trunc(f(f(damage) * 10)); // (int)(damage * 10.0F), both products in float
+  // (int)(damage * 10.0F), both products in float; the Java cast takes NaN to 0 and clamps to the int range (b81: Mining Fatigue V gives a NaN rate, higher levels -Infinity).
+  const stage = (damage) => { const v = f(f(damage) * 10); return v !== v ? 0 : Math.max(-2147483648, Math.min(2147483647, Math.trunc(v))); };
   const same = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
   return {
     state: s,
