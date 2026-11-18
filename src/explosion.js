@@ -310,8 +310,16 @@ export const explodePitch = (rand) => f(f(1 + f(f(rand.nextFloat() - rand.nextFl
 // opaque cube, from the explosion's own Random. Returns
 // { list, pitch, broken: [{x, y, z, id, meta}], drops, xp, primed: [{x, y, z, fuse}], fires, released: [[x, y, z]] (monster eggs) }.
 // The caller performs the block edits; `world.get/getMeta` are read only.
-export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false, resistance = explosionResistance } = {}) {
-  const list = explosionBlocks(world, x, y, z, size, rand, resistance);
+export function explodeBlocks(world, x, y, z, size, rand, { resistance = explosionResistance, ...options } = {}) {
+  return explosionOutcome(world, explosionBlocks(world, x, y, z, size, rand, resistance), size, rand, options);
+}
+/**
+ * b81 blast81: Explosion.doExplosionB's half of explodeBlocks (bytecode-read agw.a(Z)): the sound pitch, then, for each cell of the ray list `list`, the block it holds NOW
+ * (air is skipped), its drop draws on World.rand, a TNT block's chained fuse, and the fire roll on Explosion's own Random. World.newExplosion runs it after doExplosionA has hurt
+ * the entities, and an ender crystal that the entity part sets off explodes inside it (EntityEnderCrystal.attackEntityFrom -> World.createExplosion, bytecode-read wz.a), so a
+ * cell the nested blast already cleared is air here and drops nothing. Nothing is changed in the world; the caller applies `broken`, `fires`, `drops`, `primed`, `released`.
+ */
+export function explosionOutcome(world, list, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false } = {}) {
   const pitch = explodePitch(rand), broken = [], drops = [], xp = [], primed = [], fires = [], released = [];
   const removed = new Set(), get = (bx, by, bz) => (removed.has(bx + "," + by + "," + bz) ? 0 : world.get(bx, by, bz));
   const chance = f(1 / size);

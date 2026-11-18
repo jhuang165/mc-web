@@ -153,6 +153,7 @@ export function fireballStep(b, inWater) {
 }
 // ze.a(ro, F) when a player hits it: motion becomes the look vector, acceleration look * 0.1, the player the owner. Not hurt by water.
 export function deflect(b, look) {
+  b.velocityChanged = true; // b81 blast81: ze.a(ro, F) calls setBeenAttacked (sa.Q) first: the tracker sends S12 (multiplayer/fireball-copy.js)
   b.vx = look[0]; b.vy = look[1]; b.vz = look[2];
   b.ax = look[0] * 0.1; b.ay = look[1] * 0.1; b.az = look[2] * 0.1;
 }

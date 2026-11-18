@@ -24,7 +24,8 @@ export class RemoteDispense {
       const key = d.k + d.i;
       seen.add(key);
       let row = this.rows.get(key);
-      const fresh = !row;
+      if (row?.lingered) { this.rows.delete(key); row = null; } // b81 blast81: S13 came and went; a ball seen again is a new spawn (a new copy, motion 0)
+      const fresh = !row; // b81 mpcopies81 (after blast81's lingered reset, so a re-seen skull starts a new look)
       if (!row) { this.rows.set(key, row = { px: d.x, py: d.y, pz: d.z, prevYaw: d.yaw ?? 0, prevPitch: d.pitch ?? 0, shake: 0, dead: false }); }
       else { row.px = row.x; row.py = row.y; row.pz = row.z; row.prevYaw = row.yaw ?? 0; row.prevPitch = row.pitch ?? 0; }
       row.x = d.x; row.y = d.y; row.z = d.z; row.id = d.i; row.burning = d.f === 1; // b81 throwfire81: the server's fire flag (Entity.isBurning) for the flames
@@ -35,11 +36,16 @@ export class RemoteDispense {
         if (d.scale !== undefined) { row.scale = d.scale; row.fullbright = true; } // a fire charge: RenderFireball scale, full brightness
         if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; skullCopyLook(row, d, fresh); } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
         if (d.kind === 'eyeOfEnder') this.hooks.eyeTrail?.(row, row.x - row.px, row.y - row.py, row.z - row.pz); // b65 mpdragon2: the copy draws the flying eye's portal trail itself (EntityEnderEye.onUpdate)
+        if (d.k === 'b') row.track = d.t ?? null; // b81 blast81: a fireball's or skull's tracker packets (fireball-copy.js): the copy flies itself and the row takes its place
         if (d.k === 'b') this.hooks.ballFx?.(row); // b80 mpfx80: a fireball's or wither skull's client copy draws its own smoke and bubbles (ze.h, client-explosion.js clientBallFx)
         next.b.push(row);
       }
     }
     for (const [key, row] of this.rows) if (!seen.has(key)) {
+      // b81 blast81: the server's S13 for a dead ball goes out at the players' next onUpdate and the client updates its entities before a tick's packets, so the copy has two
+      // more updates (smokes): one in the message where its row is gone (still drawn), one in the next (the S13 then ends it, not drawn) (fireball-copy.js)
+      if (row.copy && !row.lingered) { row.lingered = true; row.track = { p: [] }; this.hooks.ballFx?.(row); next.b.push(row); continue; }
+      if (row.copy && row.lingered === true) { row.track = { p: [] }; this.hooks.ballFx?.(row); }
       this.rows.delete(key);
       if (key[0] === 'b' && (row.kind === 'snowball' || row.kind === 'egg' || row.kind === 'enderPearl')) { row.rand ??= new GaussianRandom(Math.floor(Math.random() * 2 ** 48)); this.hooks.poof?.(row); }
     }

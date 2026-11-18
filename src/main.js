@@ -771,7 +771,7 @@ function makeRemoteDispense() {
     poof: row => projectiles.clientImpact(row),
     shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
     eyeTrail: (row, vx, vy, vz) => spawnEyeTrail(scene.fx, row, vx, vy, vz), // b65 mpdragon2: the flying eye's portal trail (the copy draws it, as EntityEnderEye.onUpdate does)
-    ballFx: row => clientBallFx(row, { spawn: (...a) => scene.fx?.spawn(...a), wet: r => ballWet(world, r) }), // b80 mpfx80: ze.h's smoke (and bubbles in water) on the client copy
+    ballFx: row => clientBallFx(row, { spawn: (...a) => scene.fx?.spawn(...a), wet: r => ballWet(world, r), world }), // b80 mpfx80: ze.h's smoke (and bubbles in water) on the client copy; b81 blast81: with the tracker field the copy flies itself (`world` for the setPositionAndRotation2 box lift)
     spawnerBurst: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)), // b65 mpspawners2: aux 2004
     spawnerDelay: (x, y, z, key) => applySpawnerDelay({ spawners, copies: remoteVehicles?.copies }, x, y, z, key), // b65: the spawner's block event 1
     spawnerPuff: (x, y, z, w, h) => burst(scene.fx, "explode", 20, { x, y, z, width: w, height: h }, scene.explosionParticles.worldRandom), // b65: entity status 20

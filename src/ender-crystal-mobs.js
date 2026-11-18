@@ -34,7 +34,12 @@ export function crystalAttack(mobs, e) {
   e.health = 0;
   e.death = 20; // removed by the end-of-tick filter, with no death animation
   e.crystalGone = true;
-  mobs.events.push({ explode: { x: e.x, y: e.y, z: e.z, size: CRYSTAL_EXPLOSION_POWER, source: null, smoking: true, flaming: false } });
+  const event = { explode: { x: e.x, y: e.y, z: e.z, size: CRYSTAL_EXPLOSION_POWER, source: null, smoking: true, flaming: false } };
+  // b81 blast81 (bytecode-read wz.a(ro, F)): setDead, then World.createExplosion inside attackEntityFrom itself, so a crystal another blast hurts explodes in that blast's
+  // doExplosionA (and the TNT it primes updates in the same entity pass). It used to be queued: a crystal hurt in the event drain went off a tick late, and its TNT with it.
+  // A host without `explodeInline` (a bare EntityWorld in a test) keeps the queue.
+  if (mobs.explodeInline) mobs.explodeInline(event);
+  else mobs.events.push(event);
   return true;
 }
 export { CRYSTAL_FIRE };
