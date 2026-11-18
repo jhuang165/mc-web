@@ -17,10 +17,20 @@
 // equal to the GL pipeline within float rounding): with E the eye point (camera entity position + ActiveRenderInfo object offset) and W
 // the fragment on the plane, P = E + (W - E) * (hE + f14) / hE (hE = E.y - W.y) is where the eye ray meets a plane f14 blocks below the
 // portal; (s, t) = (-P.x, -P.z) go through the rotation, scale and scroll above. Each layer therefore sits at its own depth (parallax).
-// The 16 blended passes collapse into one opaque pass: end_sky.png and end_portal.png are fully opaque, so pass 0 replaces the framebuffer
-// and the additive passes sum on top (clamped once at the end instead of per pass; at most a 1/255 step of rounding apart). Each pass is
-// modulated by the lightmap at the tile's own brightness (TileEntityRendererDispatcher sets it; the entity pass keeps the lightmap unit on)
-// and fogged on its own before blending, as fixed-function fog is applied per fragment.
+// The 16 blended passes collapse into one opaque pass that replays the framebuffer: end_sky.png and end_portal.png are fully opaque, so
+// pass 0 (GL_SRC_ALPHA / GL_ONE_MINUS_SRC_ALPHA at alpha 1) replaces the colour and each additive pass adds on top; every pass is written to
+// the 8-bit colour buffer, clamped to [0, 1] and rounded to the nearest 1/255 step, before the next one reads it (b81 render81: the port
+// summed all 16 and clamped once). Each pass is modulated by the lightmap at the tile's own brightness (TileEntityRendererDispatcher sets it;
+// the entity pass keeps the lightmap unit on) and fogged on its own before blending, as fixed-function fog is applied per fragment.
+// Eye point (b81 render81, bytecode-read EntityRenderer.orientCamera blt.h(F) and setupCameraTransform blt.a(F, I)): in first person, awake,
+// orientCamera calls glTranslatef(0, 0, -0.1) after the roll and before the pitch and yaw turns, so the camera sits 0.1 behind the eye
+// along the pitch/yaw view axis; gluPerspective's near plane is 0.05 and ActiveRenderInfo unprojects the viewport centre at winZ 0, so
+// the texgen eye is camera + forward * 0.05. Third person and sleeping take the other branches (no 0.1).
+// Scan (b81 render81): TileEntity.getMaxRenderDistanceSquared 4096 (aor.n, not overridden by apo) is the only range test, so every portal
+// tile of a drawn column counts. Each meshed column (VoxelScene.chunks, a new group on every install) is indexed once with a byte search
+// of its block array and re-indexed only when the column is remeshed; the vertex shader then drops cells 64 or more blocks away.
+// GLSL is kept to GLSL ES 1.00 with three.js supplying the precision and the WebGL 2 defines: no loops, no uniform arrays (the 16 layers are
+// literal constants), no texture reads under a condition.
 // 1.7.10 has no end gateway and the end portal frame (render type 26) is a RenderBlocks block, not drawn here.
 import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
@@ -28,7 +38,7 @@ import { JavaRandom } from "./java-random.js";
 import { END_PORTAL } from "./eye-of-ender.js";
 import { FOG_PARS } from "./light-material.js";
 
-const f = Math.fround, RADIUS = 20, HEIGHT = 12, PLANE = 0.75, MAX_DISTANCE_SQ = 4096;
+const f = Math.fround, PLANE = 0.75, MAX_DISTANCE_SQ = 4096, BACK_OFF = 0.1;
 
 // The 16 passes as bmt draws them: texture, depth (f14), texture scale (f15), shade (f16), rotation in degrees, vertex colour bytes.
 export const END_PORTAL_LAYERS = Object.freeze((() => {
@@ -60,10 +70,54 @@ export function endPortalUv(layer, eye, point, scroll) {
 // One quad per tile, in the order bmt hands them to the Tessellator: (x, y, z), (x, y, z + 1), (x + 1, y, z + 1), (x + 1, y, z) at y + 0.75.
 export const endPortalQuad = (x, y, z) => [[x, y + PLANE, z], [x, y + PLANE, z + 1], [x + 1, y + PLANE, z + 1], [x + 1, y + PLANE, z]];
 
-const layerConsts = () => END_PORTAL_LAYERS.map((L) => {
-  const a = ((L.rotation % 360) * Math.PI) / 180;
-  return { depth: L.depth, scale: L.scale, cos: Math.cos(a), sin: Math.sin(a), colour: new THREE.Vector3(...L.colour.map((c) => c / 255)) };
-});
+// One colour-buffer write: clamped to [0, 1], then the nearest 8-bit step (GL's conversion to a normalised fixed-point buffer).
+export const framebufferStep = (c) => Math.floor(Math.min(1, Math.max(0, c)) * 255 + 0.5) / 255;
+
+// The pixel the 16 passes leave in the colour buffer, as the shader computes it: `sample(texture, [u, v])` the texel (rgb in [0, 1]) at GL
+// texture coordinates, `light` the lightmap texel and `fog(rgb)` the fixed-function fog of one pass.
+export function endPortalPixel(eye, point, scroll, sample, light = [1, 1, 1], fog = (c) => c) {
+  let sum = [0, 0, 0];
+  for (let i = 0; i < 16; i++) {
+    const L = END_PORTAL_LAYERS[i], t = sample(L.texture, endPortalUv(i, eye, point, scroll));
+    const src = fog([0, 1, 2].map((k) => t[k] * (L.colour[k] / 255) * light[k]));
+    sum = src.map((c, k) => framebufferStep(i === 0 ? c : sum[k] + c)); // pass 0 replaces (alpha 1), the rest add
+  }
+  return sum;
+}
+
+// ActiveRenderInfo's object point for the drawn camera: its position plus forward * near (the unprojected viewport centre at winZ 0). In
+// first person `look` is the player's { pitch, yaw } (the port's camera angles, YXZ, without the bob or hurt turns): the camera itself
+// stands 0.1 behind the eye along that axis, which the port's camera does not do, so the texgen eye backs off here.
+export function endPortalEye(camera, look = null, out = new THREE.Vector3()) {
+  const fwd = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
+  camera.getWorldPosition(out).addScaledVector(fwd, camera.near);
+  if (look) out.addScaledVector(fwd.set(0, 0, -1).applyEuler(new THREE.Euler(look.pitch, look.yaw, 0, "YXZ")), -BACK_OFF);
+  return out;
+}
+
+const lit = (x) => { const v = Math.abs(x) < 1e-9 ? 0 : x, t = v.toFixed(9); return t.includes(".") ? t : t + ".0"; };
+const vec = (...a) => `vec${a.length}(${a.map(lit).join(",")})`;
+
+// The fragment shader with the 16 layers written out as constants.
+export function endPortalFragmentShader() {
+  const passes = END_PORTAL_LAYERS.map((L, i) => {
+    const a = ((L.rotation % 360) * Math.PI) / 180, uv = `uvOf(d,${lit(L.depth)},${lit(L.scale)},${vec(Math.cos(a), Math.sin(a))})`;
+    const src = `applyFog(texture2D(${i === 0 ? "sky" : "portal"},${uv}).rgb*${vec(...L.colour.map((c) => c / 255))}*light)`;
+    return i === 0 ? `vec3 sum=fb(${src});` : `sum=fb(sum+${src});`;
+  });
+  return `uniform sampler2D sky,portal,lightmap;uniform vec3 eye;uniform float scroll;
+varying vec3 vWorld;varying vec2 vLight;${FOG_PARS}
+vec3 fb(vec3 c){return floor(clamp(c,0.,1.)*255.+.5)/255.;}
+vec2 uvOf(vec3 d,float depth,float scale,vec2 cs){float h=-d.y;float k=(h+depth)/h;vec2 a=-(eye.xz+d.xz*k)-.5;vec2 r=vec2(cs.x*a.x-cs.y*a.y,cs.y*a.x+cs.x*a.y)+.5;vec2 uv=scale*r+vec2(0.,scroll);return vec2(uv.x,1.-uv.y);}
+void main(){vec3 d=vWorld-eye;vec3 light=texture2D(lightmap,vLight).rgb;
+${passes.join("\n")}
+gl_FragColor=vec4(sum,1.);}`;
+}
+
+export const END_PORTAL_VERTEX_SHADER = `attribute vec3 centre;attribute vec2 lightCoord;uniform vec3 entity;varying vec3 vWorld;varying vec2 vLight;varying float vFogDistance;
+void main(){vec3 d=centre-entity;vWorld=(modelMatrix*vec4(position,1.)).xyz;vLight=(lightCoord+8.)/256.;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);
+gl_Position=dot(d,d)<${MAX_DISTANCE_SQ}.?projectionMatrix*mv:vec4(2.,2.,2.,1.);}`;
 
 export function endPortalMaterial(lighting, sky, portal) {
   const uniforms = {
@@ -71,34 +125,58 @@ export function endPortalMaterial(lighting, sky, portal) {
     fogColor: lighting.uniforms.fogColor, fogNear: lighting.uniforms.fogNear, fogFar: lighting.uniforms.fogFar, fogDensity: lighting.uniforms.fogDensity,
     sky: { value: sky }, portal: { value: portal },
     eye: { value: new THREE.Vector3() }, entity: { value: new THREE.Vector3() }, scroll: { value: 0 },
-    depth: { value: END_PORTAL_LAYERS.map((L) => L.depth) },
-    scale: { value: END_PORTAL_LAYERS.map((L) => L.scale) },
-    rot: { value: layerConsts().map((l) => new THREE.Vector2(l.cos, l.sin)) },
-    colour: { value: layerConsts().map((l) => l.colour) },
   };
-  return new THREE.ShaderMaterial({
-    uniforms,
-    vertexShader: `attribute vec3 centre;attribute vec2 lightCoord;uniform vec3 entity;varying vec3 vWorld;varying vec2 vLight;varying float vFogDistance;
-void main(){vec3 d=centre-entity;vWorld=(modelMatrix*vec4(position,1.)).xyz;vLight=(lightCoord+8.)/256.;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);
-gl_Position=dot(d,d)<${MAX_DISTANCE_SQ}.?projectionMatrix*mv:vec4(2.,2.,2.,1.);}`,
-    fragmentShader: `precision highp float;uniform sampler2D sky,portal,lightmap;uniform vec3 eye;uniform float scroll;uniform float depth[16];uniform float scale[16];uniform vec2 rot[16];uniform vec3 colour[16];
-varying vec3 vWorld;varying vec2 vLight;${FOG_PARS}
-void main(){vec3 d=vWorld-eye;float h=-d.y;vec3 light=texture2D(lightmap,vLight).rgb,sum=vec3(0.);
-for(int i=0;i<16;i++){float k=(h+depth[i])/h;vec2 a=-(eye.xz+d.xz*k)-.5;vec2 r=vec2(rot[i].x*a.x-rot[i].y*a.y,rot[i].y*a.x+rot[i].x*a.y)+.5;vec2 uv=scale[i]*r+vec2(0.,scroll);
-vec3 t=i==0?texture2D(sky,vec2(uv.x,1.-uv.y)).rgb:texture2D(portal,vec2(uv.x,1.-uv.y)).rgb;sum+=applyFog(t*colour[i]*light);}
-gl_FragColor=vec4(min(sum,vec3(1.)),1.);}`,
-    depthFunc: THREE.LessEqualDepth,
-  });
+  return new THREE.ShaderMaterial({ uniforms, vertexShader: END_PORTAL_VERTEX_SHADER, fragmentShader: endPortalFragmentShader(), depthFunc: THREE.LessEqualDepth });
+}
+
+// The end portal cells of one chunk column ({ x, z, blocks } in chunk coordinates, cells at ((lx * 16 + lz) * height + y)), by byte search.
+export function portalCellsOfChunk(chunk) {
+  const out = [], b = chunk.blocks, height = chunk.height ?? b.length / 256;
+  for (let i = b.indexOf(END_PORTAL); i >= 0; i = b.indexOf(END_PORTAL, i + 1)) {
+    const col = Math.floor(i / height);
+    out.push([chunk.x * 16 + (col >> 4), i % height, chunk.z * 16 + (col & 15)]);
+  }
+  return out;
+}
+
+// The portal tiles of the drawn columns. `meshed` is VoxelScene.chunks (column key `${x},${z}` in blocks -> the installed group); without it
+// (a view with no column meshes) every resident chunk is indexed once per chunk object. A column is re-indexed when its group or chunk object
+// changes; `update` returns whether the cell list or a brightness changed.
+export class EndPortalIndex {
+  constructor() { this.columns = new Map(); this.cells = new Map(); }
+  update(world, meshed, brightness) {
+    const seen = new Set();
+    let changed = false;
+    const visit = (key, stamp, chunkOf) => {
+      let col = this.columns.get(key);
+      if (!col || col.stamp !== stamp) {
+        const chunk = chunkOf();
+        if (!chunk?.blocks) return;
+        col = { stamp, cells: portalCellsOfChunk(chunk) };
+        this.columns.set(key, col);
+      }
+      seen.add(key);
+      for (const [x, y, z] of col.cells) {
+        const k = `${x},${y},${z}`, packed = brightness(x, y, z), was = this.cells.get(k);
+        if (!was) { this.cells.set(k, { x, y, z, packed, seen: true }); changed = true; }
+        else { was.seen = true; if (was.packed !== packed) { was.packed = packed; changed = true; } }
+      }
+    };
+    if (meshed instanceof Map && typeof world.chunkAt === "function") {
+      for (const [key, group] of meshed) visit(key, group, () => { const [bx, bz] = key.split(",").map(Number); return world.chunkAt(bx >> 4, bz >> 4); });
+    } else if (world.chunks instanceof Map) for (const [key, chunk] of world.chunks) visit(key, chunk, () => chunk);
+    for (const key of this.columns.keys()) if (!seen.has(key)) this.columns.delete(key);
+    for (const [k, c] of this.cells) { if (c.seen) c.seen = false; else { this.cells.delete(k); changed = true; } }
+    return changed;
+  }
 }
 
 export class EndPortalRenderer {
-  // `view` supplies the lightmap, fog and world brightness (VoxelScene).
+  // `view` supplies the lightmap, fog, world brightness and the meshed columns (VoxelScene).
   constructor(scene, view) {
     this.scene = scene;
     this.view = view;
-    this.cells = new Map();
-    this.frame = 0;
-    this.dirty = false;
+    this.index = new EndPortalIndex();
     const tex = (url) => { const t = pixelTexture(url).clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; };
     this.material = endPortalMaterial(view.lighting, tex("/media/1.7.10/environment/end_sky.png"), tex("/media/1.7.10/entity/end_portal.png"));
     this.geometry = new THREE.BufferGeometry();
@@ -108,31 +186,19 @@ export class EndPortalRenderer {
     this.mesh.visible = false;
     scene.add(this.mesh);
   }
-  // `position` is the player's feet (the scan centre); the eye point is ActiveRenderInfo's unprojected near-plane centre of the camera as drawn
-  // (camera position + forward * near) and the cull distance is measured from the camera entity (feet + eye height).
-  update(world, position, camera, eyeHeight = 1.62) {
-    if (this.frame++ % 10 === 0) this.scan(world, position);
+  get cells() { return this.index.cells; }
+  // `position` is the player's feet; the cull distance is measured from the camera entity (feet + eye height). `look` is the player's
+  // { pitch, yaw } in first person (awake), null in third person or asleep: see endPortalEye.
+  update(world, position, camera, eyeHeight = 1.62, look = null) {
+    const meshedWorld = this.view.world?.chunkAt ? this.view.world : world; // the world the column meshes were built from
+    if (this.index.update(meshedWorld, this.view.chunks, (x, y, z) => this.view.brightness(x, y, z))) this.rebuild();
     if (!camera) return;
-    const u = this.material.uniforms, fwd = new THREE.Vector3();
-    camera.getWorldDirection(fwd);
-    camera.getWorldPosition(u.eye.value).addScaledVector(fwd, camera.near);
+    const u = this.material.uniforms;
+    endPortalEye(camera, look, u.eye.value);
     u.entity.value.set(position.x, position.y + eyeHeight, position.z);
     u.scroll.value = endPortalScroll(Date.now()); // LWJGL Sys.getTime: System.currentTimeMillis on macOS and Linux
   }
-  scan(world, position) {
-    const px = Math.floor(position.x), py = Math.floor(position.y), pz = Math.floor(position.z), seen = new Set();
-    for (let x = px - RADIUS; x <= px + RADIUS; x++) for (let z = pz - RADIUS; z <= pz + RADIUS; z++)
-      for (let y = Math.max(0, py - HEIGHT); y <= py + HEIGHT; y++) {
-        if (world.get(x, y, z) !== END_PORTAL) continue;
-        const key = `${x},${y},${z}`, packed = this.view.brightness(x, y, z), was = this.cells.get(key);
-        seen.add(key);
-        if (was?.packed !== packed) { this.cells.set(key, { x, y, z, packed }); this.dirty = true; }
-      }
-    for (const key of this.cells.keys()) if (!seen.has(key)) { this.cells.delete(key); this.dirty = true; }
-    if (this.dirty) this.rebuild();
-  }
   rebuild() {
-    this.dirty = false;
     const n = this.cells.size, pos = new Float32Array(n * 12), centre = new Float32Array(n * 12), light = new Float32Array(n * 8), index = [];
     let i = 0;
     for (const { x, y, z, packed } of this.cells.values()) {

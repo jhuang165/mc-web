@@ -56,7 +56,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
     if (!direction) return { lost: 'no direction' };
     const power = nbtGet(entity, 'ExplosionPower', NBT.INT);
     return { list, record: { kind: FIREBALL_KINDS[id], x: base.x, y: base.y, z: base.z, vx: direction[0], vy: direction[1], vz: direction[2], ax: 0, ay: 0, az: 0,
-      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), dimension } };
+      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), ...(id === 'WitherSkull' ? { rotation } : {}), dimension } }; // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws
   }
   if (id === 'EyeOfEnderSignal') {
     // EntityEnderEye.readEntityFromNBT is empty: the target (0, 0, 0 of the Java world, moved with the import), the age and the
@@ -125,7 +125,9 @@ export function javaProjectileToNbt(list, e, { ox = 0, oz = 0, itemNbt = null } 
     const id = FIREBALL_IDS[e.kind];
     if (!id || ![e.vx, e.vy, e.vz].every(Number.isFinite)) return null;
     return { id, fields: { xTile: short(-1), yTile: short(-1), zTile: short(-1), inTile: byte(0), inGround: byte(0),
-      direction: tag(NBT.LIST, { elementType: NBT.DOUBLE, items: [e.vx, e.vy, e.vz] }), ...(id === 'Fireball' ? { ExplosionPower: int(Number.isInteger(e.power) ? e.power : 1) } : {}) } };
+      direction: tag(NBT.LIST, { elementType: NBT.DOUBLE, items: [e.vx, e.vy, e.vz] }), ...(id === 'Fireball' ? { ExplosionPower: int(Number.isInteger(e.power) ? e.power : 1) } : {}),
+      // b81 render81: a wither skull's saved rotation as Entity.writeToNBT's Rotation (replaces the exporter's record yaw/pitch, which skulls lack).
+      ...(id === 'WitherSkull' && Array.isArray(e.rotation) && e.rotation.length === 2 && e.rotation.every(Number.isFinite) ? { Rotation: tag(NBT.LIST, { elementType: NBT.FLOAT, items: e.rotation.map(Math.fround) }) } : {}) } };
   }
   if (list === 'eyes') return { id: 'EyeOfEnderSignal', fields: {} }; // EntityEnderEye saves nothing of its own
   if (list === 'rockets') {

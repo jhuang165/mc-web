@@ -4712,7 +4712,7 @@ function animate(now) {
   });
   if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
-  endPortalRenderer?.update(world, position, scene.camera, PHYSICS.eye); // b80 renderfx80: bmt texgen from the drawn camera
+  endPortalRenderer?.update(world, position, scene.camera, PHYSICS.eye, thirdPersonView === 0 && !bedSleep.sleeping ? { pitch, yaw } : null); // b80 renderfx80: bmt texgen from the drawn camera; b81 render81: orientCamera's first-person 0.1 back-off
   if(xpRenderer)xpRenderer.update(objectViews(objectTracker, residentOnly(world,xpOrbs.orbs), "orb"),partial); // ring orbs are not drawn (headless-env.js)
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
