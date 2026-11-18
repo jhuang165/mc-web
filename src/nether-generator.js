@@ -403,15 +403,31 @@ export class NetherGenWorld extends GenWorld {
     return { axis, frame: found > 0 };
   }
   portalSizeBlock(id) { return materialOf(id) === "a" || id === FIRE || id === 90; }
-  // World.doesBlockHaveSolidTopSurface for the blocks fire is placed on (opaque cubes).
+  // World.doesBlockHaveSolidTopSurface (ahb.a(ahl, III)): the block, then its metadata (read unconditionally),
+  // then GenWorld.solidTop: an opaque-material normal block, upper stairs (meta & 4), upper slabs (meta & 8), the
+  // hopper, a full snow layer (meta & 7 == 7). Not isOpaqueCube: glowstone, leaves and TNT have no solid top, the
+  // spawner, end portal frame and hopper do (fire-reference.json "table", column 9, matches for every id).
   hasSolidTopSurface(x, y, z) {
     const id = this.getBlock(x, y, z);
-    this.getBlockMetadata(x, y, z); // read unconditionally, before any block test
-    if (this.isOpaqueCube(id)) return true;
-    throw new Error(`nether-generator: unported solid-top test for block ${id}`);
+    return this.solidTop(id, this.getBlockMetadata(x, y, z));
   }
-  canNeighborBurn() { throw new Error("nether-generator: unported BlockFire.canNeighborBurn"); }
+  // BlockFire.canNeighborBurn (alb.e(ahb, III), private): BlockFire.canCatchFire (alb.e(ahl, III)) on x + 1,
+  // x - 1, y - 1, y + 1, z - 1, z + 1, stopping at the first true. canCatchFire is chanceToEncourageFire[id] > 0
+  // (alb.a, filled by alb.e() / setFireInfo), read here from FIRE_ENCOURAGEMENT. Not reached by population:
+  // WorldGenFire places fire only where it has just read netherrack below, so hasSolidTopSurface is true and
+  // onBlockAdded short-circuits before calling this.
+  canNeighborBurn(x, y, z) {
+    return this.canCatchFire(x + 1, y, z) || this.canCatchFire(x - 1, y, z) || this.canCatchFire(x, y - 1, z) ||
+      this.canCatchFire(x, y + 1, z) || this.canCatchFire(x, y, z - 1) || this.canCatchFire(x, y, z + 1);
+  }
+  canCatchFire(x, y, z) { return (FIRE_ENCOURAGEMENT[this.getBlock(x, y, z)] ?? 0) > 0; }
 }
+
+// BlockFire chanceToEncourageFire by native block id (alb.a; setFireInfo in alb.e()), every non-zero entry of the
+// executed 1.7.10 table (fire-reference.json "table", tools/probes/FireProbe.java). fire.js keeps its own table in
+// this build's internal ids; this one is in the native ids the generator uses.
+export const FIRE_ENCOURAGEMENT = Object.freeze({ 5: 5, 17: 5, 18: 30, 31: 60, 35: 30, 37: 60, 38: 60, 46: 15, 47: 30,
+  53: 5, 85: 5, 106: 15, 125: 5, 126: 5, 134: 5, 135: 5, 136: 5, 161: 30, 162: 5, 170: 60, 171: 60, 173: 5, 175: 60 });
 
 // Generate a size x size block of chunks (x outer, z inner), then populate the first `populated` x `populated`
 // of them (x outer, z inner), continuing one hellRNG. `halo` chunks beyond the generated area are produced on

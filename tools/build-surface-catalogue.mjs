@@ -245,7 +245,7 @@ const NETHER = ['WorldGenFire', 'WorldGenGlowStone1', 'WorldGenGlowStone2', 'Wor
 const featureStatus = name => {
   if (name === 'WorldGeneratorBonusChest') return 'Implemented; Bonus Chest button in Create World; ten-attempt placement, contents and torches replayed over 40 native records in [superflat](superflat.md) (bonus-chest.js); the unseeded World.rand is entropy-seeded as natively';
   if (name === 'WorldGenSpikes') return 'Implemented; End spikes in [end generation](end.md)';
-  if (NETHER.includes(name)) return 'Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported';
+  if (NETHER.includes(name)) return 'Implemented; [Nether populate](nether.md); fire\'s canNeighborBurn and solid-top checks ported in batch 80 (executed fire fixtures, not reached by population)';
   if (TREES.includes(name)) return 'Implemented; [tree generators](trees.md) and [generation](generation.md)';
   return 'Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md))';
 };
