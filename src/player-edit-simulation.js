@@ -209,8 +209,7 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
   }
   // ItemEmptyMap.onItemRightClick: becomes a filled map centred on the player (maps-clock-live.js).
   if (place && id === ITEM_EMPTY_MAP && !usesBlock && state.maps) {
-    const made = state.maps.useEmptyMap(state);
-    hook('swing');
+    const made = state.maps.useEmptyMap(state); // b80 spswing80: no swing; ItemEmptyMap.onItemRightClick (acl) never calls swingItem, only the rod (acv) does
     hook('renderHotbar');
     hook('markUnsaved');
     return act('use-empty-map', { map: made.data.id });
@@ -259,7 +258,9 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
   }
 
   // ItemMonsterPlacer.onItemRightClick: an egg aimed at a water surface (spawn-egg-use.js); other clicks fall through to onItemUse.
-  if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && useEggOnWater(state, bucket, hooks)) { if (target) hook('swing'); return act('use-spawn-egg-water'); } // b79: onItemRightClick never swings; a block under the cursor is the client onItemUse (true) that swings
+  // b80 spswing80: only without a block target. With one, onPlayerRightClick's ItemMonsterPlacer.onItemUse answers true on the client (aee, remote), rightClickMouse
+  // swings and clears its flag, so sendUseItem (and this onItemRightClick water trace) never runs: the egg is used on the block below (bao.am, bytecode-read).
+  if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && !target && useEggOnWater(state, bucket, hooks)) return act('use-spawn-egg-water'); // onItemRightClick never swings
   // ItemFood starts the use animation, not an attack swing. A successful planting action swings separately below.
   if (!place) hook('swing'); else if (!aimedEntity) { if (ctx.clientActivated) hook('swing'); else ctx.swingPlace = true; } // a declined entity click never swings (b77); a block click swings after its outcome is known (b78, applyPlayerEdit)
   if (!place && aimedEntity?.entity) {

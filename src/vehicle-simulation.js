@@ -84,7 +84,8 @@ export function placeHeldMinecart(state, { target }, hooks = {}) {
   if (type === undefined) return { handled: false, branch: 'not-minecart-item' };
   if ((state.screen !== undefined && state.screen !== 'playing') || state.survival.health <= 0)
     return { handled: true, skipped: true, branch: 'inactive-player' };
-  if (!target?.block || !state.minecarts || !held.count) return { handled: true, branch: 'no-rail' };
+  // b80 spswing80: no stack size test (ItemMinecart.onItemUse, adj.a bytecode-read; attributes2-reference.json minecartOnRail count 0: used, spawned, after -1).
+  if (!target?.block || !state.minecarts) return { handled: true, branch: 'no-rail' };
   const [x,y,z] = target.block;
   if (!state.minecarts.railKind(state.world,x,y,z)) return { handled: true, branch: 'no-rail' };
   const record = {x:f(f(x)+f(.5)),y:f(f(y)+f(.5)),z:f(f(z)+f(.5)),customName:held.name};
