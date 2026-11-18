@@ -16,7 +16,7 @@ const read = (f) => JSON.parse(readFileSync(new URL(`../public/research/${f}`, i
 
 test("tall grass pots read from NBT draw BlockTallGrass.getIcon(0, Data): deadbush, tallgrass, fern, then icons[0]", () => {
   assert.deepEqual([...Array(16).keys()].map((d) => potDrawDamage(31, d)), [0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  assert.equal(potFromNbt({ Item: 31, Data: -1 }), null); // negative index: the client throws
+  assert.deepEqual(potFromNbt({ Item: 31, Data: -1 }), { id: 0, damage: 0, item: 31, data: -1 }); // negative index: the client throws; b81: kept undrawn
   assert.deepEqual(potFromNbt({ Item: 31, Data: 0 }), { id: 83, damage: 0 });
   assert.deepEqual(potFromNbt({ Item: 31, Data: 1 }), { id: 39, damage: 0 });
   assert.deepEqual(potFromNbt({ Item: 31, Data: 2 }), { id: 84, damage: 0 });
@@ -48,10 +48,10 @@ test("break and pick give the stored native stack where the port can hold it", (
     assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: want.id, count: 1, damage: want.damage }, `${item}:${data}`);
     assert.deepEqual(potPick(world, 0, 0, 0), { id: want.id, damage: want.damage });
   }
-  // Unrepresentable native stacks (tall grass 3-15, red flower 9-15...) fall back to the drawn plant.
+  // Unrepresentable native stacks (tall grass 3-15, red flower 9-15...): b81 drops the item at damage 0 with rawDamage = Data (export writes 31:9 back).
   setPotContents(world, 0, 0, 0, potFromNbt({ Item: 31, Data: 9 }));
   assert.equal(itemFromOriginal(31, 9), null);
-  assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: 83, count: 1, damage: 0 });
+  assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: 83, count: 1, damage: 0, rawDamage: 9 });
 });
 
 test("BlockTallGrass.colorMultiplier reads the pot's metadata: 0 is white, anything else the grass colour", () => {

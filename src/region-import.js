@@ -565,9 +565,10 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else if (inside && id === 'Airportal' && block === 149) {
         tally(tileConverted, id); // TileEntityEndPortal has no saved fields
       } else if (inside && id === 'FlowerPot' && block === fromOriginal(140, 0)?.id) {
-        // TileEntityFlowerPot.readFromNBT: Item (int id) and Data (int); a plant the port cannot draw leaves the pot empty (stone-utility.js potFromNbt).
-        const content = potFromNbt({ Item: get(tile, 'Item', NBT.INT, 0), Data: get(tile, 'Data', NBT.INT, 0) });
-        if (content) pots.push({ x: lx, y, z: lz, id: content.id, damage: content.damage, ...(content.data !== undefined ? { data: content.data } : {}) });
+        // TileEntityFlowerPot.readFromNBT: Item (int id) and Data (int). b81: a registered item the port does not draw is kept with its Item, Data and drop stack
+        // (stone-utility.js potFromNbt); Item 0 or an unregistered id is an empty pot.
+        const content = potFromNbt({ Item: get(tile, 'Item', NBT.INT, 0), Data: get(tile, 'Data', NBT.INT, 0) }, itemFromOriginal);
+        if (content) pots.push({ x: lx, y, z: lz, ...content });
         tally(tileConverted, id);
       } else if (inside && ((id === 'DLDetector' && block === fromOriginal(151, 0)?.id) || (id === 'EnchantTable' && block === fromOriginal(116, 0)?.id))) {
         // The sensor power is recomputed; a table's CustomName (read when a string) goes to player.tableNames (b74).

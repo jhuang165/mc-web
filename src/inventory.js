@@ -37,7 +37,9 @@ const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.d
 // ItemStack.areItemStackTagsEqual: every supported NBT tag participates in merge identity.
 // b80 fluids80: the flowing fluid ItemBlocks (original 8/10, rawId) share the still item's port id but are other Items: ItemStack.isItemEqual is false, the inventory and
 // EntityItem.combineItems keep them apart (fluids80-reference.json stack80, executed).
-export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && a.rawId === b.rawId && sameTag(a, b);
+// b81 potspacks81: `rawDamage` (a native damage the catalogue has no variant for, java-mobs.js / stone-utility.js potStack) is part of the damage, so
+// ItemStack.isItemEqual (getItemDamage compared) keeps a raw-damage stack apart from the plain one.
+export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && (a.rawDamage ?? 0) === (b.rawDamage ?? 0) && a.rawId === b.rawId && sameTag(a, b);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
 export class PlayerInventory {

@@ -10,7 +10,7 @@ import { ITEMS, MATERIALS } from './survival.js';
 import { makeStack, copyStack } from './inventory.js';
 import { isDoor, doorHarvested } from './doors-panes.js';
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, headBaseId, itemForBlock } from './dispenser-piston.js';
-import { FLOWER_POT, potContents } from './stone-utility.js';
+import { FLOWER_POT, potContents, potDropEntry } from './stone-utility.js';
 import { enchantedBreakDrops, javaLikeRandom, playerMiningState } from './enchantment-effects.js';
 import { MONSTER_EGG, eggBreak } from './silverfish.js';
 import { NETHER_WART, ITEM_NETHER_WART, wartDropCount } from './nether-wart.js';
@@ -56,9 +56,10 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   // BlockNetherWart.dropBlockAsItemWithChance: 1 wart, a mature one 2 + nextInt(3) (+ nextInt(fortune + 1)); none without a harvest.
   const wart = block === NETHER_WART && harvest && !creative ? [{ id: ITEM_NETHER_WART, count: wartDropCount(world.getMeta(...p), heldStack?.id === tool ? getFortuneModifier(heldStack) : 0, dropRandom ?? javaLikeRandom(random)).count }] : null;
   const drops = wart ?? (block === SKULL ? skullBreakDrops(p, harvest && !creative) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
-  // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared).
-  const potPlant = block === FLOWER_POT ? potContents(world, ...p) : null;
-  if (potPlant) drops.push({ id: potPlant.id, count: 1, damage: potPlant.damage });
+  // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared). b81: the tile's own ItemStack(Item, 1, Data)
+  // (stone-utility.js potDropEntry): an undrawn item, or the plant at damage 0 with rawDamage for a Data the catalogue has no variant for.
+  const potPlant = block === FLOWER_POT ? potDropEntry(potContents(world, ...p)) : null;
+  if (potPlant) drops.push(potPlant);
   const furnace = survival.furnaces[key], chest = survival.chests[key], dispenser = survival.dispensers?.[key], meta = world.getMeta(...p);
 
   // BlockDoor.onBlockHarvested: a Creative player breaking the upper half removes the lower half first.

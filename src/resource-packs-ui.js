@@ -6,11 +6,11 @@
 import { guiAnaglyph, convertPngBytes } from "./gui-anaglyph.js";
 import { t, textWidth, trimToWidth, charWidth, slotMetrics, COLOR } from "./menu-screens.js";
 import {
-  packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker, deleteStoredPack,
+  packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker, deleteStoredPack, unlistedPackNames, deleteUnlistedPacks,
   DEFAULT_DESCRIPTION, INVALID_META,
 } from "./resource-packs.js";
 
-const ROW = 36, HEADER = 13, LIST_W = 200, TEXT_W = 157;
+const ROW = 36, HEADER = 13, LIST_W = 200, TEXT_W = 157, BROKEN = Symbol("unlisted packs");
 export { ROW as PACK_ROW, HEADER as PACK_HEADER };
 const px = (n) => `calc(${n}*var(--u))`;
 const at = (x, y, w, h) => `left:${px(x)};top:${px(y)}` + (w != null ? `;width:${px(w)}` : "") + (h != null ? `;height:${px(h)}` : "");
@@ -105,6 +105,9 @@ export function resourcePacksScreen(ctx, parent, show) {
     }
     // ResourcePackRepository.updateRepositoryEntriesAll (brc.a) leaves a pack whose load throws out of both lists (b80, pack-meta-reference.json).
     lists = new PackLists(names.filter((n) => infos.get(n)?.listed !== false), lists ? lists.names : initial);
+    broken = unlistedPackNames(infos);
+    // b81 (port choice, see removeBroken): say once per screen that stored packs are hidden and how to remove them.
+    if (broken.length && !toldBroken) { toldBroken = true; ctx.notice?.(`${broken.length} stored resource pack${broken.length === 1 ? "" : "s"} no longer load${broken.length === 1 ? "s" : ""} and ${broken.length === 1 ? "is" : "are"} not listed: press Delete twice away from the pack rows to remove ${broken.length === 1 ? "it" : "them"}`); }
     loaded = true;
     if (gui?.screen === screen) gui.build();
   };
@@ -137,7 +140,21 @@ export function resourcePacksScreen(ctx, parent, show) {
   };
   // Not native (1.7.10 has no delete control; packs live in the pack folder there): hover a pack row and press Delete twice to remove
   // the stored pack from this browser. A removed pack that was applied is dropped from the selection and the resources refresh.
-  let hovered = null, pendingDelete = null;
+  let hovered = null, pendingDelete = null, broken = [], toldBroken = false;
+  // b81 potspacks81 (port choice): Delete twice with the pointer off the pack rows removes every stored pack that no longer loads (unlisted since b80, so no
+  // row can be hovered for it). Natively such a file just sits in the resourcepacks folder, which the folder button opens. Unlisted packs are never applied
+  // (applyPacks skips them), so only the saved selection is cleaned; the resources need no refresh.
+  const removeBroken = async () => {
+    try {
+      const names = [...broken];
+      const left = await deleteUnlistedPacks(store, names, lists ? lists.names : initial);
+      if ((ctx.options.resourcePacks ?? []).some((n) => names.includes(n))) { ctx.options.resourcePacks = ctx.options.resourcePacks.filter((n) => !names.includes(n)); ctx.saveOptions(); }
+      for (const n of names) { const i = initial.indexOf(n); if (i >= 0) initial.splice(i, 1); }
+      ctx.notice?.(`Deleted ${names.length} resource pack${names.length === 1 ? "" : "s"} that no longer load${names.length === 1 ? "s" : ""}`);
+      lists = null; initial.length = 0; initial.push(...left);
+      await reload();
+    } catch (e) { ctx.notice?.("Cannot delete pack: " + (e.message ?? e)); }
+  };
   const removePack = async (name) => {
     try {
       const wasApplied = (ctx.options.resourcePacks ?? []).includes(name);
@@ -161,6 +178,12 @@ export function resourcePacksScreen(ctx, parent, show) {
     // GuiScreen.keyTyped: Escape leaves without applying the lists.
     escape: () => ctx.closeScreen(),
     key(e) {
+      if (e.code === "Delete" && !hovered && broken.length) {
+        if (pendingDelete !== BROKEN) { pendingDelete = BROKEN; ctx.notice?.(`Press Delete again to remove ${broken.length} stored pack${broken.length === 1 ? "" : "s"} that no longer load${broken.length === 1 ? "s" : ""}: ${broken.join(", ")}`); return true; }
+        pendingDelete = null;
+        removeBroken();
+        return true;
+      }
       if (e.code !== "Delete" || !hovered) return false;
       if (pendingDelete !== hovered) { pendingDelete = hovered; ctx.notice?.(`Press Delete again to remove "${hovered}" from this browser`); return true; }
       const name = hovered; pendingDelete = hovered = null;

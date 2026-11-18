@@ -159,8 +159,12 @@ const POT_META_CONTENTS = [null, [44, 0], [43, 0], [48, 0], [48, 1], [48, 2], [4
 export const potContentsOfMeta = (meta) => { const c = POT_META_CONTENTS[meta & 15]; return c ? { id: c[0], damage: c[1] } : null; };
 // TileEntityFlowerPot.writeToNBT / readFromNBT (executed, pot-sweep-reference.json): native Item id and Data. Batch 72.
 // Export keeps the native item and the held damage; import maps a native (Item, Data) to the browser's content when it is a plant the port can
-// draw (single-icon plants ignore Data, flowers and saplings need a representable damage), else null (empty or not drawable).
+// draw (single-icon plants ignore Data, flowers and saplings need a representable damage), else an undrawn record (b81, below).
+// A pot record is { id, damage } (the drawn plant), plus `data` (the exact native Data when it differs from the drawn plant's own damage, b79) or, for an
+// item the client does not draw (b81), { id: 0, damage: 0, item, data, stack? }: `item`/`data` are the tile's Item and Data, `stack` the port stack of
+// that ItemStack (absent when the port has no such item).
 export function potNbtOf(content) {
+  if (content && Number.isInteger(content.item)) return { Item: content.item, Data: content.data | 0 }; // b81: an undrawn item writes back unchanged
   const native = content ? potPlantOf(content.id, content.damage) : null;
   // `data` is the exact native TileEntityFlowerPot Data a pot kept from an import or save; the plant drawn and dropped stays the one `damage` names.
   return native ? { Item: native[0], Data: Number.isInteger(content.data) ? content.data : native[1] } : { Item: 0, Data: 0 };
@@ -178,15 +182,30 @@ export function potDrawDamage(item, data) {
 }
 const NATIVE_TO_POT = { 37: 43, 38: 44, 6: 48, 39: 75, 40: 76, 81: 53, 32: 79, 30: 51 };
 const TALL_GRASS_ICONS = [83, 39, 84];
-// TileEntityFlowerPot.readFromNBT keeps any registered item and Data (executed potNbt rows); this returns the pot content when the pair is one the port draws
-// (render type 1 or 13 ItemBlocks), else null. Items the native pot holds without drawing them (stone, reeds, seeds...) still read as an empty pot here.
-export function potFromNbt(tag) {
+// b81: the item ids Item.itemRegistry holds in 1.7.10 (executed smallchecks sweep, smallchecks-reference.json, 315 ids). Item.getItemById of any other id is
+// null, so TileEntityFlowerPot.readFromNBT leaves the pot empty and writeToNBT writes Item 0 (pot-sweep-reference.json potNbt rows 6000 and -5).
+const NATIVE_ITEM_RANGES = [[1,25],[27,33],[35,35],[37,54],[56,58],[60,62],[65,67],[69,70],[72,73],[76,82],[84,91],[95,103],[106,114],[116,116],[119,123],[125,131],[133,139],[141,143],[145,148],[151,164],[170,175],[256,408],[417,422],[2256,2267]];
+export const nativeItemRegistered = (id) => Number.isInteger(id) && NATIVE_ITEM_RANGES.some(([a, b]) => id >= a && id <= b);
+// b81: the port stack of a native ItemStack(Item, 1, Data) for a pot that holds an item. `itemOf(id, damage)` is region-import.js itemFromOriginal (passed in:
+// this module has no runtime imports). The ItemStack constructor (add.<init>(adb,II), bytecode-read) turns a negative damage into 0. A damage the port's
+// catalogue has no variant for loads as the item at damage 0 with `rawDamage` (the java-mobs.js convention), which export writes back. null: no such port item.
+export function potItemStack(item, data, itemOf) {
+  if (typeof itemOf !== 'function') return null;
+  const d = Math.max(0, data | 0), exact = itemOf(item, d);
+  if (exact) return { id: exact.id, damage: exact.damage };
+  const base = itemOf(item, 0);
+  return base ? { id: base.id, damage: base.damage, rawDamage: d } : null;
+}
+// TileEntityFlowerPot.readFromNBT keeps any registered item and Data (executed potNbt rows). This returns the pot content: the drawn plant when the pair is
+// one the port draws (render type 1 or 13 ItemBlocks), an undrawn record for any other registered item (b81: stone, reeds, seeds, a double plant, and a
+// flower or tall grass with a negative Data, which the unchanged client cannot draw), or null for an empty pot (Item 0 or an unregistered id).
+export function potFromNbt(tag, itemOf = null) {
   const item = tag?.Item, data = tag?.Data | 0;
+  if (!nativeItemRegistered(item)) return null;
   const drawn = item in NATIVE_TO_POT || item === 31 ? potDrawDamage(item, data) : null;
-  if (drawn === null) return null;
-  const id = item === 31 ? TALL_GRASS_ICONS[drawn] : NATIVE_TO_POT[item], damage = item === 31 ? 0 : drawn;
-  const native = potPlantOf(id, damage);
-  if (!native) return null;
+  const id = drawn === null ? 0 : item === 31 ? TALL_GRASS_ICONS[drawn] : NATIVE_TO_POT[item], damage = item === 31 ? 0 : drawn | 0;
+  const native = drawn === null ? null : potPlantOf(id, damage);
+  if (!native) { const stack = potItemStack(item, data, itemOf); return { id: 0, damage: 0, item, data, ...(stack ? { stack } : {}) }; }
   // The exact native Data rides along when it differs from the drawn plant's own damage, so export and save keep it (b79).
   return data === native[1] ? { id, damage } : { id, damage, data };
 }
@@ -199,36 +218,66 @@ export function potContents(world, x, y, z) {
   const rec = world.pots?.get(potKey(x, y, z));
   return rec ?? potContentsOfMeta(world.getMeta(x, y, z));
 }
+const validStack = (s) => !!s && Number.isInteger(s.id) && s.id > 0 && Number.isInteger(s.damage) && (s.rawDamage === undefined || (Number.isInteger(s.rawDamage) && s.rawDamage > 0));
+// b81: a stored pot record (save, population hand-off, S35 description) is either a drawn plant or an undrawn registered item.
+export const validPotRecord = (p) => !!p && (Number.isInteger(p.item) ? nativeItemRegistered(p.item) && Number.isInteger(p.data) : !!potPlantOf(p.id, p.damage));
+// A copy of a record with only the fields above (the drop stack copied too).
+function potRecord(content) {
+  if (Number.isInteger(content.item)) {
+    const s = content.stack;
+    return { id: 0, damage: 0, item: content.item, data: content.data | 0, ...(validStack(s) ? { stack: { id: s.id, damage: s.damage, ...(s.rawDamage ? { rawDamage: s.rawDamage } : {}) } } : {}) };
+  }
+  return { id: content.id, damage: content.damage | 0, ...(Number.isInteger(content.data) ? { data: content.data } : {}) };
+}
 export function setPotContents(world, x, y, z, content) {
   const pots = (world.pots ??= new Map());
-  if (content) pots.set(potKey(x, y, z), { id: content.id, damage: content.damage | 0, ...(Number.isInteger(content.data) ? { data: content.data } : {}) });
+  if (content) pots.set(potKey(x, y, z), potRecord(content));
   else pots.delete(potKey(x, y, z));
 }
-export const serializePots = (world) => [...(world.pots ?? [])].map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, id: v.id, damage: v.damage, ...(Number.isInteger(v.data) ? { data: v.data } : {}) }; });
+export const serializePots = (world) => [...(world.pots ?? [])].map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, ...potRecord(v) }; });
 export function restorePots(world, list) {
   world.pots = new Map();
   for (const p of Array.isArray(list) ? list : [])
-    if (Number.isInteger(p?.x) && Number.isInteger(p?.y) && Number.isInteger(p?.z) && potPlantOf(p.id, p.damage)) setPotContents(world, p.x, p.y, p.z, p);
+    if (Number.isInteger(p?.x) && Number.isInteger(p?.y) && Number.isInteger(p?.z) && validPotRecord(p)) setPotContents(world, p.x, p.y, p.z, p);
 }
 // BlockFlowerPot.onBlockActivated: only an empty pot takes a plant; the insertion returns true (and consumes one item
-// outside Creative), anything else returns false.
+// outside Creative), anything else returns false. A pot holding an undrawn item is full too (func_145965_a is non-null).
 export function potUse(world, x, y, z, heldId, heldDamage = 0) {
   if (!heldId || potContents(world, x, y, z)) return null;
   const ins = potInsertion(heldId, heldDamage);
   return ins;
 }
-// The break drops of a pot: its contents (when Survival) and the pot item itself (harvest). Native breakBlock (ald.a(ahb,III,aji,int), b80 bytecode-read)
-// drops new ItemStack(tile Item, 1, tile Data) exactly and getPickBlock / getDamageValue (ald.d, ald.k) pick the same pair. The content's internal stack is that
-// pair whenever the record has no `data` (tall grass 0/1 now map to dead shrub 83 / tall grass 39); a record with `data` holds a stack the port's item
-// catalogue cannot represent (dandelion 1-15, red flower 9-15, sapling 6-15, tall grass 3-15, ...), so the drawn plant stands in for it.
-export function potDrops(world, x, y, z) {
-  const c = potContents(world, x, y, z);
-  return [...(c ? [{ id: c.id, count: 1, damage: c.damage }] : []), { id: ITEM_FLOWER_POT, count: 1, damage: 0 }];
+// b81: the port stack { id, damage, rawDamage? } of the tile's ItemStack(Item, 1, Data), or null for an empty pot or an item the port does not have.
+// Native breakBlock (ald.a(ahb,III,aji,int), b80 bytecode-read) drops new ItemStack(tile Item, 1, tile Data) exactly and getPickBlock / getDamageValue
+// (ald.d, ald.k) pick the same pair. A record without `data` is that stack (tall grass 0/1 map to dead shrub 83 / tall grass 39). A record with `data` holds
+// a stack the catalogue has no variant for (dandelion 1-15, red flower 9-15, sapling 6-15, tall grass 3-15, cobweb/cactus/mushroom/dead bush 1-15): it is the
+// plant's item at damage 0 with `rawDamage` = Data (a negative Data is 0 in the ItemStack constructor). An undrawn record carries its own `stack`.
+export function potStack(content) {
+  if (!content) return null;
+  if (Number.isInteger(content.item)) return validStack(content.stack) ? { ...content.stack } : null;
+  const native = potPlantOf(content.id, content.damage);
+  if (!native) return null;
+  if (!Number.isInteger(content.data)) return { id: content.id, damage: content.damage | 0 };
+  const [item] = native, d = Math.max(0, content.data);
+  if (item === 31) return d <= 2 ? { id: TALL_GRASS_ICONS[d], damage: 0 } : { id: TALL_GRASS_ICONS[0], damage: 0, rawDamage: d };
+  const base = NATIVE_TO_POT[item];
+  if (d === 0 || (item === 38 && d <= 8) || (item === 6 && d <= 5)) return { id: base, damage: item === 38 || item === 6 ? d : 0 };
+  return { id: base, damage: 0, rawDamage: d };
 }
-// BlockFlowerPot.getPickBlock: the plant when it holds one, else the pot.
+// A break-drop entry ({ id, count, damage, tags? }: block-break-simulation.js and population-blocks.js pass `tags` to makeStack) for a pot's content.
+export const potDropEntry = (content) => { const s = potStack(content); return s ? { id: s.id, count: 1, damage: s.damage, ...(s.rawDamage ? { tags: { rawDamage: s.rawDamage } } : {}) } : null; };
+// The break drops of a pot: its contents (when Survival) and the pot item itself (harvest).
+export function potDrops(world, x, y, z) {
+  const s = potStack(potContents(world, x, y, z));
+  return [...(s ? [{ ...s, count: 1 }] : []), { id: ITEM_FLOWER_POT, count: 1, damage: 0 }];
+}
+// BlockFlowerPot.getPickBlock: the plant when it holds one, else the pot. A pot holding an item the port lacks picks nothing (id 0): natively it picks that
+// item. The picked stack has no `rawDamage` (inventory.pick takes an id and a damage).
 export function potPick(world, x, y, z) {
   const c = potContents(world, x, y, z);
-  return c ? { id: c.id, damage: c.damage } : { id: ITEM_FLOWER_POT, damage: 0 };
+  if (!c) return { id: ITEM_FLOWER_POT, damage: 0 };
+  const s = potStack(c);
+  return s ? { id: s.id, damage: s.damage } : { id: 0, damage: 0 };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

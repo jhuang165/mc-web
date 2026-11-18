@@ -66,12 +66,12 @@ test('NBT import follows TileEntityFlowerPot.readFromNBT', () => {
     const [item, data] = r.in, c = potFromNbt({ Item: item, Data: data });
     if (r.item === -1) { assert.equal(c, null, `empty ${item}`); continue; }
     assert.deepEqual(r.out, [item, data]);
-    if (c) assert.ok(potPlantOf(c.id, c.damage));
+    if (c) assert.ok(c.item === item || potPlantOf(c.id, c.damage)); // b81: an undrawn registered item is kept with its Item and Data
     if (nativeAccept.has(key(item, data)) && itemFromOriginal(item, data)) assert.ok(c, `${item}:${data} imports`);
   }
   assert.deepEqual(potFromNbt({ Item: 37, Data: 5 }), { id: 43, damage: 0, data: 5 }); // b79: the exact Data rides along
   assert.deepEqual(potFromNbt({ Item: 38, Data: 3 }), { id: 44, damage: 3 });
-  assert.equal(potFromNbt({ Item: 1, Data: 0 }), null);
+  assert.deepEqual(potFromNbt({ Item: 1, Data: 0 }), { id: 0, damage: 0, item: 1, data: 0 }); // b81: stone is kept, undrawn (no item resolver given here)
   assert.equal(potFromNbt({}), null);
   assert.equal(potFromNbt(null), null);
 });

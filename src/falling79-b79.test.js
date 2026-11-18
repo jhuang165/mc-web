@@ -7,7 +7,7 @@ import { NBT, decodeNbt } from './nbt.js';
 import { nbtToJson } from './spawner-data.js';
 import { fromOriginal } from './block-registry.js';
 import { applyFallingTileData } from './falling-tiles.js';
-import { itemStackFromNbt } from './region-import.js';
+import { itemStackFromNbt, itemFromOriginal } from './region-import.js';
 import { Signs } from './signs.js';
 import { MobSpawners, spawnerJSON } from './mob-spawner.js';
 import { Skulls } from './skull.js';
@@ -57,7 +57,7 @@ function nativeProj(name, t) {
       const o = t.get('Owner')?.value;
       return { type: Math.max(0, Math.min(4, t.get('SkullType').value)), rot: t.get('Rot').value & 15, owner: o ? [str(o, 'Name'), str(o, 'Id')] : null };
     }
-    case 'flowerpot': return { pot: potFromNbt({ Item: t.get('Item').value, Data: t.get('Data').value }) };
+    case 'flowerpot': return { pot: potFromNbt({ Item: t.get('Item').value, Data: t.get('Data').value }, itemFromOriginal) }; // b81: undrawn items keep their drop stack
     case 'command': return (({ command, successCount, customName, trackOutput, lastOutput }) => ({ command, successCount, customName, trackOutput, lastOutput }))(readCommandBlock(t));
     case 'note': return { note: readNoteTile(t).note };
     case 'jukebox': { const { record } = readJukeboxTile(t); return { record: record && isDisc(record.id) ? { id: canonicalDisc(record.id), count: 1, damage: 0 } : null }; }
