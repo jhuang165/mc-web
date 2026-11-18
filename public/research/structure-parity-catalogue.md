@@ -106,12 +106,12 @@ Dungeons, desert wells, End spikes, bonus chests, trees and decorators are featu
 | world/gen/feature/WorldGenDesertWells | arl | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |
 | world/gen/feature/WorldGenDoublePlant | arm | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |
 | world/gen/feature/WorldGenDungeons | asd | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |
-| world/gen/feature/WorldGenFire | arq | no | Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported | G |
+| world/gen/feature/WorldGenFire | arq | no | Implemented; [Nether populate](nether.md); fire's canNeighborBurn and solid-top checks ported in batch 80 (executed fire fixtures, not reached by population) | G |
 | world/gen/feature/WorldGenFlowers | aro | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |
 | world/gen/feature/WorldGenForest | are | no | Implemented; [tree generators](trees.md) and [generation](generation.md) | G |
-| world/gen/feature/WorldGenGlowStone1 | ary | no | Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported | G |
-| world/gen/feature/WorldGenGlowStone2 | arr | no | Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported | G |
-| world/gen/feature/WorldGenHellLava | ars | no | Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported | G |
+| world/gen/feature/WorldGenGlowStone1 | ary | no | Implemented; [Nether populate](nether.md); fire's canNeighborBurn and solid-top checks ported in batch 80 (executed fire fixtures, not reached by population) | G |
+| world/gen/feature/WorldGenGlowStone2 | arr | no | Implemented; [Nether populate](nether.md); fire's canNeighborBurn and solid-top checks ported in batch 80 (executed fire fixtures, not reached by population) | G |
+| world/gen/feature/WorldGenHellLava | ars | no | Implemented; [Nether populate](nether.md); fire's canNeighborBurn and solid-top checks ported in batch 80 (executed fire fixtures, not reached by population) | G |
 | world/gen/feature/WorldGenHugeTrees | asb | yes | Implemented; [tree generators](trees.md) and [generation](generation.md) | G |
 | world/gen/feature/WorldGenIcePath | arv | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |
 | world/gen/feature/WorldGenIceSpike | arw | no | Implemented; [generation](generation.md), live in the native population chain ([population-live](population-live.md)) | G |

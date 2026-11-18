@@ -35,6 +35,7 @@ Exact replay: nether-reference.json holds 64 chunk records (8 seeds x 8 chunks) 
 Not exact
 - The Nether fortress was a gap of the batch-6 generator; it is ported by the fortress track (see fortress.md). The nether-reference.json probe still uses a no-fortress stub of atd, and its origins are fortress-free.
 - canNeighborBurn and non-opaque solid-top checks are not ported.
+  - Batch 80 (docs sweep, 2026-11-18): stale. `NetherGenWorld.canNeighborBurn` is ported from `alb.e(ahb, III)` (x+1, x-1, y-1, y+1, z-1, z+1, `chanceToEncourageFire > 0` from the executed native table, `FIRE_ENCOURAGEMENT`), and `hasSolidTopSurface` now uses GenWorld's `solidTop(id, meta)` instead of `isOpaqueCube` (glowstone, leaves and TNT have no solid top; the spawner, end portal frame and hopper do). Both are replayed against the 160 executed BlockFire placement fixtures of `fire-reference.json` in `src/nether-fire-b80.test.js`. Population still never reaches the neighbour test: WorldGenFire places fire only on netherrack.
 - The Size full scan beyond the frame check is handed to the `createPortal` hook.
 
 ## Gaps
@@ -46,4 +47,5 @@ Not exact
 - `portalDisplayTick` (particles and ambience) was written from the decompile and is not probe-verified.
 - Wart planting by item use and the Creative listing rely on existing paths (item 386 was already listed); wart placement was not exercised in a browser.
 - canNeighborBurn and non-opaque solid-top checks are not ported in the generator.
+  - Batch 80 (docs sweep, 2026-11-18): stale, both are ported (see Not exact above).
 - Nothing here was checked in a browser (no dev server, no audio, per the rules).

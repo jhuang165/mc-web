@@ -8,6 +8,7 @@ Read with javap from the client JAR (`tools/research/minecraft-1.7.10.jar`, name
 
 - Fuel and container item: `node tools/verify-inventory.mjs` runs the unchanged `apg` burn-time lookup; `public/research/inventory-reference.json` now includes lava bucket (Minecraft id 327) with burn time 20000, and bucket, water bucket and milk bucket with burn time 0 and no smelting result. `apg` returns the fuel's container item (`getContainerItem`) when the last fuel in the stack is used up.
 - Everything else is ported from the bytecode and covered by unit tests of this port only. No probe runs the real `abo`, `adi` or `wh` classes, and the ray trace and the lake generator are not diffed against the JAR. `JRandom` in `lakes.js` is checked against known `java.util.Random` outputs (seed 42 and seed 0).
+  - Batch 80 (docs sweep, 2026-11-18): stale. `tools/probes/ClientPredictProbe.java` runs the real `abo.a(add, ahb, yz)` in 41 executed records (`client-predict-reference.json`, `"case":"bucket"`), replayed through `buckets.js` by `src/client-predict-b57.test.js` and `src/mpbuckets-b75.test.js`. The lake generator claim was not rechecked here.
 
 ## Rules ported
 
@@ -34,4 +35,5 @@ Batch 69 (docs sweep): the first three bullets below describe the original finit
 - Springs are settled sources: vanilla ticks a new spring at once so it begins to flow. Here a spring starts flowing when a neighbouring block changes (the fluid simulation wakes cells beside saved edits), not when the world is created. Lake water and lava are settled the same way.
 - Plant bounds for the ray trace are approximations (tall grass `0.1..0.9` wide and `0.8` high, crops `0.25` high, torch `0.4..0.6`); everything else uses `blockBounds`.
 - No `largesmoke` particles when water is poured in the Nether (there is no Nether), and the buckets have no sound in the Overworld apart from the drink.
+  - Batch 80 (docs sweep, 2026-11-18): stale. There is a Nether: `placeContainedLiquid` fizzes water where `world.isHell` and places nothing (`buckets.js`, the `full326-nether*` executed records), and `main.js` `world.evaporated` plays `random.fizz` and the smoke. The sound half (no bucket sounds but the drink) was not rechecked.
 - Browser behaviour was not exercised (the preview server serves the main checkout, and game audio is kept off the speakers); `npm test` and `npm run build` pass.

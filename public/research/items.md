@@ -56,6 +56,7 @@ Broken blocks, killed mobs, thrown stacks, death drops and spilled containers no
 ## Known differences
 
 - No water current push on items, and no lava burning or fire damage.
+  - Batch 80 (docs sweep, 2026-11-18): stale. `item-entities.js` applies `waterAcceleration` and `inLava` (the [parity](parity.md) Item drops row: flowing water pushes, lava pops and burns), and its ground drag reads `slipperiness` of the block below (ice and packed ice 0.98), so the slipperiness line below is stale too. Port-read; the fire-damage half was not rechecked.
 - Batch 69 (docs sweep): hoppers (`hopper.md`, `cart-hopper.js`) and item frames (`hanging-entities.md`) exist now. The creative 4,800-tick despawn was not re-checked.
 - Ground slipperiness is always the default 0.6 for items (batch 69 docs sweep: ice and packed ice exist in `world.js` now, so the "ice is not in this build" half is stale; the item slipperiness code was not re-checked).
 - The player picks items up only in the survival tick. Collision uses this build's block boxes, which are simpler than the full `addCollisionBoxesToList` shapes.
