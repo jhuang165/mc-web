@@ -43,6 +43,7 @@ import { javaPlayerFromNbt, levelGenerator, statsRecordFromJson } from './level-
 import { populationBlockMapperReady } from './population-world.js';
 import { CART_ENTITY_IDS, isContainerType, slotCount } from './cart-variants.js';
 import { spawnerRecord } from './cart-summon.js';
+import { getStringAny } from './nbt-string.js';
 import { ARTS, Hanging } from './hanging.js';
 import { scoreboardJSONFromNbt } from './scoreboard.js';
 
@@ -110,6 +111,16 @@ export function readItemTag(stack, nbt) {
 }
 
 const skullProfileFields = (tile) => { const profile = profileOfSkullTile(tile); return profile ? { owner: profile.name ?? '', profile } : { owner: '' }; };
+// b80 fluids80: TileEntitySign.readFromNBT (getString, any tag read as its toString; a missing key is ""), each line cut to 15 characters. The falling-block
+// tile path (falling-tiles.js) reads the same way; falling-tiles79-reference.json Sign rows (executed) replay through it (fluids80-b80.test.js).
+export const readSignTile = (tile) => [1, 2, 3, 4].map(i => getStringAny(tile, `Text${i}`).slice(0, 15));
+// b80 fluids80: TileEntityMobSpawner.readFromNBT -> MobSpawnerBaseLogic.readFromNBT (agq.a(dh)) on a fresh tile: EntityId (getString: "" when missing, any tag's
+// toString) and Delay always, the hasKey(k, 99) groups, SpawnPotentials and SpawnData (cart-summon.js spawnerRecord), as the spawner JSON fields.
+export function readSpawnerTile(tile) {
+  const kept = makeSpawner(0, 0, 0);
+  readSpawnerNBT(kept, spawnerRecord(tile));
+  return spawnerJSON(kept);
+}
 // Shared TileEntity container readers for Java import and command data tags.
 export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, invalidSlot = () => {} } = {}) {
   const spec = { Chest: ['chests', 27, true], Trap: ['dispensers', 9, true], Dropper: ['dispensers', 9, true], Hopper: ['hoppers', 5, true], Cauldron: ['brewing', 4, true], Furnace: ['furnaces', 3, false] }[id];
@@ -549,22 +560,7 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (loaded.name === 'furnaces') stores.furnaces[key].lit = originalState(chunk.sections[y >> 4], x & 15, y, z & 15) >> 4 === 62;
         tally(tileConverted, id);
       } else if (inside && id === 'MobSpawner' && block === MOB_SPAWNER) {
-        const values = ['Delay', 'MinSpawnDelay', 'MaxSpawnDelay', 'SpawnCount', 'MaxNearbyEntities', 'RequiredPlayerRange', 'SpawnRange'];
-        const params = values.flatMap(k => {
-          const value = get(tile, k, NBT.SHORT);
-          return value === undefined ? [] : [[k, value]];
-        });
-        const spawner = { x: lx, y, z: lz, EntityId: get(tile, 'EntityId', NBT.STRING, 'Pig'), ...Object.fromEntries(params) };
-        // SpawnData and SpawnPotentials (MobSpawnerBaseLogic.readFromNBT) are kept as the save's JSON entries (spawner-data.js).
-        const data = get(tile, 'SpawnData', NBT.COMPOUND), potentials = get(tile, 'SpawnPotentials', NBT.LIST);
-        if (data || potentials?.elementType === NBT.COMPOUND) {
-          const kept = makeSpawner(0, 0, 0);
-          readSpawnerNBT(kept, { EntityId: spawner.EntityId, SpawnData: data, SpawnPotentials: potentials?.elementType === NBT.COMPOUND ? potentials.items : undefined });
-          const json = spawnerJSON(kept);
-          if (json.SpawnData) spawner.SpawnData = json.SpawnData;
-          if (json.SpawnPotentials) spawner.SpawnPotentials = json.SpawnPotentials;
-        }
-        spawners.push(spawner);
+        spawners.push({ x: lx, y, z: lz, ...readSpawnerTile(tile) });
         tally(tileConverted, id);
       } else if (inside && id === 'Airportal' && block === 149) {
         tally(tileConverted, id); // TileEntityEndPortal has no saved fields
@@ -592,7 +588,7 @@ export async function importJavaRegionArea(regions, options = {}) {
         skulls.push({ x: lx, y, z: lz, type: Math.max(0, Math.min(4, Number(get(tile, 'SkullType', NBT.BYTE, 0)) | 0)), rot: Number(get(tile, 'Rot', NBT.BYTE, 0)) & 15, ...skullProfileFields(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Sign' && (block === 175 || block === 176)) {
         // TileEntitySign.readFromNBT: Text1-Text4, each cut to 15 characters; the loaded tile is not editable (signs.js).
-        signs.push({ x: lx, y, z: lz, text: [1, 2, 3, 4].map(i => String(get(tile, `Text${i}`, NBT.STRING, '')).slice(0, 15)) }); tally(tileConverted, id);
+        signs.push({ x: lx, y, z: lz, text: readSignTile(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Beacon' && block === 173) {
         beacons.push({ x: lx, y, z: lz, primary: get(tile, 'Primary', NBT.INT, 0), secondary: get(tile, 'Secondary', NBT.INT, 0), levels: get(tile, 'Levels', NBT.INT, 0) }); tally(tileConverted, id); // pyramid.js
       } else if (inside && id === 'Comparator' && COMPARATOR_BLOCKS.has(block)) {

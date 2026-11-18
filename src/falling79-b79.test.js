@@ -178,7 +178,8 @@ test('an unticked loaded item keeps its saved Fire; a ticked one falls back to t
   assert.equal(a.fire, 0);
   assert.equal(b.fire, 17);
   items.items[0].ticks = 1;
-  assert.equal(items.serialize()[0].fire, undefined); // ticked: export falls back to the age rule
+  items.items[0].fire = -1; // what a tick's move leaves (Entity.moveEntity: a counter <= 0 rests at -fireResistance)
+  assert.equal(items.serialize()[0].fire, undefined); // ticked, at -1: export falls back to the age rule (b80 fluids80: any other counter is written, fluids80-b80.test.js)
 });
 
 test('a falling record of Tile 8 keeps flowing through FallingBlocks save and restore', async () => {

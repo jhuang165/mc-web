@@ -185,7 +185,7 @@ function payload(state,ox,oz,report,blockAt) {
  // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting, arrows,
  // fireballs, wither skulls, eyes of ender and firework rockets. An egg has no EntityList id (and the bobber class is not registered), so they stay unsupported.
  for(const name of ['projectiles','thrownPotions','arrows','fireballs','eyes','rockets'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz,itemNbt:stack=>stackNbt(stack,undefined,report)});if(!p){report.unsupportedEntities++;continue;}
-  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx,my:e.my,mz:e.mz,rotation:[e.yaw??0,e.pitch??0],fire:name==='arrows'&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
+  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx,my:e.my,mz:e.mz,rotation:[e.yaw??0,e.pitch??0],fire:(name==='arrows'||name==='projectiles')&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }

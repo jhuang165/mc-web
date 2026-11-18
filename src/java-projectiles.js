@@ -43,9 +43,11 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
   const base = { x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, mx: motion[0], my: motion[1], mz: motion[2], yaw: rotation[0], pitch: rotation[1] };
   // EntityThrowable.readEntityFromNBT: ownerName (an empty name is null). A named owner is the local player.
   const owned = String(nbtGet(entity, 'ownerName', NBT.STRING, '')).length > 0;
-  if (id === 'Snowball') return { list, record: base };
+  // b80 fluids80: Entity.readFromNBT's Fire counter of a snowball or pearl (it burns on in Projectiles.step; a throwable never moves with moveEntity, so it never rests below 0).
+  const thrownFire = nbtGet(entity, 'Fire', NBT.SHORT, 0), burning = thrownFire > 0 ? { fire: thrownFire } : {};
+  if (id === 'Snowball') return { list, record: { ...base, ...burning } };
   // EntityEnderPearl.onImpact only teleports an EntityPlayerMP thrower; a pearl without one loads and just dies on impact (pearl-player.js).
-  if (id === 'ThrownEnderpearl') return { list, record: { ...base, kind: 'enderPearl', ...(owned ? { owner: 'player' } : {}) } };
+  if (id === 'ThrownEnderpearl') return { list, record: { ...base, kind: 'enderPearl', ...(owned ? { owner: 'player' } : {}), ...burning } };
   if (FIREBALL_KINDS[id]) {
     // EntityFireball.readEntityFromNBT: the "direction" list is the motion (a missing list is setDead); the acceleration, the shooter and
     // EntityWitherSkull's dangerous flag are not saved, so a loaded ball has acceleration 0 and no owner. ExplosionPower (EntityLargeFireball,

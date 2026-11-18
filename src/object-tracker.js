@@ -664,6 +664,8 @@ export function objectView(tracker, e, kind) {
   else if (kind === "arrow") { v.crit = ((c.meta?.get(16) ?? 0) & 1) === 1; if (c.sim) { v.shake = c.sim.shake; v.inGround = c.sim.inGround; } } // the client's own stick and arrowShake
   else if (kind === "tnt") if (c.sim) v.fuse = c.sim.fuse; // the fuse is not synchronised: the client's own countdown from 80
   else if (kind === "falling" && c.sim?.block !== undefined) { v.block = c.sim.block; v.meta = c.sim.meta; }
+  // b80 fluids80: a client throwable zeroes its own counter every update, so Entity.isBurning is the watched flag 0 the server sets from its counter (Render.doRenderShadowAndFire)
+  if (spec.thrown) v.burning = ((c.meta?.get(0) ?? 0) & 1) === 1;
   return v;
 }
 export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));
