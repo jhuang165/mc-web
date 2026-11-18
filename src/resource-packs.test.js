@@ -34,6 +34,7 @@ function makeZip(files, deflate = []) {
   return new Uint8Array(Buffer.concat([...parts, cd, eocd]));
 }
 const dec = (b) => new TextDecoder().decode(b);
+const META = '{"pack":{"pack_format":1,"description":"t"}}';
 
 test("zip reader reads stored and deflated entries", async () => {
   const big = "abcdefgh".repeat(500);
@@ -50,10 +51,11 @@ test("zip reader rejects non-zip data", () => {
 });
 
 test("pack.mcmeta parsing", () => {
-  assert.deepEqual(parsePackMcmeta('{"pack":{"pack_format":1,"description":"Hi"}}'), { valid: true, packFormat: 1, description: "Hi", formatted: "Hi\u00a7r" }); // b79: formatted = getFormattedText
+  assert.deepEqual(parsePackMcmeta('{"pack":{"pack_format":1,"description":"Hi"}}'), { listed: true, valid: true, packFormat: 1, description: "Hi", formatted: "Hi\u00a7r" }); // b79: formatted = getFormattedText; b80: listed
   assert.equal(parsePackMcmeta('{"pack":{"pack_format":1,"description":{"text":"Chat"}}}').description, "Chat");
   assert.equal(parsePackMcmeta("{}").description, INVALID_META);
   assert.equal(parsePackMcmeta("not json").valid, false);
+  assert.equal(parsePackMcmeta("not json").listed, false); // b80: the load throws, so the repository leaves the pack out
   assert.equal(parsePackMcmeta('﻿{"pack":{"pack_format":1,"description":"bom"}}').valid, true);
 });
 
@@ -97,9 +99,11 @@ test("pack info reads description and icon", async () => {
 
 test("applyPacks stores the resolved override table and lang", async () => {
   const store = memoryStore();
-  await store.putPack({ name: "low.zip", kind: "zip", blob: new Blob([makeZip({ "assets/minecraft/textures/items/apple.png": "low", "assets/minecraft/lang/en_US.lang": "gui.done=Low" }, ["assets/minecraft/textures/items/apple.png"])]) });
-  await store.putPack({ name: "high", kind: "folder", files: { "assets/minecraft/textures/items/apple.png": new Blob(["high"]) } });
-  const r = await applyPacks(["low.zip", "high", "missing.zip"], store);
+  await store.putPack({ name: "low.zip", kind: "zip", blob: new Blob([makeZip({ "pack.mcmeta": META, "assets/minecraft/textures/items/apple.png": "low", "assets/minecraft/lang/en_US.lang": "gui.done=Low" }, ["assets/minecraft/textures/items/apple.png"])]) });
+  await store.putPack({ name: "high", kind: "folder", files: { "pack.mcmeta": new Blob([META]), "assets/minecraft/textures/items/apple.png": new Blob(["high"]) } });
+  // b80: a stored pack without pack.mcmeta throws natively (ResourcePackFileNotFoundException) and is not listed, so the selection skips it.
+  await store.putPack({ name: "nometa", kind: "folder", files: { "assets/minecraft/textures/items/apple.png": new Blob(["nometa"]) } });
+  const r = await applyPacks(["low.zip", "high", "missing.zip", "nometa"], store);
   assert.deepEqual(r.packs, ["low.zip", "high"]);
   const o = await store.getOverrides();
   assert.equal(await o.get("/media/1.7.10/items/apple.png").blob.text(), "high");
@@ -171,7 +175,7 @@ test("a pack png without its own mcmeta hides the vanilla mcmeta; a pack mcmeta 
 test("applyPacks keeps hidden mcmeta, sounds and texture facts in the store", async () => {
   const store = memoryStore();
   const files = {
-    "assets/minecraft/textures/blocks/lava_still.png": "p", "assets/minecraft/sounds.json": JSON.stringify({ "random.click": { sounds: ["custom/boop"] } }),
+    "pack.mcmeta": META, "assets/minecraft/textures/blocks/lava_still.png": "p", "assets/minecraft/sounds.json": JSON.stringify({ "random.click": { sounds: ["custom/boop"] } }),
     "assets/minecraft/sounds/custom/boop.ogg": "ogg",
   };
   await store.putPack({ name: "p.zip", kind: "zip", blob: new Blob([makeZip(files)]) });

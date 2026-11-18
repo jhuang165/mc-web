@@ -23,6 +23,7 @@ Internal ids 100-127 are tools, so these blocks use `1000 + blockId` as items: 1
 - End portal frame: facing from yaw, 13/16 collision box plus the eye box, unbreakable (hardness Infinity, no drop), comparator output, solid top for fences, rails and torches.
 - Cauldron: water bucket fills to 3 (an empty bucket is returned in Survival), empty hand is handled, rain fills by `nextInt(20)` rolls, and a burning entity is extinguished using one level.
 - Flower pot: contents live in `world.pots` and fall back to the metadata, are saved with the world, drop with the pot (nothing in Creative), and need a solid top below.
+  - Batch 80 (potspacks80, 2026-11-18, bytecode-read `blm` pot path, `anz` BlockTallGrass, `ald` BlockFlowerPot): a pot read from NBT with tall grass (31) draws `BlockTallGrass.getIcon(0, Data)` (icons deadbush, tallgrass, fern; Data 3 and above -> icons[0], negative -> empty here since the client throws) and with cobweb (30) draws the crossed web; they are not plantable by click (`func_149928_a`). The plant colour is `colorMultiplier` at the pot cell, so tall grass is tinted only when the POT's metadata is not 0. Breaking drops `[Item, 1, Data]` and pick-block gives the same pair natively; the port does this when its item catalogue holds the stack (tall grass 0/1 now map to dead shrub / tall grass) and otherwise drops the drawn plant. Pots holding non-drawn items (stone, reeds, seeds...) still import as empty.
 
 ## Limits
 

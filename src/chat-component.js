@@ -14,6 +14,8 @@ export const langReady = import("./lang-en-us.js").then((m) => { fullLang = m.EN
 // StringTranslate turns each numeric conversion ("%[n$][digits.]d|f") of the file into "%[n$]s" while loading it.
 const asStrings = (v) => v.replace(/%(\d+\$)?[\d.]*[df]/g, "%$1s");
 export const translateKey = (key) => { const v = lang.table?.[key] ?? fullLang?.[key] ?? LANG[key]; return v == null ? key : asStrings(v); };
+// StatCollector.translateToFallback: the built-in English table only.
+const fallbackKey = (key) => { const v = fullLang?.[key] ?? LANG[key]; return v == null ? key : asStrings(v); };
 
 // EnumChatFormatting (a): names, codes; the qf enum adapter maps the lower-case names, so "bold" or "reset" are "colours" too.
 export const FORMATTING = Object.freeze({
@@ -86,9 +88,17 @@ export class TranslationComponent extends Base {
   // %s takes the next (or numbered) argument, %% is "%", any other conversion is "Unsupported format"; literal runs go through
   // String.format with no arguments. A failure is ChatComponentTranslationFormatException (TranslationError), which the native
   // client does not catch while drawing the chat.
+  // ensureInitialized (fr.g, b80 bytecode-read): a format failure on the current table clears the children and retries with StatCollector.translateToFallback
+  // (dd.b, the jar's en_US.lang); when that fails too the first exception propagates.
   children() {
     if (this._children) return this._children;
-    const format = translateKey(this.key), out = [], re = /%(?:(\d+)\$)?([A-Za-z%]|$)/g;
+    try { return (this._children = this.buildChildren(translateKey(this.key))); } catch (e) {
+      if (!(e instanceof TranslationError)) throw e;
+      try { return (this._children = this.buildChildren(fallbackKey(this.key))); } catch (e2) { throw e2 instanceof TranslationError ? e : e2; }
+    }
+  }
+  buildChildren(format) {
+    const out = [], re = /%(?:(\d+)\$)?([A-Za-z%]|$)/g;
     const literal = (s) => { const t = new TextComponent(javaFormatNoArgs(s, this)); t.style.parent = this.style; out.push(t); };
     let j = 0, next = 0, m;
     while ((m = re.exec(format))) {
@@ -108,7 +118,7 @@ export class TranslationComponent extends Base {
       if (l === k) re.lastIndex++; // the empty "%$" match at the end
     }
     if (j < format.length) literal(format.slice(j));
-    return (this._children = out);
+    return out;
   }
 }
 export class TranslationError extends Error { constructor(component, msg) { super(msg); this.component = component; } }
@@ -137,6 +147,8 @@ export function componentParts(c) {
 }
 
 // ---- IChatComponent.Serializer.deserialize and ChatStyle.Serializer.deserialize ----
+// Exported for other readers that hand a JsonElement to the serializer (PackMetadataSectionSerializer, resource-packs.js); JsonNull is the caller's case.
+export const deserializeComponent = (json) => deserialize(json);
 function deserialize(json) {
   if (json instanceof JsonPrimitive) return new TextComponent(asString(json));
   if (json instanceof JsonObject) {

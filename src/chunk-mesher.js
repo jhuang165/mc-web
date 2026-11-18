@@ -13,7 +13,7 @@ import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
 import { WOOD_SLAB, woodSlabBounds, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
 import { LILY_PAD, FERN, DEAD_SHRUB, HEIGHT, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, normalCube, STAINED_GLASS, CARPET, HAY_BALE, IRON_BARS } from "./world.js";
-import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, endFrameBounds, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
+import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, endFrameBounds, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf, potPlantTinted } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
@@ -531,7 +531,7 @@ export class MeshMethods {
       for(let i=k+1;i<m.p.length;i+=3)m.p[i]+=0.25;
       return;
     }
-    const tile=blockTile(c.id,0,false,c.damage),tint=native[0]===31?colourOf(this.biomeColors.grassAt(x+this.colorX,y,z+this.colorZ)):[1,1,1];
+    const tile=blockTile(c.id,0,false,c.damage),tint=potPlantTinted(c,this.world.getMeta(x,y,z))?colourOf(this.biomeColors.grassAt(x+this.colorX,y,z+this.colorZ)):[1,1,1];
     for(const q of crossedSquares(x,y,z,0.75,null,tile,tint)){q.verts.forEach(v=>{v[1]+=0.25;});this.nativeQuad(m,q,light);}
   }
   anvil(m,x,y,z) {

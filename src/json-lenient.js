@@ -387,3 +387,15 @@ export function fromJson(text, deserialize) {
 
 // Parses standard or lenient JSON to the tree without a deserializer (tests and probes).
 export const parseTree = (text) => { const r = new JsonReader(text); r.lenient = true; r.peek(); return readElement(r); };
+
+// JsonParser.parse(Reader) (Gson 2.2.4; AbstractResourcePack reads pack.mcmeta with it, b80): a lenient Streams.parse (an empty or blank document is JsonNull),
+// then, for a non-null tree, the reader back in strict mode must be at the end of the document, so trailing content or a second value fails.
+export function parseDocument(text) {
+  const r = new JsonReader(text);
+  r.lenient = true;
+  try { r.peek(); } catch (e) { if (e instanceof JsonError && e.kind === "eof") return JSON_NULL; throw e; }
+  const tree = readElement(r);
+  r.lenient = false;
+  if (tree !== JSON_NULL && r.peek() !== "END_DOCUMENT") throw new JsonError("parse", "Did not consume the entire document.");
+  return tree;
+}

@@ -135,8 +135,11 @@ export const cauldronComparator = (meta) => meta & 15;
 // metadata (generated structures write only the metadata) is POT_META_CONTENTS.
 export const POT_BOUNDS = [0.3125, 0, 0.3125, 0.6875, 0.375, 0.6875];
 // Internal plant ids: dandelion 43, red flower 44 (damage 0-8), sapling 48 (0-5), cactus 53, brown mushroom 75, red mushroom 76,
-// dead bush 79, fern 84 (native tall grass damage 2).
-const POT_PLANTS = { 43: [37, () => 0], 44: [38, (d) => d], 48: [6, (d) => d], 75: [39, () => 0], 76: [40, () => 0], 53: [81, () => 0], 79: [32, () => 0], 84: [31, () => 2] };
+// dead bush 79, fern 84 (native tall grass damage 2). Only a pot read from NBT holds the other drawn pairs (b80): dead shrub 83 (tall grass 0), tall grass 39
+// (tall grass 1) and cobweb 51 (render type 1 too, so RenderBlocks.func_147752_a draws it crossed).
+const POT_PLANTS = { 43: [37, () => 0], 44: [38, (d) => d], 48: [6, (d) => d], 75: [39, () => 0], 76: [40, () => 0], 53: [81, () => 0], 79: [32, () => 0], 84: [31, () => 2], 83: [31, () => 0], 39: [31, () => 1], 51: [30, () => 0] };
+// BlockFlowerPot.func_149928_a (executed, pot-sweep-reference.json potAccept): the stacks a click puts in: tall grass only at damage 2 (the fern), no cobweb.
+const POT_INSERTABLE = new Set([43, 44, 48, 75, 76, 53, 79, 84]);
 // Native (item, damage) of an internal plant stack, or null when the pot refuses it.
 export function potPlantOf(id, damage = 0) {
   const p = POT_PLANTS[id];
@@ -148,7 +151,7 @@ export function potPlantOf(id, damage = 0) {
 }
 // What an insertion does: the content kept ({ id, damage }) and the block metadata, or null when the item is not a pot plant.
 export function potInsertion(id, damage = 0) {
-  const native = potPlantOf(id, damage);
+  const native = POT_INSERTABLE.has(id) ? potPlantOf(id, damage) : null;
   return native ? { content: { id, damage: id === 44 || id === 48 ? damage | 0 : 0 }, meta: native[1] } : null;
 }
 // createNewTileEntity by metadata (BlockFlowerPot.func_149929_a): internal [id, damage] or null for an empty pot.
@@ -164,23 +167,32 @@ export function potNbtOf(content) {
 }
 // What the unchanged client draws for a native (Item, Data) (b79, bytecode-read RenderBlocks.func_147752_a -> getIcon(0, Data)): BlockFlower (dandelion, red
 // flower) takes icons[Data] and falls back to icons[0] when Data >= the array length (1 and 9 entries), a negative index throws, BlockSapling uses
-// clamp(Data & 7, 0, 5), mushrooms, dead bush and cactus ignore Data. Returns the port's drawable damage, or null when the client would throw.
+// clamp(Data & 7, 0, 5), mushrooms, dead bush, cobweb and cactus ignore Data. BlockTallGrass.getIcon (anz.a(int,int), b80 bytecode-read) is the same
+// rule over its 3 icons {deadbush, tallgrass, fern}. Returns the port's drawable damage (tall grass: the icon index), or null when the client would throw.
 export function potDrawDamage(item, data) {
   if (item === 38) return data < 0 ? null : data <= 8 ? data : 0;
   if (item === 37) return data < 0 ? null : 0;
+  if (item === 31) return data < 0 ? null : data <= 2 ? data : 0;
   if (item === 6) return Math.min(data & 7, 5);
   return 0;
 }
-const NATIVE_TO_POT = { 37: 43, 38: 44, 6: 48, 39: 75, 40: 76, 81: 53, 32: 79, 31: 84 };
+const NATIVE_TO_POT = { 37: 43, 38: 44, 6: 48, 39: 75, 40: 76, 81: 53, 32: 79, 30: 51 };
+const TALL_GRASS_ICONS = [83, 39, 84];
+// TileEntityFlowerPot.readFromNBT keeps any registered item and Data (executed potNbt rows); this returns the pot content when the pair is one the port draws
+// (render type 1 or 13 ItemBlocks), else null. Items the native pot holds without drawing them (stone, reeds, seeds...) still read as an empty pot here.
 export function potFromNbt(tag) {
-  const item = tag?.Item, data = tag?.Data | 0, id = NATIVE_TO_POT[item];
-  if (id === undefined) return null;
-  if (item === 31) return data === 2 ? { id, damage: 0 } : null;
-  const damage = potDrawDamage(item, data);
-  if (damage === null || !potPlantOf(id, damage)) return null;
-  // The exact native Data rides along when it differs from the drawn damage, so export and save keep it (b79).
-  return data === damage ? { id, damage } : { id, damage, data };
+  const item = tag?.Item, data = tag?.Data | 0;
+  const drawn = item in NATIVE_TO_POT || item === 31 ? potDrawDamage(item, data) : null;
+  if (drawn === null) return null;
+  const id = item === 31 ? TALL_GRASS_ICONS[drawn] : NATIVE_TO_POT[item], damage = item === 31 ? 0 : drawn;
+  const native = potPlantOf(id, damage);
+  if (!native) return null;
+  // The exact native Data rides along when it differs from the drawn plant's own damage, so export and save keep it (b79).
+  return data === native[1] ? { id, damage } : { id, damage, data };
 }
+// The colour RenderBlocks.func_147752_a multiplies the plant by: Block.colorMultiplier of the plant at the pot's cell. Only BlockTallGrass (anz.d, bytecode-read)
+// is not white, and it reads the cell metadata, i.e. the POT's: metadata 0 is white, anything else the biome grass colour. Returns true for the grass tint.
+export const potPlantTinted = (content, potMeta) => !!content && potPlantOf(content.id, content.damage)?.[0] === 31 && (potMeta & 15) !== 0;
 const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
 export function potContents(world, x, y, z) {
@@ -205,7 +217,10 @@ export function potUse(world, x, y, z, heldId, heldDamage = 0) {
   const ins = potInsertion(heldId, heldDamage);
   return ins;
 }
-// The break drops of a pot: its contents (when Survival) and the pot item itself (harvest).
+// The break drops of a pot: its contents (when Survival) and the pot item itself (harvest). Native breakBlock (ald.a(ahb,III,aji,int), b80 bytecode-read)
+// drops new ItemStack(tile Item, 1, tile Data) exactly and getPickBlock / getDamageValue (ald.d, ald.k) pick the same pair. The content's internal stack is that
+// pair whenever the record has no `data` (tall grass 0/1 now map to dead shrub 83 / tall grass 39); a record with `data` holds a stack the port's item
+// catalogue cannot represent (dandelion 1-15, red flower 9-15, sapling 6-15, tall grass 3-15, ...), so the drawn plant stands in for it.
 export function potDrops(world, x, y, z) {
   const c = potContents(world, x, y, z);
   return [...(c ? [{ id: c.id, count: 1, damage: c.damage }] : []), { id: ITEM_FLOWER_POT, count: 1, damage: 0 }];
