@@ -281,7 +281,7 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
     if (hit) {
       // ItemStack.hitEntity once the attack landed: ItemSaddle saddles an adult pig, using the saddle up even in Creative.
       if (id === SADDLE) state.mobs.saddleHit?.(aimedEntity.entity, state.survival);
-      if (critical) hook('criticalHit', aimedEntity.entity);
+      if (info.critical ?? critical) hook('criticalHit', aimedEntity.entity); // b81: no critical on a dragon part (EntityWorld.attack clears it)
       if (info.enchantCritical) hook('enchantmentCriticalHit', aimedEntity.entity);
       // The push counts the Knockback enchantment as well as sprinting (EntityPlayer.attackTargetEntityWithCurrentItem).
       if (info.knockback !== undefined ? info.knockback > 0 : state.motion.sprinting) {
