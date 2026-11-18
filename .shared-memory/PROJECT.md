@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 80 (2026-11-18, ten tracks in `../wt80-<name>` on `batch80-<name>`, cut from 6c0bf72a3, merged --no-ff on `batch80-lead`; lead note `b80-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.109.0, by track (details in the `*-b80-track.md` notes and "Done in batch 80" in `public/research/remaining-gaps.md`):
+  - docs80: `canNeighborBurn` and solid-top in `nether-generator.js`; parity.md rows corrected.
+  - genguards80: no `unported` generation guard fires over 201 surveyed cells (tests and comments only).
+  - corpse80: dying-mob right-click interactions.
+  - spswing80: `right-click-swing.js` swing rules.
+  - mpperf80: `mpperf80-fast.js` behind `MC_MPPERF80`, 20-30 % faster path search.
+  - mpcmd80: server command blocks run, S35 tile sync, MC|AdvCdm type 0, collect animation ends at y - 0.5, "Diamonds to you!" thrower lookup per dimension, server `gameRule` from the server's rules.
+  - fluids80: throwables burn in lava, falling fluids, `rawId` stack compare, region-import sign and spawner readers, item Fire.
+  - renderfx80: 16-pass end portal shader, wither skull, executed stem quads.
+  - potspacks80: tall grass and cobweb pots, `translate` pack descriptions, broken packs left out of the list.
+  - mpfx80: `client-explosion.js`, ghast `flaming` flag on server blasts, TNT minecart S27, skull smoke.
+- Lead (cabe0d28e): a flaming server blast rolls its fires with a Random drawn from Math.random (explodeBlocks' default is seeded from Date.now, which made the seeded `mpperf78` pens differ run to run once mpfx80 lit ghast fires); the b59 MC|AdvCdm source check allows mpcmd80's remote branch.
+- Verification: one full `npm test` on bfdc858f3: 9001 tests, 8994 pass, 4 fail, 3 cancelled (two real failures, fixed in cabe0d28e; the rest load timeouts that pass alone); 68 affected files rerun after the fix: 1017/1017 pass. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 80" in `public/research/remaining-gaps.md`.
+
 Batch 77 (2026-11-16, ten Sonnet tracks in `../wt77-<name>` on `batch77-<name>`, cut from 9e7fa94f8, merged --no-ff on `batch77-lead`; shared track rules `../artifacts/b77-lead/track-rules.md`; lead note `b77-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.106.0, by track:
   - mphorseclient77: `client-horse.js` (`MpHorseRider`: jump charge, `horseJump`, `horseInventory`), HUD jump bar and horse hearts for the server horse, horse `tame/hp/max` on the mob wire, `predictAnimalUse` lead and horse clicks (`selfId`, `sneak`).
@@ -814,7 +830,7 @@ Post-0.43.0 batch 4 (2026-11-05, claude-lead, unreleased): five Sonnet tracks me
   - EnderItems are written on export but not read back on import, and no EnderChest tile is exported.
   - Magma cubes are missing, and the slime attack sound is silent.
   - Enderman and squid/bat spawn passes are approximated.
-  - The big-stem model next to a fruit is approximated, and the melon Fortune cap is not implemented.
+  - The big-stem model next to a fruit is approximated, and the melon Fortune cap is not implemented. (2026-11-18, batch 80 renderfx80: the stem quads are now executed-exact; the Fortune line was not re-checked.)
   - There are no spawn eggs.
 
 Post-0.43.0 batch 3 (2026-11-04, claude-lead, unreleased): five block tracks merged in main.
