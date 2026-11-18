@@ -25,10 +25,12 @@ const knotCentre = (k) => (k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x
 let knotSeq = 0;
 const alive = (m, e) => e.health > 0 && m.entities.includes(e);
 
-// EntityPlayerSP.isRidingHorse: the ridden entity is a saddled horse.
+// The inventory key while riding (b81, bytecode-read): PlayerControllerMP.func_110738_j (bje.j) is "riding an EntityHorse", with no saddle or health test, and sends C0B 7 in place
+// of the player's own screen; the server's EntityHorse.openGUI (wi.g(yz)) then opens the horse window only for a tame horse. Returns that horse, or null (main.js opens nothing
+// for an untamed one). A dying horse's window opens and closes on the next reach test (ContainerHorseInventory.canInteractWith is alive-only).
 export function riddenHorse(rider) {
-  const v = rider?.vehicle;
-  return v?.horse && v.entity?.horse?.tame && v.entity.horse.saddled && v.entity.health > 0 ? v.entity : null;
+  const e = ridingHorse(rider);
+  return e?.horse?.tame ? e : null;
 }
 // EntityPlayerSP.isRidingHorse (blk): the ridden entity is an EntityHorse, tame, saddled or not.
 export function ridingHorse(rider) {

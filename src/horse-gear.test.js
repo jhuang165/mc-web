@@ -143,9 +143,10 @@ test("jump bar width is (int)(power * 183) while riding any horse (EntityPlayerS
   assert.equal(jumpBar(rider(1)).width, 183);
   assert.equal(jumpBar({ vehicle: null }).visible, false);
   e.horse.saddled = false;
-  assert.equal(riddenHorse(rider(1)), null);
+  assert.equal(riddenHorse(rider(1)), e, "b81: wi.g opens a tame horse's window without a saddle");
   // The bar does not ask for a saddle or a tame horse; a ridden pig (the same seat system) has none.
   e.horse.tame = false;
+  assert.equal(riddenHorse(rider(1)), null, "b81: nor an untamed one's");
   assert.deepEqual(jumpBar(rider(0.5)), { visible: true, width: 91 });
   assert.equal(jumpBar({ vehicle: { horse: true, entity: { type: "pig", health: 10 } }, jumpPower: 1 }).visible, false);
 });

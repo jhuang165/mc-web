@@ -56,7 +56,7 @@ test("a golden apple cures only a weakened zombie villager", () => {
   assert.equal(canCure(z, GOLDEN_APPLE, 1), false, "the enchanted apple is a different stack");
   assert.equal(canCure({ ...z, villager: false }, GOLDEN_APPLE), false);
   assert.equal(canCure({ ...z, effects: [] }, GOLDEN_APPLE), false);
-  assert.equal(canCure({ ...z, conversionTime: 100 }, GOLDEN_APPLE), false);
+  assert.equal(canCure({ ...z, conversionTime: 100 }, GOLDEN_APPLE), true, "b81: yq.a(yz) has no isConverting test");
   assert.equal(canCure(z, 200), false);
   assert.deepEqual(readZombieVillager({ villager: true, conversionTime: 50 }), { villager: true, conversionTime: 50 });
   assert.deepEqual(readZombieVillager({ conversionTime: -1 }), { villager: false });

@@ -288,9 +288,9 @@ import { stoneUtilityPick, CAULDRON, serializePots, restorePots } from "./stone-
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { copySeat } from "./horse-copy.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
-import { riddenHorse, jumpBar } from "./horse-gear-live.js";
+import { riddenHorse, ridingHorse, jumpBar } from "./horse-gear-live.js";
 import { mountBodyYaw, localMountYaw, windowHorseMob } from "./multiplayer/client-rider-pose.js";
-import { MpHorseRider, mountedHorse, ridesSaddled } from "./multiplayer/client-horse.js"; // b77 mphorseclient77: the jump counter, C0B 6 / 7 and the HUD of a horse the server carries
+import { MpHorseRider, mountedHorse } from "./multiplayer/client-horse.js"; // b77 mphorseclient77: the jump counter, C0B 6 / 7 and the HUD of a horse the server carries
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { leadViews } from "./multiplayer/remote-leads.js"; // b62
 import { SpamCounter, chatPacket, serverClick } from "./server-handlers.js";
@@ -2313,10 +2313,9 @@ function leaveToTitle(keep) {
 }
 function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
 function inventory(station = false) {
-  // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
-  if (!station && multiplayer?.ready && active?.remote && ridesSaddled(mountedHorse(remoteMobs, mpRiding))) { multiplayer.horseInventory(); return; } // b77: EntityPlayerSP.func_110322_i sends C0B 7; the server's S2D opens the window
-  const ridden = !station && riddenHorse(rider);
-  if (ridden) { openHorse(ridden); return; }
+  // EntityClientPlayerMP.func_110322_i: the inventory key while riding a horse asks the server for the horse screen (C0B 7).
+  if (!station && multiplayer?.ready && active?.remote && mountedHorse(remoteMobs, mpRiding)) { multiplayer.horseInventory(); return; } // b77: EntityPlayerSP.func_110322_i sends C0B 7; the server's S2D opens the window; b81: bje.j asks only for a horse (no saddle test)
+  if (!station && ridingHorse(rider)) { const ridden = riddenHorse(rider); if (ridden) openHorse(ridden); return; } // b81: riding any horse sends C0B 7, never the player's own screen; wi.g opens a tame one's
   if (survival.creative && !station) {
     openCreative();
     return;

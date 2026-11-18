@@ -1541,30 +1541,36 @@ export class EntityWorld {
   attack(e, tool, survival, player, extraKnockback = 0, critical = false, info = {}) {
     // b80: a dying dragon is still hit through its part: wy.a(ro, F) -> xa.a(wy, ro, F) returns true at any health (bytecode-read), so the weapon wears and the hunger cost is paid.
     if (!this.entities.includes(e) || (e.health <= 0 && e.type !== "ender_dragon")) return false;
+    // b81: the hit entity of a dragon is its EntityDragonPart (wy extends sa, not sv), and yz.r(sa) reads Sharpness / Smite / Bane (afv.a(sv, sv)), the Knockback level (afv.b), the critical,
+    // Fire Aspect (both setFire calls), Thorns and the damageDealt stat only for an EntityLivingBase target (bytecode-read). The sprint knockback goes to the part (Entity.addVelocity on an
+    // entity nothing moves), while the player still slows and stops sprinting; the weapon wears on the dragon itself (the wy branch before ItemStack.hitEntity).
+    const part = e.type === "ender_dragon";
+    if (part) critical = false;
+    info.critical = critical;
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0,
       held = owned && survival.held?.id === tool ? survival.held : null,
-      weapon = weaponEnchantments(held, e.type);
+      weapon = part ? { damage: 0, knockback: 0, fireAspect: 0, looting: weaponEnchantments(held, e.type).looting } : weaponEnchantments(held, e.type);
     let damage = heldAttackDamage(tool, survival);
     // EntityPlayer.attackTargetEntityWithCurrentItem: `if (f > 0 || f1 > 0)`. Weakness II on an empty hand (1 - 1.0) or worse does nothing at all.
     if (!(damage > 0 || weapon.damage > 0)) return false;
     if (critical) damage = criticalDamage(damage);
     damage = f(damage + weapon.damage);
-    this.lastAttackDamage = damage; // b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
+    this.lastAttackDamage = part ? 0 : damage; // b81: no stat for a part (an increment of 0 is none); b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
       this.ai.playerHit(e.type === "ender_dragon" ? null : e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
-      mobThornsOnPlayerHit(e, entityRandom(e), {
+      if (!part) mobThornsOnPlayerHit(e, entityRandom(e), {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
         breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
       });
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
-      if (knockback > 0 && Number.isFinite(player.yaw)) {
+      if (knockback > 0 && !part && Number.isFinite(player.yaw)) {
         const rad = f(f(f(180 - player.yaw * (180 / Math.PI)) * f(Math.PI)) / 180);
         addVelocity(e, f(f(-mhSin(rad) * knockback) * 0.5), 0.1, f(f(mhCos(rad) * knockback) * 0.5));
       }
@@ -2359,6 +2365,8 @@ export class EntityWorld {
       // with no death or drops: removed at the end of this tick (below).
       if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) peacefulGone.push(e);
       if (e.health <= 0) {
+        // b81: EntityZombie.onUpdate (yq.h) counts a converting zombie down with no health test (bytecode-read), so a corpse whose timer runs out in its death becomes the villager.
+        if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
         // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits).
         this.burn(e, t);
         e.hurt = Math.max(0, e.hurt - 1);
@@ -2533,9 +2541,14 @@ export class EntityWorld {
     e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
     if (slime) e.moveForward = 0;
     // b80: sv.e then calls moveEntityWithHeading, and EntityHorse's (wi.e(FF), bytecode-read) takes a saddled rider's input in place of the zeroed one, so the rider steers a dying horse.
-    this.walk(e, t, 0, e.type === "horse" && e.rider && e.horse?.saddled ? () => horseRideThink(this, e) : undefined);
+    // b81: EntityHorse overrides isMovementBlocked (wi.bh: a saddled rider, eating or rearing) with no health test, so a dying horse that is none of these runs its AI tasks (sw.bn) like a
+    // living one, and the rest of its onLivingUpdate / onUpdate too (the tail roll before, wi.e's 900 / 300 rolls and wi.h's counters after, then the body turn; bytecode-read).
+    const horse = e.type === "horse";
+    if (horse && entityRandom(e).nextInt(200) === 0) (e.horseAnim ??= newHorseAnim()).tail = 1;
+    this.walk(e, t, 0, horse ? () => (e.rider && e.horse?.saddled ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
     this.push(e, t);
+    if (horse) { this.horseTick(e); this.turnBody(e); }
     if (e.type === "chicken") this.chickenUpdate(e);
     this.swingLimbs(e);
     if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
