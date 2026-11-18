@@ -4,11 +4,12 @@
 // limited to air). The cell coordinates stay the upper ones. A ladder test (vertical motion counts) and the air test
 // (no step) use the replaced block; Block.onEntityWalking is the replaced block's, so a fence swallows an ore's touch.
 import { toOriginal } from "./block-registry.js";
+import { originalIdOf } from "./mpperf80-fast.js"; // b80 mpperf80: toOriginal(id, 0)[0] through a per-id table
 
 const FENCE_LIKE = new Set([85, 113, 139, 107]); // BlockFence (render type 11), BlockWall (32), BlockFenceGate (21)
 const LADDER_ORIGINAL = 65; // Blocks.ladder; vines do not count (ajn.ap is the ladder only)
 
-export const isFenceLike = (id) => !!id && FENCE_LIKE.has(toOriginal(id, 0)?.[0]);
+export const isFenceLike = (id) => !!id && FENCE_LIKE.has(originalIdOf(id, toOriginal));
 
 // {x, y, z, id, below, replaced, ladder}: `y` is posY - yOffset (the feet less ySize for the player, the feet for a mob).
 export function stepBlock(world, px, y, pz) {
@@ -17,5 +18,5 @@ export function stepBlock(world, px, y, pz) {
   const lower = world.get(x, cy - 1, z) || 0;
   const replaced = isFenceLike(lower);
   if (replaced) id = lower;
-  return { x, y: cy, z, id, replaced, ladder: !replaced && toOriginal(id, 0)?.[0] === LADDER_ORIGINAL };
+  return { x, y: cy, z, id, replaced, ladder: !replaced && originalIdOf(id, toOriginal) === LADDER_ORIGINAL };
 }
