@@ -7,7 +7,7 @@
 import { NBT } from './nbt.js';
 import { toOriginal } from './block-registry.js';
 import { compoundFromJson } from './spawner-data.js';
-import { readContainerTile } from './region-import.js';
+import { readContainerTile, itemFromOriginal } from './region-import.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { getStringAny } from './nbt-string.js';
 import { readNBT as readSpawner, spawnerJSON, makeSpawner } from './mob-spawner.js';
@@ -56,11 +56,11 @@ const OTHER = {
     host.skulls.create(x, y, z, Math.max(0, Math.min(4, nbtGet(merged, 'SkullType', NBT.BYTE, 0))), nbtGet(merged, 'Rot', NBT.BYTE, 0) & 15, '', profileOfSkullTile(merged));
     return true;
   },
-  // TileEntityFlowerPot.readFromNBT: Item and Data ints; a plant the port cannot draw leaves the pot empty.
+  // TileEntityFlowerPot.readFromNBT: Item and Data ints; b81: a registered item the port does not draw is kept (stone-utility.js potFromNbt).
   FlowerPot({ tag, x, y, z, host }) {
     if (!host.world) return false;
     const old = potNbtOf(potContents(host.world, x, y, z)), merged = overlay(new Map([['Item', entry(NBT.INT, old.Item)], ['Data', entry(NBT.INT, old.Data)]]), tag);
-    setPotContents(host.world, x, y, z, potFromNbt({ Item: nbtGet(merged, 'Item', NBT.INT, 0), Data: nbtGet(merged, 'Data', NBT.INT, 0) }));
+    setPotContents(host.world, x, y, z, potFromNbt({ Item: nbtGet(merged, 'Item', NBT.INT, 0), Data: nbtGet(merged, 'Data', NBT.INT, 0) }, itemFromOriginal));
     return true;
   },
   // TileEntityCommandBlock.readFromNBT; an invalid LastOutput throws natively (the tile does not load), so nothing is applied here.

@@ -1714,7 +1714,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     weather.activeChunkSource = spActiveChunkSource(() => position, () => options.distance);
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
     // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
-    populationBlocks=new PopulationBlocks(world,{random:weather.random,drop:(stacks,x,y,z)=>items.dropBlock(stacks.map(d=>makeStack(d.id,d.count,d.damage||0)),x,y,z),apply:changes=>{scene.updateBlocks(changes);saved=false;}}).watch();
+    populationBlocks=new PopulationBlocks(world,{random:weather.random,drop:(stacks,x,y,z)=>items.dropBlock(stacks.map(d=>makeStack(d.id,d.count,d.damage||0,undefined,d.tags)),x,y,z),apply:changes=>{scene.updateBlocks(changes);saved=false;}}).watch();
     world.populationBlocks=populationBlocks;
     weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || farming.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b) || redstoneRuntime?.randomTick(x, y, z, b);
     scene.weather = weather;

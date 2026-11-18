@@ -277,6 +277,14 @@ export async function deleteStoredPack(store, name, selected = []) {
   await store.deletePack(name);
   return selected.filter((n) => n !== name);
 }
+// b81 potspacks81 (port choice): a stored pack that no longer loads (packInfo `listed: false`, b80) is in neither list, as ResourcePackRepository.a (brc.a)
+// leaves it out natively, so it has no row to delete. Natively the file stays in the resourcepacks folder until the user removes it there (the folder button
+// opens that directory); the browser has no folder, so the screen removes all of them at once instead. `infos`: name -> packInfo result.
+export const unlistedPackNames = (infos) => [...infos].filter(([, info]) => info?.listed === false).map(([name]) => name);
+export async function deleteUnlistedPacks(store, names, selected = []) {
+  for (const name of names) await store.deletePack(name);
+  return selected.filter((n) => !names.includes(n));
+}
 
 // ---- Browser glue ----
 let sharedStore = null;

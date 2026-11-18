@@ -3,7 +3,7 @@ import {normalCube,WATER,LILY_PAD} from './world.js';
 import {cropDrops} from './farming.js';
 import {populationDrops} from './population-content.js';
 import {solidTopSurface} from './doors-panes.js';
-import {FLOWER_POT,potContents} from './stone-utility.js';
+import {FLOWER_POT,potContents,potDropEntry} from './stone-utility.js';
 import {touchRedstoneOre,randomTickRedstoneOre} from './redstone-ore.js';
 import {mushroomCanStay,mushroomSpread,isMushroom} from './plant-light.js';
 const sides=[[0,1],[-1,0],[0,-1],[1,0]];
@@ -43,7 +43,7 @@ export class PopulationBlocks{
     try{for(const [a,b,c] of [[x,y,z],[x,y-1,z],[x,y+1,z],[x-1,y,z],[x+1,y,z],[x,y,z-1],[x,y,z+1]]){
       const id=w.get(a,b,c);if(id===72&&populationPlantCanStay(w,a,b,c,id)){const nm=vineMeta(w,a,b,c);if(nm!==w.getMeta(a,b,c)){w.set(a,b,c,72,true,nm);changes.push([a,b,c,72,72]);}continue;}if(![39,69,72,73,75,76,79,83,84,LILY_PAD,FLOWER_POT].includes(id)||populationPlantCanStay(w,a,b,c,id))continue;
       const m=w.getMeta(a,b,c),drops=id===39?cropDrops(39):populationDrops(id,m)??[{id,count:1}];
-      if(id===FLOWER_POT){const held=potContents(w,a,b,c);if(held)drops.push({id:held.id,count:1,damage:held.damage});}
+      if(id===FLOWER_POT){const held=potDropEntry(potContents(w,a,b,c));if(held)drops.push(held);} // b81: the tile's ItemStack(Item, 1, Data)
       w.set(a,b,c,0);changes.push([a,b,c,id,0]);this.drop(drops,a,b,c);
       if(id===69&&!(m&8)&&w.get(a,b+1,c)===69){w.set(a,b+1,c,0);changes.push([a,b+1,c,69,0]);}
     }}finally{this.busy=false;}

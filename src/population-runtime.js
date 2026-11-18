@@ -8,7 +8,7 @@ import {primeTnt} from './explosion.js';
 import {villagerFields} from './villager.js';
 import {DISPENSER} from './dispenser-piston.js';
 import {newDispenser} from './dispenser-container.js';
-import {FLOWER_POT,setPotContents,potPlantOf} from './stone-utility.js';
+import {FLOWER_POT,setPotContents,validPotRecord} from './stone-utility.js';
 const ANIMALS={Pig:'pig',Cow:'cow',MushroomCow:'mooshroom',Sheep:'sheep',Chicken:'chicken',Wolf:'wolf',EntityHorse:'horse'};
 // Dungeon chests whose block is still a chest; an existing tile (even an emptied one) is never overwritten.
 export function restoreChests(list,world,survival){
@@ -43,7 +43,7 @@ function restoreDispensers(list,world,survival){
 function restorePots(list,world){
   let n=0;
   for(const p of list??[]){
-    if(world.get(p.x,p.y,p.z)!==FLOWER_POT||world.pots?.has(`${p.x},${p.y},${p.z}`)||!potPlantOf(p.id,p.damage))continue;
+    if(world.get(p.x,p.y,p.z)!==FLOWER_POT||world.pots?.has(`${p.x},${p.y},${p.z}`)||!validPotRecord(p))continue; // b81: undrawn items too
     setPotContents(world,p.x,p.y,p.z,p);n++;
   }
   return n;

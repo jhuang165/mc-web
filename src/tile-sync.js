@@ -28,7 +28,7 @@ import { SKULL } from "./skull.js";
 import { BEACON } from "./pyramid.js";
 import { MOB_SPAWNER, FLOWER_POT } from "./world.js";
 import { spawnerJSON } from "./mob-spawner.js";
-import { potContents, setPotContents } from "./stone-utility.js";
+import { potContents, setPotContents, validPotRecord } from "./stone-utility.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { newChest } from "./chest.js";
 import { COMMAND_BLOCK, newCommandBlock, normalizeLastOutput } from "./command-block.js"; // b80 mpcmd80
@@ -47,7 +47,21 @@ const beaconOf = (t) => ({ kind: "beacon", action: TILE_ACTION.beacon, x: t.x, y
 // Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
 // b80 mpcmd80: a command block without a server record is a fresh TileEntityCommandBlock (BlockContainer.onBlockAdded), described with its defaults.
 const commandOf = (t, x, y, z) => ({ kind: "command", action: TILE_ACTION.command, x, y, z, command: String(t.command ?? ""), successCount: t.successCount | 0, customName: String(t.customName ?? "@"), ...(t.lastOutput != null ? { lastOutput: t.lastOutput } : {}), trackOutput: t.trackOutput !== false });
-const potOf = (world, x, y, z) => { const c = potContents(world, x, y, z); return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0 }; };
+// b81 potspacks81: TileEntityFlowerPot.getDescriptionPacket (apf.m, bytecode-read) is S35 action 5 with writeToNBT's Item and Data, and the client's
+// NetHandlerPlayClient.handleUpdateTileEntity (bjb.a(gf), bytecode-read) runs readFromNBT on an apf for action 5, so the client holds the exact pair. The
+// port's description is the server's pot record: id/damage (the drawn plant) plus `data` (an exact Data the plant does not name) or `item`/`data`/`stack`
+// (an item the client does not draw), the same fields potNbtOf turns back into Item and Data.
+const potOf = (world, x, y, z) => {
+  const c = potContents(world, x, y, z), extra = {};
+  if (c && Number.isInteger(c.data)) extra.data = c.data;
+  if (c && Number.isInteger(c.item)) { extra.item = c.item; if (c.stack) extra.stack = { ...c.stack }; }
+  return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0, ...extra };
+};
+// The client's side of a pot description (apf.a(dh) into the tile at the cell). A record neither drawn nor a registered item is an empty pot (Item 0).
+export function applyPotTile(world, t) {
+  const rec = Number.isInteger(t.item) ? { item: t.item, data: t.data, stack: t.stack } : { id: t.id, damage: t.damage | 0, ...(Number.isInteger(t.data) ? { data: t.data } : {}) };
+  setPotContents(world, t.x, t.y, t.z, validPotRecord(rec) ? rec : null);
+}
 
 // Batch 60 (mpcontainers2): the 1.7.10 client makes a TileEntityChest from the block alone (the chunk packet has no chest tile; facing is the block's
 // metadata), so a never-opened chest is drawn closed. This port keeps a chest's facing in its tile record rather than the metadata, so the server sends
@@ -146,7 +160,7 @@ export function applyTiles(list, stores) {
       if (typeof t.trackOutput === "boolean") tile.trackOutput = t.trackOutput;
       n++;
     } else if (t.kind === "pot" && block === FLOWER_POT) {
-      setPotContents(world, x, y, z, t.id ? { id: t.id, damage: t.damage | 0 } : null);
+      applyPotTile(world, t); // b81 potspacks81
       n++;
     } else if (t.kind === "contChest" && stores.chests && stores.enders) {
       if (t.ender && block === ENDER_CHEST) (stores.enders[`${x},${y},${z}`] ??= newEnderTile());

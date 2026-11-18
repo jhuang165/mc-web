@@ -37,17 +37,17 @@ test("the pot draws what BlockFlower / BlockSapling.getIcon(0, Data) pick", () =
   assert.deepEqual([...Array(16).keys()].map((d) => potDrawDamage(6, d)), [0, 1, 2, 3, 4, 5, 5, 5, 0, 1, 2, 3, 4, 5, 5, 5]);
   for (const item of [37, 39, 40, 81, 32]) for (let d = 0; d < 16; d++) assert.equal(potDrawDamage(item, d), 0);
   assert.equal(potDrawDamage(38, -1), null); // the client throws on a negative index
-  assert.equal(potFromNbt({ Item: 38, Data: -1 }), null);
+  assert.deepEqual(potFromNbt({ Item: 38, Data: -1 }), { id: 0, damage: 0, item: 38, data: -1 }); // b81: kept, undrawn (the client cannot draw it)
   assert.deepEqual(potFromNbt({ Item: 38, Data: 12 }), { id: 44, damage: 0, data: 12 });
   assert.deepEqual(potFromNbt({ Item: 6, Data: 9 }), { id: 48, damage: 1, data: 9 });
   assert.deepEqual(potFromNbt({ Item: 6, Data: 3 }), { id: 48, damage: 3 });
   assert.deepEqual(potFromNbt({ Item: 37, Data: 0 }), { id: 43, damage: 0 });
 });
 
-test("breaking or picking a pot with a native-only damage yields the drawn plant the port can hold", () => {
+test("breaking or picking a pot with a native-only damage yields the plant item with the native damage as rawDamage (b81)", () => {
   const world = { pots: new Map(), getMeta: () => 0 };
   setPotContents(world, 0, 0, 0, potFromNbt({ Item: 38, Data: 12 }));
-  assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: 44, count: 1, damage: 0 });
+  assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: 44, count: 1, damage: 0, rawDamage: 12 }); // b81: ItemStack(red_flower, 1, 12)
   assert.deepEqual(potPick(world, 0, 0, 0), { id: 44, damage: 0 });
 });
 
