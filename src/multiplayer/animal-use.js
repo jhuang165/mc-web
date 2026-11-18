@@ -26,12 +26,13 @@ const SHEAR_SOUND = 'mob.sheep.shear';
 // The server half. `mobs` is the EntityWorld, `p` the player record, `ctx.drop(stack)` throws an item at the player (a full inventory). Returns true when handled.
 export function serverAnimalUse(mobs, p, e, ctx) {
   const s = p.survival, held = s.held, id = held?.id ?? 0;
+  if (e.type === 'ender_dragon') return false; // b80: the click lands on a part (wy), whose interactFirst is Entity's false and which is no EntityLivingBase for the item (yz.q, bytecode-read)
   if (ctx.extra?.first(e)) return true; // b75 mpusesweep75: flint and steel on a creeper, a spawn egg on an ageable mob (server-use-entity.js)
   if (ctx.lead?.(p, e)) return true; // b62: EntityLiving.interactFirst: the lead comes before the mob's own interact (server-leads.js)
   // b62: EntityPig.interact: the feed first, then a saddled pig takes the player (ItemSaddle only reaches a pig that did not).
   if (e.type === 'villager' && ctx.villager?.(p, e)) return true; // b66: the merchant window hook (mptrade fills sm.villagerUse)
   if (e.type === 'zombie' && e.villager && mobs.cure(e, id, s, held?.damage ?? 0)) return true; // b66: EntityZombie.interact, a golden apple on a weakened zombie villager
-  if (e.type === 'pig' && e.saddled && ctx.ride) { if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } if (e.health > 0 && ctx.ride(p, e)) return true; } // b79: boarding a corpse stays open (the seat code is live-only)
+  if (e.type === 'pig' && e.saddled && ctx.ride) { if (mobs.feed(e, id, s)) { e.breeder = p.id; return true; } if (ctx.ride(p, e)) return true; } // b80: wo.a(yz) has no health test; a corpse carries the rider until its deathTime 20 setDead
   if (e.type === 'pig' && mobs.saddleUse?.(e, s)) return true;
   if (e.type === 'wolf' && mobs.wolfInteract?.(e, s)) return true; // only when mpmobtypes puts wolves on the server (SUPPORTED); status 6 / 7 are still to be wired (see the track note)
   if (e.type === 'ocelot' && mobs.ocelotInteract?.(e, s)) return true;
@@ -48,7 +49,7 @@ export function serverAnimalUse(mobs, p, e, ctx) {
 export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null, sneak = false } = {}) {
   const extra = predictEntityExtras(mob, survival, selfId, sneak);
   if (extra) return extra;
-  if (!mob || (mob.health <= 0 && mob.type === 'mooshroom') || !ANIMAL_TYPES.has(mob.type)) return { handled: false }; // b79: a corpse takes these uses too (the mooshroom's own interact stays live-only)
+  if (!mob || !ANIMAL_TYPES.has(mob.type)) return { handled: false }; // b79 / b80: a corpse takes these uses too (wm.a(yz) has no health test either)
   const held = survival.held, id = held?.id ?? 0, adult = (mob.growingAge ?? 0) >= 0, creative = !!survival.creative;
   const spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
   const wear = () => { if (!creative && survival.count(SHEARS)) survival.wear(SHEARS, 1); };
@@ -83,6 +84,7 @@ export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null
 const takesClickFirst = (mob) => (mob.type === 'villager' && (mob.growingAge ?? 0) >= 0) || ((mob.type === 'wolf' || mob.type === 'ocelot') && !!mob.owner); // EntityVillager.interact (adult), EntityTameable.interact (tamed)
 function predictEntityExtras(mob, survival, selfId = null, sneak = false) {
   if (!mob || (mob.health <= 0 && mob.type === 'villager')) return null; // b79: only EntityVillager.interact tests isEntityAlive; a corpse takes the lead, name tag, egg and flint the same way
+  if (mob.type === 'ender_dragon') return { handled: false }; // b80: the aimed part takes no interact and no item use (yz.q)
   const held = survival.held, id = held?.id ?? 0;
   const creative = !!survival.creative, spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
   if (!id) return mob.type === 'horse' ? predictHorse(mob, survival, spend, sneak) : null; // an empty hand mounts or opens the gear window
@@ -117,7 +119,7 @@ function predictLead(mob, survival, selfId, spend) {
 // server's; here the click is claimed and the stack changes the way horse-live.js horseInteract changes it (apply: health, age, love; one item for food and a chest). The copy has no temper (the wire
 // carries type, variant, armour, saddle, chest, tame, health), so a wild horse at the temper cap would be a wrong guess. A name tag is tried before mounting (wi.a), so it is left to the name tag branch.
 function predictHorse(mob, survival, spend, sneak = false) {
-  if (mob.health <= 0 || !mob.horse) return null;
+  if (!mob.horse) return null; // b80: wi.a(yz) has no health test (a corpse is fed without healing, rears, takes a chest or is mounted)
   const id = originalId(survival.held), h = horseView(mob);
   // b78 mphorse78: temper is no watched value (EntityHorse.c() registers only 16 flags, 19 type, 20 variant, 21 owner, 22 armour), so the copy never knows it: feed with the cap assumed, which leaves only
   // the health / growth / love uses. A wild horse such a feed does not use may still take it through the temper rule, so no claim is made and the server's answer stands.

@@ -94,8 +94,9 @@ export function horseSeats(mobs) {
     carts: [],
     mobs,
     mount(e, rider) {
-      if (!e || e.rider || rider.vehicle || e.health <= 0 || (e.growingAge ?? 0) < 0) return false;
-      const vehicle = { horse: true, entity: e, get dead() { return e.health <= 0 || !mobs.entities.includes(e); } };
+      // b80: Entity.mountEntity has no health test, and the rider lets go only once the mount isDead (Entity.updateRidden): a corpse carries it until its deathTime 20 setDead.
+      if (!e || e.rider || rider.vehicle || (e.health <= 0 && (e.death ?? 0) >= 20) || (e.growingAge ?? 0) < 0) return false;
+      const vehicle = { horse: true, entity: e, get dead() { return !mobs.entities.includes(e) || (e.health <= 0 && (e.death ?? 0) >= 20); } };
       Object.defineProperty(e, "rider", { value: rider, writable: true, configurable: true, enumerable: false });
       rider.vehicle = vehicle;
       if (e.horse) { e.horse.eating = false; e.eatTicks = 0; } // wi.i(yz) (bytecode-read): o(false) and p(false) on mounting stop the grass eating and the rear
@@ -298,7 +299,7 @@ export function installHorse(EntityWorld) {
   };
   // EntityHorse.interact (wi.a(yz)). `ctx` carries what the edit dispatcher knows: `sneak`, `rider` and `horses`.
   proto.horseInteract = function (e, survival, ctx = {}) {
-    if (e.type !== "horse" || e.health <= 0 || !this.entities.includes(e)) return false;
+    if (e.type !== "horse" || !this.entities.includes(e)) return false; // b80: wi.a(yz) has no health test (a corpse is fed, rears, takes a chest, opens the window or is mounted)
     const stack = survival.held, creative = !!survival.creative;
     const id = stack ? originalOfLive(stack.id)?.id ?? null : null;
     const h = view(e), rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: H.HORSE_WIDTH, height: H.HORSE_HEIGHT };

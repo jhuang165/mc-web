@@ -9,7 +9,7 @@ import { jumpBar } from '../horse-gear-live.js';
 export function mountedHorse(remoteMobs, riding) {
   if (typeof riding !== 'string' || riding[0] !== 'm') return null;
   const mob = remoteMobs?.copies?.get(Number(riding.slice(1)))?.mob ?? remoteMobs?.copies?.get(riding.slice(1))?.mob;
-  return mob && mob.type === 'horse' && mob.health > 0 ? mob : null;
+  return mob && mob.type === 'horse' ? mob : null; // b80: isRidingHorse has no health test; a dying horse carries the rider until the server lets go (deathTime 20)
 }
 // EntityPlayerSP.isRidingHorse: the ridden horse is saddled.
 export const ridesSaddled = (mob) => !!mob?.horse?.saddled;
@@ -31,5 +31,5 @@ export class MpHorseRider {
   }
   reset() { Object.assign(this.rider, { vehicle: null, jumpCounter: 0, jumpPower: 0, wasJump: false }); }
   // The bar for the HUD (replaces the experience bar): { visible, width } of the 182 pixel track.
-  bar() { return ridesSaddled(this.mob) && this.mob.health > 0 ? jumpBar({ vehicle: { horse: true, entity: this.mob }, jumpPower: this.rider.jumpPower }) : { visible: false, width: 0 }; }
+  bar() { return ridesSaddled(this.mob) ? jumpBar({ vehicle: { horse: true, entity: this.mob }, jumpPower: this.rider.jumpPower }) : { visible: false, width: 0 }; }
 }

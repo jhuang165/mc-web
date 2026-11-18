@@ -90,7 +90,7 @@ export function feedHorse(h, itemId, { creative = false } = {}) {
   let used = false;
   const max = h.liveMaxHealth ?? h.maxHealth; // getMaxHealth, saved modifiers included (horse-live.js view)
   if (h.health < max && feed.heal > 0) {
-    out.health = Math.min(max, h.health + feed.heal);
+    if (h.health > 0) out.health = Math.min(max, h.health + feed.heal); // b80: EntityLivingBase.heal (sv.f(F)) does nothing at health <= 0, but the feed counts as used (wi.a(yz) 407-433)
     used = true;
   }
   if (h.age < 0 && feed.growth > 0) {

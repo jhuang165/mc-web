@@ -50,9 +50,9 @@ export function conversionBoost(rand, blockAt, x, y, z, blocks = BOOST_BLOCKS) {
   return boost;
 }
 
-// The condition of yq.a(yz) before the item is used: golden apple of damage 0, a villager zombie, Weakness active.
+// The condition of yq.a(yz) before the item is used: golden apple of damage 0, a villager zombie, Weakness active (b80: no health test, bytecode-read; a dying zombie takes the apple too).
 export const canCure = (zombie, id, damage = 0) =>
-  zombie?.type === "zombie" && zombie.villager === true && zombie.health > 0 && zombie.conversionTime === undefined && id === GOLDEN_APPLE && !damage && !!zombie.effects?.some((x) => x.id === WEAKNESS);
+  zombie?.type === "zombie" && zombie.villager === true && zombie.conversionTime === undefined && id === GOLDEN_APPLE && !damage && !!zombie.effects?.some((x) => x.id === WEAKNESS);
 export const isConverting = (e) => e?.type === "zombie" && Number.isInteger(e.conversionTime);
 
 // NBT: IsVillager, ConversionTime (-1 = none; the field is only read when above -1), IsBaby. Returns the record fields.

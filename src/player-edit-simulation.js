@@ -70,6 +70,8 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
   // b77: Minecraft.rightClickMouse (bao.am) never swings on an entity click; only EntityCreeper.interact calls swingItem itself.
   const hook = (name, ...args) => hooks[name]?.(...args);
   const ok = (branch, extra) => act(branch, extra);
+  // b80: a dragon is aimed at through a part (wy), whose interactFirst is Entity's false and which is no EntityLivingBase for itemInteractionForEntity (yz.q, bytecode-read): the click goes on to the item.
+  if (e.type === 'ender_dragon') return null;
   // EntityCow.interact (also the mooshroom's super call): an empty bucket is swapped for milk.
   if ((e.type === 'cow' || e.type === 'mooshroom') && id === BUCKET_ITEM) {
     const used = useHeldBucket(state, { id, aimedEntity: { entity: e }, entityOnly: true }, hooks);
@@ -94,7 +96,7 @@ function interactEntityFirst(state, e, { id, item }, hooks, act) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return ok('leash-entity');
     }
-    // b79: a corpse in its death animation is picked like any mob and every interact runs on it (bytecode-read; villager trade, wolf, ocelot, horse, mooshroom and pig mount keep their own live tests below)
+    // b79: a corpse in its death animation is picked like any mob and every interact runs on it (bytecode-read; only the villager trade keeps a live test, b80 opened wolf, ocelot, horse, mooshroom, pig mount and zombie cure)
     // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
     if (state.mobs.saddleUse?.(e, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
