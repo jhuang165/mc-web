@@ -8,7 +8,8 @@
 // freeze/snow pass make, the lake and dungeon services (saved sky light, biome top block,
 // isBlockFreezable) and chest and mob spawner tile entities in the chunk maps (Chunk.func_150806_e
 // creation, updateContainingBlockInfo, BlockChest's facing unification and markDirty's comparator
-// neighbour reads). Light propagation is not modelled; a callback this does not port throws.
+// neighbour reads). Light propagation is not modelled; a callback this does not port throws (the batch 80 survey,
+// .shared-memory/notes/genguards80-b80-track.md, reached none of these guards; genguards80-b80.test.js pins a few).
 // Original numeric IDs. Replayed natively in springs.test.js, biome-decorator.test.js,
 // biome-overrides.test.js, population-tail.test.js and populate-chunk.test.js.
 import { canBlockStay } from "./decoration-features.js";

@@ -5,10 +5,12 @@
 // BlockDispenser.onBlockAdded (facing from opaque neighbours), BlockChest.breakBlock (contents drop with the
 // block's own unseeded Random, never World.rand, so nothing is drawn here).
 //
-// Inert approximations (limits, listed in the report): the redstone family a jungle temple places (wire, pistons,
-// levers, tripwire and hooks) runs no onBlockAdded/neighbour logic. Nothing in a fresh temple is powered, so wire
-// levels, piston states and hook "attached" bits stay 0; native tripwire onBlockAdded would set the hooks'
-// attached bit.
+// Inert approximations (limits, listed in the report), generations 14 to 19 only: the redstone family a jungle temple
+// places (wire, pistons, levers, tripwire and hooks) runs no onBlockAdded/neighbour logic. Nothing in a fresh temple is
+// powered, so wire levels and piston states stay as placed. Generation 20 and later (native-neighbor-world.js) run them
+// natively; the only block difference is the tripwire string: BlockTripWire.onBlockAdded (aof.b, bytecode-read) rewrites
+// the generator's metadata 4 to 0 (supported) with flags 3, the hooks keep their attached bit, and two hook ticks are
+// queued (batch 80, genguards80-b80.test.js against the native jungleTemple671 area). Saved worlds keep their gate.
 const DOOR = 64, IRON_DOOR = 71, SNOW = 78, DISPENSER = 23, FURNACE = 61, CHEST = 54, ICE = 79, PACKED_ICE = 174, LEAVES = 18, LEAVES2 = 161;
 const DOOR_ITEM = 324, IRON_DOOR_ITEM = 330, SNOWBALL = 332;
 // Blocks whose onBlockAdded / onNeighborBlockChange / breakBlock only matter once something is powered.

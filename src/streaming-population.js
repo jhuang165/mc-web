@@ -70,8 +70,9 @@ export class StreamingPopulation {
     if (hit) return hit;
     let built;
     try {
-      // Neighbours mode (generation 20): an unported chain (a powered door, a fallen button) retries the cell with the earlier quiet callbacks, which is
-      // deterministic too, rather than losing the cell's population.
+      // Neighbours mode (generation 20): an unported guard (gen-world.js / mineshaft-world.js; powered doors, buttons and TNT are ported since batch 31)
+      // retries the cell with the earlier quiet callbacks, which is deterministic too, rather than losing the cell's population. The batch 80 survey
+      // (.shared-memory/notes/genguards80-b80-track.md) fired neither the retry nor the fallback.
       try { built = this.generate(cellX, cellZ); }
       catch (error) {
         if (!this.neighbors) throw error;
