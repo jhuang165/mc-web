@@ -74,7 +74,7 @@ test("real World collision rolls ItemBlock writes back and keeps old metadata/co
   assert.deepEqual(messages, []); // 1.7.10 refuses the placement silently
 });
 
-test("snow stacking preserves high metadata bits and rolls back on real player collision", () => {
+test("snow stacking preserves high metadata bits; a player inside the layer sends the item on to ItemBlock", () => {
   const world = new World("block-placement-snow", "meadow", 1), survival = new Survival();
   const cell = [18, 20, 18];
   world.set(...cell, SNOW_LAYER, true, 10);
@@ -92,7 +92,10 @@ test("snow stacking preserves high metadata bits and rolls back on real player c
   const failed = placeHeldBlock(collisionState, {
     id: SNOW_LAYER, item: ITEMS[SNOW_LAYER], target: targetAt(rollbackCell, [22, 21, 22]),
   }, { toast: (m) => messages.push(m) });
-  assert.equal(failed.reason, "player-collision");
+  // b80 spswing80: ItemSnow (aec.a) tests the CURRENT layer box and, when an entity is in it, falls to ItemBlock.onItemUse on the cell above (was a
+  // "player-collision" refusal of the stacked box).
+  assert.notEqual(failed.reason, "stacked-snow");
+  assert.deepEqual(failed.position, [22, 21, 22]);
   assert.equal(world.getMeta(...rollbackCell), 5);
   assert.equal(survival.count(SNOW_LAYER), 1);
   assert.deepEqual(messages, []); // 1.7.10 refuses the placement silently

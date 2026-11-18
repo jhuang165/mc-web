@@ -72,14 +72,10 @@ export function placeHeldBlock(state, request, hooks = {}) {
     stacked = stackedSnowMeta(hereMeta);
   const withinBounds = (p) => p && p[1] !== 0 && p[1] < (world.height === 256 ? 256 : world.height - 1) && world.inside(...p);
 
-  // ItemSnow.onItemUse: add one layer to the clicked snow cell first. The first
-  // write is silent so the real collision box is tested; failures restore meta.
-  if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id))) {
-    world.set(...here, SNOW_LAYER, false, stacked);
-    if (intersects(world, position.x, position.y, position.z)) {
-      world.set(...here, SNOW_LAYER, false, hereMeta);
-      return result(false, "player-collision", SNOW_LAYER, here);
-    }
+  // ItemSnow.onItemUse (aec.a, b80 spswing80 bytecode-read): add one layer to the clicked snow cell first. checkNoEntityCollision tests the layer's
+  // CURRENT box ((meta & 7) / 8 high, BlockSnow ann.a, read before setBlockMetadata), so a player standing on the snow does not stop it; when an
+  // entity is in that box the item falls to ItemBlock.onItemUse (abe/abh: the cell on the clicked side) instead of refusing.
+  if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id)) && !intersects(world, position.x, position.y, position.z)) {
     world.set(...here, SNOW_LAYER, true, stacked);
     if (!survival.creative) survival.take(id);
     updateBlock(here[0], here[2], here[1]);

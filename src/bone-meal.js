@@ -16,8 +16,8 @@ import { JavaRandom } from './java-random.js';
 import { growGrass } from './flowers.js';
 import { makeStack } from './inventory.js';
 import { toOriginal, fromOriginal } from './block-registry.js';
-import { SAPLING, COCOA, DOUBLE_PLANT, BROWN_MUSHROOM, RED_MUSHROOM, BROWN_MUSHROOM_BLOCK, RED_MUSHROOM_BLOCK, FERN, isCrop } from './world.js';
-import { isStem } from './stems-cake.js';
+import { SAPLING, COCOA, DOUBLE_PLANT, BROWN_MUSHROOM, RED_MUSHROOM, BROWN_MUSHROOM_BLOCK, RED_MUSHROOM_BLOCK, FERN, isCrop, cropAge } from './world.js';
+import { isStem, stemCanFertilize } from './stems-cake.js';
 
 const f = Math.fround;
 // Original ids the native code uses.
@@ -53,6 +53,21 @@ function nativeCan(id, meta) {
   if (id === N_DOUBLE) return meta !== 2 && meta !== 3; // meta is the type (the top half's was read from the bottom half)
   if (id === N_COCOA) return ((meta & 12) >> 2) < 2;
   return null;
+}
+
+// b80 spswing80: func_149851_a (canFertilize) alone, which is what ItemDye.onItemUse answers on the CLIENT world (acj, b79 bytecode-read: isRemote skips the
+// growth and the stack change but still returns true). The same branches as useBoneMeal below, without a write or a random draw.
+export function boneMealCanFertilize(w, x, y, z) {
+  const b = w.get(x, y, z);
+  if (b === SAPLING || b === 1) return true;
+  if (isStem(b)) return stemCanFertilize(w.getMeta(x, y, z));
+  if (isCrop(b)) return cropAge(b, w.getMeta(x, y, z)) !== 7;
+  let [id, meta] = toOriginal(b, w.getMeta(x, y, z)) ?? [0, 0];
+  if (id === N_DOUBLE && (meta & 8)) {
+    const below = toOriginal(w.get(x, y - 1, z), w.getMeta(x, y - 1, z));
+    meta = below && below[0] === N_DOUBLE ? below[1] & 7 : meta & 7;
+  } else if (id === N_DOUBLE) meta &= 7;
+  return nativeCan(id, meta) === true;
 }
 
 // ItemDye.func_150919_a on the cell. host: { world, trees, farming, flowers, grassRandom, items, rand? }.

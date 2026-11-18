@@ -25,6 +25,9 @@ import { ITEM_COMPARATOR } from './redstone-blocks-2.js';
 import { ITEM_BREWING_STAND } from './brewing.js';
 import { ITEM_CAULDRON, ITEM_FLOWER_POT } from './stone-utility.js';
 import { originalId, LEAD_ORIGINAL } from './horse-gear.js';
+import { isRailId } from './rails.js';
+import { blockOfItem as shapedItemBlock, WOOD_SLAB, woodSlabType, planWoodSlabUse } from './shaped-blocks.js';
+import { heldSlabType, planSlabUse } from './stone-utility.js';
 
 const ITEM_REEDS = new Set([REEDS_ITEM, ITEM_CAKE, ITEM_REPEATER, ITEM_COMPARATOR, ITEM_BREWING_STAND, ITEM_CAULDRON, ITEM_FLOWER_POT]);
 const GRASS = 1, DIRT = 2, LOG = 4, JUNGLE = 3;
@@ -52,10 +55,29 @@ export function clientUseResult(state, target, id, held) {
   if (id === ITEM_REDSTONE) return block === SNOW_LAYER || (!!target.adjacent && world.get(...target.adjacent) === 0);
   if (id === ITEM_SKULL) return side > 0 && signSolid(block);
   if (originalId(held) === LEAD_ORIGINAL) return block === FENCE || block === NETHER_FENCE;
+  // b80 spswing80: ItemMinecart (adj.a, bytecode-read): true on any BlockRailBase (aje.a) with no stack size or remote test (the client decrements and
+  // returns; attributes2-reference.json minecartOnRail count 0 executed: used, spawned, after -1); false on anything else.
+  if (item?.minecartType !== undefined) return isRailId(block);
+  // b80 spswing80: ItemSlab (aeg.a, bytecode-read): a merge into the clicked half (side 1 of a bottom half, side 0 of a top half) or into the same-type
+  // single slab in the cell on the clicked side returns true even when checkNoEntityCollision refuses the double slab; otherwise ItemBlock decides.
+  const slab = slabMerges(world, target, side, id, held);
+  if (slab != null) return slab;
   if (id === DYE) {
     const damage = held?.damage ?? 0;
     if (damage === 15) return null;
     return damage === 3 && block === LOG && (world.getMeta(x, y, z) & 3) === JUNGLE && side >= 2;
   }
   return null;
+}
+
+// ItemSlab.onItemUse (aeg.a): false for a stack of size 0, true on a merge (the double slab may still be refused by an entity), null when the
+// slab falls to ItemBlock.onItemUse (the placement outcome decides). Not a slab item: null.
+function slabMerges(world, target, side, id, held) {
+  const wood = (shapedItemBlock(id) || id) === WOOD_SLAB;
+  const type = wood ? woodSlabType(held?.damage || 0) : heldSlabType(id, held?.damage || 0);
+  if (type < 0) return null;
+  if (held?.count === 0) return false;
+  if (side < 0) return null;
+  const here = target.block, adj = target.adjacent, cell = (p) => ({ id: world.get(...p), meta: world.getMeta(...p) });
+  return (wood ? planWoodSlabUse : planSlabUse)(type, cell(here), cell(adj), side, 0.5).merge ? true : null;
 }
