@@ -75,7 +75,8 @@ test('landing handles exhaustion, trampling and dust before fall damage', () => 
   assert.deepEqual(calls, [['trample', 4.2, 20], ['dust', 64, 9, 64, 2, 20]]);
   assert.equal(s.survival.health, 18);
   assert.equal(s.survival.lastDamage, 'a fall');
-  assert.equal(s.survival.exhaustion, Math.fround(0.1));
+  // b81 exhaust81: 100 cm sprinting on the ground is 0.099999994F * 100 * 0.01F (yz.k; movement-stats-reference.json sprint-1), not 1 * 0.1
+  assert.equal(s.survival.exhaustion, Math.fround(Math.fround(Math.fround(0.099999994) * 100) * Math.fround(0.01)));
   assert.equal(s.fallDistance, 0);
   assert.equal(s.landedFall, 0);
 });

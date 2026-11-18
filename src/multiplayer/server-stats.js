@@ -20,7 +20,7 @@
 import { Stats, STAT, entityName } from '../stats.js';
 import { StatsLive, addFallStat, addMountedMovementStat, toolUses, originalItem, damageTenths } from '../stats-live.js';
 import { eyeInWater } from '../fluids.js';
-import { countsVertical } from '../ladders.js';
+import { isOnLadder } from '../ladders.js';
 import { PHYSICS } from '../world.js';
 import { KillCredit } from './server-combat-tracker.js';
 
@@ -61,7 +61,7 @@ export class ServerStats {
     if (p.grounded) addFallStat(p.stats, p.landedFall || 0, p.survival.creative); // EntityPlayer.fall
     p.statsLive.tick({
       oldPosition: moved?.oldPosition ?? p.previous, position: at, eyeInWater: eyeInWater(world, at.x, at.y + PHYSICS.eye, at.z), inWater: !!moved?.inWater,
-      onLadder: !p.flying && countsVertical(world, at.x, at.y, at.z), grounded: !!p.grounded,
+      onLadder: isOnLadder(world, at.x, at.y, at.z), grounded: !!p.grounded, // b81 exhaust81: sv.h_ (ladder or vine at floor(minY)), no flying test, as single player (b72)
     });
   }
   mounted(p, mount) {

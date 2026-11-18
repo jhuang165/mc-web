@@ -1,6 +1,8 @@
 import { landingEffects, JUMP_BOOST } from "./damage-fx.js";
 import { PHYSICS } from './world.js';
 import { eyeInWater } from './fluids.js';
+import { isOnLadder } from './ladders.js';
+import { movementExhaustion, TELEPORT_SQUARED } from './movement-stat.js';
 import { entityBox, isWet } from './weather.js';
 import { insideOpaqueBlock, PLAYER_EYE } from './suffocation.js';
 import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
@@ -75,14 +77,22 @@ export function landPlayer({ world, position, survival, inWater }, distance, { t
 
 // This remains a separate step because falling blocks and client display ticks
 // occur between the environment step and landing handling in the live game.
-export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition },
+// b81 exhaust81: the movement exhaustion is EntityPlayer.addMovementStat's (movement-stat.js; executed in movement-stats-reference.json): whole
+// centimetres, 0.015F under water (3-D with the eye in water, else horizontal), 0.01F walking and 0.099999994F sprinting on the ground, nothing on a
+// ladder, in the air or riding (`riding`), and no charge for a teleport-sized move (TELEPORT_SQUARED, as the stats). `eyeInWater` and `onLadder`
+// default to the world's cells at the player (sa.a(awt.h) at the 1.62 eye, sv.h_ at floor(minY)).
+export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition, eyeInWater: eye, onLadder, riding = false },
   { trample = () => {}, landingDust = () => {}, fallSound = () => {} } = {}) {
   const { world, position, survival, motion, grounded } = state;
   let { fallDistance, landedFall } = state;
   if (inLavaNow) fallDistance *= 0.5;
-  if (!survival.creative) {
-    const distance = Math.hypot(position.x - oldPosition.x, position.z - oldPosition.z);
-    survival.exhaust(distance * (inWater ? 0.015 : motion.sprinting ? 0.1 : 0.01));
+  const dx = position.x - oldPosition.x, dy = position.y - oldPosition.y, dz = position.z - oldPosition.z;
+  if (!survival.creative && !riding && dx * dx + dy * dy + dz * dz <= TELEPORT_SQUARED) {
+    survival.exhaust(movementExhaustion({
+      dx, dy, dz, swim: !!inWater, ground: !!grounded, sprinting: !!motion?.sprinting,
+      dive: eye ?? eyeInWater(world, position.x, position.y + PHYSICS.eye, position.z),
+      ladder: onLadder ?? isOnLadder(world, position.x, position.y, position.z),
+    }));
   }
   if (grounded) {
     const distance = landedFall;
