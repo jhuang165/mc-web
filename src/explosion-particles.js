@@ -46,7 +46,8 @@ export class ExplosionParticles {
     return p;
   }
   // Client Explosion.doExplosionB(true). World.rand is separate from server drops/terrain RNG.
-  burst(x,y,z,size,positions,{smoking=true,viewer=null}={}){
+  // b80 mpfx80: `cell(bx,by,bz,r)` runs after each cell's two particles, where doExplosionB(true) does the client's block step (multiplayer/client-explosion.js).
+  burst(x,y,z,size,positions,{smoking=true,viewer=null,cell=null}={}){
     const r=this.worldRandom, previousViewer=this.viewer;
     this.viewer=viewer??previousViewer;
     r.nextFloat();r.nextFloat(); // the sound's pitch consumes two floats before particle positions
@@ -60,6 +61,7 @@ export class ExplosionParticles {
       dx=dx/d*speed;dy=dy/d*speed;dz=dz/d*speed;
       this.spawn('explode',(px+x)/2,(py+y)/2,(pz+z)/2,dx,dy,dz);
       this.spawn('smoke',px,py,pz,dx,dy,dz);
+      cell?.(bx,by,bz,r);
     }
     this.viewer=previousViewer;
   }

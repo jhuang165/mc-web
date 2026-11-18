@@ -8,7 +8,7 @@ import { s27Decode } from "./server-explosion-packet.js"; // b79 explfx79
 const ARROW_FIELDS = ['yaw', 'pitch'];
 
 export class RemoteDispense {
-  // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row), eyeTrail(row, vx, vy, vz)
+  // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row), eyeTrail(row, vx, vy, vz), ballFx(row)
   constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; }
   clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; }
   apply(message) {
@@ -33,6 +33,7 @@ export class RemoteDispense {
         if (d.scale !== undefined) { row.scale = d.scale; row.fullbright = true; } // a fire charge: RenderFireball scale, full brightness
         if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
         if (d.kind === 'eyeOfEnder') this.hooks.eyeTrail?.(row, row.x - row.px, row.y - row.py, row.z - row.pz); // b65 mpdragon2: the copy draws the flying eye's portal trail itself (EntityEnderEye.onUpdate)
+        if (d.k === 'b') this.hooks.ballFx?.(row); // b80 mpfx80: a fireball's or wither skull's client copy draws its own smoke and bubbles (ze.h, client-explosion.js clientBallFx)
         next.b.push(row);
       }
     }

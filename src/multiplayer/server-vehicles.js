@@ -59,7 +59,7 @@ export class ServerVehicles {
     for (const c of [...this.carts.carts, ...this.boats.carts]) c.restorePlayer = false; // nobody is aboard after a restart
     this.cartCommands = []; // b63: command block carts an activator rail triggered this tick, run by ServerSocial.drain (server-cart-commands.js)
     this.cartHost = {
-      explode: (cart, x, y, z, power) => host.mobs.explode({ x, y, z, size: power, source: null }),
+      explode: (cart, x, y, z, power) => { host.mobs.explode({ x, y, z, size: power, source: null }); host.mobs.burst(x, y, z, power); }, // b80 mpfx80: xv calls createExplosion(this, .., true), so WorldServer.newExplosion sends S27; the cart's blast sent none (no particles, sound or push)
       particle() {}, // WorldServer.spawnParticle sends nothing
       sound: (name, cart) => host.soundsOut.push({ name, x: cart.x, y: cart.posY, z: cart.z, volume: 1, pitch: 1, except: null }),
       get transfer() { return host.containers.ticks?.hoppers.host; }, // b62: a hopper cart sucks from the container or item above it (cart-hopper.js)
