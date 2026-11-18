@@ -1,6 +1,7 @@
 import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
+import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
@@ -2666,13 +2667,7 @@ export class EntityWorld {
     e.moveMotion = null;
     // The finite world's edge stops a mob like a wall.
     // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
-    const w = this.world, lim = (axis, hi) => w.streaming ? (hi ? 30000000 : -30000000) - (axis === "x" ? w.originX || 0 : w.originZ || 0) : w[(hi ? "max" : "min") + axis.toUpperCase()];
-    const edge = (axis, v) => {
-      const c = Math.max((lim(axis, false) ?? 0)+0.6, Math.min((lim(axis, true) ?? SIZE)-0.6, e[axis]));
-      if (c !== e[axis]) (e[axis] = c), (e[v] = 0);
-    };
-    edge("x", "vx");
-    edge("z", "vz");
+    edgeClamp(this.world, e, SIZE); // b80 mpperf80: the clamp without closures (the old body is mpperf80-fast.js edgeClampReference)
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.

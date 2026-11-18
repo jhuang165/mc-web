@@ -6,6 +6,7 @@ import { isPlant, WEB, LADDER, REEDS, FENCE } from "./world.js";
 import { FENCE_GATE, TRAPDOOR, COBBLE_WALL } from "./shaped-blocks.js";
 import { NETHER_FENCE } from "./nether-blocks.js";
 import { isDoor, doorPassable } from "./doors-panes.js";
+import { pathCell, safeTries, setPathKinds, beginPathSearch, endPathSearch, KIND_CONTINUE, KIND_WATER, KIND_LAVA, KIND_FENCE, KIND_SOLID, KIND_OTHER } from "./mpperf80-fast.js";
 const f = Math.fround;
 const WATER = 10, LAVA = 42;
 const floor = Math.floor;
@@ -201,6 +202,19 @@ const cachedClassify = (id, world, x, y, z) => {
   if (!c) classifyCache.set(id, (c = defaultClassify(id)));
   return c;
 };
+// b80 mpperf80: what getVerticalOffset's loop does with a cell of this id under cachedClassify, for ids whose answer needs no metadata (mpperf80-fast.js pathCell).
+// renderType 9 (rails) never comes out of cachedClassify, so that branch is not reachable for it.
+setPathKinds((id) => {
+  if (isDoor(id) || id === TRAPDOOR || id === FENCE_GATE) return KIND_OTHER;
+  const b = cachedClassify(id, null, 0, 0, 0);
+  if (b.door || b.trapdoor || b.fenceGate || (b.renderType | 0) === 9) return KIND_OTHER;
+  if (b.air) return KIND_CONTINUE;
+  if (b.water) return b.passable ? KIND_WATER : KIND_OTHER;
+  if (b.passable) return KIND_CONTINUE;
+  if ((b.renderType | 0) === 11 || (b.renderType | 0) === 32) return KIND_FENCE;
+  if (b.lava) return KIND_LAVA;
+  return KIND_SOLID;
+});
 // PathFinder.func_82565_a (ayg.a static, 8 arguments): how an entity of `size` (a
 // PathPoint of the (int)(width+1) footprint) fares standing at the corner x, y, z.
 // 1 clear, 2 clear with water or a trapdoor in the way, 0 blocked, -1 water to avoid,
@@ -380,7 +394,7 @@ export class PathFinder {
         below = this.verticalOffset(entity, x, y - 1, z, size);
         if (this.avoidsWater && below === -1) return null;
         if (below !== 1) break;
-        if (fall++ >= entity.maxSafePointTries()) return null;
+        if (fall++ >= safeTries(this, entity)) return null;
         y--;
         if (y > 0) point = this.openPoint(x, y, z);
       }
@@ -401,11 +415,11 @@ export class PathFinder {
         }
         const i = ((x - m.ox) & 15) | (((z - m.oz) & 15) << 4) | (((y - m.oy) & 15) << 8);
         let v = page[i];
-        if (v === 127) v = page[i] = getVerticalOffset(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify);
+        if (v === 127) v = page[i] = pathCell(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify, cachedClassify, getVerticalOffset);
         return v;
       }
     }
-    return getVerticalOffset(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify);
+    return pathCell(entity, x, y, z, size, this.avoidsWater, this.breakDoors, this.openDoors, this.world, this.classify, cachedClassify, getVerticalOffset);
   }
   // Per-search cache of the cell test over a page table centred on the target (the search never leaves the follow-range sphere by more than a step or a fall).
   // Nothing the test reads changes during one search, so a cached answer equals a fresh one.
@@ -414,10 +428,13 @@ export class PathFinder {
     const ox = end.x - r, oy = end.y - r, oz = end.z - r;
     const n = ((2 * r) >> 4) + 2;
     this.memo = { ox, oy, oz, nx: n, ny: n, nz: n, pages: new Array(n * n * n).fill(null), used: [] };
+    this.tries = undefined; // b80 mpperf80: safeTries asks the entity once per search (only while a memo is open)
+    beginPathSearch(this.world);
   }
   endMemo() {
     const m = this.memo;
     this.memo = null;
+    endPathSearch();
     if (m) for (const page of m.used) { page.fill(127); pagePool.push(page); }
   }
   // ayg.a(III): the point of the (x, y, z) hash (the original's IntHashMap, keyed by the hash alone), created on first use. The points live in a module level pool

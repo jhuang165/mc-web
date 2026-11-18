@@ -4,6 +4,10 @@
 // as far as the OS shares cores). Per tick it records the whole tick callback (simulation.tick + encode + send + the per-player loop), the simulation.tick part, JSON.stringify time inside the
 // callback (the encode cost) and WebSocket.send time (framing and the socket write). Bytes sent come from WebSocket.prototype.send on the server side; the clients also count bytes per
 // message type. Binds only to 127.0.0.1; no remote endpoint is contacted. Everything is shut down and the temp directory removed at the end.
+// b80 mpperf80 --wire: also keeps every payload the server sends during the measured window (per socket, in order) and afterwards measures, offline on those bytes, what
+// permessage-deflate would cost and save (zlib deflateRaw per message without context takeover, and context takeover modelled as the previous 32 KB of that socket as a preset
+// dictionary; levels 1 and 6) and the bulk cost of TLS record encryption (AES-128-GCM and ChaCha20-Poly1305 over 16 KB records; no handshake, no kernel or framing cost). The server
+// itself is unchanged (perMessageDeflate stays off, no TLS in node; the live server's TLS ends at the Funnel proxy).
 import { performance } from 'node:perf_hooks';
 import { fork } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -11,6 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
+import zlib from 'node:zlib';
+import crypto from 'node:crypto';
 import { PROTOCOL, IDLE_INPUT } from '../src/multiplayer/protocol.js';
 
 const arg = (n, d) => (process.argv.find(a => a.startsWith(`--${n}=`)) ?? `=${d}`).split('=')[1];
@@ -77,7 +83,8 @@ if (process.argv.includes('--child')) {
   const realStringify = JSON.stringify;
   JSON.stringify = function (...a) { if (!inTick) return realStringify.apply(this, a); const t = performance.now(); const r = realStringify.apply(this, a); encodeMs += performance.now() - t; return r; };
   const realSend = WebSocket.prototype.send;
-  WebSocket.prototype.send = function (data, ...rest) { const t = inTick ? performance.now() : 0; try { return realSend.call(this, data, ...rest); } finally { if (inTick) sendMs += performance.now() - t; if (measuring) { acc.sendBytes += Buffer.byteLength(data); acc.sends++; } } };
+  const WIRE = process.argv.includes('--wire'), wire = new Map();
+  WebSocket.prototype.send = function (data, ...rest) { const t = inTick ? performance.now() : 0; try { return realSend.call(this, data, ...rest); } finally { if (inTick) sendMs += performance.now() - t; if (measuring) { acc.sendBytes += Buffer.byteLength(data); acc.sends++; if (WIRE) { let l = wire.get(this); if (!l) wire.set(this, (l = [])); l.push(Buffer.from(data)); } } } };
   const realSimTick = sim.tick.bind(sim);
   sim.tick = (...a) => { const t = performance.now(); try { return realSimTick(...a); } finally { simMs += performance.now() - t; } };
 
@@ -109,10 +116,37 @@ if (process.argv.includes('--child')) {
     const tot = Object.values(byType).reduce((a, b) => a + b, 0);
     console.log(`client received by type (all measured + warm-up + join): ${Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ${(100 * v / tot).toFixed(0)}%`).join(', ')}; total ${(tot / 1024).toFixed(0)} KB; welcome ${(stats[0].byType.welcome / 1024).toFixed(0)} KB`);
     console.log(`event-loop lag over 10 ms timer: mean=${mean(lagT).toFixed(2)} p95=${pct(lagT, .95).toFixed(1)} max=${Math.max(...lagT).toFixed(0)}`);
+    if (WIRE) wireReport([...wire.values()], secs, n);
   } catch (e) { console.error(e); code = 1; }
   finally {
     try { child?.send('stop'); } catch {}
     await app.close(); await rm(dir, { recursive: true, force: true });
     setTimeout(() => process.exit(code), 400);
   }
+}
+
+// --wire: offline cost of compression and TLS record encryption over the captured payloads (see the header). ms figures are per server tick (all sockets together).
+function wireReport(lists, secs, ticks) {
+  const all = lists.flat(), raw = all.reduce((a, b) => a + b.length, 0);
+  const out = [`wire: ${all.length} messages, ${(raw / 1024).toFixed(0)} KB raw over ${secs.toFixed(1)} s (${ticks} ticks)`];
+  for (const level of [1, 6]) {
+    let t = performance.now(), bytes = 0; const packed = [];
+    for (const b of all) { const z = zlib.deflateRawSync(b, { level }); packed.push(z); bytes += z.length; } // RFC 7692 also strips the 4-byte sync tail; deflateRawSync ends with a final block instead
+    const perMsg = performance.now() - t;
+    t = performance.now(); let ctxBytes = 0;
+    // context takeover, modelled: each message deflated with the previous 32 KB that socket sent as the preset dictionary (the LZ77 window a kept context would hold);
+    // the dictionary load makes this an upper bound on the time
+    for (const l of lists) { let win = Buffer.alloc(0); for (const b of l) { ctxBytes += zlib.deflateRawSync(b, { level, dictionary: win }).length; win = Buffer.concat([win, b]); if (win.length > 32768) win = win.subarray(win.length - 32768); } }
+    const ctx = performance.now() - t;
+    t = performance.now(); let back = 0;
+    for (const z of packed) back += zlib.inflateRawSync(z).length;
+    const inflate = performance.now() - t;
+    out.push(`  deflate level ${level}: no context takeover ${(100 * bytes / raw).toFixed(1)}% of raw, ${(perMsg / ticks).toFixed(2)} ms/tick; context takeover ${(100 * ctxBytes / raw).toFixed(1)}% of raw, ${(ctx / ticks).toFixed(2)} ms/tick; client inflate (no takeover) ${(inflate / ticks).toFixed(2)} ms/tick for all clients together${back === raw ? '' : ' (ROUND TRIP MISMATCH)'}`);
+  }
+  for (const alg of ['aes-128-gcm', 'chacha20-poly1305']) {
+    const key = crypto.randomBytes(alg === 'aes-128-gcm' ? 16 : 32), t = performance.now(); let n = 0;
+    for (const b of all) for (let o = 0; o < b.length; o += 16384) { const c = crypto.createCipheriv(alg, key, crypto.randomBytes(12), { authTagLength: 16 }); n += c.update(b.subarray(o, o + 16384)).length; c.final(); c.getAuthTag(); }
+    out.push(`  TLS record encryption ${alg}: ${((performance.now() - t) / ticks).toFixed(3)} ms/tick over ${(n / 1024).toFixed(0)} KB (cipher only, one record per message or 16 KB)`);
+  }
+  console.log(out.join('\n'));
 }
