@@ -144,12 +144,11 @@ export function edgeClamp(w, e, size) {
 const ORIG_UNSET = -2, origIds = new Int16Array(4096).fill(ORIG_UNSET);
 export function originalIdOf(id, toOriginal) {
   const mode = fast80.mode;
-  const ref = () => toOriginal(id, 0)?.[0];
-  if (mode === "off" || !(id >= 0 && id < 4096 && Number.isInteger(id))) return ref();
+  if (mode === "off" || !(id >= 0 && id < 4096 && Number.isInteger(id))) return toOriginal(id, 0)?.[0];
   let v = origIds[id];
-  if (v === ORIG_UNSET) { const r = ref(); v = origIds[id] = r === undefined || r === null ? -1 : r; }
+  if (v === ORIG_UNSET) { const r = toOriginal(id, 0)?.[0]; v = origIds[id] = r === undefined || r === null ? -1 : r; }
   const out = v === -1 ? undefined : v;
-  if (mode === "verify" && out !== ref()) fail("originalIdOf");
+  if (mode === "verify" && out !== toOriginal(id, 0)?.[0]) fail("originalIdOf"); // b81 mpperf81: no per-call `ref` closure
   return out;
 }
 
