@@ -4602,7 +4602,7 @@ function animate(now) {
       survival.creative ? 6 : 3,
       target?.distance ?? 6,
     );
-    aimedRemoteMob = remoteMobs ? remoteMobs.pick(aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6)) : null; // a server mob's client copy (the attack goes out as C02)
+    aimedRemoteMob = remoteMobs ? remoteMobs.pick(aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6), survival.creative ? 6 : 3) : null; // a server mob's client copy (the attack goes out as C02)
     aimedRemoteVeh = remoteVehicles ? remoteVehicles.pick(aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, mpRiding || null) : null; // b61
     if (aimedRemoteVeh && aimedRemoteMob) { if (aimedRemoteMob.distance < aimedRemoteVeh.distance) aimedRemoteVeh = null; else aimedRemoteMob = null; }
     aimedRemotePlayer = multiplayer && remotePlayers ? pickPlayer(remotePlayers.entries, aim, dir, Math.min(survival.creative ? 6 : 3, target?.distance ?? 6)) : null; // b63 mppvp: another player's box, nearer than the block and any mob / cart

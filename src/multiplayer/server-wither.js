@@ -13,6 +13,7 @@ import { SOUL_SAND } from '../nether-blocks.js';
 import { PHYSICS } from '../world.js';
 import { WITHER, WITHER_PROOF_INTERNAL, skullResistance } from '../wither-boss.js';
 import { explosionResistance } from '../explosion.js';
+import { skullEntry } from './skull-look.js'; // b81 mpcopies81
 
 // The players (server player records) of `views` whose box meets the wither's box grown by (ex, ey, ez): AxisAlignedBB.intersectsWith is strict on every side.
 export function playersAround(views, e, ex, ey, ez) {
@@ -52,7 +53,7 @@ export class ServerWither {
 // Called once by ServerMobs' constructor (every dimension's instance).
 export function installServerWither(sm) {
   const { mobs, host } = sm, skulls = mobs.skulls, tickOne = skulls.tickOne.bind(skulls);
-  skulls.tickOne = b => { sm.target(b); return tickOne(b); }; // the AI's player is the one nearest to the skull; the sweep itself lists every player (below)
+  skulls.tickOne = b => { b.track ??= skullEntry(b); sm.target(b); return tickOne(b); }; // b81 mpcopies81: the tracker entry takes the spawn angles before the first update (my.<init>) // the AI's player is the one nearest to the skull; the sweep itself lists every player (below)
   // b64 (EntityWither.updateAITasks: getEntitiesWithinAABB; EntityFireball.onUpdate: getEntitiesWithinAABBExcludingEntity): every player of this dimension is a candidate for a head's
   // target and for a flying ball's sweep. The sweep reports the view it hit; the impact then runs as that player's (damage, effect and kill are theirs).
   const everyone = () => [...sm.views.values()].map(v => v.view);

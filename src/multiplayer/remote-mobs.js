@@ -12,6 +12,7 @@ import { ClientEntity } from '../entity-tracker.js';
 import { EntityIds } from '../entity-ids.js';
 import { slimeFields, slimeSquishStart, slimeSquishEnd } from '../slime.js';
 import { golemStatus, golemTick, golemDust } from './client-golems.js'; // b66 mpgolems
+import { dragonListed, mouseOverBox } from '../dragon-part-query.js'; // b81 mpcopies81
 
 // The sound names the server's S29 may carry for the mobs (WorldServer.playSoundAtEntity: living, hurt, death, step, the creeper's fuse and blast, the skeleton's bow, the egg's plop).
 export const isMobSound = name => typeof name === 'string' && /^(mob\.[a-z.]+|creeper\.primed|random\.(explode|bow|pop|eat|burp)|step\.[a-z]+)$/.test(name);
@@ -131,9 +132,10 @@ export class RemoteMobs {
   list() { return [...this.copies.values()].map(c => c.mob); }
   clientOf(mob) { for (const c of this.copies.values()) if (c.mob === mob) return c.client; return null; }
   // EntityRenderer.getMouseOver on the client world's mob boxes: the nearest copy the ray reaches. Returns { id, entity, distance } or null.
-  pick(origin, dir, reach) {
-    let best = null;
+  pick(origin, dir, reach, full = reach) {
+    let best = null, query = null;
     for (const [id, { mob }] of this.copies) {
+      if (mob.type === 'ender_dragon' && !dragonListed(mob, query ??= mouseOverBox(origin, dir, full))) continue; // b81 mpcopies81: the parts are listed only with the body (dragon-part-query.js); `full` is getMouseOver's 3 or 6, before the block cut
       // b79: a dying mob is not isDead until its 20-tick animation ends, so canBeCollidedWith holds and the ray picks the corpse (the copy leaves with S13)
       // b80: the dragon copy's parts (wy.R() true) freeze at the last living tick during its 200-tick death (entity-tracker.js dragonUpdate returns before updateParts), and are aimed at
       const distance = entityHit(origin, dir, mob, reach);
