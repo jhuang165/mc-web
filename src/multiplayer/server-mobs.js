@@ -15,6 +15,7 @@ import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
 import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explodeBlocks, explosionImpact } from '../explosion.js';
+import { JavaRandom } from '../java-random.js';
 import { explodeMobs } from '../explosion-simulation.js';
 import { livingEyeHeight } from '../ai.js';
 import { serverCritical, sendCritFx } from './server-crit-fx.js'; // b73 particles73
@@ -245,7 +246,7 @@ export class ServerMobs {
       for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
       knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
     }
-    const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, opaque: opaqueCube, resistance: ev.blue ? boundedSkullResistance : undefined }); // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
+    const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube, resistance: ev.blue ? boundedSkullResistance : undefined }); // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three

@@ -130,7 +130,8 @@ test("b59: the command block opens its screen at the click from the client's til
   assert.equal(useKind({ world: w, target: { block: [8, 34, 8], adjacent: [8, 35, 8] }, heldId: 1, sneaking: true, aimed: false }) === "command", false, "sneaking with an item skips onBlockActivated");
   assert.match(main, /kind === 'command'\) \{ if \(screen === "playing"\) openCommandBlock\(\.\.\.target\.block, null, true\)/);
   assert.match(main, /if \(!atClick && \(!survival\.creative \|\| !commandHost\.cheats\)\) return;/);
-  assert.match(main, /done: \(command\) => \{ if \(!survival\.creative \|\| !commandHost\.cheats\)/, "the server's MC|AdvCdm check stays on the edit");
+  // b80 mpcmd80: on a remote server Done sends MC|AdvCdm type 0 first; the single-player edit keeps the Creative and cheats check.
+  assert.match(main, /done: \(command\) => \{ if \(!cartTile && multiplayer && active\?\.remote\) \{ multiplayer\.blockCommand\(x, y, z, command\); resume\(\); return; \}[^\n]*?\*\/ if \(!survival\.creative \|\| !commandHost\.cheats\)/, "the server's MC|AdvCdm check stays on the edit");
 });
 
 test("b59: dragon egg particles run on the client at the click (activate and punch), the move stays the server's (executed records)", () => {
