@@ -2,6 +2,7 @@ import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from 
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
+import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
 import { copyLivingRoll, copyLivingUpdate, copyLivingPre, copyFallScream } from "./copy-talk.js";
@@ -368,6 +369,21 @@ export function actorCollides(world, x, y, z, w, h) {
         if (world.solid(bx, by, bz)) return true;
   return false;
 }
+// b81 mpperf81: a mob's move record (mpperf81-fast.js moveRecord), refreshed on each call: moveHooks' object (the same keys, closures and `wet` accessor as the
+// reference literal in EntityWorld.moveHooks; `t` and `armor` are set per call), moveSteps' mobStepEvents options (`rand` and `hostile` per call) and moveWith's start.
+function makeMoveRecord(owner, e) {
+  const r = { t: null, rand: null, from: { x: 0, y: 0, z: 0 }, hooks: null, steps: null };
+  r.hooks = {
+    living: true,
+    armor: e.equipment,
+    hurt: (source, points) => owner.hazard(e, points, source),
+    get wet() { return e.inWater || !!owner.wet?.(e, r.t.height); },
+    fizz: () => owner.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(owner.random() - owner.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
+  };
+  r.steps = { hostile: false, random: () => r.rand.nextFloat(), nextInt: (n) => r.rand.nextInt(n), onWalk: (x, y, z) => owner.onEntityWalking?.(x, y, z, e) };
+  return r;
+}
+function startOf(r, e) { const p = r.from; p.x = e.x; p.y = e.y; p.z = e.z; return p; }
 // --- Motion: Entity.moveEntity (sa.d) and EntityLivingBase.moveEntityWithHeading (sv.e(FF)) ---
 const STEP_HEIGHT = 0.5; // EntityLivingBase constructor: stepHeight = 0.5f
 const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
@@ -382,11 +398,14 @@ let worldEntityBoxes = null;
 export const setWorldEntityBoxes = (fn) => { worldEntityBoxes = fn; };
 // BlockPistonMoving.getCollisionBoundingBoxFromPool boxes (moving-boxes.js, piston-live.js collisionBoxes), set by redstone-runtime.js.
 export { setMovingBoxes };
-function collisionBoxes(world, b, e) {
-  const out = entityBoxes && e ? entityBoxes(b, e) : [];
+// `s` (b81 mpperf81): moveEntity's scratch; the list and its block boxes are then reused arrays, read only until the next call with the same scratch.
+function collisionBoxes(world, b, e, s = null) {
+  const out = entityBoxes && e ? entityBoxes(b, e) : s ? s.freshList() : [];
+  if (s && out !== s.list) s.pool.reset();
   if (worldEntityBoxes && e) out.push(...worldEntityBoxes(b, e, world));
   out.push(...movingBoxes(b, world));
-  blockBoxes(world, b, out, cellCollisionBoxes); // b79 mpperf79: the cell scan, air cells skipped (Block.addCollisionBoxesToList: fence arms etc. stay separate boxes)
+  if (s) blockBoxes81(world, b, out, cellCollisionBoxes, s.pool); // b81 mpperf81: constant cells from a per-id table, pooled boxes
+  else blockBoxes(world, b, out, cellCollisionBoxes); // b79 mpperf79: the cell scan, air cells skipped (Block.addCollisionBoxesToList: fence arms etc. stay separate boxes)
   return out;
 }
 // Entity.func_145771_j [sa.j(DDD)Z], used by items and XP orbs (the player overrides it,
@@ -468,14 +487,30 @@ function pushOutCorner(world, e, px, py, pz) {
 // rounding (a rebuilt x - w/2, x + w/2 box loses it: a 1-ulp x difference per push, amplified to 1e-3 over 300 ticks). The last box is kept per entity
 // and reused only while it still sits on the entity's position and size (any teleport or setPosition builds a fresh box, as natively).
 const boxes = new WeakMap();
-function keptBox(e, w, h) {
+function keptBox(e, w, h, into = null) {
   const k = boxes.get(e);
   if (!k || k[1] !== w || k[2] !== h) return null;
   const b = k[0];
-  return e.x === (b[0] + b[3]) / 2 && e.y === b[1] && e.z === (b[2] + b[5]) / 2 ? b.slice() : null;
+  return e.x === (b[0] + b[3]) / 2 && e.y === b[1] && e.z === (b[2] + b[5]) / 2 ? (into ? copyBox(into, b) : b.slice()) : null;
+}
+// b81 mpperf81: store the moved box in the entity's kept record (the record's box is private to this file: keptBox hands out copies).
+function keepBox(e, bb, w, h) {
+  const k = boxes.get(e);
+  if (k) { copyBox(k[0], bb); k[1] = w; k[2] = h; }
+  else boxes.set(e, [bb.slice(), w, h]);
 }
 // A baby zombie's setSize (EntityZombie.setChild in onSpawnWithEgg) keeps the box's minimum corner, so the first Entity.moveEntity (posX = box centre) moves the
 // entity half the size difference towards -x and -z (found in the batch 33 villagefight5 conversion records: a villager converted to a baby zombie moved -0.15 on both axes).
+// b81 mpperf81: moveEntity's starting box in the scratch's box (an own e.bb is copied, as the slice was; the anchor box is taken as before).
+function scratchBox(e, w, h, half, s) {
+  const bb = s.bb;
+  if (e.bb) return copyBox(bb, e.bb);
+  const a = takeAnchorBox(e);
+  if (a) return copyBox(bb, a);
+  if (keptBox(e, w, h, bb)) { checkSameBox(bb, keptBox(e, w, h), "keptBox"); return bb; }
+  bb[0] = e.x - half; bb[1] = e.y; bb[2] = e.z - half; bb[3] = e.x + half; bb[4] = e.y + h; bb[5] = e.z + half;
+  return bb;
+}
 function takeAnchorBox(e) {
   const b = e.anchorBox;
   if (!b) return null;
@@ -504,6 +539,12 @@ export function resizeBox(e, w0, h0, w1, h1, world = null) {
   boxes.set(e, [bb, w1, h1]);
 }
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
+  const s = takeMoveScratch(); // b81 mpperf81: null when off or nested
+  if (s === null) return moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, null);
+  try { return moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s); } finally { releaseMoveScratch(s); }
+}
+// `s` (b81 mpperf81): scratch boxes and the pooled box lists in place of fresh arrays; the same numbers in the same order.
+function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
   h = f(h);
@@ -521,10 +562,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
     // box itself, so its centre carries the same rounding as the original.
-    bb = e.bb ? e.bb.slice() : takeAnchorBox(e) ?? keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
-    start = bb.slice(),
-    grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
-  let list = collisionBoxes(world, grow(bb, dx, dy, dz), e);
+    bb = s ? scratchBox(e, w, h, half, s) : e.bb ? e.bb.slice() : takeAnchorBox(e) ?? keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
+    start = s ? copyBox(s.start, bb) : bb.slice();
+  let list = collisionBoxes(world, growInto(s ? s.query : [0, 0, 0, 0, 0, 0], bb, dx, dy, dz), e, s); // AxisAlignedBB.addCoord
   for (const o of list) dy = offsetY(o, bb, dy);
   shift(bb, 0, dy, 0);
   const grounded = e.onGround || (ody !== dy && ody < 0);
@@ -535,10 +575,11 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   // The step retry also needs the sneak-edge flag or ySize < 0.05F: an eye still lowered
   // from sneaking (0.08 on the first tick after release) does not step.
   if (step > 0 && grounded && (sneakEdgeOn || !(e.ySize >= f(0.05))) && (odx !== dx || odz !== dz)) {
-    const sx = dx, sy = dy, sz = dz, flat = bb.slice();
+    const sx = dx, sy = dy, sz = dz, flat = s ? copyBox(s.flat, bb) : bb.slice();
     dx = odx; dy = step; dz = odz;
-    bb.splice(0, 6, ...start);
-    list = collisionBoxes(world, grow(bb, odx, step, odz), e);
+    if (s) copyBox(bb, start);
+    else bb.splice(0, 6, ...start);
+    list = collisionBoxes(world, growInto(s ? s.query : [0, 0, 0, 0, 0, 0], bb, odx, step, odz), e, s);
     for (const o of list) dy = offsetY(o, bb, dy);
     shift(bb, 0, dy, 0);
     for (const o of list) dx = offsetX(o, bb, dx);
@@ -550,13 +591,15 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
     shift(bb, 0, dy, 0);
     if (sx * sx + sz * sz >= dx * dx + dz * dz) {
       dx = sx; dy = sy; dz = sz;
-      bb.splice(0, 6, ...flat);
+      if (s) copyBox(bb, flat);
+      else bb.splice(0, 6, ...flat);
     }
   }
   e.x = (bb[0] + bb[3]) / 2;
   e.y = bb[1];
   e.z = (bb[2] + bb[5]) / 2;
-  if (e.bb) e.bb = bb;
+  if (e.bb) e.bb = s && bb === s.bb ? bb.slice() : bb;
+  else if (s) keepBox(e, bb, w, h);
   else boxes.set(e, [bb.slice(), w, h]);
   e.collidedH = odx !== dx || odz !== dz;
   e.onGround = ody !== dy && ody < 0;
@@ -566,7 +609,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   let landed = 0;
   // EntityLivingBase.updateFallState (sv.a(DZ)V) first runs handleWaterMovement when the entity
   // is not already in water, on the moved box: landing in water (even 1 deep) cancels the fall.
-  if ((hooks?.living || e.living) && !e.inWater && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0;
+  if ((hooks?.living || e.living) && !e.inWater && !(s && dryBox(world, bb[0], bb[1], bb[2], bb[3], bb[4], bb[5])) && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0; // b81 mpperf81: dryBox skips the scan's boxes when no cell is water
   if (e.onGround) {
     landed = e.fallDistance;
     e.fallDistance = 0;
@@ -625,7 +668,9 @@ export function clientBodyTurn(c) {
 // box shrunk 0.4 vertically and 0.001 all round is wet below each cell's liquid
 // surface, and living entities are pushed 0.014 along the summed flow vector.
 function inWater(world, e, w, h) {
-  const r = w / 2, { wet, push } = waterAcceleration(world, entityWaterBox([e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r]));
+  const r = w / 2;
+  if (dryBox(world, e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r)) { addVelocity(e, 0, 0, 0); return false; } // b81 mpperf81: no water cell, so no wet flag and a zero push
+  const { wet, push } = waterAcceleration(world, entityWaterBox([e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r]));
   addVelocity(e, ...push);
   return wet;
 }
@@ -688,6 +733,10 @@ export function jump(e) {
 // Mobs whose body yaw follows EntityLivingBase.func_110146_f instead of EntityBodyHelper (not isAIEnabled in 1.7.10): only the enderman so far, the one with native yaw records.
 export const LEGACY_BODY = new Set(["enderman", "spider", "cave_spider", "slime", "magma_cube", "silverfish", "giant", "pigman", "blaze", "ghast"]); // EntityLiving.isAIEnabled (sw.bk) is false unless overridden. Bytecode-read over every class extending sw: the overrides that return true are bat, chicken, cow, horse, ocelot, pig, sheep, snow golem, iron golem, wolf, wither, creeper, skeleton, witch, zombie and villager; PigZombie (yh) overrides it back to false, and enderman, spider, slime, silverfish, giant, blaze, ghast, squid and the dragon never override. The squid has its own legacyBodyTurn and the dragon sets its own yaws. b49po (spider, slime) and b50lb (silverfish, giant, pigman, blaze, ghast; witch and creeper as controls) executed
 export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "giant", "pigman", "enderman", "slime", "magma_cube", "blaze"]);
+// The block under the feet (floor(minY) - 1) only counts while on the ground (b81 mpperf81: module functions instead of per-call closures).
+const slipOf = (world, e) => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
+// isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
+const climbableOf = (world, e) => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
@@ -711,21 +760,17 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     e.vy -= 0.02;
     if (e.collidedH && offsetInLiquid(world, e, w, h, e.vx, e.vy + 0.6 - e.y + y0, e.vz)) e.vy = 0.30000001192092896;
   } else {
-    // The block under the feet (floor(minY) - 1) only counts while on the ground.
-    const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
-    let friction = slip();
+    let friction = slipOf(world, e);
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
     moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((LEGACY_MOVE.has(e.type) ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
-    friction = slip();
-    // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
-    const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
-    if (climbable()) {
+    friction = slipOf(world, e);
+    if (climbableOf(world, e)) {
       ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
     }
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.moveMotion = [e.vx, e.vy, e.vz];
-    if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
+    if (e.collidedH && climbableOf(world, e)) e.vy = LADDER_CLIMB;
     // A client entity whose chunk is not loaded hovers instead (World.isRemote and the chunk's isChunkLoaded, entity-tracker.js ClientEntity).
     if (e.clientUnloaded) e.vy = e.y > 0 ? -0.1 : 0;
     else e.vy -= 0.08;
@@ -1720,7 +1765,7 @@ export class EntityWorld {
     if (fireproof(e)) {
       e.fire = 0;
       e.burn = 0;
-      e.inLava = e.type === "magma_cube" ? false : inLava(this.world, [e.x - t.width / 2, e.y, e.z - t.width / 2, e.x + t.width / 2, e.y + t.height, e.z + t.width / 2]);
+      e.inLava = e.type === "magma_cube" ? false : lavaIn(this.world, e.x - t.width / 2, e.y, e.z - t.width / 2, e.x + t.width / 2, e.y + t.height, e.z + t.width / 2); // b81 mpperf81: inLava on six numbers
       if (e.inLava) e.fallDistance *= 0.5;
       return;
     }
@@ -1731,7 +1776,7 @@ export class EntityWorld {
       e.fire--;
     }
     const r = t.width / 2;
-    if ((e.inLava = inLava(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r]))) {
+    if ((e.inLava = lavaIn(this.world, e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r))) { // b81 mpperf81: inLava on six numbers
       this.hazard(e, 4, "lava");
       setMobFire(e, 15); // setOnFireFromLava: setFire(15), shortened by Fire Protection
       e.fallDistance *= 0.5;
@@ -2620,6 +2665,7 @@ export class EntityWorld {
   }
   // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
   moveHooks(e, t) {
+    if (fast81.mode !== "off") { const r = moveRecord(this, e, makeMoveRecord); r.t = t; r.hooks.armor = e.equipment; return r.hooks; } // b81 mpperf81: one hooks object per mob (makeMoveRecord)
     const self = this;
     return {
       living: true,
@@ -2645,6 +2691,13 @@ export class EntityWorld {
   // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
   moveSteps(e, from) {
     const rand = entityRandom(e);
+    if (fast81.mode !== "off") { // b81 mpperf81: the options object and its closures kept per mob; the random is still fetched first (entityRandom creates it on first use)
+      const r = moveRecord(this, e, makeMoveRecord), o = r.steps;
+      r.rand = rand; o.hostile = isEntityMob(e.type);
+      const out = mobStepEvents(this.world, e, from, o);
+      if (out.length) this.events.push(...out);
+      return;
+    }
     this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), nextInt: (n) => rand.nextInt(n), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
   }
   // The landing of a move (EntityLivingBase.fall).
@@ -2673,7 +2726,7 @@ export class EntityWorld {
   // EntityLivingBase.moveEntityWithHeading(strafe, forward) with this engine's tails; walk() runs it once a tick and
   // EntityAIControlledByPlayer (ai.js, pig-saddle.js) once more from inside the AI.
   moveWith(e, t, forward) {
-    const from = { x: e.x, y: e.y, z: e.z };
+    const from = fast81.mode === "off" ? { x: e.x, y: e.y, z: e.z } : startOf(moveRecord(this, e, makeMoveRecord), e); // b81 mpperf81: the start position in the mob's record
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
     this.waterAfterMove(e, t);
     // Entity.moveEntity (sa.d, bytecode-read): updateFallState (the landing's hurt-fall and step sounds) runs before the step sound at the end.
