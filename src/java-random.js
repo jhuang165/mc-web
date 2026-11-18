@@ -135,8 +135,11 @@ export function gaussianFrom(nextDouble) {
   let have = false, cached = 0;
   return () => {
     if (have) { have = false; return cached; }
-    let v1, v2, s;
+    let v1, v2, s, tries = 0;
     do {
+      // A degenerate stub source (a test's constant `() => 0.5`) never leaves the rejection loop; a real source is rejected
+      // 1000 times in a row with probability (1 - pi/4)^1000, so this guard never changes a real draw (b79 lead).
+      if (++tries > 1000) return 0;
       v1 = 2 * nextDouble() - 1;
       v2 = 2 * nextDouble() - 1;
       s = v1 * v1 + v2 * v2;

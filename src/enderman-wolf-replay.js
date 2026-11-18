@@ -276,7 +276,7 @@ function run(r) {
       for (const _ of primed.splice(0)) spawned.push(["other", "xw"]); // EntityTNTPrimed (xw) a blast chained
       for (const b of ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]);
       const pm = ew.ai.player.motion; // b46mp: the server copy's motion (mob pushes, hits, blasts); the older sets: the blasts' push on `pv` only
-      state.push([booms.slice(), spawned, cells.slice(), x46 ? [pm.x, pm.y, pm.z] : [pv.x, pv.y, pv.z]]);
+      state.push([booms.slice(), spawned, cells.slice(), [pm.x, pm.y, pm.z]]);
       state.gone = [...gone];
       state.pos = [ew.ai.player.x, ew.ai.player.y, ew.ai.player.z]; // b47sp: where the server copy rests
       if (x48) state.pistons = rw.pistonTiles().map((t) => [t.x, t.y, t.z, t.progress, t.lastProgress]);
