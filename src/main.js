@@ -3159,12 +3159,13 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
   if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
-  finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, playerLanding());
+  const moveFlags = { eyeInWater: clientEyeInWater(), onLadder: isOnLadder(world, position.x, position.y, position.z) /* b72: EntityPlayer.k uses isOnLadder (ladder or vine at floor(minY)), no flying test */ };
+  finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition, ...moveFlags, riding: !!rider.vehicle }, playerLanding()); // b81 exhaust81: yz.k's exhaustion (none riding)
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
-  statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: isOnLadder(world, position.x, position.y, position.z) /* b72: EntityPlayer.k uses isOnLadder (ladder or vine at floor(minY)), no flying test */, grounded });
+  statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, inWater, ...moveFlags, grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);

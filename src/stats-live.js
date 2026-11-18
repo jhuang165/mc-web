@@ -6,6 +6,7 @@ import { ITEMS } from "./survival.js";
 import { WEB } from "./world.js";
 import { toOriginal } from "./block-registry.js";
 import { originalOfLive } from "./item-names.js";
+import { movementStat, mountedCentimetres, TELEPORT_SQUARED } from "./movement-stat.js";
 
 const f32 = Math.fround;
 // 1.7.10 ids of this build's item and block ids (null when the port has no original: no stat).
@@ -17,34 +18,21 @@ const SHEAR_BLOCKS = new Set([5, 71, 39, WEB]);
 export const toolUses = (tool) => TOOL_KINDS.has(ITEMS[tool]?.kind);
 // ItemStack.tryPlaceItemIntoWorld returned true: the branches of player-edit-simulation.js that place or apply the held item.
 export const USE_BRANCHES = new Set(["place-block", "plant-crop", "plant-nether-wart", "use-flint-and-steel", "use-fire-charge", "use-spawn-egg", "use-bone-meal"]);
-// EntityPlayer.addMovementStat/addMountedMovementStat use qh.a(double) (a float sqrt) and Math.round(float).
-const length = (x, y, z) => f32(Math.sqrt(x * x + y * y + z * z));
+// EntityPlayer.addMovementStat/addMountedMovementStat: the branch table and the centimetre rounding are movement-stat.js (shared with the exhaustion).
 const round = (v) => Math.floor(v + 0.5);
-// A move longer than this in one tick is a teleport (portal, respawn, /tp, ender pearl): vanilla never reports one as movement.
-export const TELEPORT_SQUARED = 100;
+export { TELEPORT_SQUARED };
 
 // EntityPlayer.addMovementStat (yz.k): called after each player move with the delta and the state the move left.
 //   dive: head in water, swim: in water, ladder: on a ladder, ground: onGround, else the airborne fly stat.
-export function addMovementStat(stats, { dx, dy, dz, dive = false, swim = false, ladder = false, ground = false }) {
-  if (dive) {
-    const i = round(length(dx, dy, dz) * 100);
-    if (i > 0) stats.increment(STAT.dive, i);
-  } else if (swim) {
-    const i = round(length(dx, 0, dz) * 100);
-    if (i > 0) stats.increment(STAT.swim, i);
-  } else if (ladder) {
-    if (dy > 0) stats.increment(STAT.climb, round(dy * 100));
-  } else if (ground) {
-    const i = round(length(dx, 0, dz) * 100);
-    if (i > 0) stats.increment(STAT.walk, i);
-  } else {
-    const i = round(length(dx, 0, dz) * 100);
-    if (i > 25) stats.increment(STAT.fly, i);
-  }
+// Returns the exhaustion the same call hands EntityPlayer.addExhaustion (b81 exhaust81; player-environment.js charges it).
+export function addMovementStat(stats, move) {
+  const m = movementStat(move);
+  if (m.stat) stats.increment(STAT[m.stat], m.amount); // a climb of under half a cm is addStat(climb, 0): Stats.increment drops it
+  return m.exhaustion;
 }
 // EntityPlayer.addMountedMovementStat (yz.l): the whole 3D distance by the class of the vehicle.
 export function addMountedMovementStat(stats, { dx, dy, dz, kind }) {
-  const i = round(length(dx, dy, dz) * 100);
+  const i = mountedCentimetres(dx, dy, dz);
   if (i > 0 && STAT[kind]) stats.increment(STAT[kind], i);
 }
 // The vehicle a rider.vehicle record is: a boat, a pig or horse steed, else a minecart.

@@ -200,7 +200,7 @@ export class ServerVehicles {
     Object.assign(p.motion, { sprinting: false, ySize: 0, prevYSize: 0 });
   }
   // What movePlayer returns, for a player carried by a vehicle (no walked distance, no water or lava of its own).
-  sit(p) { return { inWater: false, inLavaNow: false, sneakOnGround: true, oldPosition: { x: p.position.x, y: p.position.y, z: p.position.z } }; }
+  sit(p) { return { inWater: false, inLavaNow: false, sneakOnGround: true, riding: true /* b81 exhaust81: yz.k returns for a rider (no movement exhaustion) */, oldPosition: { x: p.position.x, y: p.position.y, z: p.position.z } }; }
   dismount(p) {
     const m = p.mount;
     if (!m) return;
