@@ -1,0 +1,412 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "brf": {
+   "name": "ResourcePackRepository$Entry",
+   "sha256": "fc2f59cd9e3f43734d2f37e16c563a20af31ca98e00401999beb81bd6ba212b2"
+  },
+  "bqn": {
+   "name": "AbstractResourcePack",
+   "sha256": "ab28b36b12413c4c9ed2e0873574491b9bcbb98546bbe5aae9bac10d104a2a38"
+  },
+  "bqr": {
+   "name": "FileResourcePack",
+   "sha256": "2c1de78fe921fa05b812a2aedcd333d4817d4d78508981e043d64e5c510dba68"
+  },
+  "brw": {
+   "name": "IMetadataSerializer",
+   "sha256": "31c03be24157966eca7082e8a5a103bd3c0e0ccc058b23b58e3d6a45d52141f8"
+  },
+  "bsh": {
+   "name": "PackMetadataSectionSerializer",
+   "sha256": "0f52d3fcdd7446a53fb8b57786606877efe45255cd719d546bcd2ad8896992c6"
+  },
+  "bsg": {
+   "name": "PackMetadataSection",
+   "sha256": "ba811e82db8389d5c16bc1a45b89b728ba442821daac974c81f989e6fd81f9d7"
+  },
+  "pu": {
+   "name": "JsonUtils",
+   "sha256": "25e65d86341bba74bf730179276d4f6422efca2c438f037e1763298c2f6f6692"
+  },
+  "fk": {
+   "name": "IChatComponent$Serializer",
+   "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
+  },
+  "fr": {
+   "name": "ChatComponentTranslation",
+   "sha256": "9fd71a929542368197f4dbef5fff3e3f72f5d0e31b3d4531d8a97b042e239c96"
+  },
+  "dd": {
+   "name": "StatCollector",
+   "sha256": "d880d64cf98aac2a5bb239245b6a5d3a1ccec1424af1d1bbcbfbb5eb001b510e"
+  },
+  "de": {
+   "name": "StringTranslate",
+   "sha256": "46315b5835adb1ba7f326a9437e47b14873ad2e825ed3a54c4a21016e8fcc261"
+  }
+ },
+ "method": "Executed: each pack.mcmeta text is zipped and loaded by the unchanged ResourcePackRepository.Entry.updateResourcePack (brf.a) with a brw that has bsh registered for bsg (as Minecraft.<init> does), then the row text brf.e() is read. Rows: [pack.mcmeta (\"<missing>\": none), exception from brf.a (the repository then leaves the pack out of its list) or null, pack_format or null, brf.e() or null, exception from brf.e() or null]. The lang table below is a classpath stub.",
+ "lang": {
+  "resourcePack.title": "Select Resource Packs",
+  "death.attack.player": "%1$s was slain by %2$s",
+  "chat.type.text": "<%s> %s",
+  "commands.give.success": "Given %s * %d to %s",
+  "options.languageWarning": "Language translations may not be 100%% accurate",
+  "translation.test.escape": "%%s %%%s %%%%s %%%%%s",
+  "probe.unsupported": "%x and %s"
+ },
+ "rows": [
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":\"plain\"}}",
+   null,
+   1,
+   "plain§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"description\":\"no format\"}}",
+   "JsonSyntaxException: Missing pack_format, expected to find a Int",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":\"1\",\"description\":\"string format\"}}",
+   "JsonSyntaxException: Expected pack_format to be a Int, was \"1\"",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1.7,\"description\":\"fraction format\"}}",
+   null,
+   1,
+   "fraction format§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":2,\"description\":\"format two\"}}",
+   null,
+   2,
+   "format two§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":0,\"description\":\"format zero\"}}",
+   null,
+   0,
+   "format zero§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":-1,\"description\":\"format negative\"}}",
+   null,
+   -1,
+   "format negative§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":true,\"description\":\"bool format\"}}",
+   "JsonSyntaxException: Expected pack_format to be a Int, was a boolean (true)",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1}}",
+   null,
+   1,
+   null,
+   "NullPointerException: Cannot invoke \"fj.d()\" because the return value of \"bsg.a()\" is null"
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":null}}",
+   null,
+   1,
+   null,
+   "NullPointerException: Cannot invoke \"fj.d()\" because the return value of \"bsg.a()\" is null"
+  ],
+  [
+   "{}",
+   null,
+   null,
+   "§cInvalid pack.mcmeta (or missing 'pack' section)",
+   null
+  ],
+  [
+   "{\"other\":{}}",
+   null,
+   null,
+   "§cInvalid pack.mcmeta (or missing 'pack' section)",
+   null
+  ],
+  [
+   "{\"pack\":5}",
+   "IllegalArgumentException: Invalid metadata for 'pack' - expected object, found 5",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":[]}",
+   "IllegalArgumentException: Invalid metadata for 'pack' - expected object, found []",
+   null,
+   null,
+   null
+  ],
+  [
+   "[]",
+   "JsonParseException: java.lang.IllegalStateException: Not a JSON Object: []",
+   null,
+   null,
+   null
+  ],
+  [
+   "\"text\"",
+   "JsonParseException: java.lang.IllegalStateException: Not a JSON Object: \"text\"",
+   null,
+   null,
+   null
+  ],
+  [
+   "",
+   "JsonParseException: java.lang.IllegalStateException: Not a JSON Object: null",
+   null,
+   null,
+   null
+  ],
+  [
+   "   ",
+   "JsonParseException: java.lang.IllegalStateException: Not a JSON Object: null",
+   null,
+   null,
+   null
+  ],
+  [
+   "not json {",
+   "JsonParseException: com.google.gson.JsonSyntaxException: com.google.gson.stream.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 6",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":\"x\"}} trailing",
+   "JsonParseException: com.google.gson.JsonSyntaxException: com.google.gson.stream.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 47",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":\"x\"}}{}",
+   "JsonParseException: com.google.gson.JsonSyntaxException: com.google.gson.stream.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 1 column 46",
+   null,
+   null,
+   null
+  ],
+  [
+   "{pack:{pack_format:1,description:'lenient'}}",
+   null,
+   1,
+   "lenient§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":\"bom\"}}",
+   null,
+   1,
+   "bom§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":\"a\",\"description\":\"b\"}}",
+   null,
+   1,
+   "b§r",
+   null
+  ],
+  [
+   "<missing>",
+   "brb: 'pack.mcmeta' in ResourcePack '/var/folders/l6/z7c84jys1nv3qtw361vj0gxr0000gn/T/packmeta-probe/p24.zip'",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"resourcePack.title\"}}}",
+   null,
+   1,
+   "Select Resource Packs§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"death.attack.player\",\"with\":[\"Steve\",\"Zombie\"]}}}",
+   null,
+   1,
+   "Steve§r was slain by §rZombie§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"chat.type.text\",\"with\":[{\"text\":\"Alex\",\"color\":\"gold\"},\"hi\"]}}}",
+   null,
+   1,
+   "<§r§6Alex§r> §rhi§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"commands.give.success\",\"with\":[\"Stone\",64,\"Alex\"]}}}",
+   null,
+   1,
+   "Given §rStone§r * §r64§r to §rAlex§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"no.such.key\"}}}",
+   null,
+   1,
+   "no.such.key§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"no.such.key\",\"with\":[\"ignored\"]}}}",
+   null,
+   1,
+   "no.such.key§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"options.languageWarning\"}}}",
+   null,
+   1,
+   "Language translations may not be 100§r%§r accurate§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"translation.test.escape\",\"with\":[\"A\"]}}}",
+   null,
+   1,
+   null,
+   "fs: Invalid index 1 requested for TranslatableComponent{key='translation.test.escape', args=[A], siblings=[], style=Style{hasParent=false, color=null, bold=null, italic=null, underlined=null, obfuscated=null, clickEvent=null, hoverEvent=null}}"
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"death.attack.player\",\"with\":[\"only one\"]}}}",
+   null,
+   1,
+   null,
+   "fs: Invalid index 1 requested for TranslatableComponent{key='death.attack.player', args=[only one], siblings=[], style=Style{hasParent=false, color=null, bold=null, italic=null, underlined=null, obfuscated=null, clickEvent=null, hoverEvent=null}}"
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"probe.unsupported\",\"with\":[\"a\"]}}}",
+   null,
+   1,
+   null,
+   "fs: Error parsing: TranslatableComponent{key='probe.unsupported', args=[a], siblings=[], style=Style{hasParent=false, color=null, bold=null, italic=null, underlined=null, obfuscated=null, clickEvent=null, hoverEvent=null}}: Unsupported format: '%x'"
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"chat.type.text\",\"with\":[{\"translate\":\"resourcePack.title\"},{\"text\":\"x\",\"bold\":true}]}}}",
+   null,
+   1,
+   "<§rSelect Resource Packs§r> §r§lx§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"resourcePack.title\",\"color\":\"red\",\"extra\":[\" tail\"]}}}",
+   null,
+   1,
+   "§cSelect Resource Packs§r§c tail§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"death.attack.player\",\"color\":\"aqua\",\"with\":[\"A\",{\"text\":\"B\",\"color\":\"green\"}]}}}",
+   null,
+   1,
+   "§bA§r§b was slain by §r§aB§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"resourcePack.title\",\"with\":\"notarray\"}}}",
+   "ClassCastException: class com.google.gson.JsonPrimitive cannot be cast to class com.google.gson.JsonArray (com.google.gson.JsonPrimitive and com.google.gson.JsonArray are in unnamed module of loader 'app')",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"resourcePack.title\",\"with\":[]}}}",
+   null,
+   1,
+   "Select Resource Packs§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":5}}}",
+   null,
+   1,
+   "5§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"text\":\"t\",\"translate\":\"resourcePack.title\"}}}",
+   null,
+   1,
+   "t§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":[{\"translate\":\"resourcePack.title\"},\" after\"]}}",
+   null,
+   1,
+   "Select Resource Packs§r after§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":[]}}",
+   null,
+   1,
+   null,
+   "NullPointerException: Cannot invoke \"fj.d()\" because the return value of \"bsg.a()\" is null"
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{}}}",
+   "JsonParseException: Don't know how to turn {} into a Component",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"text\":\"x\",\"extra\":\"y\"}}}",
+   "ClassCastException: class com.google.gson.JsonPrimitive cannot be cast to class com.google.gson.JsonArray (com.google.gson.JsonPrimitive and com.google.gson.JsonArray are in unnamed module of loader 'app')",
+   null,
+   null,
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":5}}",
+   null,
+   1,
+   "5§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1,\"description\":{\"translate\":\"death.attack.player\",\"with\":[1.5,true]}}}",
+   null,
+   1,
+   "1.5§r was slain by §rtrue§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":1e2,\"description\":\"exp\"}}",
+   null,
+   100,
+   "exp§r",
+   null
+  ],
+  [
+   "{\"pack\":{\"pack_format\":4294967297,\"description\":\"wide\"}}",
+   null,
+   1,
+   "wide§r",
+   null
+  ]
+ ]
+}

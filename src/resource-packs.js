@@ -5,6 +5,8 @@
 // (public/resource-pack-sw.js) answers requests for /media/1.7.10/** and /audio/1.7.10** from that table.
 import { readZip } from "./zip-reader.js";
 import { parseSoundsJson } from "./pack-sounds.js";
+import { parseDocument, parseTree, JsonObject, JsonArray, JsonPrimitive, JsonNull } from "./json-lenient.js";
+import { deserializeComponent, TranslationError } from "./chat-component.js";
 
 export const ASSETS = "assets/minecraft/";
 // PackMetadataSection format of 1.7.10.
@@ -26,59 +28,61 @@ export function overrideUrls(entryName) {
   return [];
 }
 
-// IChatComponent.Serializer (fk) + ChatStyle (fn) + getFormattedText (fj.d) for a pack description. Executed (tools/probes/PackDescProbe.java, rows in
-// public/research/pack-description-reference.json): a JSON string or number is plain text; an object needs "text" (a number or boolean reads as its
-// text); "extra" must be a non-empty array and its components become siblings that inherit the parent's style; a top-level array makes its first
-// element the root and appends the rest as siblings; "color" is EnumChatFormatting.getValueByName over all 22 lowercase names (so "bold" or "reset"
-// is accepted in the colour slot, "RED" or an unknown name is no colour); bold/italic/underlined/strikethrough/obfuscated read as Boolean.parseBoolean
-// of a string (a number is false). getFormattedText is, for the root and then each sibling depth-first, the style's code (colour, then l o n k m, each
-// attribute resolved through the parents) + the text + "\u00a7r". "translate" components are not supported here (needs the lang table): invalid.
-const FORMAT_NAMES = { black: "0", dark_blue: "1", dark_green: "2", dark_aqua: "3", dark_red: "4", dark_purple: "5", gold: "6", gray: "7", dark_gray: "8", blue: "9", green: "a", aqua: "b", red: "c", light_purple: "d", yellow: "e", white: "f", obfuscated: "k", bold: "l", strikethrough: "m", underline: "n", italic: "o", reset: "r" };
-const STYLE_KEYS = [["bold", "l"], ["italic", "o"], ["underlined", "n"], ["obfuscated", "k"], ["strikethrough", "m"]];
-const prim = (v) => (typeof v === "string" || typeof v === "number" || typeof v === "boolean");
-const asString = (v) => { if (!prim(v)) throw new Error("not a primitive"); return String(v); };
-const asBool = (v) => (typeof v === "boolean" ? v : typeof v === "string" && v.toLowerCase() === "true");
-function chatComponent(el, parentStyle) {
-  if (Array.isArray(el)) {
-    if (!el.length) throw new Error("empty array of components");
-    const root = chatComponent(el[0], parentStyle);
-    for (let i = 1; i < el.length; i++) root.sib.push(chatComponent(el[i], root.style));
-    return root;
-  }
-  if (prim(el)) return { text: asString(el), style: { parent: parentStyle }, sib: [] };
-  if (!el || typeof el !== "object") throw new Error("not a component");
-  if (!Object.hasOwn(el, "text")) throw new Error("unsupported component");
-  const style = { parent: parentStyle };
-  if (Object.hasOwn(el, "color") && el.color !== null) { const code = FORMAT_NAMES[asString(el.color)]; if (code) style.color = code; }
-  for (const [k] of STYLE_KEYS) if (Object.hasOwn(el, k) && el[k] !== null) style[k] = asBool(el[k]);
-  const c = { text: asString(el.text), style, sib: [] };
-  if (Object.hasOwn(el, "extra")) {
-    if (!Array.isArray(el.extra) || !el.extra.length) throw new Error("bad extra");
-    for (const e of el.extra) c.sib.push(chatComponent(e, style));
-  }
-  return c;
-}
-const styleValue = (st, k) => { for (let s = st; s; s = s.parent) if (s[k] !== undefined) return s[k]; return undefined; };
-const formattingCode = (st) => { const c = styleValue(st, "color"); return (c ? "\u00a7" + c : "") + STYLE_KEYS.map(([k, f]) => (styleValue(st, k) ? "\u00a7" + f : "")).join(""); };
-function flatten(c, out = []) { out.push(c); for (const s of c.sib) flatten(s, out); return out; }
-// Returns { formatted, text } (getFormattedText, getUnformattedText) or throws for what the native deserialiser refuses.
+// IChatComponent.Serializer (fk) + ChatStyle (fn) + getFormattedText (fj.d) for a pack description, through the shared port in chat-component.js (b80; b79 had a
+// text-only copy here). Executed b79 (tools/probes/PackDescProbe.java, pack-description-reference.json): a JSON string or number is plain text; an object
+// needs "text" or "translate"; "extra" must be a non-empty array whose components become siblings inheriting the parent's style; a top-level array makes its
+// first element the root; "color" takes the 22 lowercase EnumChatFormatting names; getFormattedText is, part by part, the style code + text + "\u00a7r".
+// Executed b80 (tools/probes/PackMetaProbe.java, pack-meta-reference.json): "translate" is a ChatComponentTranslation over the language table (a missing key
+// prints the key, "with" elements are its %s / %n$s arguments, "%%" splits off a "%" part, a numeric conversion of the file reads as %s), drawn per part.
+// Returns { component, formatted, text } and `drawError` when getFormattedText itself throws (a null component, or a translation whose format fails on
+// the current and the fallback table); throws for what the deserialiser refuses. `el` is a json-lenient tree or a plain JSON value.
+const toTree = (el) => (el instanceof JsonObject || el instanceof JsonArray || el instanceof JsonPrimitive || el instanceof JsonNull ? el : el === undefined ? null : parseTree(JSON.stringify(el)));
 export function descriptionText(el) {
-  const parts = flatten(chatComponent(el, null));
-  return { formatted: parts.map((c) => formattingCode(c.style) + c.text + "\u00a7r").join(""), text: parts.map((c) => c.text).join("") };
+  const tree = toTree(el);
+  const component = tree == null || tree instanceof JsonNull ? null : deserializeComponent(tree);
+  if (!component) return { component: null, formatted: null, text: null, drawError: "NullPointerException" };
+  try { return { component, formatted: component.formatted(), text: component.unformatted() }; } catch (e) {
+    if (e instanceof TranslationError) return { component, formatted: null, text: null, drawError: e.message };
+    throw e;
+  }
+}
+// JsonElement.getAsInt on a number (LazilyParsedNumber.intValue): Integer.parseInt, else (int) Long.parseLong, else new BigDecimal(s).intValue(); all three
+// keep the low 32 bits of the integer part (truncated toward zero).
+function gsonInt(s) {
+  const m = /^(-?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(s);
+  if (!m || !(m[2] || m[3])) throw new Error("NumberFormatException: " + s);
+  const frac = m[3] ?? "", digits = (m[2] + frac).replace(/^0+(?=\d)/, ""), exp = Number(m[4] ?? 0) - frac.length;
+  let big;
+  if (exp >= 32) big = 0n; // a multiple of 10^32, so of 2^32
+  else if (exp >= 0) big = BigInt(digits || "0") * 10n ** BigInt(exp);
+  else big = digits.length + exp > 0 ? BigInt(digits.slice(0, digits.length + exp)) : 0n;
+  return Number(BigInt.asIntN(32, m[1] ? -big : big));
 }
 
-// PackMetadataSection via the lenient Gson reader: { "pack": { "pack_format": 1, "description": ... } }. The description is an IChatComponent
-// (descriptionText); `formatted` is its getFormattedText and `description` the unformatted text.
+// ResourcePackRepository.Entry.updateResourcePack (brf.a) over AbstractResourcePack.getPackMetadata (bqn.a: JsonParser.parse, getAsJsonObject),
+// IMetadataSerializer.parseMetadataSection (brw.a) and PackMetadataSectionSerializer (bsh). Executed rows: pack-meta-reference.json.
+// - `listed: false`: the load throws, and ResourcePackRepository.updateRepositoryEntriesAll (brc.a, bytecode-read) catches any Exception and leaves the
+//   pack out of the list: unparsable JSON or trailing content, a top level that is not an object (an empty file is JsonNull), "pack" that is not an object,
+//   a missing or non-numeric pack_format (JsonUtils.getInt: JsonSyntaxException), a description the serializer refuses. A missing pack.mcmeta (packInfo) too.
+// - `valid: false` (listed): no "pack" member; the row is "\u00a7cInvalid pack.mcmeta (or missing 'pack' section)".
+// - otherwise valid with any pack_format (1.7.10 never compares it; 1.7 reads as 1) and the description's formatted / unformatted text; a missing or null
+//   description is a null component, which natively throws a NullPointerException each time the row is drawn (`drawError`).
 export function parsePackMcmeta(text) {
-  const invalid = { valid: false, packFormat: 0, description: INVALID_META };
   try {
-    const pack = JSON.parse(String(text).replace(/^\uFEFF/, ""))?.pack;
-    if (!pack || typeof pack !== "object") return invalid;
-    const d = descriptionText(pack.description);
-    const packFormat = Number.isInteger(pack.pack_format) ? pack.pack_format : 0;
-    return { valid: true, packFormat, description: d.text, formatted: d.formatted };
-  } catch {
-    return invalid;
+    const root = parseDocument(String(text));
+    if (!(root instanceof JsonObject)) throw new Error("Not a JSON Object");
+    if (!root.has("pack")) return { listed: true, valid: false, packFormat: 0, description: INVALID_META };
+    const pack = root.get("pack");
+    if (!(pack instanceof JsonObject)) throw new Error("Invalid metadata for 'pack' - expected object");
+    const d = descriptionText(pack.get("description"));
+    if (!pack.has("pack_format")) throw new Error("Missing pack_format, expected to find a Int");
+    const f = pack.get("pack_format");
+    if (!(f instanceof JsonPrimitive) || f.kind !== "number") throw new Error("Expected pack_format to be a Int");
+    const out = { listed: true, valid: true, packFormat: gsonInt(f.value), description: d.text, formatted: d.formatted };
+    if (d.drawError) out.drawError = d.drawError;
+    return out;
+  } catch (e) {
+    return { listed: false, valid: false, packFormat: 0, description: INVALID_META, error: String(e?.message ?? e) };
   }
 }
 
@@ -117,7 +121,8 @@ const text = async (pack, name) => (pack.entries.has(name) ? new TextDecoder().d
 // The list entry of a pack: name, description (the mcmeta text, or the error line) and the pack.png bytes.
 export async function packInfo(pack) {
   const meta = await text(pack, "pack.mcmeta");
-  const parsed = meta == null ? { valid: false, packFormat: 0, description: INVALID_META } : parsePackMcmeta(meta);
+  // FileResourcePack / FolderResourcePack without pack.mcmeta throw ResourcePackFileNotFoundException (executed): the pack is not listed.
+  const parsed = meta == null ? { listed: false, valid: false, packFormat: 0, description: INVALID_META, error: "'pack.mcmeta' not found" } : parsePackMcmeta(meta);
   const icon = pack.entries.has("pack.png") ? await pack.entries.get("pack.png").read() : null;
   return { name: pack.name, kind: pack.kind, ...parsed, icon };
 }
@@ -214,9 +219,15 @@ export function indexedDbStore(idb = globalThis.indexedDB) {
 }
 
 // Adds a dropped/picked file or a folder (a File list with webkitRelativePath) to the store; returns the pack name.
+// A pack the native repository would leave out of its list (packInfo `listed: false`) is not stored: in 1.7.10 such a file in the pack folder simply never
+// appears, here the caller's "Cannot read pack" notice says why (b80).
+async function requireListed(pack) {
+  const info = await packInfo(pack);
+  if (info.listed === false) throw new Error(info.error ?? INVALID_META);
+}
 export async function addPackFromFile(store, file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  readZip(bytes); // throws on a file that is not a zip
+  await requireListed(zipPack(file.name, bytes)); // readZip throws on a file that is not a zip
   await store.putPack({ name: file.name, kind: "zip", blob: new Blob([bytes]), added: Date.now() });
   return file.name;
 }
@@ -226,6 +237,7 @@ export async function addPackFromFolder(store, files) {
   if (!root) throw new Error("Empty folder");
   const entries = {};
   for (const f of list) entries[f.webkitRelativePath.slice(root.length + 1)] = f;
+  await requireListed(folderPack(root, entries));
   await store.putPack({ name: root, kind: "folder", files: entries, added: Date.now() });
   return root;
 }
@@ -237,7 +249,13 @@ export async function openStoredPack(rec) {
 // override table the worker serves and the merged lang the menus read. Returns a summary.
 export async function applyPacks(names, store) {
   const packs = [];
-  for (const name of names) { const rec = await store.getPack(name); if (rec) packs.push(await openStoredPack(rec)); }
+  // ResourcePackRepository.func_148527_a only takes names of listed entries, so a stored pack that no longer loads is skipped (b80).
+  for (const name of names) {
+    const rec = await store.getPack(name);
+    if (!rec) continue;
+    const pack = await openStoredPack(rec);
+    if ((await packInfo(pack)).listed !== false) packs.push(pack);
+  }
   const table = resolveOverrides(packs), overrides = new Map();
   for (const [url, hit] of table) {
     if (hit.missing) overrides.set(url, { blob: null, type: mimeOf(url), missing: true });

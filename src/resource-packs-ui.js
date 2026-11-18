@@ -21,7 +21,10 @@ const SPRITE = "url('/media/1.7.10/gui/resource_packs.png')";
 // ResourcePackListEntryFound.func_148311_a (brf.e) is `bsg.a().getFormattedText()` (fj.d): the text plus a trailing "\u00a7r" (ChatComponentText with
 // an empty style, Bytecode-read), or "\u00a7c" + "Invalid pack.mcmeta (or missing 'pack' section)" with no reset when the metadata section is
 // missing. The Default row (bgh) reads the same getter from the bundled pack. Executed: "A short description.\u00a7r", "\u00a7aGreen\u00a7r and plain text\u00a7r".
+// A listed pack whose getFormattedText throws (null description, failing translation: `drawError`) crashes the native screen each frame; the port draws
+// no description for it (b80).
 export function packRowDescription(info) {
+  if (info.drawError) return "";
   if (info.valid === false || info.description == null) return "\u00a7c" + INVALID_META;
   return info.formatted ?? info.description + "\u00a7r"; // a parsed description carries its getFormattedText (b79); a bare one is plain text + reset
 }
@@ -97,9 +100,11 @@ export function resourcePacksScreen(ctx, parent, show) {
     infos = new Map();
     for (const name of names) {
       const rec = await store.getPack(name);
-      try { infos.set(name, await packInfo(await openStoredPack(rec))); } catch (e) { infos.set(name, { name, valid: false, description: String(e.message ?? e), icon: null }); }
+      // A zip that no longer opens throws natively too (ZipException in the FileResourcePack): not listed.
+      try { infos.set(name, await packInfo(await openStoredPack(rec))); } catch (e) { infos.set(name, { name, listed: false, valid: false, description: String(e.message ?? e), icon: null }); }
     }
-    lists = new PackLists(names, lists ? lists.names : initial);
+    // ResourcePackRepository.updateRepositoryEntriesAll (brc.a) leaves a pack whose load throws out of both lists (b80, pack-meta-reference.json).
+    lists = new PackLists(names.filter((n) => infos.get(n)?.listed !== false), lists ? lists.names : initial);
     loaded = true;
     if (gui?.screen === screen) gui.build();
   };
