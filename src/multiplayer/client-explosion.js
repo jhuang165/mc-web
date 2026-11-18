@@ -20,6 +20,7 @@ import { presentCells } from './client-chunks.js';
 import { waterAcceleration, entityWaterBox } from '../fluids.js';
 import { FIREBALL } from '../blaze-ghast.js';
 import { SKULL } from '../wither-boss.js';
+import { flyBallRow } from './fireball-copy.js'; // b81 blast81
 
 const nextInts = (...bounds) => (r) => { for (const b of bounds) r.nextInt(b); };
 // Native block id -> the World.rand draws of its client-side dropBlockAsItemWithChance.
@@ -57,8 +58,9 @@ export class S27ClientBlocks {
 // server's post-move position, its motion is the row's position delta, and the water test is the client's own, on the box at the previous position (Entity.handleWaterMovement
 // runs at the start of the update, before the move).
 export const SMOKING_BALLS = new Set(['fireball', 'smallFireball', 'witherSkull']);
-export function clientBallFx(row, { spawn, wet = () => false }) {
+export function clientBallFx(row, { spawn, wet = () => false, world = null }) {
   if (!SMOKING_BALLS.has(row.kind)) return;
+  if (row.track && flyBallRow(row, { world, wet, spawn })) return; // b81 blast81: a server that sends the tracker field: the copy flies itself (fireball-copy.js)
   const vx = row.x - row.px, vy = row.y - row.py, vz = row.z - row.pz;
   if (wet(row)) for (let i = 0; i < 4; i++) spawn('bubble', row.x - vx * 0.25, row.y - vy * 0.25, row.z - vz * 0.25, vx, vy, vz);
   spawn('smoke', row.x, row.y + 0.5, row.z, 0, 0, 0);

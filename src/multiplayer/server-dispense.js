@@ -16,6 +16,7 @@ import { WitchPotions } from '../witch-potions.js';
 import { splashImpact } from '../witch.js';
 import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
 import { tickPrimedTnt, tickOneTnt } from '../entity-simulation.js';
+import { BallTracks } from './fireball-copy.js'; // b81 blast81
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
 import { SUPPORTED } from './server-mobs.js';
@@ -40,6 +41,7 @@ export class ServerDispense {
     this.balls.clientParticles = true;
     this.potions = null; // WitchPotions over the server's EntityWorld, made on first use (ServerMobs is built after the container ticks)
     this.primed = [];
+    this.ballTracks = new BallTracks(); // b81 blast81
     this.rockets = new FireworkRockets();
     this.ids = new WeakMap(); this.nextId = 0;
     this.fx = [];  // dispFx of this tick, in order
@@ -307,9 +309,9 @@ export class ServerDispense {
     if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
-    for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale });
+    for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, t: this.ballTracks.row(b) }); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js)
     for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
-    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0 }); // b63: wither skulls (the model turns to its flight)
+    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, t: this.ballTracks.row(b) }); // b63: wither skulls (the model turns to its flight)
     return out;
   }
   // Called by the simulation's tick tail: queues dispEnts / dispFx / projCollect on each player (`dispOut`, sent by server.js). A player who just saw entities gets one empty
@@ -317,13 +319,14 @@ export class ServerDispense {
   flush() {
     for (const lane of this.lanes) this.drainArrows(lane); // a skeleton's shot (made during the mobs' tick) is heard in the tick it was made
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
+    this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)
       const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.k === 'explode' ? s27Reaches(e, p.position) : (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < NEAR)).map(e => e.k === 'explode' ? s27Of(e, p) : e);
       const msgs = p.dispOut ??= [];
-      if (ents.length || p.dispSeen) msgs.push({ type: 'dispEnts', ents });
-      p.dispSeen = ents.length > 0;
+      if (ents.length || p.dispSeen > 0) msgs.push({ type: 'dispEnts', ents });
+      p.dispSeen = ents.length ? (ents.some(e => e.t) ? 2 : 1) : Math.max(0, (p.dispSeen | 0) - 1); // b81 blast81: a ball's copy runs two more updates after its row is gone (fireball-copy.js), so two empty snapshots
       if (events.length) msgs.push({ type: 'dispFx', events });
       const got = taken.filter(c => c.dim === dim && (c.x - p.position.x) ** 2 + (c.z - p.position.z) ** 2 < NEAR);
       if (got.length) msgs.push({ type: 'projCollect', taken: got.map(c => ({ i: c.i, by: c.by, x: c.x, y: c.y, z: c.z })) });

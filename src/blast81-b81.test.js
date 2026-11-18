@@ -119,3 +119,84 @@ test('server: a crystal hurt by a TNT blast explodes inside it, and the TNT that
   assert.ok(chained, 'the crystal blast primed the TNT block');
   assert.equal(chained.e.fuse, chained.fuse - 1, 'which updated in this tick');
 });
+
+// --- the fireball's client copy (multiplayer/fireball-copy.js) ---
+import { BallTracks, spawnBallCopy } from './multiplayer/fireball-copy.js';
+import { RemoteDispense } from './multiplayer/client-dispense.js';
+import { clientBallFx } from './multiplayer/client-explosion.js';
+import { fireballStep, deflect } from './blaze-ghast.js';
+
+function flight(ticks, { punchAt = -1 } = {}) {
+  const b = { kind: 'fireball', x: 10.3, y: 70.2, z: -4.6, vx: 0, vy: 0, vz: 0, ax: 0.08, ay: -0.0360555127546399, az: 0.048 }; // |a| = 0.1
+  const tracks = new BallTracks(), smoke = [], log = [];
+  const client = new RemoteDispense({ ballFx: row => clientBallFx(row, { spawn: (name, x, y, z) => smoke.push({ name, x, y, z }) }) });
+  for (let t = 0; t < ticks; t++) {
+    fireballStep(b, false); // the server ball's update (ze.h) in the tick it was launched in, and every tick after; the first moves by the launch motion 0
+    if (t === punchAt) deflect(b, [-1, 0, 0]);
+    tracks.update([b]);
+    const row = { k: 'b', i: 1, kind: b.kind, x: b.x, y: b.y, z: b.z, t: tracks.row(b) };
+    client.ents([row]);
+    log.push({ t, server: { x: b.x, y: b.y, z: b.z }, copy: { ...client.balls[0] }, packets: row.t.p ?? [] });
+  }
+  return { b, tracks, client, smoke, log };
+}
+
+test('fireball copy: the spawn has motion 0 and the acceleration normalised to 0.1 from the (int)(a * 8000) fields', () => {
+  const c = spawnBallCopy('fireball', [331, 2246, -148, 800, -288, 384]);
+  assert.deepEqual([c.vx, c.vy, c.vz], [0, 0, 0]);
+  assert.ok(Math.abs(Math.hypot(c.ax, c.ay, c.az) - 0.1) < 1e-6);
+  assert.deepEqual([c.x, c.y, c.z], [331 / 32, 2246 / 32, -148 / 32]);
+});
+
+test('fireball copy: it flies by itself between the entry\'s 10-tick packets, with a smoke every update', () => {
+  const { log, smoke } = flight(31);
+  const sent = log.filter(l => l.packets.length).map(l => l.t);
+  assert.ok(sent.every(t => t === 1 || t % 10 === 0), `packets only at ticks 1 and every 10th: ${sent}`);
+  assert.ok(sent.includes(10) && sent.includes(20) && sent.includes(30));
+  // between packets the copy moves on its own: the S0E only places it (motion 0) and from the next message it runs its update before the packets (Minecraft.runTick), so
+  // it trails the server ball by one update until a position packet puts it on the ball again
+  const l5 = log[5];
+  assert.ok(l5.copy.x - log[0].copy.x > 0.3, 'the copy moved without any packet');
+  assert.ok(Math.abs(l5.copy.x - log[4].server.x) < 0.05 && Math.abs(l5.copy.z - log[4].server.z) < 0.05, 'one update behind the server ball');
+  // (the entry's x and z go out rounded by its size class, from a floored start: within 1/16)
+  for (const t of [10, 20, 30]) assert.ok(Math.abs(log[t].copy.x - log[t].server.x) <= 1 / 16 && Math.abs(log[t].copy.z - log[t].server.z) <= 1 / 16, `on the ball after the packet at ${t}`);
+  assert.equal(smoke.filter(s => s.name === 'smoke').length, 30, 'a smoke every update, none in the spawn message');
+  const s = smoke[12], c = log[13].copy;
+  assert.deepEqual([s.x, s.y, s.z], [c.x, c.y + 0.5, c.z], 'the smoke is at the copy, half a block up');
+});
+
+test('fireball copy: after the server ball is gone the copy updates twice more (the S13 comes after the next update), drawn in the first of them', () => {
+  const { b, tracks, client, smoke } = flight(6);
+  const before = smoke.length;
+  b.dead = true; tracks.update([b]);
+  client.ents([]);
+  assert.equal(smoke.length, before + 1, 'one more update of the copy');
+  assert.equal(client.balls.length, 1, 'still drawn this tick');
+  client.ents([]);
+  assert.equal(client.balls.length, 0);
+  assert.equal(smoke.length, before + 2, 'and one more before the S13');
+  client.ents([]);
+  assert.equal(smoke.length, before + 2);
+});
+
+test('fireball copy: a punched ball sends S12 (setBeenAttacked); the copy takes the motion but keeps its acceleration', () => {
+  const { log } = flight(14, { punchAt: 7 });
+  const v = log[7].packets.find(p => p.type === 'velocity');
+  assert.ok(v, 'S12 in the punch tick');
+  assert.equal(v.vx, -8000);
+  assert.ok(log[8].copy.x < log[7].copy.x, 'the copy turned round');
+});
+
+test('server: the dedicated dispense snapshot carries the tracker field and two empty snapshots follow a ball', () => {
+  const { s } = server();
+  const d = s.dispense, p = [...s.players.values()][0];
+  d.mobs.fireballs.launch({ large: true, owner: null, x: p.position.x + 3, y: p.position.y + 5, z: p.position.z, exact: [0.1, 0, 0] });
+  p.dispOut = [];
+  s.input('a', input()); s.tick();
+  const rows = p.dispOut.filter(m => m.type === 'dispEnts').flatMap(m => m.ents).filter(r => r.kind === 'fireball');
+  assert.ok(rows.length && rows[0].t?.s?.length === 6);
+  for (const b of d.mobs._fireballs.list) b.dead = true;
+  p.dispOut = [];
+  s.input('a', input()); s.tick(); s.input('a', input()); s.tick(); s.input('a', input()); s.tick();
+  assert.equal(p.dispOut.filter(m => m.type === 'dispEnts' && !m.ents.length).length, 2);
+});

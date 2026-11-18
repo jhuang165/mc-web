@@ -97,18 +97,32 @@ test('ExplosionParticles.burst calls `cell` after each cell\'s two particles, on
   assert.ok(seen[1][4] > seen[0][4] && seen[0][4] >= 2);
 });
 
-test('fireball smoke and bubbles: the client copy draws what the server ball drew, tick for tick', () => {
+// b81 blast81: this test used to hold the b80 gap (the client copy had no flight of its own and drew the smoke at the server row). Rows without the tracker field `t` (an
+// older server) still take that path, exactly; with `t` the copy flies itself (multiplayer/fireball-copy.js) and trails the server ball by up to one update between packets.
+function ballRun({ track }) {
   const { s, a, world } = fixture({ water: true });
   const server = [];
   s.mobs.mobs.fx = { spawn: (...v) => server.push(v) };
-  const client = [], rd = new RemoteDispense({ ballFx: row => clientBallFx(row, { spawn: (...v) => client.push(v), wet: r => ballWet(world, r) }) });
+  const client = [], rd = new RemoteDispense({ ballFx: row => clientBallFx(row, { spawn: (...v) => client.push(v), wet: r => ballWet(world, r), world }) });
+  const feed = () => { for (const m of ents(a)) rd.apply(track ? m : { ...m, ents: m.ents.map(({ t, ...r }) => r) }); a.dispOut = null; };
   s.mobs.mobs.fireballs.launch({ large: false, owner: null, x: 70.5, y: 15.5, z: 64.5, exact: [1, 0, 0] });
-  s.tick(); for (const m of ents(a)) rd.apply(m); a.dispOut = null; server.length = 0; client.length = 0; // the first row has no previous position
-  for (let i = 0; i < 25; i++) { s.tick(); for (const m of ents(a)) rd.apply(m); a.dispOut = null; }
+  s.tick(); feed(); server.length = 0; client.length = 0; // the first row has no previous position (and with `t` it only places the copy)
+  for (let i = 0; i < 25; i++) { s.tick(); feed(); }
   const pick = l => l.filter(v => v[0] === 'smoke' || v[0] === 'bubble');
-  assert.ok(pick(server).some(v => v[0] === 'bubble'), 'the ball flew into water');
-  assert.equal(pick(client).length, pick(server).length);
-  pick(client).forEach((v, i) => { assert.equal(v[0], pick(server)[i][0]); for (let k = 1; k < 7; k++) assert.ok(Math.abs(v[k] - pick(server)[i][k]) < 1e-9, `${i} ${k}`); });
+  return { server: pick(server), client: pick(client) };
+}
+test('fireball smoke and bubbles: without the tracker field the client draws what the server ball drew, tick for tick', () => {
+  const { server, client } = ballRun({ track: false });
+  assert.ok(server.some(v => v[0] === 'bubble'), 'the ball flew into water');
+  assert.equal(client.length, server.length);
+  client.forEach((v, i) => { assert.equal(v[0], server[i][0]); for (let k = 1; k < 7; k++) assert.ok(Math.abs(v[k] - server[i][k]) < 1e-9, `${i} ${k}`); });
+});
+test('fireball smoke and bubbles: with the tracker field the copy flies itself, a smoke per update, bubbles in the water, near the server ball', () => {
+  const { server, client } = ballRun({ track: true });
+  assert.equal(client.length, server.length);
+  assert.deepEqual(client.map(v => v[0]), server.map(v => v[0]));
+  client.forEach((v, i) => { if (v[0] === 'smoke') assert.ok(Math.abs(v[1] - server[i][1]) < 0.7 && Math.abs(v[2] - server[i][2]) < 0.05 && Math.abs(v[3] - server[i][3]) < 0.05, `${i}`); });
+  assert.ok(client.some((v, i) => v[0] === 'smoke' && Math.abs(v[1] - server[i][1]) > 0.05), 'its own place, not the row\'s');
 });
 
 test('wither skull: smoke after the move, four bubbles in water (ze.h; zp has no onUpdate of its own)', () => {
