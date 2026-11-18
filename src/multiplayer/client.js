@@ -147,6 +147,8 @@ export class DedicatedClient {
   vehicle(v, hit) { this.send({ type: hit ? 'vehHit' : 'vehUse', v }); }
   // b63 MC|AdvCdm (type 1) for a command block minecart: the GUI's Done. The server accepts a Creative operator on a server with enable-command-block.
   vehCommand(v, command) { this.send({ type: 'vehCmd', v, command }); }
+  // b80 mpcmd80 MC|AdvCdm (type 0) for a command block at x, y, z; the server answers with chat (advMode.*) and the block's S35.
+  blockCommand(x, y, z, command) { this.send({ type: 'blockCmd', x, y, z, command }); }
   // C0D close window.
   // C0E click window: the slot, button and mode, the client's action number and the stack its own slotClick returned.
   clickWindow(windowId, slot, button, mode, action, item) { this.send({ type: 'clickWindow', windowId, slot, button, mode, action, item: item ?? null }); }

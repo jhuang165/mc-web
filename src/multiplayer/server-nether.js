@@ -19,7 +19,7 @@ import { Fire } from '../fire.js';
 import { Farming } from '../farming.js';
 import { FallingBlocks } from '../falling.js';
 import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
-import { CommandBlockTiles } from './server-command-blocks.js'; // b79 mplanes79
+import { CommandBlockTiles, installServerCommandBlocks } from './server-command-blocks.js'; // b79 mplanes79
 import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
@@ -86,6 +86,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   });
   n.redstone.restore(saved.redstone);
   installMusic(sim, n.redstone, n.dim ?? NETHER, saved.redstone); // b66 mpbooks: note blocks and jukeboxes of this dimension
+  installServerCommandBlocks(sim, n.redstone, n, n.dim ?? NETHER); // b80 mpcmd80: this dimension's command blocks run in it
   n.containers = new ServerContainers(sim); n.containers.dim = n.dim ?? NETHER; // b63: the End is built by the same function with n.dim = 1
   n.light = new LightVolume(w, (x, y, z, b) => lightEmission(b, n.redstone.lit.has(`${x},${y},${z}`) || n.containers.litFurnaces.has(`${x},${y},${z}`)));
   w.blockLight = (x, y, z) => n.light.blockAt(x, y, z);

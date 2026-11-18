@@ -15,7 +15,9 @@ import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { FallingBlocks } from '../falling.js';
 import { serverFallingTile } from './server-falling-tiles.js'; // b78 falling78
-import { CommandBlockTiles } from './server-command-blocks.js'; // b79 mplanes79
+import { CommandBlockTiles, installServerCommandBlocks } from './server-command-blocks.js'; // b79 mplanes79; b80 mpcmd80: run on redstone
+import { COMMAND_BLOCK } from '../command-block.js'; // b80 mpcmd80
+import { setGameRuleSource, ruleOn } from '../game-rules.js'; // b80 mpcmd80
 import { Rails } from '../rails.js';
 import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
@@ -184,6 +186,7 @@ export class DedicatedSimulation {
     });
     this.redstone.restore(saved.redstone);
     installMusic(this, this.redstone, 0, saved.redstone); // b66 mpbooks: note blocks and jukeboxes (server-music.js)
+    installServerCommandBlocks(this, this.redstone, this, 0); // b80 mpcmd80: BlockCommandBlock (server-command-blocks.js)
     this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
     this.dispense = new ServerProjectiles(this, saved.projectiles); // b61: what dispensers fire (arrows, potions, TNT...), sent to clients as dispEnts / dispFx
     this.containers.ticks = new ContainerTicks(this); // hoppers, dispensers, trapped chest power (server-container-ticks.js)
@@ -569,8 +572,10 @@ export class DedicatedSimulation {
     if (block !== SKULL) t.skulls.remove(x, y, z);
     if (block === BEACON) t.beacons.ensure(x, y, z); else t.beacons.remove(x, y, z); // BlockContainer.onBlockAdded makes the tile, a default one
     if (block === MOB_SPAWNER) { if (!t.spawners.get(x, y, z)) t.spawners.add({ x, y, z }); } else t.spawners.remove(x, y, z);
+    if (block !== COMMAND_BLOCK) t.commandBlocks?.remove(x, y, z); // b80 mpcmd80: a new command block at the cell starts empty
   }
   tick() {
+    setGameRuleSource((name) => ruleOn(this, name)); // b80 mpcmd80: entities.js / fire.js / ... read gameRule() (mobGriefing, doMobLoot, doFireTick); without a source they saw the defaults, so /gamerule did not reach them on the server
     const beforeLit = new Set(this.redstone.lit);
     hardcoreTick(this); // b69 serverprops: a hardcore world is Hard
     this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle

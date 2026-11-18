@@ -19,12 +19,23 @@ const wire = (chatMessage, message) => (typeof message === 'string' || isCompone
 
 // One cart's run. `social` is the ServerSocial; `commands` is its SERVER_COMMANDS set.
 export function runCartCommand(social, cart, { commands, chatMessage }) {
-  const sim = social.simulation, tile = cart.command;
+  const tile = cart.command;
   if (!tile) return 0;
-  if (!sim.commandBlocks) { tile.successCount = 0; return 0; } // MinecraftServer.isCommandBlockEnabled is false: agp.a(World) sets the count to 0
-  const pos = cartCommandPosition(cart);
+  if (!social.simulation.commandBlocks) { tile.successCount = 0; return 0; } // MinecraftServer.isCommandBlockEnabled is false: agp.a(World) sets the count to 0
+  tile.outputChanged = () => { tile.watch24 = tile.lastOutput; };
+  try { return runCommandLogic(social, tile, cartCommandPosition(cart), { commands, chatMessage, dim: 0, skipEmpty: true }); } finally { delete tile.outputChanged; }
+}
+
+// b80 mpcmd80: one CommandBlockLogic run (agp.a(ahb)) of a cart or a command block `tile` at `pos` in dimension `dim`, through the server's command runner; returns and stores
+// the success count. The host is built over the nearest player of that dimension (the port's world, summon and player hosts are per player; no player there: 0, a port rule).
+// The sender is commandBlockSender (permission level 2, the tile's name and position, TrackOutput / LastOutput); a command this server does not hold answers "not available".
+// `skipEmpty`: the cart's empty command counts 0 without a run (b63); a command block runs "" like native executeCommand (commands.generic.notFound into its LastOutput).
+// A tile's `outputChanged` hook (set by the caller) sees each tracked output line.
+export function runCommandLogic(social, tile, pos, { commands, chatMessage, dim = 0, skipEmpty = false }) {
+  const sim = social.simulation;
+  if (!sim.commandBlocks) { tile.successCount = 0; return 0; }
   let near = null, nd = Infinity;
-  for (const p of sim.players.values()) { if (p.dimension) continue; const d = (p.position.x - pos.x) ** 2 + (p.position.y - pos.y) ** 2 + (p.position.z - pos.z) ** 2; if (d < nd) { nd = d; near = p; } }
+  for (const p of sim.players.values()) { if ((p.dimension | 0) !== dim) continue; const d = (p.position.x - pos.x) ** 2 + (p.position.y - pos.y) ** 2 + (p.position.z - pos.z) ** 2; if (d < nd) { nd = d; near = p; } }
   if (!near) { tile.successCount = 0; return 0; } // nobody is here to read the output or to be a target
   const roster = [...sim.players.values()].map(p => ({ name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, mode: p.survival.mode === 'creative' ? 1 : p.survival.mode === 'adventure' ? 2 : 0 }));
   const records = roster.map(r => ({ name: r.name, position: () => r.position, mode: r.mode, level: 0 }));
@@ -44,8 +55,7 @@ export function runCartCommand(social, cart, { commands, chatMessage }) {
   Object.defineProperties(base, Object.getOwnPropertyDescriptors(summonHost(sim, near))); // b67 mpsummon: /summon from a command block cart (near is an Overworld player)
   Object.defineProperties(base, Object.getOwnPropertyDescriptors(worldCommandsHost(sim, near, forPlayer))); // b68 mpworldcmds
   const sender = commandBlockSender(base, tile, pos);
-  tile.outputChanged = () => { tile.watch24 = tile.lastOutput; };
-  try { tile.successCount = tile.command ? (createCommandRunner(sender).run(tile.command) ? 1 : 0) : 0; } finally { delete tile.outputChanged; }
+  tile.successCount = tile.command || !skipEmpty ? (createCommandRunner(sender).run(tile.command) ? 1 : 0) : 0; // the runner answers one success per run (see command-blocks.md)
   return tile.successCount;
 }
 

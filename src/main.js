@@ -93,6 +93,7 @@ import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
 import { Trees } from "./trees.js";
 import { VoxelScene } from "./scene.js";
+import { PLAYER_PICKUP_LIFT, MOB_PICKUP_LIFT } from "./drop-renderer.js"; // b80 mpcmd80: EntityPickupFX end point (a mob collector is 0.5 below its feet)
 import { SoundBank } from "./audio.js";
 import { randomSuperSecretEvent, SUPER_SECRET_SOUND } from "./post-shaders.js";
 import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
@@ -823,7 +824,7 @@ function applyMultiplayerTick(message) {
   remotePistons?.tick(message.changes); // b66 mppistons: TileEntityPiston.updateEntity of the client's moving blocks
   if (message.blockActions) applyBlockActions(message.blockActions, survival); // S24 chest lids of every viewer
   if (message.contFurnaceLit || Object.keys(mpFurnaces).length) mpFurnaces = litFurnaceData(message.contFurnaceLit); // b60: lit furnaces (block 62 and its light)
-  if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // the S33/S35 descriptions that follow a chunk resend
+  if (message.tiles?.length) applyTiles(message.tiles, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ }); // the S33/S35 descriptions that follow a chunk resend
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
@@ -842,8 +843,9 @@ function applyMultiplayerTick(message) {
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   for (const t of message.taken ?? []) { // S0D collect item: the item flies to the collector
-    const e = remoteItems.get(t.i), who = t.at ?? (t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by && !q.far) /* b73 streamfix73: far rows are list entries only */) /* b79 mplanes79: `at` is a mob collector's place */;
-    if (e && who) scene.drops.pickup(e, who);
+    const mobWho = t.mob != null ? remoteMobs?.copies.get(t.mob)?.mob ?? t.at : null; // b80 mpcmd80: a mob collector is followed live (blb reads its position each frame); `at` when the copy is gone
+    const e = remoteItems.get(t.i), who = mobWho ?? t.at ?? (t.by === multiplayer.id ? position : message.players.find(q => q.id === t.by && !q.far) /* b73 streamfix73: far rows are list entries only */) /* b79 mplanes79: `at` is a mob collector's place */;
+    if (e && who) scene.drops.pickup(e, who, mobWho ? MOB_PICKUP_LIFT : PLAYER_PICKUP_LIFT); // b80 mpcmd80: posY + yOffs(-0.5): a mob's posY is its feet
     if (e && t.partial) takenDrops.add(t.i); // b61: the remainder of a partly taken stack vanishes on every client, as natively
   }
   if (message.itrack || itrackClient.size) { itrackClient.tick(message.itrack, world, position); Object.assign(message, itrackClient.lists()); } // b72 mpcadence72: item / orb packets, client physics between them
@@ -929,7 +931,7 @@ async function joinMultiplayer(settings) {
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(disconnectedScreen({ headingKey: disconnectHeading(true), message: reason, back: showMultiplayer })); } }, // b68 mpping: GuiDisconnected (disconnect.lost)
   });
   client.onUseDone = () => { eating = finishPredictedUse(eating, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }); }; // b65 lead: S19 status 9, EntityPlayer.handleHealthUpdate(9) -> onItemUseFinish: updateItemUse(16), then clearItemInUse (the stack itself comes in the S2F that follows)
-  client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); remotePlayers?.dropColumns(cols); /* b73 streamfix73 */ } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }), dropTiles: cols => dropTilesIn(cols, { signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, pistons: remotePistons }) /* b73 streamfix73: Chunk.onChunkUnload drops the tile entities */ }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
+  client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); remotePlayers?.dropColumns(cols); /* b73 streamfix73 */ } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ }), dropTiles: cols => dropTilesIn(cols, { signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, pistons: remotePistons }) /* b73 streamfix73: Chunk.onChunkUnload drops the tile entities */ }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
   connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
@@ -959,7 +961,7 @@ async function joinMultiplayer(settings) {
     remotePistons = new ClientPistons({ scene }); client.onPiston = m => remotePistons?.apply(m); // b66 mppistons
     remoteLightning = new RemoteLightning(() => weather, e => sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } })); // b66 mplightning
     remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */, mountYawOf: (key, t) => mountBodyYaw(key, remoteMobs, t) /* b78 */ });
-    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles }); // b60: chests drawn closed before any block action
+    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ }); // b60: chests drawn closed before any block action
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
@@ -1002,7 +1004,7 @@ async function multiplayerDimension(client, settings, m) {
     remoteVehicles?.clear(); remoteVehicles = new RemoteVehicles(world); remoteVehicles.renderers = { minecart: new MinecartRenderer(scene.scene, scene, remoteVehicles.carts), boat: new BoatRenderer(scene.scene, scene, remoteVehicles.boats), hanging: new HangingRenderer(scene.scene, scene) }; aimedRemoteVeh = null; mpRiding = false; remoteDispense = makeRemoteDispense(); // b61 lead: the new dimension's vehicles and dispensed entities (the trip dismounts)
     remoteMobs = new RemoteMobs(world, { sound: (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch }), particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), blockParticle: (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]) /* b67: a golem copy's walking dust */ });
     remotePlayers?.clear(); remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash), capeUrl: hash => settings.api.capeUrl(hash), board: mpBoard /* b64 mpscoreboard */, seatOf: key => mountSeat(key, { vehicles: remoteVehicles, mobs: remoteMobs }) /* b77 mpvelocity77 */, mountYawOf: (key, t) => mountBodyYaw(key, remoteMobs, t) /* b78 */ });
-    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles });
+    applyTiles(snapshot.contTiles ?? [], { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ });
     client.start(); client.clientSettings(options); // b72 mpsettings: C15 (all fields, incl. showCape) at join
     itrackClient.clear(); /* b72 mpcadence72 */ syncMultiplayerItems(snapshot.items ?? []);
     sendMultiplayerInput();
@@ -1834,6 +1836,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.thrownDiamond = (name) => { if (name === PLAYER_NAME) achievements.trigger("diamondsToYou"); }; // b79 spswing79: sw.e picks a thrown diamond up -> the thrower's achievement
+    mobs.itemPickedUp = (e, item) => scene.drops.pickup(item, e, MOB_PICKUP_LIFT); // b80 mpcmd80: the integrated server's S0D for a mob collector: EntityPickupFX to the mob's feet - 0.5 (silent: RenderGlobal.playSound is empty)
     mobs.fx = scene.fx;
     awayIdle = !world.dimension && record.transit ? dims.takeIdle() : null; // b59/b60: the Overworld's spawn-area entities kept their tracker phase while the player was in the Nether/End (caught up below, once the object lists are loaded)
     for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
@@ -2376,7 +2379,7 @@ function openCommandBlock(x, y, z, cartTile = null, atClick = false) {
   document.exitPointerLock?.();
   gui.show(commandBlockScreen({
     command: tile.command, lastOutput: tile.lastOutput, // bfh shows func_145749_h whatever TrackOutput says
-    done: (command) => { if (!survival.creative || !commandHost.cheats) { resume(); return; } tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
+    done: (command) => { if (!cartTile && multiplayer && active?.remote) { multiplayer.blockCommand(x, y, z, command); resume(); return; } /* b80 mpcmd80: bfh Done sends MC|AdvCdm type 0 and sets nothing locally; the server's S35 brings the command */ if (!survival.creative || !commandHost.cheats) { resume(); return; } tile.command = command; if ("watch24" in tile) tile.watch24 = tile.lastOutput ?? "null"; /* MC|AdvCdm: setCommand then func_145756_e (nh, bytecode-read) */ saved = false; resume(); },
     cancel: resume,
   }));
 }

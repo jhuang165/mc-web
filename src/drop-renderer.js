@@ -17,6 +17,8 @@ import { flatItemSprites } from "./render-settings.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 
 import { blockCopyCount, spriteCopyCount, fancySpriteZ, flatSpriteOffsets } from "./drop-sprite.js";
+// b80 mpcmd80: EntityPickupFX's end point above the collector's feet: posY + yOffs (-0.5); posY is feet + 1.62 for a player, the feet for a mob.
+export const PLAYER_PICKUP_LIFT = 1.12, MOB_PICKUP_LIFT = -0.5;
 
 // RenderItem (executed, drop-sprite.js): a block or the chest draws the block rule's copies, a fancy sprite item its own 1 to 4, a fast sprite the block rule's count.
 const copies = (n, sprite = false, flat = false) => (sprite && !flat ? spriteCopyCount(n) : blockCopyCount(n));
@@ -128,11 +130,13 @@ export class DropRenderer {
   }
   // EntityPickupFX: over three ticks the item moves to 0.5 below the player's
   // eye (1.12 above the feet), eased by t squared. `target` is live.
-  pickup(item, target) {
+  // b80 mpcmd80: blb (bytecode-read) aims at the collector's posY + yOffs, with yOffs -0.5 from NetHandlerPlayClient.handleCollectItem. A player's posY is its eye
+  // (yOffset 1.62), so `lift` 1.12 above the feet; a mob's posY is its feet (yOffset 0), so a mob collector passes MOB_PICKUP_LIFT, 0.5 below its feet.
+  pickup(item, target, lift = PLAYER_PICKUP_LIFT) {
     const pile = this.piles.get(item);
     if (!pile) return;
     this.piles.delete(item);
-    this.flying.push({ pile, item, target, start: null });
+    this.flying.push({ pile, item, target, start: null, lift });
   }
   // b63 (mpprojectiles2): EntityPickupFX for something that was never a drop here (an arrow a connected player took): builds the pile for `item.stack` and flies it to `target` like pickup().
   flyIn(item, target) {
@@ -169,7 +173,7 @@ export class DropRenderer {
       }
       t *= t;
       const e = fx.item, p = fx.target;
-      this.place(fx.pile, e.x + (p.x - e.x) * t, e.y + (p.y + 1.12 - e.y) * t, e.z + (p.z - e.z) * t, e.age + (ticks - fx.start), e);
+      this.place(fx.pile, e.x + (p.x - e.x) * t, e.y + (p.y + (fx.lift ?? PLAYER_PICKUP_LIFT) - e.y) * t, e.z + (p.z - e.z) * t, e.age + (ticks - fx.start), e);
       return true;
     });
   }
