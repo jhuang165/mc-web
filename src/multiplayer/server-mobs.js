@@ -317,7 +317,7 @@ export class ServerMobs {
     const statusSounds = mobs.clientSounds.splice(0); // taken first: drainMobEvents would play them as server sounds
     // The orbs of a kill (ExperienceOrbs of server-items.js), the server's own sounds (S29) and explosions; the clients' status sounds become S19 below.
     drainMobEvents({ mobs, xpOrbs: this.host.serverItems.xp, items: this.host.items }, {
-      explode: (x, y, z, size, opts) => { this.explode({ x, y, z, size, source: opts?.exploder, smoking: opts?.smoking, blue: opts?.blue }); this.burst(x, y, z, size); },
+      explode: (x, y, z, size, opts) => { this.explode({ x, y, z, size, source: opts?.exploder, smoking: opts?.smoking, flaming: opts?.flaming, blue: opts?.blue }); this.burst(x, y, z, size); }, // b80 mpfx80: `flaming` was dropped here, so a server ghast fireball (zg.a: newExplosion(null, .., power, true, mobGriefing)) lit no fire
       sound: (s, ev) => this.sound(s, ev),
       blockEdit: (cells, ev) => { if (ev?.blockBreak) this.eatGrass(ev.blockBreak); }, // b63: World.func_147480_a(x, y, z, true) plays aux 2001 (the wither's block sweep)
       eatGrass: g => this.eatGrass(g),

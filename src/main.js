@@ -166,6 +166,7 @@ import { applySpawnerDelay } from "./multiplayer/client-spawners.js"; // b65 mps
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
 import { RemoteDispense } from "./multiplayer/client-dispense.js";
+import { S27ClientBlocks, clientBallFx, ballWet } from "./multiplayer/client-explosion.js"; // b80 mpfx80
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { serverListScreen, ServerList, disconnectedScreen, disconnectHeading } from "./multiplayer/server-list-gui.js"; // b68 mpping
 import { skinCanvas } from "./skin.js";
@@ -714,11 +715,13 @@ function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current, ...inventoryFields(survival.inventory, mpInv, tickCounter, true) }); // b59: counts and tags, `rest` when changed, `ack` of the last S2F slot
 }
 // Cells from a tick (S22/S21 equivalents) or a placement resend (the clicker's two S23 packets).
+const s27Blocks = new S27ClientBlocks(); // b80 mpfx80: the client's own S27 block pass (multiplayer/client-explosion.js)
 function applyMultiplayerCells(changes) {
   if (!multiplayer?.ready || !active?.remote) return;
   const cells = [];
   for (const [x, y, z, id, meta] of presentCells(world, changes)) { // b71 mpchunks: nothing for a column the server has not sent or has unloaded
     const old = world.get(x, y, z);
+    s27Blocks.note(x, y, z, old, world.getMeta(x, y, z)); // b80 mpfx80: this tick's dispFx S27 sees the cell as it was and leaves the server's change alone
     world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
   }
   if (cells.length) scene.updateBlocks(cells);
@@ -757,13 +760,14 @@ function makeRemoteDispense() {
   return new RemoteDispense({
     sound: play,
     knock: (mx, my, mz) => { velocity.x += mx; velocity.y += my; velocity.z += mz; }, // b78 mpexplosion78: S27 motion (NetHandlerPlayClient.handleExplosion)
-    explode: (x, y, z, size, cells) => { scene.explosionParticles.burst(Math.fround(x), Math.fround(y), Math.fround(z), Math.fround(size), cells ?? [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] }); play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
+    explode: (x, y, z, size, cells) => { const cleared = [], own = multiplayer?.ready && active?.remote; scene.explosionParticles.burst(Math.fround(x), Math.fround(y), Math.fround(z), Math.fround(size), cells ?? [], { viewer: [position.x, position.y + PHYSICS.eye, position.z], cell: own ? (bx, by, bz, r) => s27Blocks.cell(world, bx, by, bz, r, cleared) : null }); if (cleared.length) scene.updateBlocks(cleared); /* b80 mpfx80: doExplosionB(true) clears the listed blocks on the client */ play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
     splash: (x, y, z, damage) => splashBreak(scene.fx, scene.fx.worldRandom, damage, x, y, z),
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),
     poof: row => projectiles.clientImpact(row),
     shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
     eyeTrail: (row, vx, vy, vz) => spawnEyeTrail(scene.fx, row, vx, vy, vz), // b65 mpdragon2: the flying eye's portal trail (the copy draws it, as EntityEnderEye.onUpdate does)
+    ballFx: row => clientBallFx(row, { spawn: (...a) => scene.fx?.spawn(...a), wet: r => ballWet(world, r) }), // b80 mpfx80: ze.h's smoke (and bubbles in water) on the client copy
     spawnerBurst: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)), // b65 mpspawners2: aux 2004
     spawnerDelay: (x, y, z, key) => applySpawnerDelay({ spawners, copies: remoteVehicles?.copies }, x, y, z, key), // b65: the spawner's block event 1
     spawnerPuff: (x, y, z, w, h) => burst(scene.fx, "explode", 20, { x, y, z, width: w, height: h }, scene.explosionParticles.worldRandom), // b65: entity status 20
@@ -819,6 +823,7 @@ function collectMultiplayerStack(stack) {
 function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
+  s27Blocks.newTick();
   applyMultiplayerCells(message.changes);
   remotePistons?.tick(message.changes); // b66 mppistons: TileEntityPiston.updateEntity of the client's moving blocks
   if (message.blockActions) applyBlockActions(message.blockActions, survival); // S24 chest lids of every viewer

@@ -171,7 +171,6 @@ export class WitherSkulls extends Fireballs {
     const box = this.boxOf(b), waterAcc = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += waterAcc.push[0]; b.vy += waterAcc.push[1]; b.vz += waterAcc.push[2];
     b.ticks++;
-    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
     const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
     let hit = rayTraceBlocks(mobs.world, start, end);
     const entity = this.sweep(b, start, hit ? hit.vec : end, box);
@@ -179,7 +178,12 @@ export class WitherSkulls extends Fireballs {
     if (hit) this.impact(b, hit); // the update goes on: the skull still moves (EntityFireball.onUpdate only marks it dead)
     const k = waterAcc.wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
     b.x += b.vx; b.y += b.vy; b.z += b.vz;
+    // b80 mpfx80: zp has no onUpdate of its own (bytecode-read: only ze defines h()), so ze.h's order holds: after the move four bubbles in water at the new position minus a
+    // quarter of the old motion (moving with it), the motion update, then the smoke at (x, y + 0.5, z) of the NEW position. The port spawned the smoke before the move, with no bubbles.
+    const [ovx, ovy, ovz] = [b.vx, b.vy, b.vz];
+    if (waterAcc.wet) for (let i = 0; i < 4; i++) mobs.fx?.spawn("bubble", b.x - ovx * 0.25, b.y - ovy * 0.25, b.z - ovz * 0.25, ovx, ovy, ovz);
     b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
+    mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
   }
   // zp.a(azu): 8 damage from the wither (a mob source) and a 5 heal on a kill, the wither effect by difficulty, then a power 1 explosion.
   impact(b, hit) {

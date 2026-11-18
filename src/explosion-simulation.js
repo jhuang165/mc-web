@@ -13,6 +13,7 @@ import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
 import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
+import { clientDropDraws } from "./multiplayer/client-explosion.js"; // b80 mpfx80
 import { s27Loopback } from "./multiplayer/server-explosion-packet.js"; // b79 explfx79: the integrated client sees the blast as S27 does
 import { velocityPacket } from "./multiplayer/server-velocity.js"; // S12 quantisation
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
@@ -180,7 +181,9 @@ export function applyExplosion(state, request, hooks = {}) {
   // S27 reaches only a player within 64 blocks (WorldServer.newExplosion), and the client's huge explosion particle has no other range test (ring-events.js).
   if (explosionReaches(x, y, z, position)) {
     const wire = s27Loopback(x, y, z, size, smoking ? explosion.list : []); // b79 explfx79: float centre, offset bytes (the integrated client reads S27, not the server's list)
-    burst(wire.x, wire.y, wire.z, wire.size, wire.list, { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+    // b80 mpfx80: the integrated client's world still holds the blocks when S27 arrives (the S23s follow), so its ore and spawner drop draws on World.rand run between the
+    // cells' particles; here the blocks are still in place too (broken below).
+    burst(wire.x, wire.y, wire.z, wire.size, wire.list, { viewer: [position.x, position.y + PHYSICS.eye, position.z], cell: (bx, by, bz, r) => clientDropDraws(world.get(bx, by, bz), world.getMeta?.(bx, by, bz) ?? 0, r) });
   }
   sound("random.explode", { volume: 4, pitch: explosion.pitch, position: { x, y, z } });
 
@@ -224,7 +227,7 @@ export function applyExplosion(state, request, hooks = {}) {
       if (world.get(...head) === PISTON_HEAD && world.set(...head, 0)) changes.push([...head, PISTON_HEAD, 0]);
     }
   }
-  // Explosion.doExplosionB(flaming): the cells explodeBlocks chose get fire (flaming is the ender crystal and ghast fireballs).
+  // Explosion.doExplosionB(flaming): the cells explodeBlocks chose get fire (flaming is ghast fireballs and beds; the ender crystal is not flaming, ender-crystal-mobs.js).
   for (const [fx, fy, fz] of explosion.fires) if (ignite(fx, fy, fz)) changes.push([fx, fy, fz, 0, FIRE]);
   for (const drop of explosion.drops)
     items.spawn(makeStack(drop.id, 1, drop.damage || 0), drop.x, drop.y, drop.z, { delay: 10 });
