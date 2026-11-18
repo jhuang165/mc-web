@@ -2,6 +2,7 @@
 // (Fuel, PushX, PushZ, TNTFuse, TransferCooldown, Items with original ids, CustomName, Motion). MinecartSpawner reads the MobSpawnerBaseLogic keys (spawner-cart.md).
 import { nbtGet, hasNumber } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
+import { getStringAny } from "./nbt-string.js";
 import { isContainerType, slotCount } from "./cart-variants.js";
 import { Y_OFFSET } from "./minecarts.js";
 
@@ -50,7 +51,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
 // A command tag reaches readEntityFromNBT, which reads EntityId and Delay unconditionally: absent they are "" and 0.
 export function spawnerRecord(tag) {
   const r = { EntityId: "", Delay: 0 }, num = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount", "MaxNearbyEntities", "RequiredPlayerRange", "SpawnRange"];
-  if (tag.get("EntityId")?.type === NBT.STRING) r.EntityId = tag.get("EntityId").value;
+  r.EntityId = getStringAny(tag, "EntityId"); // b80 fluids80: getString reads any tag as its toString (falling-tiles79-reference.json, executed)
   for (const k of num) if (hasNumber(tag, k)) r[k] = nbtGet(tag, k, NBT.SHORT, 0);
   const list = nbtGet(tag, "SpawnPotentials", NBT.LIST);
   if (list?.elementType === NBT.COMPOUND && list.items.length) r.SpawnPotentials = list.items;

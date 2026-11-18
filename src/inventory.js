@@ -35,7 +35,9 @@ const storedTag = (s) => Array.isArray(s.storedEnchantments) ? s.storedEnchantme
 const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.displayName && a.unbreakable === b.unbreakable && a.color === b.color &&
   samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b)) && sameFireworkTag(a, b) && sameBookTag(a, b) && sameItemTags(a, b);
 // ItemStack.areItemStackTagsEqual: every supported NBT tag participates in merge identity.
-export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && sameTag(a, b);
+// b80 fluids80: the flowing fluid ItemBlocks (original 8/10, rawId) share the still item's port id but are other Items: ItemStack.isItemEqual is false, the inventory and
+// EntityItem.combineItems keep them apart (fluids80-reference.json stack80, executed).
+export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && a.rawId === b.rawId && sameTag(a, b);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
 export class PlayerInventory {

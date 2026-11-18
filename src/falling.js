@@ -231,7 +231,7 @@ export class FallingBlocks {
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
       const old = w.get(i, j, k);
       // Fire is the one block whose canPlaceBlockAt looks past the cell: a solid top below or a burnable neighbour (falling-block78-reference.json, executed).
-      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && (e.block !== FIRE || fireCanPlace(w, i, j, k)) && w.set(i, j, k, e.block, true, e.meta & 15)) { // setBlock stores the low nibble of a Data byte above 15
+      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && (e.block !== FIRE || fireCanPlace(w, i, j, k)) && this.landSet(w, i, j, k, e)) { // setBlock stores the low nibble of a Data byte above 15
         this.apply([[i, j, k, old, e.block]]);
         if(e.tileData)this.tile(i, j, k, e.block, e.tileData, e.data ?? e.meta);
         if(e.block===ANVIL)this.sound('random.anvil_land',{x:i+0.5,y:j+0.5,z:k+0.5,volume:1,pitch:1});
@@ -240,6 +240,15 @@ export class FallingBlocks {
       if (e.dropItem !== false) this.dropItem(e, posY);
       e.dead = true;
     }
+  }
+  // setBlock stores the low nibble of a Data byte above 15. b80 fluids80: an original still fluid (9/11, e.flowing false) lands as the still block: onBlockAdded is only
+  // the hardening check, no tick (fluids80-reference.json land80, executed); flowing 8/10 schedule theirs (water 5, lava 30) and keep their metadata.
+  landSet(w, i, j, k, e) {
+    const still = (e.block === WATER || e.block === LAVA) && !e.flowing;
+    if (!still) return w.set(i, j, k, e.block, true, e.meta & 15);
+    const was = w.staticLiquid;
+    w.staticLiquid = true;
+    try { return w.set(i, j, k, e.block, true, e.meta & 15); } finally { w.staticLiquid = was; }
   }
   // new ItemStack(block, 1, block.damageDropped(meta)) through entityDropItem (falling-drops.js); a block without an item drops nothing.
   dropItem(e, posY) {

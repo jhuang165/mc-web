@@ -228,7 +228,9 @@ export class Fluids {
     this.sources = 0;
     // World.setBlock(..., flag 1) from edits made outside the fluid code.
     world.onChange = (x, y, z, old, now) => {
-      if (isLiquid(now)) this.added(x, y, z); // BlockDynamicLiquid.onBlockAdded (akr.b)
+      // BlockDynamicLiquid.onBlockAdded (akr.b). b80 fluids80: a still block (9/11) has only BlockLiquid.onBlockAdded (alw.b, the hardening check; BlockStaticLiquid has
+      // no override), so a writer that places one (a falling still fluid landing) sets world.staticLiquid and no tick is scheduled (fluids80-reference.json land80, executed).
+      if (isLiquid(now)) { if (world.staticLiquid) this.harden(x, y, z); else this.added(x, y, z); }
       this.notify(x, y, z);
     };
   }

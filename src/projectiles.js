@@ -14,6 +14,7 @@ import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 import { explosionImpact } from "./explosion.js";
 import { enterWater } from "./fx.js"; // b75: Projectiles.step called it without the import, so a ball entering water threw a ReferenceError
 import { acceptsParticle } from "./particle-settings.js";
+import { inLava } from "./fluids.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { isStair, stairRayTrace } from "./stairs.js";
@@ -499,6 +500,20 @@ export class Projectiles {
         else this.events.push({ sound: "game.neutral.swim.splash", volume, pitch, position: { x: b.x, y: b.y, z: b.z } });
       });
     }
+    // b80 fluids80: the fire part of Entity.onEntityUpdate (sa.C, bytecode-read; executed: spexec79-reference.json pearl79 `fire`). handleWaterMovement zeroes the
+    // counter in water; a client world zeroes it every update; a server one takes one per tick, and Entity.attackEntityFrom(onFire) on every 20th only runs
+    // setBeenAttacked (velocityChanged: the tracker's S12). handleLavaMovement (the box shrunk 0.1 at the sides, 0.4 top and bottom) runs setOnFireFromLava:
+    // attackEntityFrom(lava, 4) (velocityChanged again) and setFire(15), the larger of the counter and 300. No EntityThrowable overrides any of these.
+    if (b.water) b.fire = 0;
+    if (this.remote) b.fire = 0;
+    else if (b.fire > 0) {
+      if (b.fire % 20 === 0) b.velocityChanged = true;
+      b.fire--;
+    }
+    if (inLava(world, [b.x - HW, b.y, b.z - HW, b.x + HW, b.y + HEIGHT, b.z + HW])) {
+      b.velocityChanged = true;
+      b.fire = Math.max(b.fire | 0, 300);
+    }
     if (b.y < -64) b.dead = true;
     b.ticks++;
     const start = [b.x, b.y, b.z], far = [b.x + b.mx, b.y + b.my, b.z + b.mz],
@@ -680,7 +695,8 @@ export class Projectiles {
       // A pearl without a thrower (a Java save's ownerless EntityEnderPearl) is saved without an owner and just dies on impact.
       if (b.kind === "enderPearl" && b.owner != null && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
       return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
-        ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}) };
+        ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}),
+        ...(b.fire > 0 ? { fire: b.fire } : {}) }; // b80 fluids80: Entity.writeToNBT's Fire
     });
   }
   load(list) {
@@ -691,7 +707,7 @@ export class Projectiles {
       if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player" || d.owner === undefined)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
         const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
-        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false });
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire > 0 ? { fire: Math.min(32767, d.fire) } : {}) });
       }
     }
   }

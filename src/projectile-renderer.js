@@ -12,6 +12,7 @@ import { entityMaterial, worldMaterial, liveSpriteTransform } from "./light-mate
 import { itemTexture, pixelTexture, skinBox } from "./first-person.js";
 import { itemPasses, ITEM_POTION } from "./item-passes.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
+import { EntityFireRenderer } from "./entity-fire-renderer.js";
 
 const SNOWBALL = 312, EGG = 316, ENDER_PEARL = 378;
 export function projectileItemId(kind) {
@@ -27,6 +28,8 @@ export function projectileItemId(kind) {
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY.
 const BALL_LIGHT = 0.25 * 0.66;
+// The EntityThrowable kinds whose fire counter Projectiles keeps (b80 fluids80); fireballs and potions keep none in the port.
+const THROWN_FIRE = new Set(["snowball", "egg", "enderPearl"]);
 
 export class ProjectileRenderer {
   constructor(scene, view) {
@@ -108,12 +111,18 @@ export class ProjectileRenderer {
       const packed = b.fullbright ? 15728880 : this.view.brightness(x, y + BALL_LIGHT, z);
       m.material.setLight(packed);
       m.extra?.setLight(packed);
+      // b80 fluids80: Render.doRenderShadowAndFire (bno.b, bytecode-read) draws renderEntityOnFire over a burning throwable (canRenderOnFire = isBurning; the 0.25 box):
+      // a pearl or snowball out of lava. `burning` is the client copy's watched flag (object-tracker.js objectView), else the live counter.
+      const burning = THROWN_FIRE.has(b.kind ?? "snowball") && (b.burning ?? b.fire > 0);
+      if (burning && !m.fire) m.fire = new EntityFireRenderer(this.scene, 0.25, 0.25, 0);
+      m.fire?.update({ x, y, z }, burning, 180 - (yaw * 180) / Math.PI);
     }
     for (const [b, m] of this.balls)
       if (!seen.has(b)) {
         this.scene.remove(m.mesh);
         m.material.dispose();
         m.extra?.dispose();
+        m.fire?.dispose();
         this.balls.delete(b);
       }
     const basis = particleBasis(180 - (yaw * 180) / Math.PI, (-pitch * 180) / Math.PI, mirror), seenFx = new Set();

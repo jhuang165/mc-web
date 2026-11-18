@@ -72,7 +72,8 @@ test('Nether and End Anvil columns keep their coordinates, runtime tiles and lev
   if(d===-1){
    const native=chunkFromNbt(await decodeRegionChunk(readRegion(bytes).get(regionSlot(31,31))),{hasSky:false});
    assert.ok(native.tileEntities.some(t=>t.get('id').value==='Dropper'));
-   assert.deepEqual(blob.state.spawners,[spawner]);
+   // b80 fluids80: the importer reads the tile through MobSpawnerBaseLogic.readFromNBT on a fresh logic, so the keys the save left out come back as the logic's defaults
+   assert.deepEqual(blob.state.spawners,[{...spawner,MinSpawnDelay:200,MaxSpawnDelay:800,SpawnCount:4,MaxNearbyEntities:6,RequiredPlayerRange:16,SpawnRange:4}]);
    assert.equal(blob.tiles.dispensers['-1,104,-1'].items[0].count,2);
   }
   else {
