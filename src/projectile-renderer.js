@@ -12,6 +12,7 @@ import { entityMaterial, worldMaterial, liveSpriteTransform } from "./light-mate
 import { itemTexture, pixelTexture, skinBox } from "./first-person.js";
 import { itemPasses, ITEM_POTION } from "./item-passes.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
+import { fireballTurn, interpolateRotation, lerpPitch } from "./fireball-turn.js";
 
 const SNOWBALL = 312, EGG = 316, ENDER_PEARL = 378;
 export function projectileItemId(kind) {
@@ -27,6 +28,20 @@ export function projectileItemId(kind) {
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY.
 const BALL_LIGHT = 0.25 * 0.66;
+
+// ModelSkeletonHead(0, 35, 64, 64) (bib, the wither skull's model): one box addBox(-4, -8, -4, 8, 8, 8) at rotation point 0, texture offset
+// (0, 35) on the 64 x 64 wither texture. skinBox is laid out in the mob frame (x, -y, -z), the box centre (0, -4, 0) / 16 in model axes.
+export const skullGeometry = () => skinBox(8, 8, 8, 0, 35, 64, 64).translate(0, 4 / 16, 0);
+// The modelview RenderWitherSkull builds (bytecode-read, executed in renderfx80-reference.json): glTranslatef((float) x, (float) y, (float) z),
+// glScalef(-1, -1, 1), then ModelRenderer's glRotatef(rotateAngleY * 57.295776) about y and glRotatef(rotateAngleX * 57.295776) about x, where
+// ModelSkeletonHead sets rotateAngleY = yaw / 57.295776 and rotateAngleX = pitch / 57.295776; times the mob frame's diag(1, -1, -1).
+const DEG = Math.fround(57.295776), RAD = Math.PI / 180;
+const angle = (deg) => Math.fround(Math.fround(Math.fround(deg) / DEG) * DEG) * RAD;
+export function skullMatrix(x, y, z, yaw, pitch, out = new THREE.Matrix4()) {
+  const r = new THREE.Matrix4(), f = Math.fround;
+  out.makeTranslation(f(x), f(y), f(z)).multiply(r.makeScale(-1, -1, 1)).multiply(r.makeRotationY(angle(yaw))).multiply(r.makeRotationX(angle(pitch)));
+  return out.multiply(r.makeScale(1, -1, -1));
+}
 
 export class ProjectileRenderer {
   constructor(scene, view) {
@@ -48,16 +63,14 @@ export class ProjectileRenderer {
     if (kind === "expBottle") return pixelTexture("/media/1.7.10/items/experience_bottle.png"); // RenderSnowball(Items.experience_bottle)
     return pixelTexture(itemTexture(projectileItemId(kind)));
   }
-  // RenderWitherSkull (bpd): ModelSkeletonHead on wither_invulnerable.png for a blue skull, else wither.png.
+  // RenderWitherSkull (bpd): ModelSkeletonHead on wither_invulnerable.png for a blue skull, else wither.png; GL_CULL_FACE is off.
   skullMaterial(b) {
-    return entityMaterial(this.view.lighting, { map: pixelTexture(b.blue ? "/media/1.7.10/entity/wither/wither_invulnerable.png" : "/media/1.7.10/entity/wither/wither.png") });
+    return entityMaterial(this.view.lighting, { map: pixelTexture(b.blue ? "/media/1.7.10/entity/wither/wither_invulnerable.png" : "/media/1.7.10/entity/wither/wither.png"), side: THREE.DoubleSide });
   }
   skullMesh(material) {
-    const group = new THREE.Group(), box = new THREE.Mesh(skinBox(8, 8, 8, 0, 0, 64, 32), material);
-    box.position.y = 4 / 16;
-    box.rotation.y = Math.PI; // skinBox's front is +z; the model's front is -z
-    group.add(box);
-    return group;
+    const mesh = new THREE.Mesh(skullGeometry(), material);
+    mesh.matrixAutoUpdate = false;
+    return mesh;
   }
   material(kind) {
     return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });
@@ -97,9 +110,15 @@ export class ProjectileRenderer {
       }
       const x = lerp(b.px, b.x), y = lerp(b.py, b.y), z = lerp(b.pz, b.z);
       if (b.kind === "witherSkull") {
-        // RenderWitherSkull: the 8 cube turned to its flight (yaw from the motion, pitch up or down); the exact angles are approximated.
-        m.mesh.position.set(x, y, z);
-        m.mesh.rotation.set(-Math.atan2(b.vy, Math.hypot(b.vx, b.vz)), Math.atan2(b.vx, b.vz), 0, "YXZ");
+        // RenderWitherSkull: the rotation EntityFireball.onUpdate gave the skull (wither-boss-mobs.js tickOne), interpolated. A row without
+        // it (a multiplayer copy) turns the same way here from its per-tick displacement, which is the motion the native turn reads.
+        if (!Number.isFinite(b.yaw)) {
+          const at = `${b.x},${b.y},${b.z}`;
+          if (m.at !== at) { m.at = at; const t = m.turn ?? (m.turn = { yaw: 0, pitch: 0 }); t.prevYaw = t.yaw; t.prevPitch = t.pitch; if (m.seen) fireballTurn(t, b.x - b.px, b.y - b.py, b.z - b.pz); m.seen = true; }
+        }
+        const r = Number.isFinite(b.yaw) ? b : m.turn;
+        m.mesh.matrix.copy(skullMatrix(x, y, z, interpolateRotation(r.prevYaw ?? r.yaw, r.yaw, partial), lerpPitch(r.prevPitch ?? r.pitch, r.pitch, partial)));
+        m.mesh.matrixWorldNeedsUpdate = true;
         m.material.setLight(15728880);
         continue;
       }

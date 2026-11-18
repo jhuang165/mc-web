@@ -137,17 +137,26 @@ export function installStemCakeRecipes({ recipe }) {
   recipe('cake', 'Cake', ['AAA', 'BEB', 'CCC'], { A: 343, B: 329, E: 316, C: 305 }, ITEM_CAKE);
 }
 
-// Render geometry for scene.js (block-local coordinates, uv as fractions of the tile, v from the top):
-// RenderBlocks.renderBlockStem: always the small stem (two diagonal planes, cropped to the block height), plus, beside a fruit, the
-// connected texture on a plane through the stem toward it. The big-stem plane geometry is approximated (bytecode of func_147740_a not replayed).
+// Render geometry (block-local coordinates, uv as fractions of the tile, v from the top), the quads RenderBlocks.renderBlockStem draws
+// in Tessellator order: the cell 1/16 low (y - 0.0625f); disconnected, func_147795_a (renderBlockStemSmall) at the block height, two planes
+// 0.45 from the centre, each drawn twice (front, then back with the same u order), the icon cropped to (float) (h * 16) / 16; beside a fruit,
+// the small stem at height 0.5 and then func_147740_a (renderBlockStemBig) at the block height: one plane through the centre toward `dir`
+// (0 -x, 1 +x, 2 -z, 3 +z; u swapped when (dir + 1) / 2 is odd), drawn twice, the full connected icon. b80 renderfx80: executed against
+// the unchanged methods (tools/probes/RenderFx80Probe.java -> public/research/renderfx80-reference.json, src/renderfx80-b80.test.js);
+// chunk-mesher.js draws the same quads through render-vessels.js stemSmall / stemBig. No imports (see the top of this file).
+const STEM_HALF = 0.44999998807907104, STEM_Y = -0.0625;
+const stemSmallQuads = (h) => {
+  const a = 0.5 - STEM_HALF, b = 0.5 + STEM_HALF, v = f(h * 16) / 16, y0 = STEM_Y, y1 = STEM_Y + h;
+  const q = (p, r, u0, u1) => ({ tile: 'disconnected', verts: [[p[0], y1, p[1]], [p[0], y0, p[1]], [r[0], y0, r[1]], [r[0], y1, r[1]]], uvs: [[u0, 0], [u0, v], [u1, v], [u1, 0]] });
+  return [q([a, a], [b, b], 0, 1), q([b, b], [a, a], 1, 0), q([a, b], [b, a], 0, 1), q([b, a], [a, b], 1, 0)];
+};
+const stemBigQuads = (h, dir) => {
+  const [a, b] = Math.trunc((dir + 1) / 2) % 2 === 1 ? [1, 0] : [0, 1], y0 = STEM_Y, y1 = STEM_Y + h;
+  const p = dir < 2 ? (t) => [t, 0.5] : (t) => [0.5, 1 - t];
+  const q = (s, e, us, ue) => ({ tile: 'connected', verts: [[p(s)[0], y1, p(s)[1]], [p(s)[0], y0, p(s)[1]], [p(e)[0], y0, p(e)[1]], [p(e)[0], y1, p(e)[1]]], uvs: [[us, 0], [us, 1], [ue, 1], [ue, 0]] });
+  return [q(0, 1, a, b), q(1, 0, b, a)];
+};
 export function stemQuads(meta, dir) {
-  const quads = [], h = dir < 0 ? stemBounds(meta)[4] : 0.5, vb = h;
-  for (const [a, b] of [[[0, 0], [1, 1]], [[1, 0], [0, 1]]])
-    quads.push({ tile: 'disconnected', verts: [[a[0], h, a[1]], [a[0], 0, a[1]], [b[0], 0, b[1]], [b[0], h, b[1]]], uvs: [[0, 0], [0, vb], [1, vb], [1, 0]] });
-  if (dir >= 0) {
-    const alongX = dir < 2, flip = dir === 0 || dir === 2, u = flip ? [1, 0] : [0, 1];
-    const p = (t) => (alongX ? [t, 0.5] : [0.5, t]);
-    quads.push({ tile: 'connected', verts: [[p(0)[0], 1, p(0)[1]], [p(0)[0], 0, p(0)[1]], [p(1)[0], 0, p(1)[1]], [p(1)[0], 1, p(1)[1]]], uvs: [[u[0], 0], [u[0], 1], [u[1], 1], [u[1], 0]] });
-  }
-  return quads;
+  const h = stemBounds(meta)[4];
+  return dir < 0 ? stemSmallQuads(h) : [...stemSmallQuads(0.5), ...stemBigQuads(h, dir)];
 }
