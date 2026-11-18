@@ -5,7 +5,7 @@ import { isFrozen, liveOrder } from "./saved-order.js"; // b62: an unloaded chun
 import { explosionReaches } from "./ring-events.js";
 import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
-import { explodeBlocks, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
+import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
 import { ENTITY_TYPES } from "./entities.js";
 import { livingEyeHeight } from "./ai.js";
 import { makeStack, copyStack } from "./inventory.js";
@@ -38,10 +38,12 @@ function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop)
  * snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, and the minecarts and boats (attackEntityFrom with the explosion
  * source, then the motion; EntityListProbe). Primed TNT, mobs and the player stay with applyExplosion.
  */
-export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null) {
+export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null, orbsBefore = null) {
   const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
   // `itemsBefore`: the item count when the blast collected its entity list; the items after it (a mob the blast just killed dropped them) wait out the blast.
   const born = itemsBefore === null || !items.items ? [] : items.items.splice(itemsBefore);
+  // b81 blast81 `orbsBefore`: the same for the orbs (an ore an ender crystal's nested blast broke dropped them, Block.dropXpOnBlockBreak in that blast's doExplosionB).
+  const bornOrbs = orbsBefore === null || !xpOrbs?.orbs ? [] : xpOrbs.orbs.splice(orbsBefore);
   items.explode(world, x, y, z, size, exploder);
   xpOrbs.explode(world, x, y, z, size, exploder);
   arrows.explode(world, x, y, z, size, exploder);
@@ -53,6 +55,7 @@ export function explodeNonLiving(state, x, y, z, size, exploder = null, creative
   falling?.explode(x, y, z, size, exploder);
   state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
   if (born.length) items.items.splice(itemsBefore, 0, ...born);
+  if (bornOrbs.length) xpOrbs.orbs.splice(orbsBefore, 0, ...bornOrbs);
 }
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
@@ -135,14 +138,17 @@ export function applyExplosion(state, request, hooks = {}) {
     markDirty = () => {},
   } = hooks; // `hooks.vehicleDrop(drop)`: a broken cart's or boat's item (Minecarts / Boats drain record), spawned at once
 
-  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite, resistance: blue ? blueSkullResistance : undefined }); // blue: a charged wither skull caps resistance (wither-boss.js)
+  // Explosion.doExplosionA: the rays first (World.rand), against the unmodified world. b81 blast81: the rest of doExplosionB (pitch, drop draws, chained fuses) waits until the
+  // entities are hurt (explosionOutcome below), because an ender crystal hurt here explodes inside this blast and can clear cells of this list first.
+  const list = explosionBlocks(world, x, y, z, size, random, blue ? blueSkullResistance : explosionResistance); // blue: a charged wither skull caps resistance (wither-boss.js)
   // Batch 49: a mob this blast kills drops its loot at its hurt call (EntityLivingBase.onDeath), after Explosion.doExplosionA collected its entity list: those items are not in it.
-  const itemsBefore = items.items?.length ?? null;
+  // b81 blast81: neither are the orbs and primed TNT a nested crystal blast makes (doExplosionA takes its entity list once, before the first attackEntityFrom).
+  const itemsBefore = items.items?.length ?? null, orbsBefore = xpOrbs?.orbs?.length ?? null, primedBefore = [...primed];
   const mobHits = explodeMobs(state, { x, y, z, size, exploder, attacker });
 
-  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore);
+  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore, orbsBefore);
   const tntProcessed = [];
-  for (const entity of primed) {
+  for (const entity of primedBefore) {
     if (entity === exploder || isFrozen(entity)) continue;
     explodeTnt(world, entity, x, y, z, size);
     tntProcessed.push(entity);
@@ -177,6 +183,8 @@ export function applyExplosion(state, request, hooks = {}) {
       else { velocity.x += Math.fround(playerHit.push[0]); velocity.y += Math.fround(playerHit.push[1]); velocity.z += Math.fround(playerHit.push[2]); }
     }
   }
+
+  const explosion = { list, ...explosionOutcome(world, list, size, random, { opaque, smoking, flaming: flaming && !!ignite }) }; // b81 blast81: doExplosionB reads the cells as they are now
 
   // S27 reaches only a player within 64 blocks (WorldServer.newExplosion), and the client's huge explosion particle has no other range test (ring-events.js).
   if (explosionReaches(x, y, z, position)) {

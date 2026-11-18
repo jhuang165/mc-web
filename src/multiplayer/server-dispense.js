@@ -15,7 +15,7 @@ import { Projectiles, mobTargets, thrownHit } from '../projectiles.js';
 import { WitchPotions } from '../witch-potions.js';
 import { splashImpact } from '../witch.js';
 import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
-import { tickPrimedTnt } from '../entity-simulation.js';
+import { tickPrimedTnt, tickOneTnt } from '../entity-simulation.js';
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
 import { SUPPORTED } from './server-mobs.js';
@@ -73,8 +73,8 @@ export class ServerDispense {
       equip: (cell, stack, position) => this.equip(cell, stack, position),
     };
   }
-  prime(x, y, z, sound) {
-    const e = primeTnt(x, y, z, { placer: null });
+  prime(x, y, z, sound, { fuse, placer = null } = {}) {
+    const e = primeTnt(x, y, z, { placer, ...(fuse !== undefined ? { fuse } : {}) }); // b81 blast81: a chained TNT block's fuse (ServerMobs.explode)
     this.primed.push(e);
     if (sound) this.fx.push({ k: 'sound', name: 'game.tnt.primed', x: e.x, y: e.y + 0.49, z: e.z, volume: 1, pitch: 1 });
     return e;
@@ -191,8 +191,9 @@ export class ServerDispense {
   tick() {
     this.restorePotions(); this.restoreFireballs();
     const mobs = this.mobs;
+    this.tntTicked = new WeakSet(); // b81 blast81: the TNT that had its update this tick (tickJoined)
     if (!this.any) return;
-    if (this.primed.length) tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) });
+    if (this.primed.length) { for (const e of this.primed) this.tntTicked.add(e); tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) }); }
     this.tickLane(this);
     this._eyes?.tick(); // b64 mpend2: eyes of ender in flight
     for (const lane of this.extra.values()) { // another dimension's lane runs with that dimension's items and orbs in place (server-dimensions.js swap)
@@ -240,6 +241,15 @@ export class ServerDispense {
       if (!pickupPass(this.sim, lane, p, [at.x - hw, at.y, at.z - hw, at.x + hw, at.y + q(1.8), at.z + hw], (lane.dim ? this.dimState(lane.dim)?.vehicles : this.sim.vehicles)?.ridingBox?.(p) ?? null)) continue; // b73 mpriders73: the ridden box widens the pickup box; b74 mppickup74: with dropped items in reach, one pass in list order
       for (const a of was) if (a.dead) (this.collected ??= []).push({ i: this.id(a), by: p.id, dim: lane.dim, x: a.x, y: a.y, z: a.z });
     }
+  }
+  // b81 blast81: World.spawnEntityInWorld appends to loadedEntityList and World.updateEntities walks it by index, so primed TNT that joins during the entity pass (a chained
+  // TNT block of a blast in the TNT pass or the mobs' tick, a burning arrow's TNT) has its first update in this same pass, after the entities before it; it used to wait a tick
+  // and so explode one tick late. Called after the mobs and vehicles; TNT a late TNT's blast primes joins the loop too.
+  tickJoined() {
+    const done = this.tntTicked;
+    if (!done) return;
+    for (let fresh = this.primed.filter(e => !done.has(e)); fresh.length; fresh = this.primed.filter(e => !done.has(e)))
+      for (const e of fresh) { done.add(e); tickOneTnt(this.sim.world, this.primed, e, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) }); }
   }
   // A burning arrow lights a TNT block (EntityArrow.onUpdate -> BlockTNT.onBlockDestroyedByPlayer): the block goes, a primed TNT appears.
   igniteBlockTnt(x, y, z) { if (this.sim.world.set(x, y, z, 0)) this.prime(x + 0.5, y + 0.5, z + 0.5, true); }

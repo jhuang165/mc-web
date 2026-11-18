@@ -14,7 +14,7 @@ import { SharedMobTracker } from './server-mob-entries.js';
 import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
 import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
-import { explodeBlocks, explosionImpact } from '../explosion.js';
+import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt } from '../explosion.js';
 import { JavaRandom } from '../java-random.js';
 import { explodeMobs } from '../explosion-simulation.js';
 import { livingEyeHeight } from '../ai.js';
@@ -228,12 +228,17 @@ export class ServerMobs {
     for (const v of this.views.values()) if (v.view === view) { this.use(v); return; }
   }
   use(v) { this.mobs.ai.player = v.view; this.mobs.ai.survival = v.survival; }
-  // Explosion.doExplosionA for the dedicated world: the mobs, every player in reach, then the blocks.
+  // Explosion.doExplosionA for the dedicated world: the rays, the mobs, primed TNT, every player in reach; then doExplosionB: the blocks.
+  // b81 blast81 (bytecode-read agw.a(), agw.a(Z), wz.a, aob.a(ahb,IIIagw)): the rays draw World.rand before any entity is hurt; the rest of the block half reads the world
+  // after the entities (an ender crystal hurt in the entity part explodes inside this one, through explodeInline), and a TNT block in the list becomes primed TNT at once.
   explode(ev) {
     const { world, weather, items } = this.host, { x, y, z, size } = ev;
     if (!(size > 0)) return;
+    const list = explosionBlocks(world, x, y, z, size, weather.random, ev.blue ? boundedSkullResistance : explosionResistance);
+    const primed = this.host.dispense?.primed, primedBefore = primed ? [...primed] : []; // the entity list doExplosionA took: TNT a nested blast primes is not in it
     explodeMobs({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null });
     this.host.vehicles?.hanging?.explode(x, y, z, size); // b68 mppaintings: paintings and item frames in the blast
+    for (const t of primedBefore) if (t !== ev.source) explodeTnt(world, t, x, y, z, size); // b81 blast81: Explosion.doExplosionA pushes other primed TNT (no damage), as applyExplosion
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival;
@@ -246,12 +251,16 @@ export class ServerMobs {
       for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
       knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
     }
-    const out = explodeBlocks(world, x, y, z, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube, resistance: ev.blue ? boundedSkullResistance : undefined }); // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
+    const out = { list, ...explosionOutcome(world, list, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube }) }; // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three
     for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
     for (const at of out.released) this.mobs.spawnSilverfishAt?.(...at); // b67: BlockSilverfish.dropBlockAsItemWithChance in doExplosionB (explosion.js released)
+    // b81 blast81: BlockTNT.onBlockDestroyedByExplosion (aob.a(ahb,IIIagw), bytecode-read): EntityTNTPrimed at the cell centre, placer getExplosivePlacedBy, fuse rand.nextInt(20) + 10
+    // (drawn in explosionOutcome), no sound. It used to be dropped here, so a server TNT block in a blast just vanished.
+    const placer = ev.source && 'fuse' in ev.source ? ev.source.placer ?? null : ev.source ?? null; // Explosion.getExplosivePlacedBy: a TNT's placer, a living exploder, else null
+    for (const b of out.primed) this.host.dispense?.prime(b.x, b.y, b.z, false, { fuse: b.fuse, placer });
   }
   // The one SpawnerAnimals pass of the world tick (WorldServer.tick: aho.a(world, hostile, peaceful, totalTime % 400 == 0)): the chunks of every player, the cap
   // `max * size / 256` of the union's size, and "a player within 24 blocks" (World.getClosestPlayer, posY is the eye) from any player.

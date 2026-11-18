@@ -29,8 +29,11 @@ function endFixture() {
 test('an end crystal explodes without fire (World.createExplosion: flaming false, smoking true)', { timeout: 120000 }, () => {
   const { mobs } = endFixture();
   const crystal = mobs.entities.find(e => e.type === 'ender_crystal');
+  // b81 blast81: the crystal now explodes inside attackEntityFrom (wz.a -> World.createExplosion), through the host's explodeInline, rather than through the event queue.
+  const ex = [], inline = mobs.explodeInline;
+  mobs.explodeInline = ev => { ex.push(ev); inline(ev); };
   mobs.attackEntityFrom(crystal, 1);
-  const ex = mobs.events.filter(v => v.explode);
+  assert.equal(mobs.events.filter(v => v.explode).length, 0);
   assert.equal(ex.length, 1);
   assert.deepEqual([ex[0].explode.size, ex[0].explode.flaming, ex[0].explode.smoking], [6, false, true]);
 });

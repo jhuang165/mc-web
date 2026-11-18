@@ -622,6 +622,7 @@ export class DedicatedSimulation {
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();
     this.vehicles.tick(); // b61
+    this.dispense.tickJoined(); // b81 blast81: TNT primed during the entity pass updates in it
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
     tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
