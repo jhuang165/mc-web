@@ -15,6 +15,7 @@ import { JavaRandom } from "./lighting.js";
 import { itemPasses } from "./item-passes.js";
 import { flatItemSprites } from "./render-settings.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
+import { FireOverlays, FIRE_BOXES, entityBurning, cameraViewYaw } from "./fire-overlays.js";
 
 import { blockCopyCount, spriteCopyCount, fancySpriteZ, flatSpriteOffsets } from "./drop-sprite.js";
 // b80 mpcmd80: EntityPickupFX's end point above the collector's feet: posY + yOffs (-0.5); posY is feet + 1.62 for a player, the feet for a mob.
@@ -34,6 +35,7 @@ export class DropRenderer {
     this.flatSprite = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
     this.cubes = new Map();
     this.flying = [];
+    this.fires = new FireOverlays(scene, FIRE_BOXES.item); // b81 throwfire81: renderEntityOnFire over a burning item (fire-overlays.js)
   }
   cube(id, damage = 0) {
     const key = id + ":" + damage;
@@ -157,8 +159,12 @@ export class DropRenderer {
         pile = this.build(stack, e.hover);
         this.piles.set(e, pile);
       }
-      this.place(pile, e.px + (e.x - e.px) * partial, e.py + (e.y - e.py) * partial, e.pz + (e.z - e.pz) * partial, e.age + partial, e);
+      const x = e.px + (e.x - e.px) * partial, y = e.py + (e.y - e.py) * partial, z = e.pz + (e.z - e.pz) * partial;
+      this.place(pile, x, y, z, e.age + partial, e);
+      // b81 throwfire81: RenderManager's doRenderShadowAndFire after RenderItem: the flames at the entity's interpolated position (no bob or spin; EntityPickupFX draws none)
+      this.fires.draw(e, entityBurning(e), x, y, z, () => cameraViewYaw(this.view.camera));
     }
+    this.fires.sweep();
     for (const [e, pile] of this.piles)
       if (!seen.has(e)) {
         this.remove(pile);

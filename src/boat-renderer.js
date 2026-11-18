@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
+import { FireOverlays, FIRE_BOXES, entityBurning, cameraViewYaw } from "./fire-overlays.js";
 
 const D = Math.PI / 180, fr = Math.fround;
 // ModelBoat.a[0..4]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -59,10 +60,14 @@ export class BoatRenderer {
       r.root.position.set(pose.x, pose.y, pose.z);
       r.root.rotation.set(pose.roll * D, (180 - pose.yaw) * D, 0, "YZX");
       r.material.setLight(this.view.brightness(boat.x, boat.bb[1] + boat.height * 0.66, boat.z));
+      // b81 throwfire81: EntityBoat runs Entity.onEntityUpdate (lava, the fire counter), so a burning boat draws renderEntityOnFire; the pose is at posY, 0.3 above the box bottom
+      (this.fires ??= new FireOverlays(this.scene, FIRE_BOXES.boat)).draw(boat, entityBurning(boat), pose.x, pose.y - FIRE_BOXES.boat[2], pose.z, () => cameraViewYaw(this.view.camera));
     }
+    this.fires?.sweep();
   }
   clear() {
     for (const r of this.meshes.values()) this.dispose(r);
     this.meshes.clear();
+    this.fires?.clear();
   }
 }

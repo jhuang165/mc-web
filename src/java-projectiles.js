@@ -43,7 +43,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
   const base = { x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, mx: motion[0], my: motion[1], mz: motion[2], yaw: rotation[0], pitch: rotation[1] };
   // EntityThrowable.readEntityFromNBT: ownerName (an empty name is null). A named owner is the local player.
   const owned = String(nbtGet(entity, 'ownerName', NBT.STRING, '')).length > 0;
-  // b80 fluids80: Entity.readFromNBT's Fire counter of a snowball or pearl (it burns on in Projectiles.step; a throwable never moves with moveEntity, so it never rests below 0).
+  // b80 fluids80: Entity.readFromNBT's Fire counter of a snowball, pearl (b81: or thrown potion and bottle) (it burns on in Projectiles.step; a throwable never moves with moveEntity, so it never rests below 0).
   const thrownFire = nbtGet(entity, 'Fire', NBT.SHORT, 0), burning = thrownFire > 0 ? { fire: thrownFire } : {};
   if (id === 'Snowball') return { list, record: { ...base, ...burning } };
   // EntityEnderPearl.onImpact only teleports an EntityPlayerMP thrower; a pearl without one loads and just dies on impact (pearl-player.js).
@@ -72,7 +72,8 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
       yaw: base.yaw, pitch: base.pitch, prevYaw: base.yaw, prevPitch: base.pitch, life: nbtGet(entity, 'Life', NBT.INT, 0), lifetime: nbtGet(entity, 'LifeTime', NBT.INT, 0),
       ...(stack ? { stack: { id: stack.id, count: 1, damage: stack.damage ?? 0, ...(fireworks ? { fireworks } : {}) } } : {}) } };
   }
-  if (id === 'ThrownExpBottle') return { list, record: { ...base, kind: 'expBottle', damage: 0, ticks: 0, ...(owned ? { owner: 'player' } : {}) } };
+  // b81 throwfire81: an EntityPotion or EntityExpBottle is an EntityThrowable too, so its Fire short loads and burns on (witch-potions.js load).
+  if (id === 'ThrownExpBottle') return { list, record: { ...base, kind: 'expBottle', damage: 0, ticks: 0, ...(owned ? { owner: 'player' } : {}), ...burning } };
   if (id === 'ThrownPotion') {
     // EntityPotion.readEntityFromNBT: the Potion item compound, or the legacy int potionValue when it is absent.
     const stack = nbtGet(entity, 'Potion', NBT.COMPOUND);
@@ -82,7 +83,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
       damage = nbtGet(stack, 'Damage', NBT.SHORT, 0);
     } else damage = nbtGet(entity, 'potionValue', NBT.INT, 0);
     if (!Number.isInteger(damage) || damage < 0) return { lost: 'negative damage' };
-    return { list, record: { ...base, damage, ticks: 0, ...(owned ? { owner: 'player' } : {}) } };
+    return { list, record: { ...base, damage, ticks: 0, ...(owned ? { owner: 'player' } : {}), ...burning } };
   }
   // EntityArrow.readEntityFromNBT: xTile/yTile/zTile (shorts), life (short), inTile/inData/shake/inGround (bytes), pickup (byte, or the
   // legacy boolean "player"), damage (double, default 2) and Entity's Fire. The shooter is not saved.

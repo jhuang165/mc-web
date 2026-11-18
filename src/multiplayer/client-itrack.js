@@ -39,8 +39,9 @@ export class ItemTrackClient {
     const items = [], xp = [];
     for (const [key, c] of this.copies) {
       const i = Number(key.slice(key.indexOf(':') + 1));
-      if (c.kind === 'item') items.push({ i, stack: c.meta.get(10) ?? c.sim.stack, x: c.x, y: c.y - OBJECT_KINDS.item.yOff, z: c.z, age: c.sim.age, hover: c.sim.hover, delay: 0 });
-      else xp.push({ i, x: c.x, y: c.y - OBJECT_KINDS.orb.yOff, z: c.z, v: c.orbValue ?? 1, c: c.sim.color | 0 });
+      const b = (c.meta.get(0) ?? 0) & 1; // b81 throwfire81: Entity.isBurning's watched flag 0 (the S1C), for the flames (fire-overlays.js)
+      if (c.kind === 'item') items.push({ i, stack: c.meta.get(10) ?? c.sim.stack, x: c.x, y: c.y - OBJECT_KINDS.item.yOff, z: c.z, age: c.sim.age, hover: c.sim.hover, delay: 0, ...(b ? { b } : {}) });
+      else xp.push({ i, x: c.x, y: c.y - OBJECT_KINDS.orb.yOff, z: c.z, v: c.orbValue ?? 1, c: c.sim.color | 0, ...(b ? { b } : {}) });
     }
     return { items, xp };
   }
