@@ -5,6 +5,7 @@
 // `dispFx` is the one-shot effects: explode, splash (potion or bottle glass), firework (burst), spark (rocket trail), sound. The hooks do the drawing and playing (main.js).
 import { GaussianRandom } from '../projectiles.js';
 import { s27Decode } from "./server-explosion-packet.js"; // b79 explfx79
+import { skullCopyLook } from "./skull-look.js"; // b81 mpcopies81: the skull copy's angles (spawn bytes, own turn, look packets)
 const ARROW_FIELDS = ['yaw', 'pitch'];
 
 export class RemoteDispense {
@@ -23,6 +24,7 @@ export class RemoteDispense {
       const key = d.k + d.i;
       seen.add(key);
       let row = this.rows.get(key);
+      const fresh = !row;
       if (!row) { this.rows.set(key, row = { px: d.x, py: d.y, pz: d.z, prevYaw: d.yaw ?? 0, prevPitch: d.pitch ?? 0, shake: 0, dead: false }); }
       else { row.px = row.x; row.py = row.y; row.pz = row.z; row.prevYaw = row.yaw ?? 0; row.prevPitch = row.pitch ?? 0; }
       row.x = d.x; row.y = d.y; row.z = d.z; row.id = d.i;
@@ -31,7 +33,7 @@ export class RemoteDispense {
       else {
         row.kind = d.k === 'r' ? 'firework' : d.kind; row.damage = d.damage ?? 0;
         if (d.scale !== undefined) { row.scale = d.scale; row.fullbright = true; } // a fire charge: RenderFireball scale, full brightness
-        if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
+        if (d.kind === 'witherSkull') { row.blue = !!d.blue; row.vx = d.vx ?? 0; row.vy = d.vy ?? 0; row.vz = d.vz ?? 0; skullCopyLook(row, d, fresh); } // b63: RenderWitherSkull turns the cube to the flight and picks the charged skin
         if (d.kind === 'eyeOfEnder') this.hooks.eyeTrail?.(row, row.x - row.px, row.y - row.py, row.z - row.pz); // b65 mpdragon2: the copy draws the flying eye's portal trail itself (EntityEnderEye.onUpdate)
         if (d.k === 'b') this.hooks.ballFx?.(row); // b80 mpfx80: a fireball's or wither skull's client copy draws its own smoke and bubbles (ze.h, client-explosion.js clientBallFx)
         next.b.push(row);

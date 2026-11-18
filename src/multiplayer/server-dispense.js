@@ -23,6 +23,7 @@ import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
 import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { mobCandidate, dressMob } from '../sp-dispense76.js'; // b78 loot78: the single-player mob selector and dressing
+import { skullEntry, skullEntryTick, skullWire } from './skull-look.js'; // b81 mpcopies81
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
@@ -299,7 +300,7 @@ export class ServerDispense {
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale });
     for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
-    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0 }); // b63: wither skulls (the model turns to its flight)
+    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b) }); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js)
     return out;
   }
   // Called by the simulation's tick tail: queues dispEnts / dispFx / projCollect on each player (`dispOut`, sent by server.js). A player who just saw entities gets one empty
@@ -307,6 +308,7 @@ export class ServerDispense {
   flush() {
     for (const lane of this.lanes) this.drainArrows(lane); // a skeleton's shot (made during the mobs' tick) is heard in the tick it was made
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
+    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead) b.lookSent = skullEntryTick(b.track ??= skullEntry(b), b); // b81 mpcopies81: one EntityTracker update a tick (frequency 10)
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)

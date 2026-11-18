@@ -90,6 +90,7 @@ import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveSta
 import { enchantedDamage, isAbsolute, setMobFire } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
+import { dragonListed, mouseOverBox } from "./dragon-part-query.js"; // b81 mpcopies81
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -1047,7 +1048,8 @@ export class EntityWorld {
     // b79: canBeCollidedWith is !isDead and a dying mob is not dead until its 20-tick animation ends, so the ray picks every corpse still in the list.
     // b80: the dragon is never the target (xa.R() is false); its parts are (wy.R() is true, bytecode-read), and a dying dragon's parts stay where its last living tick put them
     // (xa.e returns after the death puff before updating them), so they are aimed at for all 200 ticks of its death.
-    for (const e of this.entities) if (!e.dragonGone) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
+    let query = null; // b81 mpcopies81: getMouseOver's query box (full reach); a dragon's parts are listed only while its body is (dragon-part-query.js)
+    for (const e of this.entities) if (!e.dragonGone && (e.type !== "ender_dragon" || dragonListed(e, query ??= mouseOverBox(origin, dir, reach)))) { const c = e.type === "ender_dragon" ? null : this.clientPosition(e); cands.push({ key: e, c, pos: [(c ?? e).x, (c ?? e).y, (c ?? e).z] }); }
     for (const { key: e, c } of orderTargets(cands)) { // b72: the client world lists entities in chunk order, which decides equal distances (candidate-order.js)
       // EntityRenderer.getMouseOver tests the client world's entity boxes: a tracked mob is aimed at where its client entity stands (and is drawn),
       // not its live server position (entity-tracker.js). The dragon's parts stay live (dragon-mobs.js).
