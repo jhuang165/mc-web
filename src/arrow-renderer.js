@@ -8,6 +8,7 @@
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { pixelTexture } from "./first-person.js";
+import { FireOverlays, FIRE_BOXES, entityBurning, cameraViewYaw } from "./fire-overlays.js";
 
 const RAD = Math.PI / 180, SCALE = 0.05625;
 // Entity.getBrightnessForRender: floor(posY - yOffset + height * 0.66), the 0.5 box.
@@ -50,6 +51,7 @@ export class ArrowRenderer {
     this.arrows = new Map();
     this.geometry = arrowGeometry();
     this.material = null;
+    this.fires = new FireOverlays(scene, FIRE_BOXES.arrow); // b81 throwfire81: renderEntityOnFire over a burning arrow (Flame, lava, fire)
   }
   // `partial` is the fraction of the current tick: RenderManager lerps the position from
   // lastTickPos and RenderArrow the angles from prevRotation.
@@ -74,7 +76,9 @@ export class ArrowRenderer {
         (lerp(a.prevPitch, a.pitch) + (shake > 0 ? -Math.sin(shake * 3) * shake : 0)) * RAD,
       );
       mesh.material.setLight(this.view.brightness(x, y + LIGHT, z));
+      this.fires.draw(a, entityBurning(a), x, y, z, () => cameraViewYaw(this.view.camera));
     }
+    this.fires.sweep();
     for (const [a, mesh] of this.arrows)
       if (!seen.has(a)) {
         this.scene.remove(mesh);

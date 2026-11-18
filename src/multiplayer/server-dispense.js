@@ -289,9 +289,10 @@ export class ServerDispense {
   snapshot(player) {
     const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0, lane = dim === this.dim ? this : this.extra.get(dim);
     if (lane) {
-      for (const a of lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0 });
-      for (const b of lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z });
-      for (const b of lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0 });
+      // b81 throwfire81: `f` 1 while the fire counter runs (Entity.isBurning, the watched flag 0 natively): the client draws the flames (fire-overlays.js, projectile-renderer.js)
+      for (const a of lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0, ...(a.fire > 0 ? { f: 1 } : {}) });
+      for (const b of lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, ...(b.fire > 0 ? { f: 1 } : {}) });
+      for (const b of lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0, ...(b.fire > 0 ? { f: 1 } : {}) });
     }
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
     if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2

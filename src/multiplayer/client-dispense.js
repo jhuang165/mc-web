@@ -25,7 +25,7 @@ export class RemoteDispense {
       let row = this.rows.get(key);
       if (!row) { this.rows.set(key, row = { px: d.x, py: d.y, pz: d.z, prevYaw: d.yaw ?? 0, prevPitch: d.pitch ?? 0, shake: 0, dead: false }); }
       else { row.px = row.x; row.py = row.y; row.pz = row.z; row.prevYaw = row.yaw ?? 0; row.prevPitch = row.pitch ?? 0; }
-      row.x = d.x; row.y = d.y; row.z = d.z; row.id = d.i;
+      row.x = d.x; row.y = d.y; row.z = d.z; row.id = d.i; row.burning = d.f === 1; // b81 throwfire81: the server's fire flag (Entity.isBurning) for the flames
       if (d.k === 'a') { for (const f of ARROW_FIELDS) row[f] = d[f] ?? 0; row.inGround = !!d.g; row.crit = !!d.c; row.shake = d.s ?? 0; next.a.push(row); }
       else if (d.k === 't') { row.fuse = d.fuse; next.t.push(row); }
       else {

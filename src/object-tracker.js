@@ -665,7 +665,8 @@ export function objectView(tracker, e, kind) {
   else if (kind === "tnt") if (c.sim) v.fuse = c.sim.fuse; // the fuse is not synchronised: the client's own countdown from 80
   else if (kind === "falling" && c.sim?.block !== undefined) { v.block = c.sim.block; v.meta = c.sim.meta; }
   // b80 fluids80: a client throwable zeroes its own counter every update, so Entity.isBurning is the watched flag 0 the server sets from its counter (Render.doRenderShadowAndFire)
-  if (spec.thrown) v.burning = ((c.meta?.get(0) ?? 0) & 1) === 1;
+  // b81 throwfire81: the same for items, orbs and arrows (fire-overlays.js). sa.al also reads the copy's own counter, which a client arrow or throwable sets in lava within its update.
+  if (spec.thrown || spec.arrow || spec.orb || kind === "item") v.burning = ((c.meta?.get(0) ?? 0) & 1) === 1 || (!!(spec.thrown || spec.arrow) && c.sim?.fire > 0);
   return v;
 }
 export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));
@@ -722,7 +723,7 @@ export function vehicleView(tracker, e, rides = false) {
   v.x = c.x; v.z = c.z; v.posY = c.y; v.y = c.y - off; v.px = c.px; v.pz = c.pz; v.py = c.py;
   v.yaw = c.yaw; v.pitch = c.pitch; v.prevYaw = c.prevYaw; v.prevPitch = c.prevPitch;
   const hit = c.meta.get(17) ?? 0, dir = c.meta.get(18) ?? 1, dmg = c.meta.get(19) ?? 0;
-  if (c.kind === "boat") { v.timeSinceHit = hit; v.forwardDir = dir; v.damage = dmg; }
+  if (c.kind === "boat") { v.timeSinceHit = hit; v.forwardDir = dir; v.damage = dmg; v.burning = ((c.meta.get(0) ?? 0) & 1) === 1; } // b81 throwfire81: Entity.isBurning's watched flag 0 (boat-renderer.js flames)
   else { v.rolling = hit; v.rollingDir = dir; v.damage = dmg; v.type = c.cartType; v.fuse = c.fuse; v.display = displayOf(c, v.display); }
   const r = f(c.spec.width) / 2, bb = (Object.hasOwn(v, "bb") ? v.bb : (v.bb = [0, 0, 0, 0, 0, 0]));
   bb[0] = c.x - r; bb[1] = c.y - off; bb[2] = c.z - r; bb[3] = c.x + r; bb[4] = bb[1] + f(c.spec.height); bb[5] = c.z + r;

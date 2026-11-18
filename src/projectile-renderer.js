@@ -29,8 +29,9 @@ export function projectileItemId(kind) {
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY.
 const BALL_LIGHT = 0.25 * 0.66;
-// The EntityThrowable kinds whose fire counter Projectiles keeps (b80 fluids80); fireballs and potions keep none in the port.
-const THROWN_FIRE = new Set(["snowball", "egg", "enderPearl"]);
+// The EntityThrowable kinds whose fire counter Projectiles keeps (b80 fluids80; b81 throwfire81: splash potions and bottles o' enchanting too, witch-potions.js). Fireballs and
+// wither skulls are immune to fire (isBurning false); eyes of ender and rockets keep no counter in the port.
+const THROWN_FIRE = new Set(["snowball", "egg", "enderPearl", "potion", "expBottle"]);
 
 // ModelSkeletonHead(0, 35, 64, 64) (bib, the wither skull's model): one box addBox(-4, -8, -4, 8, 8, 8) at rotation point 0, texture offset
 // (0, 35) on the 64 x 64 wither texture. skinBox is laid out in the mob frame (x, -y, -z), the box centre (0, -4, 0) / 16 in model axes.

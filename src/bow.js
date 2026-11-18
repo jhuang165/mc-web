@@ -263,13 +263,16 @@ export class Arrows {
     a.my += wet.push[1];
     a.mz += wet.push[2];
     if (a.water) a.fire = 0;
-    if (a.fire > 0) {
+    if (ctx?.remote) a.fire = 0; // b81 throwfire81: sa.C zeroes the counter of an entity on a client world every update (bytecode-read)
+    else if (a.fire > 0) {
       // Entity.onEntityUpdate: `if (fire % 20 == 0) attackEntityFrom(DamageSource.onFire, 1)`; Entity.attackEntityFrom only runs setBeenAttacked, so a burning arrow
       // flags velocityChanged every 20th tick (executed: tracker-hits-reference.json arrowFire_*, the tracker sends the arrow's S12 with it)
       if (a.fire % 20 === 0) a.velocityChanged = true;
       a.fire--;
     }
-    if (a.y >= 0 && inLava(world, box(a))) a.fire = Math.max(a.fire, 300);
+    // b81 throwfire81: handleLavaMovement -> setOnFireFromLava (sa.E, bytecode-read): attackEntityFrom(lava, 4), which EntityArrow (zc) does not override, so Entity.attackEntityFrom
+    // runs setBeenAttacked (sa.Q: velocityChanged, the tracker's S12) on every tick in lava, then setFire(15): the larger of the counter and 300. Both run on a client copy too.
+    if (a.y >= 0 && inLava(world, box(a))) { a.velocityChanged = true; a.fire = Math.max(a.fire, 300); }
     if (a.y < -64) a.dead = true;
     // zc.h: an arrow that never got a heading takes its angles from its motion.
     if (a.prevPitch === 0 && a.prevYaw === 0) {
@@ -337,10 +340,10 @@ export class Arrows {
         let dmg = ceil(speed * a.damage);
         if (a.crit) dmg += a.rand.nextInt(Math.trunc(dmg / 2) + 2);
         if (!ctx.remote) aimPart(hit.entity); // an arrow into one of the dragon's parts
-        // A client world's copy (ctx.remote): the damage is drawn (the crit's nextInt included), a burning arrow (the S1C fire flag) sets the target on fire for 5 seconds
+        // A client world's copy (ctx.remote): the damage is drawn (the crit's nextInt included), a burning arrow (Entity.isBurning: the S1C fire flag, or the copy's own counter from lava this update) sets the target on fire for 5 seconds
         // (not an enderman), and `ctx.attack` answers what attackEntityFrom does on a client world: false for living entities (isRemote), true for boats, carts, hanging
         // entities and the dragon's parts. A false answer ricochets the arrow; a true one plays the hit sound and ends it (none of those is an EntityLivingBase: no knockback).
-        if (ctx.remote && a.clientBurning && hit.entity.ref?.type !== "enderman") ctx.ignite?.(hit.entity.ref, hit.entity);
+        if (ctx.remote && (a.clientBurning || a.fire > 0) && hit.entity.ref?.type !== "enderman") ctx.ignite?.(hit.entity.ref, hit.entity);
         if (ctx.remote ? ctx.attack?.(hit.entity.ref, dmg, hit.entity) === true : this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
           // Knockback (the Knockback enchantment only): addVelocity(m * k * 0.6 / h, 0.1, ...).
           const h = sqrtF(a.mx * a.mx + a.mz * a.mz);

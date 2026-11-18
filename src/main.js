@@ -739,7 +739,7 @@ function syncMultiplayerItems(list) {
     seen.add(d.i);
     let e = remoteItems.get(d.i);
     if (!e) remoteItems.set(d.i, e = { px: d.x, py: d.y, pz: d.z, mx: 0, my: 0, mz: 0, dead: false });
-    Object.assign(e, { px: e.x ?? d.x, py: e.y ?? d.y, pz: e.z ?? d.z, stack: d.stack, x: d.x, y: d.y, z: d.z, age: d.age, hover: d.hover, delay: d.delay, eid: d.i });
+    Object.assign(e, { px: e.x ?? d.x, py: e.y ?? d.y, pz: e.z ?? d.z, stack: d.stack, x: d.x, y: d.y, z: d.z, age: d.age, hover: d.hover, delay: d.delay, eid: d.i, burning: !!d.b }); // b81 throwfire81: `b` the copy's fire flag
   }
   for (const id of [...remoteItems.keys()]) if (!seen.has(id)) { remoteItems.delete(id); requestedPickups.delete(id); takenDrops.delete(id); }
   items.items = [...remoteItems.values()];
@@ -802,7 +802,7 @@ function syncMultiplayerOrbs(list) {
     seen.add(d.i);
     let o = remoteOrbs.get(d.i);
     if (!o) remoteOrbs.set(d.i, o = { px: d.x, py: d.y, pz: d.z });
-    Object.assign(o, { px: o.x ?? d.x, py: o.y ?? d.y, pz: o.z ?? d.z, x: d.x, y: d.y, z: d.z, posY: d.y + 0.25, value: d.v, color: d.c });
+    Object.assign(o, { px: o.x ?? d.x, py: o.y ?? d.y, pz: o.z ?? d.z, x: d.x, y: d.y, z: d.z, posY: d.y + 0.25, value: d.v, color: d.c, burning: !!d.b });
   }
   for (const id of [...remoteOrbs.keys()]) if (!seen.has(id)) remoteOrbs.delete(id);
   xpOrbs.orbs = [...remoteOrbs.values()];
@@ -4807,7 +4807,7 @@ async function boot(){try {
   arrows.fx = null; // the crit trail, bubbles and splash of an arrow are drawn by its client copy
   bindObjectTracker();
   await scene.textures.ready;
-  xpRenderer=new ExperienceRenderer(scene.scene);
+  xpRenderer=new ExperienceRenderer(scene.scene,scene);
   sounds = new SoundBank(
     () => options,
     // SoundManager.setListener (probed): the player's posY (the eye, lowered by ySize while sneaking) interpolated by the partial tick, and the look.
