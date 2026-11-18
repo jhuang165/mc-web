@@ -129,6 +129,22 @@ Batch 78 (2026-11-16, ten Sonnet tracks in `../wt78-<name>` on `batch78-<name>`,
 - Verification: one full `npm test` on d70e437d5: 8899 tests, 8873 pass, 26 fail (25 throw-launch replays from spexec78's removed `spare` field, 1 recipe count from falling78's fire item); both fixed in 332c5b5ae and the affected files rerun (recipe, catalogue, throws, survival and 13 recipe users pass). Build and bridge tests ok.
 - Open: "Still open from batch 78" in `public/research/remaining-gaps.md`.
 
+Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut from 39ec5377d, merged --no-ff on `batch79-lead`; lead note `b79-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.108.0, by track (details in the `*-b79-track.md` notes and "Done in batch 79" in `public/research/remaining-gaps.md`):
+  - riderpose79: local rider body yaw clamp (pig and horse, not boats or carts), seated paperdoll, live horse window preview.
+  - explfx79: S27 block offsets on the wire (`server-explosion-packet.js`), single-player blast through the same encoding and S27 + S12 player motion, dedicated-server creeper S27.
+  - corpse79: every dying mob except the dragon is picked and clicked (single player, server, client copy); knot box on the copy's tile.
+  - mplanes79: server mob pickup S0D in every dimension, `server-command-blocks.js` store, eye of ender fx by dimension, server piston-moving click.
+  - spswing79: client `onItemUse` swing table, piston-moving dry placement, "Diamonds to you!" for mob pickups.
+  - spexec79: executed pearl-in-liquid, calf bowl and dispenser fire charge probes; fireball smoke after the move with water bubbles; `gaussianFrom` in `java-random.js`.
+  - falling79: per-kind falling tile replay (401 rows), flowing fluid ids 8/10, item Fire round trip.
+  - potspacks79: flower pot native Data, styled pack descriptions, canvas fallback audit.
+  - mpperf79: exact speed-ups behind `MC_MPPERF79`.
+  - catalogue79: stale catalogue generators and doc rows corrected.
+- Lead (536376793): `gaussianFrom` returns 0 after 1000 rejections, because a constant stub random (`() => 0.5`) looped forever and hung `explosion-simulation` and `block-break-simulation`; the b45 creeper/witch replays compare the server copy's motion, since explfx79 gives the single-player player the S12 value.
+- Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
+
 Batch 77 (2026-11-16, ten Sonnet tracks in `../wt77-<name>` on `batch77-<name>`, cut from 9e7fa94f8, merged --no-ff on `batch77-lead`; shared track rules `../artifacts/b77-lead/track-rules.md`; lead note `b77-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.106.0, by track:
   - mphorseclient77: `client-horse.js` (`MpHorseRider`: jump charge, `horseJump`, `horseInventory`), HUD jump bar and horse hearts for the server horse, horse `tame/hp/max` on the mob wire, `predictAnimalUse` lead and horse clicks (`selfId`, `sneak`).
