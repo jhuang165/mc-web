@@ -4704,7 +4704,7 @@ function animate(now) {
   });
   if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
-  endPortalRenderer?.update(world, position, performance.now() / 1000);
+  endPortalRenderer?.update(world, position, scene.camera, PHYSICS.eye); // b80 renderfx80: bmt texgen from the drawn camera
   if(xpRenderer)xpRenderer.update(objectViews(objectTracker, residentOnly(world,xpOrbs.orbs), "orb"),partial); // ring orbs are not drawn (headless-env.js)
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
@@ -4824,7 +4824,7 @@ async function boot(){try {
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   skinBook.add({ skinOf: (lower) => (playerRenderer?.hasSkin && playerRenderer.name?.toLowerCase() === lower ? playerRenderer.base.uniforms.map.value : null) }); // b71: the signed-in player's own skin for SkullOwner heads
   chestRenderer = new ChestRenderer(scene.scene, scene);
-  endPortalRenderer = new EndPortalRenderer(scene.scene);
+  endPortalRenderer = new EndPortalRenderer(scene.scene, scene);
   beaconRenderer = new BeaconRenderer(scene.scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
   minecartRenderer = new MinecartRenderer(scene.scene, scene, null);

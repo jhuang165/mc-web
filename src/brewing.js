@@ -134,8 +134,9 @@ export class BrewingStand {
 export const BUBBLE_HEIGHTS = Object.freeze([29, 24, 20, 16, 11, 6, 0]);
 export const bubbleHeight = (brewTime) => (brewTime > 0 ? BUBBLE_HEIGHTS[Math.trunc(brewTime / 2) % 7] : 0);
 
-// BlockBrewingStand.addCollisionBoxesToList: the 2/16 base, then the centre post 7/16-9/16 up to 14/16. The selection box is approximated
-// as the 14/16 high cell (the original keeps whatever bounds the last collision call set).
+// BlockBrewingStand.addCollisionBoxesToList (bytecode-read): the centre post 7/16-9/16 up to 14/16 is added first, then g()
+// (setBlockBoundsForItemRender, 0..1 x 0..0.125 x 0..1, the stand's only bounds setter outside this method) and the 2/16 base. Listed here
+// base first; the union is what entity collision sees. The selection box is the exact shared-bounds rule below (brewingSelection).
 export const BREWING_BOXES = Object.freeze([[0, 0, 0, 1, 0.125, 1], [0.4375, 0, 0.4375, 0.5625, 0.875, 0.5625]]);
 // BlockBrewingStand [ajq] never sets its bounds except inside addCollisionBoxesToList (pole 0.4375..0.5625 x 0..0.875, then g() = the 0.125 base
 // slab, the LAST write), and the shared Block keeps them. Executed (tools/probes/BrewingBoundsProbe.java -> brewing-bounds-reference.json):

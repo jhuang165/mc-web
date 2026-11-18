@@ -14,6 +14,7 @@ import { addMobEffect } from "./mob-effects.js";
 import { explosionDrops } from "./explosion.js";
 import { POTION } from "./potions.js";
 import { headPass } from "./wither-targeting.js";
+import { fireballTurn } from "./fireball-turn.js";
 import { WITHER, SKULL, WITHER_EYE, WITHER_PROOF_INTERNAL, chase, trackHead, headPosition, headParticleSpecs, invulStep, startHealth, armored, witherSkullEffectTicks } from "./wither-boss.js";
 const f = Math.fround;
 export const NETHER_STAR = 2060;
@@ -151,7 +152,9 @@ export class WitherSkulls extends Fireballs {
   // `exact` is the (world, x, y, z, ax, ay, az) form (EntityFireball's second constructor): the aim as given, normalised the same way, with no noise.
   launch({ owner, x, y, z, dx, dy, dz, blue = false, exact = null }) {
     const rand = new JavaRandom(Math.floor(this.mobs.random() * 2 ** 48)), [ax, ay, az] = exact ? fireballAcceleration(...exact) : fireballAcceleration(dx, dy, dz, rand);
-    const b = { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue, large: false, owner, health: 1, x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, ax, ay, az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size };
+    const b = { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue, large: false, owner, health: 1, x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, ax, ay, az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size,
+      yaw: Math.fround(owner?.rotationYaw ?? 0), pitch: Math.fround(owner?.rotationPitch ?? 0) }; // b80 renderfx80: setLocationAndAngles with the shooter's rotation (exact form: 0, 0)
+    b.prevYaw = b.yaw; b.prevPitch = b.pitch;
     this.list.push(b);
     this.mobs.joined?.(b, "skull"); // entity-simulation.js (entityWalkers): World.spawnEntityInWorld, the end of loadedEntityList
     return b;
@@ -167,6 +170,7 @@ export class WitherSkulls extends Fireballs {
     if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
     b.px = b.x; b.py = b.y; b.pz = b.z;
     if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    b.prevYaw = b.yaw ?? 0; b.prevPitch = b.pitch ?? 0; // Entity.onEntityUpdate
     // Entity.handleWaterMovement (Entity.onUpdate, before the sweep): the box test and the 0.014 flow push, as the fireballs do (b75).
     const box = this.boxOf(b), waterAcc = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += waterAcc.push[0]; b.vy += waterAcc.push[1]; b.vz += waterAcc.push[2];
@@ -179,6 +183,7 @@ export class WitherSkulls extends Fireballs {
     if (hit) this.impact(b, hit); // the update goes on: the skull still moves (EntityFireball.onUpdate only marks it dead)
     const k = waterAcc.wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
     b.x += b.vx; b.y += b.vy; b.z += b.vz;
+    fireballTurn(b, b.vx, b.vy, b.vz); // b80 renderfx80: EntityFireball's turn toward the motion, which RenderWitherSkull draws
     b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
   }
   // zp.a(azu): 8 damage from the wither (a mob source) and a 5 heal on a kill, the wither effect by difficulty, then a power 1 explosion.
