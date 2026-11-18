@@ -63,7 +63,7 @@ test('Nether and End mob pickups work and report to that lane\'s own list', { ti
 
 test('the client flies a mob-collected item to the row\'s place (source check)', () => {
   const src = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-  assert.match(src, /who = t\.at \?\? \(t\.by === multiplayer\.id/);
+  assert.match(src, /who = mobWho \?\? t\.at \?\? \(t\.by === multiplayer\.id/); // b80 mpcmd80: the live mob copy comes first, `at` stays the fallback
 });
 
 test('a falling command block\'s TileEntityData lands in the server\'s command block store and is saved', () => {

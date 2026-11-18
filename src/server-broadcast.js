@@ -21,7 +21,8 @@ import { stackName } from "./item-names.js";
 import { ITEMS } from "./survival.js";
 import { itemComponent } from "./item-component.js";
 import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
-import { runCartCommand, setCartCommand } from "./multiplayer/server-cart-commands.js"; // b63
+import { runCartCommand, setCartCommand, runCommandLogic } from "./multiplayer/server-cart-commands.js"; // b63
+import { setBlockCommand } from "./multiplayer/server-command-blocks.js"; // b80 mpcmd80
 import { pickedAchievement } from "./achievements-live.js";
 import { summonHost } from "./multiplayer/server-summon.js"; // b67 mpsummon
 import { worldCommandsHost } from "./multiplayer/server-worldcmds.js"; // b68 mpworldcmds
@@ -66,6 +67,7 @@ export class ServerSocial {
   constructor({ simulation, deliver, ops = new Set() }) {
     Object.assign(this, { simulation, deliver, ops: new Set([...ops].map((n) => n.toLowerCase())), achievements: new Map() });
     if (simulation.achievements) simulation.achievements.sink = this; // b60: the biome and beacon observers read the per-player Achievements (server-achievements.js)
+    simulation.commandBlockRun = (tile, pos, dim) => runCommandLogic(this, tile, pos, { commands: SERVER_COMMANDS, chatMessage, dim }); // b80 mpcmd80: BlockCommandBlock.updateTick (server-command-blocks.js)
   }
   idOf(name) { for (const [id, p] of this.simulation.players) if (p.name.toLowerCase() === String(name).toLowerCase()) return id; return undefined; }
   // b68 mpadmin: an operator is a MC_WEB_OPS name (level = op-permission-level) or a /op entry of the admin lists (its own level).
@@ -105,6 +107,12 @@ export class ServerSocial {
   forget(id) { this.achievements.delete(id); }
   /** MC|AdvCdm for a command block minecart (b63): a Creative operator sets its command. */
   setCartCommand(id, key, command) { return setCartCommand(this, id, key, command); }
+  /** b80 mpcmd80: MC|AdvCdm type 0 for a command block: the native answer (notEnabled / notAllowed / setCommand.success) goes to the sender; true when the command was set. */
+  setBlockCommand(id, x, y, z, command) {
+    const reply = setBlockCommand(this, id, x, y, z, command);
+    if (reply) this.deliver(id, chatMessage(reply));
+    return reply?.key === "advMode.setCommand.success";
+  }
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
     for (const p of this.simulation.players.values()) this.simulation.scoreboard?.tickHealth(p); // b64 mpscoreboard: EntityPlayerMP.onUpdate health criteria

@@ -61,6 +61,7 @@ export function worldCommandsHost(sim, p, forPlayer) {
     return {
       world: () => sim.world, survival: () => sim.tiles, changed() {}, updateBlock() {},
       skulls: () => sim.tileEntities.skulls, beaconTile: (x, y, z) => sim.tileEntities.beacons.ensure(x, y, z), spawners: () => sim.tileEntities.spawners,
+      commandTile: (x, y, z) => sim.tileEntities.commandBlocks?.tile(x, y, z), // b80 mpcmd80: /setblock and /testforblock read and write the command block's Control data
       // World.func_147480_a(x, y, z, true): the block breaks with its drops and the 2001 effect for everyone (no breaker). The harvest rule is the hand's (breakPlayerBlock).
       destroyBlock: (x, y, z) => {
         const state = { world: sim.world, survival: scratch, farming: sim.farming, trees: sim.trees, items: sim.itemHost, xpOrbs: sim.serverItems.xp, heldTool: 0 };

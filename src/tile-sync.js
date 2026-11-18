@@ -18,7 +18,11 @@
 // does a tile edit (sign text, skull placement, beacon picks, spawner mob; DedicatedSimulation.tileChanged).
 //
 // Here the port's wire form is `chunks[i].tiles`: [{ kind, x, y, z, ... }] built by describeTiles from the server's stores and applied on the
-// replica by applyTiles. There is no command block in this port, so that description is not produced.
+// replica by applyTiles.
+//
+// Batch 80 (mpcmd80): the command block description. TileEntityCommandBlock.getDescriptionPacket (aox.m, bytecode-read) is S35 action 2 with the whole writeToNBT compound,
+// CommandBlockLogic.func_145758_a (agp.a(dh)): Command, SuccessCount, CustomName, LastOutput (only when not null) and TrackOutput. The client's onDataPacket is readFromNBT
+// (agp.b(dh)): Command and SuccessCount always, CustomName / LastOutput / TrackOutput only when the tag is there, so a description without LastOutput keeps the old one.
 import { SIGN_POST, WALL_SIGN, isSign, SIGN_LINES, MAX_LINE } from "./signs.js";
 import { SKULL } from "./skull.js";
 import { BEACON } from "./pyramid.js";
@@ -27,6 +31,7 @@ import { spawnerJSON } from "./mob-spawner.js";
 import { potContents, setPotContents } from "./stone-utility.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { newChest } from "./chest.js";
+import { COMMAND_BLOCK, newCommandBlock, normalizeLastOutput } from "./command-block.js"; // b80 mpcmd80
 
 export { SIGN_POST, WALL_SIGN };
 const cellIn = (t, cx, cz, mask) => (t.x >> 4) === cx && (t.z >> 4) === cz && (mask >> (t.y >> 4) & 1) === 1;
@@ -40,6 +45,8 @@ const skullOf = (t) => ({ kind: "skull", action: TILE_ACTION.skull, x: t.x, y: t
 const spawnerOf = (s) => ({ kind: "spawner", action: TILE_ACTION.spawner, x: s.x, y: s.y, z: s.z, nbt: spawnerJSON(s) });
 const beaconOf = (t) => ({ kind: "beacon", action: TILE_ACTION.beacon, x: t.x, y: t.y, z: t.z, primary: t.primary, secondary: t.secondary, levels: t.levels });
 // Flower pots keep their plant on the world (world.pots, else implied by the block metadata).
+// b80 mpcmd80: a command block without a server record is a fresh TileEntityCommandBlock (BlockContainer.onBlockAdded), described with its defaults.
+const commandOf = (t, x, y, z) => ({ kind: "command", action: TILE_ACTION.command, x, y, z, command: String(t.command ?? ""), successCount: t.successCount | 0, customName: String(t.customName ?? "@"), ...(t.lastOutput != null ? { lastOutput: t.lastOutput } : {}), trackOutput: t.trackOutput !== false });
 const potOf = (world, x, y, z) => { const c = potContents(world, x, y, z); return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0 }; };
 
 // Batch 60 (mpcontainers2): the 1.7.10 client makes a TileEntityChest from the block alone (the chunk packet has no chest tile; facing is the block's
@@ -60,6 +67,7 @@ export function describeCell(stores, x, y, z) {
   if (block === MOB_SPAWNER) { const t = stores.spawners?.get(x, y, z); return t ? spawnerOf(t) : null; }
   if (block === BEACON) { const t = stores.beacons?.get(x, y, z); return t ? beaconOf(t) : null; }
   if (block === FLOWER_POT) return potOf(world, x, y, z);
+  if (block === COMMAND_BLOCK && stores.commandBlocks) return commandOf(stores.commandBlocks.get(x, y, z) ?? newCommandBlock(), x, y, z); // b80 mpcmd80
   if (isChestBlock(block) || block === ENDER_CHEST) return chestOf(stores, x, y, z, block);
   return null;
 }
@@ -92,6 +100,7 @@ export function describeTiles(stores, cx, cz, mask) {
   for (const s of stores.spawners?.values() ?? []) if (cellIn(s, cx, cz, mask) && world.get(s.x, s.y, s.z) === MOB_SPAWNER) out.push(spawnerOf(s));
   for (const t of stores.beacons?.tiles.values() ?? []) if (cellIn(t, cx, cz, mask) && world.get(t.x, t.y, t.z) === BEACON) out.push(beaconOf(t));
   for (const [x, y, z] of potCells(world, cx, cz, mask)) out.push(potOf(world, x, y, z));
+  for (const { x, y, z, tile } of stores.commandBlocks?.values() ?? []) if (cellIn({ x, y, z }, cx, cz, mask) && world.get(x, y, z) === COMMAND_BLOCK) out.push(commandOf(tile, x, y, z)); // b80 mpcmd80: recorded ones (a fresh one is the client's default)
   for (const key of Object.keys(stores.chests ?? {})) {
     const [x, y, z] = key.split(",").map(Number);
     if (cellIn({ x, y, z }, cx, cz, mask) && isChestBlock(world.get(x, y, z))) out.push(chestOf(stores, x, y, z, world.get(x, y, z)));
@@ -125,6 +134,16 @@ export function applyTiles(list, stores) {
     } else if (t.kind === "beacon" && block === BEACON && stores.beacons) {
       const tile = stores.beacons.ensure(x, y, z);
       tile.primary = t.primary | 0; tile.secondary = t.secondary | 0; tile.levels = Number.isInteger(t.levels) ? t.levels : -1;
+      n++;
+    } else if (t.kind === "command" && block === COMMAND_BLOCK && stores.commandBlocks) { // b80 mpcmd80: agp.b(dh) into the client's tile
+      let last;
+      try { last = typeof t.lastOutput === "string" ? normalizeLastOutput(t.lastOutput) : undefined; } catch { continue; } // fk.a threw: the packet is not applied
+      const tile = stores.commandBlocks.tile(x, y, z);
+      tile.command = typeof t.command === "string" ? t.command : "";
+      tile.successCount = Number.isInteger(t.successCount) ? t.successCount : 0;
+      if (typeof t.customName === "string") tile.customName = t.customName;
+      if (last !== undefined) tile.lastOutput = last;
+      if (typeof t.trackOutput === "boolean") tile.trackOutput = t.trackOutput;
       n++;
     } else if (t.kind === "pot" && block === FLOWER_POT) {
       setPotContents(world, x, y, z, t.id ? { id: t.id, damage: t.damage | 0 } : null);

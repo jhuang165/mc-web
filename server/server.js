@@ -252,6 +252,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         else if (m.type === 'animUse' && Number.isInteger(m.mob)) simulation.queueAnimUse(id, m.mob, m.claim); // b61: C02 UseEntity (interact) on an animal
         else if (m.type === 'vehUse' || m.type === 'vehHit') simulation.queueVehicle(id, { v: m.v, hit: m.type === 'vehHit' }); // b61: C02 on a minecart or boat
         else if (m.type === 'vehCmd') social.setCartCommand(id, m.v, m.command); // b63: MC|AdvCdm on a command block minecart (Creative operator)
+        else if (m.type === 'blockCmd') social.setBlockCommand(id, m.x, m.y, m.z, m.command); // b80 mpcmd80: MC|AdvCdm type 0 on a command block (op level 2, Creative)
         else if (m.type === 'sign') simulation.updateSign(id, m); // C12 update sign
         else if (m.type === 'bookEdit' || m.type === 'bookSign') { if (!bookPacket(simulation, id, m)) ws.close(1008, 'Invalid book tag!'); } // b66 mpbooks: MC|BEdit / MC|BSign
         else if (m.type === 'beacon') simulation.chooseBeacon(id, m); // MC|Beacon
