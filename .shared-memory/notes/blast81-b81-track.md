@@ -1,0 +1,107 @@
+# Batch 81 blast81: client blast neighbour updates, the fireball client copy, chained blast timing
+
+## Summary
+- **Client neighbour updates (part 1): no change needed; this corrects b80.**
+  - Native: the client clears S27 cells and runs no neighbour updates for them.
+    - `World.setBlock` (`ahb.d(IIILaji;II)`) calls notifyBlockChange only when `!isRemote && (flags & 1)`.
+    - `Chunk.setBlock` (`apx.a(IIILaji;I)`) skips onBlockPreDestroy, breakBlock and onBlockAdded on a remote world. It only removes the tile entity of an `akw`.
+  - So a torch on a cleared block does not drop on the client. It goes when the server's block changes arrive.
+  - The port's client already behaves this way. `S27ClientBlocks` leaves alone the cells the server changed in that tick, so no server cell update is applied twice.
+  - The b80 follow-up in `mpfx80-b80-track.md`, "the native client also runs neighbour updates from its setBlock(.., 3)", was wrong.
+- **Chained blasts in their native tick (part 3), commit 196f8ee11.**
+  - Natively, a crystal hurt by a blast explodes inside that blast's doExplosionA. `wz.a` calls setDead, then `createExplosion(null, x, y, z, 6, true)` inline.
+  - A TNT block primed by doExplosionB spawns at the end of `loadedEntityList`, so it updates in the same entity pass.
+  - The port queued both: the crystal's event was drained in the next tick, and the server's new primed TNT was ticked in the next tick.
+  - `explosion.js`: new `explosionOutcome`, the doExplosionB half (pitch, drops, xp, primed, fires). `explodeBlocks` = `explosionBlocks` + `explosionOutcome`.
+  - `explosion-simulation.js` (single player) now runs native order: rays, then the entity hits (which may nest a crystal blast), then the outcome, so each cell is re-read at B time. A cell that the inner blast cleared is not dropped twice.
+    - TNT primed during the blast is not pushed by it.
+    - Orbs born mid-blast are not pushed by it.
+  - `ender-crystal-mobs.js`: `crystalAttack` calls `mobs.explodeInline(event)` when the host has it, and otherwise queues the event as before.
+  - `server-mobs.js` `explode` uses the same order. The server primes the outcome's TNT with the blast's placer.
+  - `server-dispense.js`:
+    - `tick()` records which TNT it ticked.
+    - New `tickJoined()` ticks TNT primed later in the tick, until none are left.
+    - `simulation.js` and `server-nether.js` call `tickJoined` after `vehicles.tick()`.
+- **Fireball client copy (part 2), commit 39a6dfb53.**
+  - New `src/multiplayer/fireball-copy.js`.
+  - Server: `BallTracks` keeps one TrackerEntry per fireball or skull (range 64, frequency 10, no velocity sends; the location block is also forced at ticks == 1). Its S0E fields and this tick's S15/S18/S12 go in the `dispEnts` row as `t`.
+  - Client:
+    - `flyBallRow` spawns the copy with motion 0 and the acceleration normalised to 0.1. Later messages run ze.h first (move, four bubbles in water, factor 0.95 / 0.8 in water / 0.73 for a blue skull, smoke at y + 0.5), then apply the packets.
+    - Position packets lift the box as setPositionAndRotation2 does. A teleport adds 1/64 to y.
+  - `client-explosion.js`: `clientBallFx` uses the copy when the row has `t`. A row without `t` (an older server) keeps the b80 mirror.
+  - `client-dispense.js`: a gone ball's copy updates twice more and is drawn in the first of those two messages.
+  - `server-dispense.js` sends two empty snapshots after a ball, so both late updates reach the client.
+  - `blaze-ghast.js` `deflect` sets `velocityChanged` (setBeenAttacked), so a punched ball sends S12.
+  - `main.js` passes `world` to the hook.
+- Old tests changed because they encoded the fixed gaps:
+  - `mpdragon2-b65.test.js`: the crystal test expected the queued explode event. It now captures `explodeInline`.
+  - `mpfx80-b80.test.js`: "the client copy draws what the server ball drew, tick for tick" is now two tests:
+    - the exact mirror, for rows without `t`;
+    - the copy's own flight: the same smoke and bubble sequence, within 0.7 blocks of the server ball.
+- Correction to b80: `src/explosion-simulation.test.js` does finish. It passes 2/2 in about 140 ms here and also with the b81 changes stashed (base f98083f29).
+
+## Evidence
+- Bytecode-read (javap -c -p, 1.7.10 jar), this batch:
+  - Blocks and world:
+    - `ahb.d(IIILaji;II)`: `getfield E` (isRemote) at 165, then `flags & 1`, then `c(IIILaji;)` notifyBlockChange.
+    - Chunk setBlock remote guards on onBlockPreDestroy, breakBlock and onBlockAdded.
+  - Crystal and blast order:
+    - `wz.a(ro, F)`: `B()` setDead, then `ldc 6.0f`, then `ahb.a(Lsa;DDDFZ)` createExplosion. The blast runs inside the attacker's doExplosionA entity loop.
+    - `agw.a()` doExplosionA: the rays, then one entity list read, then attackEntityFrom.
+    - `agw.a(Z)` doExplosionB: re-reads each cell. `aob` onBlockDestroyedByExplosion spawns `xw` with fuse `nextInt(fuse / 4) + fuse / 8` (fuse 80).
+    - World.spawnEntityInWorld appends to `loadedEntityList`, which `updateEntities` walks by index.
+  - Fireballs:
+    - `mn.a(sa)`: `ze` is tracked with 64, 10, false.
+    - `my.c`: S0E types 63/64/66, with speed fields `(int)(accel * 8000)`.
+    - `bjb.a(fw)`: builds `zg/zi/zp(world, x, y, z, s / 8000 ...)`, then `fw.g(0)`, so no setVelocity.
+    - `ze.<init>`: normalisation with a float sqrt, `* 0.1`.
+    - `ze.h`: no remote guard.
+    - `sa.C`: the burning flag is set only when `!isRemote`. Then `ze.h` calls `e(1)`, so the watcher changes at the ball's second update.
+    - `ze.a(ro, F)` calls `sa.Q` setBeenAttacked.
+    - `ze.e` = 0.95f.
+  - Client tick order: `bao` runTick, the "level" section's `bjf.h()V` at offset 1811, comes before the "pendingConnection" section's `ej.a()V` at 2042. The client updates entities before it processes the tick's packets.
+- Port-read:
+  - A dead ball leaves the server's entity list in its tick. `onEntityRemoved` makes the entry queue its id in each viewer's `destroyedItemsNetCache`. The S13 goes out at the viewer's next `EntityPlayerMP.onUpdate`, which is the next tick when the player is earlier in the list.
+  - So the copy gets two more updates (smokes) after the ball's last packets.
+  - The port models one server tick per client message.
+- Executed (node, scratch probes):
+  - Copy vs server x over 31 ticks: one update behind between packets. On the ball to within 1/16 after the move/teleport at ticks 10, 20 and 30; the entry rounds x and z by size class from a floored start.
+  - Smoke and bubble sequence through water: 61 events on each side, 36 bubbles on each side.
+
+## Verification
+- `node --test --test-timeout=600000 src/blast81-b81.test.js`: 10 pass, 0 fail. The tests cover:
+  - SP crystal nesting.
+  - SP cells and TNT not doubled.
+  - A bare host still queues.
+  - The server's TNT updates in the same tick.
+  - The server crystal nested in a TNT blast, with its chained TNT.
+  - The copy's spawn normalisation.
+  - Flight between packets, with a smoke every update.
+  - Two late updates.
+  - S12 on a punch.
+  - The `t` field and two empty snapshots.
+- Part 3 neighbours:
+  - explosion, block-actions-replay, crystal-fire-b57, explfx79, mpfx80, mpexplosion78, mpdispense-b61, explosion-entities, player-knockback, entity-simulation-replay: 69/69.
+  - end, mpend-b63, mpend2-b64, mpend3-b66, mpendwindow-b65, mpdragon-b64, mpdragon2-b65, dragon-world, game-rules, spfixes75, ring-events, mob-griefing, xp-orbs, hanging, fixes68, mpvehiclehits-b67: 108 tests. mpdragon2 failed until its test was updated, then passed 5/5.
+  - dragon, deathfx-b59, singleleft-b62, random-persistence, dispense, entity-simulation, explosion-particles, fire, mpprojectiles2-b63, temple-traps, redstone-live, saved-order-b57, savedorder8-b60: 128/128.
+  - explosion-simulation: 2/2.
+- Part 2 neighbours:
+  - `--test-concurrency=2`: b62-lead, blaze-ghast, clientreplays-b65, explfx79, fluids80, mpdispense-b61, mpdragon2-b65, mpend2-b64, mpexplosion78, mpfx80, mpmobs2-b60, mpprojectiles-b62, mpprojectiles2-b63, mpwither-b63, mpvelocity77, fireballs-native: 143/144. The failure was the mpfx80 mirror test; after its update, mpfx80 passes 10/10.
+  - fireballs-b41/b42/b43, entity-tracker, object-tracker-extras/hits/vehicles, tracker-timing-b48, mpreach71, mpspawners2-b65, blast81: 203/203.
+- `npm run build`: passes (the usual chunk-size warning).
+- No full npm test and no browser checks, per the track rules.
+
+## Follow-ups
+- Single player: a ghast fireball's blast is still queued and drained after the entity walk (the crystal is now inline). Its timing against TNT primed in the same tick was not re-checked.
+- Server blasts still do not push dropped items or minecarts (single player pushes items).
+- The single-player `explodeBlocks` default `own` is still `new JavaRandom(Date.now())` for flaming blasts.
+- The fireball copy has no rotation or look packets (the stand-in never turns; the skull renderer turns to the row's motion). Not modelled:
+  - the extinguish watcher flicker of a ball in water;
+  - the client's ray and entity sweep (onImpact is remote-guarded, so it never ends the copy).
+- The S13 lands one tick earlier when the viewer is later in the entity list than the ball. The port always uses the usual case.
+- Browser-only (not checked):
+  - the smoke trail and copy movement between packets, seen in a real client;
+  - render smoothness at packet corrections;
+  - the skull model's turning;
+  - the last smoke at impact;
+  - chained crystal or TNT blasts on screen, and their sounds.
