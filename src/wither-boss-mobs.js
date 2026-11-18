@@ -161,8 +161,17 @@ export class WitherSkulls extends Fireballs {
   }
   accepts(kind) { return kind === "witherSkull"; }
   // EntityWitherSkull's dangerous flag is a data-watcher value that the native NBT does not save; `blue` is restored from the browser save only.
+  // b81 render81: the rotation is Entity.writeToNBT's Rotation [rotationYaw, rotationPitch]; readFromNBT (sa.f(dh), bytecode-read) sets
+  // prevRotationYaw/Pitch to the stored floats and setRotation (sa.b(FF)) the current ones to them mod 360 (frem). Older saves have none (0, 0).
   build(r) {
-    return { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue: false, large: false, owner: null, health: 1, x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size };
+    const [yaw, pitch] = Array.isArray(r.rotation) && r.rotation.length >= 2 && r.rotation.every(Number.isFinite) ? r.rotation.map(Math.fround) : [0, 0];
+    return { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue: false, large: false, owner: null, health: 1, x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size,
+      yaw: Math.fround(yaw % 360), pitch: Math.fround(pitch % 360), prevYaw: yaw, prevPitch: pitch };
+  }
+  // The browser save keeps the rotation the way the native save does (javaProjectileToNbt writes it as Entity's Rotation).
+  serialize(dimension = 0) {
+    const live = this.list.filter((b) => !b.dead);
+    return super.serialize(dimension).map((r, i) => ({ ...r, rotation: [live[i].yaw ?? 0, live[i].pitch ?? 0] }));
   }
   // EntityWitherSkull.onUpdate (EntityFireball's flight with the skull's own factor) for one skull, where the loaded-entity walk reaches it.
   tickOne(b) {
