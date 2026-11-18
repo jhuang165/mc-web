@@ -2,7 +2,7 @@
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
 import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
-import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
+import { collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
@@ -44,7 +44,7 @@ const shapedNonSolid = (b) => b === 0 || isLiquid(b) || b === SNOW_LAYER || b ==
  *
  * `state`: `{world,survival,position:{x,y,z},flowers,yaw,farming}`.
  * `request`: `{id,item,target:{block:[x,y,z],adjacent:[x,y,z]}}`.
- * Hooks: `collides`, `toast`, `updateBlock(x,z,y)`, `renderHotbar`,
+ * Hooks: `collides` (the placing player), `entities(box)` (World.checkNoEntityCollision for every other entity, placement-entities.js), `toast`, `updateBlock(x,z,y)`, `renderHotbar`,
  * `sound(placed,id)`, `playSound(name,options)`, and `markUnsaved`.
  * Returns `{placed,reason,block,position}` for the caller's action result.
  */
@@ -61,7 +61,17 @@ export function placeHeldBlock(state, request, hooks = {}) {
     playSound = () => {},
     scheduleFalling = () => {},
     markUnsaved = () => {},
+    entities = null,
   } = hooks;
+  // b81 collide81: checkNoEntityCollision against the other entities with the cell's collision box (getCollisionBoundingBoxFromPool: one box, the
+  // union of the port's boxes; a block without one tests nothing), in world coordinates.
+  const entityBlocked = (cell) => {
+    if (!entities) return false;
+    const boxes = collisionBoxes(world, ...cell);
+    if (!boxes.length) return false;
+    const u = [0, 1, 2].map((i) => Math.min(...boxes.map((b) => b[i]))).concat([3, 4, 5].map((i) => Math.max(...boxes.map((b) => b[i]))));
+    return !!entities([cell[0] + u[0], cell[1] + u[1], cell[2] + u[2], cell[0] + u[3], cell[1] + u[4], cell[2] + u[5]]);
+  };
   if (!target?.block) return result(false, "no-target");
   // ItemBlock, ItemReed, ItemSlab and ItemSnow.onItemUse open with `if (stack.stackSize == 0) return false` in either game mode; ItemRedstone,
   // ItemDoor and ItemDye (cocoa) have no such check (probed: attributes2-reference.json use, stone/torch/slab/cake/reed/string/repeater/flower pot).
@@ -75,7 +85,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // ItemSnow.onItemUse (aec.a, b80 spswing80 bytecode-read): add one layer to the clicked snow cell first. checkNoEntityCollision tests the layer's
   // CURRENT box ((meta & 7) / 8 high, BlockSnow ann.a, read before setBlockMetadata), so a player standing on the snow does not stop it; when an
   // entity is in that box the item falls to ItemBlock.onItemUse (abe/abh: the cell on the clicked side) instead of refusing.
-  if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id)) && !intersects(world, position.x, position.y, position.z)) {
+  // Every entity counts (b81 collide81): the player through `intersects`, the others through `entities` with the same current box.
+  if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id)) && !intersects(world, position.x, position.y, position.z) && !entityBlocked(here)) {
     world.set(...here, SNOW_LAYER, true, stacked);
     if (!survival.creative) survival.take(id);
     updateBlock(here[0], here[2], here[1]);
@@ -138,17 +149,26 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   // ItemSlab.onItemUse (stone-utility.js planSlabUse): merge into a double slab on the open face or in the adjacent cell, else
   // place the half chosen by the side and the hit height. Item 82 is the sandstone slab (type 1); 1103's damage is the type.
+  // b81 collide81: the merges read the clicked cell and func_150946_a's cell (aeg, bytecode-read: always the cell offset by the clicked side, a
+  // one-layer snow or vine clicked included) with the real side; only the ItemBlock fall-through uses the replaced cell `p` and side 1 for snow.
   const slabType = id === WOOD_SLAB ? woodSlabType(survival.held?.damage || 0) : heldSlabType(itemId, survival.held?.damage || 0);
   if (slabType >= 0) {
     if (!survival.creative && !survival.count(itemId)) return result(false, "empty-stack", id, p);
     const hitY = Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]);
-    const plan = (id === WOOD_SLAB ? planWoodSlabUse : planSlabUse)(slabType, { id: block, meta: world.getMeta(...here) }, { id: world.get(...p), meta: world.getMeta(...p) }, side, hitY);
-    const cell = plan.merge === "clicked" ? here : p, was = world.get(...cell), wasMeta = world.getMeta(...cell);
+    const planUse = id === WOOD_SLAB ? planWoodSlabUse : planSlabUse, realSide = adjacent ? clickedSide(here, adjacent) : side;
+    let plan = planUse(slabType, { id: block, meta: world.getMeta(...here) }, adjacent ? { id: world.get(...adjacent), meta: world.getMeta(...adjacent) } : null, realSide, hitY);
+    if (!plan.merge) {
+      // ItemBlock.onItemUse's canPlaceEntityOnSide: the fall-through needs a replaceable cell (a torch or rail there keeps the slab).
+      if (!placementReplaceable(world.get(...p))) return result(false, "occupied", id, p);
+      plan = planUse(slabType, { id: 0, meta: 0 }, null, side, hitY);
+    }
+    const cell = plan.merge === "clicked" ? here : plan.merge === "adjacent" ? adjacent : p, was = world.get(...cell), wasMeta = world.getMeta(...cell);
     if (!withinBounds(cell)) return result(false, "invalid-position", plan.id, cell);
     world.set(...cell, plan.id, false, plan.meta);
-    if (intersects(world, position.x, position.y, position.z)) {
+    if (intersects(world, position.x, position.y, position.z) || entityBlocked(cell)) {
+      const player = intersects(world, position.x, position.y, position.z);
       world.set(...cell, was, false, wasMeta);
-      return result(false, "player-collision", plan.id, cell);
+      return result(false, player ? "player-collision" : "entity-collision", plan.id, cell);
     }
     world.set(...cell, plan.id, true, plan.meta);
     farming.observe(...cell);
@@ -220,9 +240,10 @@ export function placeHeldBlock(state, request, hooks = {}) {
           : isDispenserPiston(id) ? pistonOrientation(p[0], p[1], p[2], position.x, position.y, position.z, minecraftYaw(yaw))
           : 0;
   world.set(...p, id, false, meta);
-  if (intersects(world, position.x, position.y, position.z)) {
+  if (intersects(world, position.x, position.y, position.z) || entityBlocked(p)) {
+    const player = intersects(world, position.x, position.y, position.z);
     world.set(...p, old, false, oldMeta);
-    return result(false, "player-collision", id, p);
+    return result(false, player ? "player-collision" : "entity-collision", id, p);
   }
   world.set(...p, id, true, meta);
   if (isChestBlock(id)) placeChest(world, survival.chests, ...p, yaw, id);

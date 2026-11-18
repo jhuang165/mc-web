@@ -86,6 +86,7 @@ import { setWorldSpawn } from './server-worldcmds.js'; // b68 mpworldcmds: /setw
 import { aimOriginY, serverPosY } from '../sleeper-eye.js'; // b69 mpfixes69
 import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
+import { placementEntityBlocker } from '../placement-entities.js'; // b81 collide81
 
 const noop = () => {};
 // What a server-side survival break needs from the world around it. Item entities are real (`itemHost`); the dedicated world has no experience orbs.
@@ -484,6 +485,9 @@ export class DedicatedSimulation {
         // write, so the same collision test must cover every connected player.
         return collides(w, other.position.x, other.position.y, other.position.z);
       }),
+      // b81 collide81: World.checkNoEntityCollision also sees the mobs, carts, boats, falling blocks and primed TNT.
+      entities: (this._placementEntities ??= placementEntityBlocker(() => ({ mobs: this.mobs?.mobs, vehicles: [this.vehicles?.carts?.carts, this.vehicles?.boats?.carts],
+        falling: this.mobs?.falling?.entities, primed: this.dispense?.primed }))),
     }), placed = put.placed;
     if (placed) this.golems.afterPlace(put); // b66 mpgolems: BlockPumpkin.onBlockAdded
     if (placed) this.stats.used(p, id); // b63 mpstats: ItemStack.tryPlaceItemIntoWorld, the use stat

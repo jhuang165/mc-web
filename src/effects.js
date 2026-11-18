@@ -27,8 +27,9 @@ export class WorldEffects {
   crack(block, progress = 0) {
     // RenderGlobal drops a partially destroyed block 400 ticks after its last stage (a breaker that died leaves one).
     if (this.mobCracks?.size) for (const [id, mesh] of this.mobCracks) if (performance.now() - mesh.userData.at > 20000) this.mobCrack(id, null, -1);
-    this.crackMesh.visible = !!block;
-    if (block) {
+    // PlayerControllerMP sends (int)(damage * 10) - 1: a NaN or negative damage (Mining Fatigue V and up) shows no crack.
+    this.crackMesh.visible = !!block && progress >= 0;
+    if (this.crackMesh.visible) {
       this.crackMesh.position.set(...block.map((n) => n + 0.5));
       const map = this.cracks[Math.min(9, Math.floor(progress * 10))];
       if (this.crackMesh.material.map !== map) {

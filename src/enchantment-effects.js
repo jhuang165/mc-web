@@ -177,18 +177,16 @@ export function miningEnchantments(held, armor = []) {
   return { efficiency: held ? getEfficiencyModifier(held) : 0, aquaAffinity: getAquaAffinityModifier(armor.filter(Boolean)) };
 }
 
-// Survival.mining with the player's live enchantments (Efficiency of the held tool, Aqua Affinity of the
-// worn helmet). Without either it is exactly survival.mining, so stubbed or older callers behave as before.
+// Survival.mining with the player's live enchantments (Efficiency of the held tool, Aqua Affinity of the worn helmet) and effects
+// (Haste, Mining Fatigue). Without any of them it is exactly survival.mining, so stubbed or older callers behave as before.
+// EntityPlayer.getBreakSpeed applies the effects to the speed before Block.getPlayerRelativeBlockHardness divides (b81 collide81, executed:
+// public/research/mining-effects-reference.json); the progress is not clamped (NaN at Mining Fatigue V, negative past it, as native).
 export function playerMiningState(survival, block, toolId, underwater = false, onGround = true) {
-  const state = enchantedMiningState(survival, block, toolId, underwater, onGround), haste = survival.effects?.digSpeedMultiplier?.() ?? 1;
-  // EntityPlayer.getBreakSpeed: Haste and Mining Fatigue scale the break speed (progress is linear in it).
-  return haste === 1 || !(state.progress > 0) ? state : { ...state, progress: Math.max(0, Math.fround(state.progress * haste)) };
-}
-function enchantedMiningState(survival, block, toolId, underwater, onGround) {
   const held = survival.held, tool = held && held.id === toolId ? held : null;
   const { efficiency, aquaAffinity } = miningEnchantments(tool, survival.inventory?.armor);
-  if (!efficiency && !aquaAffinity) return survival.mining(block, toolId, underwater, onGround);
-  return miningState(block, MATERIALS[block], survival.count(toolId) ? ITEMS[toolId] : null, { underwater, onGround, efficiency, aquaAffinity });
+  const { haste = -1, fatigue = -1 } = survival.effects?.digAmplifiers?.() ?? {};
+  if (!efficiency && !aquaAffinity && haste < 0 && fatigue < 0) return survival.mining(block, toolId, underwater, onGround);
+  return miningState(block, MATERIALS[block], survival.count(toolId) ? ITEMS[toolId] : null, { underwater, onGround, efficiency, aquaAffinity, haste, fatigue });
 }
 
 // ---- attacking ------------------------------------------------------------

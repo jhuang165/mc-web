@@ -33,12 +33,16 @@ export function miningState(block,material={},tool=null,{underwater=false,onGrou
  if(!Number.isFinite(hardness)||hardness<0)return{progress:0,harvest:false,speed:0,hardness};
  let speed=f(digSpeed(block,tool));
  if(speed>1&&efficiency>0)speed=f(speed+efficiency*efficiency+1);
+ // EntityPlayer.getCurrentPlayerStrVsBlock [yz.a(aji,boolean)]: Haste, then Mining Fatigue, each `f *= 1 +/- (amplifier + 1) * 0.2F`,
+ // before the water and airborne divisions (b81 collide81, executed: mining-effects-reference.json).
  if(haste>=0)speed=f(speed*f(1+f((haste+1)*f(.2))));
- // 1.7.10 fatigue is linear; the later exponential slowdown is different.
+ // 1.7.10 fatigue is linear; the later exponential slowdown is different. Level V gives 0 and higher levels a negative speed.
  if(fatigue>=0)speed=f(speed*f(1-f((fatigue+1)*f(.2))));
  if(underwater&&!aquaAffinity)speed=f(speed/5);
  if(!onGround)speed=f(speed/5);
- return{harvest,speed,hardness,progress:hardness===0?Infinity:f(f(speed/hardness)/(harvest?30:100))};
+ // Block.getPlayerRelativeBlockHardness: speed / hardness / 30F (or 100F) in floats, so hardness 0 gives Infinity, but NaN at speed 0
+ // (Mining Fatigue V: no instant break) and -Infinity at a negative speed; a negative progress never reaches 1 (PlayerControllerMP).
+ return{harvest,speed,hardness,progress:f(f(speed/hardness)/(harvest?30:100))};
 }
 export function breakTicks(state){if(state.progress>=1)return 0;if(!(state.progress>0))return Infinity;let damage=0,ticks=0;while(damage<1&&ticks<10000000){damage=f(damage+state.progress);ticks++;}return damage>=1?ticks:Infinity;}
 export function blockWear(block,material,tool){

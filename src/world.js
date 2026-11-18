@@ -416,9 +416,10 @@ export function collisionBoxes(world,x,y,z){
   const b=world.get(x,y,z);
   return b===134?(noteBrewingCollisionPass(),BREWING_BOXES.map(v=>[...v])):b===133?HOPPER_BOXES.map(v=>[...v]):isShaped(b)?shapedBoxes(world,x,y,z,wallSolid):isFence(b)?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
 }
-// One-box-per-block collision consumers (items, particles, carts, projectiles) take a stair's two or three boxes
-// and every other block's single collisionBounds box.
-export const collisionBoxList=(world,x,y,z)=>isShaped(world.get(x,y,z))?shapedBoxes(world,x,y,z,wallSolid):world.get(x,y,z)===134?(noteBrewingCollisionPass(),BREWING_BOXES.map(v=>[...v])):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
+// Entity.moveEntity's World.getCollidingBoundingBoxes for items, particles, carts and projectiles: a stair's two or three boxes, a pane's
+// and a fence's arms (BlockFence.addCollisionBoxesToList, akz: the z arm and the x arm, each 1.5 high; b81 collide81 bytecode-read: walls
+// and fence gates override only getCollisionBoundingBoxFromPool, one box) and every other block's single collisionBounds box.
+export const collisionBoxList=(world,x,y,z)=>isShaped(world.get(x,y,z))?shapedBoxes(world,x,y,z,wallSolid):isFence(world.get(x,y,z))?fenceCollisionBoxes(fenceMask(world,x,y,z)):world.get(x,y,z)===134?(noteBrewingCollisionPass(),BREWING_BOXES.map(v=>[...v])):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
 // Block.getSelectedBoundingBoxFromPool (the drawn outline), block-local. BlockCactus draws its
 // collision box inset; sugar cane its block bounds.
 export function selectionBounds(world,x,y,z){

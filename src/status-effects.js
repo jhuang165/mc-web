@@ -97,13 +97,10 @@ export class Effects {
   }
   // EntityLivingBase.jump: Jump Boost adds 0.1 per level to the upward motion.
   jumpBoost() { const e = this.active.get(PT.JUMP_BOOST); return e ? Math.fround((e.amplifier + 1) * Math.fround(0.1)) : 0; }
-  // EntityPlayer.getBreakSpeed: Haste multiplies by 1 + 0.2 per level, Mining Fatigue by 1 - 0.2 per level (1.7.10, not the later 0.3^n).
-  digSpeedMultiplier() {
-    let m = 1;
-    const h = this.active.get(PT.HASTE), f = this.active.get(PT.MINING_FATIGUE);
-    if (h) m = Math.fround(m * Math.fround(1 + Math.fround((h.amplifier + 1) * 0.2)));
-    if (f) m = Math.fround(m * Math.fround(1 - Math.fround((f.amplifier + 1) * 0.2)));
-    return m;
+  // EntityPlayer.getBreakSpeed: the Haste and Mining Fatigue amplifiers (-1 when absent); mining.js miningState applies them in order to the
+  // break speed (1 + 0.2 per level, then 1 - 0.2 per level: 1.7.10, not the later 0.3^n).
+  digAmplifiers() {
+    return { haste: this.active.get(PT.HASTE)?.amplifier ?? -1, fatigue: this.active.get(PT.MINING_FATIGUE)?.amplifier ?? -1 };
   }
   // generic.attackDamage: Weakness adds -0.5 per level (operation 0) to the item damage, Strength then multiplies the total by 1 + 1.3 per level (operation 2).
   attackDamage(base) {

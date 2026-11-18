@@ -101,6 +101,7 @@ function system(actions, functions) {
     signs: null, farming: { observe() {}, drain: () => [] }, trees: {}, fire: {}, fluids, items, projectiles, arrows,
     FLOWERS: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom: new JavaRandom(1), itemRand: new JavaRandom(2), weather: { random: new JavaRandom(3) }, // b68 lead: fixes68 passes weather.random as worldRand
     serverAcceptsClick: () => true, // server-handlers.test.js covers the C08/C07/C02 gate
+    placementEntities: null, // b81 collide81: placement checkNoEntityCollision (collide81-b81.test.js); these replays place nothing near a mob
     applyHangingEdit: () => false, hanging: null, aimedHanging: null, spawnHangingDrops: () => {}, // paintings and frames: hanging.test.js
     objectTracker: null, objectViews: (_tracker, list) => list, // main.js draws arrows at their client positions (object-tracker.js); no client entities here
     editActionLog, ITEMS, BOW, ARROW, copyStack, useBucket, milkCow, MILK_BUCKET, DRINK_TICKS, releaseBow, captureBucketTarget,
