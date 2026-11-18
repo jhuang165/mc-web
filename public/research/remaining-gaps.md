@@ -2,6 +2,40 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 81
+
+Batch 81 covered these areas:
+- **Chained blasts and fireball copies.** A crystal or TNT set off by another blast now explodes in the same tick, inside the outer blast, in single player and on the server (bytecode-read `wz.a`: setDead then createExplosion inline; TNT primed by a blast updates in the same entity pass). The multiplayer client's fireball and wither skull copies fly on their own between tracker packets (motion 0 at spawn, acceleration normalised to 0.1, update before packets as in `Minecraft.runTick`), smoke every update and draw twice more after impact; a punched ghast ball sends its new motion. The batch 80 gap "the client does no neighbour updates when it clears an exploded block" was wrong: a remote world runs none (`ahb.d` and `apx.a` test isRemote).
+- **Server command blocks.** The success count is the number of players a selector matched (`/testfor @a` with three players gives 3, and the comparator reads it), in single player and on the server. Server blocks run with nobody in their dimension (the port's Overworld is always loaded); Nether and End carts run in their own dimension. The command cart setter follows MC|AdvCdm type 1 (no reach limit, the advMode replies). `/summon ~ ~ ~` from a block uses the block, and commands aimed at another player from a server block no longer throw.
+- **Server speed.** Collision boxes and the per-move scratch boxes are reused (`MC_MPPERF81=on|off|verify`, identical seeded hashes): 14 to 42 % less allocation per tick; the cow pen tick drops from 1.18 to 0.92 ms, other scenes are within noise.
+- **Multiplayer copies.** A revived dying wolf's copy was checked end to end and already matched. Dragon parts are picked only when the dragon's body is inside the crosshair search box, so the frozen parts stop being pickable once the dying body rises (single player and client). Wither skull copies take the spawn angles and the tracker's look packets and turn from their own motion between them, as the native client does.
+- **Movement exhaustion.** Exhaustion and the `stat.*OneCm` counters follow `EntityPlayer.addMovementStat`: whole centimetres, 0.015 per cm diving (3-D) and swimming, 0.01 walking, 0.099999994 sprinting, nothing on ladders, in the air, riding or in Creative (executed, 360 records with a real EntityPlayerMP). The server's climb stat uses the ladder test.
+- **Mining and collisions.** Haste and Mining Fatigue scale the speed inside `getBreakSpeed` before the water and air divisions (executed, 9,675 rows; Fatigue V never breaks a block). Items, particles, carts and projectiles meet a fence's two arm boxes, not their union. Snow, slab and block placement refuse when any colliding entity is in the way (`checkNoEntityCollision`), and a slab merge reads the cell past a one-layer snow or vine.
+- **Corpses.** A dying horse keeps running its AI for its 20 death ticks (EntityHorse's own isMovementBlocked); a converting zombie can be cured again and keeps converting while dying; the inventory key on a horse asks for the horse window whenever the player rides one (single player opens it only for a tame horse); hits on a dragon part skip enchantment damage, knockback, crits, Fire Aspect and Thorns, which native applies only to a living target.
+- **Throwables and fire.** Arrows in lava flag a velocity change (EntityArrow does not override attackEntityFrom); potions and experience bottles save their Fire; items, orbs, arrows, boats, potions and bottles draw the fire overlay (a sweep of all classes found only falling blocks refuse it), in single player and multiplayer.
+- **Rendering.** End portal passes are clamped per pass, the shader's eye backs off 0.1 in first person, and every loaded portal tile is drawn within the 64-block cull (indexed per column). Wither skull projectiles keep their rotation through saves, import and export. The batch 80 gaps "the wither has no pitch" and "saved skulls start at rotation 0" were wrong for the wither and the skull block.
+- **Flower pots and packs.** Breaking or picking a pot gives the stored item and Data (`rawDamage` when the catalogue has no variant); any registered item in a pot imports, saves and exports unchanged; pots sync their exact Data through S35. Stored packs that no longer load can be removed from the pack screen (a port choice: native leaves the file in the folder).
+
+Still open from batch 81:
+- **Multiplayer.**
+  - Fireball copies never turn (no rotation packets for fireballs), ignore the in-water fire flicker and the client's own hit sweep; skull copies ignore water's 0.8. Server blasts do not push dropped items or minecarts.
+  - Command blocks: a server block far from spawn keeps running where native would unload its chunk (all server redstone); `/spawnpoint <other player>` from a block reads the base player; counts above 15 through wires and comparators are unchecked.
+  - Client placement prediction does not check entities, so the server refuses and the client corrects. The client's own crit on a dragon part is untested.
+  - The server player's own movement step can charge exhaustion a second time natively (`mw.i()` inside processPlayer, e.g. sinking under water); the port charges once.
+  - Performance: remaining allocation in travel comes from `nearestView`, `solidBlock`'s plant array, `columnKey` strings and spreads. WebSocket compression stays off (the user's call).
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
+  - Not seen in a browser: fireball and skull copy flight and turning, chained blasts, command cart replies, comparator counts, the revived wolf copy, dragon part picking, plus the batch 67 to 80 lists.
+- **Single player.**
+  - Ghast fireball blasts are queued and run after the entity walk; flaming blasts still seed their fire roll from `Date.now`.
+  - Corpses skip growing up, love-mode hearts and age counters; horse herd following is not modelled.
+  - The HUD mining meter at Fatigue V (NaN progress) is unchecked; placement entity boxes use the port's mob sizes.
+  - Eyes of ender and firework rockets keep no fire counter. Ghast and blaze fireballs save no rotation.
+  - Flower pots drop their item only on a player break or support loss (not explosions, water or /setblock); picking a `rawDamage` pot gives the plain plant; placing a `rawDamage` flower places Data 0.
+  - Rendering: view bob and hurt roll make the portal eye point approximate; portals beyond the loaded columns are not drawn. The portal shader has not been compiled on a real GPU.
+  - Not seen in a browser: fire overlays, the portal passes and eye shift, the pack screen's broken-pack removal, Fatigue V, the dying horse wandering, plus the batch 80 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 80
 
 Batch 80 covered these areas:
@@ -17,25 +51,7 @@ Batch 80 covered these areas:
 - **World generation guards.** A survey of 201 streamed cells (Default, Large Biomes, Amplified, six Superflat presets, generations 13 to 20) reached none of the `unported` guards in gen-world.js and mineshaft-world.js and never used the neighbour retry; the jungle temple's tripwire diff between the old quiet callbacks and generation 20 is pinned. No generated output changed.
 - **Docs.** Dated corrections in `parity.md` for hunger, mining, crafting, tools, item drops, boats, buckets and pigs; the Nether generator's `canNeighborBurn` and solid-top test are ported (7 ids had a wrong solid top).
 
-Still open from batch 80:
-- **Multiplayer.**
-  - The client does no neighbour updates when it clears an exploded block; its fireball copy has no flight of its own, and the impact tick shows no smoke. A crystal or TNT set off by another blast explodes one tick late (single player and server).
-  - Command blocks: the success count is 1 or 0, not the selector match count; a block runs only with a player in its dimension; the cart command setter keeps an 8-block reach and sends no replies.
-  - Performance: GC and allocations in `moveEntity` and `blockBoxes` lead the remaining tick cost. WebSocket compression stays off (the user's call).
-  - The client copy of a revived wolf and the frozen dragon parts after the body rises are untested; multiplayer skull copies turn from their movement, not from server rotation.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision).
-  - Not seen in a browser: client block clearing from S27, fireball and skull trails, server ghast fire, the TNT minecart blast, the command block GUI over the network, the mob collect fly-in, the multiplayer swing cases. Earlier unseen items from batches 67 to 79 still stand.
-- **Single player.**
-  - Movement exhaustion charges the raw distance every tick; native `addMovementStat` rounds to centimetres, uses 0.099999994 for sprinting, the 3-D distance under water, and charges nothing on ladders, in the air or while riding (bytecode-read, not ported).
-  - Haste and Mining Fatigue are applied to the finished break progress (float rounding unchecked); items collide with a fence's union box.
-  - Corpses: a dying horse without a rider moves at speed 0; `canCure` refuses a converting zombie; `riddenHorse` checks health; knockback and Fire Aspect on a live dragon land on the body, not the part.
-  - Swing: snow and slab collision checks only test the player; a slab merge beside a one-layer snow or vine is unmatched.
-  - Throwables: arrows do not flag a velocity change on first entering lava; potions and experience bottles keep no fire counter; items have no fire overlay.
-  - Flower pots: stacks the item catalogue cannot hold still drop the drawn plant; pots with undrawn items import as empty; pot Data is not synced to other players. Stored packs that are now unlisted cannot be deleted from the screen.
-  - Rendering: the portal scan window is 20 x 12 blocks (native: every portal tile within 64); the first-person camera has no 0.1 back-off; portal passes are clamped once, not per pass; the port's wither has no pitch and saved skulls start at rotation 0. The portal shader has not been compiled on a real GPU.
-  - Not seen in a browser: the portal, the skull, burning thrown balls, the pot tints and cobweb pot, the pack screen changes, corpse riding and the revived wolf, plus the batch 79 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 80: carried into the batch 81 list above, except the items batch 81 closed or found wrong.
 
 ## Done in batch 79
 

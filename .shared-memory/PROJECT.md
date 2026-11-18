@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 81 (2026-11-18, ten tracks in `../wt81-<name>` on `batch81-<track>`, cut from f98083f29, merged --no-ff on `batch81-lead`; shared rules `../artifacts/b81-lead/track-rules.md`; lead note `b81-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.110.0, by track (details in the `*-b81-track.md` notes and "Done in batch 81" in `public/research/remaining-gaps.md`):
+  - blast81: chained crystal and TNT blasts in the same tick (`explosionOutcome`, `explodeInline`, `tickJoined`); `multiplayer/fireball-copy.js` client fireball and skull copies fly between tracker packets; the "client neighbour updates" gap was wrong (remote worlds run none).
+  - mpcmd81: `commands.js` `count()` gives the selector match count; server blocks run without a player in the dimension; MC|AdvCdm type 1 cart setter checks and replies; `/summon ~` and other-player commands from server blocks fixed.
+  - mpperf81: `mpperf81-fast.js` behind `MC_MPPERF81` (cell-box table, pooled boxes, move scratch, fluid and fire pre-tests); 14-42 % less allocation.
+  - mpcopies81: `dragon-part-query.js` (parts pickable only with the body in the crosshair box); `multiplayer/skull-look.js` skull copy angles; revived wolf copy tested.
+  - exhaust81: `movement-stat.js` (`addMovementStat` table, executed `MovementStatProbe`, 360 records); server climb stat uses the ladder test.
+  - collide81: Haste/Fatigue inside `getBreakSpeed` (executed `MiningEffectsProbe`, 9,675 rows); fence arm boxes; `placement-entities.js` entity check for placement; slab side shift.
+  - corpse81: dying horse AI, converting zombie cure, horse inventory key, dragon part hits skip living-only effects.
+  - throwfire81: arrow lava velocity flag, potion and bottle Fire saved, `fire-overlays.js` for items, orbs, arrows, boats and thrown bottles.
+  - render81: per-pass portal clamp, 0.1 eye back-off, per-column portal index, `glsl-mini.js` shader check, wither skull projectile rotation saved and exported.
+  - potspacks81: pot drops and pick give the stored item (`rawDamage`), undrawn pot items kept, exact pot Data over S35 (`applyPotTile`), broken stored packs removable.
+- Lead: one merge conflict (`client-dispense.js`, `server-dispense.js`: mpcopies81's skull look and blast81's ball tracker both kept; the skull row carries `...skullWire(b)` and `t`; `fresh` is taken after blast81's lingered reset).
+- Verification: one full `npm test` on 40f8687aa: 9123 tests, 9123 pass. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 81" in `public/research/remaining-gaps.md`.
+
 Batch 80 (2026-11-18, ten tracks in `../wt80-<name>` on `batch80-<name>`, cut from 6c0bf72a3, merged --no-ff on `batch80-lead`; lead note `b80-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.109.0, by track (details in the `*-b80-track.md` notes and "Done in batch 80" in `public/research/remaining-gaps.md`):
   - docs80: `canNeighborBurn` and solid-top in `nether-generator.js`; parity.md rows corrected.
