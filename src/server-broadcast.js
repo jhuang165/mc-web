@@ -21,7 +21,7 @@ import { stackName } from "./item-names.js";
 import { ITEMS } from "./survival.js";
 import { itemComponent } from "./item-component.js";
 import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
-import { runCartCommand, setCartCommand, runCommandLogic } from "./multiplayer/server-cart-commands.js"; // b63
+import { drainCartCommands, setCartCommand, runCommandLogic } from "./multiplayer/server-cart-commands.js"; // b63
 import { setBlockCommand } from "./multiplayer/server-command-blocks.js"; // b80 mpcmd80
 import { pickedAchievement } from "./achievements-live.js";
 import { summonHost } from "./multiplayer/server-summon.js"; // b67 mpsummon
@@ -105,8 +105,12 @@ export class ServerSocial {
   /** C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT (nh.a(is)): the client opened its own survival inventory. */
   openInventory(id) { return this.simulation.players.has(id) && this.award(id, "openInventory"); }
   forget(id) { this.achievements.delete(id); }
-  /** MC|AdvCdm for a command block minecart (b63): a Creative operator sets its command. */
-  setCartCommand(id, key, command) { return setCartCommand(this, id, key, command); }
+  /** MC|AdvCdm type 1 for a command block minecart (b63; b81 mpcmd81: the native checks and advMode replies, no reach): true when the command was set. */
+  setCartCommand(id, key, command) {
+    const reply = setCartCommand(this, id, key, command);
+    if (reply) this.deliver(id, chatMessage(reply));
+    return reply?.key === "advMode.setCommand.success";
+  }
   /** b80 mpcmd80: MC|AdvCdm type 0 for a command block: the native answer (notEnabled / notAllowed / setCommand.success) goes to the sender; true when the command was set. */
   setBlockCommand(id, x, y, z, command) {
     const reply = setBlockCommand(this, id, x, y, z, command);
@@ -116,7 +120,7 @@ export class ServerSocial {
   /** Events the simulation queued this tick (`simulation.events`): { type: 'death', id }. */
   drain() {
     for (const p of this.simulation.players.values()) this.simulation.scoreboard?.tickHealth(p); // b64 mpscoreboard: EntityPlayerMP.onUpdate health criteria
-    for (const cart of this.simulation.vehicles?.cartCommands?.splice(0) ?? []) if (!cart.dead) runCartCommand(this, cart, { commands: SERVER_COMMANDS, chatMessage }); // b63: command block carts that an activator rail triggered this tick
+    drainCartCommands(this, { commands: SERVER_COMMANDS, chatMessage }); // b63: command block carts that an activator rail triggered this tick (b81 mpcmd81: in every dimension)
     const events = this.simulation.events?.splice(0) ?? [];
     for (const e of events) {
       if (e.type === "death") this.death(e.id, e.component);

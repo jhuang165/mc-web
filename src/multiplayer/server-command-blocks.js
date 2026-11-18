@@ -8,6 +8,7 @@
 // The tile is described to clients as S35 action 2 (tile-sync.js): TileEntityCommandBlock.getDescriptionPacket (aox.m) writes the whole agp.a(dh) compound (Command, SuccessCount,
 // CustomName, LastOutput when not null, TrackOutput). It is resent when the tracked output changes (agp.a(fj) -> aoy.e() -> World.markBlockForUpdate) and after MC|AdvCdm
 // (nh: agp.a(String) then agp.e()); a run that only changes the success count sends nothing.
+// Batch 81 mpcmd81: SuccessCount is the run count (z.a: one per player an @a selector matched) and the run needs no player in the dimension (server-cart-commands.js runCommandLogic).
 import { newCommandBlock, normalizeLastOutput, COMMAND_BLOCK, COMMAND_BLOCK_ID } from '../command-block.js';
 import { LastOutputError, translation } from '../chat-component.js';
 

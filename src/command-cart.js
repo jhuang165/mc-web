@@ -13,7 +13,7 @@ export function runCommandCart(cart, { host, changed = () => {} }) {
   const sender = commandBlockSender(host, tile, cartCommandPosition(cart));
   // Watcher 24 only follows addChatMessage output (agp.a(fj) -> e()), the GUI's setCommand + e() and readEntityFromNBT (cart-variants.js), never a run itself: a fresh cart reads "" whether or not it ran (executed).
   tile.outputChanged = () => { tile.watch24 = tile.lastOutput; };
-  try { tile.successCount = tile.command ? (createCommandRunner(sender).run(tile.command) ? 1 : 0) : 0; } finally { delete tile.outputChanged; }
+  try { tile.successCount = tile.command ? createCommandRunner(sender).count(tile.command) : 0; } finally { delete tile.outputChanged; }
   changed();
   return tile.successCount;
 }

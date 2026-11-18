@@ -596,7 +596,9 @@ export function createCommandRunner(host) {
     }
     return handlers[command.name](parts);
   }
-  function run(text) {
+  // b81 mpcmd81: CommandHandler.executeCommand (z.a(ac, String), bytecode-read) returns j, the number of processCommand calls that did not throw: one per matched player of an
+  // expanding selector (usernameIndex with a count other than 1), else 1 or 0. CommandBlockLogic stores it as SuccessCount (the comparator signal). `run` is that count above 0.
+  function count(text) {
     let line = text.trim();
     if (line.startsWith("/")) line = line.slice(1);
     const parts = line.split(" ");
@@ -608,24 +610,25 @@ export function createCommandRunner(host) {
       if (host.unsupported?.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available on this server`], "unsupported"); // an operator's command this server cannot run
       if (!allowed(command)) throw new CommandException("commands.generic.permission");
       if (UNSUPPORTED.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available in this build`], "unsupported");
-      if (selectsNobody(command.name, parts, host)) return false; // CommandHandler.a: no matching player, no run, no message
+      if (selectsNobody(command.name, parts, host)) return 0; // CommandHandler.a: no matching player, no run, no message
       const at = USERNAME_INDEX[command.name];
       if (at !== undefined && parts[at] !== undefined && expandsSelector(parts[at])) {
         // CommandHandler.a: the command runs once per matched player with the selector replaced by that player's name; each failure is reported on its own.
-        let ran = false;
+        let ran = 0;
         for (const who of selectPlayers(parts[at], host)) {
           const copy = [...parts]; copy[at] = who;
-          try { dispatch(command, copy); ran = true; } catch (e) { fail(e); }
+          try { dispatch(command, copy); ran++; } catch (e) { fail(e); }
         }
         return ran;
       }
       dispatch(command, parts);
-      return true;
+      return 1;
     } catch (e) {
       fail(e);
-      return false;
+      return 0;
     }
   }
+  const run = (text) => count(text) > 0;
   // ServerCommandManager.getPossibleCommands + each command's addTabCompletionOptions (text before the cursor, with its "/").
   function complete(before, unchecked = host.tabUnchecked) { // b70: `unchecked` for the integrated server's answer (no permission test on arguments)
     const players = host.playerNames ? host.playerNames() : [name()]; // b69 mptabcomplete: the server's getAllUsernames (every connected player)
@@ -654,7 +657,7 @@ export function createCommandRunner(host) {
     else if (n === "scoreboard") options = scoreboardCommands.complete(n, index, args, players);
     return matchLast(args, options);
   }
-  return { run, complete, handlers };
+  return { run, count, complete, handlers };
 }
 
 // Chat that is not a command: ServerConfigurationManager prints chat.type.text, "<Player> message".

@@ -26,7 +26,7 @@ export function adminComponent(senderName, component) {
 }
 export function commandBlockSender(host, tile, position, { now = () => new Date() } = {}) {
   const sender = Object.create(host);
-  Object.defineProperties(sender, { name: { value: tile.customName }, isCommandBlock: { value: true }, playerName: { value: host.playerName ?? host.name }, cheats: { value: true } });
+  Object.defineProperties(sender, { name: { value: tile.customName }, isCommandBlock: { value: true }, playerName: { value: host.playerName ?? host.name, writable: true }, cheats: { value: true } }); // b81 mpcmd81: writable, so the server's redirect (commands.js dispatch: Object.assign(sub, { playerName })) can shadow it; read-only it threw, and /give, /tp, /gamemode ... on another player from a server command block failed with commands.generic.exception
   sender.canUse = command => command.permission <= 2;
   sender.position = () => ({ ...position });
   sender.playerPosition = () => host.position();
@@ -63,7 +63,7 @@ export function installCommandBlocks(redstone, { host, changed = () => {} } = {}
     },
     updateTick(w, x, y, z) {
       const t = tile(x, y, z), sender = commandBlockSender(host(), t, { x, y, z });
-      t.successCount = createCommandRunner(sender).run(t.command) ? 1 : 0;
+      t.successCount = createCommandRunner(sender).count(t.command); // b81 mpcmd81: z.a's count of runs (one per player an @a selector matched)
       w.updateNeighbourForOutputSignal(x, y, z, COMMAND_BLOCK_ID);
       changed();
     },
