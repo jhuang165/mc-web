@@ -34,6 +34,12 @@ tiles (`gen-world.js` createTile).
 - Redstone puzzle hooks (29, 55, 69, 93, 131, 132) are no-ops under `relaxRedstone` (jungle area only);
 - Batch 71 (docs sweep, 2026-11-14): the "live jungle temples need an equivalent guard" claim is stale. A live `PopulationArea` builds a `StructureRedstone` when neighbour callbacks are on (`src/population-world.js` 73) and sets `relaxRedstone = false` (line 55), so the temple's puzzle hooks run through `src/structure-redstone.js` and `native-neighbor-world.js` 51, 129 and 148 instead of throwing; the jungle area replays whole in `structure-live-neighbors.test.js` (per this doc's limit above). The `unported` throw remains in `gen-world.js` 61 and 465 for other blocks.
   the generic world still throws "unported" for them, so live jungle temples need an equivalent guard.
+- Batch 80 (genguards80): what the temple's generation-time callbacks change. In the native jungleTemple671 area (neighbour callbacks on,
+  hash-equal to native) against the quiet callbacks, exactly two blocks differ: the tripwire strings at (40, 64, 242) and (40, 64, 243) go
+  from the generator's metadata 4 to 0, because BlockTripWire.onBlockAdded (`aof.b`, bytecode-read) rewrites the string to 0 (solid top
+  below) or 2 with flags 3; the hooks keep their attached bit, and two tripwire hook ticks (delay 10) are queued. Pinned in
+  `genguards80-b80.test.js`. A survey of 180+ streamed cells (Default, Large Biomes, Amplified, six Superflat presets; generations 13, 15,
+  16, 19 and 20; temples, villages, strongholds and mineshafts) reached none of the remaining `unported` guards; see the batch 80 note.
 - Flower pot contents come from a meta table in `gen-world.js`; only meta 7 (red mushroom) is
 - Batch 71 (docs sweep, 2026-11-14): still open. `FLOWER_POT_CONTENTS` (`src/gen-world.js` 60) maps 14 metas; the probe records pot contents for the temples and huts it generates, but only meta 7 was compared, so the other 13 entries stay recalled.
   native-verified.

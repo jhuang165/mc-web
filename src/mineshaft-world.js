@@ -18,7 +18,8 @@
 // Block writes go through the 1.7.10 Chunk/World callbacks gen-world.js models, with BlockTorch
 // (onBlockAdded wall attachment, support checks and drops) and BlockRail / BlockRailBase$Rail
 // (onBlockAdded shape logic, onNeighborBlockChange support, breakBlock slope notification)
-// ported here. Redstone power next to a rail is unported and throws. Original numeric IDs
+// ported here. Redstone power next to a rail is unported and throws (in neighbours mode native-neighbor-world.js
+// replaces the power read; a rail told by a power provider still throws, unreached in the batch 80 survey). Original numeric IDs
 // throughout; generateLiveMineshafts maps the final cells to the live World with block-registry
 // fromOriginal, throwing on an unmapped original block. Replayed natively in
 // mineshaft-world.test.js against public/research/mineshaft-world-reference.json.
