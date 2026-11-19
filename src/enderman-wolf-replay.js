@@ -85,6 +85,8 @@ function run(r) {
   ew.lightAt = () => r.bright;
   const roofed = (x, z) => r.roofs.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
   ew.ai.deps.canSeeSky = (x, y, z) => !roofed(x, z);
+  // b83 rain83: the enderman reads isWet through `mobs.wet` (World.canLightningStrikeAt at the feet and head cells); in this probe's plains world that is rain and an unroofed column.
+  ew.wet = (e, h) => rain && (!roofed(Math.floor(e.x), Math.floor(e.z)));
   const ents = [], logs = [], init = [], spawnOpts = {};
   [...types].forEach((ch, i) => {
     const [x, z, y0 = 0] = r.pos[i], e = ew.create(TYPE_OF[ch], x, y0, z);
