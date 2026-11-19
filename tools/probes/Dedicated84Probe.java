@@ -98,7 +98,7 @@ public class Dedicated84Probe {
     return p;
   }
 
-  static final String[] SETUPS = { "base", "lists", "offline", "saveoff", "partial" };
+  static final String[] SETUPS = { "base", "lists", "offline", "saveoff", "partial", "levels" };
 
   static void fresh(String setup, String sender) throws Exception {
     console.clear(); saves.clear(); kicks.clear(); stops = 0; savedPlayers = 0;
@@ -116,11 +116,14 @@ public class Dedicated84Probe {
     players.clear();
     DP alex = mkPlayer("Alex", 1, "1"), steve = mkPlayer("Steve", 2, "2"), eve = mkPlayer("Eve", 3, "2");
     players.put("Alex", alex); players.put("Steve", steve); players.put("Eve", eve);
+    boolean levels = setup.equals("levels"); // b85 dedtab85: more watchers, to see which ops the chat.type.admin notice reaches by permission level
+    if (levels) { players.put("Ivy", mkPlayer("Ivy", 5, "5")); players.put("Kay", mkPlayer("Kay", 6, "6")); players.put("Lou", mkPlayer("Lou", 7, "7")); }
     for (DP p : players.values()) { mgr.e.add(p); cache.a(p.bJ()); }
     mgr.a(alex.bJ()); // op, level l()
     mgr.d(alex.bJ()); mgr.c(alex.bJ()); // whitelist add + remove: leaves the whitelist file written, empty
-    if (sender.equals("eve")) { oj ops = (oj) fieldOf(mgr, "l"); ops.a(new ok(eve.bJ(), 2)); }
-    if (setup.equals("lists")) {
+    if (sender.equals("eve") || levels) { oj ops = (oj) fieldOf(mgr, "l"); ops.a(new ok(eve.bJ(), 2)); }
+    if (levels) { oj ops = (oj) fieldOf(mgr, "l"); ops.a(new ok(players.get("Ivy").bJ(), 1)); ops.a(new ok(players.get("Kay").bJ(), 3)); ops.a(new ok(players.get("Lou").bJ(), 4)); }
+    if (setup.equals("lists") || levels) {
       op bans = (op) fieldOf(mgr, "j"); nx ips = (nx) fieldOf(mgr, "k"); or wl = (or) fieldOf(mgr, "m"); oj ops = (oj) fieldOf(mgr, "l");
       bans.a(new oq(steve.bJ(), null, "Console", null, "griefing"));
       bans.a(new oq(new com.mojang.authlib.GameProfile(id(9), "Notch"), null, "Alex", null, null));
@@ -130,7 +133,7 @@ public class Dedicated84Probe {
       ops.a(new ok(new com.mojang.authlib.GameProfile(id(9), "Notch"), 3));
       cache.a(new com.mojang.authlib.GameProfile(id(9), "Notch"));
     }
-    dat.clear(); if (setup.equals("lists")) { dat.add(id(2).toString()); dat.add(id(9).toString()); }
+    dat.clear(); if (setup.equals("lists") || levels) { dat.add(id(2).toString()); dat.add(id(9).toString()); }
     for (int i = 0; i < worlds.length; i++) worlds[i].c = setup.equals("saveoff") || (setup.equals("partial") && i == 0); // mt.c is levelSaving = saving DISABLED (save-off sets it, save-on clears it)
     for (DP p : players.values()) { p.direct.clear(); ((CmdChatProbe.NH) p.a).got.clear(); }
   }
@@ -160,7 +163,7 @@ public class Dedicated84Probe {
 
   static String run(String line, String setup, String sender) throws Exception {
     fresh(setup, sender);
-    ac who = sender.equals("console") ? server : players.get(sender.equals("eve") ? "Eve" : sender.equals("steve") ? "Steve" : "Alex");
+    ac who = sender.equals("console") ? server : players.get(sender.equals("eve") ? "Eve" : sender.equals("steve") ? "Steve" : sender.equals("ivy") ? "Ivy" : sender.equals("kay") ? "Kay" : sender.equals("lou") ? "Lou" : "Alex");
     String crash = "null"; int count = -1;
     if (System.getProperty("probe.debug") != null && line.equals(System.getProperty("probe.debug"))) {
       String[] w = line.split(" ");
@@ -229,6 +232,7 @@ public class Dedicated84Probe {
     }
     for (String f : new String[] { "op Herobrine", "op Nobody", "ban Herobrine", "ban Nobody", "whitelist add Nobody", "whitelist add Herobrine", "ban-ip Nobody" }) rows.add(run(f, "offline", "alex"));
     for (String f : new String[] { "save-on", "save-off", "save-all", "save-all flush" }) { rows.add(run(f, "saveoff", "alex")); rows.add(run(f, "partial", "alex")); }
+    for (String f : forms) for (String sd : new String[] { "alex", "kay", "eve", "ivy", "lou", "steve" }) rows.add(run(f, "levels", sd));
     List<String> tabs = new ArrayList<>();
     for (String t : new String[] { "op ", "op S", "op s", "deop ", "ban ", "ban S", "ban-ip ", "ban-ip S", "ban-ip 10", "pardon ", "pardon S", "pardon-ip ", "pardon-ip 1", "banlist ", "banlist i", "banlist ips ", "whitelist ", "whitelist a", "whitelist add ", "whitelist add S", "whitelist remove ", "whitelist remove S", "whitelist x ", "kick ", "kick S", "kick Steve ", "list ", "list u", "save-all ", "setidletimeout ", "netstat ", "stop " })
       for (String s : new String[] { "base", "lists" }) tabs.add(tab(t, s, "alex"));
