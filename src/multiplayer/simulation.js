@@ -494,13 +494,14 @@ export class DedicatedSimulation {
     if (place && placeBlockItem(this, p, target, id)) { this.stats.used(p, id); return true; } // b73 mpblocks73: ItemBed, ItemReed (cake), ItemHoe
     const put = placeHeldBlock(state, { id, item: ITEMS[id], target }, {
       collides: w => [...this.players.values()].some(other => {
+        if ((other.dimension | 0) !== (p.dimension | 0)) return false; // b84 mpplace84: World.checkNoEntityCollision sees only this world's entities
         // The normal placement path tests this callback after its speculative
         // write, so the same collision test must cover every connected player.
         return !other.sleeping && collides(w, other.position.x, other.position.y, other.position.z); // b83 attack83: a lying player is the 0.2 box below
       }),
       // b81 collide81: World.checkNoEntityCollision also sees the mobs, carts, boats, falling blocks and primed TNT.
       // b83 attack83: and a sleeper's 0.2 x 0.2 box (sleepInBedAt setSize(0.2F, 0.2F); minY is position.y, server-sleep.js), not the standing 0.6 x 1.8.
-      entities: box => [...this.players.values()].some(o => o.sleeping && !o.dead && boxesIntersect(box, [o.position.x - SLEEP_HALF, o.position.y, o.position.z - SLEEP_HALF, o.position.x + SLEEP_HALF, o.position.y + SLEEP_BOX, o.position.z + SLEEP_HALF]))
+      entities: box => [...this.players.values()].some(o => (o.dimension | 0) === (p.dimension | 0) && o.sleeping && !o.dead && boxesIntersect(box, [o.position.x - SLEEP_HALF, o.position.y, o.position.z - SLEEP_HALF, o.position.x + SLEEP_HALF, o.position.y + SLEEP_BOX, o.position.z + SLEEP_HALF]))
         || (this._placementEntities ??= placementEntityBlocker(() => ({ mobs: this.mobs?.mobs, vehicles: [this.vehicles?.carts?.carts, this.vehicles?.boats?.carts],
         falling: this.mobs?.falling?.entities, primed: this.dispense?.primed })))(box),
     }), placed = put.placed;

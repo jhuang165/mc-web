@@ -14,6 +14,8 @@ import { ITEM_FIREWORK_ROCKET } from '../fireworks.js';
 import { useFirework } from '../fireworks-live.js';
 import { traceBucket } from '../buckets.js';
 import { blockProtected } from './server-properties.js';
+import { LILY_PAD } from '../world.js';
+import { useLilyPad } from '../lily-use.js';
 
 export function airUse(sim, p, eye, dir, target) {
   const s = p.survival, held = s.held, id = held?.id ?? 0, item = ITEMS[id];
@@ -31,6 +33,7 @@ export function airUse(sim, p, eye, dir, target) {
     if (id === ITEM_GLASS_BOTTLE) return useGlassBottle({ world: sim.world, survival: s, items: sim.items, position: p.position, yaw: p.yaw, pitch: p.pitch }, bucket).branch === 'fill-bottle';
     return useEggOnWater({ world: sim.world, survival: s, mobs: sim.mobs?.mobs }, bucket, { mobSpawned: e => { e.summonKeep = true; } });
   }
+  if (id === LILY_PAD && !target) return !!useLilyPad(sim.world, s, [eye.x, eye.y, eye.z], [dir.x, dir.y, dir.z], b => !blockProtected(sim, p, b)); // b84 mpplace84: ItemLilyPad.onItemRightClick (C08 255)
   if (id === ITEM_FIREWORK_ROCKET && target) {
     const rockets = sim.dispense?.laneFor?.(p.dimension | 0)?.rockets;
     if (!rockets || !useFirework({ rockets, survival: s }, { target, usesBlock: false })) return false;

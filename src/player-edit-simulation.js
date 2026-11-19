@@ -20,7 +20,7 @@ import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BEACON } from './pyramid.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
-import { REDSTONE_ORE, LIT_REDSTONE_ORE, PISTON_MOVING } from './world.js';
+import { REDSTONE_ORE, LIT_REDSTONE_ORE, PISTON_MOVING, LILY_PAD } from './world.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { ITEM_EMPTY_MAP } from './maps.js';
 import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
@@ -29,6 +29,7 @@ import { useFirework } from './fireworks-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { slowServerAttacker } from './player-knockback.js';
+import { useLilyPad } from './lily-use.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { hoeSound } from './block-sounds.js';
 import { playerMiningState } from './enchantment-effects.js';
@@ -253,6 +254,13 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
   if (place && id === ITEM_GLASS_BOTTLE && !usesBlock) {
     const used = useGlassBottle(state, bucket, hooks);
     return act('use-glass-bottle', { bottle: used.branch });
+  }
+  // b84 mpplace84: ItemLilyPad.onItemRightClick runs after onItemUse refused (placeHeldBlock: a lake-bed click is 'lily-support'); no swing of its own.
+  if (place && id === LILY_PAD && !usesBlock && !aimedEntity && !(target && dryPlace({ ...state, entities: hooks.placement?.entities ?? state.entities }, { id, item, target }, {}).placed)) {
+    const ray = bucket?.ray;
+    const cell = ray ? useLilyPad(state.world, state.survival, ray.origin, ray.dir) : null, placed = !!cell;
+    if (placed) { hook('updateBlock', cell[0], cell[2], cell[1]); hook('renderHotbar'); hook('markUnsaved'); }
+    return act('use-lily-pad', { lily: placed });
   }
   if (place && isBucket(item) && !usesBlock) {
     // A stale or malformed bucket capture is consumed here; it never becomes a block click.

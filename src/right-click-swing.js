@@ -62,7 +62,17 @@ export function clientWithholdsPlace({ world, target, held, sneaking = false, su
   if (!(sneaking && id) && activatesOnClick(world.get(...target.block), world, target.block, id, held?.damage ?? 0)) return false;
   if (clientUseResult({ world, survival, position, flowers, yaw, entities }, target, id, held) != null) return false; // an item with its own onItemUse rule: the ItemReed placers (cake, repeater, cauldron ...), slab merges, beds, signs. These are no ItemBlock refusal, so the block C08 goes
   const reason = dryPlace({ world, survival, position, flowers, yaw, entities }, { id, item: ITEMS[id], target }, {}).result?.reason;
-  return reason === 'entity-collision' || reason === 'player-collision';
+  return withheldReason(reason);
+}
+
+// b84 mpplace84: every refusal of abh.a (ItemBlock.func_150936_a -> World.canPlaceEntityOnSide, bytecode-read ahb.a(aji, IIIZ, I, sa, add)): the collision
+// with an entity (the client's copies and the placer), the target cell not Material.isReplaceable ('occupied'), and Block.canReplace ->
+// canPlaceBlockOnSide / canPlaceBlockAt (the '*-support' reasons). All return false from bje.a before the C08, so rightClickMouse sends only direction 255.
+// Not these: door-side / door-support (ItemDoor.onItemUse is no ItemBlock), cocoa-support (ItemDye), pot-support (ItemReed; clientUseResult answers first).
+const NOT_ITEMBLOCK = new Set(['door-side', 'door-support', 'cocoa-support']);
+export function withheldReason(reason) {
+  if (typeof reason !== 'string' || NOT_ITEMBLOCK.has(reason)) return false;
+  return reason === 'entity-collision' || reason === 'player-collision' || reason === 'occupied' || reason.endsWith('-support');
 }
 
 // A view of the world whose writes go nowhere (placeSign sets the block; only its answer is wanted).

@@ -3,7 +3,7 @@
 // their original positions without requiring a browser or scene.
 import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
 import { validRawDamage } from "./inventory.js"; // b82 pots82
-import { collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, YELLOW_FLOWER, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
+import { LILY_PAD, collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, YELLOW_FLOWER, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
@@ -30,6 +30,7 @@ import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta, 
 
 import { logPlacedMeta } from './wood-types.js';
 import { coloredItemBlock, isColoredBlock, coloredPlacedMeta, pumpkinFacingMeta, CARPET, carpetCanStay } from './colored-blocks.js';
+import { lilyCanStay } from './lily-use.js';
 const BLOCK_MAX = new Set([STONE_BRICKS,68,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
 // ItemBlock.onItemUse: clicking vines, tall grass (with its dead-shrub and fern variants) or a dead bush places into the
@@ -195,6 +196,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (!placementReplaceable(world.get(...p))) return result(false, "occupied", id, p);
   // BlockFenceGate.canPlaceBlockAt: the block below has a solid Material. BlockTrapDoor.canPlaceBlockOnSide: a side face whose
   // support (behind the placed cell) is a normal cube, glowstone, slab or stair (shaped-blocks.js).
+  if (id === LILY_PAD && !lilyCanStay(world, ...p)) return result(false, "lily-support", id, p); // b84 mpplace84: BlockLilyPad.canPlaceBlockAt
   if (id === FENCE_GATE && shapedNonSolid(world.get(p[0], p[1] - 1, p[2]))) return result(false, "gate-support", id, p);
   const trapMeta = id === TRAPDOOR ? trapPlacedMeta(side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1])) : 0;
   if (id === TRAPDOOR) {
