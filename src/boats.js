@@ -21,6 +21,7 @@ import { entityWaterBox, waterAcceleration, inLava } from "./fluids.js";
 import { traceBucket } from "./buckets.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { JavaRandom } from "./java-random.js";
+import { entityWet, wetFizz } from "./entity-wet.js";
 
 const f = Math.fround;
 export const BOAT_ITEM = 495, PLANKS = 7, STICK = 300;
@@ -105,7 +106,7 @@ export class Boats extends Minecarts {
   }
   // Entity.moveEntity (sa.d) for a boat: web slowdown, box offsets, flags, EntityBoat.updateFallState, zeroed motion,
   // then doBlockCollisions and the burning-box test.
-  move(world, boat, dx, dy, dz, others) {
+  move(world, boat, dx, dy, dz, others, hooks = {}) {
     if (boat.inWeb) {
       boat.inWeb = false;
       dx *= 0.25; dy *= 0.05000000074505806; dz *= 0.25;
@@ -140,7 +141,12 @@ export class Boats extends Minecarts {
     if (odx !== dx) boat.vx = 0;
     if (ody !== dy) boat.vy = 0;
     if (odz !== dz) boat.vz = 0;
-    blockCollisions(world, bb, boat, { hurt: (source, n) => (boat.remote ? true : this.attack(boat, n, { source })), wet: boat.inWater });
+    // b84 rain84: moveEntity's isWet (sa.L, bytecode-read) is inWater (field ac, set by handleWaterMovement in onEntityUpdate) or rain; xi never reads isWet itself. `hooks.rain`
+    // (or `this.rain`) is canLightningStrikeAt, `hooks.fizz(boat, volume, pitch)` plays sa.d's wet-and-burning fizz at the feet (posY - yOffset = the box bottom).
+    const strike = hooks.rain ?? this.rain;
+    blockCollisions(world, bb, boat, { hurt: (source, n) => (boat.remote ? true : this.attack(boat, n, { source })),
+      get wet() { return entityWet(boat.inWater, strike, boat.x, boat.posY, boat.z, BOAT_HEIGHT); },
+      fizz: () => { const s = wetFizz(() => boat.random.nextFloat()); (hooks.fizz ?? this.fizz)?.(boat, s.volume, s.pitch); } });
   }
   // EntityBoat.updateFallState: on landing above 3 blocks the boat falls (rider damage), breaks into planks and
   // sticks; otherwise a fall over anything but water accumulates.
@@ -269,7 +275,7 @@ export class Boats extends Minecarts {
       }
     }
     if (boat.onGround) { boat.vx *= 0.5; boat.vy *= 0.5; boat.vz *= 0.5; }
-    this.move(world, boat, boat.vx, boat.vy, boat.vz, [...this.carts.filter((c) => !isFrozen(c)), ...entities]);
+    this.move(world, boat, boat.vx, boat.vy, boat.vz, [...this.carts.filter((c) => !isFrozen(c)), ...entities], hooks);
     if (boat.collidedH && d10 > 0.2) {
       if (!boat.dead && !boat.remote) this.crashBreak(boat); // `!isRemote && !isDead`; neither branch drags the motion (executed: ride-crash-fast)
     } else { boat.vx *= 0.9900000095367432; boat.vy *= 0.949999988079071; boat.vz *= 0.9900000095367432; }

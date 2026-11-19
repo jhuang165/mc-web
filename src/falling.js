@@ -10,6 +10,7 @@ import { canPlace as fireCanPlace } from "./fire.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { ringEntityActive, ringTickActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
+import { entityWet, wetFizz } from "./entity-wet.js";
 import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
 import { anvilImpact } from './anvil-block.js';
 import { fallingDropStack } from './falling-drops.js';
@@ -38,7 +39,7 @@ const key = (x, y, z) => `${x},${y},${z}`;
 // 0): one item entity at the falling block's position. `apply(changes)` gets [x, y, z, old, new]
 // entries for the renderer.
 export class FallingBlocks {
-  constructor(world, { drop = () => {}, apply = () => {}, hurt = () => {}, sound = () => {}, tile = () => {}, entityRandom = () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))) } = {}, saved = []) {
+  constructor(world, { drop = () => {}, apply = () => {}, hurt = () => {}, sound = () => {}, tile = () => {}, rain = null, fizz = () => {}, entityRandom = () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))) } = {}, saved = []) {
     this.world = world;
     this.drop = drop;
     this.apply = apply;
@@ -46,6 +47,8 @@ export class FallingBlocks {
     this.sound = sound;
     this.tile = tile; // (x, y, z, block, tileEntityData, data): the landed block's tile entity takes the saved TileEntityData (falling-tiles.js)
     this.entityRandom = entityRandom;
+    this.rain = rain; // b84 rain84: canLightningStrikeAt (weather.js) or null where nothing rains; moveEntity's isWet for a falling block (xj never calls handleWaterMovement: rain only)
+    this.fizz = fizz; // (name, x, y, z, volume, pitch): sa.d's wet-and-burning fizz at the feet
     this.time = 0;
     this.pending = new Map();
     this.ids = null; // the shared TickTree (tile-ticks.js) once the live game attaches one: creation ids come from it, and it takes the due entries
@@ -194,7 +197,11 @@ export class FallingBlocks {
     e.pz = e.z;
     e.ticks++;
     e.vy -= 0.03999999910593033;
-    const landedDistance=moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz, 0); // Entity.stepHeight 0 (tracker-extras-reference.json fallingStep)
+    // b84 rain84: sa.d's burning-box tail runs for a falling block too (xj.h never calls onEntityUpdate, so nothing counts the counter down or sets flag 0): a fire or lava cell does ++fire
+    // (setFire(8) at 0, and the counter then stays), and rain (isWet = canLightningStrikeAt at posY and posY + 0.98) puts a burning block out with the fizz at the feet.
+    const self = this, tail = { hurt: () => {}, get wet() { return entityWet(false, self.rain, e.x, e.y + FALLING_Y_OFFSET, e.z, FALLING_SIZE); },
+      fizz: () => { const s = wetFizz(() => e.rand.nextFloat()); self.fizz(s.name, e.x, e.y, e.z, s.volume, s.pitch); } };
+    const landedDistance=moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz, 0, tail); // Entity.stepHeight 0 (tracker-extras-reference.json fallingStep)
     e.vx *= 0.9800000190734863;
     e.vy *= 0.9800000190734863;
     e.vz *= 0.9800000190734863;

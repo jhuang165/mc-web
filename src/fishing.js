@@ -7,7 +7,8 @@
 import { JavaRandom } from './java-random.js';
 import { GaussianRandom, heading, intercept, rayTraceBlocks } from './projectiles.js';
 import { moveEntity } from './entities.js';
-import { waterAcceleration, entityWaterBox } from './fluids.js';
+import { waterAcceleration, entityWaterBox, inLava } from './fluids.js';
+import { entityWet, wetFizz } from './entity-wet.js';
 import { enterWater } from './fx.js';
 import { mobStepEvents } from './mob-steps.js';
 import { mhSin, mhCos } from './lighting.js';
@@ -115,7 +116,7 @@ export class FishHook {
     Object.assign(this, {
       x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, px: 0, py: 0, pz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0,
       onGround: false, collidedH: false, fallDistance: 0, shake: 0, inGround: false, ticksInGround: 0, ticksInAir: 0,
-      ticksCatchable: 0, ticksCaughtDelay: 0, ticksCatchableDelay: 0, fishApproachAngle: 0, hooked: null, dead: false, water: null,
+      ticksCatchable: 0, ticksCaughtDelay: 0, ticksCatchableDelay: 0, fishApproachAngle: 0, hooked: null, dead: false, water: null, fire: 0,
     });
   }
   // EntityFishHook(World, EntityPlayer) (xe.<init>): `player` is { x, y, z (feet), yaw, pitch } in Minecraft
@@ -167,6 +168,13 @@ export class FishHook {
     this.prevPitch = this.pitch;
     this.prevYaw = this.yaw;
     this.waterMovement(env);
+    // b84 rain84: Entity.onEntityUpdate's counter (bytecode-read sa.C: handleWaterMovement, then the count-down, then lava). xe has no attackEntityFrom, so the fire damage does nothing; a client's world zeroes the counter.
+    if (this.water) this.fire = 0;
+    if (env.remote) this.fire = 0;
+    else {
+      if (this.fire > 0) this.fire--;
+      if (this.y >= 0 && inLava(world, this.bb)) this.fire = Math.max(this.fire, 300); // setFire(15)
+    }
     if (this.y < -64) { this.dead = true; return false; }
     const dx = this.x - p.x, dy = this.y - p.y, dz = this.z - p.z;
     // the angler check, the hooked entity, the entity search and the fish timers are all under !isRemote (env.remote: a client's copy)
@@ -224,7 +232,10 @@ export class FishHook {
   fly(env) {
     const { world } = env, rand = this.rand, p = env.player;
     const from = { x: this.x, y: this.y, z: this.z };
-    moveEntity(world, this, WIDTH, WIDTH, this.vx, this.vy, this.vz, 0);
+    // sa.d's tail: isWet is inWater (field ac) or rain at posY (yOffset 0) and posY + 0.25; a burning hook there fizzes at its feet and rests at -1; a fire or lava cell does ++fire.
+    const self = this, strike = env.canLightningStrike, tail = { hurt: () => {}, get wet() { return entityWet(self.water === true, strike, self.x, self.y, self.z, WIDTH); },
+      fizz: () => { const s = wetFizz(() => rand.nextFloat()); env.sound?.(s.name, s.volume, s.pitch, self); } };
+    moveEntity(world, this, WIDTH, WIDTH, this.vx, this.vy, this.vz, 0, tail);
     // Entity.canTriggerWalking is true for the hook: the step counter of moveEntity plays the swim sound while it is in water, which draws two floats
     // of its Entity.rand (client and server alike; the executed client hook shows them).
     this.stepEntity ??= { type: 'fishHook', stepDistance: 0, nextStep: 1, inWater: false };

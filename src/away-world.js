@@ -21,7 +21,7 @@ import { Hoppers } from "./hopper.js";
 import { cartInventoryAt } from "./cart-inventory.js"; // b71 mpreach71
 import { Survival, burnTime } from "./survival.js";
 import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
-import { Weather } from "./weather.js";
+import { Weather, canLightningStrikeAt } from "./weather.js";
 import { makeStack, validRawDamage } from "./inventory.js";
 import { FLOWER_POT } from "./stone-utility.js";
 import { washStacks, burnStacks } from "./fluid-wash.js"; // b82 pots82
@@ -105,7 +105,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const weather = new Weather().restore(plan.weather);
   const fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, 11)) });
   fire.watch(); fire.sharedRandomTicks = true;
-  const falling = new FallingBlocks(world, { drop: (stack, x, y, z) => spill(stack, x, y, z) }, plan.falling ?? []);
+  const falling = new FallingBlocks(world, { drop: (stack, x, y, z) => spill(stack, x, y, z), rain: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z) /* b84 rain84: no sound here */ }, plan.falling ?? []);
   falling.watch();
   if (plan.fluidTicks) fluids.load(plan.fluidTicks);
   if (plan.fireTicks) fire.load(plan.fireTicks);

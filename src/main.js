@@ -1696,6 +1696,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       drop: (stack, x, posY, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }),
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
       sound:(event,{x,y,z,volume,pitch})=>sounds.play(event,{volume,pitch,position:{x,y,z}}),
+      rain:(x,y,z)=>rainAt(x,y,z),fizz:(name,x,y,z,volume,pitch)=>sounds.play(name,{volume,pitch,position:{x,y,z}}), // b84 rain84: a burning falling block in the rain (falling.js)
       tile:(x,y,z,block,data,dataByte)=>{applyFallingTileData({block,x,y,z,data,dataByte,host:{survival,signs,spawners,skulls:SKULLS,beacons,world,commandBlocks:redstoneRuntime?.commandBlocks,music:redstoneRuntime?.music,comparators:redstoneRuntime?.redstone?.tiles}});}, // b77 fallingblock77: EntityFallingBlock.TileEntityData -> the landed block's tile; b78 falling78: every tile kind
       hurt:(box,amount,kind='anvil')=>{
         const intersects=b=>box[3]>b[0]&&box[0]<b[3]&&box[4]>b[1]&&box[1]<b[4]&&box[5]>b[2]&&box[2]<b[5];
@@ -3201,6 +3202,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     drop: dropVehicleItem,
     particle: ([kind, x, y, z, mx, my, mz]) => scene.fx.spawn(kind, x, y, z, mx, my, mz),
     splash: (b, volume, pitch) => sounds.play("game.neutral.swim.splash", { volume, pitch, position: { x: b.x, y: b.posY, z: b.z } }),
+    rain: rainAt, fizz: (b, volume, pitch) => sounds.play("random.fizz", { volume, pitch, position: { x: b.x, y: b.y, z: b.z } }), // b84 rain84: moveEntity's isWet and the wet-and-burning fizz at the feet (boats.js)
     clear: (x, y, z, block) => {
       if (block === SNOW_LAYER) { if (world.set(x, y, z, 0)) scene.updateBlock(x, z, y); } else breakBlock([x, y, z]);
       saved = false;
