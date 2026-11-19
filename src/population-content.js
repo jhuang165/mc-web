@@ -7,6 +7,7 @@ import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
 import * as RS2 from './redstone-blocks-2.js';
 import { quartzOreXp } from './nether-blocks.js';
+import { tallGrassShearStack, doublePlantDamage } from './plant-damage.js'; // b83 plants83
 import { installShapedItems, installShapedMaterials, installShapedRecipes, shapedCraftingResult, shapedDrops, isShaped } from './shaped-blocks.js';
 import { POTION_ITEM_ROWS } from './potion-items.js';
 import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
@@ -219,8 +220,12 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===133)return[{id:1133,count:1}]; // BlockHopper drops the hopper item (the contents drop from the tile)
   if(id===134)return[{id:1134,count:1}]; // BlockBrewingStand drops the brewing stand item (the potions drop from the tile)
   if(id===FLOWER_POT)return[{id:ITEM_FLOWER_POT,count:1}];
-  if(id===83||id===84)return shears?[{id:39,count:1,damage:id===84?2:0}]:random()<1/8?[{id:309,count:1}]:[];
-  if(id===69){if(meta&8)return[];const t=meta&7;if(t===2||t===3)return shears?[{id:39,count:2,damage:t===2?1:2}]:t===2&&random()<1/8?[{id:309,count:1}]:[];return[{id:69,count:1,damage:t}];}
+  // b83 plants83: BlockTallGrass.harvestBlock with shears drops ItemStack(tallgrass, 1, meta) (the shrub 83 or fern 84 itself, a shrub meta >= 3 as
+  // rawDamage) and BlockDoublePlant.b's ItemStack(tallgrass, 2, type == 3 ? 2 : 1) is two tall grass 39 or two ferns 84 (bytecode-read anz/ako; without
+  // shears ako.getItemDropped is null for types 2/3, so double grass drops no seeds, unlike the single tall grass); the
+  // old item-39 damage 0/1/2 drops lost the fern because item 39 has no variants. Types 6/7 keep rawDamage (plant-damage.js doublePlantDamage).
+  if(id===83||id===84)return shears?[tallGrassShearStack(id,meta)]:random()<1/8?[{id:309,count:1}]:[];
+  if(id===69){if(meta&8)return[];const t=meta&7;if(t===2||t===3)return shears?[{id:t===3?84:39,count:2}]:[];return[{id:69,count:1,...doublePlantDamage(t)}];}
   return null;
 }
 

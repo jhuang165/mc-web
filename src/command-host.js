@@ -1,3 +1,4 @@
+import { applySetblockTag } from "./setblock-tags.js"; // b83 plants83
 import { itemComponent } from "./item-component.js";
 import { readCommandBlock, writeCommandBlock } from "./command-block.js";
 // Connects the command engine (commands.js) to the running game. main.js passes accessors for its live state (`env`), so
@@ -267,7 +268,7 @@ export function createCommandHost(env) {
         stores[loaded.name][key] = { ...(id === 'Chest' ? newChest() : {}), ...loaded.record };
         if (id === 'Chest') settleFacing(w, stores.chests, x, y, z);
         this.ignoredTagKeys = loaded.ignored;
-      } else if (tag) this.ignoredTagKeys = [...tag.keys()];
+      } else if (tag) this.ignoredTagKeys = applySetblockTag(original, x, y, z, tag, { world: w, signs: env.signs?.(), music: env.music?.(), comparators: env.comparators?.() }) ?? [...tag.keys()]; // b83 plants83: pot, sign, note, jukebox, comparator (setblock-tags.js)
       // TileEntityEnderChest holds no items (they live with the player); it only needs the lid state the renderer draws.
       if (original === 130) (stores.enderTiles ??= {})[key] ??= newEnderTile(); else if (stores.enderTiles) delete stores.enderTiles[key];
       env.updateBlock(x, y, z);

@@ -115,7 +115,7 @@ import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { washStacks, burnStacks } from "./fluid-wash.js";
-import { plantDropDamage } from "./plant-damage.js"; // b82 pots82
+import { plantDropDamage, plantPick } from "./plant-damage.js"; // b82 pots82; b83 plants83 plantPick
 import { meterPercent } from "./mining-crack.js"; // b82 pots82
 import { spActiveChunkSource } from "./sp-active-chunks.js"; // b69 spfarming
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
@@ -2091,6 +2091,7 @@ const commandHost = createCommandHost({
   scoreboard: () => scoreboard,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
+  signs: () => signs, music: () => redstoneRuntime?.music ?? null, comparators: () => redstoneRuntime?.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
   giveDrop: (s, owner) => { const e = items.dropPlayer(s, position, yaw, pitch); if (e) { e.delay = 0; e.owner = owner; } },
   refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
@@ -4174,7 +4175,7 @@ function dispatchKeypress(e, code) {
 }
 // GuiContainer / GuiInventory: Block-pick of the targeted block (Minecraft.middleClickMouse).
 function pickBlock() {
-  const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
+  const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)) ?? plantPick(world, ...target.block)); // b83 plants83: flower/shrub/double-plant getDamageValue (plant-damage.js)
   const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
   if (id) {
     const doPick = () => survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined), stonePick?.rawDamage); // b82 pots82: a rawDamage pot picks its stored stack

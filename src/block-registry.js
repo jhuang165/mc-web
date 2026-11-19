@@ -33,6 +33,10 @@ export const ticksRandomlyOriginal = (id) => id >= 0 && id < 4096 && TICKING[id]
 const same = (mc) => ({ mc, to: (meta) => [mc, meta & 15], from: (meta) => ({ meta, exact: true }) });
 // One original state; others of the same original id come back inexactly.
 const fixed = (mc, value = 0) => ({ mc, to: () => [mc, value], from: (meta) => ({ meta: 0, exact: meta === value }) });
+// b83 plants83: BlockTallGrass (anz) keeps any metadata; meta 0 is the shrub and 3..15 draw its icon (getIcon: meta >= 3 -> icon 0) with the
+// grass tint (colorMultiplier: meta != 0), so the port's dead shrub (83) stores them instead of collapsing them onto tall grass 39 or meta 0.
+// Old saves only ever stored 31:0 for 83, so they read back unchanged.
+const SHRUB = { mc: 31, to: (meta) => [31, (meta & 15) === 1 || (meta & 15) === 2 ? 0 : meta & 15], from: (meta) => (meta === 0 || meta >= 3 ? { meta, exact: true } : { meta: 0, exact: false }) };
 const fluid = (still) => ({
   mc: still,
   also: [still - 1],
@@ -89,7 +93,7 @@ const MAP = {
   164: same(90), 170: same(115), // nether portal (axis in meta, nether-portal.js) and nether wart (age in meta, nether-wart.js)
   173: fixed(138), // beacon (pyramid.js)
   [LAVA]: fluid(11),
-  43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
+  43: same(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
   51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),
   // BlockFence (85) has no metadata; BlockRail (66) keeps its shape 0-9; BlockMobSpawner (52) keeps
   // its tile entity outside the cell (mob-spawner.js).
@@ -98,7 +102,7 @@ const MAP = {
   62: fixed(52),
   63: fixed(21),64: fixed(73),65: fixed(74),66: fixed(129),67: same(86),68: same(97),69: same(175),
   70: same(162),71: same(161),72: same(106),73: same(127),74: fixed(48),75: fixed(39),76: fixed(40),
-  77: same(99),78: same(100),79: fixed(32),80: fixed(174),81: fixed(103),82: fixed(44,1),83: fixed(31,0),84: fixed(31,2),
+  77: same(99),78: same(100),79: fixed(32),80: fixed(174),81: fixed(103),82: fixed(44,1),83: SHRUB,84: fixed(31,2),
   // BlockAnvil: low two bits are orientation; high bits are damage stage.
   // BlockEnchantmentTable: one state; its book tile entity is presentation-only here (enchanting-table.md).
   [ENCHANTING_TABLE]: fixed(116),

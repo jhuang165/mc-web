@@ -193,7 +193,7 @@ const isWheat = (id) => id >= 31 && id <= 38;
 // getItemDropped (and damageDropped) per internal id, after the nextFloat chance:
 // [item, damage] or null. Consumes world.rand where the original does.
 function itemDropped(id, meta, rand) {
-  if (id === 39) return rand.nextInt(8) === 0 ? [SEEDS, 0] : null; // BlockTallGrass
+  if (id === 39 || id === 83 || id === 84) return rand.nextInt(8) === 0 ? [SEEDS, 0] : null; // BlockTallGrass (b83 plants83: the shrub 83 and fern 84 are tallgrass:0/2)
   if (id === 25) return rand.nextInt(10) === 0 ? [FLINT, 0] : [25, 0]; // BlockGravel
   if (isWheat(id)) return id === 38 ? [WHEAT, 0] : [SEEDS, 0];
   if (id === CARROTS) return [CARROT, 0];
@@ -210,6 +210,8 @@ function itemDropped(id, meta, rand) {
     case WOOL: return [id, meta];
     // b82 pots82: BlockFlower.damageDropped is the meta, BlockSapling's clamp(meta & 7, 0, 5) (bytecode-read); a rose past its variants keeps rawDamage (plant-damage.js).
     case RED_FLOWER: case SAPLING: { const pd = plantDropDamage(id, meta); return [id, pd.damage, pd.tags]; }
+    // b83 plants83: the dandelion likewise; BlockDoublePlant.getItemDropped is null for the top half and the grass/fern types 2/3, else its type (ako, bytecode-read).
+    case YELLOW_FLOWER: case 69: { if (id === 69 && (meta & 8 || (meta & 7) === 2 || (meta & 7) === 3)) return null; const pd = plantDropDamage(id, meta); return [id, pd.damage, pd.tags]; }
     // BlockDoor.getItemDropped: the lower half's door item (original 324 and 330), nothing for the upper half; BlockPane (glass) drops nothing.
     case WOODEN_DOOR: return meta & 8 ? null : [470, 0];
     case IRON_DOOR: return meta & 8 ? null : [471, 0];

@@ -15,6 +15,7 @@ import { canPlaceDoublePlant } from './biome-features.js';
 import { JavaRandom } from './java-random.js';
 import { growGrass } from './flowers.js';
 import { makeStack } from './inventory.js';
+import { doublePlantDamage } from './plant-damage.js'; // b83 plants83
 import { toOriginal, fromOriginal } from './block-registry.js';
 import { SAPLING, COCOA, DOUBLE_PLANT, BROWN_MUSHROOM, RED_MUSHROOM, BROWN_MUSHROOM_BLOCK, RED_MUSHROOM_BLOCK, FERN, isCrop, cropAge } from './world.js';
 import { isStem, stemCanFertilize } from './stems-cake.js';
@@ -110,7 +111,8 @@ export function useBoneMeal(host, x, y, z) {
   } else if (id === N_DOUBLE) { // BlockDoublePlant: Block.func_149642_a drops (block, 1, type) with three world nextFloat
     const spread = () => f(rand.nextFloat() * f(0.7)) + f(f(1 - f(0.7))) * 0.5;
     const dx = spread(), dy = spread(), dz = spread();
-    host.items?.spawn(makeStack(DOUBLE_PLANT, 1, meta), x + dx, y + dy, z + dz, { delay: 10 });
+    const pd = doublePlantDamage(meta); // b83 plants83: types 6/7 (a rawDamage stack's) keep rawDamage instead of clamping to the sunflower
+    host.items?.spawn(makeStack(DOUBLE_PLANT, 1, pd.damage, undefined, pd.tags), x + dx, y + dy, z + dz, { delay: 10 });
   } else if (id === N_COCOA) { // BlockCocoa: age + 1 (flag 2), the direction kept
     w.set(x, y, z, COCOA, true, ((((meta & 12) >> 2) + 1) << 2) | (meta & 3));
     out.changed.push([x, y, z]);
@@ -122,7 +124,7 @@ export function useBoneMeal(host, x, y, z) {
 // or fern 0.8 (BlockBush 0.4 * 2), a mushroom 0.4, a young crop 0.25, a stem (meta * 2 + 2) / 16, cocoa 0.75, a double plant and every full block 1.
 export function sparkleHeight(world, x, y, z) {
   const b = world.get(x, y, z);
-  if (b === SAPLING || b === 39 || b === FERN) return f(0.8);
+  if (b === SAPLING || b === 39 || b === FERN || b === 83) return f(0.8); // b83 plants83: a shrub meta >= 3 (tallgrass:3+) is fertilisable too
   if (b === BROWN_MUSHROOM || b === RED_MUSHROOM) return f(f(0.2) * 2);
   if (isCrop(b)) return f(0.25);
   if (isStem(b)) return f(((world.getMeta(x, y, z) & 15) * 2 + 2) / 16);

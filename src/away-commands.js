@@ -56,7 +56,7 @@ const NEEDS_PLAYER = new Set(["scoreboard", "spreadplayers", "debug", "publish"]
 const SELECTOR = /^@([parf])(?:\[([\w=,!-]*)\])?$/;
 const CHAT_CAP = 100;
 
-export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted, breakBlock, loadedChunk = (cx, cz) => inSpawnArea(plan.spawn ?? [0, 0, 0], cx, cz) }) {
+export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted, breakBlock, dropStacks, loadedChunk = (cx, cz) => inSpawnArea(plan.spawn ?? [0, 0, 0], cx, cz) }) {
   const spawn = plan.spawn ?? [0, 0, 0];
   const active = { allowCommands: true, gameRules: { ...DEFAULT_RULES, ...(plan.gameRules ?? {}) }, worldSpawn: [...spawn], defaultGameMode: plan.defaultGameMode };
   const initial = JSON.stringify(active), initialWeather = JSON.stringify(weather.save());
@@ -85,6 +85,8 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     stackName: () => "", changed() {}, refreshInventory() {},
     setTime: (t) => { const d = t - state.lastTime; state.lastTime = t; state.timeShift += d; entities()?.shiftTime(d); },
     updateBlock() {}, destroyBlock: (x, y, z) => breakBlock(x, y, z),
+    dropStacks, // b83 plants83: a /setblock-replaced pot's plant (away-world.js spills it)
+    music: () => rt.music ?? null, comparators: () => rt.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
   };
   const host = createCommandHost(env);
   // The shadow player: the player's state, advanced by the queued commands at the moment they fire (see the header). Batch 36: it follows the main thread's TRACE of the

@@ -22,7 +22,7 @@ import { cartInventoryAt } from "./cart-inventory.js"; // b71 mpreach71
 import { Survival, burnTime } from "./survival.js";
 import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
 import { Weather } from "./weather.js";
-import { makeStack } from "./inventory.js";
+import { makeStack, validRawDamage } from "./inventory.js";
 import { FLOWER_POT } from "./stone-utility.js";
 import { washStacks, burnStacks } from "./fluid-wash.js"; // b82 pots82
 import { awayEntities } from "./away-entities.js";
@@ -92,7 +92,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   };
 
   const drops = [], tiles = plan.tiles, spill = (stack, x, y, z) => {
-    const made = makeStack(stack.id, stack.count, stack.damage || 0);
+    const made = makeStack(stack.id, stack.count, stack.damage || 0, undefined, validRawDamage(stack.rawDamage) ? { rawDamage: stack.rawDamage } : undefined); // b83 plants83: a rawDamage plant keeps it (as main.js)
     if (ents) ents.spill(made, x, y, z); else drops.push({ stack: made, x, y, z, age: 0, delay: 10 });
   };
   let ents = null;
@@ -146,7 +146,10 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     },
   } });
   rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks });
-  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); } });
+  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
+    // b83 plants83: /setblock's replaced pot drops its plant (command-host.js env.dropStacks) as ItemEntities.dropBlock does in single player: one entity per
+    // item at x/y/z + (rand * 0.7 + 0.15) each, through the run's item random when the entity run is on.
+    dropStacks: (stacks, x, y, z) => { const r = ents?.items?.random ?? Math.random, f = Math.fround, off = () => f(f(r() * 0.7) + f(0.15)); for (const s of stacks) for (let n = 0; n < (s?.count ?? 0); n++) spill({ ...s, count: 1 }, x + off(), y + off(), z + off()); } });
   const live = rt.redstone;
   // Dispensers and droppers fire through the entity systems above (items, TNT, carts, buckets, flint and steel). A dispense that
   // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks run through away-commands.js.

@@ -63,7 +63,7 @@ test("roses keep their metadata as damage, saplings clamp(meta & 7, 0, 5) (alc.a
   assert.deepEqual(plantDropDamage(RED_FLOWER, 4), { damage: 4 });
   assert.deepEqual(plantDropDamage(RED_FLOWER, 12), { damage: 0, tags: { rawDamage: 12 } });
   assert.deepEqual([0, 5, 6, 7, 13].map((m) => plantDropDamage(SAPLING, m).damage), [0, 5, 5, 5, 5]);
-  assert.equal(plantDropDamage(YELLOW_FLOWER, 3), null);
+  assert.deepEqual(plantDropDamage(YELLOW_FLOWER, 3), { damage: 0, tags: { rawDamage: 3 } }); // b83 plants83: the dandelion keeps its metadata now (was null)
   const rose = explosionDrops(RED_FLOWER, 12, 0, 0, 0, 1, new JavaRandom(2n)).items[0];
   assert.deepEqual([rose.id, rose.damage, rose.tags], [RED_FLOWER, 0, { rawDamage: 12 }]);
   assert.equal(explosionDrops(SAPLING, 7, 0, 0, 0, 1, new JavaRandom(2n)).items[0].damage, 5);
