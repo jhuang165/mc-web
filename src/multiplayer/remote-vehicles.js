@@ -9,6 +9,7 @@ import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
 import { waterAcceleration, entityWaterBox } from '../fluids.js';
 import { enterWater } from '../fx.js';
 import { moveInput } from '../player-movement.js';
+import { vehicleSeat } from '../vehicle-seat.js';
 
 // b70 carts70: EntityMinecart.setPositionAndRotation2 (xl.a(DDDFFI)V, bytecode-read): the client copy stores the target (minecartX/Y/Z, yaw, pitch) and
 // turnProgress = increments + 2; NetHandlerPlayClient passes 3 for the move and teleport packets of an entity (bjb.a(ik) and a(hf)), so 5 ticks.
@@ -98,19 +99,20 @@ function boatWake(v, fx) {
 // the buoyancy, the rider's steering (EntityLivingBase moveForward / moveStrafing, yaw), the speed, the move and the drag; the splash draws come with it (Boats.tickBoat). Server packets reach it only
 // through xi.a(DDDFFI) and xi.i (bytecode-read): a position packet whose target is over one block (squared distance > 1) away only sets boatPosRotationIncrements = 3 and motion = the last S12, and
 // a nearer one is dropped; the position and angles are never set from it (the increments are read only in the isBoatEmpty branch). An S12 sets the motion. The state carries `own` with the entry's
-// released position (tx/ty/tz), S12 (mx/my/mz, count vs) and position-packet count rs. The dedicated server still seats the port's local player from its own boat, so a copy more than two blocks
-// from that exact state is put back on it (the port's deviation; natively the player follows the client boat).
-export const OWN_RESYNC = 4; // squared distance
+// released position (tx/ty/tz), S12 (mx/my/mz, count vs) and position-packet count rs.
 export function riderRecord(input) {
   const i = moveInput({ forward: input.forward ?? 0, strafe: input.strafe ?? 0 }); // not slowed: a rider is not using an item
   return { yaw: fl(180 - input.yaw * 180 / Math.PI), moveForward: fl(i.forward * fl(0.98)), moveStrafing: fl(-i.strafe * fl(0.98)), dead: false };
 }
-export function ownBoatStep(c, boats, world, fx = null, input = null) {
+// b85 boatseat85: nothing puts the copy back on the server's boat any more (the b84 two-block snap is gone); the local player is seated on this copy (RemoteVehicles.seatOf, main.js).
+// `seated` false: the player left but the copy is still isBoatEmpty false (bjb.a(S1B) only calls setIsBoatEmpty for an attach packet whose vehicle is a boat: the dismount's S1B with vehicle -1
+// changes nothing), so it keeps running xi.h's full physics, with no rider input, until another player's attach sets it true (RemoteVehicles.noteRiders).
+// xi.h clears the snow layers and lily pads at its four corners with no isRemote guard (World.setBlockToAir / breakBlock(true); a client world's drops are none): `clear(x, y, z, block)` does it on the client world.
+export function ownBoatStep(c, boats, world, fx = null, input = null, clear = null) {
   const v = c.v;
-  v.remote = true; v.rider = riderRecord(input ?? { yaw: 0 });
-  for (const p of boats.tickBoat(world, v, [], { clear: () => {} })) fx?.spawn(...p);
-  const s = c.target;
-  if (s && (s.x - v.x) ** 2 + (s.y - v.posY) ** 2 + (s.z - v.z) ** 2 > OWN_RESYNC) { boats.setPosition(v, s.x, s.y, s.z); v.px = v.x; v.py = v.posY; v.pz = v.z; v.yaw = s.yaw; v.vx = v.vy = v.vz = 0; }
+  v.remote = true; v.rider = c.seated === false ? null : riderRecord(input ?? { yaw: 0 });
+  const hooks = { clear: (x, y, z, block) => { world.put(x, y, z, 0, 0, false); clear?.(x, y, z, block); } };
+  for (const p of boats.tickBoat(world, v, [], hooks)) fx?.spawn(...p);
 }
 // The packets of the rider's boat (see above): `s` is the state with `own`. Returns nothing; updates c.cv / c.vs / c.rs and the motion.
 export function ownBoatPackets(c, s) {
@@ -131,6 +133,7 @@ export class RemoteVehicles {
     this.renderers = null;
     this.fx = null; // b84 mpboat84: { spawn(name, x, y, z, vx, vy, vz) }, the particle sink of the boat copies (main.js)
     this.input = null;
+    this.cleared = null; // b85 boatseat85: (x, y, z, block) after the own boat cleared a snow layer or lily pad on the client world (main.js remeshes)
     this.hanging = new ClientHanging(); // b68 mppaintings: paintings, item frames and knots (the message's hset / hdel)
   }
   // The `vehicles` message: the newest state of each vehicle in range, and the keys that left.
@@ -154,9 +157,9 @@ export class RemoteVehicles {
       // tracker cadence (take it at once), and `cartMeta` states carry no new position (only the data fields below)
       if (!c.v.boat && !(message.cartCadence && s.cartMeta)) { c.pending = s; if (message.cartCadence) c.since = CART_SEND_INTERVAL; }
       const v = c.v;
-      if (v.boat && s.own === 1) { // b84 mpboat84: the state of the boat this player rides (exact, with the entry's packets)
+      if (v.boat && (s.own === 1 || c.own)) { // b84 mpboat84: the state of the boat this player rides (exact, with the entry's packets); b85 boatseat85: and the one it left (isBoatEmpty stays false)
         c.tracked = false;
-        if (c.ride) ownBoatPackets(c, s); else { c.vs = s.vs; c.rs = s.rs; c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; }
+        if (c.own) ownBoatPackets(c, s.own === 1 ? s : { ...s, tx: s.x, ty: s.y, tz: s.z }); else { c.vs = s.vs; c.rs = s.rs; c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; }
       } else if (v.boat) { // b83 tracker83: a tracked boat takes the S12 when its count moved, then the position packet (cartMeta: none this time); a plain state (an older server, or the boat this player rides) snaps in tick
         c.tracked = s.bc === 1;
         if (c.tracked && !fresh) { if (s.vs !== c.vs) boatSetVelocity(c, s); if (!s.cartMeta) boatSetPositionAndRotation2(c, s); } else if (!c.tracked) c.bt = null;
@@ -175,11 +178,20 @@ export class RemoteVehicles {
     this.carts.reap(); this.boats.reap();
   }
   // b84 mpboat84: the key of the boat the local player rides (self.riding) or null, and this tick's input { yaw (radians), forward, strafe }; call before tick().
+  // b85 boatseat85: a boat the player leaves stays `own` (isBoatEmpty false, no rider) until noteRiders sees another attach.
   ride(key, input = null) {
     this.input = input;
-    for (const [k, c] of this.copies) if (c.ride && k !== key) { c.ride = false; c.v.rider = null; c.v.remote = false; }
+    for (const [k, c] of this.copies) if (c.seated && k !== key) { c.seated = false; c.v.rider = null; }
     const c = key && this.copies.get(key);
-    if (c && c.v.boat && !c.ride) { c.ride = true; c.v.remote = true; c.cv ??= [0, 0, 0]; }
+    if (c && c.v.boat && !c.seated) { c.seated = true; c.own = true; c.tracked = false; c.bt = null; c.v.remote = true; c.cv ??= [0, 0, 0]; }
+  }
+  // b85 boatseat85: the local player's feet on the boat copy he rides (Entity.updateRiderPosition: the client player follows the client boat), or null when he is not seated on a running copy.
+  seatOf(key) { const c = typeof key === 'string' && this.copies.get(key); return c && c.v.boat && c.seated && c.own && !c.v.dead ? vehicleSeat(c.v, -0.5) : null; }
+  // b85 boatseat85: bjb.a(S1B) for another rider attaching to a boat sets isBoatEmpty true: `keys` are the boats the other players ride now; a key new since the last call ends the own physics.
+  noteRiders(keys) {
+    const now = new Set(keys), before = this.others ?? new Set();
+    for (const k of now) if (!before.has(k)) { const c = this.copies.get(k); if (c?.v.boat && c.own && !c.seated) { c.own = false; c.tracked = c.target.bc === 1; c.bt = null; c.v.rider = null; } }
+    this.others = now;
   }
   // One client tick: the previous state is kept, the copy moves to the newest.
   tick() {
@@ -191,7 +203,7 @@ export class RemoteVehicles {
         cartClientStep(c, (cv, x, y, z) => this.carts.setPosition(cv, x, y, z));
         continue;
       }
-      if (c.ride && c.target.own === 1 && this.world) { ownBoatStep(c, this.boats, this.world, this.fx, this.input); continue; } // b84 mpboat84
+      if (c.own && this.world) { ownBoatStep(c, this.boats, this.world, this.fx, this.input, (x, y, z, block) => this.cleared?.(x, y, z, block)); continue; } // b84 mpboat84 / b85 boatseat85
       if (c.tracked) { boatClientStep(c, (bv, x, y, z) => this.boats.setPosition(bv, x, y, z), this.world, this.fx); continue; } // b83 tracker83
       v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
       (v.boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
