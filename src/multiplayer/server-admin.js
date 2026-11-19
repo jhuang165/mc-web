@@ -14,7 +14,7 @@ import { joinNiceString } from '../commands-scoreboard.js';
 import { UserMap, userListValues, userListKeys } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists; b71 mpadmin71: listings, files and the profile cache use it
 import { idleActivity } from './server-idle.js'; // b74 mpmisc74: which messages reset the idle clock
 
-export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3 };
+export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3, netstat: 1 }; // netstat: CommandNetstat (permission 0) is denied to non-ops by mw.a, and a player gets only a refusal line (b84 dedicated84, executed)
 export const DEFAULT_OP_LEVEL = 4; // server.properties op-permission-level
 // CommandBanIp.a: ^([01]?\d\d?|2[0-4]\d|25[0-5])\.(...)$
 const OCTET = '([01]?\\d\\d?|2[0-4]\\d|25[0-5])';
@@ -53,6 +53,7 @@ export class ServerAdmin {
     this.listFiles = null; // b71 mpadmin71: { read(name) -> rows | null, write(name, rows) } for ops, whitelist, banned-players and banned-ips (.json beside server.properties; set by server/server.js)
     this.written = new Map(); // list name -> the text last written to (or read from) its file
     this.directory = null; // (name) => { uuid, name } | null: accounts the server knows but that never joined (the usercache's role)
+    this.savedCount = null; // () => number of stored player files (set by the simulation)
     this.host = null; // { kick(id, reason), ipOf(id), stop(), save() } set by server/server.js
     this.pending = null; this.lastAction = new Map(); this.looks = new Map();
   }
@@ -69,7 +70,12 @@ export class ServerAdmin {
   }
   /** ns.func_152654_a: the lowercase names, in HashMap order (the /whitelist add completion). */
   profileNames() { return userListKeys(this.profiles); }
-  profile(name) { return this.profiles.get(String(name).toLowerCase()) ?? this.directory?.(name) ?? null; }
+  // ns.func_152655_a (a(String)): a cache miss asks the profile repository and, on a hit, adds the profile to the cache (b84 dedicated84: executed, the name joins the usercache and the tab names).
+  profile(name) {
+    const hit = this.profiles.get(String(name).toLowerCase()); if (hit) return hit;
+    const known = this.directory?.(name); if (!known) return null;
+    this.seen(known.uuid, known.name); return this.profiles.get(String(known.name).toLowerCase());
+  }
   /** An entry past its expiry is removed on lookup (UserList.func_152683_b). */
   live(map, key) {
     const e = map.get(key); if (!e) return null;
@@ -174,7 +180,7 @@ export class ServerAdmin {
         return ctx.feedback('commands.unban.success', a[0]);
       }
       case 'ban-ip': {
-        if (!(a.length >= 1 && a[0].length > 0)) throw usage('commands.banip.usage');
+        if (!(a.length >= 1 && a[0].length > 1)) throw usage('commands.banip.usage'); // CommandBanIp: args[0].length() > 1 (executed: /ban-ip x is the usage line)
         const reason = reasonFrom(1);
         let ip = a[0];
         if (!IPV4.test(ip)) { // a player that is online: that player's address
@@ -188,7 +194,7 @@ export class ServerAdmin {
         return hit.length ? ctx.feedback('commands.banip.success.players', ip, joinNiceString(hit.map((p) => p.name))) : ctx.feedback('commands.banip.success', ip);
       }
       case 'pardon-ip': {
-        if (!(a.length === 1 && a[0].length > 0)) throw usage('commands.unbanip.usage');
+        if (!(a.length === 1 && a[0].length > 1)) throw usage('commands.unbanip.usage'); // CommandPardonIp: length() > 1 too
         if (!IPV4.test(a[0])) throw new Fail('commands.unbanip.invalid');
         this.ipBans.delete(a[0]); // BanList.func_152684_c removes whether or not it was banned
         return ctx.feedback('commands.unbanip.success', a[0]);
@@ -200,9 +206,11 @@ export class ServerAdmin {
         return ctx.print(textComponent(joinNiceString(names)));
       }
       case 'whitelist': return this.whitelistCommand(a, ctx);
+      case 'netstat': return ctx.print(textComponent('Command is not available for players')); // CommandNetstat: a raw ChatComponentText, not red, not translated
       case 'stop': ctx.feedback('commands.stop.start'); return void setImmediate(() => host?.stop());
       case 'save-all': {
         ctx.print(translation('commands.save.start')); // sender only (ac.a)
+        if (a.length > 0 && a[0] === 'flush') { ctx.print(translation('commands.save.flushStart')); ctx.print(translation('commands.save.flushEnd')); } // case-sensitive; the lang file has no such keys, so the raw keys show (bytecode-read + executed)
         const done = () => ctx.feedback('commands.save.success'), failed = (e) => ctx.feedback('commands.save.failed', e?.message ?? String(e));
         try { const r = host?.save(); this.pending = Promise.resolve(r).then(done, failed); } catch (e) { failed(e); }
         return;
@@ -230,7 +238,7 @@ export class ServerAdmin {
       case 'off': this.whitelistOn = false; return ctx.feedback('commands.whitelist.disabled');
       case 'list': {
         const names = userListValues(this.allow).map((e) => e.name); // b71 mpadmin71: oi.l() = or.a() = values() names, HashMap order
-        ctx.print(translation('commands.whitelist.list', names.length, this.profiles.size)); // second count: players the server has seen (oi.q)
+        ctx.print(translation('commands.whitelist.list', names.length, this.savedCount?.() ?? this.profiles.size)); // second count (oi.q = world 0's SaveHandler playerdata/*.dat files; b84 dedicated84, executed): players whose data was saved (a leave, an autosave or /save-all), not the profile cache
         return ctx.print(textComponent(joinNiceString(names)));
       }
       case 'add': {

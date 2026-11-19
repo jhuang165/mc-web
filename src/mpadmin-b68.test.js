@@ -116,7 +116,7 @@ test("/whitelist: on/off/list/add/remove/reload, ops pass, others get the native
   assert.match(f.say("Alex", "/whitelist add Ghost")[0], /Could not add Ghost/);
   assert.match(f.say("Alex", "/whitelist add Steve")[0], /Added Steve to the whitelist/);
   assert.equal(a.refusal(steve, "1.1.1.1"), null);
-  assert.deepEqual(f.say("Alex", "/whitelist list").slice(0, 2), ["There are 1 (out of 2 seen) whitelisted players:", "Steve"]);
+  assert.deepEqual(f.say("Alex", "/whitelist list").slice(0, 2), ["There are 1 (out of 0 seen) whitelisted players:", "Steve"]);
   assert.match(f.say("Alex", "/whitelist remove Ghost")[0], /Could not remove Ghost/);
   assert.match(f.say("Alex", "/whitelist remove steve")[0], /Removed steve from the whitelist/);
   assert.match(f.say("Alex", "/whitelist reload")[0], /Reloaded the whitelist/);
