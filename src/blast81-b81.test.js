@@ -194,7 +194,7 @@ test('server: the dedicated dispense snapshot carries the tracker field and two 
   p.dispOut = [];
   s.input('a', input()); s.tick();
   const rows = p.dispOut.filter(m => m.type === 'dispEnts').flatMap(m => m.ents).filter(r => r.kind === 'fireball');
-  assert.ok(rows.length && rows[0].t?.s?.length === 6);
+  assert.ok(rows.length && rows[0].t?.s?.length === 9); // b82 mpball82: the S0E's yaw and pitch bytes and the S1C flag after the batch 81 six fields
   for (const b of d.mobs._fireballs.list) b.dead = true;
   p.dispOut = [];
   s.input('a', input()); s.tick(); s.input('a', input()); s.tick(); s.input('a', input()); s.tick();

@@ -7,7 +7,8 @@ import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
 import { sweepBox } from "./mpperf79-fast.js"; // b79 mpperf79
 import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
-import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell, lookVector } from "./blaze-ghast.js";
+import { FIREBALL, fireballAcceleration, fireballStep, fireballBurn, deflect, faceCell, lookVector } from "./blaze-ghast.js";
+import { fireballTurn } from "./fireball-turn.js"; // b82 mpball82
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
@@ -19,6 +20,7 @@ const f = Math.fround;
 export const FIRE_IMMUNE = new Set(["blaze", "ghast", "magma_cube", "pigman", "zombie_pigman", "wither_skeleton", "wither"]);
 // ze.h: the sweep grows each candidate box by this (getCollisionBorderSize 0.3 for the mob; the player's pick uses 1.0 for the fireball).
 const SWEEP = 0.3, PICK_BORDER = 1;
+const turnToMotion = (b) => fireballTurn(b, b.vx, b.vy, b.vz);
 const seedOf = (mobs) => Math.floor(mobs.random() * 2 ** 48);
 
 export class Fireballs {
@@ -43,7 +45,10 @@ export class Fireballs {
       // box (the water test, the entity query of the first update) stays there until the end of the first update.
       rand, inGround: false, tile: null, ticksAlive: 0, // inGround: EntityFireball.e/f/g (tile), h (block id), i, and the ticksAlive counter; see stick()
       boxPos: exact || !owner || owner === "player" ? [x, y, z] : [owner.x, owner.y, owner.z],
+      // b82 mpball82: ze(world, shooter, ..) is setLocationAndAngles(.., shooter.rotationYaw, shooter.rotationPitch); the dispenser form keeps 0, 0
+      yaw: f(exact || !owner || owner === "player" ? 0 : owner.rotationYaw ?? 0), pitch: f(exact || !owner || owner === "player" ? 0 : owner.rotationPitch ?? 0),
     };
+    ball.prevYaw = ball.yaw; ball.prevPitch = ball.pitch;
     this.list.push(ball);
     const w = this.mobs, seq = w.orderStamp?.(); // World.spawnEntityInWorld: the end of loadedEntityList, walked by index, so a ball launched in the pass updates in it
     if (seq !== undefined) w.orderSeqs.set(ball, seq);
@@ -79,10 +84,12 @@ export class Fireballs {
     if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
     b.px = b.x; b.py = b.y; b.pz = b.z;
     if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    b.prevYaw = b.yaw ?? 0; b.prevPitch = b.pitch ?? 0; // b82 mpball82: Entity.onEntityUpdate
     const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
     // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
     const water = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
+    fireballBurn(b, water.wet, b.large); // b82 mpball82: the fire counter, the watched burning flag and (large ball) setBeenAttacked; then setFire(1)
     const was = b.inGround;
     if (was && this.stick(b)) return;
     if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
@@ -94,7 +101,7 @@ export class Fireballs {
     // ze.h after the move: in water four bubbles at the new position minus a quarter of the old motion (moving with it), then the motion update, then the smoke at
     // (x, y + 0.5, z) of the NEW position (executed: spexec79 fire79; b79 moved the smoke here from before the move and added the bubbles).
     const [ovx, ovy, ovz] = [b.vx, b.vy, b.vz];
-    fireballStep(b, water.wet);
+    fireballStep(b, water.wet, turnToMotion); // b82 mpball82: with ze.h's turn after the move
     if (water.wet) for (let i = 0; i < 4; i++) mobs.fx?.spawn("bubble", b.x - ovx * 0.25, b.y - ovy * 0.25, b.z - ovz * 0.25, ovx, ovy, ovz);
     mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
   }
@@ -239,7 +246,7 @@ export class Fireballs {
       id: "fb-" + this.next++, type: "fireball", kind: r.kind, large, owner: null, health: 1,
       x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az,
       power: large && Number.isInteger(r.power) ? r.power : FIREBALL.defaultPower, ticks: 0, dead: false,
-      scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize,
+      scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, // b82: the save keeps no rotation
     };
   }
   // Restores the records of `dimension`; bad records are skipped. Call after the world's mobs exist (owners are looked up by id).

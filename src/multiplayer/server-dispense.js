@@ -24,7 +24,7 @@ import { ITEMS } from '../survival.js';
 import { PHYSICS } from '../world.js';
 import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { mobCandidate, dressMob } from '../sp-dispense76.js'; // b78 loot78: the single-player mob selector and dressing
-import { skullEntry, skullEntryTick, skullWire } from './skull-look.js'; // b81 mpcopies81
+import { skullEntry, skullWire } from './skull-look.js'; // b81 mpcopies81
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
@@ -311,7 +311,7 @@ export class ServerDispense {
     if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
     for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
-    for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, t: this.ballTracks.row(b) }); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js)
+    for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, ...skullWire(b), t: this.ballTracks.row(b) }); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js); b82 mpball82: the angle fields a skull row has (skull-look.js)
     for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b), t: this.ballTracks.row(b) }); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js); b81 blast81: `t` the tracker packets the copy flies on (fireball-copy.js)
     return out;
@@ -321,8 +321,8 @@ export class ServerDispense {
   flush() {
     for (const lane of this.lanes) this.drainArrows(lane); // a skeleton's shot (made during the mobs' tick) is heard in the tick it was made
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
-    for (const b of this.mobs._skulls?.list ?? []) if (!b.dead) b.lookSent = skullEntryTick(b.track ??= skullEntry(b), b); // b81 mpcopies81: one EntityTracker update a tick (frequency 10)
-    this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass
+    for (const b of [...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]) if (!b.dead) b.track ??= skullEntry(b); // b81 mpcopies81: the S0E angles of the join (a ball that never ran the tickOne hooks)
+    this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass; b82 mpball82: the one entry also sends the look packets and the burning flag's S1C (fireball-copy.js), and sets `lookSent` for skullWire
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)

@@ -1,0 +1,105 @@
+# Batch 82 mpball82: angles, burning flag and water on the multiplayer fireball and skull copies
+
+## Summary
+- **One tracker entry for every ball's angles.**
+  - `src/multiplayer/fireball-copy.js` `BallTracks` now feeds the ball's current yaw and pitch into its TrackerEntry. It sends S16, S17 and S18 with the angle bytes:
+    - S17 stays `type: 'move'` with extra `yb`/`pb`.
+    - S16 is `look`.
+    - S18 is `teleport` with `yb`/`pb`.
+  - `t.s` grows from 6 to 9 fields: the yaw byte, the pitch byte and the S1C flag that follows the S0E. In the ball's first tracked tick these are the join's bytes (skullEntry's `spawn`) and flag 0.
+  - The skull's own beat-only `skullEntryTick` call is gone from `server-dispense.js` flush. BallTracks sets `b.track.ticks` and `b.lookSent`, so `skullWire` (yb/pb/a8/look/lyb/lpb) keeps working. It is now on fireball rows too.
+  - `server-mobs.js` `fireballWatch` makes `b.track = skullEntry(b)` before a fireball's first update, as `server-wither.js` does for skulls.
+- **Single-player and server ball state** (the server runs the same classes):
+  - `src/fireballs.js`:
+    - The launch takes the shooter's rotationYaw/Pitch (the exact form, no owner or `player` gives 0).
+    - Each update sets prev = current, then `fireballBurn`, then `fireballStep(b, wet, turn)`, which turns the ball toward its motion between the move and the motion update (`src/blaze-ghast.js`).
+  - `src/blaze-ghast.js` `fireballBurn(b, wet, attackable)` is the fire part of Entity.onEntityUpdate:
+    - In water the counter goes to 0.
+    - Otherwise a counter above 0 hurts every 20th count (a large ball's setBeenAttacked sets `velocityChanged`) and counts down.
+    - `burnFlag` = fire > 0.
+    - Then setFire(1) makes the counter max(fire, 20).
+  - `src/wither-boss-mobs.js` skulls call `fireballBurn(b, wet, false)`.
+- **The burning flag on the wire.** BallTracks passes `burnFlag !== last` as the tracker's dataChanged. That forces the location block and adds `{type:'meta', f}` before the tail's S12.
+  - A ball with no `burnFlag` keeps the batch 81 stand-in: a change at ticks 1.
+  - A large ball out of water now sends S12 every tick, as native does.
+- **Client copy** (`spawnBallCopy`, `stepBallCopy`, `applyBallPacket`, `flyBallRow`). A copy built from a 9-field `s` has `angles: true`:
+  - Rotation comes from the bytes; prev is 0 and the flag comes from `s[8]`.
+  - Each update:
+    - Sets prev = current.
+    - Adds the flow push, where `water(c)` gives `{wet, push}`.
+    - Sets the counter to 20.
+    - Moves, then turns toward its own motion (`fireballTurn`).
+    - Applies the bubbles and the 0.8, 0.95 or 0.73 factor, then the smoke.
+  - Packets:
+    - S15 keeps the angles through % 360.
+    - S16 re-places at serverPos and takes the angles.
+    - S17 and S18 take the angles.
+    - S1C sets the flag.
+  - The row takes the copy's yaw, pitch, prevYaw and prevPitch, and `burning = ballCopyBurning(c)`: not a skull, and fire > 0 or the flag.
+  - **No client sweep, deliberately.** It is a no-op natively; see Evidence.
+- **`skull-look.js` generalised.** `ballCopyLook(row, d, fresh, {wet})` handles any ball kind, with factor `ballLookFactor(kind, blue, wet)`: 0.8 in water, 0.73 for a charged skull, 0.95 otherwise. `skullCopyLook` is an alias.
+  - `client-dispense.js` now runs it after the `ballFx` hook, and only when the row's copy holds no angles (a batch 81 server, or no hook). The wet test comes from a new `ballWet(row)` hook.
+  - `main.js` passes `ballWet` and `water` (new `ballWater` in `client-explosion.js`, which returns waterAcceleration's `{wet, push}`).
+- **Flames.** `src/projectile-renderer.js` draws EntityFireRenderer over burning `fireball` (box 1) and `smallFireball` (box 0.3125) balls. The live ball burns when its counter is above 0 (20 from its first update). A multiplayer row burns when `row.burning` is set from an angle-bearing copy.
+- **Backward compatibility.**
+  - A batch 81 row (6-field `s`, no `yb` on fireball rows) gives a copy without `angles`. It gets no angles, no flames and no flow push (the batch 81 flight), and the skull's `ballCopyLook` path stays as before, plus water's 0.8.
+  - A batch 81 client reading new rows still moves on `move` packets and ignores `look` and `meta`.
+- **Tests updated (they encoded the gaps):**
+  - `src/mpcopies81-b81.test.js`: skull look packets are now at entry ticks [1, 10, 20], not [10, 20], and the S1C f:1 at ticks 1.
+  - `src/blast81-b81.test.js`: `t.s.length` is 9, not 6.
+- New `src/mpball82-b82.test.js` (11 tests).
+- **Research doc corrections, dated 2026-11-18:**
+  - `public/research/blaze-ghast.md`: fireballs are not fire immune.
+  - `public/research/wither-boss.md`: the skull's watcher does change.
+
+## Evidence
+- **Executed**: `tools/probes/BallFlagProbe.java` on the unchanged 1.7.10 classes, output in `public/research/ballflag82-reference.json`. It uses FireballProbe's world double, so it needs the ignored `tools/research/fireballs-probe` build. The probe runs zg, zi and zp in the exact form (26.5, 2.5, 3.5, accel 0.1 +x) through still water (x 30..40) into stone (x 50..51), on a server world and with `ahb.E` (isRemote) set. Per tick it records pos, motion, yaw, pitch, fire, flag 0, velocityChanged, isInWater, isBurning and isDead.
+  - **Server ball:**
+    - The flag is 0 after update 0 and in water, 1 otherwise.
+    - fire is always 20.
+    - The large ball's velocityChanged is 1 on every update out of water after the first; the small ball and skull never set it.
+    - Every ball dies at the wall.
+  - **Remote copy:**
+    - The flag stays 0, fire is 20 and isBurning is 1 (zg, zi) or 0 (zp).
+    - It never dies and flies through the wall to x 66 to 70.
+    - Yaw and pitch turn toward the motion: 18, 32.4, 43.92 ... and -18, -14.4 ...
+  - `src/mpball82-b82.test.js` reproduces all six runs from the port code:
+    - Position and motion match within 1e-9 and angles within 1e-3 degrees.
+    - The counter, flag, velocityChanged, isInWater and isBurning match exactly.
+- **Bytecode-read** (`javap -c -p`):
+  - `ze.h` opens with `if (!isRemote && (shooter dead || !blockExists)) setDead`. Its order is:
+    - super.onUpdate (sa.C: prev angles, handleWaterMovement, fire).
+    - setFire(1).
+    - The ray and entity sweep, then onImpact.
+    - pos += motion.
+    - The turn.
+    - The factor (`e()`, or 0.8 when isInWater, after four bubbles).
+    - motion = (motion + accel) * factor.
+    - The smoke.
+  - `zg.a(azu)`, `zi.a(azu)` and `zp.a(azu)` are wholly inside `if (!isRemote)`, so the client's own sweep has no effect.
+  - sa.C zeroes `fire` on a remote world and sets flag 0 on the server only.
+  - `ze.a(ro, F)` calls `Q()` (setBeenAttacked) before testing the source. `zi.a` and `zp.a` return false.
+  - `zp.al()` returns false.
+  - `bnr` (RenderFireball) reads only RenderManager's playerViewY/X (a billboard: fireball angles are not drawn), and does not override `bno.b` (doRenderShadowAndFire).
+  - The `my.a(List)` block condition includes `DataWatcher.hasObjectChanged`, and the S1C is sent inside the block before the tail S12. tryStartWatching sends S1C after S0E.
+  - `bjb.a(hf)` for an S15 keeps the current rotation, and setRotation applies % 360.
+- **Port-read**: the TrackerEntry's look rule and angle bytes (`src/entity-tracker.js`) are reused unchanged. The EntityFireball(world, shooter, ...) setLocationAndAngles with the shooter's angles was already used for skulls (b80, b81).
+
+## Verification
+- `node --test --test-timeout=600000 src/mpball82-b82.test.js`: 11 pass, 0 fail.
+- `node --test --test-timeout=600000 src/mpcopies81-b81.test.js src/blast81-b81.test.js`: 19 pass, 0 fail (after the two updates above).
+- Targeted neighbours (69 test files that import or name the edited modules, plus `entity-tracker.test.js`, run with `--test-concurrency=2`): 932 pass, 0 fail.
+- `npm run build`: passes (exit 0; only the usual chunk-size warning).
+- No full `npm test`, and no browser checks.
+
+## Follow-ups
+- **Browser-only:**
+  - Flames over ghast and blaze fireballs, in single player and on multiplayer copies (size, offset, flicker).
+  - A skull copy turning by itself between packets and snapping to the look packets.
+  - The S12-every-tick motion corrections of a large ball copy.
+  - The copy's flow push in flowing water.
+- **Not modelled:**
+  - The splash sound and particles when the copy (or the server ball) enters water. handleWaterMovement plays them when the ball was not already in water and it is not the first update.
+  - The fireball's rotation in the browser save. Fireballs build with 0, 0; skulls already save it.
+  - The single-player fire counter (now 20) is not used by any other system.
+- The fireball angles are invisible (billboard). They only matter for the packet types and timing, which now match native.
