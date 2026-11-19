@@ -12,6 +12,7 @@ import { TRACKER_LIMIT } from "./entity-tracker.js";
 const MOB_LIMIT = 80; // the b63-b72 server cap, gone in b73 (mpspawn73): the tests keep their count past it
 import { nativeOrigin, toLocal, toNative, SUMMON_HOSTS, UNKEPT_ENTITIES } from "./multiplayer/server-summon.js";
 import { sendSpawnerFx } from "./multiplayer/server-spawners.js";
+import { SUPPORTED } from "./multiplayer/server-mobs.js";
 
 await langReady;
 const key = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
@@ -93,10 +94,12 @@ test("a data tag: Health, CustomName, Equipment and a two-step Riding chain are 
   assert.equal(by("spider").ridingEntity, by("chicken"));
 });
 
-test("hanging kinds are kept since mppaintings (b68 lead); the giant is still refused", () => {
+test("hanging kinds are kept since mppaintings (b68 lead); the giant is kept since b82 entities82", () => {
   assert.deepEqual(SUMMON_HOSTS, []);
   assert.deepEqual([...UNKEPT_ENTITIES], []);
-  const f = fixture(); assert.deepEqual(f.say("/summon Giant"), [FAILED]);
+  const f = fixture(); assert.deepEqual(f.say("/summon Giant"), [OK]);
+  SUPPORTED.delete("giant");
+  try { assert.deepEqual(f.say("/summon Giant"), [FAILED]); } finally { SUPPORTED.add("giant"); }
 });
 
 test("tracker view-distance clamp: limit = viewDistance * 16 - 16, read once; the spawner puff's square is clamped", () => {

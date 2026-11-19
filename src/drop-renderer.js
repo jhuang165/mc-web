@@ -12,7 +12,7 @@ import { ITEMS } from "./survival.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
-import { itemPasses } from "./item-passes.js";
+import { itemPasses, itemPassColor } from "./item-passes.js"; // b82: itemPassColor gives a firework star its pass 1 colour
 import { flatItemSprites } from "./render-settings.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { FireOverlays, FIRE_BOXES, entityBurning, cameraViewYaw } from "./fire-overlays.js";
@@ -47,7 +47,7 @@ export class DropRenderer {
     return this.cubes.get(key);
   }
   build(stack, hover) {
-    const glint = stackHasEffect(stack, ITEMS[stack.id]), leather = itemPasses(stack.id, stack.damage, stack.color), url = leather?.base ?? itemTexture(stack.id, stack.damage),
+    const glint = stackHasEffect(stack, ITEMS[stack.id]), leather = itemPasses(stack.id, stack.damage, itemPassColor(stack)), url = leather?.base ?? itemTexture(stack.id, stack.damage),
       color = leather?.color ?? 0, group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       chestUrl = !url && chestItemTexture(stack.id),
       material = url
@@ -152,7 +152,7 @@ export class DropRenderer {
       if (!stack) continue;
       seen.add(e);
       let pile = this.piles.get(e);
-      const leather = itemPasses(stack.id, stack.damage, stack.color),
+      const leather = itemPasses(stack.id, stack.damage, itemPassColor(stack)),
         key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count, !!itemTexture(stack.id, stack.damage), flatItemSprites()) + ":" + itemFrameTag(itemTexture(stack.id, stack.damage)) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
       if (pile?.key !== key) {
         if (pile) this.remove(pile);

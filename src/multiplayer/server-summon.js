@@ -7,7 +7,7 @@
 // ServerVehicles, arrows / snowballs / pearls / potions / eyes through ServerProjectiles (`adopt` adds the one entity, so a live ghast ball or arrow keeps its owner and id), blaze and
 // ghast fireballs and wither skulls into the mobs' own Fireballs, primed TNT into the dispenser's `primed`, falling blocks into the dimension's FallingBlocks, items and orbs into the
 // dimension's lists (an orb takes a world entity id), rockets into the dispenser's FireworkRockets.
-// A kind the server cannot keep is a failed creation (`commands.summon.failed`, also as a Riding mount, which ends the chain): the mobs outside SUPPORTED (the giant); paintings, item frames and leash knots are kept by server-hanging.js since batch 68 (mppaintings).
+// A kind the server cannot keep is a failed creation (`commands.summon.failed`, also as a Riding mount, which ends the chain): the mobs outside SUPPORTED (none since b82 entities82 added the giant; the path stays for any kind taken out); paintings, item frames and leash knots are kept by server-hanging.js since batch 68 (mppaintings).
 // Coordinates are native (b68 summon2): `~` starts from the sender's native position and the End's origin maps them into the shifted window; the "out of world" refusal tests the mapped cell.
 // No mob cap: native /summon creates past the natural spawn limit (the b67 MOB_LIMIT refusal is gone; the new mobs carry summonKeep so ServerMobs' cull leaves them).
 import { createCommandHost } from '../command-host.js';

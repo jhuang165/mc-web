@@ -7,6 +7,7 @@ import { World, MOB_SPAWNER } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { chainSupported, sendSpawnerFx } from './multiplayer/server-spawners.js';
+import { SUPPORTED } from './multiplayer/server-mobs.js';
 import { RemoteDispense } from './multiplayer/client-dispense.js';
 import { applySpawnerDelay } from './multiplayer/client-spawners.js';
 import { RemoteVehicles } from './multiplayer/remote-vehicles.js';
@@ -76,7 +77,9 @@ test('chainSupported: a Riding mount outside the server kinds refuses the whole 
   const jockey = { props: comp(['id', str('Skeleton')], ['Riding', comp(['id', str('Spider')])]) };
   const mk = j => MobSpawners.fromJSON([{ x: 0, y: 0, z: 0, EntityId: 'Skeleton', SpawnData: j }]).get(0, 0, 0).spawnData;
   assert.equal(chainSupported(mk(jockey)), true, 'spider jockey');
-  assert.equal(chainSupported(mk(spawnData('Skeleton', comp(['id', str('Giant')])))), false, 'a giant mount has no client copy'); // b66: villagers are server kinds now
+  assert.equal(chainSupported(mk(spawnData('Skeleton', comp(['id', str('Giant')])))), true, 'b82 entities82: the giant is a server kind now');
+  SUPPORTED.delete('giant'); // no kind is left out since b82, so one is taken out to check the refusal
+  try { assert.equal(chainSupported(mk(spawnData('Skeleton', comp(['id', str('Giant')])))), false, 'a mount with no client copy'); } finally { SUPPORTED.add('giant'); }
   assert.equal(chainSupported(mk(spawnData('Zombie', comp(['id', str('Boat')])))), true, 'a boat is a vehicle, made in ServerVehicles');
   assert.equal(chainSupported(mk(spawnData('Zombie', comp(['id', str('Spider')], ['Riding', comp(['id', str('Pig')])])))), true, 'a deeper chain');
   assert.equal(chainSupported(null), true);
@@ -102,8 +105,11 @@ test('a spider jockey from SpawnData Riding is spawned and linked on the server,
 
 test('an unsupported Riding mount spawns nothing (the rolls are spent)', { timeout: 300000 }, () => {
   const { s, a, n, w } = fixture();
-  addSpawner(n, w, { EntityId: 'Skeleton', SpawnData: spawnData('Skeleton', comp(['id', str('Giant')])) }); // b66: villagers are server kinds now
-  for (let i = 0; i < 80; i++) { s.input('a', input()); a.position.copy({ x: 64.5, y: 70, z: 64.5 }); s.tick(); a.dispOut = null; a.mobPackets = null; }
+  addSpawner(n, w, { EntityId: 'Skeleton', SpawnData: spawnData('Skeleton', comp(['id', str('Giant')])) }); // b82 entities82: the giant is a server kind now, so it is taken out for the check
+  SUPPORTED.delete('giant');
+  try {
+    for (let i = 0; i < 80; i++) { s.input('a', input()); a.position.copy({ x: 64.5, y: 70, z: 64.5 }); s.tick(); a.dispOut = null; a.mobPackets = null; }
+  } finally { SUPPORTED.add('giant'); }
   assert.equal(n.mobs.mobs.entities.filter(e => e.type === 'skeleton' || e.type === 'giant').length, 0);
 });
 

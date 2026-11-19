@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { SAMPLE_HEIGHT } from "./display-light.js";
 import { pixelTexture, itemTexture, drawCompassCell } from "./first-person.js";
+import { itemPassColor } from "./item-passes.js"; // b82: a framed firework star rebuilds when its colour changes
 import { ITEM_COMPASS, itemFrameCompassFrame, compassWorld } from "./compass.js";
 import { compassFrameCount } from "./sprite-frames.js";
 import { itemFrameTag } from "./item-animation.js";
@@ -71,7 +72,7 @@ export const FRAME_PARTS = [
   { bounds: [0, 0.5 - F5, 0.5 + F5 - F3, F3, 0.5 + F5, 0.5 + F5] },
 ];
 
-const itemKey = (item) => (item ? item.id + ":" + (item.damage || 0) + ":" + itemFrameTag(itemTexture(item.id, item.damage || 0)) + ":" + (item.color ?? "") + ":" + JSON.stringify(item.tag?.ench ?? "") : "");
+const itemKey = (item) => (item ? item.id + ":" + (item.damage || 0) + ":" + itemFrameTag(itemTexture(item.id, item.damage || 0)) + ":" + (itemPassColor(item) ?? "") + ":" + JSON.stringify(item.tag?.ench ?? "") : "");
 
 export class HangingRenderer {
   constructor(scene, view) {

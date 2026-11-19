@@ -46,6 +46,7 @@ export const SUPPORTED = new Set(['pig', 'cow', 'sheep', 'chicken', 'zombie', 's
 for (const k of VILLAGE_KINDS) SUPPORTED.add(k); // b66 mpvillage: villagers and the village's iron golems (server-villagers.js)
 for (const k of DRAGON_KINDS) SUPPORTED.add(k); // b64 mpdragon: the Ender Dragon and the End crystals (the End's mobs)
 for (const k of GOLEM_KINDS) SUPPORTED.add(k); // b66 mpgolems: iron and snow golems, silverfish
+SUPPORTED.add('giant'); // b82 entities82: the giant (summon, spawners and region data only, as natively; the client draws it with MobRenderer's scaled zombie)
 export const MOB_LIMIT = SPAWN_RUNAWAY_GUARD; // b73 mpspawn73: no flat cap any more (native has none); only the runaway guard. Natural spawning is limited per type by max * chunks / 256 (spawnPass), the wire per player by range (the trackers)
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));

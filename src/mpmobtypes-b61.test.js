@@ -85,8 +85,10 @@ test('natural spawning is no longer filtered to the old eight: a squid or a bat 
   for (const t of ['squid', 'bat', 'enderman', 'wolf', 'horse', 'slime', 'witch', 'ocelot', 'mooshroom']) add(s.mobs.mobs.create(t, 64.5, 10, 64.5));
   const types = new Set(s.mobs.mobs.entities.map(e => e.type));
   for (const t of ['squid', 'bat', 'enderman', 'wolf', 'horse', 'slime', 'witch', 'ocelot', 'mooshroom']) assert.ok(types.has(t), t);
-  add(s.mobs.mobs.create('giant', 64.5, 10, 64.5)); // b66: silverfish are server kinds now (mpgolems); the giant is the one left out
-  assert.ok(!s.mobs.mobs.entities.some(e => e.type === 'giant'), 'a kind without a copy is still refused');
+  add(s.mobs.mobs.create('giant', 64.5, 10, 64.5)); // b82 entities82: the giant, the last one left out, is a server kind now
+  assert.ok(s.mobs.mobs.entities.some(e => e.type === 'giant'), 'the giant is kept');
+  SUPPORTED.delete('giant'); // the refusal itself: a kind without a copy (none is left, so one is taken out for the check)
+  try { add(s.mobs.mobs.create('giant', 70.5, 10, 70.5)); assert.equal(s.mobs.mobs.entities.filter(e => e.type === 'giant').length, 1, 'a kind without a copy is still refused'); } finally { SUPPORTED.add('giant'); }
 });
 
 test('a spider jockey: the skeleton rider is attached to the spider on the client', () => {
