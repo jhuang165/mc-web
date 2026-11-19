@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 84 (2026-11-19, ten tracks in `../wt84-<name>` on `batch84-<track>`, cut from 5cb5c6458, merged --no-ff on `batch84-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b84-lead/track-rules.md`; lead note `b84-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.113.0, by track (details in the `*-b84-track.md` notes and "Done in batch 84" in `public/research/remaining-gaps.md`):
+  - mpboat84: boat copy splashes in `multiplayer/remote-vehicles.js`; the rider's own client boat (`ride`, `own` rows); late-joiner spawn state (`server-cart-track.js` `join`/`forViewer`).
+  - mpthrown84: `multiplayer/thrown-tracks.js` and `thrown-copy.js`: tracker lanes (`trk` rows) for arrows, throwables, rockets and eyes; hooks left as rows.
+  - mpplace84: `withheldReason` (every ItemBlock refusal sends C08 255); `lily-use.js`; dimension-filtered placement collisions.
+  - drops84: `installSkullBreak` (skull drops on any replacement); `multiplayer/server-support-loss.js`; native Creative-world drops.
+  - dedicated84: executed `Dedicated84Probe` (16 commands, 645 rows) replayed in `dedicated-cmds-b84.test.js`; /list, ban-ip, kick, whitelist, save-all and netstat fixes.
+  - mobs84: live zombie conversion tail, enderman corpse teleport, wither particles on the entity's random, live squid push.
+  - blastparts84: arrow velocityChanged, dragon body push and parts, single-player hanging drops at their turn, native crystal box.
+  - rain84: rain for boats, falling blocks and hooks; fizz at the feet; executed `RainFireProbe`.
+  - cmdfix84: /tp look copy (`playerOp "look"`), summoned `Fire` for every kind, Air 0, empty pots, fresh signs, jukebox eject.
+  - mpperf84: `mpperf84-fast.js` behind `MC_MPPERF84=on|off|verify`; MC_MPPERF83 verify fixed for dragon parts.
+- Lead fixes: the dedicated server's boats get rain84's rain and fizz hooks; `chunkscan2-b68.test.js` puts its farmland under open air (the server now runs the farmland neighbour rule).
+- Verification: one full `npm test` on 065523a7f: 9382 tests, 9381 pass, 1 fail (that chunkscan2 test, fixed in a5567a884 and rerun 8/8). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 84" in `public/research/remaining-gaps.md`.
+
 Batch 83 (2026-11-18, ten tracks in `../wt83-<name>` on `batch83-<track>`, cut from 786c05f67, merged --no-ff on `batch83-lead`; shared rules `../artifacts/b83-lead/track-rules.md`; lead note `b83-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.112.0, by track (details in the `*-b83-track.md` notes and "Done in batch 83" in `public/research/remaining-gaps.md`):
   - mppiston83: `multiplayer/server-redstone-drops.js` server redstone drop hook; `redstone-drops.js` `crushDrops` per block class; doTileDrops inside the drop; single-player spread fixed.

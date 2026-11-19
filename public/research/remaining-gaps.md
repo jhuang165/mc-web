@@ -2,6 +2,35 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 84
+
+Batch 84 covered these areas:
+- **Boats in multiplayer.** A boat copy draws its water-entry and speed splashes on its own random. The rider's own boat runs the boat physics from the rider's input on their client, with S12 and far position packets correcting it as `xi.a(DDDFFI)V` does. A late joiner gets a spawn state built from the vehicle's current position, rotation and motion.
+- **Thrown entities on the wire.** Arrows, snowballs, eggs, pearls, potions, XP bottles, rockets and eyes of ender reach clients as tracker packets at the native range, frequency and velocity flag (bytecode-read `mn.a(sa)`), and each client copy flies itself between them. Blast-hit arrows set velocityChanged, so their S12 goes out.
+- **Placement refusals.** Every ItemBlock `canPlace` refusal (entities, occupied, support) is withheld from the block C08 and sends the item use; the extra S23 was only the result of the old C08. Lily pads are placed by the native ray trace onto source water, in single player and on the server. Placement collisions and sleeper boxes only see players in the same dimension.
+- **Drops.** A skull drops on any block replacement (explosions, /setblock, /fill, the dragon, fire) unless its no-drop bit is set; the Wither build drops none. The server pops carpet, signs, stems, cake, flowers, crops, ladders and snow layers when their support goes. Creative worlds drop items as in 1.7.10; only a Creative player's own break skips drops. Away-world piston drops lost a doubled half-block offset.
+- **Dedicated-server commands executed.** `Dedicated84Probe` ran the 16 dedicated commands (`netstat` included) on the real classes: 645 rows replay clean. Fixes: /list is op-only, the profile cache learns directory profiles, the one-character argument checks of ban-ip, pardon-ip and kick, the whitelist's seen count, the save-all flush keys, netstat for players.
+- **Mobs.** A zombie that converts alive runs the rest of its update; a projectile hit teleports an enderman corpse; the wither's head particles draw on its own random; the live squid pushes.
+- **Explosions.** The dragon body takes its blast push and its parts are collected before the first hurt; single-player hanging drops spawn at the entity's turn; the ender crystal uses its native box (posY at the centre) and eye height.
+- **Rain and fire.** Boats, falling blocks and fishing hooks get rain in their fire tail (single player, server, away run). Item and orb fizzes play at the feet. `RainFireProbe` (executed) replays a burning primed TNT and minecart through rain, roofs and dry fire.
+- **Commands.** Player-to-player /tp copies the target's yaw and pitch (with a server look op). Falling blocks, carts, hanging entities, arrows, fireballs, eyes and throwables keep a summoned `Fire`; untagged summons get Air 0. `{Item:0}` leaves an empty pot, a meta-only /setblock makes a fresh sign, and /setblock ejects a jukebox's record.
+- **Server speed.** Behind `MC_MPPERF84=on|off|verify` (identical state hashes): cached mob boxes for ball targets (about half the `mobTargets` allocation), indexed loops in entity and item moves, fewer modifier arrays and step results. Batch 83's verify mode no longer throws on dragon tests.
+
+Still open from batch 84:
+- **Multiplayer.**
+  - The rider's boat copy is snapped back to the server's state when more than 2 blocks away, because the local player is still seated from the server's boat; after a dismount the copy returns to tracked following at once.
+  - Fishing hooks still go as exact rows; thrown copies fly without hit targets; extra-dimension stand-in lanes keep exact rows; a thrown entity's spawn state is the first one seen.
+  - The client does not predict a lily pad placed by the item use. Creative players cannot pick up items on the server (natively they can).
+  - Server commands: /publish stays off; the dedicated commands' 64 tab rows are recorded but not replayed; console-sender rows are skipped; the `Invulnerable` /summon tag is not applied. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: boat copy splashes, steering the rider's boat, thrown copies and their particles, rocket trails, the /tp look, plus the batch 67 to 83 lists.
+- **Single player.**
+  - A zombie that dies in the tick it converts; no native records of the conversion tail. Minecarts and other moveEntity users do not rest a non-positive fire counter at -1; carts, hanging entities and falling blocks have no water extinguish. An untagged ocelot summon can still get kittens.
+  - `farmNeighbourChange` also checks the changed cell itself, so farmland set under a solid block turns back at once (single player and, since batch 84, the server); whether native only does this on a neighbour change is unchecked.
+  - The away run has no skull tile store and no eyes or hooks in its blasts. The single-player copy moves from the new packet position, not the last accepted one.
+  - Not seen in a browser: wither particles, lily pads, the empty pot, burning boats and falling blocks in rain, plus the batch 83 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 83
 
 Batch 83 covered these areas:
@@ -16,21 +45,7 @@ Batch 83 covered these areas:
 - **Commands executed.** `CmdExec83Probe` ran /kill, /tp, /clear, the height checks, /achievement and 171 /summon rows on the real classes. Fixes: /kill's message, /clear's matcher, data check and cursor stack, the /tp dismount, the ±30000000 y limit and /summon's truncation, and /summon tags (Fire, OnGround, FallDistance, Air; the dragon and crystal with a tag).
 - **Server speed.** Behind `MC_MPPERF83=on|off|verify` (identical hashes): an exact two-part JavaRandom seed (5 ns a draw instead of 35), frozen per-type sizes, reused push boxes, one player-position shape: 12 to 16 % less heap growth per tick; wall time within noise.
 
-Still open from batch 83:
-- **Multiplayer.**
-  - Boat copies have no splash; the rider's own boat physics; a late joiner gets the last released vehicle state. Rockets, eyes, arrows, thrown balls and hooks have no tracker cadence on the wire.
-  - Only entity refusals send C08 255; occupied and support refusals still send the block edit.
-  - Carpet losing support has no server version; skulls drop only on a piston or player break. The Creative-server "no drops" rule is the port's, not 1.7.10's.
-  - Server commands: /publish stays off; the 15 dedicated-server-only rows are not executed. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: blast-thrown items and boats, boat coasting, fireball splashes, the comparator preview, server piston drops, plus the batch 67 to 82 lists.
-- **Single player.**
-  - A live zombie whose conversion ends skips the rest of its update; an enderman corpse is not teleported by a projectile hit (native has no health test there). Wither head particles use a visual random.
-  - Arrows do not flag a velocity change on a blast hit; the dragon is one list entry, not its parts.
-  - Boats, hooks and falling blocks get no rain in their move step; item and orb fizz plays at posY, not the feet.
-  - /tp to a player keeps the player's own rotation; several kinds keep no fire counter for /summon tags; an empty pot with a non-zero meta shows that meta's plant.
-  - Not seen in a browser: the corpse animations, rain fizzes, the sprint feel, sleeping-player placement, shrub tints, sunflower facing, plus the batch 82 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 83: carried into the batch 84 list above, less what batch 84 fixed.
 
 ## Done in batch 82
 
