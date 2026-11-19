@@ -2389,7 +2389,13 @@ export class EntityWorld {
         if (r && r.ridingEntity === e && !e.dead && order[oi + 1] !== r && this.entities.includes(r)) order.splice(oi + 1, 0, r);
         continue;
       }
-      if (e.type === "fireball") { this._fireballs.tickOne(e); continue; } // a ball (fireballs.js) updates where it stands in the list
+      if (e.type === "fireball") {
+        this._fireballs.tickOne(e); // a ball (fireballs.js) updates where it stands in the list
+        // b82 spblast82: EntityLargeFireball.onImpact (zg.a, bytecode-read) calls World.newExplosion inside the ball's own update, so the blast runs here, before the entities after
+        // the ball move (it used to wait for the drain after the walk). A host without explodeInline keeps the queue.
+        if (this.explodeInline) for (const ev of this.takeExplosions()) this.explodeInline(ev);
+        continue;
+      }
       if (e.removedNow || !this.isActive(e)) continue;
       // Loot queued before this entry (a kill outside the tick: a horse's saddle at onDeath) is flushed first, so the far mob's flushLoot cannot shrink the list below the mark (holes in events)
       if (this.ring && !this.world.isTicking(e.x, e.z)) { this.flushLoot(); farMark = this.events.length; }

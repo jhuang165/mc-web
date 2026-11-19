@@ -16,7 +16,7 @@ import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
 import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt } from '../explosion.js';
 import { JavaRandom } from '../java-random.js';
-import { explodeMobs } from '../explosion-simulation.js';
+import { explodeMobs, explodeNonLiving } from '../explosion-simulation.js';
 import { livingEyeHeight } from '../ai.js';
 import { serverCritical, sendCritFx } from './server-crit-fx.js'; // b73 particles73
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
@@ -232,12 +232,20 @@ export class ServerMobs {
   // b81 blast81 (bytecode-read agw.a(), agw.a(Z), wz.a, aob.a(ahb,IIIagw)): the rays draw World.rand before any entity is hurt; the rest of the block half reads the world
   // after the entities (an ender crystal hurt in the entity part explodes inside this one, through explodeInline), and a TNT block in the list becomes primed TNT at once.
   explode(ev) {
-    const { world, weather, items } = this.host, { x, y, z, size } = ev;
+    const host = this.host, { world, weather, items } = host, { x, y, z, size } = ev;
     if (!(size > 0)) return;
     const list = explosionBlocks(world, x, y, z, size, weather.random, ev.blue ? boundedSkullResistance : explosionResistance);
     const primed = this.host.dispense?.primed, primedBefore = primed ? [...primed] : []; // the entity list doExplosionA took: TNT a nested blast primes is not in it
+    const placer = ev.source && 'fuse' in ev.source ? ev.source.placer ?? null : ev.source ?? null; // Explosion.getExplosivePlacedBy: a TNT's placer, a living exploder, else null
+    const itemsBefore = items?.items?.length ?? null, orbsBefore = host.serverItems?.xp?.orbs?.length ?? null; // the entity list is taken before a kill drops its loot
     explodeMobs({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null });
-    this.host.vehicles?.hanging?.explode(x, y, z, size); // b68 mppaintings: paintings and item frames in the blast
+    // b82 spblast82 (bytecode-read agw.a()): doExplosionA hurts and pushes every entity in its list, so the server's items, orbs, arrows, thrown entities, falling blocks,
+    // minecarts and boats (a broken one drops at once), rockets, eyes, hooks, fireballs and knots get the single-player treatment (explodeNonLiving); only paintings and item
+    // frames (b68 mppaintings) were reached before. The vehicles' world is the swapped dimension's (`host.vehicles`), as the primed TNT below.
+    const vehicles = host.vehicles, drop = d => { if (d.stack) items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); };
+    explodeNonLiving({ world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
+      hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
+      hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) }, x, y, z, size, ev.source ?? null, false, drop, itemsBefore, orbsBefore, placer);
     for (const t of primedBefore) if (t !== ev.source) explodeTnt(world, t, x, y, z, size); // b81 blast81: Explosion.doExplosionA pushes other primed TNT (no damage), as applyExplosion
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
@@ -259,7 +267,6 @@ export class ServerMobs {
     for (const at of out.released) this.mobs.spawnSilverfishAt?.(...at); // b67: BlockSilverfish.dropBlockAsItemWithChance in doExplosionB (explosion.js released)
     // b81 blast81: BlockTNT.onBlockDestroyedByExplosion (aob.a(ahb,IIIagw), bytecode-read): EntityTNTPrimed at the cell centre, placer getExplosivePlacedBy, fuse rand.nextInt(20) + 10
     // (drawn in explosionOutcome), no sound. It used to be dropped here, so a server TNT block in a blast just vanished.
-    const placer = ev.source && 'fuse' in ev.source ? ev.source.placer ?? null : ev.source ?? null; // Explosion.getExplosivePlacedBy: a TNT's placer, a living exploder, else null
     for (const b of out.primed) this.host.dispense?.prime(b.x, b.y, b.z, false, { fuse: b.fuse, placer });
   }
   // The one SpawnerAnimals pass of the world tick (WorldServer.tick: aho.a(world, hostile, peaceful, totalTime % 400 == 0)): the chunks of every player, the cap
