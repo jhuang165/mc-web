@@ -27,6 +27,7 @@ import { PHYSICS } from '../world.js';
 import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { mobCandidate, dressMob } from '../sp-dispense76.js'; // b78 loot78: the single-player mob selector and dressing
 import { skullEntry, skullWire } from './skull-look.js'; // b81 mpcopies81
+import { ThrownTracks } from './thrown-tracks.js'; // b84 mpthrown84
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
@@ -48,6 +49,8 @@ export class ServerDispense {
     this.potions = null; // WitchPotions over the server's EntityWorld, made on first use (ServerMobs is built after the container ticks)
     this.primed = [];
     this.ballTracks = new BallTracks(); // b81 blast81
+    // b84 mpthrown84: arrows, thrown balls, rockets and eyes of this instance's own dimension go out as tracker packets (thrown-tracks.js); a stand-in lane keeps the exact rows
+    this.thrownTracks = new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e) });
     this.rockets = new FireworkRockets();
     this.ids = new WeakMap(); this.nextId = 0;
     this.fx = [];  // dispFx of this tick, in order
@@ -61,7 +64,7 @@ export class ServerDispense {
   get world() { return this.dim ? (this.dimState(this.dim)?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
   get eyeSystem() { return this._eyes ??= new ServerEyes(this); } // b64 mpend2: made on first use (the constructor's load may reach it first)
-  get any() { return this._eyes?.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
+  get any() { return this._eyes?.active || this.thrownTracks.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }
 
   // The host of dispense.js's engine (installDispensers). `stop(...)` is the old "put the stack back" for what has no entity path here.
@@ -210,8 +213,7 @@ export class ServerDispense {
     }
     if (this.rockets.rockets.length) this.rockets.tick(this.sim.world, {
       sound: (name, x, y, z, volume, pitch) => this.fx.push({ k: 'sound', name, x, y, z, volume, pitch }),
-      spark: (x, y, z, vx, vy, vz) => this.fx.push({ k: 'spark', x, y, z, vx, vy, vz }),
-      explode: (x, y, z, vx, vy, vz, fireworks) => this.fx.push({ k: 'firework', x, y, z, vx, vy, vz, fireworks }), // World.makeFireworks (status 17) to the clients tracking it
+      clientCopies: true, // b84 mpthrown84: the trail and the burst belong to the client copy (its own onUpdate and the S1A 17 of the tracker lane)
       rain: this.rainAt, // b83 rain83: a burning rocket in the rain fizzes
     });
   }
@@ -309,18 +311,29 @@ export class ServerDispense {
     const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0, lane = dim === this.dim ? this : this.extra.get(dim);
     if (lane) {
       // b81 throwfire81: `f` 1 while the fire counter runs (Entity.isBurning, the watched flag 0 natively): the client draws the flames (fire-overlays.js, projectile-renderer.js)
-      for (const a of lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0, ...(a.fire > 0 ? { f: 1 } : {}) });
-      for (const b of lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, ...(b.fire > 0 ? { f: 1 } : {}) });
-      for (const b of lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0, ...(b.fire > 0 ? { f: 1 } : {}) });
+      const tracked = lane === this; // b84 mpthrown84: this instance's arrows, balls, potions, rockets and eyes ride the tracker lane (`trk`)
+      for (const a of tracked ? [] : lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0, ...(a.fire > 0 ? { f: 1 } : {}) });
+      for (const b of tracked ? [] : lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, ...(b.fire > 0 ? { f: 1 } : {}) });
+      for (const b of tracked ? [] : lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0, ...(b.fire > 0 ? { f: 1 } : {}) });
     }
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
-    if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2
+    // b84 mpthrown84: eyes (b64 mpend2 rows) and rockets are tracker rows now
     // b82 fireext82: `f` for a TNT whose moveEntity counter is above 0 (natively the copy's own counter: xw never sets flag 0) and for a burning rocket or eye (flag 0)
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse, ...(t.fire > 0 ? { f: 1 } : {}) });
-    for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z, ...(r.fire > 0 ? { f: 1 } : {}) });
+    for (const r of []) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z, ...(r.fire > 0 ? { f: 1 } : {}) });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, ...skullWire(b), t: this.ballTracks.row(b) }); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js); b82 mpball82: the angle fields a skull row has (skull-look.js)
     for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b), t: this.ballTracks.row(b) }); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js); b81 blast81: `t` the tracker packets the copy flies on (fireball-copy.js)
+    return out;
+  }
+  // b84 mpthrown84: the live entities of the tracker lane, with their OBJECT_KINDS names
+  thrownList() {
+    const out = [];
+    for (const a of this.arrows.list) if (!a.dead) out.push({ e: a, kind: 'arrow' });
+    for (const b of this.balls.balls) if (!b.dead && ['snowball', 'egg', 'enderPearl'].includes(b.kind)) out.push({ e: b, kind: b.kind });
+    for (const b of this.potions?.projectiles.balls ?? []) if (!b.dead && (b.kind === 'potion' || b.kind === 'expBottle')) out.push({ e: b, kind: b.kind });
+    for (const r of this.rockets.rockets) if (!r.dead) out.push({ e: r, kind: 'firework' });
+    for (const e of this._eyes?.system.eyes ?? []) if (!e.dead) out.push({ e, kind: 'eyeOfEnder' });
     return out;
   }
   // Called by the simulation's tick tail: queues dispEnts / dispFx / projCollect on each player (`dispOut`, sent by server.js). A player who just saw entities gets one empty
@@ -330,12 +343,15 @@ export class ServerDispense {
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
     for (const b of [...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]) if (!b.dead) b.track ??= skullEntry(b); // b81 mpcopies81: the S0E angles of the join (a ball that never ran the tickOne hooks)
     this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass; b82 mpball82: the one entry also sends the look packets and the burning flag's S1C (fireball-copy.js), and sets `lookSent` for skullWire
+    const here = new Map(); for (const [id, p] of this.sim.players) if ((p.dimension | 0) === this.dim) here.set(id, p);
+    const trk = this.thrownTracks.update(this.thrownList(), here); // b84 mpthrown84
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)
       const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.k === 'explode' ? s27Reaches(e, p.position) : (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < NEAR)).map(e => e.k === 'explode' ? s27Of(e, p) : e);
       const msgs = p.dispOut ??= [];
-      if (ents.length || p.dispSeen > 0) msgs.push({ type: 'dispEnts', ents });
+      const rows = dim === this.dim ? trk.get(p.id) : null, live = dim === this.dim && this.thrownTracks.tracking(p.id);
+      if (ents.length || p.dispSeen > 0 || rows || live) msgs.push({ type: 'dispEnts', ents, ...(rows || live ? { trk: rows ?? [] } : {}) }); // b84: while a copy exists the client needs a message each tick to update it
       p.dispSeen = ents.length ? (ents.some(e => e.t) ? 2 : 1) : Math.max(0, (p.dispSeen | 0) - 1); // b81 blast81: a ball's copy runs two more updates after its row is gone (fireball-copy.js), so two empty snapshots
       if (events.length) msgs.push({ type: 'dispFx', events });
       const got = taken.filter(c => c.dim === dim && (c.x - p.position.x) ** 2 + (c.z - p.position.z) ** 2 < NEAR);

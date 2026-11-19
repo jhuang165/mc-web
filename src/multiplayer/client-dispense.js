@@ -5,6 +5,7 @@
 // `dispFx` is the one-shot effects: explode, splash (potion or bottle glass), firework (burst), spark (rocket trail), sound. The hooks do the drawing and playing (main.js).
 import { GaussianRandom } from '../projectiles.js';
 import { s27Decode } from "./server-explosion-packet.js"; // b79 explfx79
+import { ThrownCopies } from './thrown-copy.js'; // b84 mpthrown84
 import { ballCopyLook } from "./skull-look.js"; // b81 mpcopies81: the skull copy's angles (spawn bytes, own turn, look packets); b82 mpball82: the fireballs' too
 const LOOK_BALLS = new Set(['fireball', 'smallFireball', 'witherSkull']);
 const ARROW_FIELDS = ['yaw', 'pitch'];
@@ -12,10 +13,18 @@ const ARROW_FIELDS = ['yaw', 'pitch'];
 export class RemoteDispense {
   // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row), eyeTrail(row, vx, vy, vz), ballFx(row),
   // ballWet(row) (b82: Entity.isInWater of a ball row at px/py/pz, for the angles of a row whose copy holds none)
-  constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; }
-  clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; }
+  constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; this.copies = null; }
+  clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; this.copies?.clear(); }
   apply(message) {
-    if (message.type === 'dispEnts') this.ents(message.ents ?? []);
+    if (message.type === 'dispEnts') {
+      this.ents(message.ents ?? []);
+      // b84 mpthrown84: tracker rows (`trk`) for arrows, thrown balls, rockets and eyes; the copies update first, then take the packets (thrown-copy.js). Old rows (`ents`) still work.
+      if (message.trk || this.copies?.size) {
+        this.copies ??= new ThrownCopies({ particle: this.hooks.copyParticle, firework: this.hooks.firework, eyeTrail: this.hooks.eyeTrail, balls: this.hooks.copyBalls });
+        const { arrows, balls } = this.copies.tick(message.trk, this.hooks.copyWorld?.() ?? null, this.hooks.copyPlayer?.() ?? null);
+        this.arrows = [...this.arrows, ...arrows]; this.balls = [...this.balls, ...balls];
+      }
+    }
     else if (message.type === 'dispFx') this.events(message.events ?? []);
     else if (message.type === 'projCollect') for (const t of message.taken ?? []) this.hooks.collect?.(t.i, t.by, Number.isFinite(t.x) && Number.isFinite(t.y) && Number.isFinite(t.z) ? { x: t.x, y: t.y, z: t.z } : null); // b63: the arrow's last place, for the fly-in (its row is already gone from dispEnts) // S0D for an arrow: the pop sound arrives as a dispFx sound
   }

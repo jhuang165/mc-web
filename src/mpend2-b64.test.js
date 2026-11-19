@@ -79,7 +79,7 @@ test('an eye of ender thrown in the air flies to the nearest stronghold; others 
   assert.ok((eye.tx - eye.x) * (goal[0] - eye.x) + (eye.tz - eye.z) * (goal[2] - eye.z) > 0, 'towards the stronghold');
   s.input('a', input()); s.input('b', input());
   s.tick();
-  assert.ok(b.dispOut?.some(m => m.type === 'dispEnts' && m.ents.some(e => e.kind === 'eyeOfEnder')), 'Bob sees the eye');
+  assert.ok(b.dispOut?.some(m => m.type === 'dispEnts' && m.trk?.some(r => r.k === 'eyeOfEnder')), 'Bob sees the eye'); // b84 mpthrown84: a tracker row (EntityEnderEye 64/4/true)
   // the saved eye comes back
   assert.ok(s.save().projectiles?.lanes?.[0]?.eyes?.eyes?.length === 1, 'an eye in flight is saved');
   eye.drops = true;
