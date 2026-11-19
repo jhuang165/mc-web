@@ -6,6 +6,7 @@
 // re-bucketed by `markMoved` (called where positions are written outside a mob's own move: seats, dismounts, piston pushes) and by push itself for the mob, its mount
 // and its rider; a changed array length, a moved list index, or a disabled grid falls back to the full scan (`lookup` returns null). MC_PUSHGRID=off disables it;
 // MC_PUSHGRID=verify runs both and throws on the first difference (tests and the benchmark use it to prove the two agree).
+import { fineSorted } from "./mpperf83-fast.js"; // b83 mpperf83: FineGrid.query sorts short candidate lists in place
 const CELL = 8, REACH = 12 + 1e-6;
 export const pushGridConfig = { mode: (typeof process !== "undefined" && process.env?.MC_PUSHGRID) || "on" }; // tests set `mode` ("on", "off", "verify")
 const MIN = (typeof process !== "undefined" && +process.env?.MC_PUSHGRID_MIN) || 200; // measured: no gain at 100 and 300 mobs, about 25% at 600, so smaller scenes keep the plain scan
@@ -83,7 +84,7 @@ export const fineConfig = { mode: (typeof process !== "undefined" && process.env
 export class FineGrid {
   constructor(list, halfOf) {
     this.list = list; this.len = list.length; this.ents = list.slice(); this.halfOf = halfOf; this.cells = new Map(); this.idxOf = new Map(); this.keyAt = new Array(list.length); this.big = []; this.bad = false; this.maxHalf = 0;
-    this.buf = new Int32Array(256);
+    this.buf = new Int32Array(256); this.n = 0;
     for (let i = 0; i < list.length; i++) {
       const o = list[i]; this.idxOf.set(o, i);
       const h = halfOf(o);
@@ -104,17 +105,22 @@ export class FineGrid {
     if (k === k) this.cellList(k).push(i);
     this.keyAt[i] = k;
   }
+  add(c) {
+    let n = this.n, buf = this.buf;
+    if (n + c.length > buf.length) { const g = new Int32Array(Math.max(buf.length * 2, n + c.length)); g.set(buf); this.buf = buf = g; }
+    for (let i = 0; i < c.length; i++) buf[n++] = c[i];
+    this.n = n;
+  }
   // Candidates for a box `near` ([minX, minY, minZ, maxX, maxY, maxZ]), list order; null when the array no longer matches.
   query(near) {
     const list = this.list, ents = this.ents;
     if (this.bad || list.length !== this.len) return null;
     const H = this.maxHalf + 1e-3, x0 = Math.floor((near[0] - H) / FCELL), x1 = Math.floor((near[3] + H) / FCELL), z0 = Math.floor((near[2] - H) / FCELL), z1 = Math.floor((near[5] + H) / FCELL);
     if (!(x1 - x0 < 64 && z1 - z0 < 64)) return null; // NaN or an enormous box: the full scan
-    let n = 0, buf = this.buf;
-    const add = (c) => { if (n + c.length > buf.length) { const g = new Int32Array(Math.max(buf.length * 2, n + c.length)); g.set(buf); this.buf = buf = g; } for (let i = 0; i < c.length; i++) buf[n++] = c[i]; };
-    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) { const c = this.cells.get(cx * 1048576 + cz); if (c) add(c); }
-    if (this.big.length) add(this.big);
-    const idx = buf.subarray(0, n).sort(), out = new Array(n);
+    this.n = 0; // b83 mpperf83: `add` is a method (no closure per query) and short index lists sort in place (fineSorted, no subarray view)
+    for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) { const c = this.cells.get(cx * 1048576 + cz); if (c) this.add(c); }
+    if (this.big.length) this.add(this.big);
+    const n = this.n, idx = fineSorted(this.buf, n), out = new Array(n);
     for (let i = 0; i < n; i++) { const j = idx[i], o = ents[j]; if (list[j] !== o) { this.bad = true; return null; } out[i] = o; }
     return out;
   }

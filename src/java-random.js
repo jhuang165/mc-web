@@ -1,9 +1,12 @@
 // java.util.Random; shared leaf module for terrain and live simulation.
+import { lcgNext, seedHalves, seedOf } from "./mpperf83-fast.js"; // b83 mpperf83: the 48-bit seed as two 24-bit numbers (hi, lo); `seed` is a BigInt accessor
 const MASK = (1n << 48n) - 1n;
 export class JavaRandom {
   constructor(seed) {
     this.setSeed(seed);
   }
+  get seed() { return seedOf(this); }
+  set seed(v) { seedHalves(this, v); }
   setSeed(seed) {
     this.seed = (BigInt(seed) ^ 0x5deece66dn) & MASK;
     this.haveNextGaussian = false;
@@ -33,8 +36,7 @@ export class JavaRandom {
     return true;
   }
   next(bits) {
-    this.seed = (this.seed * 0x5deece66dn + 0xbn) & MASK;
-    return Number(BigInt.asIntN(32, this.seed >> BigInt(48 - bits)));
+    return lcgNext(this, bits); // (seed * 0x5DEECE66D + 0xB) & (2^48 - 1), then (int)(seed >>> (48 - bits)) (mpperf83-fast.js lcgBig is the BigInt form)
   }
   nextFloat() {
     return this.next(24) / (1 << 24);

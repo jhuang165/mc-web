@@ -1,8 +1,9 @@
-import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
+import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved, fineConfig } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
+import { typeSize, pushNearBox, pushNearDone, meetsArg } from "./mpperf83-fast.js"; // b83 mpperf83
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -2075,7 +2076,7 @@ export class EntityWorld {
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       horseCanMate,
       horseRunAround:(e)=>this.horseRunAround(e),
-      moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,{...base,width:base.width*scale,height:base.height*scale},forward);},
+      moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,typeSize(base,scale),forward);},
       wearHeld:(amount)=>this.wearStick?.(this.ai.survival,amount),
       eatGrass:(e)=>this.eatGrass(e),
       mobStatus:(e,s)=>this.mobStatus?.(e,s), // b61: EntityAIEatGrass.startExecuting sends status 10 (dedicated server, multiplayer/server-mobs.js)
@@ -2432,7 +2433,7 @@ export class EntityWorld {
       e.prevRotationYawHead = e.rotationYawHead;
       e.prevRotationPitch = e.rotationPitch;
       e.prevLimbSwingAmount = e.limbSwingAmount;
-      const base=ENTITY_TYPES[e.type],scale=mobScale(e),t={...base,width:base.width*scale,height:base.height*scale};
+      const base=ENTITY_TYPES[e.type],scale=mobScale(e),t=typeSize(base,scale); // b83 mpperf83: one frozen { ...base, width, height } per (type, scale)
       if (e.type === "ender_dragon") { dragonUpdate(this, e, player, survival); continue; } // EntityDragon (dragon-mobs.js)
       if (e.type === "ender_crystal") { if (e.health > 0) crystalUpdate(this, e); continue; } // EntityEnderCrystal.onUpdate: fire in the End, nothing else
       // EntityMob.onUpdate (yg.h): super.onUpdate() runs in full (movement, AI and their draws, a corpse's death tick) and then, on Peaceful, the mob is setDead
@@ -2667,10 +2668,10 @@ export class EntityWorld {
   // server: every pushable entity (living mobs until setDead, and the player) whose box meets
   // this one's grown by 0.2 sideways runs applyEntityCollision against it.
   push(e, t) {
-    const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+    const near = pushNearBox(e, t.width, t.height, pushBox); // b83 mpperf83: pushBox(e, w, h) grown by 0.2 sideways, in a reused array (released at the end)
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
-    const cand = pushNear(this.entities, e, near, pushHalf, (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, this, pushBox)) ?? pushCandidates(this.entities, e); // b78 (push-grid.js FineGrid): only the entities whose box can reach this one's; b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
+    const cand = pushNear(this.entities, e, near, pushHalf, meetsArg(fineConfig.mode, () => (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, this, pushBox))) ?? pushCandidates(this.entities, e); // b78 (push-grid.js FineGrid): only the entities whose box can reach this one's; b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
     for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
@@ -2681,6 +2682,7 @@ export class EntityWorld {
     this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
     if (p?.alive && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
+    pushNearDone(near);
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
   // The end of EntityIronGolem.onLivingUpdate: the attack/rose counters and the walking dust (iron-golem.js golemTail).
