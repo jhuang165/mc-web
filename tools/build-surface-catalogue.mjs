@@ -25,7 +25,7 @@ const CMD_PARTIAL = {
   kill: 'kills the sender as in 1.7.10', toggledownfall: '', weather: 'CommandWeather timers', xp: 'L suffix, local player',
   tp: 'selectors resolve to the local player', give: 'supported item data tags only', effect: 'effects limited to the port\'s Effects table',
   enchant: 'local player', me: '', seed: '', help: 'paged, 7 per page', tell: 'local player only', say: '',
-  spawnpoint: '', setworldspawn: 'integer coordinates, y + 0.5 as natively; stored in the world record; spawn search unchanged', gamerule: 'all nine defaults plus custom keys',
+  spawnpoint: '', setworldspawn: 'integer coordinates, y + 0.5 as natively; stored in the world record; spawn search unchanged', gamerule: 'the nine defaults; an unknown key is never created (b82 correction, executed)',
   clear: 'local player', testfor: 'command-block only, silent on success, as natively', playsound: '', summon: `all ${Object.keys(SUMMONABLE).length} concrete EntityList registrations are /summon types (SUMMONABLE: mobs, carts, End crystal, items, orbs, TNT, falling blocks, boats, hanging entities, projectiles); unsupported tag keys are reported as ignored`,
   setblock: 'supported tile data tags only', testforblock: 'typed subset comparison', publish: 'LAN settings only, no browser socket hosting',
 };
@@ -37,14 +37,35 @@ const CMD_B13 = {
   debug: 'Profiler.getProfilingData probed on a filled map; the result file follows CommandDebug; the browser\'s profiler sections are not the server\'s',
   scoreboard: 'objectives/players/teams output, state and data/scoreboard.dat probed (scoreboard-reference.json); sidebar, Tab score, team chat prefix; belowName has no other players to show',
 };
+// Batch 82 commands82 audit (2026-11-18): tools/probes/CmdArgsProbe.java ran the unchanged 1.7.10 command classes through ICommandSender (cmd-args-reference.json, 142 Tab texts,
+// 265 processCommand forms); src/cmd-args-b82.test.js replays them. "verified" = executed and matching; "missing" = what is still not the game's.
+const B82 = 'b82 2026-11-18 [cmd-args](cmd-args-reference.json)';
+const CMD_B82 = {
+  time: 'verified: Tab, 19 forms', gamemode: 'verified: Tab, 16 forms (success lines use notify flag 1: no copy to the sender; "self" when the target is the sender); missing: a command block still records the success line as LastOutput, getCommandSenderAsPlayer\'s literal "You must specify which player..." text',
+  difficulty: 'verified: Tab, 14 forms (fixed: the argument is the options.difficulty.* translation)', defaultgamemode: 'verified: 7 forms; fixed: Tab offers players at index 1 (inherited from CommandGameMode)',
+  kill: 'Tab verified; processCommand not executed (the double crashes)', toggledownfall: 'verified: 1 form', weather: 'verified: Tab, 12 forms', xp: 'verified: Tab, 16 forms',
+  tp: 'verified: Tab, 9 forms (fixed: 5+ arguments do nothing; commands.tp.notSameDimension on the server, bytecode-read); missing: player-to-player and coordinate moves not executed (the double has no net handler)',
+  give: 'verified: Tab (fixed: items 256+ by id, then blocks), 13 forms', effect: 'verified: 15 forms; fixed: Tab offers players only, the id is parseIntWithMin 1, "clear" is case-sensitive',
+  enchant: 'verified: Tab, 10 forms; fixed: id 0..255 and the native check order (noItem, notFound, cantEnchant before the level)', me: 'verified: Tab', seed: 'verified: 2 forms; fixed: sent to the sender only, not through notifyAdmins',
+  help: 'verified: 13 forms; fixed: no argument Tab completion, -1 / 1.5 / 2147483648 are commands.generic.notFound', tell: 'verified: Tab', say: 'verified: Tab',
+  spawnpoint: 'verified: 8 forms; fixed: Tab offers players at index 0 and 1', setworldspawn: 'verified: Tab, 6 forms', debug: 'verified: Tab, 4 forms; /debug stop not executed',
+  gamerule: 'verified: 8 forms; fixed: TreeMap-sorted Tab, the query is ChatComponentText name + siblings " = " and value, unknown rules notify commands.gamerule.norule',
+  clear: 'verified: 3 forms; fixed: Tab offers items at index 1; missing: forms that reach the inventory not executed (the double has no inventory container)', testfor: 'verified: 3 forms; fixed: no Tab completion',
+  spreadplayers: 'verified: Tab, 10 forms', playsound: 'verified: 8 forms; fixed: no Tab completion', scoreboard: 'verified: Tab, 8 forms; objectives-add criteria Tab not executed (no StatList in the double)',
+  achievement: 'verified: 5 forms; give Tab and unknownAchievement not executed (no AchievementList in the double)', summon: 'verified: 3 forms; fixed: Tab lists all 57 EntityList names (Mob and Monster too) in HashMap order; y range not executed',
+  setblock: 'verified: 10 forms; fixed: Tab block order by id and index 5 replace/destroy/keep, an unknown block is commands.give.notFound; y range not executed',
+  testforblock: 'verified: 14 forms; fixed: Block.getBlockFromName (numbers without a deprecation line, an unknown id is air), failed.tile names are en_US getLocalizedName, success goes to the sender only; y range not executed',
+  tellraw: 'verified: Tab, 3 forms; malformed-JSON texts differ by the probe\'s Gson version only', publish: 'Tab verified; not executed (no LAN in the double)',
+};
+const b82Note = name => (CMD_B82[name] ? `; ${B82}: ${CMD_B82[name]}` : '');
 // The repo's dedicated server (src/server-broadcast.js SERVER_COMMANDS, batches 59-67) runs a subset over named players: operators only for the world
 // and player commands; /summon joined in batch 67 (server-summon.js); /setblock, /testfor, /testforblock, /playsound, /setworldspawn, /spreadplayers and /debug joined in batch 68 (server-worldcmds.js); /publish is not on it.
 const serverNote = name => SERVER_COMMANDS.has(name) ? '; also on the dedicated server (named players, src/server-broadcast.js)' : '; not on the dedicated server';
 const commandStatus = c => {
-  if (c.scope === 'dedicated') return SERVER_COMMANDS.has(c.name) ? 'Partial; dedicated-server command, not registered in the integrated server; implemented on the repo\'s dedicated server (src/server-broadcast.js SERVER_COMMANDS; admin commands in src/multiplayer/server-admin.js, op levels, native refusal texts)' : 'Out of scope; dedicated-server only, not registered in the integrated server, and not implemented on the repo\'s dedicated server either (not in SERVER_COMMANDS)';
-  if (c.name in CMD_B13) return `Partial; [batch 13 commands](commands-b13.md); ${CMD_B13[c.name]}${serverNote(c.name)}`;
+  if (c.scope === 'dedicated') return SERVER_COMMANDS.has(c.name) ? 'Partial; dedicated-server command, not registered in the integrated server; implemented on the repo\'s dedicated server (src/server-broadcast.js SERVER_COMMANDS; admin commands in src/multiplayer/server-admin.js, op levels, native refusal texts); ' + B82 + ': not re-executed (the probe covers the 32 integrated classes; Tab bytecode-read in batch 69)' : 'Out of scope; dedicated-server only, not registered in the integrated server, and not implemented on the repo\'s dedicated server either (not in SERVER_COMMANDS)';
+  if (c.name in CMD_B13) return `Partial; [batch 13 commands](commands-b13.md); ${CMD_B13[c.name]}${serverNote(c.name)}${b82Note(c.name)}`;
   assert(c.name in CMD_PARTIAL, c.name);
-  return `Partial; [commands](commands.md)${CMD_PARTIAL[c.name] ? '; ' + CMD_PARTIAL[c.name] : ''}${serverNote(c.name)}`;
+  return `Partial; [commands](commands.md)${CMD_PARTIAL[c.name] ? '; ' + CMD_PARTIAL[c.name] : ''}${serverNote(c.name)}${b82Note(c.name)}`;
 };
 const partialCount = commands.filter(c => c.scope !== 'dedicated').length, dedicatedCount = commands.length - partialCount;
 const dedicatedMissing = commands.filter(c => c.scope === 'dedicated' && !SERVER_COMMANDS.has(c.name));

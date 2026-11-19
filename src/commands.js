@@ -12,10 +12,12 @@ import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { createExtraCommands } from "./commands-extra.js";
 import { createScoreboardCommands, joinNiceString } from "./commands-scoreboard.js";
-import { translation, text as textComponent } from "./chat-component.js";
+import { translation, text as textComponent, translateKey } from "./chat-component.js";
 import { senderComponent } from "./team-names.js";
 import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
+import { BLOCK_UNLOCALIZED } from "./block-unlocalized-data.js";
+import { javaStringHash } from "./multiplayer/user-list-order.js";
 
 // ---- java.lang.String.format subset used by the lang strings: %s %d %.Nf, with %n$ positions ----
 export class FormatError extends Error {}
@@ -125,6 +127,18 @@ export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 
 // Original entity names the port can create (EntityList names -> entities.js types).
 export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, ...ENTITY_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither", EnderDragon: "ender_dragon", Giant: "giant" };
+// b82 commands82 (executed, cmd-args-reference.json): Item.itemRegistry.getKeys() iterates the items (ids 256 and up) then the block items, each by id; Block.blockRegistry.getKeys()
+// by id; EntityList.func_151515_b() is the stringToClassMapping key set (a HashMap filled in id order, Mob and Monster included).
+// java.util.HashMap<String, ?> iteration order (the same emulation as multiplayer/server-tabcomplete.js javaHashOrder, which imports this module).
+const hashOrder = (keys) => {
+  let capacity = 16; while (keys.length > capacity * 0.75) capacity *= 2;
+  const bucket = (k) => { const h = javaStringHash(k); return (h ^ (h >>> 16)) & (capacity - 1); };
+  return keys.map((k, i) => ({ k, b: bucket(k), i })).sort((x, y) => x.b - y.b || x.i - y.i).map((e) => e.k);
+};
+const byIdOrder = (rows) => [...rows].sort((a, b) => a[1] - b[1]).map(([k]) => k);
+const ITEM_KEYS_ORDER = [...byIdOrder(ITEM_REGISTRY.filter(([, id]) => id >= 256)), ...byIdOrder(ITEM_REGISTRY.filter(([, id]) => id < 256))];
+const BLOCK_KEYS_ORDER = byIdOrder(BLOCK_REGISTRY);
+const ENTITY_KEYS_ORDER = hashOrder([...new Set(byIdOrder(ENTITY_NAMES))]);
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
 export const UNSUPPORTED = new Set(); // every registered 1.7.10 command has a handler since batch 13 (/scoreboard last)
 
@@ -140,7 +154,8 @@ export const ALWAYS_ALLOWED = new Set(["tell", "help", "me", "seed"]);
 export const cheatsAllowed = (record) => (typeof record?.allowCommands === "boolean" ? record.allowCommands : record?.mode === "creative");
 export const canUse = (command, cheats) => ALWAYS_ALLOWED.has(command.name) || (cheats && command.permission <= 4);
 
-const PLAYER_ARG = { gamemode: [1], give: [0], clear: [0], xp: [1], effect: [0], enchant: [0], tp: [0, 1], tell: [0], spawnpoint: [0], testfor: [0], playsound: [1] };
+// addTabCompletionOptions positions that list getAllUsernames (b82, executed): /defaultgamemode inherits CommandGameMode's; /testfor and /playsound have none.
+const PLAYER_ARG = { gamemode: [1], defaultgamemode: [1], give: [0], clear: [0], xp: [1], effect: [0], enchant: [0], tp: [0, 1], tell: [0], spawnpoint: [0, 1] };
 
 export function createCommandRunner(host) {
   const name = () => host.name || "Player";
@@ -173,6 +188,13 @@ export function createCommandRunner(host) {
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
   // The ChatComponentTranslation(key, args) the native sender receives travels beside the text (a command block keeps it as LastOutput); a number argument is Double/Integer.toString.
   const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args), translation(key, ...args));
+  // b82: func_152374_a with flag 1 (only CommandGameMode, bytecode-read): the other ops get chat.type.admin, the sender gets no copy (and a command block no LastOutput).
+  // `args` may hold components: the text line uses their unformatted text.
+  const plainArgs = (args) => args.map((v) => (v && typeof v === "object" && typeof v.unformatted === "function" ? v.unformatted() : v));
+  const feedbackFlags = (flags, key, ...args) => {
+    if (!(flags & 1)) return (host.feedback ?? say)(tr(key, ...plainArgs(args)), translation(key, ...args));
+    host.feedback?.(tr(key, ...plainArgs(args)), translation(key, ...args), flags);
+  };
   // CommandBase.getPlayer: PlayerSelector.matchOnePlayer (exactly one match), else the online player of that name (ServerConfigurationManager.func_152612_a), else not found.
   const anyPlayer = (s) => {
     const selected = selectLocalPlayer(s, host);
@@ -214,8 +236,18 @@ export function createCommandRunner(host) {
       say("§7" + tr("commands.generic.deprecatedId", blockById.get(Number(text))), coloured("gray", "commands.generic.deprecatedId", blockById.get(Number(text))));
       return Number(text);
     }
+    throw numberInvalid("commands.give.notFound", text); // b82: CommandBase.getBlockByText (g) throws commands.give.notFound (executed)
+  };
+  // b82: CommandTestForBlock uses Block.getBlockFromName (aji.b, executed): a registry name, else Integer.parseInt with no deprecation line, an unknown id is the
+  // registry's default (air); anything else is commands.setblock.notFound.
+  const blockFromName = (text) => {
+    const key = withNamespace(text);
+    if (blockByName.has(key)) return blockByName.get(key);
+    if (INT_RE.test(text) && Math.abs(Number(text)) <= 2147483647) return blockById.has(Number(text)) ? Number(text) : 0;
     throw numberInvalid("commands.setblock.notFound", text);
   };
+  // Block.getLocalizedName through StatCollector: the client's language on the integrated server (LanguageManager replaces StringTranslate), en_US on a dedicated one.
+  const blockLocalName = (id) => translateKey((BLOCK_UNLOCALIZED[blockById.get(id) ?? "minecraft:air"] ?? "tile.air") + ".name");
   const pos = () => host.position();
   const usage = (key) => { throw wrongUsage(key); };
   const note = (keys) => { if (keys?.length) say("§7Not kept in this build: " + [...new Set(keys)].join(", ")); };
@@ -241,11 +273,13 @@ export function createCommandRunner(host) {
       const pages = Math.floor((list.length - 1) / 7);
       let page = 0;
       if (a.length > 0) {
-        if (INT_RE.test(a[0]) && Math.abs(Number(a[0])) <= 2147483647) page = parseIntBounded(a[0], 1, pages + 1) - 1;
-        else {
+        // b82 (bytecode-read, executed): parseIntBounded first; on its NumberInvalidException a known command name or alias answers its usage, a text that
+        // MathHelper.parseIntWithDefault(text, -1) reads as anything but -1 rethrows the number error, and the rest (-1, 1.5, 2147483648) is commands.generic.notFound.
+        try { page = parseIntBounded(a[0], 1, pages + 1) - 1; } catch (e) {
           const c = BY_NAME.get(a[0]);
-          if (!c) { const n = Number.parseInt(a[0], 10); if (Number.isNaN(n)) throw new CommandException("commands.generic.notFound", [], "notfound"); }
-          throw wrongUsage(c.usage);
+          if (c) throw wrongUsage(c.usage);
+          if (INT_RE.test(a[0]) && Math.abs(Number(a[0])) <= 2147483647 && Number(a[0]) !== -1) throw e;
+          throw new CommandException("commands.generic.notFound", [], "notfound");
         }
       }
       say("§2" + tr("commands.help.header", page + 1, pages + 1), coloured("dark_green", "commands.help.header", page + 1, pages + 1));
@@ -273,7 +307,7 @@ export function createCommandRunner(host) {
       (host.deliver ? (t, c) => host.deliver(target, t, c) : host.broadcast)?.(tr("commands.message.display.incoming", name(), message.unformatted()), incoming);
       say(tr("commands.message.display.outgoing", target, message.unformatted()), outgoing);
     },
-    seed() { feedback("commands.seed.success", String(host.seed())); },
+    seed() { const s = String(host.seed()); say(tr("commands.seed.success", s), translation("commands.seed.success", s)); }, // b82: sender.addChatMessage, not notifyAdmins (executed)
     // CommandListPlayers (ay): commands.players.list (online, max), then the names (ServerConfigurationManager.func_152609_b: "name (uuid)" with the "uuids" argument).
     list(a) {
       if (host.listPlayers) {
@@ -293,8 +327,11 @@ export function createCommandRunner(host) {
       if (a.length < 1) usage("commands.gamemode.usage");
       const mode = gameMode(a[0]), target = targetArg(a, 1);
       host.setGameMode(mode);
-      (host.targetPrint ?? say)(tr("gameMode.changed"), translation("gameMode.changed")); // the target gets this line, not the sender
-      feedback(target === name() && a.length < 2 ? "commands.gamemode.success.self" : "commands.gamemode.success.other", ...(a.length < 2 ? [modeText(mode)] : [target, modeText(mode)]));
+      (host.targetPrint ?? say)(tr("gameMode.changed"), translation("gameMode.changed")); // the target gets this line (S2B state 3), not the sender
+      // b82 (bytecode-read, executed): "self" when the target is the sender, whatever the argument count; both with flag 1 and the mode as a ChatComponentTranslation.
+      const self = target.toLowerCase() === name().toLowerCase() && !host.isCommandBlock; // name(): the sender, also in a redirected run
+      if (self) feedbackFlags(1, "commands.gamemode.success.self", translation("gameMode." + mode));
+      else feedbackFlags(1, "commands.gamemode.success.other", target, translation("gameMode." + mode));
     },
     defaultgamemode(a) {
       if (a.length < 1) usage("commands.defaultgamemode.usage");
@@ -304,14 +341,17 @@ export function createCommandRunner(host) {
     },
     gamerule(a) {
       const r = rules();
+      // b82 (executed, cmd-args-reference.json): an unknown rule is never created; both forms answer commands.gamerule.norule through notifyAdmins, not as an error.
       if (a.length === 2) {
         const [key, value] = a;
-        if (!(key in r)) { /* GameRules.setOrCreateGameRule: a new rule is created */ }
+        if (!Object.hasOwn(r, key)) return feedback("commands.gamerule.norule", key);
         host.setGameRule(key, value);
         feedback("commands.gamerule.success");
       } else if (a.length === 1) {
-        if (!(a[0] in r)) throw new CommandException("commands.gamerule.norule", [a[0]]);
-        { const line = `${a[0]} = ${r[a[0]]}`; say(line, textComponent(line)); } // CommandGameRule: a ChatComponentText (executed, b51ct)
+        if (!Object.hasOwn(r, a[0])) return feedback("commands.gamerule.norule", a[0]);
+        // new ChatComponentText(rule).appendText(" = ").appendText(value) (executed): siblings, not one text.
+        const c = textComponent(a[0]); c.append(textComponent(" = ")); c.append(textComponent(String(r[a[0]])));
+        say(`${a[0]} = ${r[a[0]]}`, c);
       } else if (a.length === 0) { const line = joinNiceString(Object.keys(r).sort()); say(line, textComponent(line)); } // CommandBase.joinNiceString over GameRules.getRules (a TreeMap key set): "a, b and c"
       else usage("commands.gamerule.usage");
     },
@@ -373,6 +413,7 @@ export function createCommandRunner(host) {
       if (a.length === 2 || a.length === 4) { who = player(a[0]); i = 1; }
       const here = pos();
       if (host.isCommandBlock && i === 0) throw playerNotFound();
+      if (a.length > 4) return; // b82 (bytecode-read, executed): five or more arguments match no branch of CommandTeleport and do nothing
       if (a.length - i === 3) {
         const x = parseCoordinate(here.x, a[i]), y = parseCoordinate(here.y, a[i + 1], 0, 0), z = parseCoordinate(here.z, a[i + 2]);
         host.teleport(x, y, z);
@@ -380,6 +421,8 @@ export function createCommandRunner(host) {
       }
       if (a.length - i === 1) {
         const target = player(a[i]);
+        // b82 (bytecode-read): CommandTeleport compares the two players' worldObj; different dimensions notify commands.tp.notSameDimension and move nobody.
+        if (host.dimensionOf && (host.dimensionOf(who) ?? 0) !== (host.dimensionOf(target) ?? 0)) return feedback("commands.tp.notSameDimension");
         const p = host.positionOf?.(target) ?? pos(); // the destination player's position (a server holds several)
         host.teleport(p.x, p.y, p.z);
         return feedback("commands.tp.success", who, target);
@@ -416,17 +459,19 @@ export function createCommandRunner(host) {
       let d = DIFFICULTIES.indexOf(l);
       if (d < 0) { const short = ["p", "e", "n", "h"].indexOf(l); d = short >= 0 ? short : parseIntBounded(a[0], 0, 3); }
       host.setDifficulty(d);
-      feedback("commands.difficulty.success", tr("options.difficulty." + DIFFICULTIES[d]) === "options.difficulty." + DIFFICULTIES[d] ? DIFFICULTIES[d] : tr("options.difficulty." + DIFFICULTIES[d]));
+      // b82 (executed): the argument is a ChatComponentTranslation of the difficulty's options key ("Easy").
+      const c = translation("options.difficulty." + DIFFICULTIES[d]);
+      (host.feedback ?? say)(tr("commands.difficulty.success", c.unformatted()), translation("commands.difficulty.success", c));
     },
     effect(a) {
       if (a.length < 2) usage("commands.effect.usage");
       const target = player(a[0]);
-      if (a[1].toLowerCase() === "clear") {
+      if (a[1] === "clear") { // b82 (executed): case-sensitive; "CLEAR" is a number error
         const cleared = host.clearEffects();
         if (!cleared) throw new CommandException("commands.effect.failure.notActive.all", [target]);
         return feedback("commands.effect.success.removed.all", target);
       }
-      const id = parseIntBounded(a[1], 0, 2147483647);
+      const id = parseIntMin(a[1], 1); // b82 (executed): parseIntWithMin(.., 1)
       if (!potionById.has(id)) throw numberInvalid("commands.effect.notFound", id);
       let seconds = 600, amplifier = 0;
       if (a.length >= 3) {
@@ -443,9 +488,14 @@ export function createCommandRunner(host) {
     enchant(a) {
       if (a.length < 2) usage("commands.enchant.usage");
       player(a[0]);
-      const id = parseIntBounded(a[1], 0, 256);
+      // b82 (bytecode-read, executed): id within 0..Enchantment.enchantmentsList.length - 1 (255), then the held item (noItem), the enchantment (notFound),
+      // canApply (cantEnchant), and only then the level within its min..max; cantCombine last.
+      const id = parseIntBounded(a[1], 0, 255);
       const info = enchantById.get(id);
+      const early = host.enchantCheck?.(id);
+      if (early === "noItem") throw new CommandException("commands.enchant.noItem");
       if (!info) throw numberInvalid("commands.enchant.notFound", id);
+      if (early === "cantEnchant") throw new CommandException("commands.enchant.cantEnchant");
       const level = a.length >= 3 ? parseIntBounded(a[2], 1, info.max) : 1;
       const out = host.enchant(id, level);
       if (out === "noItem") throw new CommandException("commands.enchant.noItem");
@@ -503,19 +553,19 @@ export function createCommandRunner(host) {
       if (a.length < 4) usage("commands.testforblock.usage");
       const here = pos();
       const x = Math.floor(parseCoordinate(here.x, a[0])), y = Math.floor(parseCoordinate(here.y, a[1], 0, 0)), z = Math.floor(parseCoordinate(here.z, a[2]));
-      const id = findBlock(a[3]);
+      const id = blockFromName(a[3]);
       const meta = a.length >= 5 ? parseIntBounded(a[4], -1, 15) : -1;
       if (!host.inWorld(x, y, z)) throw new CommandException("commands.testforblock.outOfWorld");
       const tag = ORIGINAL_CONTAINERS.includes(id) ? dataTag(a, 5, "setblock", true) : undefined;
       const got = host.blockAt(x, y, z);
-      if (got.id !== id) throw new CommandException("commands.testforblock.failed.tile", [x, y, z, blockById.get(got.id) ?? "minecraft:air", a[3]]);
+      if (got.id !== id) throw new CommandException("commands.testforblock.failed.tile", [x, y, z, blockLocalName(got.id), blockLocalName(id)]); // b82: Block.getLocalizedName of both (bytecode-read, executed)
       if (meta > -1 && got.meta !== meta) throw new CommandException("commands.testforblock.failed.data", [x, y, z, got.meta, meta]);
       if (tag) {
         const tile = host.tileAt(x, y, z);
         if (!tile) throw new CommandException("commands.testforblock.failed.tileEntity", [x, y, z]);
         if (!nbtMatches({ type: NBT.COMPOUND, value: tag }, { type: NBT.COMPOUND, value: tile })) throw new CommandException("commands.testforblock.failed.nbt", [x, y, z]);
       }
-      feedback("commands.testforblock.success", x, y, z);
+      say(tr("commands.testforblock.success", x, y, z), translation("commands.testforblock.success", x, y, z)); // b82: sender.addChatMessage, not notifyAdmins (executed)
     },
     // CommandTestFor (by, bytecode-read b68): exactly one argument, only a command block may run it ("commands.testfor.failed"), the player is looked up (selector or name)
     // and nothing is said: the success is the run itself (the 1.7.10 lang has no commands.testfor.success).
@@ -646,13 +696,13 @@ export function createCommandRunner(host) {
     else if (n === "time" && index === 1 && args[0] === "set") options = ["day", "night"];
     else if (n === "weather" && index === 0) options = ["clear", "rain", "thunder"];
     else if (n === "difficulty" && index === 0) options = DIFFICULTIES;
-    else if (n === "gamerule" && index === 0) options = Object.keys(rules());
+    else if (n === "gamerule" && index === 0) options = Object.keys(rules()).sort(); // GameRules.getRules: a TreeMap
     else if (n === "gamerule" && index === 1) options = ["true", "false"];
-    else if (n === "give" && index === 1) options = ITEM_REGISTRY.map(([k]) => k);
-    else if (n === "setblock" && index === 3 || n === "testforblock" && index === 3) options = BLOCK_REGISTRY.map(([k]) => k);
-    else if (n === "summon" && index === 0) options = Object.keys(SUMMONABLE);
-    else if (n === "help" && index === 0) options = REGISTERED.filter((c) => allowed(c)).map((c) => c.name);
-    else if (n === "effect" && index === 1) options = ["clear"];
+    else if ((n === "give" || n === "clear") && index === 1) options = ITEM_KEYS_ORDER; // b82: /clear completes items too (executed)
+    else if (n === "setblock" && index === 3 || n === "testforblock" && index === 3) options = BLOCK_KEYS_ORDER;
+    else if (n === "setblock" && index === 5) options = ["replace", "destroy", "keep"];
+    else if (n === "summon" && index === 0) options = ENTITY_KEYS_ORDER;
+    // b82 (executed): /help and /effect complete nothing beyond the player (CommandHelp has no addTabCompletionOptions; CommandEffect only its first word).
     else if (extra.handlers[n]) options = extra.complete(n, index, args, players);
     else if (n === "scoreboard") options = scoreboardCommands.complete(n, index, args, players);
     return matchLast(args, options);

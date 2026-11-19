@@ -152,14 +152,16 @@ export class ServerSocial {
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
+      dimensionOf: (name) => sim.players.get(this.idOf(name))?.dimension ?? 0, // b82 commands82: /tp between players in two dimensions
       seed: () => sim.world.seed,
       print: (t, c) => to(sender.name, c ?? t),
       broadcast: (t, c) => { for (const r of records) to(r.name, c ?? t); },
       deliver: (name, t, c) => to(name, c ?? t),
       // CommandBase.func_152373_a: the sender's own line, and chat.type.admin (gray italic) to every other op.
-      feedback: (t, c) => {
+      // b82 commands82: flag 1 (CommandGameMode's success lines, bytecode-read) skips the sender's own copy.
+      feedback: (t, c, flags = 0) => {
         const component = isComponent(t) ? t : c;
-        to(sender.name, component ?? t);
+        if (!(flags & 1)) to(sender.name, component ?? t);
         if (component) for (const r of records) if (r.name !== sender.name && rights(r.name)) to(r.name, grayItalic(translation("chat.type.admin", sender.name, component)));
       },
     });

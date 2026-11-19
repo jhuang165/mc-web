@@ -41,7 +41,8 @@ test("the gamerule query is a ChatComponentText", () => {
   const rules = { doFireTick: "true" };
   const c = capture({ rules, setGameRule: (k, v) => { rules[k] = v; } });
   c.run("/gamerule doFireTick");
-  assert.equal(c.lines[0].json, row("gameruleQuery")); // Gson escapes = as \u003d
+  // b82 commands82: CommandGameRule executed (cmd-args-reference.json) appends " = " and the value as siblings; b51's row was built from the sources as one text.
+  assert.equal(c.lines[0].json, '{"extra":[" \\u003d ","true"],"text":"doFireTick"}'); // Gson escapes = as \u003d
   assert.equal(row("gameruleQuery"), '"doFireTick \\u003d true"');
 });
 

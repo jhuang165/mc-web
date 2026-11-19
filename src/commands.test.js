@@ -182,12 +182,13 @@ test("give, clear, xp, effect and enchant change the real inventory, experience 
 
 test("gamemode, teleport with ~, spawnpoint, difficulty and kill act on the player", () => {
   const g = game({ mode: "creative", allowCommands: true });
-  assert.deepEqual(g.run("/gamemode 0"), ["Your game mode has been updated", "Set own game mode to Survival Mode"]);
+  // b82 commands82: CommandGameMode notifies with flag 1 (executed, cmd-args-reference.json): the sender gets no "Set own game mode" copy.
+  assert.deepEqual(g.run("/gamemode 0"), ["Your game mode has been updated"]);
   assert.equal(g.survival.mode, "survival");
   assert.equal(g.survival.inventory.creative, false);
   g.run("/gamemode c");
   assert.equal(g.survival.mode, "creative");
-  assert.deepEqual(g.run("/gamemode 2"), ["Your game mode has been updated", "Set own game mode to Adventure Mode"]);
+  assert.deepEqual(g.run("/gamemode 2"), ["Your game mode has been updated"]);
   assert.equal(g.survival.mode, "adventure");
   assert.equal(g.survival.inventory.creative, false);
   g.run("/gamemode c");
