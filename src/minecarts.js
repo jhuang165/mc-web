@@ -22,6 +22,7 @@ import { recordBirth } from "./tracker-birth.js";
 import * as W from "./world.js";
 import { collisionBoxList, normalCube, CACTUS, WEB } from "./world.js";
 import { blockCollisions, setInWeb } from "./block-collisions.js";
+import { rainedOn, wetFizz } from "./entity-wet.js";
 import { movingBoxes } from "./moving-boxes.js";
 import { JavaRandom } from "./java-random.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -316,7 +317,11 @@ export class Minecarts {
     if (odx !== dx) cart.vx = 0;
     if (ody !== dy) cart.vy = 0;
     if (odz !== dz) cart.vz = 0;
-    blockCollisions(world, bb, cart, { hurt: (source, n) => this.attack(cart, n, { source }), wet: false });
+    // b83 rain83: isWet is rain only (xl.h never calls handleWaterMovement, so inWater stays false); `host.rain(x, y, z)` is canLightningStrikeAt (entity-wet.js). The counter
+    // has no count-down (xl.h never calls onEntityUpdate) and flag 0 is never set, so no client draws the flames; a burning cart in the rain fizzes (S29 from a server) and rests at -1.
+    const host = this.host;
+    blockCollisions(world, bb, cart, { hurt: (source, n) => this.attack(cart, n, { source }), get wet() { return rainedOn(host?.rain, cart.x, cart.posY, cart.z, CART_HEIGHT); },
+      fizz: () => { const s = wetFizz(() => cart.random.nextFloat()); host?.sound?.(s.name, cart, s.volume, s.pitch); } });
     this.touchDetectors(world, cart);
   }
   // Block.onEntityCollidedWithBlock for detector rails under the cart (BlockRailDetector): the redstone

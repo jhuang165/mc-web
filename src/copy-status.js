@@ -10,6 +10,7 @@
 //  - 4 / 11 (iron golem): a sound / the flower arm with no draw. 10 (sheep eat grass), 9, 17, 19..22 and 1: no draw on any mob class (status 20 is the spawner's server call).
 import { burst } from "./fx.js";
 import { updateWolf } from "./wolf.js";
+import { rainedOn } from "./entity-wet.js";
 import { deathRandom } from "./death-fx.js";
 import { witchMagicParticles } from "./witch-magic.js";
 
@@ -35,11 +36,13 @@ export function copyStatus(c, m, status, rand = deathRandom(c), fx = null) {
 // EntityWolf.h on the copy (after the living update): the shake of status 8 or of a copy in water: the sound's two floats at the start, then the splash particles (two floats
 // each). The copy's wetness is its own inWater; the server-only start of a shake (a wet wolf standing still) is status 8, so hasPath is false on a client (no path is ever set there).
 const wolfCopy = (c) => (c.wolf ??= { wet: false, shaking: false, shakeTime: 0, prevShakeTime: 0, headTilt: 0, prevHeadTilt: 0, begging: false, health: 0, idle: 0 });
-export function copyWolfShake(c, m, rand = deathRandom(c)) {
+// b83 rain83: wv.h's test is isWet, so `rained` (the client world's canLightningStrikeAt, entity-wet.js) makes a copy in the rain wet and stops its shake.
+export function copyWolfShake(c, m, rand = deathRandom(c), rained = null) {
   if (m.type !== "wolf") return;
   const s = wolfCopy(c);
-  if (!s.wet && !s.shaking && !c.inWater) return;
-  const out = updateWolf(s, { inWater: !!c.inWater, onGround: !!c.onGround, hasPath: false, rand });
+  const wet = !!c.inWater || rainedOn(rained, c.x, c.y, c.z, c.height ?? 0);
+  if (!s.wet && !s.shaking && !wet) return;
+  const out = updateWolf(s, { inWater: wet, onGround: !!c.onGround, hasPath: false, rand });
   if (out.shakeSound) { rand.nextFloat(); rand.nextFloat(); }
   for (let i = 0; i < out.splashes; i++) { rand.nextFloat(); rand.nextFloat(); }
 }

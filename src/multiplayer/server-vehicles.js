@@ -14,6 +14,7 @@
 // `sim.achievements` (Achievements.rideMinecart, EntityPlayer.addMovementStat, bytecode-read yz.k: any EntityMinecart, only when the player moved).
 import { serverRiderFall } from './server-rider-fall.js';
 import { Minecarts } from '../minecarts.js';
+import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
 import { Boats } from '../boats.js';
 import { registerBoatWorld, worldBoatBoxes } from '../entity-collision.js';
 import { EntityIds } from '../entity-ids.js';
@@ -61,7 +62,8 @@ export class ServerVehicles {
     this.cartHost = {
       explode: (cart, x, y, z, power) => { host.mobs.explode({ x, y, z, size: power, source: null }); host.mobs.burst(x, y, z, power); }, // b80 mpfx80: xv calls createExplosion(this, .., true), so WorldServer.newExplosion sends S27; the cart's blast sent none (no particles, sound or push)
       particle() {}, // WorldServer.spawnParticle sends nothing
-      sound: (name, cart) => host.soundsOut.push({ name, x: cart.x, y: cart.posY, z: cart.z, volume: 1, pitch: 1, except: null }),
+      sound: (name, cart, volume = 1, pitch = 1) => host.soundsOut.push({ name, x: cart.x, y: cart.posY, z: cart.z, volume, pitch, except: null }),
+      rain: (x, y, z) => !this.dim && !!host.weather && canLightningStrikeAt(host.weather, host.world, x, y, z), // b83 rain83: moveEntity's isWet for carts (minecarts.js); the Nether/End host inherits the Overworld's weather, but nothing rains there
       get transfer() { return host.containers.ticks?.hoppers.host; }, // b62: a hopper cart sucks from the container or item above it (cart-hopper.js)
       changed: keys => host.containers.ticks?.changed(keys),
       runCommand: cart => { this.cartCommands.push(cart); }, // b63: xn.a(x, y, z, powered) -> CommandBlockLogic.func_145755_a

@@ -16,6 +16,8 @@ import { WitchPotions } from '../witch-potions.js';
 import { splashImpact } from '../witch.js';
 import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
 import { tickPrimedTnt, tickOneTnt } from '../entity-simulation.js';
+import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
+import { rainedOn } from '../entity-wet.js'; // b83 rain83
 import { BallTracks } from './fireball-copy.js'; // b81 blast81
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
@@ -38,6 +40,9 @@ export class ServerDispense {
     // `extra` holds a stand-in lane for a dimension with no instance yet (a saved Nether arrow before anyone went there): the Nether instance adopts it when it is built.
     this.dim = 0; this.extra = new Map();
     this.arrows = new Arrows(Math.random);
+    this.arrows.wet = (a) => rainedOn(this.rainAt, a.x, a.y, a.z, 0.5); // b83 rain83: EntityArrow.onUpdate's isWet() extinguish, rain half (bow.js; a.water is the other)
+    this.rainAt = (x, y, z) => !this.dim && !!this.sim.weather && canLightningStrikeAt(this.sim.weather, this.sim.world, x, y, z); // b83 rain83: canLightningStrikeAt of the Overworld lane; nothing rains in the Nether or the End
+    this.tntFizz = (s, x, y, z) => this.fx.push({ k: 'sound', name: s.name, x, y, z, volume: s.volume, pitch: s.pitch }); // b83 rain83: burning primed TNT in the rain (S29 from the entity's feet)
     this.balls = new Projectiles(Math.random); // snowballs and eggs; the poof particles belong to the clients (disp replicas die -> clientImpact)
     this.balls.clientParticles = true;
     this.potions = null; // WitchPotions over the server's EntityWorld, made on first use (ServerMobs is built after the container ticks)
@@ -196,7 +201,7 @@ export class ServerDispense {
     const mobs = this.mobs;
     this.tntTicked = new WeakSet(); // b81 blast81: the TNT that had its update this tick (tickJoined)
     if (!this.any) return;
-    if (this.primed.length) { for (const e of this.primed) this.tntTicked.add(e); tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) }); }
+    if (this.primed.length) { for (const e of this.primed) this.tntTicked.add(e); tickPrimedTnt(this.sim.world, this.primed, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx), rain: this.rainAt, fizz: this.tntFizz }); }
     this.tickLane(this);
     this._eyes?.tick(); // b64 mpend2: eyes of ender in flight
     for (const lane of this.extra.values()) { // another dimension's lane runs with that dimension's items and orbs in place (server-dimensions.js swap)
@@ -207,6 +212,7 @@ export class ServerDispense {
       sound: (name, x, y, z, volume, pitch) => this.fx.push({ k: 'sound', name, x, y, z, volume, pitch }),
       spark: (x, y, z, vx, vy, vz) => this.fx.push({ k: 'spark', x, y, z, vx, vy, vz }),
       explode: (x, y, z, vx, vy, vz, fireworks) => this.fx.push({ k: 'firework', x, y, z, vx, vy, vz, fireworks }), // World.makeFireworks (status 17) to the clients tracking it
+      rain: this.rainAt, // b83 rain83: a burning rocket in the rain fizzes
     });
   }
   tickLane(lane) {
@@ -252,7 +258,7 @@ export class ServerDispense {
     const done = this.tntTicked;
     if (!done) return;
     for (let fresh = this.primed.filter(e => !done.has(e)); fresh.length; fresh = this.primed.filter(e => !done.has(e)))
-      for (const e of fresh) { done.add(e); tickOneTnt(this.sim.world, this.primed, e, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx) }); }
+      for (const e of fresh) { done.add(e); tickOneTnt(this.sim.world, this.primed, e, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx), rain: this.rainAt, fizz: this.tntFizz }); }
   }
   // A burning arrow lights a TNT block (EntityArrow.onUpdate -> BlockTNT.onBlockDestroyedByPlayer): the block goes, a primed TNT appears.
   igniteBlockTnt(x, y, z) { if (this.sim.world.set(x, y, z, 0)) this.prime(x + 0.5, y + 0.5, z + 0.5, true); }

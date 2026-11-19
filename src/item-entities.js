@@ -14,6 +14,7 @@ import { LAVA } from "./world.js";
 
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
+import { entityWet } from "./entity-wet.js"; // b83 rain83
 import { entityPushOut } from "./entities.js";
 import { freshEntityRandom, gaussianFrom } from "./java-random.js";
 import { orderTargets } from "./candidate-order.js"; // b73
@@ -32,6 +33,8 @@ export class ItemEntities {
     this.items = [];
     // A client world's items (object-tracker.js): EntityItem.onUpdate without the !isRemote parts, the merge search and the lifetime.
     this.remote = false;
+    // b83 rain83: `rain(x, y, z)`, the world's canLightningStrikeAt, for the rain half of Entity.isWet in moveEntity's fire tail (entity-wet.js); null: no rain.
+    this.rain = null;
     // Sounds items made this tick ({ name, volume, pitch, x, y, z }); the caller drains them.
     this.sounds = [];
   }
@@ -198,9 +201,10 @@ export class ItemEntities {
     if (odx !== dx) e.mx = 0;
     if (odz !== dz) e.mz = 0;
     if (ody !== dy) e.my = 0;
+    const rain = this.rain;
     blockCollisions(world, this.box(e), e, {
       hurt: (source, amount) => this.hurt(e, amount),
-      wet,
+      get wet() { return entityWet(wet, rain, e.x, e.y + W, e.z, H); }, // b83 rain83: isWet after the move (posY = y + yOffset, height 0.25)
       fizz: () => {
         const r = this.rng(e);
         this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y + W, z: e.z });

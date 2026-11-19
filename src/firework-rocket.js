@@ -3,6 +3,7 @@
 import { moveParticleEntity } from './particles.js';
 import { waterAcceleration, entityWaterBox, inLava } from './fluids.js';
 import { burningIn } from './mpperf81-fast.js';
+import { entityWet, wetFizz } from './entity-wet.js';
 const f = Math.fround, PI_F = f(Math.PI), SIZE = f(0.25);
 
 // zf(world, x, y, z, stack): flight = 1 + Fireworks.Flight; gaussian*0.001 sideways, 0.05 up,
@@ -23,9 +24,10 @@ export function createRocket(x, y, z, stack, rand) {
 // client world (`server` false) zeroes it, a server rocket loses 1 a tick (every 20th tick's attackEntityFrom(onFire, 1) is setBeenAttacked only: velocityChanged); lava sets
 // velocityChanged and the larger of the counter and 300. moveEntity's tail: a fire or lava cell in the moved box (shrunk 0.001) runs dealFireDamage(1) (velocityChanged) and,
 // out of water, ++fire with setFire(8) (160) when that reaches 0; else a counter <= 0 rests at -1. A wet rocket still burning would fizz (random.fizz, two Entity.rand
-// floats) and rest at -1, but isWet here is this update's water test, which already zeroed the counter, and the lava test reads the same cells of the same box: only
-// isWet's rain half (not modelled) reaches that branch, so it is left out.
-export function tickRocket(r, world, rand, { remote = false, server = true, entityBoxes = null } = {}) {
+// floats) and rest at -1. In water that branch is dead (this update's water test already zeroed the counter, and the lava test reads the same cells); b83 rain83:
+// isWet's rain half reaches it. `rain(x, y, z)` is the world's canLightningStrikeAt (entity-wet.js; yOffset 0, height 0.25): a rained-on rocket in fire does not
+// count up, and one still burning (a server rocket after lava) fizzes (`out.fizz`, the draws on `rand`) and rests at -1. A client rocket zeroes its counter first.
+export function tickRocket(r, world, rand, { remote = false, server = true, entityBoxes = null, rain = null } = {}) {
   const out = { launch: false, spark: null, explode: null };
   r.px = r.x; r.py = r.y; r.pz = r.z;
   r.prevPitch = r.pitch; r.prevYaw = r.yaw; // Entity.onEntityUpdate
@@ -51,11 +53,13 @@ export function tickRocket(r, world, rand, { remote = false, server = true, enti
   if (r.y < -64) r.dead = true; // ... and its void test (posY < -64: kill(), tested before the move): the rest of the update still runs, no status 17 (executed, firework-collide-reference.json)
   r.mx *= 1.15; r.mz *= 1.15; r.my += 0.04;
   moveParticleEntity(world, r, r.mx, r.my, r.mz, entityBoxes);
-  if (!r.noClip) { // moveEntity's fire tail (after doBlockCollisions); isWet is isInWater here
+  if (!r.noClip) { // moveEntity's fire tail (after doBlockCollisions); isWet (sa.L) after the move
+    const wet = entityWet(r.inWater, rain, r.x, r.y, r.z, SIZE);
     if (burningIn(world, r.box)) {
       r.velocityChanged = true;
-      if (!r.inWater && ++r.fire === 0) r.fire = 160;
+      if (!wet && ++r.fire === 0) r.fire = 160;
     } else if (r.fire <= 0) r.fire = -1;
+    if (wet && r.fire > 0) { out.fizz = wetFizz(() => rand.nextFloat()); r.fire = -1; }
   }
   const speed = f(Math.sqrt(r.mx * r.mx + r.mz * r.mz));
   r.yaw = f(Math.atan2(r.mx, r.mz) * 180 / PI_F);

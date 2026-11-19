@@ -28,7 +28,7 @@ import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { FireworkRockets } from "./fireworks-live.js";
 import { Hanging, hangingArrowTargets } from "./hanging.js";
 import { drainMobEvents, explodeEvent, spawnLoot } from "./living-simulation.js";
-import { isWet, canSeeSky } from "./weather.js";
+import { isWet, canSeeSky, canLightningStrikeAt } from "./weather.js";
 import { skylightSubtracted, celestialAngle } from "./lighting.js";
 import { copyStack } from "./inventory.js";
 import { EntityIds } from "./entity-ids.js";
@@ -115,6 +115,10 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   arrows.load(arrowSplit.inside); projectiles.load(ballSplit.inside);
   rockets.load({ rockets: rocketSplit.inside });
   arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
+  // b83 rain83: the rain half of Entity.isWet for the rest of moveEntity's users (entity-wet.js), as main.js: items, orbs, carts, primed TNT and rockets. The fizz has no sound here.
+  const rain = (x, y, z) => canLightningStrikeAt(weather, world, x, y, z);
+  items.rain = rain;
+  xp.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
   // The mobs: EntityWorld on the away world with no player. `absent` keeps despawnEntity out (ai.js); the survival has health 0, so the stand-in
   // player is not alive and is never a target, a push partner or a victim. `isActive` is the run's loaded area (the saved world is Superflat-shaped).
   const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
@@ -152,10 +156,10 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // stand-in (an orb or potion sees nobody near).
   const walkState = { world, items, primed, projectiles, arrows, rockets, mobs, xpOrbs: xp, survival: mobSv, position: player, minecarts, boats, hanging, velocity: { x: 0, y: 0, z: 0 }, rider: null, alive: false, width: 0.6, height: 1.8,
     get falling() { return self.falling; } };
-  const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
+  const cartHost = { runCommand, explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer, rain };
   const dropVehicle = (d) => { if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10); };
   const walkHooks = {
-    maxStack, explodeTnt: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }),
+    maxStack, explodeTnt: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }), tntRain: rain, rocketHooks: () => ({ rain }),
     arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
       igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } }),
     // Batch 47: the ball's ray takes the carts, boats and hanging entities too (vehicleTargets / thrownAtVehicleOrHanging, as in main.js); no player threw it, so the hit has no owner.

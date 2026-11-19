@@ -86,8 +86,9 @@ export function endermanTick(mobs, e, rng) {
   const view = playerOf(mobs);
   const t = m.attackTarget;
   const target = t ? (t === p ? { id: "player", x: view?.x ?? t.x, y: view?.y ?? t.y, z: view?.z ?? t.z, player: view, eye: E.PLAYER_EYE_OFFSET } : { id: "mob", x: t.x, y: t.y, z: t.z, player: null, eye: t.eyeHeight ?? 0 }) : null; // a mob target is not a yz: no stare test
-  const bx = Math.floor(e.x), bz = Math.floor(e.z);
-  const wet = !!e.inWater || (!!mobs.isRaining?.() && (ai.deps.canSeeSky(bx, Math.floor(e.y), bz) || ai.deps.canSeeSky(bx, Math.floor(e.y + E.ENDERMAN_HEIGHT), bz)));
+  // isWet (sa.L; ya.e calls it, bytecode-read): b83 rain83 takes `mobs.wet`, World.canLightningStrikeAt at the feet and head cells, instead of isRaining && canSeeSky,
+  // so a roof of glass or leaves (above the precipitation height), a desert or a snowy biome keeps an enderman dry.
+  const wet = !!e.inWater || !!mobs.wet?.(e, E.ENDERMAN_HEIGHT);
   E.tick(e, w, {
     rng, target, wet, burning: e.fire > 0,
     dropTarget: () => { m.attackTarget = null; }, // entityToAttack = null only: the path (pathToEntity) is kept

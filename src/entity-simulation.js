@@ -23,9 +23,10 @@ export function tickPrimedTnt(world, primed, hooks = {}) {
   for (const entity of [...primed]) tickOneTnt(world, primed, entity, hooks);
 }
 /** One primed TNT's update (EntityTNTPrimed.onUpdate); a detonation is removed from `primed` before its explosion runs. */
-export function tickOneTnt(world, primed, entity, { smoke = null, explode = () => {} } = {}) {
+// b83 rain83: `rain(x, y, z)` (canLightningStrikeAt) and `fizz(sound, x, y, z)` are moveEntity's isWet and wet-burning fizz (explosion.js tickTnt).
+export function tickOneTnt(world, primed, entity, { smoke = null, explode = () => {}, rain = null, fizz = null } = {}) {
   if (!ringEntityActive(world, entity)) return;
-  const at = tickTnt(world, entity, smoke);
+  const at = tickTnt(world, entity, smoke, { rain, fizz });
   if (!at) return;
   primed.splice(primed.indexOf(entity), 1);
   explode(at.x, at.y, at.z, TNT_POWER, { exploder: entity, attacker: entity.placer });
@@ -54,7 +55,7 @@ export function tickEntitySimulation(state, hooks = {}) {
     projectileEvent = () => {}, handleEntityEvents = () => {}, arrowOptions = () => ({}) } = hooks;
 
   items.tick(world, maxStack);
-  tickPrimedTnt(world, primed, { smoke, explode: explodeTnt });
+  tickPrimedTnt(world, primed, { smoke, explode: explodeTnt, rain: hooks.tntRain ?? null, fizz: hooks.tntFizz ?? null });
   collectItems(state, hooks);
 
   projectiles.tick(world, projectileTargets(state), projectileHit, projectilePearlImpact);
@@ -165,7 +166,7 @@ export function entityWalkers(ctx) {
     ["thrown", { list: () => st().projectiles.balls,
       // EntityEgg.onImpact spawns its chicks in the ball's own update (World.spawnEntityInWorld joins the list being walked: the chick updates in this pass), so the ball's events run here.
       tick: (e) => { st().projectiles.tickOne(st().world, e, hk().projectileTargets?.(st()) ?? [], hk().projectileHit, hk().projectilePearlImpact); for (const ev of st().projectiles.drain()) hk().projectileEvent?.(ev); }, reap: () => st().projectiles.reap() }],
-    ["tnt", { list: () => st().primed, tick: (e) => tickOneTnt(st().world, st().primed, e, { smoke: hk().smoke, explode: hk().explodeTnt }), reap: () => {} }],
+    ["tnt", { list: () => st().primed, tick: (e) => tickOneTnt(st().world, st().primed, e, { smoke: hk().smoke, explode: hk().explodeTnt, rain: hk().tntRain ?? null, fizz: hk().tntFizz ?? null }), reap: () => {} }],
     ["orb", { list: () => st().xpOrbs?.orbs ?? [], tick: (e) => st().xpOrbs.tickOne(st().world, e, st().position), reap: () => st().xpOrbs?.reap() }],
     ["falling", { list: () => st().falling?.entities ?? [], tick: (e) => st().falling.tickOne(e), reap: () => st().falling?.reap() }],
     // Minecarts and boats: the rider (a mob) is updated right after its mount (EntityWorld.seatRiders); the player's own seat follows in main.js.

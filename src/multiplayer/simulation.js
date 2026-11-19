@@ -146,6 +146,7 @@ export class DedicatedSimulation {
     this.items = new ItemEntities();
     this.nextItemId = 0; this.itemsSent = 0;
     this.items.joined = e => { e.eid = ++this.nextItemId; };
+    this.items.rain = (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y, z); // b83 rain83: the Overworld's items (moveEntity's isWet); a dimension's own ItemEntities keeps null
     this.itemHost = { spill: (...a) => this.items.spill(...a), dropBlock: (...a) => this.items.dropBlock(...a), dropPlayer: (...a) => this.items.dropPlayer(...a) };
     this.achievements = new ServerAchievements(this); // b60: server-side achievement triggers (server-achievements.js)
     this.stats = new ServerStats(this); this.stats.watchItems(this.items); // b63 mpstats: per-player statistics (server-stats.js); `stats.add(p, id, n)` is the hook
