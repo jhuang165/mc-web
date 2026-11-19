@@ -35,6 +35,7 @@ export function applySlots(inventory, message, state) {
 // Client side: how many of `stack` the inventory would take (InventoryPlayer.addItemStackToInventory on a copy), for a partial pickup.
 export function pickupFit(inventory, stack) {
   const probe = new PlayerInventory(inventory.items, inventory.main), left = copyStack(stack);
+  probe.creative = !!inventory.creative; // b85 pickup85: addItemStackToInventory consumes the whole stack for a Creative player
   probe.add(left);
   return stack.count - left.count;
 }
@@ -119,7 +120,7 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
   // `fits[i]`: how many of item eids[i] the client's inventory takes (EntityItem.onCollideWithPlayer keeps the rest on the ground). Without it the whole stack goes.
   pickup(p, eids, fits) {
     const sim = this.sim;
-    if (!p || p.dead || p.survival.creative || !Array.isArray(eids) || eids.length > 16) return false;
+    if (!p || p.dead || !Array.isArray(eids) || eids.length > 16) return false;
     const room = new Map(), byStack = new Map(), auth = this.authority(p);
     for (const e of sim.items.items) { const at = eids.indexOf(e.eid); if (at >= 0) { byStack.set(e.stack, e); room.set(e.eid, Number.isInteger(fits?.[at]) ? fits[at] : Infinity); } }
     if (!byStack.size) return false;

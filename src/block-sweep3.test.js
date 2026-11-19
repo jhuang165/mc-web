@@ -41,7 +41,7 @@ const STAY = {
   104: () => !popDrops(world, ...P), 105: () => !popDrops(world, ...P),
   175: (id) => populationPlantCanStay(world, ...P, id),
 };
-const farmStays = () => !farmNeighbourChange(world, ...P).some((c) => c.old !== 29 && c.old !== 30 && c.now === 0);
+const farmStays = () => !farmNeighbourChange(world, P[0] + 1, P[1], P[2]).some((c) => c.old !== 29 && c.old !== 30 && c.now === 0);
 test("block sweep light: BlockBush-family survival over sky, block light, skylightSubtracted and sky view matches the native classes", () => {
   const bad = [];
   let n = 0;

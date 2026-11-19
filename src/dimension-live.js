@@ -420,6 +420,7 @@ export class DimensionLive {
       const r = msg.result;
       root.fluidTicks = r.fluidTicks; root.fireTicks = r.fireTicks; root.fallingTicks = r.fallingTicks; root.falling = r.falling;
       root.redstone = r.redstone; root.pistons = r.pistons;
+      if (r.skulls) { if (r.skulls.length) root.skulls = r.skulls; else delete root.skulls; } // b85 pickup85: skull tiles the run consumed
       root.player = { ...(root.player ?? {}), ...r.tiles };
       if (r.entities) { // away-entities.js: the saved entity lists, whole
         root.drops = r.entities.drops; root.xpOrbs = r.entities.xpOrbs; root.tnt = r.entities.tnt;

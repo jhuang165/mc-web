@@ -29,6 +29,7 @@ import { awayEntities } from "./away-entities.js";
 import { dispenseFirework } from "./fireworks-live.js";
 import { spawnEggMob } from "./spawn-egg-use.js";
 import { WATER, LAVA } from "./world.js";
+import { Skulls, installSkullBreak } from "./skull.js"; // b85 pickup85
 import { JavaRandom } from "./java-random.js";
 import { awayCommands } from "./away-commands.js";
 import { AwayBlockLight } from "./away-light.js";
@@ -92,7 +93,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   };
 
   const drops = [], tiles = plan.tiles, spill = (stack, x, y, z) => {
-    const made = makeStack(stack.id, stack.count, stack.damage || 0, undefined, validRawDamage(stack.rawDamage) ? { rawDamage: stack.rawDamage } : undefined); // b83 plants83: a rawDamage plant keeps it (as main.js)
+    const made = makeStack(stack.id, stack.count, stack.damage || 0, stack.tags, validRawDamage(stack.rawDamage) ? { rawDamage: stack.rawDamage } : undefined); // b85 pickup85: a skull keeps its SkullOwner tags; b83 plants83: a rawDamage plant keeps it (as main.js)
     if (ents) ents.spill(made, x, y, z); else drops.push({ stack: made, x, y, z, age: 0, delay: 10 });
   };
   let ents = null;
@@ -110,12 +111,16 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   if (plan.fluidTicks) fluids.load(plan.fluidTicks);
   if (plan.fireTicks) fire.load(plan.fireTicks);
   if (plan.fallingTicks) falling.load(plan.fallingTicks);
+  // b85 pickup85: the away world's skull tiles (from the saved chunk tile entities). World.setBlock -> BlockSkull.breakBlock drops the tile's item (installSkullBreak) at the native
+  // 0.7 spread through the run's item random; a piston's crush reads the same store (game.skulls below), so it drops its own type instead of 0.
+  const skullTiles = Skulls.fromJSON(plan.skulls);
+  installSkullBreak(world, () => skullTiles, (stacks, x, y, z) => { const r = ents?.items?.random ?? Math.random, f = Math.fround, off = () => f(f(r() * 0.7) + f(0.15)); for (const s of stacks) for (let n = 0; n < (s?.count ?? 0); n++) spill({ ...s, count: 1, ...(s.tags ? { tags: s.tags } : {}) }, x + off(), y + off(), z + off()); });
   const sv = new Survival({}, "survival");
   const unsupported = { hit: false }; // a dispense the run cannot make (arrow, potion, fireball, firework): the stack is put back
   const dispRand = new JavaRandom(BigInt(rand) * 40503n + 7n);
   const rt = createRedstoneRuntime({ world, scene: null, game: {
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
-    drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
+    skulls: () => skullTiles,     drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
     transfer: () => hoppers.host, // b72 smallfixes72: droppers push into containers through the run's hopper host (main.js game.transfer; built below, read only while ticking)
     items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,
@@ -230,7 +235,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   return {
     entities: entityLists,
     columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: entityLists?.falling ?? falling.serialize(), // b58so: the stamped records when the entity run held them
-    editSequence: world.nextEditOrder, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
+    editSequence: world.nextEditOrder, skulls: skullTiles.toJSON(), redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
     ...cmds.result(),
     stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}), commands: cmds.stats, light: { emitters: light.emitters, floods: light.floods, floodMs: Math.round(light.floodMs) } },
   };
