@@ -167,7 +167,7 @@ import { applySpawnerDelay } from "./multiplayer/client-spawners.js"; // b65 mps
 import { predictAnimalUse } from "./multiplayer/animal-use.js"; // b61
 import { RemoteVehicles } from "./multiplayer/remote-vehicles.js"; // b61 mpvehicles
 import { RemoteDispense } from "./multiplayer/client-dispense.js";
-import { S27ClientBlocks, clientBallFx, ballWet } from "./multiplayer/client-explosion.js"; // b80 mpfx80
+import { S27ClientBlocks, clientBallFx, ballWet, ballWater } from "./multiplayer/client-explosion.js"; // b80 mpfx80
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { serverListScreen, ServerList, disconnectedScreen, disconnectHeading } from "./multiplayer/server-list-gui.js"; // b68 mpping
 import { skinCanvas } from "./skin.js";
@@ -772,7 +772,7 @@ function makeRemoteDispense() {
     poof: row => projectiles.clientImpact(row),
     shatter: (x, y, z) => spawnEyeShatter(scene.fx, x, y, z), // b64 mpend2: a server eye of ender broke
     eyeTrail: (row, vx, vy, vz) => spawnEyeTrail(scene.fx, row, vx, vy, vz), // b65 mpdragon2: the flying eye's portal trail (the copy draws it, as EntityEnderEye.onUpdate does)
-    ballFx: row => clientBallFx(row, { spawn: (...a) => scene.fx?.spawn(...a), wet: r => ballWet(world, r), world }), // b80 mpfx80: ze.h's smoke (and bubbles in water) on the client copy; b81 blast81: with the tracker field the copy flies itself (`world` for the setPositionAndRotation2 box lift)
+    ballFx: row => clientBallFx(row, { spawn: (...a) => scene.fx?.spawn(...a), wet: r => ballWet(world, r), water: r => ballWater(world, r), world }), ballWet: r => ballWet(world, r), // b82 mpball82: the copy's flow push; the angles' isInWater // b80 mpfx80: ze.h's smoke (and bubbles in water) on the client copy; b81 blast81: with the tracker field the copy flies itself (`world` for the setPositionAndRotation2 box lift)
     spawnerBurst: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)), // b65 mpspawners2: aux 2004
     spawnerDelay: (x, y, z, key) => applySpawnerDelay({ spawners, copies: remoteVehicles?.copies }, x, y, z, key), // b65: the spawner's block event 1
     spawnerPuff: (x, y, z, w, h) => burst(scene.fx, "explode", 20, { x, y, z, width: w, height: h }, scene.explosionParticles.worldRandom), // b65: entity status 20

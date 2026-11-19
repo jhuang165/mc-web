@@ -7,19 +7,20 @@ import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
 import { sweepBox } from "./mpperf79-fast.js"; // b79 mpperf79
 import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
-import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell, lookVector } from "./blaze-ghast.js";
+import { FIREBALL, fireballAcceleration, fireballStep, fireballBurn, deflect, faceCell, lookVector } from "./blaze-ghast.js";
+import { fireballTurn } from "./fireball-turn.js"; // b82 mpball82
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
-import { fireballTurn } from "./fireball-turn.js";
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
 export const FIRE_IMMUNE = new Set(["blaze", "ghast", "magma_cube", "pigman", "zombie_pigman", "wither_skeleton", "wither"]);
 // ze.h: the sweep grows each candidate box by this (getCollisionBorderSize 0.3 for the mob; the player's pick uses 1.0 for the fireball).
 const SWEEP = 0.3, PICK_BORDER = 1;
+const turnToMotion = (b) => fireballTurn(b, b.vx, b.vy, b.vz);
 const seedOf = (mobs) => Math.floor(mobs.random() * 2 ** 48);
 // b82 fireext82 (render81's skull rule, now for every fireball): Entity.readFromNBT (sa.f(dh), bytecode-read) sets prevRotationYaw/Pitch to the saved Rotation floats and
 // setRotation the current ones to them mod 360 (frem). A record without one (older saves) gives 0, 0.
@@ -94,6 +95,7 @@ export class Fireballs {
     // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
     const water = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
+    fireballBurn(b, water.wet, b.large); // b82 mpball82: the fire counter, the watched burning flag and (large ball) setBeenAttacked; then setFire(1)
     const was = b.inGround;
     if (was && this.stick(b)) return;
     if (!was) b.ticks++; // the let-go update resets ticksInAir to 0 and does not count it
@@ -105,8 +107,7 @@ export class Fireballs {
     // ze.h after the move: in water four bubbles at the new position minus a quarter of the old motion (moving with it), then the motion update, then the smoke at
     // (x, y + 0.5, z) of the NEW position (executed: spexec79 fire79; b79 moved the smoke here from before the move and added the bubbles).
     const [ovx, ovy, ovz] = [b.vx, b.vy, b.vz];
-    fireballStep(b, water.wet);
-    fireballTurn(b, ovx, ovy, ovz); // b82 fireext82: ze.h turns toward the motion after the move, before the motion update (fireball-turn.js; render81 did the skulls)
+    fireballStep(b, water.wet, turnToMotion); // b82 mpball82: with ze.h's turn after the move, before the motion update (fireball-turn.js; render81 did the skulls; fireext82 had the same turn)
     if (water.wet) for (let i = 0; i < 4; i++) mobs.fx?.spawn("bubble", b.x - ovx * 0.25, b.y - ovy * 0.25, b.z - ovz * 0.25, ovx, ovy, ovz);
     mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
   }

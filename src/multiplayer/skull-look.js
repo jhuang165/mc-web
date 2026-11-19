@@ -7,8 +7,10 @@
 //    bytes. The client's handleSpawnObject (bjb.a(fw)) builds zp(world, x, y, z, ax, ay, az) (setLocationAndAngles with the fields' 0 angles,
 //    so prevRotationYaw / prevRotationPitch stay 0), sets the data to 0 (no setVelocity: the copy's motion starts at 0), then
 //    rotationPitch = j * 360 / 256 and rotationYaw = k * 360 / 256 from the signed bytes.
-//  - sendLocationToAllClients (my.a(List)): the block runs when ticks % 10 == 0 (isAirBorne and a dirty data watcher never fall off that beat
-//    for a skull: its watcher 10 is set only in the constructor). No packet at ticks 0. A teleport (S18, always with the angles) when a
+//  - sendLocationToAllClients (my.a(List)): the block runs when ticks % 10 == 0, isAirBorne or a dirty data watcher. No packet at ticks 0.
+//    (Correction 2026-11-18, b82 mpball82: the batch 81 note said a skull's watcher never changes. Entity.onEntityUpdate's setFlag(0, fire > 0)
+//    flips the burning flag at the second update and on entering or leaving water (executed, tools/probes/BallFlagProbe.java), which forces
+//    the block off the beat; fireball-copy.js BallTracks now runs the one entry, and skullEntryTick below is the beat-only form.) A teleport (S18, always with the angles) when a
 //    position delta leaves -128..127 or more than 400 updates passed; otherwise S17 for move and look, S15 for a move only (no angles), S16
 //    for a look only. Look is |yaw - lastYaw| >= 4 or |pitch - lastPitch| >= 4; lastYaw / lastPitch move only on a look, also for S18.
 //  - The client: S14 (bjb.a(hf)) and S18 (bjb.a(ik)) call setPositionAndRotation2 (sa.a(DDDFFI), not overridden by ze or zp) with the
@@ -19,7 +21,7 @@
 const f = Math.fround;
 import { encodeAxis, encodeY, sizeClass } from '../entity-tracker.js';
 import { fireballTurn } from '../fireball-turn.js';
-import { fireballAcceleration } from '../blaze-ghast.js';
+import { FIREBALL, fireballAcceleration } from '../blaze-ghast.js';
 import { SKULL } from '../wither-boss.js';
 
 export const SKULL_FREQUENCY = 10;
@@ -69,12 +71,18 @@ export function skullWire(b) {
   return out;
 }
 
-// The client copy (client-dispense.js row): `fresh` on the row's first snapshot (the S0E), else one client tick of the copy's own
-// EntityFireball.onUpdate, then this tick's packets. The copy's turn reads its OWN motion (bytecode-read bjb.a(fw): the data is set to 0,
-// so setVelocity never runs): 0 at the spawn, then (motion + acceleration) * 0.95 (0.73 charged) a tick, where the acceleration is the
-// 7-argument constructor's normalised speed fields * 0.1. Kept in `row.look` and used for the angles only (the drawn position stays the
-// server's). Water's 0.8 on the copy is not modelled.
-export function skullCopyLook(row, d, fresh) {
+// The client copy (client-dispense.js row) of a fireball, small fireball or wither skull: `fresh` on the row's first snapshot (the S0E), else
+// one client tick of the copy's own EntityFireball.onUpdate, then this tick's packets. The copy's turn reads its OWN motion (bytecode-read
+// bjb.a(fw): the data is set to 0, so setVelocity never runs): 0 at the spawn, then (motion + acceleration) * factor a tick, where the
+// acceleration is the 7-argument constructor's normalised speed fields * 0.1. Kept in `row.look` and used for the angles only (the drawn
+// position stays the server's). b82 mpball82: the factor is getMotionFactor (0.95; a charged skull's 0.73), or 0.8 when the copy is in water
+// (ze.h: `if (isInWater()) { four bubbles; factor = 0.8F }`; `wet` is Entity.isInWater at the start of the update). Used when the row has no
+// angle-bearing copy (fireball-copy.js flyBallRow keeps the angles on the copy itself when the server's `t.s` carries them).
+export function ballLookFactor(kind, blue, wet) {
+  if (wet) return FIREBALL.waterFriction;
+  return kind === 'witherSkull' ? (blue ? SKULL.factorBlue : SKULL.factor) : FIREBALL.friction;
+}
+export function ballCopyLook(row, d, fresh, { wet = false } = {}) {
   if (!Number.isFinite(d.yb) || !Number.isFinite(d.pb)) return row;
   if (fresh || !row.look) {
     const [ax, ay, az] = Array.isArray(d.a8) ? d.a8 : [0, 0, 0];
@@ -83,10 +91,12 @@ export function skullCopyLook(row, d, fresh) {
     row.yaw = angleOfByte(d.yb); row.pitch = angleOfByte(d.pb);
     return row;
   }
-  const L = row.look, m = L.m, k = row.blue ? SKULL.factorBlue : SKULL.factor;
+  const L = row.look, m = L.m, k = ballLookFactor(row.kind ?? d.kind, !!row.blue, !!wet);
   row.prevYaw = row.yaw; row.prevPitch = row.pitch; // Entity.onEntityUpdate
   fireballTurn(row, m[0], m[1], m[2]); // ze.h: after posX += motionX, before the acceleration
   for (let i = 0; i < 3; i++) m[i] = (m[i] + L.a[i]) * k;
   if (d.look) { row.yaw = f(angleOfByte(d.lyb) % 360); row.pitch = f(angleOfByte(d.lpb) % 360); } // setPositionAndRotation2 -> setRotation
   return row;
 }
+// The batch 81 name (a skull row).
+export const skullCopyLook = (row, d, fresh, opts) => ballCopyLook(row, d, fresh, opts);

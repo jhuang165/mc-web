@@ -39,6 +39,7 @@ import { installServerWither, boundedSkullResistance } from './server-wither.js'
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
 import { VILLAGE_KINDS, installServerVillagers } from './server-villagers.js'; // b66 mpvillage
 import { GOLEM_KINDS, installServerGolems } from './server-golems.js'; // b66 mpgolems
+import { skullEntry } from './skull-look.js'; // b82 mpball82: the fireballs' join angles (fireballWatch)
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
 // jockeys only), squid, bat, wolf, ocelot, horse and mooshroom. Zombie villagers and baby zombies are zombies with flags (mobState). Keep it a plain Set: other tracks union into it.
@@ -159,7 +160,7 @@ export class ServerMobs {
   // server world's getClosestPlayer-style aim), and a ball a player punched (`punchedBy`) is updated as that player's, so the kill goes to them (the `ghast` achievement).
   fireballWatch() {
     const fb = this.mobs.fireballs, tickOne = fb.tickOne.bind(fb), impact = fb.impact.bind(fb), ach = this.host.achievements;
-    fb.tickOne = b => { this.target(b); return tickOne(b); };
+    fb.tickOne = b => { b.track ??= skullEntry(b); this.target(b); return tickOne(b); }; // b82 mpball82: the entry's S0E angles at the join, as the skulls (skull-look.js)
     fb.impact = (b, hit) => {
       this.useHit(hit); // b64: the player the sweep found is the one hurt
       const who = b.owner === 'player' ? b.punchedBy : null, v = who && this.views.get(who.id), was = ach?.attacker;

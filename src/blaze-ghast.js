@@ -146,10 +146,24 @@ export function fireballAcceleration(dx, dy, dz, rand = null) {
   return d === 0 ? [0, 0, 0] : [(dx / d) * FIREBALL.speed, (dy / d) * FIREBALL.speed, (dz / d) * FIREBALL.speed];
 }
 // ze.h()'s motion step after the sweep: position moves by the old motion, then motion += acceleration and is multiplied by 0.95 (0.8 in water).
-export function fireballStep(b, inWater) {
+// b82 mpball82: `turn(b)` runs between the move and the motion update, where ze.h turns the ball toward its motion (fireball-turn.js).
+export function fireballStep(b, inWater, turn = null) {
   b.x += b.vx; b.y += b.vy; b.z += b.vz;
+  turn?.(b);
   const k = inWater ? FIREBALL.waterFriction : FIREBALL.friction;
   b.vx = (b.vx + b.ax) * k; b.vy = (b.vy + b.ay) * k; b.vz = (b.vz + b.az) * k;
+}
+// b82 mpball82: the fire part of Entity.onEntityUpdate (sa.C) for a ball on the server, then ze.h's setFire(1). Bytecode-read and executed
+// (tools/probes/BallFlagProbe.java): handleWaterMovement (sa.N) zeroes the counter in water; otherwise a counter > 0 hurts the ball with
+// DamageSource.onFire every 20th count and counts down; then setFlag(0, fire > 0) (server only); ze.h then calls setFire(1) (fire = max(fire, 20)).
+// So the watched burning flag is false after the first update and in water, true otherwise. EntityFireball.attackEntityFrom (ze.a, the large
+// ball's) calls setBeenAttacked before it looks at the source: `attackable` balls set velocityChanged on every update out of water after the first,
+// and the tracker sends S12 each tick. The small ball (zi.a) and the wither skull (zp.a) return false at once.
+export function fireballBurn(b, wet, attackable) {
+  if (wet) b.fire = 0;
+  else if ((b.fire ?? 0) > 0) { if (attackable && b.fire % 20 === 0) b.velocityChanged = true; b.fire--; }
+  b.burnFlag = (b.fire ?? 0) > 0;
+  b.fire = Math.max(b.fire ?? 0, 20); // ze.h: setFire(1) after super.onUpdate
 }
 // ze.a(ro, F) when a player hits it: motion becomes the look vector, acceleration look * 0.1, the player the owner. Not hurt by water.
 export function deflect(b, look) {

@@ -58,16 +58,18 @@ export class S27ClientBlocks {
 // server's post-move position, its motion is the row's position delta, and the water test is the client's own, on the box at the previous position (Entity.handleWaterMovement
 // runs at the start of the update, before the move).
 export const SMOKING_BALLS = new Set(['fireball', 'smallFireball', 'witherSkull']);
-export function clientBallFx(row, { spawn, wet = () => false, world = null }) {
+// b82 mpball82: `water(row)` { wet, push } is handleWaterMovement with the flow's 0.014 push, for the copy's flight (ballWater below).
+export function clientBallFx(row, { spawn, wet = () => false, water = null, world = null }) {
   if (!SMOKING_BALLS.has(row.kind)) return;
-  if (row.track && flyBallRow(row, { world, wet, spawn })) return; // b81 blast81: a server that sends the tracker field: the copy flies itself (fireball-copy.js)
+  if (row.track && flyBallRow(row, { world, wet, water, spawn })) return; // b81 blast81: a server that sends the tracker field: the copy flies itself (fireball-copy.js)
   const vx = row.x - row.px, vy = row.y - row.py, vz = row.z - row.pz;
   if (wet(row)) for (let i = 0; i < 4; i++) spawn('bubble', row.x - vx * 0.25, row.y - vy * 0.25, row.z - vz * 0.25, vx, vy, vz);
   spawn('smoke', row.x, row.y + 0.5, row.z, 0, 0, 0);
 }
 // The ball's box (ze: width = height) at the row's previous position, with the server balls' water test (fluids.js, as fireballs.js and wither-boss-mobs.js use).
 const BALL_WIDTH = { fireball: FIREBALL.largeSize, smallFireball: FIREBALL.smallSize, witherSkull: SKULL.size };
-export function ballWet(world, row) {
+export function ballWater(world, row) {
   const w = BALL_WIDTH[row.kind] ?? 0, r = w / 2;
-  return !!waterAcceleration(world, entityWaterBox([row.px - r, row.py, row.pz - r, row.px + r, row.py + w, row.pz + r])).wet;
+  return waterAcceleration(world, entityWaterBox([row.px - r, row.py, row.pz - r, row.px + r, row.py + w, row.pz + r]));
 }
+export const ballWet = (world, row) => !!ballWater(world, row).wet;

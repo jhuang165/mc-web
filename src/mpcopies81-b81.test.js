@@ -223,7 +223,10 @@ test("server to client: the first skull row carries the spawn angles, look only 
   assert.ok(rows.length >= 21, `the skull flew (${rows.length})`);
   assert.deepEqual([rows[0].yb, rows[0].pb], [21, 7], "the S0E of trackEntity: the shooter's angles before the first turn");
   assert.deepEqual([copies[0].prevYaw, copies[0].yaw], [0, angleOfByte(21)]);
-  assert.deepEqual(rows.map((r, i) => (r.look ? i : -1)).filter(i => i >= 0), [10, 20], "the entry's ticks 10 and 20 (it was made in the launch tick)");
-  for (const i of [10, 20]) assert.equal(copies[i].yaw, Math.fround(angleOfByte(rows[i].lyb) % 360), `tick ${i}: the copy takes the packet's yaw`);
+  // b82 mpball82: the burning flag (watched flag 0) turns on in the skull's second update, so the entry's ticks 1 runs the location block off the beat as well
+  // (DataWatcher.hasObjectChanged; executed, tools/probes/BallFlagProbe.java). Batch 81 expected [10, 20] (it took the skull's watcher as constant).
+  assert.deepEqual(rows.map((r, i) => (r.look ? i : -1)).filter(i => i >= 0), [1, 10, 20], "the entry's ticks 1 (the flag's S1C), 10 and 20 (it was made in the launch tick)");
+  assert.deepEqual(rows[1].t.p.filter(q => q.type === "meta"), [{ type: "meta", f: 1 }], "the S1C after the look packet");
+  for (const i of [1, 10, 20]) assert.equal(copies[i].yaw, Math.fround(angleOfByte(rows[i].lyb) % 360), `tick ${i}: the copy takes the packet's yaw`);
   assert.ok(rows.every(r => r.a8?.length === 3 && r.a8.every(Number.isInteger)), "the speed fields");
 });

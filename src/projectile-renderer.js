@@ -29,10 +29,13 @@ export function projectileItemId(kind) {
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY.
 const BALL_LIGHT = 0.25 * 0.66;
-// The EntityThrowable kinds whose fire counter Projectiles keeps (b80 fluids80; b81 throwfire81: splash potions and bottles o' enchanting too, witch-potions.js). Fireballs and
-// wither skulls are immune to fire (isBurning false). b82 fireext82: eyes of ender and rockets (both setSize(0.25, 0.25), yOffset 0) keep the counter too (eye-of-ender.js eyeFire,
-// firework-rocket.js tickRocket).
+// The EntityThrowable kinds whose fire counter Projectiles keeps (b80 fluids80; b81 throwfire81: splash potions and bottles o' enchanting too, witch-potions.js). b82 fireext82:
+// eyes of ender and rockets (both setSize(0.25, 0.25), yOffset 0) keep the counter too (eye-of-ender.js eyeFire, firework-rocket.js tickRocket).
 const THROWN_FIRE = new Set(["snowball", "egg", "enderPearl", "potion", "expBottle", "eyeOfEnder", "firework"]);
+// b82 mpball82 (correction 2026-11-18): EntityLargeFireball and EntitySmallFireball are not fire immune and ze.h calls setFire(1) every update, so Entity.isBurning is true
+// from the first update (executed, tools/probes/BallFlagProbe.java), and RenderFireball keeps Render.doRenderShadowAndFire: the flames over the ball's box (width = height,
+// yOffset 0). The wither skull's isBurning (zp.al) returns false. `burning` is a multiplayer copy's (fireball-copy.js), else the live counter (fireballs.js fireballBurn).
+const BALL_FIRE = { fireball: 1, smallFireball: Math.fround(0.3125) };
 
 // ModelSkeletonHead(0, 35, 64, 64) (bib, the wither skull's model): one box addBox(-4, -8, -4, 8, 8, 8) at rotation point 0, texture offset
 // (0, 35) on the 64 x 64 wither texture. skinBox is laid out in the mob frame (x, -y, -z), the box centre (0, -4, 0) / 16 in model axes.
@@ -134,8 +137,8 @@ export class ProjectileRenderer {
       m.extra?.setLight(packed);
       // b80 fluids80: Render.doRenderShadowAndFire (bno.b, bytecode-read) draws renderEntityOnFire over a burning throwable (canRenderOnFire = isBurning; the 0.25 box):
       // a pearl or snowball out of lava. `burning` is the client copy's watched flag (object-tracker.js objectView), else the live counter.
-      const burning = THROWN_FIRE.has(b.kind ?? "snowball") && (b.burning ?? b.fire > 0);
-      if (burning && !m.fire) m.fire = new EntityFireRenderer(this.scene, 0.25, 0.25, 0);
+      const ballFire = BALL_FIRE[b.kind], burning = (THROWN_FIRE.has(b.kind ?? "snowball") || ballFire !== undefined) && (b.burning ?? b.fire > 0);
+      if (burning && !m.fire) m.fire = new EntityFireRenderer(this.scene, ballFire ?? 0.25, ballFire ?? 0.25, 0);
       m.fire?.update({ x, y, z }, burning, 180 - (yaw * 180) / Math.PI);
     }
     for (const [b, m] of this.balls)
