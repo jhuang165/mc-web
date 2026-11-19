@@ -193,6 +193,24 @@ export function horseSeatsFor(mobs, rider) {
   return seats;
 }
 
+// EntityHorse.getClosestHorse (wi.a(sa, D), bytecode-read): World.getEntitiesWithinAABBExcludingEntity(e, e's box grown by d on every axis, wj: a horse with flag 16), then the first
+// with the smallest getDistanceSq to e's position (strict <, so list order breaks ties). The chunk lists hold a corpse, even one set dead earlier in the pass; nothing else is tested.
+const herdTargets = new WeakMap();
+const distSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
+export const herdTargetOf = (e) => herdTargets.get(e) ?? null;
+export function closestBredHorse(mobs, e, d) {
+  const [w, h] = mobs.size(e), box = [e.x - w / 2 - d, e.y - d, e.z - w / 2 - d, e.x + w / 2 + d, e.y + h + d, e.z + w / 2 + d];
+  let best = Infinity, out = null;
+  for (const o of mobs.entities) {
+    if (o === e || o.type !== "horse" || !o.horse?.bred) continue;
+    const [ow, oh] = mobs.size(o);
+    if (!(o.x + ow / 2 > box[0] && o.x - ow / 2 < box[3] && o.y + oh > box[1] && o.y < box[4] && o.z + ow / 2 > box[2] && o.z - ow / 2 < box[5])) continue;
+    const q = distSq(o, e);
+    if (q < best) { best = q; out = o; }
+  }
+  return out;
+}
+
 export function installHorse(EntityWorld) {
   const proto = EntityWorld.prototype;
   Object.defineProperty(proto, "horseSeats", { get() { return (this._horseSeats ??= horseSeats(this)); }, configurable: true });
@@ -241,6 +259,14 @@ export function installHorse(EntityWorld) {
     if (rand.nextInt(900) === 0 && e.health > 0) e.health = Math.min(max, e.health + 1);
     if (!e.horse.eating && !e.rider && !e.riddenBy && rand.nextInt(300) === 0 && this.world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z)) === GRASS) e.horse.eating = true;
     if (e.horse.eating && (e.eatTicks = (e.eatTicks ?? 0) + 1) > 50) { e.eatTicks = 0; e.horse.eating = false; }
+    // b82: the herd tail of wi.e (bytecode-read): a Bred foal (flag 16, `bred`; in 1.7.10 only NBT "Bred" sets it) that is not eating looks for the closest Bred horse (wi.a(sa, 16)) and,
+    // beyond 2 blocks (getDistanceSq > 4), asks World.getPathEntityToEntity(this, it, 16, true, false, false, true) and hands the path to EntityCreature.setPathToEntity (td.a(ayf): the
+    // field td.bp). Only the old-AI updateEntityActionState (td.bq) and its hasPath (td.bS) read td.bp, and the horse is AI-enabled (wi.bk is true), so nothing follows it: the foal does
+    // not move toward the herd, and no Entity.rand is drawn. The port keeps the chosen horse (herdTargetOf) and builds no path.
+    if (e.horse.bred && (e.growingAge ?? 0) < 0 && !e.horse.eating) {
+      const o = closestBredHorse(this, e, 16);
+      if (o && distSq(o, e) > 4) herdTargets.set(e, o); // otherwise td.bp keeps what it held
+    }
   };
   // EntityAIRunAroundLikeCrazy.updateTask (vg.e, run by the AI task of an untamed horse with a rider, ai.js RunAround): nextInt(50) == 0, then for a player rider
   // nextInt(100) < temper tames the horse (setTamedBy, status 7), otherwise temper + 5 (capped at 100); the rider is thrown off and the horse rears with the angry sound (status 6).
