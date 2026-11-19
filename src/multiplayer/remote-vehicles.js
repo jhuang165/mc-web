@@ -3,9 +3,12 @@
 // tick, with the previous position kept so the renderers' partial-tick interpolation works. The renderers are injected by main.js (they need three.js), `renderers.minecart` and `.boat`.
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
+import { JavaRandom } from '../java-random.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
 import { waterAcceleration, entityWaterBox } from '../fluids.js';
+import { enterWater } from '../fx.js';
+import { moveInput } from '../player-movement.js';
 
 // b70 carts70: EntityMinecart.setPositionAndRotation2 (xl.a(DDDFFI)V, bytecode-read): the client copy stores the target (minecartX/Y/Z, yaw, pitch) and
 // turnProgress = increments + 2; NetHandlerPlayClient passes 3 for the move and teleport packets of an entity (bjb.a(ik) and a(hf)), so 5 ticks.
@@ -38,7 +41,12 @@ export function cartClientStep(c, place) {
 //   * onUpdate (xi.h, executed for the numbers in tracker-vehicles-reference.json `boatGlide`): handleWaterMovement first (the flow push into the motion), then with increments left
 //     the step towards the target (position by (target - pos) / n, yaw by wrapAngleTo180(target - yaw) / n, pitch likewise, then % 360), else the coast on the motion
 //     (pos += motion, then 0.99F / 0.95F / 0.99F). So a boat a blast throws flies on its S12 between the 3-tick position packets.
-// Not modelled here: the copy's splash sound draws and particles (ObjectClient.waterMovement / splash in single player), onGround's halving (the copy never runs moveEntity).
+// b84 mpboat84: the copy's own draws on its Entity.rand (xi.h and sa.C run on a client world too, bytecode-read):
+//   * sa.N (handleWaterMovement, inside sa.h -> onEntityUpdate before xi.h's own code): entering water after the first update draws the splash sound's two floats (RenderGlobal.playSound is empty:
+//     silent), then 1 + 1.5 * 20 "bubble" and as many "splash" over the width at floor(minY) + 1 (fx.js enterWater); firstUpdate clears after it.
+//   * xi.h's loop before the isRemote test: with horizontal speed d > 0.2625, 1 + d * 60 "splash" (nextFloat, nextInt(2), nextBoolean per draw) at posY - 0.125 with the motion as velocity.
+//   * Not modelled: onGround's halving in the coast (the copy never runs moveEntity).
+// The rider's own boat (isBoatEmpty false after bjb.a(S1B) with the local player): see ownBoatStep.
 export const BOAT_TURN_EXTRA = 5;
 const DRAG_H = fl(0.99), DRAG_V = fl(0.95);
 export function boatSetVelocity(c, s) { c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; c.vs = s.vs; [c.v.vx, c.v.vy, c.v.vz] = c.cv; }
@@ -47,11 +55,18 @@ export function boatSetPositionAndRotation2(c, s, increments = CART_TURN_INCREME
   [c.v.vx, c.v.vy, c.v.vz] = c.cv ?? [0, 0, 0];
 }
 // One client tick of a tracked boat copy. `place(v, x, y, z)` is Boats.setPosition; `world` gives the water push (null: none).
-export function boatClientStep(c, place, world = null) {
+export function boatClientStep(c, place, world = null, fx = null) {
   const v = c.v;
   v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
   v.vx ??= 0; v.vy ??= 0; v.vz ??= 0;
-  if (world && v.bb) { const w = waterAcceleration(world, entityWaterBox(v.bb)); if (w.wet) { v.vx += w.push[0]; v.vy += w.push[1]; v.vz += w.push[2]; } }
+  v.random ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)); // Entity.rand
+  if (world && v.bb) {
+    const w = waterAcceleration(world, entityWaterBox(v.bb));
+    if (w.wet) { v.vx += w.push[0]; v.vy += w.push[1]; v.vz += w.push[2]; if (!v.inWater && !v.firstUpdate) enterWater(fx, { x: v.x, z: v.z, minY: v.bb[1], width: BOAT_W, mx: v.vx, my: v.vy, mz: v.vz }, v.random); }
+    v.inWater = w.wet;
+  }
+  v.firstUpdate = false;
+  boatWake(v, fx);
   const t = c.bt;
   if (t && t.inc > 0) {
     const n = t.inc;
@@ -66,6 +81,47 @@ export function boatClientStep(c, place, world = null) {
   v.vx *= DRAG_H; v.vy *= DRAG_V; v.vz *= DRAG_H;
 }
 
+const BOAT_W = fl(1.5);
+// xi.h's speed splash: the horizontal motion over 0.2625 throws 1 + d * 60 "splash" behind and beside the hull (the same draws as boats.js tickBoat).
+function boatWake(v, fx) {
+  const d = Math.sqrt(v.vx * v.vx + v.vz * v.vz);
+  if (!(d > 0.26249999999999996)) return;
+  const rad = v.yaw * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad), r = v.random;
+  for (let j = 0; j < 1 + d * 60; j++) {
+    const a = fl(fl(r.nextFloat() * 2) - 1), b = (r.nextInt(2) * 2 - 1) * 0.7;
+    if (r.nextBoolean()) fx?.spawn('splash', v.x - cs * a * 0.8 + sn * b, v.posY - 0.125, v.z - sn * a * 0.8 - cs * b, v.vx, v.vy, v.vz);
+    else fx?.spawn('splash', v.x + cs + sn * a * 0.7, v.posY - 0.125, v.z + sn - cs * a * 0.7, v.vx, v.vy, v.vz);
+  }
+}
+
+// b84 mpboat84: the rider's own boat. bjb.a(S1B) with the local player aboard calls setIsBoatEmpty(false) (another rider's attach calls it with true), so the client runs xi.h's whole physics:
+// the buoyancy, the rider's steering (EntityLivingBase moveForward / moveStrafing, yaw), the speed, the move and the drag; the splash draws come with it (Boats.tickBoat). Server packets reach it only
+// through xi.a(DDDFFI) and xi.i (bytecode-read): a position packet whose target is over one block (squared distance > 1) away only sets boatPosRotationIncrements = 3 and motion = the last S12, and
+// a nearer one is dropped; the position and angles are never set from it (the increments are read only in the isBoatEmpty branch). An S12 sets the motion. The state carries `own` with the entry's
+// released position (tx/ty/tz), S12 (mx/my/mz, count vs) and position-packet count rs. The dedicated server still seats the port's local player from its own boat, so a copy more than two blocks
+// from that exact state is put back on it (the port's deviation; natively the player follows the client boat).
+export const OWN_RESYNC = 4; // squared distance
+export function riderRecord(input) {
+  const i = moveInput({ forward: input.forward ?? 0, strafe: input.strafe ?? 0 }); // not slowed: a rider is not using an item
+  return { yaw: fl(180 - input.yaw * 180 / Math.PI), moveForward: fl(i.forward * fl(0.98)), moveStrafing: fl(-i.strafe * fl(0.98)), dead: false };
+}
+export function ownBoatStep(c, boats, world, fx = null, input = null) {
+  const v = c.v;
+  v.remote = true; v.rider = riderRecord(input ?? { yaw: 0 });
+  for (const p of boats.tickBoat(world, v, [], { clear: () => {} })) fx?.spawn(...p);
+  const s = c.target;
+  if (s && (s.x - v.x) ** 2 + (s.y - v.posY) ** 2 + (s.z - v.z) ** 2 > OWN_RESYNC) { boats.setPosition(v, s.x, s.y, s.z); v.px = v.x; v.py = v.posY; v.pz = v.z; v.yaw = s.yaw; v.vx = v.vy = v.vz = 0; }
+}
+// The packets of the rider's boat (see above): `s` is the state with `own`. Returns nothing; updates c.cv / c.vs / c.rs and the motion.
+export function ownBoatPackets(c, s) {
+  const v = c.v;
+  if (s.vs !== c.vs) { c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; c.vs = s.vs; [v.vx, v.vy, v.vz] = c.cv; } // xi.i: setVelocity
+  if (s.rs !== c.rs) { // xi.a(DDDFFI) with isBoatEmpty false
+    c.rs = s.rs;
+    if ((s.tx - v.x) ** 2 + (s.ty - v.posY) ** 2 + (s.tz - v.z) ** 2 > 1) [v.vx, v.vy, v.vz] = c.cv ?? [0, 0, 0];
+  }
+}
+
 export class RemoteVehicles {
   constructor(world) {
     this.world = world;
@@ -73,6 +129,8 @@ export class RemoteVehicles {
     this.boats = new Boats();
     this.copies = new Map(); // key -> { v (record), target (state) }
     this.renderers = null;
+    this.fx = null; // b84 mpboat84: { spawn(name, x, y, z, vx, vy, vz) }, the particle sink of the boat copies (main.js)
+    this.input = null;
     this.hanging = new ClientHanging(); // b68 mppaintings: paintings, item frames and knots (the message's hset / hdel)
   }
   // The `vehicles` message: the newest state of each vehicle in range, and the keys that left.
@@ -96,7 +154,10 @@ export class RemoteVehicles {
       // tracker cadence (take it at once), and `cartMeta` states carry no new position (only the data fields below)
       if (!c.v.boat && !(message.cartCadence && s.cartMeta)) { c.pending = s; if (message.cartCadence) c.since = CART_SEND_INTERVAL; }
       const v = c.v;
-      if (v.boat) { // b83 tracker83: a tracked boat takes the S12 when its count moved, then the position packet (cartMeta: none this time); a plain state (an older server, or the boat this player rides) snaps in tick
+      if (v.boat && s.own === 1) { // b84 mpboat84: the state of the boat this player rides (exact, with the entry's packets)
+        c.tracked = false;
+        if (c.ride) ownBoatPackets(c, s); else { c.vs = s.vs; c.rs = s.rs; c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; }
+      } else if (v.boat) { // b83 tracker83: a tracked boat takes the S12 when its count moved, then the position packet (cartMeta: none this time); a plain state (an older server, or the boat this player rides) snaps in tick
         c.tracked = s.bc === 1;
         if (c.tracked && !fresh) { if (s.vs !== c.vs) boatSetVelocity(c, s); if (!s.cartMeta) boatSetPositionAndRotation2(c, s); } else if (!c.tracked) c.bt = null;
       }
@@ -113,6 +174,13 @@ export class RemoteVehicles {
     }
     this.carts.reap(); this.boats.reap();
   }
+  // b84 mpboat84: the key of the boat the local player rides (self.riding) or null, and this tick's input { yaw (radians), forward, strafe }; call before tick().
+  ride(key, input = null) {
+    this.input = input;
+    for (const [k, c] of this.copies) if (c.ride && k !== key) { c.ride = false; c.v.rider = null; c.v.remote = false; }
+    const c = key && this.copies.get(key);
+    if (c && c.v.boat && !c.ride) { c.ride = true; c.v.remote = true; c.cv ??= [0, 0, 0]; }
+  }
   // One client tick: the previous state is kept, the copy moves to the newest.
   tick() {
     for (const c of this.copies.values()) {
@@ -123,7 +191,8 @@ export class RemoteVehicles {
         cartClientStep(c, (cv, x, y, z) => this.carts.setPosition(cv, x, y, z));
         continue;
       }
-      if (c.tracked) { boatClientStep(c, (bv, x, y, z) => this.boats.setPosition(bv, x, y, z), this.world); continue; } // b83 tracker83
+      if (c.ride && c.target.own === 1 && this.world) { ownBoatStep(c, this.boats, this.world, this.fx, this.input); continue; } // b84 mpboat84
+      if (c.tracked) { boatClientStep(c, (bv, x, y, z) => this.boats.setPosition(bv, x, y, z), this.world, this.fx); continue; } // b83 tracker83
       v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
       (v.boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
       v.yaw = s.yaw; v.pitch = s.pitch;

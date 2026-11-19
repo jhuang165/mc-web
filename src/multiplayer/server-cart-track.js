@@ -42,7 +42,7 @@ export class CartTracker {
       // the S0E: serverPos = floor(pos * 32), the copy at serverPos / 32 (a boat 0.3 higher), the server's angles as bytes, then the spawn's S12 with the current motion
       const m = { sx: Math.floor(e.x * 32), sy: Math.floor(e.y * 32), sz: Math.floor(e.z * 32) };
       const sent = { x: m.sx / 32, y: m.sy / 32 + (v.boat ? BOAT_LIFT : 0), z: m.sz / 32, yaw: angleOfByte(angleByteOf(e.rotationYaw)), pitch: angleOfByte(angleByteOf(e.rotationPitch)) };
-      en = { entry, e, m, sent, released: true, vs: 0, rs: 0, motion: v.boat ? [e.vx, e.vy, e.vz].map(q => velocityInt(q) / 8000) : null };
+      en = { entry, e, m, sent, released: true, vs: 0, rs: 0, pc: 0, tc: 0, rc: 0, motion: v.boat ? [e.vx, e.vy, e.vz].map(q => velocityInt(q) / 8000) : null };
       this.entries.set(v, en); // the first sendLocation (ticks 0) runs below: it sends no position packet, as the executed entry at tick 0
     }
     standIn(v, en.e);
@@ -53,6 +53,7 @@ export class CartTracker {
     // b83 tracker83: my.a(List) re-tests the players (tryStartWachingThis) only when the entity moved more than 4 blocks from where it last did (and at its first update), and
     // before this tick's packets: the square test reads lastScaledPosition / 32 (int division) as it was then. ServerVehicles.track applies it per viewer.
     en.pre = [idiv(en.entry.lastX, 32), idiv(en.entry.lastZ, 32)];
+    en.snapPre = this.snap(en); // b84 mpboat84: the spawn packet of a viewer this entry's own re-list finds (before this tick's packets)
     en.entry.sendLocation(en.e.airBorne, dataChanged);
     en.recheck = en.entry.updated;
     // b72 mpcadence72 / b83 tracker83: each position packet re-aims the client entity at serverPos / 32 (S18: + 1/64); S16 / S17 / S18 also turn it to the bytes
@@ -61,6 +62,9 @@ export class CartTracker {
     for (const p of en.entry.packets) {
       if (p.type === 'velocity') { if (en.motion) { en.motion = [p.vx / 8000, p.vy / 8000, p.vz / 8000]; en.vs++; } continue; }
       if (p.type !== 'move' && p.type !== 'moveLook' && p.type !== 'look' && p.type !== 'teleport') continue;
+      if (p.type === 'teleport') en.tc++; // b84 mpboat84: counts of S18, of the packets that carry angle bytes (S16 / S17 / S18) and of every position packet, for a late viewer's own serverPos
+      if (p.type !== 'move') en.rc++;
+      en.pc++;
       if (p.type === 'teleport') { m.sx = p.x; m.sy = p.y; m.sz = p.z; } else if (p.type !== 'look') { m.sx += p.dx; m.sy += p.dy; m.sz += p.dz; }
       sent.x = m.sx / 32; sent.y = m.sy / 32 + (p.type === 'teleport' ? TELEPORT_LIFT : 0); sent.z = m.sz / 32;
       if (p.type !== 'move') { sent.yaw = angleOfByte(p.yaw); sent.pitch = angleOfByte(p.pitch); }
@@ -69,9 +73,34 @@ export class CartTracker {
     en.released = place;
     if (place && en.motion) en.rs++; // a boat's release count: every position packet re-aims the copy (8 increments), even at the same serverPos
     en.entry.packets.length = 0;
+    en.snapPost = this.snap(en); // b84 mpboat84: ... and the one a viewer's own re-list finds (EntityTracker runs it after every entry's update)
     if (v.airBorne) v.airBorne = false; // Entity.isAirBorne is reset by the tracker after the send
     if (v.velocityChanged) v.velocityChanged = false; // and velocityChanged once its S12 went out
     return en.motion ? { ...sent, bc: 1, vs: en.vs, rs: en.rs, mx: en.motion[0], my: en.motion[1], mz: en.motion[2] } : { ...sent };
+  }
+  /** b84 mpboat84: what a spawn packet carries now (EntityTrackerEntry.func_151260_c builds the S0E from the entity: floor(pos * 32), the angle bytes, the S12 with the motion). */
+  snap(en) {
+    const e = en.e, m = en.m;
+    return { sx: Math.floor(e.x * 32), sy: Math.floor(e.y * 32), sz: Math.floor(e.z * 32), msx: m.sx, msy: m.sy, msz: m.sz,
+      yaw: angleOfByte(angleByteOf(e.rotationYaw)), pitch: angleOfByte(angleByteOf(e.rotationPitch)), pc: en.pc, tc: en.tc, rc: en.rc, vs: en.vs,
+      motion: en.motion ? [e.vx, e.vy, e.vz].map(q => velocityInt(q) / 8000) : null };
+  }
+  /** The spawn record for a viewer that starts tracking `v` now: `afterPackets` false when the entry's own re-list found it (before this tick's packets). Null for an unknown vehicle. */
+  join(v, entryRelist) { const en = this.entries.get(v); return en ? (entryRelist ? en.snapPre : en.snapPost) : null; }
+  /**
+   * b84 mpboat84: the state field a viewer's client holds. Its entity was made by the S0E at floor(pos * 32) (a boat 0.3 high) with the entity's rotation bytes and the spawn's S12, so
+   * until the entry releases a position, a look or a velocity packet the viewer holds those, and after one the entry's later deltas (S15 / S17) land on the viewer's own serverPos:
+   * the difference to the entry's lastScaledPosition stays until an S18 sets it absolutely. `base` is the entry's own released state.
+   */
+  forViewer(v, j, base) {
+    const en = this.entries.get(v);
+    if (!en || !j) return base;
+    const out = { ...base };
+    if (en.pc === j.pc) { out.x = j.sx / 32; out.y = j.sy / 32 + (v.boat ? BOAT_LIFT : 0); out.z = j.sz / 32; }
+    else if (en.tc === j.tc) { out.x = (en.m.sx + j.sx - j.msx) / 32; out.y = (en.m.sy + j.sy - j.msy) / 32; out.z = (en.m.sz + j.sz - j.msz) / 32; }
+    if (en.rc === j.rc) { out.yaw = j.yaw; out.pitch = j.pitch; }
+    if (j.motion && en.vs === j.vs) [out.mx, out.my, out.mz] = j.motion;
+    return out;
   }
   /** The entry's lastScaledPosition / 32 (int division) now, for a viewer's own re-list (EntityTracker.updateTrackedEntities runs it after every entry's update). */
   scaled(v) { const en = this.entries.get(v); return en ? [idiv(en.entry.lastX, 32), idiv(en.entry.lastZ, 32)] : null; }
