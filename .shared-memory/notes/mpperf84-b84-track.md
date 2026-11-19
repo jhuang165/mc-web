@@ -18,7 +18,8 @@
 
 ## Verification
 - `node --test src/mpperf84-b84.test.js`: 5 pass (cached boxes through moves, -0, NaN, calf growth, list shift; aiMoveSpeed on every ENTITY_TYPES entry with and without modifiers; stepBlockInto; seeded hashes off/on/verify).
-- Neighbour set (45 files) with `MC_MPPERF84=verify MC_MPPERF83=verify` and with default mode: see the result lines in the final report.
+- Neighbour set (45 files: mpperf77-84, entities, item-entities, projectiles, multiplayer, attributes, ai, dragon, mob-steps, fishing, villager, iron-golem, mpdispense, rain83, spexec79), `--test-concurrency=2`: 397 pass, 0 fail with `MC_MPPERF84=verify MC_MPPERF83=verify`. A seven-file default-mode subset (mpperf84, mob-steps, attributes2, item-entities, entities, projectiles, mpdispense-b61): 99 pass, 0 fail. The first verify run found the b83 dragon `reach` false positive (3 failures, also on the unmodified branch) which is now fixed.
+- `npm run build` not run (no bundle-facing change beyond imports).
 - No full npm test, no browser checks.
 
 ## Follow-ups
