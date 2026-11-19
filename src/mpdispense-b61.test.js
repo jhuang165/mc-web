@@ -154,7 +154,7 @@ test("a spawn egg adds a mob through ServerMobs, a villager too (b66)", () => {
   const v = fixture(), r = join(v, "c", 1); load(v, makeStack(ITEM.SPAWN_EGG, 2, 120)); // b66: villagers are server kinds now (mpvillage)
   run(v, 8, [r]);
   assert.equal(v.mobs.mobs.entities.filter(e => e.type === "villager").length, 1);
-  // b66: every 1.7.10 spawn-egg kind is a server kind now; the giant, the one left out, has no egg (EntityList.entityEggs), so no egg is kept back any more.
+  // b66: every 1.7.10 spawn-egg kind is a server kind now; the giant, the one left out, has no egg (EntityList.entityEggs), so no egg is kept back any more. b82 entities82: the giant is a server kind too.
 });
 
 test("armour dispensed at a player in front is worn (invSet), not dropped; one already wearing a helmet gets the item thrown", () => {

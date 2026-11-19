@@ -8,6 +8,7 @@ import { ServerSocial, chatDisplay } from "./server-broadcast.js";
 import { langReady } from "./chat-component.js";
 import { sendSpawnerFx, mobTrackRange } from "./multiplayer/server-spawners.js";
 import { KillCredit } from "./multiplayer/server-combat-tracker.js";
+import { SUPPORTED } from "./multiplayer/server-mobs.js";
 
 await langReady;
 
@@ -56,7 +57,7 @@ test("a data tag is merged (Health, CustomName), and a Riding chain seats the mo
   const pig = f.sim.mobs.mobs.entities.find((e) => e.type === "pig"), chicken = f.sim.mobs.mobs.entities.find((e) => e.type === "chicken");
   assert.ok(pig && chicken);
   assert.equal(chicken.ridingEntity, pig);
-  // a chain whose mount cannot be made ends the chain: the rider stays, the command still succeeds (CommandSummon)
+  // a chain whose mount cannot be made ends the chain: the rider stays, the command still succeeds (CommandSummon). b82 entities82: the giant is kept now, so it rides.
   assert.deepEqual(f.say("a", "/summon Chicken ~ ~ ~ {Riding:{id:Giant}}"), [OK]);
 });
 
@@ -70,12 +71,15 @@ test("onSpawnWithEgg runs only without a tag: a bare zombie may roll gear or a j
   assert.equal(calls, 1);
 });
 
-test("a kind the server cannot keep (the giant) gives the failure message", () => {
+test("a kind the server cannot keep gives the failure message (b82 entities82: the giant is kept now)", () => {
   const f = fixture(); f.join("a", "Alex", 1);
-  assert.deepEqual(f.say("a", "/summon Giant"), [FAILED]);
+  assert.deepEqual(f.say("a", "/summon Giant"), [OK]);
+  assert.equal(f.sim.mobs.mobs.entities.filter((e) => e.type === "giant").length, 1);
+  SUPPORTED.delete("giant"); // no mob kind is left out since b82, so one is taken out for the refusal
+  try { assert.deepEqual(f.say("a", "/summon Giant"), [FAILED]); } finally { SUPPORTED.add("giant"); }
   assert.deepEqual(f.say("a", "/summon Painting"), [OK]); // b68 mppaintings: kept by server-hanging.js
   assert.deepEqual(f.say("a", "/summon ItemFrame"), [OK]);
-  assert.equal(f.sim.mobs.mobs.entities.some((e) => e.type === "giant"), false);
+  assert.equal(f.sim.mobs.mobs.entities.filter((e) => e.type === "giant").length, 1);
 });
 
 test("vehicles go to the server's vehicles: minecarts of every type (spawner and command block included) and a boat", () => {

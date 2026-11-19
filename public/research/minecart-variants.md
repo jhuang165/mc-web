@@ -26,6 +26,7 @@ Cart items place on rails, dispense from dispensers, appear in the creative tran
 - Spawner cart (type 4) is supported; see [spawner cart](spawner-cart.md).
 - The wall-collision explosion of the TNT cart never fires on rails in the original either (motion is zeroed first), so it is not covered by any recorded case.
 - The hopper cart block inside the model is approximated from boxes; furnace, TNT and command block use the block textures at the original offset and scale. Not compared with native screenshots.
+- Batch 82 (entities82, 2026-11-18): "approximated from boxes" is stale for the hopper: `cart-display-shape.js` draws it from 17 executed render-type-38 quads. Still not compared with native screenshots.
 - Native keeps a size-0 stack in a spilled slot (NBT Count 0); the port empties the slot.
 - Hopper cart interaction with hopper block chains and other tile entities beyond the probed cases is not recorded.
 - Browser behaviour (rendering, GUI, sounds) was not exercised in a browser. Full parity is not claimed.

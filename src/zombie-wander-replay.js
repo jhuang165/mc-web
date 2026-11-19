@@ -36,6 +36,7 @@ export function replayZombieWander(r) {
     for (const op of r.script) {
       const p = op.split(" ");
       if (Number(p[0]) === t && p[1] === "fire") e.fire = Number(p[2]) * 20;
+      if (Number(p[0]) === t && p[1] === "helmet") e.equipment[4] = { id: Number(p[2]), count: 1, damage: Number(p[3]) }; // b82: native ids (mob-equipment.js)
     }
     ew.ai.beginTick(player, survival, 0);
     ew.events.length = 0;
@@ -49,7 +50,8 @@ export function replayZombieWander(r) {
       path = same ? [cp.index] : [cp.index, ...pts];
     } else lastPath = "";
     rows.push([e.x, e.y, e.z, e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.fire ?? 0, e.health,
-      rand.log.splice(0), path, [mh.x, mh.y, mh.z, mh.speed, mh.update ? 1 : 0], [lh.looking ? 1 : 0, lh.x, lh.y, lh.z, lh.deltaYaw, lh.deltaPitch], b.tasks.running.map((x) => x.action.constructor.name)]);
+      rand.log.splice(0), path, [mh.x, mh.y, mh.z, mh.speed, mh.update ? 1 : 0], [lh.looking ? 1 : 0, lh.x, lh.y, lh.z, lh.deltaYaw, lh.deltaPitch], b.tasks.running.map((x) => x.action.constructor.name),
+      null, null, e.equipment?.[4] ? [e.equipment[4].id, e.equipment[4].damage, e.equipment[4].count] : null]); // b82: [20] the helmet slot (the records' navigator and body helper, 18 and 19, are not compared)
   }
   return { ew, e, rows };
 }
@@ -66,6 +68,7 @@ export function zombieWanderDivergence(r, got) {
       if (k === 14 || k === 15 || k === 16) { if (JSON.stringify(w) !== JSON.stringify(g[k]) && !(Array.isArray(w) && w.every((v, i) => near(v, g[k][i])))) return [t, FIELDS[k], w, g[k]]; continue; }
       if (!near(w, g[k])) return [t, FIELDS[k], w, g[k]];
     }
+    if (want.length > 20 && JSON.stringify(want[20]) !== JSON.stringify(g[20])) return [t, "helmet", want[20], g[20]]; // b82 entities82: helmet records only
   }
   return null;
 }

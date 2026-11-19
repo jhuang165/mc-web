@@ -4,6 +4,8 @@
 //   spawn egg (ItemMonsterPlacer): pass 0 spawn_egg in the primary colour, pass 1 spawn_egg_overlay in the secondary colour.
 //   potion (ItemPotion, bytecode-read adp.a(int,int) / adp.a(add,int)): pass 0 potion_overlay in PotionHelper's liquid colour, pass 1 the bottle (drinkable, or splash for
 //   damage bit 16384), white.
+//   firework star (ItemFireworkCharge acr, bytecode-read acr.a(int,int) / acr.a(add,int), b82 entities82): pass 0 fireworks_charge, white; pass 1 fireworks_charge_overlay in
+//   the Explosion Colors' channel average (one colour as is, none 0x8A8A8A). The pass 1 colour comes in as `color` (itemPassColor(stack)) and is the cache key.
 // itemPasses(id, damage, color) -> { color, tint, base, overlay, overlayTint } (tints are [r, g, b] in 0..1, null = white) or null for a one-pass item. `color` is the pass 0 colour
 // as an integer (a cache key); `base` is the pass 0 sprite, `overlay` the pass 1 sprite drawn over it.
 import { leatherItemLayers } from "./leather-dye.js";
@@ -12,6 +14,7 @@ import { potionColor } from "./potions.js";
 import { flatBlockItem } from "./flat-block-items.js";
 import { blockTile, tileName } from "./block-textures.js";
 import { itemGrassColor, hasColormaps, FOLIAGE_BASIC, LILY_PAD_COLOR } from "./biome-colors.js";
+import { ITEM_FIREWORK_STAR, STAR_DEFAULT_TINT, starTint } from "./fireworks.js";
 
 export const ITEM_POTION = 385;
 const ITEMS_DIR = "/media/1.7.10/items/";
@@ -31,7 +34,14 @@ export function flatTintOfTile(name) {
 }
 const BLOCKS_DIR = "/media/1.7.10/blocks/";
 
+// The `color` argument itemPasses takes for a stack: the leather display colour, or a firework star's pass 1 colour (its Explosion Colors).
+export const itemPassColor = (stack) => (stack?.id === ITEM_FIREWORK_STAR ? starTint(stack, 1) : stack?.color);
+
 export function itemPasses(id, damage = 0, color = undefined) {
+  if (id === ITEM_FIREWORK_STAR) {
+    const c = (color ?? STAR_DEFAULT_TINT) & 0xffffff;
+    return { color: c, tint: [1, 1, 1], base: ITEMS_DIR + "fireworks_charge.png", overlay: ITEMS_DIR + "fireworks_charge_overlay.png", overlayTint: rgb(c) };
+  }
   const leather = leatherItemLayers(id, color);
   if (leather) return { color: leather.color, tint: leather.tint, base: leather.base, overlay: leather.overlay, overlayTint: null };
   if (id === ITEM_SPAWN_EGG) {

@@ -35,7 +35,7 @@ import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, spawnEggIconHtml } from "./spawn-eggs.js";
 import { spawnEggMob } from "./spawn-egg-use.js";
 import { isThrowable } from "./player-throw-simulation.js";
-import { ITEM_POTION, itemPasses } from "./item-passes.js";
+import { ITEM_POTION, itemPasses, itemPassColor } from "./item-passes.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
 import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-ui.js';
@@ -201,6 +201,7 @@ import { EyesOfEnder, spawnEyeShatter, spawnEyeTrail } from "./eye-of-ender-live
 import { MapsClock } from "./maps-clock-live.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { FireworkRockets, dispenseFirework, setRocketEntityBoxes } from "./fireworks-live.js";
+import { ITEM_FIREWORK_STAR } from "./fireworks.js"; // b82 entities82: the star icon's two passes
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
 import { BEACON, Beacons, validPrimary, validSecondary } from "./pyramid.js";
@@ -1168,6 +1169,7 @@ function icon(id, damage = 0, stack) {
   // ItemPotion layers: potion_overlay tinted by the liquid colour under the untinted bottle (splash bottle for splash values).
   if (id === 385) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${(damageColor(damage | 0) & 0xffffff).toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${(damage | 0) & 16384 ? "potion_bottle_splash" : "potion_bottle_drinkable"}.png" alt=""></span>`;
   if (id === ITEM_SPAWN_EGG) return spawnEggIconHtml(damage); // spawn-eggs.js: primary and secondary colour layers
+  if (id === ITEM_FIREWORK_STAR) { const p = itemPasses(id, damage | 0, itemPassColor(stack ?? { id })); return `<span class="vanilla-item-icon tinted-item" aria-hidden="true"><i style="--tint:#ffffff;--base:url('${p.base}')"></i><i style="--tint:#${p.color.toString(16).padStart(6, "0")};--base:url('${p.overlay}')"></i></span>`; } // b82: ItemFireworkCharge's two passes
   if (id === ITEM_COMPASS) return compassIcon();
   // Tinted flat block items (grass, fern, vine, lily pad, double plants): the grey blocks-sheet icon times getRenderColor, as RenderItem draws it (item-passes.js), not a baked image.
   const flatTint = itemPasses(id, damage | 0);
@@ -2559,7 +2561,7 @@ function paperdollFrame() {
       armor: survival?.inventory?.armor ?? [],
       held: heldId(),
       heldDamage: survival.held?.damage || 0,
-      heldColor: survival.held?.color,
+      heldColor: itemPassColor(survival.held), // b82: a firework star's pass 1 colour too (item-passes.js)
       heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       hurt: survival.hurtTime > 0,
       sneak: motion.sneaking,
@@ -4698,7 +4700,7 @@ function animate(now) {
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
     heldDamage: survival.held?.damage || 0,
-    heldColor: survival.held?.color,
+    heldColor: itemPassColor(survival.held), // b82: a firework star's pass 1 colour too (item-passes.js)
     heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
     blocking: !!eating?.block,
     hurt: survival.hurtTime > 0,
@@ -4746,7 +4748,7 @@ function animate(now) {
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
       blocking: !!eating?.block, // ItemRenderer: a sword in use (EnumAction.block)
       glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
-      color: survival.held?.color,
+      color: itemPassColor(survival.held),
       map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
       pitchDeg: -pitch / (Math.PI / 180),
     });

@@ -14,3 +14,5 @@ Approximate / gaps:
 - Natural spawning is not added (the Giant does not spawn naturally in 1.7.10).
 
 Batch 73 (docs sweep, 2026-11-14): the AI-gap line was not re-executed. The giant is still outside the server's `SUPPORTED` set (batch 66 rules), so it only exists in single player; natural spawning is correctly absent.
+
+Batch 82 (entities82, 2026-11-18): the giant is a dedicated-server kind now (`server-mobs.js` SUPPORTED): `/summon Giant`, spawner SpawnData (also as a Riding mount) and saved mobs keep it, the tracker sends it at the IAnimals default range 80, and the client copy is the giant's 3.6 x 10.8 box (`src/entities82-b82.test.js`). It still never spawns naturally and has no egg. The pathing-reach line is still unverified.

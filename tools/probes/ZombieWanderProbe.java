@@ -23,7 +23,12 @@ public class ZombieWanderProbe {
   static void at(sa e, double x, double y, double z) throws Exception { MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(e, x, y, z); }
 
   static int[][] blocks = {};
-  static boolean water = false, day = false;
+  static boolean water = false, day = false, helmets = false;
+  // b82 entities82: EntityLivingBase.previousEquipment (sv.g) set to copies of the current slots, as the server's equipment-packet branch would leave them.
+  static void syncPrevious(yq z) throws Exception {
+    add[] prev = (add[]) MobMoveProbe.field(sv.class, "g").get(z);
+    for (int i = 0; i < prev.length; i++) { add cur = z.q(i); prev[i] = cur == null ? null : cur.m(); }
+  }
 
   static int scenario(String name, long zseed, int ticks, double[] zpos, double[] ppos, String[] script, int needBy) throws Exception {
     if (System.getenv("ZW_PREFIX") != null && !name.startsWith(System.getenv("ZW_PREFIX"))) return -2;
@@ -65,11 +70,13 @@ public class ZombieWanderProbe {
           case "move": at(z, Double.parseDouble(p[2]), p.length > 4 ? Double.parseDouble(p[4]) : z.t, Double.parseDouble(p[3])); break;
           case "air": VillageLiveProbe.put(Integer.parseInt(p[2]), Integer.parseInt(p[3]), Integer.parseInt(p[4]), p.length > 5 ? Integer.parseInt(p[5]) : 0, 0); break;
           case "day": VillageLiveProbe.W.day = p[2].equals("1"); break;
+          case "helmet": z.c(4, new add(adb.d(Integer.parseInt(p[2])), 1, Integer.parseInt(p[3]))); syncPrevious(z); break; // b82: setCurrentItemOrArmor(4, stack)
           default: throw new RuntimeException(op);
         }
       }
       int before = log.log.size();
       if (!z.K) { z.aa++; z.h(); }
+      syncPrevious(z); // b82: the probe world is not a WorldServer, so EntityLivingBase.onUpdate's equipment-change branch (a cast to mt) must never see a change
       VillagerProbe.World.entities.removeIf(e -> e.K);
       StringBuilder row = new StringBuilder("[");
       row.append(num(z.s)).append(",").append(num(z.t)).append(",").append(num(z.u)).append(",").append(num(z.v)).append(",").append(num(z.w)).append(",").append(num(z.x)).append(",")
@@ -98,7 +105,9 @@ public class ZombieWanderProbe {
       boolean first = true;
       for (Object te : ex) { Object a = MobMoveProbe.field(te.getClass(), "a").get(te); row.append(first ? "" : ",").append(q(a.getClass().getName())); first = false; }
       row.append("],[").append(nav.g() ? 1 : 0).append(",").append(num(dv(vv.class, nav, "d"))).append("],[")
-        .append(iv(tr.class, fvc(sw.class, z, "bn"), "b")).append(",").append(num(flv(tr.class, fvc(sw.class, z, "bn"), "c"))).append("]]");
+        .append(iv(tr.class, fvc(sw.class, z, "bn"), "b")).append(",").append(num(flv(tr.class, fvc(sw.class, z, "bn"), "c"))).append("]");
+      if (helmets) { add h = z.q(4); row.append(",").append(h == null ? "null" : "[" + adb.b(h.b()) + "," + h.k() + "," + h.b + "]"); } // b82: the helmet slot [item id, damage, size]
+      row.append("]");
       rows.add(row.toString());
     }
     if (needBy >= 0 && (firstPath < 0 || firstPath > needBy)) { VillagerProbe.reset(); return -1; }
@@ -134,6 +143,13 @@ public class ZombieWanderProbe {
     family("zw-sun", 42201, 3, new double[] {72.5, 64.5}, FAR, none);
     day = false;
     family("zw-fire", 42301, 2, new double[] {72.5, 64.5}, FAR, new String[] {"20 fire 5"});
+    // b82 entities82: daylight with a helmet (EntityZombie.onLivingUpdate's helmet branch): a leather helmet one point from breaking (it wears, breaks with
+    // renderBrokenItemStack's 15 floats and the zombie then burns), a fresh diamond helmet (wears, never burns) and a pumpkin (no wear, never burns).
+    day = true; helmets = true;
+    family("zw-helm-leather", 42401, 5, new double[] {72.5, 64.5}, FAR, new String[] {"0 helmet 298 54"});
+    family("zw-helm-diamond", 42501, 2, new double[] {72.5, 64.5}, FAR, new String[] {"0 helmet 310 0"});
+    family("zw-helm-pumpkin", 42601, 2, new double[] {72.5, 64.5}, FAR, new String[] {"0 helmet 86 0"});
+    day = false; helmets = false;
   }
 
   public static void main(String[] args) throws Exception {
