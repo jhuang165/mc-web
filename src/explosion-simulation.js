@@ -59,7 +59,7 @@ export function nonLivingRows(state, b, { creative = false, vehicleDrop = null, 
     ...balls(projectiles), ...balls(mobs?.potions?.projectiles), ...balls(mobs?._golemBalls?.projectiles),
     ...vehicleRows(state.minecarts, b, creative, vehicleDrop), ...vehicleRows(state.boats, b, creative, vehicleDrop),
     ...(falling?.explodeOne ? systemRows(falling.entities, b, (e) => e.y + 0.49, (e) => falling.explodeOne(e, x, y, z, size)) : []),
-    ...(hanging?.explodeOne ? systemRows(hanging.entities, b, (e) => e.y, (e) => { hanging.explodeOne(e, x, y, z, size); hangingDrops?.(); }) : []), // paintings and item frames break (hanging.js)
+    ...(hanging?.explodeOne ? systemRows(hanging.entities, b, (e) => e.y, (e) => { hanging.explodeOne(e, x, y, z, size); if (hangingDrops) hangingDrops(); else if (vehicleDrop && hanging.drain) for (const d of hanging.drain()) vehicleDrop(d); }) : []), // paintings and item frames break (hanging.js)
     ...knotRows(mobs, b), ...fireballRows(mobs?._fireballs, b), ...fireballRows(mobs?._skulls, b),
     ...rocketRows(state.rockets?.rockets, b), ...eyeRows(state.eyes?.eyes, b), ...hookRows(state.hooks, b),
   ];
@@ -126,8 +126,15 @@ export function mobRows(state, request, mobHits = []) {
       // The query box is Explosion.doExplosionA's integer box floor(centre -/+ (2 * size) - 1) (probed: the dragon's own box and chunk gate the parts).
       const r = 2 * size, area = [Math.floor(x - r - 1), Math.floor(y - r - 1), Math.floor(z - r - 1), Math.floor(x + r + 1), Math.floor(y + r + 1), Math.floor(z + r + 1)];
       if (!isDragon(entity) || !reachesDragon(entity, area)) continue;
+      // b84 blastparts84 (bytecode-read apx.a(sa, azt, List, sj)): the list gets the dragon ITSELF (xa), then its getParts() that meet the area, all inside one `meets` block, so
+      // the body and its parts are consecutive list entries at the dragon's slot. xa.a(ro, F) returns false (no damage, no setBeenAttacked); the push below still lands on its
+      // motion. Parts are collected now (before any hurt), each with the box it has at list time.
+      const meets = (bb) => bb[3] > area[0] && bb[0] < area[3] && bb[4] > area[1] && bb[1] < area[4] && bb[5] > area[2] && bb[2] < area[5];
+      const listed = [...entity.dragon.parts.entries()].filter(([, p]) => p.box && meets(p.box));
       out.push({ key: entity, pos: [entity.x, entity.y, entity.z], run: () => {
-        for (const [part, p] of entity.dragon.parts.entries()) {
+        const body = explosionImpact(world, x, y, z, size, entity.x, entity.y, entity.z, entity.y + livingEyeHeight("ender_dragon", 8), [entity.x - 8, entity.y, entity.z - 8, entity.x + 8, entity.y + 8, entity.z + 8]);
+        if (body) { entity.vx += body.push[0]; entity.vy += body.push[1]; entity.vz += body.push[2]; }
+        for (const [part, p] of listed) {
           const hit = explosionImpact(world, x, y, z, size, p.x, p.y, p.z, p.y, p.box);
           if (!hit) continue;
           mobs.attackEntityFrom(entity, hit.damage, { name: "explosion", part, from: hitFrom ? { x: hitFrom.x, z: hitFrom.z } : undefined, player: attacker === "player", attacker: attacker && attacker !== "player" ? attacker : undefined });
@@ -140,11 +147,13 @@ export function mobRows(state, request, mobHits = []) {
     out.push({ key: entity, pos: [entity.x, entity.y, entity.z], run: () => {
       const scale = entity.growingAge < 0 ? 0.5 : 1;
       const width = type.width * scale, height = type.height * scale;
+      // b84 blastparts84 (bytecode-read wz.<init>): an ender crystal is no EntityLivingBase: yOffset = height / 2 = 1, so its `y` is posY and its box [y - 1, y + 1]; getEyeHeight is 0.
+      const crystal = entity.type === "ender_crystal";
       const hit = explosionImpact(
         world, x, y, z, size,
         entity.x, entity.y, entity.z,
-        entity.y + livingEyeHeight(entity.type, height), // Explosion.doExplosionA reads posY + getEyeHeight()
-        entityBox(entity, width, height),
+        crystal ? entity.y : entity.y + livingEyeHeight(entity.type, height), // Explosion.doExplosionA reads posY + getEyeHeight()
+        crystal ? [entity.x - 1, entity.y - 1, entity.z - 1, entity.x + 1, entity.y + 1, entity.z + 1] : entityBox(entity, width, height),
       );
       if (!hit) return;
       if (hitFrom) mobs.damage(entity, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
