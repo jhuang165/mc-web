@@ -185,7 +185,7 @@ export function carryStep(e, w, rng) {
 
 // ya.e(), everything before the EntityMob/EntityLivingBase update, in the original's order and with its Random draws.
 // ctx = { rng, target (null or { x, y, z, eye, player: p | null, id }), dropTarget(), wet (L: in water or rain), burning (al),
-//         hurt(source) (the 1 point of drown damage), distanceSq(target), face(target) (isJumping = false and faceEntity 100/100) }.
+//         hurt(source) (the 1 point of drown damage), distanceSq(target), face(target) (isJumping = false and faceEntity 100/100), dead (health <= 0) }.
 // `p` (when the target is a player) is the staring record staresAt takes. The mob's own particle effect (two "portal"
 // particles a tick) is drawn here because it consumes Entity.rand.
 export function tick(e, w, ctx) {
@@ -211,6 +211,7 @@ export function tick(e, w, ctx) {
   if (ctx.wet || ctx.burning) lose();
   if (e.screaming && !e.aggressive && rng.nextInt(100) === 0) e.screaming = false;
   ctx.face?.(tgt); // bc = false, then faceEntity(bm, 100, 100) when the (possibly just dropped) target is set
+  if (ctx.dead) return; // b83 corpse83: the rest is inside `!isRemote && isEntityAlive()` (bytecode-read; corpse-living-reference.json enderCorpse / enderChase executed)
   if (tgt) {
     if (tgt.player && staresAt(e, tgt.player, w)) {
       if (ctx.distanceSq(tgt) < 16) teleportRandomly(e, w, rng); // ya.e(): sa.f(sa) is getDistanceSqToEntity, `< 16.0D` = 4 blocks (bytecode-read)

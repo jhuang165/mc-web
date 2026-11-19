@@ -68,6 +68,7 @@ import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
 import { squidBatUpdate, squidBatTalk, installSquidBat } from "./squid-bat-mobs.js";
+import { corpseEntityUpdate, corpseEffects, corpseLivingHead, corpseLivingTail, squidCorpse } from "./corpse-living.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
@@ -668,7 +669,7 @@ export function clientBodyTurn(c) {
 // Entity.handleWaterMovement (sa.N) through World.handleMaterialAcceleration: the
 // box shrunk 0.4 vertically and 0.001 all round is wet below each cell's liquid
 // surface, and living entities are pushed 0.014 along the summed flow vector.
-function inWater(world, e, w, h) {
+export function inWater(world, e, w, h) {
   const r = w / 2;
   if (dryBox(world, e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r)) { addVelocity(e, 0, 0, 0); return false; } // b81 mpperf81: no water cell, so no wet flag and a zero push
   const { wet, push } = waterAcceleration(world, entityWaterBox([e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r]));
@@ -2445,8 +2446,8 @@ export class EntityWorld {
         if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
         // b81: EntityZombie.onUpdate (yq.h) counts a converting zombie down with no health test (bytecode-read), so a corpse whose timer runs out in its death becomes the villager.
         if (e.conversionTime !== undefined) { const death = e.death, hit = e.recentlyHit; if (this.tickConversion(e)) { this.convertedCorpse(e, t, death, hit); continue; } }
-        // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits).
-        this.burn(e, t);
+        // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits); b83: and the sprint draws, handleWaterMovement (splash, extinguish) and the air reset (corpse-living.js).
+        corpseEntityUpdate(this, e, t);
         e.hurt = Math.max(0, e.hurt - 1);
         this.dying(e, t);
         continue;
@@ -2594,10 +2595,12 @@ export class EntityWorld {
     if (slime) slimeSquishStart(e);
     this.deathUpdate(e, t);
     if (e.recentlyHit > 0) e.recentlyHit--;
+    corpseEffects(this, e, t, ENTITY_TYPES[e.type].health); // b83: sv.C's revenge lapse and updatePotionEffects test no health (corpse-living.js)
     e.jumping = false;
     this.sunIgnite(e, t); // b82: EntityZombie / EntitySkeleton.onLivingUpdate (yq.e, yl.e) test no health: a corpse in daylight draws the roll and can catch fire
     if (e.type === "blaze") blazeUpdate(this, e, t, true); // EntityBlaze.onLivingUpdate runs for a corpse too (its hover push, the 0.6 fall damping and its draws), before EntityLivingBase's blocked movement
     if (e.type === "witch") this.witchUpdate(e, t); // EntityWitch.onLivingUpdate (yp.e) runs for a corpse too: the drink roll draws and can still start a drink (creeperwitch-b45 records)
+    corpseLivingHead(this, e, t); // b83: EntityEnderman / EntityWither.onLivingUpdate before EntityMob's (corpse-living.js)
     e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
     if (slime) e.moveForward = 0;
     // b80: sv.e then calls moveEntityWithHeading, and EntityHorse's (wi.e(FF), bytecode-read) takes a saddled rider's input in place of the zeroed one, so the rider steers a dying horse.
@@ -2608,16 +2611,17 @@ export class EntityWorld {
     // b82: a movement-blocked tick runs no sw.bn, so EntityAITasks.tickCount stays (ai.js derives it from the age, which counts every tick, less aiSkipped): a revived wolf or a horse corpse
     // that runs its AI again resumes the task phase it had.
     if (!horse || (e.rider && e.horse?.saddled) || e.rearing || e.horse?.eating) e.aiSkipped = (e.aiSkipped || 0) + 1;
-    this.walk(e, t, 0, horse ? () => (e.rider && e.horse?.saddled ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
+    const squid = e.type === "squid";
+    if (squid) squidCorpse(this, e, t); // b83: ws.e(FF) is moveEntity(motion), then the push, ws.e's tail and the walking-direction body turn (corpse-living.js); no limb swing
+    else this.walk(e, t, 0, horse ? () => (e.rider && e.horse?.saddled ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
-    this.push(e, t);
+    if (!squid) this.push(e, t);
     this.ageAndLove(e, t); // b82: EntityAgeable / EntityAnimal.onLivingUpdate (rx.e, wf.e) test no health (bytecode-read): a corpse grows, a foal corpse's box widens, love counts down with its heart draws
+    corpseLivingTail(this, e, t); // b83: the wolf's shake and head tilt, the snowman's trail, the wither's side heads (corpse-living.js)
     if (horse) this.horseTick(e);
     if (e.type === "chicken") this.chickenUpdate(e);
-    // b82: EntityLivingBase.onUpdate (sv.h) turns the body after onLivingUpdate for every living entity, a corpse too (bytecode-read): the body helper or the walking-direction turn.
-    if (e.type === "squid") legacyBodyTurn(e, e.x - e.px, e.z - e.pz);
-    else this.turnBody(e);
-    this.swingLimbs(e);
+    // b82: EntityLivingBase.onUpdate (sv.h) turns the body after onLivingUpdate for every living entity, a corpse too (bytecode-read): the body helper (the squid's turn is in squidCorpse).
+    if (!squid) { this.turnBody(e); this.swingLimbs(e); }
     if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
   }
   // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <

@@ -90,7 +90,7 @@ export function endermanTick(mobs, e, rng) {
   // so a roof of glass or leaves (above the precipitation height), a desert or a snowy biome keeps an enderman dry.
   const wet = !!e.inWater || !!mobs.wet?.(e, E.ENDERMAN_HEIGHT);
   E.tick(e, w, {
-    rng, target, wet, burning: e.fire > 0,
+    rng, target, wet, burning: e.fire > 0, get dead() { return !(e.health > 0); }, // b83: a corpse (entities.js dying -> corpse-living.js), or one the wet hit just killed, skips the alive-gated stare / chase block
     dropTarget: () => { m.attackTarget = null; }, // entityToAttack = null only: the path (pathToEntity) is kept
     hurt: () => mobs.attackEntityFrom(e, 1, { name: "drown" }),
     distanceSq: (q) => (e.x - q.x) ** 2 + (e.y - q.y) ** 2 + (e.z - q.z) ** 2,
