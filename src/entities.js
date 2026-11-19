@@ -1155,6 +1155,7 @@ export class EntityWorld {
   // plays the hurt or death sound with getSoundPitch; a top-up hit is silent and pushes nothing.
   attackEntityFrom(e, amount, source = {}) {
     if (!this.entities.includes(e)) return false;
+    if (e.invulnerable) return false; // b85 fire85: isEntityInvulnerable is the first test of sv.a and of every override that acts before super (animal, wolf, ocelot, silverfish, pigman, enderman, ghast; bytecode-read); the void (sv.G), fire and /kill all arrive here
     if (e.type === "ender_crystal") return crystalAttack(this, e); // any damage explodes it (ender-crystal-mobs.js)
     if (e.type === "silverfish") this.silverfishHurt(e, source);
     if (e.type === "enderman" && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true; // b84 mobs84: ya.a has no health test (bytecode-read): a projectile hit teleports a corpse too

@@ -73,7 +73,7 @@ export class ExperienceOrbs {
  spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128)){const o=newOrb(n,p.x,p.y,p.z,Math.random,this.ids);this.orbs.push(o);this.joined?.(o);}} // joined: entity-simulation.js (entityWalkers), the orb's place in World.loadedEntityList
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
  // not check isDead, so later hits in the same tick keep counting down.
- hurt(o,source,amount){o.velocityChanged=true;/* Entity.setBeenAttacked (S12 by the tracker) */o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}
+ hurt(o,source,amount){if(o.invulnerable)return;/* b85 fire85: sq.a tests isEntityInvulnerable first */o.velocityChanged=true;/* Entity.setBeenAttacked (S12 by the tracker) */o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}
  // Explosion.doExplosionA visits existing orbs before any blocks are removed or ore XP spawns.
  // EntityXPOrb inherits Entity.getEyeHeight = 0: use posY (the box centre) for the push.
  explode(world,x,y,z,size,exploder=null){

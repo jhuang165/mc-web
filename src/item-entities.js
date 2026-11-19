@@ -235,6 +235,7 @@ export class ItemEntities {
   }
   // EntityItem.attackEntityFrom (xk.a): health 5, the item dies at 0.
   hurt(e, amount) {
+    if (e.invulnerable) return; // b85 fire85: xk.a tests isEntityInvulnerable before setBeenAttacked (bytecode-read)
     e.velocityChanged = true; // Entity.setBeenAttacked: EntityItem.attackEntityFrom sets it before the health, so the tracker sends S12
     e.health = Math.trunc(e.health - amount);
     if (e.health <= 0) e.dead = true;

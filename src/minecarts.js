@@ -571,6 +571,7 @@ export class Minecarts {
   // above 40 (or any creative player hit) the cart breaks. `creative` is the attacker's
   // PlayerCapabilities.isCreativeMode. Returns true (the hit always registers).
   attack(cart, amount, { creative = false, source = null } = {}) {
+    if (cart.invulnerable) return false; // b85 fire85: EntityMinecart.attackEntityFrom (xl.a) tests isEntityInvulnerable first (bytecode-read)
     if (cart.dead) return true;
     cart.velocityChanged = true; // EntityMinecart.attackEntityFrom: setBeenAttacked() before the damage (bytecode-read: xl.a(ro, float) calls Q())
     cart.rollingDir = -cart.rollingDir;

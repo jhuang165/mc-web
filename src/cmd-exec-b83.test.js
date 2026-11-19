@@ -144,13 +144,15 @@ test("clearMatcher: the original Item and, given a data value, getItemDamage (ra
 // /summon through the command host (summon-coverage.test.js harness): the real EntityWorld for mobs, Minecarts for carts, recording hosts for the rest.
 function game() {
   const world = new World("cmdexec83", "meadow", 1), survival = new Survival({}, "creative"), mobs = new EntityWorld(world, []);
-  const lines = [], minecarts = new Minecarts({}), rockets = { rockets: [] }, calls = { items: [], orbs: [], primed: [], falling: [], boats: [], loads: [] };
+  const lines = [], minecarts = new Minecarts({}), rockets = { rockets: [] }, calls = { items: [], orbs: [], primed: [], falling: [], boats: [], loads: [], hanging: [] };
   const holder = (name) => ({ serialize: () => [], load: (list) => calls.loads.push([name, list.at(-1)]) });
   const hosts = {
     items: { spawn: (stack, x, y, z, o) => { const e = { stack, x, y, z, ...o }; calls.items.push(e); return e; } },
     xpOrbs: { orbs: calls.orbs }, primed: calls.primed,
     falling: { entities: calls.falling, entityRandom: () => new JavaRandom(1) },
     boats: { spawnBoat: (o) => { const b = { ...o }; calls.boats.push(b); return b; } },
+    // b85 fire85: a recording host for painting / item frame summons (Hanging.summon's arguments), so the probe replay covers them too
+    hanging: { summon: (kind, dir, tx, ty, tz, x, y, z, extra) => { const h = { kind, dir, tx, ty, tz, x, y, z, ...extra }; calls.hanging.push(h); return h; } },
     projectiles: holder("projectiles"), arrows: holder("arrows"), eyes: { serialize: () => ({ random: 0, eyes: [] }), load: (s) => calls.loads.push(["eyes", s.eyes.at(-1)]) },
     mobs: { potions: holder("potions"), fireballs: holder("fireballs"), skulls: holder("skulls") }, dimension: 0,
   };
@@ -186,8 +188,14 @@ test("/summon keeps Entity.readFromNBT's Fire, OnGround, FallDistance and Air on
       continue;
     } else if (g.calls.falling.length) { e = g.calls.falling.at(-1); fields = ["fire"]; // b84 cmdfix84: FallingSand keeps Fire (never calls Entity.onUpdate)
     } else if (g.minecarts.carts?.length) { e = g.minecarts.carts.at(-1); fields = ["fire"]; // b84 cmdfix84: carts keep Fire (moveEntity rests a negative counter at -1 after the first update: see the note)
-    } else if (load && ["arrows", "fireballs", "eyes"].includes(g.calls.loads.at(-1)[0])) {
-      if ((load.fire ?? 0) !== fire) bad.push(`${name} ${tag}: fire ${load.fire} != ${fire}`); // b84 cmdfix84: arrows, fireballs and eyes keep the raw short
+    } else if (g.calls.hanging.length) { // b85 fire85: paintings and item frames (EntityHanging.onUpdate never calls sa.h: Fire kept raw), and Invulnerable
+      e = g.calls.hanging.at(-1);
+      if ((e.fire ?? 0) !== fire) bad.push(`${name} ${tag}: fire ${e.fire} != ${fire}`);
+      if (!!e.invulnerable !== (nbtNumber(nbt.Invulnerable) !== 0)) bad.push(`${name} ${tag}: invulnerable ${e.invulnerable}`);
+      checked.add(name);
+      continue;
+    } else if (load && ["arrows", "fireballs", "eyes", "skulls"].includes(g.calls.loads.at(-1)[0])) {
+      if ((load.fire ?? 0) !== fire) bad.push(`${name} ${tag}: fire ${load.fire} != ${fire}`); // b84 cmdfix84: arrows, fireballs, skulls and eyes keep the raw short (b85 fire85: Fireball, SmallFireball and WitherSkull rows too)
       checked.add(name);
       continue;
     } else { open.add(name); continue; } // FallingSand, carts, hanging entities, arrows, fireballs, eyes, crystals: no port fire counter on the record
@@ -203,10 +211,11 @@ test("/summon keeps Entity.readFromNBT's Fire, OnGround, FallDistance and Air on
     }
   }
   assert.deepEqual(bad, []);
-  console.log(`checked: ${[...checked].join(" ")}\nno port counter: ${[...open].join(" ")}`);
+  console.log(`checked: ${[...checked].join(" ")}\nno port counter: ${[...open].filter((n) => !checked.has(n)).join(" ")}`); // b85 fire85: a fireball without `direction` is born dead natively and is not made here; the direction rows cover Fireball, SmallFireball and WitherSkull
   // The probe's Item rows carry no Item stack (EntityItem kills itself on its first update; the port does not spawn it): one with a stack here.
   const g = game();
   g.run("/summon Item 0.5 10 0.5 {Item:{id:264s,Count:1b},Fire:-20s,OnGround:1b}");
   assert.deepEqual([g.calls.items[0].fire, g.calls.items[0].loadedFire, g.calls.items[0].onGround], [-20, -20, true]);
+  for (const k of ["Fireball", "SmallFireball", "WitherSkull", "Painting", "ItemFrame"]) assert.ok(checked.has(k), k + " replayed");
   assert.ok(checked.has("FallingSand") && checked.has("MinecartChest") && checked.has("PrimedTnt") && checked.has("Pig") && checked.size >= 30, [...open].join(" "));
 });
