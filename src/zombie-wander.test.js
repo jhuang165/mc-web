@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { zombieWanderReference, replayZombieWander, zombieWanderDivergence } from "./zombie-wander-replay.js";
 
 // public/research/zombie-wander-reference.json (tools/probes/ZombieWanderProbe.java, tools/verify-zombie-wander.mjs): a bare EntityZombie ticked whole on the unchanged
-// 1.7.10 classes, 18 records on flat stone, a slope, beside water, in daylight (burning) and set on fire. Position, motion, yaw, pitch, head yaw, body yaw, fire,
+// 1.7.10 classes, 18 records (27 with batch 82's helmets) on flat stone, a slope, beside water, in daylight (burning) and set on fire. Position, motion, yaw, pitch, head yaw, body yaw, fire,
 // health, every Random call, the path (index and points), the move and look helpers and the running tasks replay exactly. Batch 41's seed 4109 volley zombie is zw-flat-41091.
 for (const r of zombieWanderReference) {
   test(`native zombie wander ${r.name}`, () => {
@@ -13,7 +13,7 @@ for (const r of zombieWanderReference) {
 
 test("the zombie wander records cover flat, slope, water, sun and fire and every one wanders", () => {
   const by = (s) => zombieWanderReference.filter((r) => r.name.startsWith(s));
-  assert.equal(zombieWanderReference.length, 18);
+  assert.equal(zombieWanderReference.length, 27); // b82 entities82: 9 zw-helm records joined the 18
   for (const k of ["zw-flat", "zw-slope", "zw-water", "zw-sun", "zw-fire"]) assert.ok(by(k).length >= 2, k);
   for (const r of zombieWanderReference) assert.ok(r.rows.some((x) => x[14] !== null), r.name); // a path was built
   const seed4109 = zombieWanderReference.find((r) => r.name === "zw-flat-41091");
@@ -21,6 +21,23 @@ test("the zombie wander records cover flat, slope, water, sun and fire and every
   assert.ok(by("zw-slope").every((r) => r.rows.some((x) => x[1] > 1))); // the zombie climbs the steps
   assert.ok(by("zw-fire").every((r) => r.rows.some((x) => x[11] > 0))); // the scripted fire burns
   assert.ok(by("zw-sun").every((r) => r.rows.some((x) => x[11] > 0))); // it burns in daylight
+});
+
+// b82 entities82: the helmet branch of EntityZombie.onLivingUpdate (yq.e). A helmet keeps the zombie from burning; a damageable one wears by nextInt(2) and at
+// damage >= maxDamage breaks (renderBrokenItemStack's 15 Entity.rand floats) and the slot empties, after which the sun sets the zombie on fire.
+test("native daylight helmets: worn helmets protect, a broken one stops protecting, a pumpkin never wears", () => {
+  const by = (s) => zombieWanderReference.filter((r) => r.name.startsWith(s));
+  assert.equal(by("zw-helm").length, 9);
+  for (const r of by("zw-helm-diamond")) { assert.ok(r.rows.every((x) => x[11] <= 0)); assert.ok(r.rows.at(-1)[20][1] > 0); }
+  for (const r of by("zw-helm-pumpkin")) { assert.ok(r.rows.every((x) => x[11] <= 0 && x[20][1] === 0)); }
+  const broke = by("zw-helm-leather").filter((r) => r.rows.some((x) => x[20] === null));
+  assert.ok(broke.length >= 3);
+  for (const r of broke) {
+    const t = r.rows.findIndex((x) => x[20] === null);
+    assert.ok(r.rows[t][13].filter((d) => d === "f").length >= 16, r.name); // the daylight roll plus the 15 crumb floats
+    assert.ok(r.rows.slice(0, t).every((x) => x[11] <= 0), r.name);
+  }
+  assert.ok(broke.some((r) => r.rows.some((x) => x[11] > 0)), "a zombie whose helmet broke burns later");
 });
 
 // The batch 41 volley with seed 4109 (FireballProbe, a blaze hurt by the zombie at tick 3, the zombie wandering from tick 15): the full fireball replay now matches

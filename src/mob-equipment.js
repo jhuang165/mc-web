@@ -8,7 +8,7 @@
 // item, 1 boots to 4 helmet, as EntityLiving.getEquipmentInSlot) in the ORIGINAL 1.7.10 item ids that
 // enchantments.js uses, `dropChances` the five floats of equipmentDropChances and `canPickUpLoot`.
 // mob-equipment-live.js converts to the browser's item ids at the edges (drops, pickup, rendering).
-import { attemptDamageItem, addRandomEnchantment, getEnchantmentLevel, getEnchantmentModifierLiving, getKnockbackModifier, getFireAspectModifier, ENCHANTMENT, itemInfo } from "./enchantments.js";
+import { attemptDamageItem, addRandomEnchantment, getEnchantmentLevel, getEnchantmentModifierLiving, getKnockbackModifier, getFireAspectModifier, ENCHANTMENT, itemInfo, isItemStackDamageable } from "./enchantments.js";
 
 const f = Math.fround;
 export const HELD = 0, BOOTS = 1, LEGGINGS = 2, CHESTPLATE = 3, HELMET = 4;
@@ -102,6 +102,21 @@ export const breakSoundPitch = (worldRandom) => Math.fround(0.8 + Math.fround(wo
 export function breakStack(stack) {
   stack.count = Math.max(0, (stack.count ?? 1) - 1);
   stack.damage = 0;
+}
+
+// b82 entities82: the helmet branch of EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e, bytecode-read) after the daylight roll passed:
+// any helmet slot stack (getEquipmentInSlot(4), a zero-size one too) keeps the mob from burning. A damageable one (ItemStack.isItemStackDamageable,
+// add.g: maxDamage > 0 and no Unbreakable tag) first takes setItemDamage(damage + rand.nextInt(2)) on the mob's Random, no Unbreaking; at
+// damage >= maxDamage it runs renderBrokenItemStack (`broken(stack)`) and the slot is cleared (setCurrentItemOrArmor(4, null)). A pumpkin or a
+// skull protects without wear. Returns true when the mob should be set on fire (no helmet).
+export function daylightHelmet(equipment, random, broken = () => brokenItemDraws(random)) {
+  const helmet = equipment?.[HELMET];
+  if (!helmet) return true;
+  if (isItemStackDamageable(helmet)) {
+    helmet.damage = (helmet.damage ?? 0) + random.nextInt(2);
+    if (helmet.damage >= maxDamage(helmet.id)) { broken(helmet); equipment[HELMET] = null; }
+  }
+  return false;
 }
 
 // EntityLivingBase.attackEntityFrom (sv.a(ro,F)) for DamageSource.anvil / fallingBlock on a mob with a helmet slot stack (a zero-size one

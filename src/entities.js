@@ -85,7 +85,7 @@ import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle, takeVehicleFalls } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
-import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
+import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch, daylightHelmet } from "./mob-equipment.js";
 import { MobTracker } from "./entity-tracker.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage, isAbsolute, setMobFire } from "./armor-enchantments.js";
@@ -2478,11 +2478,12 @@ export class EntityWorld {
       // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight
       // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
       // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
-      // water or rain puts it out. None wears a helmet here.
+      // water or rain puts it out. b82 entities82: a helmet takes the hit instead (mob-equipment.js daylightHelmet: wear, the break sound and crumbs).
       if (((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day) {
         const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
           light = this.ai.brightness(bx, by, bz);
-        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) setMobFire(e, 8);
+        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)
+          && daylightHelmet(e.equipment, entityRandom(e), () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(entityRandom(e)); })) setMobFire(e, 8);
       }
       // EntityLivingBase.onUpdate's equipment block (before onLivingUpdate, so before the AI): when a slot differs from the last update's, the old stack's attribute modifiers leave the
       // attribute map and the new one's join it. A sword given after a mob's own update (loot pickup, another mob's hit) therefore adds its damage from the NEXT update (b36 records).
