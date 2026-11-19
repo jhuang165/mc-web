@@ -15,6 +15,7 @@
 //   Creeper, villager, witch   no override: Entity.func_145780_a, the block's SoundType (block-sounds.js)
 import { footstepSound } from "./block-sounds.js";
 import { stepBlock } from "./step-block.js"; // b71 steps71
+import { noSteps } from "./mpperf82-fast.js"; // b82 mpperf82
 
 const f = Math.fround;
 const own = (name, volume) => ({ name, volume: f(volume), pitch: 1 });
@@ -70,12 +71,12 @@ export function mobStepSound(type, block, above = 0, e = {}) {
 // sound events it makes (zero or one). `hostile` picks game.hostile.swim over game.neutral.swim; `random` is the entity's
 // Random (drawn twice, only for the swim sound). `e.inWater` is the entity's own flag.
 export function mobStepEvents(world, e, from, { hostile = false, random, onWalk, nextInt } = {}) {
-  if (!canTriggerWalking(e.type) || e.riding) return [];
-  const dx = e.x - from.x, dz = e.z - from.z;
-  const sb = stepBlock(world, e.x, e.y, e.z), dy = sb.ladder ? e.y - from.y : 0; // b71: the fence-replaced block, ladders only
+  if (!canTriggerWalking(e.type) || e.riding) return noSteps(); // b82 mpperf82: one frozen empty answer (MC_MPPERF82=off: a fresh [])
+  const ex = e.x, ey = e.y, ez = e.z, dx = ex - from.x, dz = ez - from.z; // b82 mpperf82: each field read once
+  const sb = stepBlock(world, ex, ey, ez), dy = sb.ladder ? e.y - from.y : 0; // b71: the fence-replaced block, ladders only
   e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
   const { x, y, z, id: block } = sb;
-  if (!(e.stepDistance > (e.nextStep ?? 1)) || !block) return [];
+  if (!(e.stepDistance > (e.nextStep ?? 1)) || !block) return noSteps();
   e.nextStep = Math.floor(e.stepDistance) + 1;
   const position = { x: e.x, y: e.y, z: e.z }, events = [];
   // Entity.moveEntity plays the swim sound when isInWater() and then func_145780_a regardless (the step is silent over liquids).

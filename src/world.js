@@ -1,4 +1,5 @@
 import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
+import { chunkKeyOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType, mapFeaturesOn } from "./java-world.js";
 import { normalizeFlatOptions } from "./flat-world.js";
 import { playerSpawnPoint, topSolidOrLiquidBlock } from "./world-spawn.js";
@@ -304,7 +305,7 @@ export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
 export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
 export const cropKind=b=>b>=31&&b<=38?31:b;
 export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:isChestShaped(b)?.875:b===SNOW_LAYER?.125:b===ENCHANTING_TABLE?.75:b===BED?.5625:1;
-export const isPlant=b=>isCrop(b)||b===NETHER_WART||b===PUMPKIN_STEM||b===MELON_STEM||b===39||isFlower(b)||b===SAPLING||[DOUBLE_PLANT,BROWN_MUSHROOM,RED_MUSHROOM,DEAD_BUSH,DEAD_SHRUB,FERN].includes(b);
+export const isPlant=b=>isCrop(b)||b===NETHER_WART||b===PUMPKIN_STEM||b===MELON_STEM||b===39||isFlower(b)||b===SAPLING||b===DOUBLE_PLANT||b===BROWN_MUSHROOM||b===RED_MUSHROOM||b===DEAD_BUSH||b===DEAD_SHRUB||b===FERN; // b82 mpperf82: comparisons, not an array per call (same ids)
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
@@ -605,7 +606,7 @@ export class World {
     if (misses.map !== chunks || misses.size !== chunks.size) { misses.keys.clear(); misses.map = chunks; misses.size = chunks.size; }
     const mk = cx * 8388608 + cz;
     if (misses.keys.has(mk)) return null;
-    const found = chunks.get(columnKey(cx, cz)) || null;
+    const found = chunks.get(chunkKeyOf(cx, cz, columnKey)) || null; // b82 mpperf82: the key string from a cache (mpperf82-fast.js)
     if (found) this.lastChunk = found;
     else { if (misses.keys.size >= 4096) misses.keys.clear(); misses.keys.add(mk); }
     return found;

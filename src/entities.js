@@ -2,6 +2,7 @@ import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved } from 
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
+import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -737,13 +738,13 @@ export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "gian
 const slipOf = (world, e) => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
 // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
 const climbableOf = (world, e) => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
-export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
+export function moveEntityWithHeading(world, e, w, h, forward, hooks, motion) { // b82 mpperf82: `motion`, moveWith's reused buffer for e.moveMotion (mpperf82-fast.js motionEnter)
   let landed;
   if (e.inWater) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(LEGACY_MOVE.has(e.type) ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
-    e.moveMotion = [e.vx, e.vy, e.vz]; // Entity.moveEntity reads the motion before the water drag below for its swim sound volume
+    e.moveMotion = motionOf(motion, e.vx, e.vy, e.vz); // Entity.moveEntity reads the motion before the water drag below for its swim sound volume
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
@@ -753,7 +754,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(0.02));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
-    e.moveMotion = [e.vx, e.vy, e.vz];
+    e.moveMotion = motionOf(motion, e.vx, e.vy, e.vz);
     e.vx *= 0.5;
     e.vy *= 0.5;
     e.vz *= 0.5;
@@ -769,7 +770,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
       e.fallDistance = 0;
     }
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
-    e.moveMotion = [e.vx, e.vy, e.vz];
+    e.moveMotion = motionOf(motion, e.vx, e.vy, e.vz);
     if (e.collidedH && climbableOf(world, e)) e.vy = LADDER_CLIMB;
     // A client entity whose chunk is not loaded hovers instead (World.isRemote and the chunk's isChunkLoaded, entity-tracker.js ClientEntity).
     if (e.clientUnloaded) e.vy = e.y > 0 ? -0.1 : 0;
@@ -2050,7 +2051,7 @@ export class EntityWorld {
   get ai(){
     return this.mobAI??=new MobAI(this,{
       ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,entityRandom,isRaining:()=>this.isRaining?.(),
-      mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return{width:base.width*scale,height:base.height*scale};},
+      mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return mobSizeObject(base.width*scale,base.height*scale);}, // b82 mpperf82: one reused answer (callers read it at once)
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       horseCanMate,
       horseRunAround:(e)=>this.horseRunAround(e),
@@ -2727,12 +2728,15 @@ export class EntityWorld {
   // EntityAIControlledByPlayer (ai.js, pig-saddle.js) once more from inside the AI.
   moveWith(e, t, forward) {
     const from = fast81.mode === "off" ? { x: e.x, y: e.y, z: e.z } : startOf(moveRecord(this, e, makeMoveRecord), e); // b81 mpperf81: the start position in the mob's record
-    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
-    this.waterAfterMove(e, t);
-    // Entity.moveEntity (sa.d, bytecode-read): updateFallState (the landing's hurt-fall and step sounds) runs before the step sound at the end.
-    this.moveLanding(e, landed);
-    this.moveSteps(e, from);
-    e.moveMotion = null;
+    const motion = motionEnter(); // b82 mpperf82: e.moveMotion's buffer for this call (null when MC_MPPERF82=off)
+    try {
+      const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t), motion);
+      this.waterAfterMove(e, t);
+      // Entity.moveEntity (sa.d, bytecode-read): updateFallState (the landing's hurt-fall and step sounds) runs before the step sound at the end.
+      this.moveLanding(e, landed);
+      this.moveSteps(e, from);
+      e.moveMotion = null;
+    } finally { if (motion && e.moveMotion === motion) e.moveMotion = null; motionRelease(motion); }
     // The finite world's edge stops a mob like a wall.
     // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
     edgeClamp(this.world, e, SIZE); // b80 mpperf80: the clamp without closures (the old body is mpperf80-fast.js edgeClampReference)

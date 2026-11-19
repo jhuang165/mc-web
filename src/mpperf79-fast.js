@@ -4,6 +4,7 @@
 //   2. nearestView / mobStateJson: the server's per-mob nearest-player pick (server-mobs.js target) over a cached array, and the tracker's state string built from the flag bits for
 //      types whose watched state is only dead/hurt/baby/burn (the same key order as mobState, so the same JSON text).
 //   3. sweepBox: Fireballs.sweep's per-mob box without building the pushBox array for mobs that miss the swept query box (same float arithmetic as pushBox).
+import { fast82, fail82 } from './mpperf82-fast.js'; // b82 mpperf82
 export const fast79 = { mode: (typeof process !== 'undefined' && process.env?.MC_MPPERF79) || 'on' };
 const f = Math.fround, SCRATCH = [0, 0];
 const fail = (what) => { throw new Error(`mpperf79 ${what} mismatch`); };
@@ -52,12 +53,33 @@ export function nearestView(views, e) {
   if (mode === 'off') return nearestReference(views, e);
   let list = lists.get(views);
   if (!list || list.length !== views.size) { list = [...views.values()]; lists.set(views, list); }
+  const ex = e.x, ey = e.y, ez = e.z; // b82 mpperf82: read once (a megamorphic or mixed-representation load of a number field boxes a fresh HeapNumber)
+  const m82 = fast82.mode, best = m82 === 'off' ? nearestList(list, ex, ey, ez) : nearestPruned(list, ex, ey, ez);
+  if (m82 === 'verify' && best !== nearestList(list, ex, ey, ez)) fail82('nearestView');
+  if (mode === 'verify' && best !== nearestReference(views, e)) fail('nearestView');
+  return best;
+}
+function nearestList(list, ex, ey, ez) {
   let best = null, bd = Infinity;
   for (let k = 0; k < list.length; k++) {
-    const v = list[k], p = v.player.position, d = (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2;
+    const v = list[k], p = v.player.position, d = (p.x - ex) ** 2 + (p.y - ey) ** 2 + (p.z - ez) ** 2;
     if (d < bd) { bd = d; best = v; }
   }
-  if (mode === 'verify' && best !== nearestReference(views, e)) fail('nearestView');
+  return best;
+}
+// b82 mpperf82: the same pick, reading p.y and p.z only while the partial sum is still below the best distance. The terms are squares (>= 0 or NaN) and a
+// rounded sum of non-negative numbers never falls below a partial sum, so a partial sum >= bd means d >= bd: that view could not have won (NaN never skips and
+// never wins, as before). Each player-position load boxes a HeapNumber in the server (the 16 positions have two maps), so this halves the loads.
+function nearestPruned(list, ex, ey, ez) {
+  let best = null, bd = Infinity;
+  for (let k = 0; k < list.length; k++) {
+    const v = list[k], p = v.player.position, a = (p.x - ex) ** 2;
+    if (a >= bd) continue;
+    const ab = a + (p.y - ey) ** 2;
+    if (ab >= bd) continue;
+    const d = ab + (p.z - ez) ** 2;
+    if (d < bd) { bd = d; best = v; }
+  }
   return best;
 }
 // Types with watched state beyond dead / hurt / baby / burn (server-mobs.js mobState); everything else is one of 16 texts.

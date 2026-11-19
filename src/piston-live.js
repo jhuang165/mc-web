@@ -57,7 +57,8 @@ import { fromOriginal } from "./block-registry.js";
 import { blockBounds, collisionBounds } from "./world.js";
 import { pistonQuads, FACING_OFFSETS, PISTON, STICKY_PISTON, PISTON_HEAD } from "./dispenser-piston.js";
 import { ENTITY_TYPES, pushBox, moveEntity } from "./entities.js";
-import { pistonTile } from "./redstone.js";
+import { pistonTile, RedstoneWorld } from "./redstone.js";
+import { walkLoadedTiles, sameBoxLists, verifying82, fail82 } from "./mpperf82-fast.js"; // b82 mpperf82
 import { pushPlayer, pushServerPlayer } from "./piston-push.js";
 
 const f32 = Math.fround;
@@ -260,6 +261,21 @@ export function installPistons({ redstone, scene = null, world = null, entities 
   };
   wrap();
 
+  // BlockPistonMoving.getCollisionBoundingBoxFromPool for every moving tile of `tiles` whose box meets `box` (`all`: `tiles` is loadedTiles, other kinds skipped).
+  const movingTileBoxes = (tiles, all, box) => {
+    const out = [];
+    for (let k = 0; k < tiles.length; k++) {
+      const t = tiles[k];
+      if (all && t.kind !== "piston") continue;
+      // World.getCollidingBoundingBoxes visits the cells floor(minX)..floor(maxX) (and z), floor(minY) - 1..floor(maxY): the
+      // cell below counts, so a stored block taller than 1 (cobblestone wall post, fence gate) still meets a box above its cell.
+      // An invalidated tile is no longer returned by World.getTileEntity.
+      if (t.invalid || t.x < Math.floor(box[0]) || t.x > Math.floor(box[3]) || t.y < Math.floor(box[1]) - 1 || t.y > Math.floor(box[4]) || t.z < Math.floor(box[2]) || t.z > Math.floor(box[5])) continue;
+      const b = movingCollisionBox(t, boundsOf(t), tileProgress(t, 0));
+      if (b && b[3] > box[0] && b[0] < box[3] && b[4] > box[1] && b[1] < box[4] && b[5] > box[2] && b[2] < box[5]) out.push(b);
+    }
+    return out;
+  };
   const api = {
     // Parts for the scene this frame; also handed to scene.setMovingBlocks.
     frame(partial = 0) {
@@ -282,15 +298,9 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     // BlockPistonMoving.getCollisionBoundingBoxFromPool for every moving tile whose box meets `box`: the stored block's box
     // shifted by func_149964_a at partial 0 (tile.lastProgress; extending uses 1 - p, retracting p itself).
     collisionBoxes(box) {
-      const out = [];
-      for (const t of redstone.pistonTiles()) {
-        // World.getCollidingBoundingBoxes visits the cells floor(minX)..floor(maxX) (and z), floor(minY) - 1..floor(maxY): the
-        // cell below counts, so a stored block taller than 1 (cobblestone wall post, fence gate) still meets a box above its cell.
-        // An invalidated tile is no longer returned by World.getTileEntity.
-        if (t.invalid || t.x < Math.floor(box[0]) || t.x > Math.floor(box[3]) || t.y < Math.floor(box[1]) - 1 || t.y > Math.floor(box[4]) || t.z < Math.floor(box[2]) || t.z > Math.floor(box[5])) continue;
-        const b = movingCollisionBox(t, boundsOf(t), tileProgress(t, 0));
-        if (b && b[3] > box[0] && b[0] < box[3] && b[4] > box[1] && b[1] < box[4] && b[5] > box[2] && b[2] < box[5]) out.push(b);
-      }
+      // b82 mpperf82: the RedstoneWorld's loadedTiles walked in place (other kinds skipped) instead of the pistonTiles() filter copy; MC_MPPERF82=verify compares.
+      const all = walkLoadedTiles(redstone, RedstoneWorld.prototype.pistonTiles), out = movingTileBoxes(all ? redstone.loadedTiles : redstone.pistonTiles(), all, box);
+      if (all && verifying82() && !sameBoxLists(out, movingTileBoxes(redstone.pistonTiles(), false, box))) fail82("piston collisionBoxes");
       return out;
     },
     // Moving tiles in a JSON-able list: world position, stored ORIGINAL block and metadata, facing, progress, extending
