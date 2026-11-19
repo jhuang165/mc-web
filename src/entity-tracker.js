@@ -35,6 +35,7 @@ import { JavaHashSetOrder } from "./java-hashset-order.js";
 import { horseFlagsOf } from "./horse-copy.js";
 import { copyDeathUpdate } from "./death-fx.js";
 import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
+import { fast85, fail85, SIZE_SCRATCH } from "./mpperf85-fast.js"; // b85 mpperf85
 import { transientIds } from "./tracker-transient.js"; // b64: entities that spawned and died inside one tick
 
 export const TRACKER_LIMIT = trackerLimit(10); // EntityTracker.e with the integrated view distance 10
@@ -596,10 +597,9 @@ export class MobTracker {
     return { entry: new TrackerEntry(e, { range: trackingRange(e.type), limit: this.limit, size: sizeClass(size), velocity: e.type !== "bat" && e.type !== "wither" && !crystal, ...(crystal ? { frequency: 2147483647 } : {}) }, this.view), client: this.newClient(e.type), health: e.health, air: e.air ?? 300, hang: !!e.batHanging, horse: e.type === "horse" ? horseFlagsOf(e) : 0, wasGround: !!e.onGround };
   }
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
-  observe(e, en) {
-    const jumped = en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0;
-    return { airBorne: e.airBorne === true || jumped, changed: e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) || (e.type === "horse" && horseFlagsOf(e) !== en.horse) };
-  }
+  observe(e, en) { return { airBorne: this.airBorneOf(e, en), changed: this.changedOf(e, en) }; }
+  airBorneOf(e, en) { return e.airBorne === true || (en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0); }
+  changedOf(e, en) { return e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) || (e.type === "horse" && horseFlagsOf(e) !== en.horse); }
   settle(e, en) { en.health = e.health; en.air = e.air ?? 300; en.hang = !!e.batHanging; if (e.type === "horse") en.horse = horseFlagsOf(e); en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
   // Batch 52: `beforePlayer(entity)` (EntityWorld) says an entity that left the world sits before the player in loadedEntityList: World.updateEntities removes it at its own place,
   // so the player's update that follows in the same pass flushes the destroy at once. The default is the player-first order: one tick later.
@@ -761,10 +761,20 @@ export class MobTracker {
   // Batch 49: native EntityTracker.updateTrackedEntities walks a HashSet<EntityTrackerEntry> (hashCode = entity id, bytecode-read; executed order in
   // tracker-order-reference.json), so the entries send their location in bucket order of their ids, not in the live list's order (tracker-order-b49.test.js).
   stepEntry(e) {
-    const en = this.entries.get(e);
-    [en.client.width, en.client.height] = this.sizeOf(e);
-    const { airBorne, changed } = this.observe(e, en);
-    en.entry.sendLocation(airBorne, changed);
+    const en = this.entries.get(e), sz = this.sizeOf, mode = fast85.mode;
+    if (mode === "off" || this.observe !== MobTracker.prototype.observe) { // (object-tracker.js overrides observe: it keeps the record)
+      [en.client.width, en.client.height] = sz(e);
+      const { airBorne, changed } = this.observe(e, en);
+      en.entry.sendLocation(airBorne, changed);
+    } else { // b85 mpperf85: no size array, no observe() record
+      if (sz.into) { sz.into(e, SIZE_SCRATCH); en.client.width = SIZE_SCRATCH[0]; en.client.height = SIZE_SCRATCH[1]; } else [en.client.width, en.client.height] = sz(e);
+      if (mode === "verify") {
+        const r = sz(e); if (!Object.is(r[0], en.client.width) || !Object.is(r[1], en.client.height)) fail85("stepEntry size");
+        const o = this.observe(e, en), a = this.airBorneOf(e, en), c = this.changedOf(e, en);
+        if (o.airBorne !== a || o.changed !== c) fail85("stepEntry observe");
+      }
+      en.entry.sendLocation(this.airBorneOf(e, en), this.changedOf(e, en));
+    }
     this.settle(e, en);
   }
   // 2. the player's own entry (range 512, every 2 ticks) flags itself when it moved more than 4 blocks (3. a flagged player re-evaluates every entry, in the second loop)
