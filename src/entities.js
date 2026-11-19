@@ -2,6 +2,7 @@ import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved, fineCo
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
+import { fast84, fail84, moveSpeedQuick } from "./mpperf84-fast.js"; // b84 mpperf84
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { typeSize, pushNearBox, pushNearDone, meetsArg } from "./mpperf83-fast.js"; // b83 mpperf83
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
@@ -76,7 +77,7 @@ import { blockCollisions } from "./block-collisions.js";
 import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
 import { ownerPresent } from "./owner-links.js";
-import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
+import { ATTRIBUTE_RANGE, cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
 import { mountEntity, releaseDead, clearStaleRider, releaseSeats, freeRider, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage, mobEffect, RESISTANCE, setMaxHealthHook } from "./mob-effects.js";
@@ -302,6 +303,16 @@ export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
+  const mode = fast84.mode; // b84 mpperf84: no modifier arrays for a mob with none (the common case)
+  if (mode === "off") return aiMoveSpeedReference(e, multiplier);
+  const q = moveSpeedQuick(e, () => e.horse?.speed ?? ENTITY_TYPES[e.type].movement, MOVE_SPEED_MAX);
+  if (q === undefined) return aiMoveSpeedReference(e, multiplier);
+  const got = f(multiplier * q);
+  if (mode === "verify" && !Object.is(got, aiMoveSpeedReference(e, multiplier))) fail84("aiMoveSpeed");
+  return got;
+}
+const MOVE_SPEED_MAX = ATTRIBUTE_RANGE["generic.movementSpeed"][1];
+function aiMoveSpeedReference(e, multiplier) {
   // The baby boost counts once, from the child flag or a saved copy (an imported adult keeps it: mob-attributes.js hasStoredBabyBoost).
   // EntityPigZombie inherits EntityZombie.setChild, so a baby pigman carries the boost too (probed interchange `babyBoost`).
   const baby = ((e.type === "zombie" || e.type === "pigman") && e.growingAge < 0) || hasStoredBabyBoost(e) ? [[0.5, 1]] : [];
@@ -568,12 +579,12 @@ function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
     bb = s ? scratchBox(e, w, h, half, s) : e.bb ? e.bb.slice() : takeAnchorBox(e) ?? keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = s ? copyBox(s.start, bb) : bb.slice();
   let list = collisionBoxes(world, growInto(s ? s.query : [0, 0, 0, 0, 0, 0], bb, dx, dy, dz), e, s); // AxisAlignedBB.addCoord
-  for (const o of list) dy = offsetY(o, bb, dy);
+  for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dy = offsetY(o, bb, dy); } // b84 mpperf84: indexed, no iterator
   shift(bb, 0, dy, 0);
   const grounded = e.onGround || (ody !== dy && ody < 0);
-  for (const o of list) dx = offsetX(o, bb, dx);
+  for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dx = offsetX(o, bb, dx); } // b84 mpperf84: indexed, no iterator
   shift(bb, dx, 0, 0);
-  for (const o of list) dz = offsetZ(o, bb, dz);
+  for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dz = offsetZ(o, bb, dz); } // b84 mpperf84: indexed, no iterator
   shift(bb, 0, 0, dz);
   // The step retry also needs the sneak-edge flag or ySize < 0.05F: an eye still lowered
   // from sneaking (0.08 on the first tick after release) does not step.
@@ -583,14 +594,14 @@ function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
     if (s) copyBox(bb, start);
     else bb.splice(0, 6, ...start);
     list = collisionBoxes(world, growInto(s ? s.query : [0, 0, 0, 0, 0, 0], bb, odx, step, odz), e, s);
-    for (const o of list) dy = offsetY(o, bb, dy);
+    for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dy = offsetY(o, bb, dy); } // b84 mpperf84: indexed, no iterator
     shift(bb, 0, dy, 0);
-    for (const o of list) dx = offsetX(o, bb, dx);
+    for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dx = offsetX(o, bb, dx); } // b84 mpperf84: indexed, no iterator
     shift(bb, dx, 0, 0);
-    for (const o of list) dz = offsetZ(o, bb, dz);
+    for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dz = offsetZ(o, bb, dz); } // b84 mpperf84: indexed, no iterator
     shift(bb, 0, 0, dz);
     dy = -step;
-    for (const o of list) dy = offsetY(o, bb, dy);
+    for (let oi = 0; oi < list.length; oi++) { const o = list[oi]; dy = offsetY(o, bb, dy); } // b84 mpperf84: indexed, no iterator
     shift(bb, 0, dy, 0);
     if (sx * sx + sz * sz >= dx * dx + dz * dz) {
       dx = sx; dy = sy; dz = sz;

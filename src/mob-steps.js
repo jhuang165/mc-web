@@ -14,7 +14,7 @@
 //   Horse                      mob.horse.soft / wood / gallop (horseStep)
 //   Creeper, villager, witch   no override: Entity.func_145780_a, the block's SoundType (block-sounds.js)
 import { footstepSound } from "./block-sounds.js";
-import { stepBlock } from "./step-block.js"; // b71 steps71
+import { stepBlock, stepBlockInto } from "./step-block.js"; // b71 steps71
 import { noSteps } from "./mpperf82-fast.js"; // b82 mpperf82
 
 const f = Math.fround;
@@ -70,12 +70,13 @@ export function mobStepSound(type, block, above = 0, e = {}) {
 // Advances `e.stepDistance` / `e.nextStep` for a move from `from` ({x, y, z}) to the entity's position and returns the
 // sound events it makes (zero or one). `hostile` picks game.hostile.swim over game.neutral.swim; `random` is the entity's
 // Random (drawn twice, only for the swim sound). `e.inWater` is the entity's own flag.
+const STEP_SCRATCH = { x: 0, y: 0, z: 0, id: 0, replaced: false, ladder: false }; // b84 mpperf84
 export function mobStepEvents(world, e, from, { hostile = false, random, onWalk, nextInt } = {}) {
   if (!canTriggerWalking(e.type) || e.riding) return noSteps(); // b82 mpperf82: one frozen empty answer (MC_MPPERF82=off: a fresh [])
   const ex = e.x, ey = e.y, ez = e.z, dx = ex - from.x, dz = ez - from.z; // b82 mpperf82: each field read once
-  const sb = stepBlock(world, ex, ey, ez), dy = sb.ladder ? e.y - from.y : 0; // b71: the fence-replaced block, ladders only
+  const sb = stepBlockInto(world, ex, ey, ez, STEP_SCRATCH), dy = sb.ladder ? e.y - from.y : 0; // b71: the fence-replaced block, ladders only (b84 mpperf84: in a scratch, read at once)
   e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
-  const { x, y, z, id: block } = sb;
+  const { x, y, z, id: block } = sb, replaced = sb.replaced;
   if (!(e.stepDistance > (e.nextStep ?? 1)) || !block) return noSteps();
   e.nextStep = Math.floor(e.stepDistance) + 1;
   const position = { x: e.x, y: e.y, z: e.z }, events = [];
@@ -90,6 +91,6 @@ export function mobStepEvents(world, e, from, { hostile = false, random, onWalk,
   if (s) events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position });
   // EntityHorse.func_145780_a: a gallop step of a horse (type 0) then draws nextInt(10) on Entity.rand and on 0 breathes at 0.6 x the block's volume (b47h records: executed).
   if (s?.name === "mob.horse.gallop" && (e.horse?.type ?? 0) === 0 && nextInt && nextInt(10) === 0) events.push({ sound: "mob.horse.breathe", volume: f(f(s.volume / f(0.15)) * f(0.6)), pitch: s.pitch, position });
-  if (!sb.replaced) onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
+  if (!replaced) onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
   return events;
 }
