@@ -222,12 +222,14 @@ public class CmdExec83Probe {
     String[] tags = {
       "{Fire:100s,Air:50s,Motion:[0.1d,0.2d,0.3d],Rotation:[45.0f,10.0f],OnGround:1b,FallDistance:3.5f,Dimension:1,Invulnerable:1b,PortalCooldown:7,CustomName:\"Bob\",CustomNameVisible:1b,Fuse:5b}",
       "{Fire:-20s,Motion:[11.0d,-10.0d,0.0d]}",
+      "{direction:[0.1d,-0.2d,0.3d],Fire:100s}", "{direction:[0.1d,-0.2d,0.3d],Fire:-20s}", // b85 fire85: a fireball without `direction` is born dead (EntityFireball.readEntityFromNBT); these rows are run for the fireball kinds only
       "{}", "" }; // b84 cmdfix84: "" is the untagged command (no fifth argument)
     String[] keys = { "Fire", "Air", "Motion", "Rotation", "OnGround", "FallDistance", "Dimension", "Invulnerable", "PortalCooldown", "CustomName", "CustomNameVisible", "Fuse" };
     StringBuilder sum = new StringBuilder("[");
     fresh("solo");
     List<?> names = handler.b(alex, "summon ");
     for (Object n : names) for (String tag : tags) {
+      if (tag.startsWith("{direction") && !Arrays.asList("Fireball", "SmallFireball", "WitherSkull").contains(n)) continue;
       W.spawned.clear(); admin.clear();
       String crash = "null";
       try { byName.get("summon").b(alex, tag.isEmpty() ? new String[] { (String) n, "0.5", "64", "0.5" } : new String[] { (String) n, "0.5", "64", "0.5", tag }); } catch (Throwable t) { crash = q(String.valueOf(t)); }
@@ -245,7 +247,7 @@ public class CmdExec83Probe {
         // double is not a world) is recorded as "!..." and means the class's update needs more than this double.
         int fireRead = fd(sa.class, "e").getInt(s);
         String tick = "null";
-        if (tag.startsWith("{Fire:")) {
+        if (tag.contains("Fire:")) {
           try { s.h(); tick = "{\"fire\":" + fd(sa.class, "e").getInt(s) + ",\"burning\":" + s.al() + ",\"dead\":" + fd(sa.class, "K").getBoolean(s) + "}"; } catch (Throwable t) { tick = q("!" + t); }
         }
         sp.append(sp.length() > 1 ? "," : "").append("{\"cls\":" + q(s.getClass().getName()) + ",\"fire\":" + fireRead + ",\"tick\":" + tick + ",\"nbt\":" + nbt + "}");
@@ -254,6 +256,39 @@ public class CmdExec83Probe {
       sum.append(sum.length() > 1 ? "," : "").append("[" + q((String) n) + "," + q(tag) + ",{\"crash\":" + crash + ",\"admin\":[" + String.join(",", admin) + "],\"spawned\":" + sp + "}]");
     }
     sum.append("]");
-    System.out.println("{\"tab\":" + tab + ",\"run\":[" + String.join(",", rows) + "],\"summon\":" + sum + "}");
+    // b85 fire85: (1) CommandSummon's onSpawnWithEgg (bu.b: run when the command has NO data tag and the entity is an EntityLiving; a tag, {} too, skips it): 280 runs per mode of an ocelot
+    // (one chance in seven of two kittens: the spawned count) and a sheep (EntitySheep.onSpawnWithEgg: a random fleece colour; a tagged sheep is always colour 0). Each run is spawned
+    // list size + the first sheep's Color. (2) Invulnerable:1b / absent, then attackEntityFrom(generic, 4) and (outOfWorld, 4) on the summoned entity: return value, isDead and a living entity's health.
+    StringBuilder egg = new StringBuilder("[");
+    for (String n : new String[] { "Ozelot", "Sheep" }) for (String tg : new String[] { "", "{}" }) {
+      StringBuilder counts = new StringBuilder("["), colors = new StringBuilder("[");
+      for (int i = 0; i < 280; i++) {
+        W.spawned.clear(); admin.clear();
+        try { byName.get("summon").b(alex, tg.isEmpty() ? new String[] { n, "0.5", "64", "0.5" } : new String[] { n, "0.5", "64", "0.5", tg }); } catch (Throwable t) { counts.append("\"!" + t + "\","); continue; }
+        counts.append(i > 0 ? "," : "").append(W.spawned.size());
+        String color = "null";
+        for (sa s : W.spawned) if (s.getClass().getName().equals("wp")) { dh out = new dh(); s.e(out); color = q(out.a("Color").toString()); break; }
+        colors.append(i > 0 ? "," : "").append(color);
+      }
+      egg.append(egg.length() > 1 ? "," : "").append("[" + q(n) + "," + q(tg) + "," + counts + "]," + colors + "]]");
+    }
+    egg.append("]");
+    StringBuilder inv = new StringBuilder("[");
+    String[][] invKinds = { { "Pig", "" }, { "Zombie", "" }, { "Boat", "" }, { "MinecartRideable", "" }, { "Item", "Item:{id:264s,Count:1b,Damage:0s}," }, { "XPOrb", "Value:5s," },
+      { "Painting", "Direction:0b,TileX:0,TileY:64,TileZ:0,Motive:\"Kebab\"," }, { "ItemFrame", "Direction:0b,TileX:0,TileY:64,TileZ:0," }, { "EnderCrystal", "" } };
+    for (String[] k : invKinds) for (String flag : new String[] { "0b", "1b" }) for (String src : new String[] { "generic", "outOfWorld" }) {
+      W.spawned.clear(); admin.clear();
+      String res = "null", err = "null", health = "null", dead = "null";
+      try {
+        byName.get("summon").b(alex, new String[] { k[0], "0.5", "64", "0.5", "{" + k[1] + "Invulnerable:" + flag + "}" });
+        sa s = W.spawned.get(0);
+        try { res = String.valueOf(s.a(src.equals("generic") ? ro.j : ro.i, 4.0f)); } catch (Throwable t) { err = q("" + t); }
+        dead = String.valueOf(fd(sa.class, "K").getBoolean(s));
+        if (s instanceof sv) health = String.valueOf(((sv) s).aS());
+      } catch (Throwable t) { err = q("!" + t); }
+      inv.append(inv.length() > 1 ? "," : "").append("[" + q(k[0]) + "," + q(flag) + "," + q(src) + "," + res + "," + dead + "," + health + "," + err + "]");
+    }
+    inv.append("]");
+    System.out.println("{\"tab\":" + tab + ",\"run\":[" + String.join(",", rows) + "],\"summon\":" + sum + ",\"egg\":" + egg + ",\"invulnerable\":" + inv + "}");
   }
 }

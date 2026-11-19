@@ -172,6 +172,7 @@ export class Boats extends Minecarts {
   // EntityBoat.attackEntityFrom: flips the wobble direction, timeSinceHit 10, damage + 10 x amount; above 40, or any
   // Creative player's hit, the rider is released and the boat breaks (the Creative break drops nothing).
   attack(boat, amount, { creative = false } = {}) {
+    if (boat.invulnerable) return false; // b85 fire85: EntityBoat.attackEntityFrom (xi.a) tests isEntityInvulnerable first, a Creative hit too (bytecode-read)
     if (boat.dead) return true;
     boat.velocityChanged = true; // EntityBoat.attackEntityFrom: setBeenAttacked() before the damage (executed path: Entity.velocityChanged -> the entry's S12)
     boat.forwardDir = -boat.forwardDir;

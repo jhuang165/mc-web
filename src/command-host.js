@@ -222,6 +222,7 @@ export function createCommandHost(env) {
         if (!mob) return null;
         mobs.entities.push(mob); mobs.nextId++;
         mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
+        if (nbtGet(nbt, 'Invulnerable', NBT.BYTE, 0) !== 0) mob.invulnerable = true; // b85 fire85: Entity.readFromNBT's flag (sa.i); attackEntityFrom refuses it
         // b83 cmdexec83 (executed, cmd-exec-reference.json): Entity.readFromNBT also sets OnGround, FallDistance (landing damage counts it) and the air supply (Air, 0 when absent;
         // EntityLivingBase.onEntityUpdate puts it back to 300 out of water).
         mob.onGround = nbtGet(nbt, 'OnGround', NBT.BYTE, 0) !== 0;

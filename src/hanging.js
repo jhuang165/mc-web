@@ -185,6 +185,7 @@ export class Hanging {
   // attackEntityFrom(source, amount): a frame holding an item drops it and stays (any source);
   // otherwise the entity dies and onBroken(source.getEntity()) runs. Always true.
   attack(e, by = null) {
+    if (e.invulnerable) return false; // b85 fire85: EntityHanging.attackEntityFrom (ss.a) tests isEntityInvulnerable first (bytecode-read)
     if (e.dead) return true;
     if (e.kind === "frame" && e.item) {
       const creative = !!(by?.player && by.creative);
