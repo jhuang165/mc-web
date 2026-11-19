@@ -35,14 +35,15 @@ test('the Nether has its own full projectile instance; each player gets one snap
   assert.equal(n.dispense.dim, -1);
   assert.equal(s.dispense.laneFor(-1), n.dispense, 'the Overworld routes a Nether lane to the Nether instance');
   assert.equal(s.dimensions.within(a, () => s.dispense), n.dispense, 'a Nether player\'s action sees the Nether instance');
+  for (let i = 0; i < 20; i++) s.tick(); // b84 mpthrown84: the thrown lane tracks only inside columns the player was sent (PlayerManager.isPlayerWatchingChunk): let them stream
   fly(n.dispense, 64.5, 71, 60.5); fly(s.dispense, 64.5, 11, 60.5);
   a.dispOut = null; b.dispOut = null;
   s.tick();
   const ea = ents(a), eb = ents(b);
   assert.equal(ea.length, 1, 'one dispEnts for the Nether player (ids would collide across two instances)');
   assert.equal(eb.length, 1);
-  assert.ok(ea[0].ents.every(e => e.y > 60), 'the Nether player sees only the Nether arrow');
-  assert.ok(eb[0].ents.every(e => e.y < 30), 'the Overworld player sees only the Overworld arrow');
+  assert.ok(ea[0].trk.length === 1 && ea[0].trk[0].p.every(p => p.type !== 'spawn' || p.y > 60 * 32), 'the Nether player sees only the Nether arrow'); // b84 mpthrown84: tracker rows (the spawn packet's y is in 1/32 blocks)
+  assert.ok(eb[0].trk.length === 1 && eb[0].trk[0].p.every(p => p.type !== 'spawn' || p.y < 30 * 32), 'the Overworld player sees only the Overworld arrow');
 });
 
 test('a Nether arrow is saved with the Overworld instance and restored into the Nether instance', { timeout: 120000 }, () => {

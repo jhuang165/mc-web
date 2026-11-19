@@ -154,6 +154,6 @@ test("a Nether player is sent nothing of the Overworld's projectiles, and the re
   q.dimension = 1;
   shoot(s, { x: 65.5, y: 12, z: 66 }, { mz: 0.1 });
   const [lp, lq] = run(s, 3, [p, q]);
-  assert.ok(lp.some(m => m.type === "dispEnts" && m.ents.length), "the Overworld player sees it");
-  assert.ok(!lq.some(m => m.type === "dispEnts" && m.ents.length), "the Nether player does not");
+  assert.ok(lp.some(m => m.type === "dispEnts" && (m.ents.length || m.trk?.length)), "the Overworld player sees it"); // b84 mpthrown84: arrows are tracker rows (`trk`)
+  assert.ok(!lq.some(m => m.type === "dispEnts" && (m.ents.length || m.trk?.length)), "the Nether player does not");
 });

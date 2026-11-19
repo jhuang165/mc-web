@@ -38,6 +38,12 @@ function run(s, n, players = []) {
   return log;
 }
 const fx = (log, p, k) => log.get(p).filter(m => m.type === "dispFx").flatMap(m => m.events).filter(e => e.k === k);
+// b84 mpthrown84: arrows, thrown balls, rockets and eyes ride `trk` rows (tracker packets); a RemoteDispense replays them into the client copies' per-message lists
+const replay = (s, log, p, hooks = {}) => {
+  const rd = new RemoteDispense({ copyWorld: () => s.world, copyPlayer: () => p.position, ...hooks }), seen = [];
+  for (const m of log.get(p)) { rd.apply(m); if (m.type === "dispEnts") seen.push({ arrows: rd.arrows.map(a => ({ ...a })), balls: rd.balls.map(b => ({ ...b })) }); }
+  return seen;
+};
 const ents = (log, p, k) => log.get(p).filter(m => m.type === "dispEnts").flatMap(m => m.ents).filter(e => e.k === k);
 
 test("a dispensed arrow flies on the server, sticks in the ground, reaches nearby players as dispEnts and is skipped for far ones", () => {
@@ -45,9 +51,10 @@ test("a dispensed arrow flies on the server, sticks in the ground, reaches nearb
   const disp = load(s, makeStack(ITEM.ARROW, 3), { x: 22 });
   const log = run(s, 60, [p, far]);
   assert.equal(tile(s, 22).items[0].count, 2, "one arrow used");
-  const seen = ents(log, p, "a");
-  assert.ok(seen.length > 5, "a snapshot per tick while it flies and sits");
-  assert.equal(seen.at(-1).g, 1, "the last snapshot has it stuck in the ground");
+  // b84 mpthrown84: the arrow's tracker copy (range 64, every 20 ticks, no velocity packets) updates itself each tick, a message per tick while it is tracked
+  const seen = replay(s, log, p).map(m => m.arrows[0]).filter(Boolean);
+  assert.ok(seen.length > 5, "a copy per tick while it flies and sits");
+  assert.equal(seen.at(-1).inGround, true, "the copy has stuck in the ground");
   assert.ok(seen[0].z > 62 && seen[0].z < 66, "it started in front of the dispenser");
   assert.equal(log.get(far).length, 0, "a player beyond 64 blocks hears nothing of it");
   assert.equal(s.dispense.arrows.list.length, 1);
@@ -70,10 +77,12 @@ test("a snowball and an egg fly as balls; a vanished one plays its poof on the c
   const egg = s.dispense.balls.balls[0];
   egg.rand = { nextInt: () => 0 }; // the 1/8 and 1/32 rolls: one chick, then four
   assert.equal(egg.kind, "egg");
-  const rd = new RemoteDispense({ poof: row => poofs.push(row.kind) }), poofs = [];
+  const poofs = [];
   const log = run(s, 30, [p]);
-  for (const m of log.get(p)) rd.apply(m);
-  assert.deepEqual(poofs, ["egg"], "the client copy that vanished plays the poof once");
+  // b84 mpthrown84: the egg's tracker copy flies and breaks by itself (EntityThrowable.onUpdate on the client): its own onImpact draws the eight snowballpoof particles, once
+  replay(s, log, p, { copyBalls: b => { const o = b.poof.bind(b); b.poof = (...a) => { poofs.push("egg"); return o(...a); }; } });
+  // the copy flies on through the block until the held S13 (executed: tracker-items-reference.json), so its onImpact runs on each of those updates: 8 particles per update
+  assert.ok(poofs.length >= 8 && poofs.length % 8 === 0, `the client copy plays its eight poof particles per impact update (${poofs.length})`);
   assert.equal(chickens(), 4, "nextInt(8) == 0 and nextInt(32) == 0: four chicks");
   assert.equal(s.dispense.balls.balls.length, 0);
 });
@@ -104,10 +113,12 @@ test("a fire charge launches a small fireball and a firework rocket flies, trail
   const t = fixture(), q = join(t, "b", 1);
   load(t, { id: ITEM.FIREWORK, count: 1, damage: 0 });
   const l2 = run(t, 120, [q]);
-  assert.ok(ents(l2, q, "r").length > 5, "the rocket is listed while it flies");
+  // b84 mpthrown84: the rocket is a tracker row; its client copy draws the trail (its own onUpdate) and the burst (S1A 17)
+  const sparks = [], bursts = [], flying = replay(t, l2, q, { copyParticle: (name) => name === "fireworksSpark" && sparks.push(name), firework: () => bursts.push(1) });
+  assert.ok(flying.filter(m => m.balls.some(b => b.kind === "firework")).length > 5, "the rocket copy is listed while it flies");
   assert.ok(fx(l2, q, "sound").some(e => e.name === "fireworks.launch"));
-  assert.ok(fx(l2, q, "spark").length > 3, "the trail");
-  assert.equal(fx(l2, q, "firework").length, 1, "one burst (World.makeFireworks)");
+  assert.ok(sparks.length > 3, "the trail");
+  assert.equal(bursts.length, 1, "one burst (World.makeFireworks)");
   assert.equal(t.dispense.rockets.rockets.length, 0);
 });
 

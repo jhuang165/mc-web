@@ -775,6 +775,10 @@ function makeRemoteDispense() {
     knock: (mx, my, mz) => { velocity.x += mx; velocity.y += my; velocity.z += mz; }, // b78 mpexplosion78: S27 motion (NetHandlerPlayClient.handleExplosion)
     explode: (x, y, z, size, cells) => { const cleared = [], own = multiplayer?.ready && active?.remote; scene.explosionParticles.burst(Math.fround(x), Math.fround(y), Math.fround(z), Math.fround(size), cells ?? [], { viewer: [position.x, position.y + PHYSICS.eye, position.z], cell: own ? (bx, by, bz, r) => s27Blocks.cell(world, bx, by, bz, r, cleared) : null }); if (cleared.length) scene.updateBlocks(cleared); /* b80 mpfx80: doExplosionB(true) clears the listed blocks on the client */ play('random.explode', x, y, z, 4, (1 + (Math.random() - Math.random()) * 0.2) * 0.7); }, // World.newExplosion's sound
     splash: (x, y, z, damage) => splashBreak(scene.fx, scene.fx.worldRandom, damage, x, y, z),
+    // b84 mpthrown84: the tracker lane's own client copies (multiplayer/thrown-copy.js) draw their particles and take the live world and player
+    copyParticle: (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz),
+    copyWorld: () => world, copyPlayer: () => position,
+    copyBalls: (balls) => { if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; } },
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),
     poof: row => projectiles.clientImpact(row),
