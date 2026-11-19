@@ -2,6 +2,44 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 85
+
+Batch 85 covered these areas (track agents ran on Sonnet):
+- **Riding boats in multiplayer.** The local player is seated on the client's own boat copy (`RemoteVehicles.seatOf`), so the 2-block snap back to the server's boat is gone. After a dismount the boat stays non-empty for `noteRiders`, as natively. The client copy clears snow layers and lily pads it runs into.
+- **Item-use prediction.** A new `clientUseItem` predicts lily pads, buckets, glass bottles, boats and throwables on the client after the C08 goes out.
+- **Fishing hooks on the wire.** Hooks ride the thrown lane (S0E type 90 with the angler id). A thrown copy keeps its join baseline. Arrow and hook copies get hit targets; native throwable copies never hit entities on the client (`zk.h` checks isRemote).
+- **The single-player copy's moves.** New `server-process-player.js`: the copy moves from the last accepted position, with collisions zeroed and the moved-wrongly check, and mobs are corrected through `mobs.serverCorrect`. The integrated owner skips moved-too-quickly, as natively.
+- **Pickup and drops.** Creative players pick up items on the server and take the whole stack. The away run stores skull tiles. The farmland and crop self-check is gone: BlockFarmland has no onBlockAdded, and setBlock notifies only the neighbours.
+- **Dedicated-server tab completion.** All 64 recorded tab rows replay and match. Admin notices go only to ops whose level reaches the command's level. The probe now holds 1401 executed rows.
+- **Summon tags.** `Invulnerable` is honoured on every kind, and summoned items and XP orbs read Health as `&255` (0 when absent). The replay covers hanging entities and fireballs.
+- **Explosion probe.** `BlastOrderProbe` now also executes 300 scenes each for the dragon, hanging entities and ender crystals (1300 records, 0 mismatches). Fixes: dragon health is clamped at 0, and a Creative player's TNT breaks paintings and frames with no drop (single player).
+- **Zombie conversion and squids.** A converted villager is seeded from the record and ticks in the zombie's pass. A converting corpse runs its whole death update. A zombie killed by fire in that update keeps health 0. 23 executed conversion records and 7 squid push records replay.
+- **Server speed.** Behind `MC_MPPERF85=on|off|verify` (identical state hashes): no per-tick observe records, size arrays, entry sets or per-packet destination arrays. Heap growth per tick is about 4% lower on the travel scene and 10% lower on the pen scene; tick time is unchanged.
+
+Found wrong in the batch 84 list:
+- A non-positive fire counter already rests as natively.
+- Carts, hanging entities, falling blocks and crystals have no native water pass.
+- onSpawnWithEgg runs only with no tag (`{}` skips it), so the ocelot summon already matched.
+- The farmland self-check was not native (removed, above).
+
+Still open from batch 85:
+- **Multiplayer.**
+  - A rider's C03 while seated is not checked against native; lily pads broken by a boat draw no particles.
+  - Item-use prediction: no empty-map or overflow-drop prediction; the boat placement skips the sight check.
+  - Extra-dimension stand-in lanes keep exact rows; a late viewer's thrown baseline is not re-recorded.
+  - The single-player copy: mobs still see the packet position for part of the tick; a 10-block teleport guard is not native; the new path is gated on `packetGround`; `nh.r` and the 20-tick teleport branch are not ported.
+  - The dedicated server passes no Creative flag to the blast's hanging rows, so a Creative player's TNT still drops their items there; dispensed TNT has no placer record.
+  - Server commands: /publish stays off; console-sender rows and offline mode are skipped. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: riding and dismounting the boat copy, item-use prediction, hook copies, possible rubber-banding from the new single-player copy moves, plus the batch 67 to 84 lists.
+- **Single player.**
+  - Summons: the spawn order of kittens and jockeys is unchecked; `Invulnerable` is not saved on item, orb and hanging records.
+  - The away run has no live eyes or hooks for blasts, no doTileDrops gate on its skull store, and no sign or beacon stores.
+  - Explosion probe worlds have no blocks, so partial-cover exposure is not exercised.
+  - Squids against boats and a ticked pushing player are port-read only.
+  - Not seen in a browser: the corpse and the converted villager in the same frame, squid pushes, blast pushes and drops, plus the batch 84 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 84
 
 Batch 84 covered these areas:
@@ -16,20 +54,7 @@ Batch 84 covered these areas:
 - **Commands.** Player-to-player /tp copies the target's yaw and pitch (with a server look op). Falling blocks, carts, hanging entities, arrows, fireballs, eyes and throwables keep a summoned `Fire`; untagged summons get Air 0. `{Item:0}` leaves an empty pot, a meta-only /setblock makes a fresh sign, and /setblock ejects a jukebox's record.
 - **Server speed.** Behind `MC_MPPERF84=on|off|verify` (identical state hashes): cached mob boxes for ball targets (about half the `mobTargets` allocation), indexed loops in entity and item moves, fewer modifier arrays and step results. Batch 83's verify mode no longer throws on dragon tests.
 
-Still open from batch 84:
-- **Multiplayer.**
-  - The rider's boat copy is snapped back to the server's state when more than 2 blocks away, because the local player is still seated from the server's boat; after a dismount the copy returns to tracked following at once.
-  - Fishing hooks still go as exact rows; thrown copies fly without hit targets; extra-dimension stand-in lanes keep exact rows; a thrown entity's spawn state is the first one seen.
-  - The client does not predict a lily pad placed by the item use. Creative players cannot pick up items on the server (natively they can).
-  - Server commands: /publish stays off; the dedicated commands' 64 tab rows are recorded but not replayed; console-sender rows are skipped; the `Invulnerable` /summon tag is not applied. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: boat copy splashes, steering the rider's boat, thrown copies and their particles, rocket trails, the /tp look, plus the batch 67 to 83 lists.
-- **Single player.**
-  - A zombie that dies in the tick it converts; no native records of the conversion tail. Minecarts and other moveEntity users do not rest a non-positive fire counter at -1; carts, hanging entities and falling blocks have no water extinguish. An untagged ocelot summon can still get kittens.
-  - `farmNeighbourChange` also checks the changed cell itself, so farmland set under a solid block turns back at once (single player and, since batch 84, the server); whether native only does this on a neighbour change is unchecked.
-  - The away run has no skull tile store and no eyes or hooks in its blasts. The single-player copy moves from the new packet position, not the last accepted one.
-  - Not seen in a browser: wither particles, lily pads, the empty pot, burning boats and falling blocks in rain, plus the batch 83 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 84: carried into the batch 85 list above, less what batch 85 fixed or found wrong.
 
 ## Done in batch 83
 

@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 85 (2026-11-19, ten tracks in `../wt85-<name>` on `batch85-<track>`, cut from 3bf09d50a, merged --no-ff on `batch85-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b85-lead/track-rules.md`; lead note `b85-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.114.0, by track (details in the `*-b85-track.md` notes and "Done in batch 85" in `public/research/remaining-gaps.md`):
+  - boatseat85: `RemoteVehicles.seatOf` seats the rider on the client's boat copy (the 2-block snap is gone); `noteRiders` keeps a boat non-empty after a dismount; the copy clears snow and lily pads.
+  - mppredict85: `client-item-use.js` (`clientUseItem`, called from `predictMultiplayerUse()` in main.js): lily pads, buckets, bottles, boats, throwables.
+  - mphook85: hooks on the thrown lane (type 90, angler id); `ThrownTracks.birth` keeps the join baseline; arrow and hook copies get hit targets.
+  - spcopy85: `server-process-player.js` and `PlayerView.from`: the single-player copy moves from the last accepted position with the moved-wrongly check; `mobs.serverCorrect`.
+  - pickup85: Creative pickups on the server (`pickupFit` takes the whole stack); away-world skull store; the farmland and crop self-check removed (not native).
+  - dedtab85: the 64 tab rows replay; admin notices only to ops of the command's level (`ctx.ops(need)`); probe 1401 rows.
+  - fire85: /summon `Invulnerable` on every kind; item and orb Health `&255`; replay covers hanging entities and fireballs (`fire85-b85.test.js`).
+  - blastprobe85: `BlastOrderProbe` dragon, hanging and crystal cases (1300 records, 0 mismatches); dragon health clamped at 0; a Creative player's TNT breaks hanging entities with no drop (single player).
+  - convert85: converted villager seeded and ticked in the zombie's pass, full corpse death update, fire-kill health 0 (23 executed records); squid push records (7).
+  - mpperf85: `mpperf85-fast.js` behind `MC_MPPERF85=on|off|verify`; tracker, copy-meta, mob entry and `mobTargets` allocations cut (heap per tick -4% travel, -10% pen).
+- Lead fixes: `mpsurvival-b58.test.js` expects Creative server pickups (pickup85 changed the rule to native).
+- Verification: cross-track run of 36 files with MC_MPPERF83/84/85=verify: 447/447. One full `npm test` on ba2cbed8f: 9483 tests, 9482 pass, 1 fail (that mpsurvival test, fixed in b7c15aa25 and rerun 8/8). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 85" in `public/research/remaining-gaps.md`.
+
 Batch 84 (2026-11-19, ten tracks in `../wt84-<name>` on `batch84-<track>`, cut from 5cb5c6458, merged --no-ff on `batch84-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b84-lead/track-rules.md`; lead note `b84-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.113.0, by track (details in the `*-b84-track.md` notes and "Done in batch 84" in `public/research/remaining-gaps.md`):
   - mpboat84: boat copy splashes in `multiplayer/remote-vehicles.js`; the rider's own client boat (`ride`, `own` rows); late-joiner spawn state (`server-cart-track.js` `join`/`forViewer`).
