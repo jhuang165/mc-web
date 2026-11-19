@@ -2418,8 +2418,12 @@ export class EntityWorld {
       // with no death or drops: removed at the end of this tick (below).
       if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) peacefulGone.push(e);
       if (e.health <= 0) {
+        // b82: World.updateEntityWithOptionalForce adds 1 to ticksExisted (sa.aa) before every onUpdate, a corpse's too (bytecode-read); EntityPigZombie.onUpdate's (yh.h) angry-sound
+        // countdown and its draws come before EntityZombie's, with no health test.
+        e.age++;
+        if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
         // b81: EntityZombie.onUpdate (yq.h) counts a converting zombie down with no health test (bytecode-read), so a corpse whose timer runs out in its death becomes the villager.
-        if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
+        if (e.conversionTime !== undefined) { const death = e.death, hit = e.recentlyHit; if (this.tickConversion(e)) { this.convertedCorpse(e, t, death, hit); continue; } }
         // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits).
         this.burn(e, t);
         e.hurt = Math.max(0, e.hurt - 1);
@@ -2485,11 +2489,7 @@ export class EntityWorld {
       // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
       // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
       // water or rain puts it out. None wears a helmet here.
-      if (((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day) {
-        const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
-          light = this.ai.brightness(bx, by, bz);
-        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) setMobFire(e, 8);
-      }
+      this.sunIgnite(e, t);
       // EntityLivingBase.onUpdate's equipment block (before onLivingUpdate, so before the AI): when a slot differs from the last update's, the old stack's attribute modifiers leave the
       // attribute map and the new one's join it. A sword given after a mob's own update (loot pickup, another mob's hit) therefore adds its damage from the NEXT update (b36 records).
       if (e.equipment) e.attackEquipment = e.equipment.map((s) => (s ? { id: s.id } : null));
@@ -2501,19 +2501,11 @@ export class EntityWorld {
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider && e.horse.saddled ? horseRideThink(this, e) : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider && e.horse.saddled ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(this, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
       }
       this.push(e, t);
       this.lootPickupOne(e);
-      // EntityAgeable.onLivingUpdate (rx.e) ages after EntityLiving's (AI, move, push, loot), then EntityAnimal.onLivingUpdate (wf.e, bytecode-read): a mob that is not an adult loses its love,
-      // otherwise inLove counts down and every 10th tick draws the heart particle's arguments on Entity.rand (3 gaussians, then 3 floats; the server's spawnParticle is a no-op).
-      const wasAge = e.growingAge;
-      if (e.growingAge < 0 && e.type !== 'zombie') e.growingAge++; else if (e.growingAge > 0) e.growingAge--;
-      if (e.type === "horse" && wasAge < 0) this.horseGrowSize(e, wasAge); // EntityHorse.setScaleForAge: the foal's box widens every tick
-      if (ANIMALS.has(e.type)) {
-        if (e.growingAge !== 0) e.love = 0;
-        if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);
-      }
+      this.ageAndLove(e, t);
       if (isSpider(e.type)) {
         e.climbing = e.collidedH;
       }
@@ -2589,6 +2581,7 @@ export class EntityWorld {
     this.deathUpdate(e, t);
     if (e.recentlyHit > 0) e.recentlyHit--;
     e.jumping = false;
+    this.sunIgnite(e, t); // b82: EntityZombie / EntitySkeleton.onLivingUpdate (yq.e, yl.e) test no health: a corpse in daylight draws the roll and can catch fire
     if (e.type === "blaze") blazeUpdate(this, e, t, true); // EntityBlaze.onLivingUpdate runs for a corpse too (its hover push, the 0.6 fall damping and its draws), before EntityLivingBase's blocked movement
     if (e.type === "witch") this.witchUpdate(e, t); // EntityWitch.onLivingUpdate (yp.e) runs for a corpse too: the drink roll draws and can still start a drink (creeperwitch-b45 records)
     e.moveStrafing = 0; // EntityLivingBase.onLivingUpdate: isMovementBlocked (health <= 0) zeroes strafing, forward (walk) and randomYawVelocity for every corpse, so a blaze's last strafe no longer pushes it
@@ -2598,13 +2591,49 @@ export class EntityWorld {
     // living one, and the rest of its onLivingUpdate / onUpdate too (the tail roll before, wi.e's 900 / 300 rolls and wi.h's counters after, then the body turn; bytecode-read).
     const horse = e.type === "horse";
     if (horse && entityRandom(e).nextInt(200) === 0) (e.horseAnim ??= newHorseAnim()).tail = 1;
+    // b82: a movement-blocked tick runs no sw.bn, so EntityAITasks.tickCount stays (ai.js derives it from the age, which counts every tick, less aiSkipped): a revived wolf or a horse corpse
+    // that runs its AI again resumes the task phase it had.
+    if (!horse || (e.rider && e.horse?.saddled) || e.rearing || e.horse?.eating) e.aiSkipped = (e.aiSkipped || 0) + 1;
     this.walk(e, t, 0, horse ? () => (e.rider && e.horse?.saddled ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
     this.push(e, t);
-    if (horse) { this.horseTick(e); this.turnBody(e); }
+    this.ageAndLove(e, t); // b82: EntityAgeable / EntityAnimal.onLivingUpdate (rx.e, wf.e) test no health (bytecode-read): a corpse grows, a foal corpse's box widens, love counts down with its heart draws
+    if (horse) this.horseTick(e);
     if (e.type === "chicken") this.chickenUpdate(e);
+    // b82: EntityLivingBase.onUpdate (sv.h) turns the body after onLivingUpdate for every living entity, a corpse too (bytecode-read): the body helper or the walking-direction turn.
+    if (e.type === "squid") legacyBodyTurn(e, e.x - e.px, e.z - e.pz);
+    else this.turnBody(e);
     this.swingLimbs(e);
     if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
+  }
+  // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
+  // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage, water or rain puts it out. None wears a helmet here. No health test (b82: corpses too).
+  sunIgnite(e, t) {
+    if (!(((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day)) return;
+    const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
+      light = this.ai.brightness(bx, by, bz);
+    if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) setMobFire(e, 8);
+  }
+  // EntityAgeable.onLivingUpdate (rx.e) ages after EntityLiving's (AI, move, push, loot), then EntityAnimal.onLivingUpdate (wf.e, bytecode-read): a mob that is not an adult loses its love,
+  // otherwise inLove counts down and every 10th tick draws the heart particle's arguments on Entity.rand (3 gaussians, then 3 floats; the server's spawnParticle is a no-op).
+  // Neither tests health (b82): a corpse runs both too.
+  ageAndLove(e, t) {
+    const wasAge = e.growingAge;
+    if (e.growingAge < 0 && e.type !== 'zombie') e.growingAge++; else if (e.growingAge > 0) e.growingAge--;
+    if (e.type === "horse" && wasAge < 0) this.horseGrowSize(e, wasAge); // EntityHorse.setScaleForAge: the foal's box widens every tick
+    if (ANIMALS.has(e.type)) {
+      if (e.growingAge !== 0) e.love = 0;
+      if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);
+    }
+  }
+  // b82: a dying zombie whose conversion ends (yq.h -> yq.cd: World.removeEntity only sets it dead) still runs the rest of its onUpdate in that tick (bytecode-read): EntityLivingBase's
+  // onEntityUpdate reaches onDeathUpdate (sv.aF), which counts deathTime on; when that makes 20 the experience is dropped as for any corpse (recentlyHit, an adult, doMobLoot), after the
+  // villager in the list, and the 20 puffs are drawn. Below 20 nothing else is observable. `death` and `hit` are the corpse's values before cureZombie cleared them.
+  convertedCorpse(e, t, death, hit) {
+    if ((death || 0) !== 19) return;
+    e.death = death; e.recentlyHit = hit;
+    this.deathUpdate(e, t);
+    e.death = 20; e.recentlyHit = 0;
   }
   // b77 mpperf77: size(o) written into `out` ([width, height]) without a new array; the same two expressions as size().
   sizeInto(o, out) {
