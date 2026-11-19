@@ -115,7 +115,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const dispRand = new JavaRandom(BigInt(rand) * 40503n + 7n);
   const rt = createRedstoneRuntime({ world, scene: null, game: {
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
-    drop: (x, y, z, d) => spill(d, x + 0.5, y + 0.5, z + 0.5), sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
+    drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
     transfer: () => hoppers.host, // b72 smallfixes72: droppers push into containers through the run's hopper host (main.js game.transfer; built below, read only while ticking)
     items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,

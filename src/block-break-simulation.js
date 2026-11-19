@@ -22,8 +22,10 @@ import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 // hooks. Random sources stay separate: Math.random drives gravel/crops/ore XP, while
 // the tree system's random stream drives leaf drops as it does in the browser.
 // BlockSkull.breakBlock: the item of the tile's SkullType (none in Creative, whose harvest sets metadata bit 8).
-const skullBreakDrops = (p, drops) => (drops ? skullDrops(SKULLS.tile(...p)?.type ?? 0, SKULLS.tile(...p)?.profile) : []);
+// b84 drops84: the tile is consumed here (the world's skullBreak hook would otherwise drop the same skull again when the cell clears); `skulls` is the dimension's store.
+const skullBreakDrops = (p, drops, skulls = SKULLS) => { const tile = skulls.tile(...p); skulls.remove(...p); return drops ? skullDrops(tile?.type ?? 0, tile?.profile) : []; };
 export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, trees, heldTool }, coords, {
+  skulls = SKULLS, // b84 drops84: the dimension's skull tiles (the server passes its own; the global store is single player's)
   creative = false,
   random = Math.random,
   leafRandom = trees.random,
@@ -56,7 +58,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     : null;
   // BlockNetherWart.dropBlockAsItemWithChance: 1 wart, a mature one 2 + nextInt(3) (+ nextInt(fortune + 1)); none without a harvest.
   const wart = block === NETHER_WART && harvest && !creative ? [{ id: ITEM_NETHER_WART, count: wartDropCount(world.getMeta(...p), heldStack?.id === tool ? getFortuneModifier(heldStack) : 0, dropRandom ?? javaLikeRandom(random)).count }] : null;
-  const drops = wart ?? (block === SKULL ? skullBreakDrops(p, harvest && !creative) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
+  const drops = wart ?? (block === SKULL ? skullBreakDrops(p, harvest && !creative, skulls) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
   // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared). b81: the tile's own ItemStack(Item, 1, Data)
   // (stone-utility.js potDropEntry): an undrawn item, or the plant at damage 0 with rawDamage for a Data the catalogue has no variant for.
   const potPlant = block === FLOWER_POT ? potDropEntry(potContents(world, ...p)) : null;

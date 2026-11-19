@@ -101,8 +101,8 @@ test('experience: an ore break spawns orbs the server moves and the collector re
   assert.equal(s.savePlayer(a).experience.total, total);
 });
 
-test('world systems drop real items in Survival (an unsupported torch) and nothing in Creative', () => {
-  for (const [mode, expected] of [['survival', 1], ['creative', 0]]) {
+test('world systems drop real items in Survival and Creative worlds (an unsupported torch; b84 drops84: only a Creative player\'s own harvest skips drops)', () => {
+  for (const [mode, expected] of [['survival', 1], ['creative', 1]]) {
     const { s } = setup([], 0, mode);
     s.world.set(70, 10, 64, 3); s.world.set(70, 11, 64, TORCH); s.tick();
     s.world.set(70, 10, 64, 0);

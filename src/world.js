@@ -506,6 +506,7 @@ export class World {
     this.savingColumns = new Map();
     this.nextEditOrder = 0;
     this.onChange = null;
+    this.skullBreak = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
     this.blockLight = null;
@@ -785,6 +786,7 @@ export class World {
     const out = this.ringSink && !this.isLoaded(x, z) && this.inside(x, y, z) ? this.ringSink : this;
     const old = out.get(x, y, z), oldMeta = out.getMeta(x, y, z);
     if (!this.put(x, y, z, b, meta, track)) return false;
+    if (old === 172 && b !== 172) this.skullBreak?.(x, y, z, oldMeta); // b84 drops84: BlockSkull.breakBlock on any replacement (skull.js installSkullBreak)
     if (track && (old !== b || oldMeta !== meta)) this.onChange?.(x, y, z, old, b);
     return true;
   }

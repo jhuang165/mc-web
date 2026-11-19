@@ -333,7 +333,7 @@ import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
 import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists, liveOrder } from "./saved-order.js";
 import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
-import { SKULL, SKULLS, Skulls } from "./skull.js";
+import { SKULL, SKULLS, Skulls, installSkullBreak } from "./skull.js";
 import { spawnRedstoneDrop } from "./redstone-drops.js"; // b83 mppiston83
 import { SkullRenderer } from "./skull-renderer.js";
 import { skinBook } from "./skull-skins.js";
@@ -1519,6 +1519,7 @@ const itemRand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 // EntityLivingBase.deathTime of the client player, counted on the death screen.
 let deathTime = 0;
 function watchFlowers() {
+  installSkullBreak(world, () => SKULLS, (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0, undefined, d.tags)), x, y, z)); // b84 drops84: BlockSkull.breakBlock on any setBlock (explosions, /setblock, the dragon); items.dropBlock honours doTileDrops
   const next = world.onChange;
   world.onChange = (x, y, z, old, now) => {
     next?.(x, y, z, old, now);

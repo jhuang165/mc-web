@@ -155,13 +155,14 @@ test("server pistons and redstone support loss drop items (server-redstone-drops
     s.world.set(70, 10, 64, 0, true, 0);
     assert.notEqual(s.world.get(70, 11, 64), internal(55), `${mode}: the dust popped off`);
     const got = s.items.items.map((e) => e.stack.id).sort((a, b) => a - b);
-    if (mode === "survival") {
-      assert.deepEqual(got, [44, 360], "the poppy and the redstone");
+    {
+      // b84 drops84: Creative worlds drop too (only a Creative player's own harvest skips drops, ItemInWorldManager.tryHarvestBlock).
+      assert.deepEqual(got, [44, 360], `${mode}: the poppy and the redstone`);
       const poppy = s.items.items.find((e) => e.stack.id === 44), dust = s.items.items.find((e) => e.stack.id === 360);
       assert.equal(dust.delay, 10, "dropBlockAsItem_do's pickup delay (no tick since)");
       assert.ok(poppy, "the crushed poppy");
       assert.ok(dust.x > 70.15 && dust.x < 70.85 && dust.z > 64.15 && dust.z < 64.85, "inside the cell, one spread");
-    } else assert.deepEqual(got, []);
+    }
   }
   assert.match(src("multiplayer/server-nether.js"), /drop: serverRedstoneDrop\(sim, \(\) => n\.items\)/);
 });
