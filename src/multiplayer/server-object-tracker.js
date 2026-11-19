@@ -47,6 +47,7 @@ export class ObjectTracker {
       const off = this.cadence ? OBJECT_KINDS[kind].yOff : 0;
       o.e.x = r.x; o.e.y = r.y + off; o.e.z = r.z; o.e.stack = r.stack; o.value = r.v;
       o.e.vx = r.mx ?? r.vx ?? 0; o.e.vy = r.my ?? r.vy ?? 0; o.e.vz = r.mz ?? r.vz ?? 0;
+      o.vc = r.vc === 1; // b83 tracker83: the object's velocityChanged this tick (every entry of it sends the tail S12; the shared stand-in is re-armed per entry below)
     }
     const limit = this.limit, out = new Map();
     for (const [pid, p] of here) {
@@ -69,6 +70,7 @@ export class ObjectTracker {
           en.ticks = this.cadence ? o.ticks : 0;
         } else if (moved) en.tryStart();
         if (this.cadence && en.watcher) en.watcher.update(metaValues(o.kind, o.e)); // a merged stack changes the S1C
+        o.e.velocityChanged = o.vc; // b83 tracker83: natively one entry sends the S12 to every tracking player; here each player's entry reads and clears the flag
         en.sendLocation(false, false); push(pid, o, en); // the first pass lists the players; later ones re-list when the object moved over 4 blocks
         if (en.tracked) next.add(key);
       }

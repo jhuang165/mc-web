@@ -122,7 +122,9 @@ test('the vehicles message: first sight sets, unchanged sends nothing, leaving r
   assert.ok(take(p).set.some(x => x.v === `b${far.id}`), 'walking up to it sends it');
   p.position.copy({ x: 22.5, y: 10, z: 70.5 }); p.previous.copy(p.position);
   tick(s);
-  assert.deepEqual(take(p).del, [`b${far.id}`], 'walking away deletes it');
+  assert.equal(take(p), null, 'b83 tracker83: the entry untracks it now, the S13 goes at the next update');
+  tick(s);
+  assert.deepEqual(take(p).del, [`b${far.id}`], 'walking away deletes it (one tick later)');
 });
 
 test('client copies: apply, tick toward the target, pick, delete', () => {

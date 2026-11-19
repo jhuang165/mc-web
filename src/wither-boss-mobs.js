@@ -6,6 +6,7 @@ import { ENTITY_TYPES, HOSTILE, entityRandom, livingSoundRoll } from "./entities
 import { JavaRandom } from "./java-random.js";
 import { Fireballs, savedRotation } from "./fireballs.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
+import { serverBallSplash } from "./fireball-splash.js";
 import { aimPart } from "./dragon-parts.js";
 import { fireballAcceleration, fireballBurn } from "./blaze-ghast.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
@@ -186,6 +187,7 @@ export class WitherSkulls extends Fireballs {
     // Entity.handleWaterMovement (Entity.onUpdate, before the sweep): the box test and the 0.014 flow push, as the fireballs do (b75).
     const box = this.boxOf(b), waterAcc = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += waterAcc.push[0]; b.vy += waterAcc.push[1]; b.vz += waterAcc.push[2];
+    serverBallSplash(mobs, b, waterAcc.wet, box[1], b.width); // b83 tracker83: sa.N's splash on entering water, as the fireballs do
     fireballBurn(b, waterAcc.wet, false); // b82 mpball82: the fire counter and watched burning flag (zp.a(ro, F) returns false: no setBeenAttacked; zp.isBurning is false)
     b.ticks++;
     const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];

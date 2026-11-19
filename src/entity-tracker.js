@@ -47,7 +47,7 @@ export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dra
 // The dragon's client onLivingUpdate is its own (ClientEntity.dragonUpdate); it has no moveEntityWithHeading call, so only the body turn runs after it.
 const CLIENT_PHYSICS_OFF = new Set(["ender_dragon"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)
-const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
+export const velocityInt = (v) => Math.trunc(Math.max(-3.9, Math.min(3.9, v)) * 8000) + 0; // + 0: Java ints have no negative zero
 
 const floor = Math.floor;
 const f = Math.fround;
@@ -71,6 +71,7 @@ export function encodeAxis(size, v) {
 export const encodeY = (v) => floor(v * 32);
 const byte = (v) => (v << 24) >> 24; // the position packets' rotation fields are bytes (the entry compares the ints)
 const angle = (deg) => floorFloat(f(f(f(deg) * 256) / 360));
+export const angleByteOf = (deg) => byte(angle(deg)); // b83 tracker83: the wire byte of an angle (S0E / S16 / S17 / S18 write it with writeByte)
 // S0FPacketSpawnMob's constructor casts (byte)(int)(angle * 256 / 360): truncation, unlike the tracker entry's floor_float for its look packets
 const spawnAngle = (deg) => Math.trunc(f(f(f(deg) * 256) / 360));
 const unangle = (b) => f(f(byte(b) * 360) / 256); // (float)(packet byte * 360) / 256.0F

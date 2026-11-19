@@ -108,7 +108,11 @@ function ballRun({ track }) {
   s.mobs.mobs.fireballs.launch({ large: false, owner: null, x: 70.5, y: 15.5, z: 64.5, exact: [1, 0, 0] });
   s.tick(); feed(); server.length = 0; client.length = 0; // the first row has no previous position (and with `t` it only places the copy)
   for (let i = 0; i < 25; i++) { s.tick(); feed(); }
-  const pick = l => l.filter(v => v[0] === 'smoke' || v[0] === 'bubble');
+  // b83 tracker83: the server ball (with an fx, as the integrated client draws it) now also makes handleWaterMovement's entry splash: 1 + 0.3125 * 20 -> 8 bubble at
+  // floor(minY) + 1 (a whole y) and 8 splash. This client has no `water` hook (only `wet`), so its copy draws none; the comparison leaves that burst out.
+  const entry = v => v[0] === 'bubble' && Number.isInteger(v[2]);
+  assert.equal(server.filter(entry).length, 8); assert.equal(server.filter(v => v[0] === 'splash').length, 8);
+  const pick = l => l.filter(v => (v[0] === 'smoke' || v[0] === 'bubble') && !entry(v));
   return { server: pick(server), client: pick(client) };
 }
 test('fireball smoke and bubbles: without the tracker field the client draws what the server ball drew, tick for tick', () => {
