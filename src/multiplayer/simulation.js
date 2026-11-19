@@ -186,7 +186,8 @@ export class DedicatedSimulation {
     this.trees = new Trees(this.world, { random: this.weather.random, apply: noop, drop: this.serverItems.stacksDrop,
       light: (x, y, z) => this.light.level(x, y, z, this.darkness) }).watch();
     this.plants = new Plants(this.world, { drop: this.serverItems.stacksDrop, broken: noop, apply: noop }).watch();
-    this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop, tile: serverFallingTile(this) /* b78 falling78 */ }, saved.falling).watch();
+    this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop, tile: serverFallingTile(this) /* b78 falling78 */,
+      rain: (x, y, z) => canLightningStrikeAt(this.weather, this.world, x, y, z), fizz: (name, x, y, z, volume, pitch) => this.soundsOut.push({ name, x, y, z, volume, pitch, except: null }) /* b84 rain84 */ }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
     watchSupportLoss(this.world, this.serverItems.stacksDrop, this.farming); // b84 drops84: signs, ladders, flowers, stems, crops, snow and carpet losing their support (server-support-loss.js)

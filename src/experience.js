@@ -150,7 +150,7 @@ export class ExperienceOrbs {
   if(world.get(Math.floor(o.x),Math.floor(o.posY),Math.floor(o.z))===LAVA){
    const r=this.rng(o);
    o.vy=0.20000000298023224;o.vx=f(f(f(r())-f(r()))*f(0.2));o.vz=f(f(f(r())-f(r()))*f(0.2));
-   this.sounds.push({name:'random.fizz',volume:f(0.4),pitch:f(2+f(f(r())*f(0.4))),x:o.x,y:o.posY,z:o.z});
+   this.sounds.push({name:'random.fizz',volume:f(0.4),pitch:f(2+f(f(r())*f(0.4))),x:o.x,y:o.posY-HALF,z:o.z}); // b84 rain84: at the feet (posY - yOffset)
   }
   // func_145771_j at the box centre; unlike EntityItem the result does not set noClip.
   const push=entityPushOut(world,o.x,(o.bb[1]+o.bb[4])/2,o.z,o.bb,this.rng(o));
@@ -192,7 +192,7 @@ export class ExperienceOrbs {
  move(world,o,dx,dy,dz){
   const self=this,rng=this.rng(o);
   moveEntity(world,o,SIZE,SIZE,dx,dy,dz,0,{hurt:(source,n)=>this.hurt(o,source,n),get wet(){return !!self.wet?.(o);},
-   fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(rng())-f(rng()))*f(0.4))),x:o.x,y:o.posY,z:o.z})});
+   fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(rng())-f(rng()))*f(0.4))),x:o.x,y:o.bb[1],z:o.z})}); // b84 rain84: the feet, after the move
   o.posY=o.bb[1]+HALF;
  }
  serialize(){return this.orbs.map(strip);}
