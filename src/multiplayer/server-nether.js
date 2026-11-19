@@ -24,7 +24,8 @@ import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
 import { LiveRedstone } from '../redstone-live.js';
-import { serverRedstoneDrop } from './server-redstone-drops.js'; // b83 mppiston83
+import { watchSupportLoss } from './server-support-loss.js';
+import { serverRedstoneDrop, installServerSkullBreak } from './server-redstone-drops.js'; // b83 mppiston83
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
@@ -80,6 +81,8 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   const te = saved.tileEntities ?? {};
   n.tileEntities = { world: w, signs: Signs.fromJSON(saved.signs), skulls: Skulls.fromJSON(saved.skulls), beacons: new Beacons().fromJSON(te.beacons), spawners: MobSpawners.fromJSON(te.spawners), commandBlocks: CommandBlockTiles.fromJSON(te.commandBlocks) /* b79 mplanes79 */, chests: n.tiles.chests, enders: n.tiles.enderTiles };
   if (source.provider) w.fortressSpawns = (x, y, z) => fortressMonsterSpawnList(source.provider.bridge, (bx, by, bz) => (w.get(bx, by, bz) === NETHER_BRICK ? 112 : 0), x, y, z);
+  watchSupportLoss(w, drop); // b84 drops84
+  installServerSkullBreak(sim, w, () => n.tileEntities.skulls, () => n.items); // b84 drops84
   n.redstone = new LiveRedstone(w, {
     entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? n.vehicles?.cartsIn(box, mode) ?? [] : [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
     environment: () => ({ sky: 0, skylightSubtracted: 0, celestialAngle: 0, noSky: true }),

@@ -24,7 +24,8 @@ import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { LiveRedstone } from '../redstone-live.js';
-import { serverRedstoneDrop } from './server-redstone-drops.js'; // b83 mppiston83
+import { watchSupportLoss } from './server-support-loss.js';
+import { serverRedstoneDrop, installServerSkullBreak } from './server-redstone-drops.js'; // b83 mppiston83
 import { installResidency } from './server-residency.js'; // b82 mpcmd82
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
@@ -188,6 +189,8 @@ export class DedicatedSimulation {
     this.falling = new FallingBlocks(this.world, { drop: this.serverItems.fallingDrop, apply: noop, tile: serverFallingTile(this) /* b78 falling78 */ }, saved.falling).watch();
     this.falling.load(saved.fallingTicks);
     for (const System of [Rails, Torches, Doors, Beds]) new System(this.world, { drop: this.serverItems.stacksDrop, apply: noop }).watch();
+    watchSupportLoss(this.world, this.serverItems.stacksDrop, this.farming); // b84 drops84: signs, ladders, flowers, stems, crops, snow and carpet losing their support (server-support-loss.js)
+    installServerSkullBreak(this, this.world, () => this.tileEntities.skulls, () => this.items); // b84 drops84
     this.redstone = new LiveRedstone(this.world, {
       entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? this.vehicles?.cartsIn(box, mode) ?? [] : [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
@@ -341,7 +344,7 @@ export class DedicatedSimulation {
   }
   breakDug(p, cell) {
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: this.itemHost, xpOrbs: this.serverItems.xp, heldTool: p.survival.held?.id ?? 0 };
-    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { creative: p.survival.creative, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
+    return this.serverItems.afterBreak(p, cell, () => breakPlayerBlock(state, cell, { skulls: this.tileEntities.skulls, creative: p.survival.creative, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
   }
   // World.destroyBlockInWorldPartially -> S25 (bytecode-read, WorldManager mp.b): every player except the breaker, in the same world and under 32 blocks
   // (squared distance from the player's feet below 1024), gets the stage. Stage -1 (or 10, an air cell) takes the crack away.
@@ -455,7 +458,7 @@ export class DedicatedSimulation {
     if (blockProtected(this, p, target.block)) { if (!place) p.resendCells = [target.block]; return false; } // b69 serverprops: spawn-protection, nh C07 / C08 send S23 instead
     p.swing = 6;
     const state = { ...p, world: this.world, farming: this.farming, trees: this.trees, items: { spill: noop }, heldTool: p.survival.held?.id ?? 0 };
-    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
+    if (!place) return this.serverItems.afterBreak(p, target.block, () => breakPlayerBlock(state, target.block, { skulls: this.tileEntities.skulls, creative: true, harvested: info => this.stats.harvested(p, info) /* b63 mpstats */, releaseSilverfish: (x, y, z) => this.golems.release(x, y, z) /* b66 */ }));
     // Block activations that don't open a GUI remain shared.
     const [x, y, z] = target.block, b = this.world.get(x, y, z);
     if ([108, 111, 112, 124, 126, 127].includes(b) && !p.input.sneak) { this.redstone.use(x, y, z); return true; }

@@ -52,9 +52,10 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
   save() { return { items: this.sim.items.serialize(), xpOrbs: this.xp.serialize() }; }
 
   // ---- world-system drops (leaf decay, plants, rails, torches, doors, beds, falling blocks) ----
-  // A Survival world drops them as entities; a Creative one keeps the earlier no-op (its players cannot pick items up through a packet).
-  get stacksDrop() { return this.survival ? (stacks, x, y, z) => this.sim.items.dropBlock(stacks.map(d => makeStack(d.id, d.count, d.damage || 0, undefined, d.rawDamage > 0 ? { rawDamage: d.rawDamage } : undefined)), x, y, z) : () => {}; }
-  get fallingDrop() { return this.survival ? (stack, x, posY, z) => this.sim.items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }) : () => {}; }
+  // b84 drops84: every world drops them as entities. 1.7.10 skips drops only for a Creative player's own harvest (ItemInWorldManager.tryHarvestBlock); the earlier
+  // Creative-world no-op was the port's convention.
+  get stacksDrop() { return (stacks, x, y, z) => this.sim.items.dropBlock(stacks.map(d => makeStack(d.id, d.count, d.damage || 0, undefined, d.rawDamage > 0 ? { rawDamage: d.rawDamage } : undefined)), x, y, z); }
+  get fallingDrop() { return (stack, x, posY, z) => this.sim.items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }); }
 
   // ---- inventory authority ----
   join(p, saved) {

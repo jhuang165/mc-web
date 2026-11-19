@@ -81,6 +81,19 @@ export class Skulls {
 // The live store (main.js saves and loads it; region import/export and /setblock read it when the state carries none).
 export const SKULLS = new Skulls();
 
+// b84 drops84: BlockSkull.breakBlock (anl.a(ahb,III,aji,I), bytecode-read) runs on every setBlock that replaces the skull (World.setBlock -> Chunk.func_150807_a ->
+// breakBlock), not only on a player's break: an explosion, /setblock, /fill, the dragon, fire and the Wither's own build all go through it. It drops the tile's item
+// (Block.dropBlockAsItem_do, so doTileDrops and the 0.7 spread apply) unless metadata bit 8 is set, and the tile goes with the block. World.set calls
+// `world.skullBreak(x, y, z, oldMeta)` once the cell has changed; `skulls()` is the dimension's store, `drop(stacks, x, y, z)` its item drop. A cell without a tile drops nothing.
+export function installSkullBreak(world, skulls, drop) {
+  world.skullBreak = (x, y, z, meta) => {
+    const store = skulls(), tile = store.tile(x, y, z);
+    if (!tile) return;
+    store.remove(x, y, z);
+    if (meta & 8) return;
+    drop(skullDrops(tile.type, tile.profile ?? null), x, y, z);
+  };
+}
 const FACE_OFFSET = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
 // BlockSkull.func_149966_a: the cell holds a skull block whose tile is a wither skeleton skull.
 const witherSkullAt = (world, skulls, x, y, z) => world.get(x, y, z) === SKULL && (skulls.tile(x, y, z)?.type ?? 0) === 1;
@@ -99,7 +112,7 @@ export function tryBuildWither(world, skulls, x, y, z, { difficulty = 2, spawn, 
       if (!base || !cells.every(([a, c]) => witherSkullAt(world, skulls, ax === 'z' ? x : a, y, ax === 'z' ? c : z))) continue;
       for (const [a, c] of cells) {
         const cx = ax === 'z' ? x : a, cz = ax === 'z' ? c : z;
-        world.set(cx, y, cz, 0, true, 0); skulls.remove(cx, y, cz);
+        skulls.remove(cx, y, cz); world.set(cx, y, cz, 0, true, 0); // the tile first: the build sets metadata 8 (no drop) before clearing the row (func_149965_a, bytecode-read)
         world.set(cx, y - 1, cz, 0, true, 0);
       }
       const mx = ax === 'z' ? x : x + i + 1, mz = ax === 'z' ? z + i + 1 : z;
