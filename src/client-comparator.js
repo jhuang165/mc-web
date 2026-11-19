@@ -4,6 +4,9 @@
 // This builds a RedstoneWorld (the engine src/redstone.js, native-verified) whose storage is the client's world, so the input and side powers are computed from client data only:
 //   world: the client view (get / getMeta / inside, internal ids); lit(x, y, z): the repeater is powered (the client knows block 94 from chunk data);
 //   signal(x, y, z): the comparator tile's output the client was sent (optional; the steady state, the value the engine would settle on, is the stand-in).
+//   successCount(x, y, z): the client's TileEntityCommandBlock SuccessCount (b83 cmdblock83). BlockCommandBlock.getComparatorInputOverride (akb.g) returns agp.g() of the
+//   client tile, which holds the count of the last S35 action 2 (agp.b(dh) reads SuccessCount; a run that only changes the count sends nothing, so it can be stale); before b83
+//   the view read 0 for a command block.
 // Tile-held inputs (chests, furnaces, jukeboxes, brewing stands) read 0 here, as on a client that has not opened them (tile contents are not in the description packets).
 import { RedstoneWorld, comparatorReadings, AIR } from "./redstone.js";
 import { toOriginal } from "./block-registry.js";
@@ -24,12 +27,14 @@ function info(id) {
 }
 
 class ClientRedstoneView extends RedstoneWorld {
-  constructor(world, { lit = () => false, signal = null } = {}) {
+  constructor(world, { lit = () => false, signal = null, successCount = null } = {}) {
     super({ seed: 0, log: false });
     this.view = world;
     this.litAt = lit;
     this.signalAt = signal;
     this.depth = 0;
+    const count = successCount;
+    this.registerBehaviour(137, { comparator: (w, x, y, z) => { const n = count?.(x, y, z); return Number.isInteger(n) ? n : 0; } }); // akb.g: agp.g(), unclamped (b82 mpcmd82)
   }
   getBlock(x, y, z) {
     const w = this.view;

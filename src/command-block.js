@@ -43,12 +43,16 @@ export function commandBlockSender(host, tile, position, { now = () => new Date(
     tile.lastOutput = serializeComponent(root);
     tile.outputChanged?.(); // a command cart's CommandBlockLogic.func_145756_e (agp.e) copies the output to watcher 24
   };
-  // ServerCommandManager.func_152372_a: the rule suppresses op feedback, never the sender's tracked output.
-  sender.feedback = (text, component) => {
-    sender.print(text, component);
+  // ServerCommandManager.func_152372_a (bl.a(ac, aa, int, String, Object[]), bytecode-read b83): the rule suppresses op feedback, never the sender's tracked output; a flag with
+  // bit 0 set (only CommandGameMode passes 1) skips the sender's own addChatMessage, so the block keeps its previous LastOutput (b83 cmdblock83: it recorded the success line).
+  sender.feedback = (text, component, flags = 0) => {
+    if ((flags & 1) !== 1) sender.print(text, component);
     if (ruleOn({ gameRules: host.rules }, 'commandBlockOutput') && host.cheats) host.print(`§7§o[${tile.customName}: ${text}]`, adminComponent(tile.customName, component ?? componentFromLegacy(String(text))));
   };
   sender.broadcast = (text, component) => { host.print(text, component); };
+  // b83 cmdblock83: a line for the TARGET player (CommandGameMode's S2B state 3, which the target's client shows as gameMode.changed) never reaches the block's LastOutput.
+  // A server host delivers it to the player-state base (the target when not redirected; the redirect sets its own targetPrint), single player prints it to the one player.
+  sender.targetPrint = (text, component) => { if (host.deliver) host.deliver(sender.playerName, text, component); else host.print(text, component); }; // called detached (commands.js gamemode)
   return sender;
 }
 export function installCommandBlocks(redstone, { host, changed = () => {} } = {}) {
@@ -73,6 +77,6 @@ export function installCommandBlocks(redstone, { host, changed = () => {} } = {}
     comparator: (w, x, y, z) => tile(x, y, z).successCount,
     breakBlock(w, x, y, z) { if (w.getBlock(x, y, z) !== COMMAND_BLOCK_ID) tiles.delete(key(x, y, z)); },
   });
-  return { tile, save: () => [...tiles].filter(([k]) => { const p = k.split(',').map(Number); return !redstone.loaded?.(...p) || redstone.getBlock(...p) === COMMAND_BLOCK_ID; }).map(([k, value]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, ...value }; }),
+  return { tile, get: (x, y, z) => tiles.get(key(x, y, z)) ?? null, save: () => [...tiles].filter(([k]) => { const p = k.split(',').map(Number); return !redstone.loaded?.(...p) || redstone.getBlock(...p) === COMMAND_BLOCK_ID; }).map(([k, value]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, ...value }; }),
     restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger)) { const { x, y, z, ...value } = e; try { tiles.set(key(x, y, z), { ...newCommandBlock(), ...value, lastOutput: normalizeLastOutput(value.lastOutput) }); } catch (err) { if (!(err instanceof LastOutputError)) throw err; /* agp.b threw: the block does not load */ } } } };
 }

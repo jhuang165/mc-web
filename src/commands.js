@@ -59,6 +59,9 @@ export class CommandException extends Error {
 const numberInvalid = (key, ...args) => new CommandException(key, args, "number");
 const wrongUsage = (key, ...args) => new CommandException(key, args, "usage");
 const playerNotFound = () => new CommandException("commands.generic.player.notFound", [], "player");
+// b83 cmdblock83: CommandBase.getCommandSenderAsPlayer (y.b, bytecode-read) throws PlayerNotFoundException with this literal (no lang key: the red translation shows it as is)
+// for a sender that is no EntityPlayerMP; its callers are achievement, clear, xp, gamemode, kill, setworldspawn, spawnpoint and tp (the scoreboard's two calls are guarded by instanceof).
+const senderNotPlayer = () => new CommandException("You must specify which player you wish to perform this action on.", [], "player");
 
 // ---- CommandBase parsers (parse results recorded in commands-reference.json) ----
 const INT_RE = /^[+-]?\d+$/;
@@ -209,7 +212,7 @@ export function createCommandRunner(host) {
     if (!host.forPlayer && !host.redirected && n.toLowerCase() !== playerName().toLowerCase()) throw new CommandException("commands.generic.exception", ["This command cannot target another player in this build"], "unsupported");
     return n;
   };
-  const targetArg = (a, i) => { if (a.length > i) return player(a[i]); if (host.isCommandBlock) throw playerNotFound(); return playerName(); };
+  const targetArg = (a, i) => { if (a.length > i) return player(a[i]); if (host.isCommandBlock) throw senderNotPlayer(); return playerName(); };
   const gameMode = (s) => {
     const l = s.toLowerCase();
     if (l === "survival" || l === "s") return "survival";
@@ -319,7 +322,7 @@ export function createCommandRunner(host) {
       say(tr("commands.players.list", 1, 8)); say(name());
     },
     kill() {
-      if (host.isCommandBlock) throw playerNotFound();
+      if (host.isCommandBlock) throw senderNotPlayer();
       host.kill();
       feedback("commands.kill.success");
     },
@@ -412,7 +415,7 @@ export function createCommandRunner(host) {
       let i = 0, who = name();
       if (a.length === 2 || a.length === 4) { who = player(a[0]); i = 1; }
       const here = pos();
-      if (host.isCommandBlock && i === 0) throw playerNotFound();
+      if (host.isCommandBlock && i === 0) throw senderNotPlayer();
       if (a.length > 4) return; // b82 (bytecode-read, executed): five or more arguments match no branch of CommandTeleport and do nothing
       if (a.length - i === 3) {
         const x = parseCoordinate(here.x, a[i]), y = parseCoordinate(here.y, a[i + 1], 0, 0), z = parseCoordinate(here.z, a[i + 2]);
@@ -446,7 +449,7 @@ export function createCommandRunner(host) {
       let x, y, z;
       if (a.length === 3) { x = parseIntBounded(a[0], -30000000, 30000000); y = parseIntBounded(a[1], 0, 256); z = parseIntBounded(a[2], -30000000, 30000000); }
       else if (a.length === 0) {
-        if (host.isCommandBlock) throw playerNotFound();
+        if (host.isCommandBlock) throw senderNotPlayer();
         const here = pos();
         x = Math.floor(here.x); y = Math.floor(here.y + 0.5); z = Math.floor(here.z);
       } else usage("commands.setworldspawn.usage");
