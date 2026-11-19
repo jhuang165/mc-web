@@ -4,7 +4,7 @@
 // buildWitherTasks. The skulls in flight are WitherSkulls (a Fireballs subclass on the same sweep).
 import { ENTITY_TYPES, HOSTILE, entityRandom, livingSoundRoll } from "./entities.js";
 import { JavaRandom } from "./java-random.js";
-import { Fireballs } from "./fireballs.js";
+import { Fireballs, savedRotation } from "./fireballs.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { aimPart } from "./dragon-parts.js";
 import { fireballAcceleration } from "./blaze-ghast.js";
@@ -164,15 +164,10 @@ export class WitherSkulls extends Fireballs {
   // b81 render81: the rotation is Entity.writeToNBT's Rotation [rotationYaw, rotationPitch]; readFromNBT (sa.f(dh), bytecode-read) sets
   // prevRotationYaw/Pitch to the stored floats and setRotation (sa.b(FF)) the current ones to them mod 360 (frem). Older saves have none (0, 0).
   build(r) {
-    const [yaw, pitch] = Array.isArray(r.rotation) && r.rotation.length >= 2 && r.rotation.every(Number.isFinite) ? r.rotation.map(Math.fround) : [0, 0];
     return { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue: false, large: false, owner: null, health: 1, x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size,
-      yaw: Math.fround(yaw % 360), pitch: Math.fround(pitch % 360), prevYaw: yaw, prevPitch: pitch };
+      ...savedRotation(r) };
   }
-  // The browser save keeps the rotation the way the native save does (javaProjectileToNbt writes it as Entity's Rotation).
-  serialize(dimension = 0) {
-    const live = this.list.filter((b) => !b.dead);
-    return super.serialize(dimension).map((r, i) => ({ ...r, rotation: [live[i].yaw ?? 0, live[i].pitch ?? 0] }));
-  }
+  // The browser save keeps the rotation the way the native save does (Fireballs.serialize writes it for every ball since b82 fireext82; javaProjectileToNbt writes Rotation).
   // EntityWitherSkull.onUpdate (EntityFireball's flight with the skull's own factor) for one skull, where the loaded-entity walk reaches it.
   tickOne(b) {
     const mobs = this.mobs;

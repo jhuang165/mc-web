@@ -15,7 +15,6 @@ import { JavaRandom } from '../java-random.js';
 import { StructureCache } from '../population-world.js';
 import { WorldChunkManager } from '../biome-layers.js';
 import { javaSeed } from '../java-world.js';
-import { WATER } from '../world.js';
 import { nearPlayers } from './server-music.js';
 
 const f = Math.fround, caches = new Map();
@@ -58,15 +57,17 @@ export class ServerEyes {
     if (!this.system.eyes.length) return;
     const sim = this.dispense.sim, fx = this.dispense.fx, before = new Set(this.system.eyes);
     const world = sim.world;
+    // b82 fireext82: the world gives the eye Entity.onEntityUpdate's water test and fire counter (eye-of-ender.js eyeFire); the server spawns no particles, so the old
+    // point test for the bubbles is gone with no visible change
     this.system.tick({
-      inWater: (x, y, z) => { return world.get(Math.floor(x), Math.floor(y), Math.floor(z)) === WATER; },
+      world,
       drop: (stack, x, y, z) => { sim.items.spawn(stack, x, y, z); },
     });
     for (const e of before) if (e.dead && !e.drops) fx.push({ k: 'eyeShatter', x: Math.floor(e.x + 0.5), y: Math.floor(e.y + 0.5), z: Math.floor(e.z + 0.5), dim: this.dispense.dim | 0 });
   }
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = this.dispense.id(e)); return i; }
   // dispEnts rows within 64 blocks of `q`.
-  rows(q) { return this.system.eyes.filter(e => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < NEAR).map(e => ({ k: 'b', i: this.id(e), kind: 'eyeOfEnder', x: e.x, y: e.y, z: e.z })); }
+  rows(q) { return this.system.eyes.filter(e => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < NEAR).map(e => ({ k: 'b', i: this.id(e), kind: 'eyeOfEnder', x: e.x, y: e.y, z: e.z, ...(e.fire > 0 ? { f: 1 } : {}) })); }
   serialize() { return this.system.eyes.length ? this.system.serialize() : null; }
   load(record) { this.system.load(record); }
 }

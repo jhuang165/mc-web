@@ -357,7 +357,7 @@ export function primeTnt(x, posY, z, { fuse = TNT_FUSE, placer = null, random = 
     x, y, z, px: x, py: y, pz: z,
     bb: [x - half, y, z - half, x + half, y + TNT_SIZE, z + half],
     vx: f(-f(Math.sin(a)) * f(0.02)), vy: 0.20000000298023224, vz: f(-f(Math.cos(a)) * f(0.02)),
-    fuse, placer, onGround: false, collidedH: false, fallDistance: 0,
+    fuse, placer, onGround: false, collidedH: false, fallDistance: 0, fire: 0,
   };
 }
 // Explosion.doExplosionA applies knockback to other primed TNT even though damage is ignored.
@@ -371,10 +371,15 @@ export function explodeTnt(world, e, x, y, z, size) {
 // EntityTNTPrimed.onUpdate (xw.h): gravity 0.04, Entity.moveEntity (stepHeight 0),
 // drag 0.98, ground friction 0.7 and a -0.5 bounce; `if (fuse-- <= 0)` explodes at
 // posY (the box centre) with strength 4. Returns the explosion centre or null.
-export function tickTnt(world, e, smoke = null) {
+// b82 fireext82 (bytecode-read, xw.h): EntityTNTPrimed.onUpdate never calls super.onUpdate, so the fire counter is not counted down, flag 0 is never set and isInWater stays false;
+// moveEntity's fire tail still runs on both sides (a client copy too: `remote`). Outside fire the counter rests at -1; a fire block or lava cell in the box (shrunk 0.001) runs
+// dealFireDamage(1) (Entity.attackEntityFrom: setBeenAttacked only, `velocityChanged`) and ++fire, with setFire(8) (160) when that reaches 0; nothing takes it back down, so
+// a block that once burnt keeps a counter above 0 (isBurning: RenderTNTPrimed's fire overlay) for the rest of the fuse. isWet is then only rain (not modelled here: no fizz).
+// With `remote` the cauldron (World-changing, !isRemote) is skipped.
+export function tickTnt(world, e, smoke = null, { remote = false } = {}) {
   e.px = e.x; e.py = e.y; e.pz = e.z;
   e.vy -= 0.03999999910593033;
-  moveEntity(world, e, TNT_SIZE, TNT_SIZE, e.vx, e.vy, e.vz, 0);
+  moveEntity(world, e, TNT_SIZE, TNT_SIZE, e.vx, e.vy, e.vz, 0, { hurt: () => { e.velocityChanged = true; }, remote });
   e.vx *= 0.9800000190734863;
   e.vy *= 0.9800000190734863;
   e.vz *= 0.9800000190734863;

@@ -22,7 +22,7 @@ export const END_PORTAL_LIGHT = 15;
 // 12 blocks along the line and 8 blocks up; otherwise exactly for the target. Entity.rand draws nextInt(5): 0 shatters.
 export function createEye(x, y, z) {
   return { x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0,
-    tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false };
+    tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false, fire: 0 };
 }
 export function moveTowards(eye, x, y, z, random) {
   const dx = x - eye.x, dz = z - eye.z, d = f(Math.sqrt(dx * dx + dz * dz));
@@ -40,8 +40,9 @@ export function moveTowards(eye, x, y, z, random) {
 
 // EntityEnderEye.onUpdate (zd.h). Returns the particle spawned this tick and, on the last tick (age > 80), what ends
 // the flight: { drop: {x, y, z} } (EntityItem holding one eye) or { shatter: {x, y, z} } (World.playAuxSFX 2003 at
-// the rounded position). The base Entity.onEntityUpdate call (water flag, fire) is not modelled; `inWater` selects
-// the 4 bubble particles (bytecode-derived).
+// the rounded position). `inWater` (Entity.isInWater, set by this update's handleWaterMovement) selects the 4 bubble
+// particles (bytecode-derived); the fire part of Entity.onEntityUpdate before it is eye-of-ender-live.js eyeFire (b82 fireext82; this module stays free of world.js
+// imports, since world.js imports it).
 export function tickEye(eye, random, { inWater = false } = {}) {
   const speed = flyEye(eye);
   return endEye(eye, random, speed, inWater);

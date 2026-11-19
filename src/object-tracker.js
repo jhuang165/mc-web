@@ -29,6 +29,7 @@ import { MobTracker, ClientEntity, TrackerEntry, sizeClass } from "./entity-trac
 import { toOriginal, fromOriginal } from "./block-registry.js";
 import { originalOfLive } from "./item-names.js";
 import { flyEye } from "./eye-of-ender.js";
+import { eyeFire, eyeBox } from "./eye-of-ender-live.js";
 import { createRocket, tickRocket } from "./firework-rocket.js";
 import { FishHook, setBox as setHookBox } from "./fishing.js";
 import { ItemEntities } from "./item-entities.js";
@@ -117,7 +118,9 @@ export class Watcher {
 }
 // The data watcher objects of a kind from the entity (the stand-in `p` the tracker reads): the Entity flags and air, then the kind's own.
 export function metaValues(kind, p) {
-  const out = [[0, 0, p.fire > 0 ? 1 : 0], [1, 1, 300]];
+  // flag 0 is Entity.onEntityUpdate's setFlag(0, fire > 0) (server side). EntityTNTPrimed.onUpdate never calls it (xw.h has no super.onUpdate, bytecode-read in b82 fireext82),
+  // so primed TNT keeps the flag clear whatever its counter; its copy burns by its own counter (objectView).
+  const out = [[0, 0, kind !== "tnt" && p.fire > 0 ? 1 : 0], [1, 1, 300]];
   if (kind === "item") out.push([5, 10, copyStack(p.stack)]);
   else if (kind === "arrow") out.push([0, 16, p.crit ? 1 : 0]);
   else if (kind === "firework") out.push([5, 8, p.stack?.fireworks ? copyStack(p.stack) : null]);
@@ -213,7 +216,7 @@ export class ObjectClient extends ClientEntity {
         this.x = p.x / 32; this.y = p.y / 32 + (this.spec.lift ?? 0); this.z = p.z / 32;
         this.yaw = angleByte(p.yaw); this.pitch = angleByte(p.pitch);
       }
-      this.px = this.x; this.py = this.y; this.pz = this.z;
+      this.px = this.x; this.py = this.y; this.pz = this.z; this.boxAt = [this.x, this.y, this.z]; // b82 fireext82: where Entity.setPosition last put the box (an eye copy's box moves only with the packets)
       this.prevYaw = this.yaw; this.prevPitch = this.pitch; this.cartType = this.kind === "minecart" ? p.data | 0 : 0; this.fuse = -1;
       this.vx = this.vy = this.vz = 0; this.onGround = false;
       this.meta.clear(); this.fish = null;
@@ -226,9 +229,11 @@ export class ObjectClient extends ClientEntity {
       if (p.type !== "look") { this.sx += p.dx; this.sy += p.dy; this.sz += p.dz; }
       const look = p.type !== "move";
       this.place(this.sx / 32, this.sy / 32, this.sz / 32, look ? angleByte(p.yaw) : undefined, look ? angleByte(p.pitch) : undefined);
+      if (this.spec.eye) this.boxAt = [this.x, this.y, this.z];
     } else if (p.type === "teleport") {
       this.sx = p.x; this.sy = p.y; this.sz = p.z;
       this.place(this.sx / 32, this.sy / 32 + 0.015625, this.sz / 32, angleByte(p.yaw), angleByte(p.pitch));
+      if (this.spec.eye) this.boxAt = [this.x, this.y, this.z];
     } else if (p.type === "meta") { for (const [, idx, value] of p.list) this.meta.set(idx, value); }
     else if (p.type === "velocity") this.setVelocity(p.vx / 8000, p.vy / 8000, p.vz / 8000);
     else if (p.type === "status") this.handleStatus(p.status);
@@ -431,8 +436,10 @@ export class ObjectClient extends ClientEntity {
       this.x = s.x; this.y = s.y; this.z = s.z; this.vx = s.mx; this.vy = s.my; this.vz = s.mz; this.yaw = s.yaw; this.pitch = s.pitch;
       if (s.dead) this.present = false;
     } else if (spec.eye) {
-      // EntityEnderEye.onUpdate on the client: the flight only (the homing and the end are under !isRemote)
+      // EntityEnderEye.onUpdate on the client: super.onUpdate's fire part, then the flight (the homing and the end are under !isRemote). b82 fireext82: a client world zeroes the
+      // counter, then handleLavaMovement on the box the last packet placed (zd.h moves the box only under !isRemote) sets it to 300; the copy burns by that or by flag 0
       Object.assign(s, { x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, yaw: this.yaw, pitch: this.pitch });
+      eyeFire(s, world, { remote: true, box: eyeBox(...(this.boxAt ?? [this.x, this.y, this.z])) });
       flyEye(s);
       this.x = s.x; this.y = s.y; this.z = s.z; this.yaw = s.yaw; this.pitch = s.pitch;
     } else if (spec.rocket) {
@@ -452,7 +459,7 @@ export class ObjectClient extends ClientEntity {
       this.vx = s.vx * 0.9800000190734863; this.vy = s.vy * 0.9800000190734863; this.vz = s.vz * 0.9800000190734863;
     } else if (this.kind === "tnt") {
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.vx = this.vx; s.vy = this.vy; s.vz = this.vz; s.onGround = this.onGround;
-      const boom = tickTnt(world, s); // fuse 80 on the client; at 0 it dies without exploding
+      const boom = tickTnt(world, s, null, { remote: true }); // fuse 80 on the client; at 0 it dies without exploding. b82 fireext82: its moveEntity counts its own fire (blockCollisions)
       this.x = s.x; this.y = s.y + spec.yOff; this.z = s.z; this.vx = s.vx; this.vy = s.vy; this.vz = s.vz; this.onGround = s.onGround;
       if (boom) this.present = false;
     }
@@ -546,11 +553,11 @@ export class ObjectTracker extends MobTracker {
     if (k === "orb") return { x: 0, y: 0, posY: 0, z: 0, vx: 0, vy: 0, vz: 0, value: 1, age: 0, health: 5, fire: 0, bb: [0, 0, 0, 0, 0, 0], px: 0, py: 0, pz: 0, color: 0, retarget: 0, target: false, id: c.id, fallDistance: 0, onGround: false };
     if (c.spec.arrow) return s.arrows.make({ x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0 }, s.arrows.rng(), {});
     if (c.spec.thrown) { const rand = s.balls.rng(); return { kind: k, x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0, px: 0, py: 0, pz: 0, prevYaw: 0, prevPitch: 0, ticks: 0, rand, random: rand, dead: false }; }
-    if (c.spec.eye) return { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false };
+    if (c.spec.eye) return { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, tx: 0, ty: 0, tz: 0, age: 0, drops: false, dead: false, fire: 0 };
     if (c.spec.rocket) { const r = createRocket(c.x, c.y, c.z, null, s.balls.rng()); r.rand = s.balls.rng(); return r; } // the client's constructor draws its own random motion, the S12 replaces it
     if (c.spec.hook) return new FishHook(s.balls.rng()); // its own Entity.rand
     if (c.spec.vehicle || c.spec.hanging) return c.kind === "boat" ? { prevYaw: 0, prevPitch: 0, rand: s.balls.rng() } : { prevYaw: 0, prevPitch: 0 }; // the boat copy's own Entity.rand (its splash draws)
-    return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, fuse: 80, px: 0, py: 0, pz: 0 };
+    return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, fuse: 80, px: 0, py: 0, pz: 0, fire: 0 };
   }
   // Copies the live entity into the stand-in the tracker entry reads (Java's posY and field names).
   read(kind, e, p) {
@@ -662,11 +669,13 @@ export function objectView(tracker, e, kind) {
   // what the S1C and the spawn packet gave the client entity: the renderers read these, not the live entity's fields
   if (kind === "item") { const st = c.meta?.get(10); if (st) v.stack = st; }
   else if (kind === "arrow") { v.crit = ((c.meta?.get(16) ?? 0) & 1) === 1; if (c.sim) { v.shake = c.sim.shake; v.inGround = c.sim.inGround; } } // the client's own stick and arrowShake
-  else if (kind === "tnt") if (c.sim) v.fuse = c.sim.fuse; // the fuse is not synchronised: the client's own countdown from 80
+  else if (kind === "tnt") { if (c.sim) { v.fuse = c.sim.fuse; v.burning = c.sim.fire > 0; } } // the fuse is not synchronised: the client's own countdown from 80. b82 fireext82: the braces
+  // keep the falling branch below off the tnt test (it bound to the inner if); the copy's isBurning is its own counter (moveEntity's fire tail), the server never sets flag 0 for TNT
   else if (kind === "falling" && c.sim?.block !== undefined) { v.block = c.sim.block; v.meta = c.sim.meta; }
   // b80 fluids80: a client throwable zeroes its own counter every update, so Entity.isBurning is the watched flag 0 the server sets from its counter (Render.doRenderShadowAndFire)
   // b81 throwfire81: the same for items, orbs and arrows (fire-overlays.js). sa.al also reads the copy's own counter, which a client arrow or throwable sets in lava within its update.
-  if (spec.thrown || spec.arrow || spec.orb || kind === "item") v.burning = ((c.meta?.get(0) ?? 0) & 1) === 1 || (!!(spec.thrown || spec.arrow) && c.sim?.fire > 0);
+  // b82 fireext82: eyes and rockets likewise (an eye copy sets its counter in lava, a rocket copy in lava or a fire block, both within the update)
+  if (spec.thrown || spec.arrow || spec.orb || spec.eye || spec.rocket || kind === "item") v.burning = ((c.meta?.get(0) ?? 0) & 1) === 1 || (!!(spec.thrown || spec.arrow || spec.eye || spec.rocket) && c.sim?.fire > 0);
   return v;
 }
 export const objectViews = (tracker, list, kind) => list.map((e) => objectView(tracker, e, kind));

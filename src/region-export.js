@@ -169,7 +169,7 @@ function payload(state,ox,oz,report,blockAt) {
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0)})));}
- for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:e.fire>0?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json)
+ for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json); b82 fireext82: then moveEntity's counter (-1 at rest, 160 and up once lit)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15,e.flowing?{flowing:true}:{});entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:e.fire>0?e.fire:0},'FallingSand',ox,oz),
   // EntityFallingBlock.writeEntityToNBT (object-nbt-reference.json): Tile (the id as a byte), TileID, Data, Time, DropItem, HurtEntities, FallHurtAmount (float, 2.0)
@@ -185,7 +185,8 @@ function payload(state,ox,oz,report,blockAt) {
  // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting, arrows,
  // fireballs, wither skulls, eyes of ender and firework rockets. An egg has no EntityList id (and the bobber class is not registered), so they stay unsupported.
  for(const name of ['projectiles','thrownPotions','arrows','fireballs','eyes','rockets'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz,itemNbt:stack=>stackNbt(stack,undefined,report)});if(!p){report.unsupportedEntities++;continue;}
-  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx,my:e.my,mz:e.mz,rotation:[e.yaw??0,e.pitch??0],fire:(name==='arrows'||name==='projectiles'||name==='thrownPotions')&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
+  // b82 fireext82: an eye's motion is vx/vy/vz (it exported as 0); its Fire and a rocket's counter (a rocket rests at -1 like any moveEntity mover) go out too
+  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx??e.vx,my:e.my??e.vy,mz:e.mz??e.vz,rotation:[e.yaw??0,e.pitch??0],fire:name==='rockets'?(Number.isInteger(e.fire)?e.fire:0):(name==='arrows'||name==='projectiles'||name==='thrownPotions'||name==='eyes')&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }
