@@ -769,6 +769,25 @@ function syncMultiplayerItems(list) {
 }
 // Batch 61 (mpdispense): the arrows, thrown items, fireballs, rockets and primed TNT that the server's dispensers fired (multiplayer/client-dispense.js). The rows are drawn like the
 // local ones: scene.setArrows / setProjectiles each tick, primed TNT through the TNT renderer's list (see `tntRows`).
+// b85 mphook85: the client world's collidable entities for the thrown lane's arrow and hook copies (clientTargets of the single-player tracker, for the dedicated server's mob and player copies).
+const mpPlayerBoxOf = (e) => { const b = e.body, w = PHYSICS.width / 2; return [b.x - w, b.y, b.z - w, b.x + w, b.y + PHYSICS.height, b.z + w]; };
+function mpCopyTargets() {
+  const out = [];
+  for (const { client: c, mob } of remoteMobs?.copies.values() ?? []) {
+    if (!c.present || !(mob.health > 0)) continue;
+    if (c.dragon?.parts) { for (const p of c.dragon.parts) out.push({ ref: c, kind: "dragonPart", box: p.box, answers: true, reach: (area) => reachesDragon(c, area) }); continue; }
+    const [w, h] = remoteMobs.factory.size(mob);
+    out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
+  }
+  for (const [id, e] of remotePlayers?.entries ?? []) if (e.body) out.push({ ref: e, kind: "player", box: mpPlayerBoxOf(e), answers: true });
+  out.push({ ref: "player", box: [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2], immune: survival.creative });
+  return out;
+}
+function mpCopyRefOf(sh) {
+  if (sh?.p !== undefined) return sh.p === multiplayer?.id ? "player" : remotePlayers?.entries.get(sh.p) ?? null;
+  if (sh?.m !== undefined) return remoteMobs?.copies.get(sh.m)?.client ?? null;
+  return null;
+}
 function makeRemoteDispense() {
   const play = (name, x, y, z, volume, pitch) => sounds?.play(name, { position: { x, y, z }, volume, pitch });
   return new RemoteDispense({
@@ -779,6 +798,9 @@ function makeRemoteDispense() {
     // b84 mpthrown84: the tracker lane's own client copies (multiplayer/thrown-copy.js) draw their particles and take the live world and player
     copyParticle: (name, x, y, z, vx, vy, vz) => name === "fireworksSpark" ? fireworkFx.spawnSpark(x, y, z, vx, vy, vz) : scene?.fx.spawn(name, x, y, z, vx, vy, vz),
     copyWorld: () => world, copyPlayer: () => position,
+    // b85 mphook85: what an arrow or hook copy searches (EntityArrow / EntityFishHook.onUpdate on a client world): the mob copies, the other players' copies (EntityOtherPlayerMP.attackEntityFrom answers true) and the local player
+    copyTargets: () => mpCopyTargets(), copyRefOf: sh => mpCopyRefOf(sh), copyHasAngler: id => id === multiplayer?.id || !!remotePlayers?.entries.has(id),
+    fishHooks: rows => remoteFishing?.lane(rows),
     copyBalls: (balls) => { if (scene) { balls.useEffects(scene.effectRenderer); balls.particleSetting = projectiles.particleSetting; balls.particleRandom = projectiles.particleRandom; balls.particleViewer = projectiles.particleViewer; } },
     firework: (x, y, z, vx, vy, vz, fireworks) => fireworkFx.spawnStarter(x, y, z, vx, vy, vz, fireworks),
     spark: (...a) => fireworkFx.spawnSpark(...a),

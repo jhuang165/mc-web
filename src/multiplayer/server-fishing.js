@@ -6,7 +6,9 @@
 // dimension within range are told about it each tick.
 //
 // Wire (server -> client, queued on `p.dispOut` like dispEnts):
-//   { type: 'fishHooks', hooks: [{ o: anglerId, i: entityId, x, y, z }] }   the bobbers near this player (an empty list once, to clear them). The client draws bobber and line (client-fishing.js).
+//   b85 mphook85: the bobbers themselves ride the thrown-entity tracker lane now (thrown-tracks.js, `trackList`): EntityFishHook is tracked 64 / 5 / velocity (bytecode-read), its S0E type 90
+//   carries the angler's id as data, and the client copy runs its own update (thrown-copy.js). The old `{ type: 'fishHooks', hooks: [{ o, i, x, y, z }] }` message is no longer sent (the
+//   client still reads it from an older server).
 //   { type: 'fishFx', events: [{ n: 'splash'|'bubble'|'wake', x, y, z, vx, vy, vz }] }   one-shot particles (EntityFishHook's WorldServer.func_147487_a).
 // Sounds go through sim.soundsOut (S29). Loot, XP orb (1-6 at the angler's feet + 0.5), rod wear (1 for a bite, 3 for a pulled mob, +2 on the ground; none in Creative)
 // and the fishCaught / junkFished / treasureFished statistics follow the single-player rules. Hooks are not saved (EntityFishHook has no entity-list name, so a native
@@ -23,10 +25,16 @@ export const FX_NEAR = 32 * 32;
 const f = Math.fround;
 
 export class ServerFishing {
-  constructor(sim) { this.sim = sim; this.byPlayer = new Map(); this.fx = []; this.sent = new Set(); }
+  constructor(sim) { this.sim = sim; this.byPlayer = new Map(); this.fx = []; }
   has(p) { return !!this.byPlayer.get(p.id)?.active; }
   hookOf(p) { const fishing = this.byPlayer.get(p.id); return fishing?.active ? fishing.hook : null; }
   drop(p) { this.byPlayer.delete(p.id); }
+  // b85 mphook85: the live hooks of dimension `dim` for the tracker lane ({ e, kind }); the hook carries its angler's id (EntityFishHook's S0E data).
+  trackList(dim = 0) {
+    const out = [];
+    for (const [id, fishing] of this.byPlayer) if (fishing.active && fishing.dimension === dim) { fishing.hook.anglerId = id; out.push({ e: fishing.hook, kind: 'fishHook' }); }
+    return out;
+  }
 
   // What EntityFishHook / ItemFishingRod need from the running server, for player `p` in the current (swapped) dimension.
   host(p) {
@@ -77,18 +85,15 @@ export class ServerFishing {
       if (!fishing.hook) this.byPlayer.delete(id);
     }
   }
-  // Tail of the tick: queue fishHooks / fishFx for each player of the hook's dimension.
+  // Tail of the tick: queue fishFx for each player of the hook's dimension. The bite's bubbles, wake and splash are the server's own WorldServer.func_147487_a particles (S2A, sent by the
+  // server natively; fishing.js `env.particle`, the `!env.remote` branch). The entity's own water splash (Entity.handleWaterMovement -> World.spawnParticle) is a no-op on a server:
+  // the client copy draws it (`env.fx` is absent here), so nothing in `fx` duplicates the copy.
   flush() {
-    const hooks = [];
-    for (const [id, fishing] of this.byPlayer) if (fishing.active) { const h = fishing.hook; hooks.push({ o: id, i: h.entityId, x: h.x, y: h.y, z: h.z, dim: fishing.dimension }); }
-    const fx = this.fx.splice(0), now = new Set();
+    const fx = this.fx.splice(0);
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0, q = p.position, msgs = p.dispOut ??= [];
-      const list = hooks.filter(h => h.dim === dim && (h.x - q.x) ** 2 + (h.z - q.z) ** 2 < FISH_NEAR).map(({ dim: _d, ...h }) => h);
-      if (list.length) { msgs.push({ type: 'fishHooks', hooks: list }); now.add(p.id); } else if (this.sent.has(p.id)) msgs.push({ type: 'fishHooks', hooks: [] });
       const events = fx.filter(e => e.dim === dim && (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < FX_NEAR).slice(0, 64).map(({ dim: _d, ...e }) => e);
       if (events.length) msgs.push({ type: 'fishFx', events });
     }
-    this.sent = now;
   }
 }

@@ -20,9 +20,10 @@ export class RemoteDispense {
       this.ents(message.ents ?? []);
       // b84 mpthrown84: tracker rows (`trk`) for arrows, thrown balls, rockets and eyes; the copies update first, then take the packets (thrown-copy.js). Old rows (`ents`) still work.
       if (message.trk || this.copies?.size) {
-        this.copies ??= new ThrownCopies({ particle: this.hooks.copyParticle, firework: this.hooks.firework, eyeTrail: this.hooks.eyeTrail, balls: this.hooks.copyBalls });
-        const { arrows, balls } = this.copies.tick(message.trk, this.hooks.copyWorld?.() ?? null, this.hooks.copyPlayer?.() ?? null);
+        this.copies ??= new ThrownCopies({ particle: this.hooks.copyParticle, firework: this.hooks.firework, eyeTrail: this.hooks.eyeTrail, balls: this.hooks.copyBalls, targets: this.hooks.copyTargets, refOf: this.hooks.copyRefOf, hasAngler: this.hooks.copyHasAngler });
+        const { arrows, balls, hooks } = this.copies.tick(message.trk, this.hooks.copyWorld?.() ?? null, this.hooks.copyPlayer?.() ?? null);
         this.arrows = [...this.arrows, ...arrows]; this.balls = [...this.balls, ...balls];
+        this.hooks.fishHooks?.(hooks); // b85 mphook85: the fishing hook copies (client-fishing.js `lane`)
       }
     }
     else if (message.type === 'dispFx') this.events(message.events ?? []);
