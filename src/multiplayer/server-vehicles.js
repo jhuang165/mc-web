@@ -57,6 +57,9 @@ export class ServerVehicles {
     const ids = this.ids = new EntityIds();
     this.carts = saved?.carts ? Minecarts.fromJSON(saved.carts, { ids }) : new Minecarts({ ids });
     this.boats = saved?.boats ? Boats.fromJSON(saved.boats, { ids }) : new Boats({ ids });
+    // b84 lead (rain84's server half): moveEntity's isWet for boats (boats.js reads `this.rain`/`this.fizz` when the hooks lack them); the fizz at the boat's feet.
+    this.boats.rain = (x, y, z) => !this.dim && !!host.weather && canLightningStrikeAt(host.weather, host.world, x, y, z);
+    this.boats.fizz = (b, volume, pitch) => host.soundsOut.push({ name: 'random.fizz', x: b.x, y: b.y, z: b.z, volume, pitch, except: null });
     for (const c of [...this.carts.carts, ...this.boats.carts]) c.restorePlayer = false; // nobody is aboard after a restart
     this.cartCommands = []; // b63: command block carts an activator rail triggered this tick, run by ServerSocial.drain (server-cart-commands.js)
     this.cartHost = {
