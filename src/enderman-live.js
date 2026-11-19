@@ -89,7 +89,7 @@ export function endermanTick(mobs, e, rng) {
   const bx = Math.floor(e.x), bz = Math.floor(e.z);
   const wet = !!e.inWater || (!!mobs.isRaining?.() && (ai.deps.canSeeSky(bx, Math.floor(e.y), bz) || ai.deps.canSeeSky(bx, Math.floor(e.y + E.ENDERMAN_HEIGHT), bz)));
   E.tick(e, w, {
-    rng, target, wet, burning: e.fire > 0,
+    rng, target, wet, burning: e.fire > 0, get dead() { return !(e.health > 0); }, // b83: a corpse (entities.js dying -> corpse-living.js), or one the wet hit just killed, skips the alive-gated stare / chase block
     dropTarget: () => { m.attackTarget = null; }, // entityToAttack = null only: the path (pathToEntity) is kept
     hurt: () => mobs.attackEntityFrom(e, 1, { name: "drown" }),
     distanceSq: (q) => (e.x - q.x) ** 2 + (e.y - q.y) ** 2 + (e.z - q.z) ** 2,
