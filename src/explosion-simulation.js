@@ -6,6 +6,8 @@ import { explosionReaches } from "./ring-events.js";
 import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
 import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
+import { JavaRandom } from "./java-random.js";
+import { explodeFireballs, explodeRockets, explodeEyes, explodeHooks, explodeKnots } from "./explosion-extras.js"; // b82 spblast82
 import { ENTITY_TYPES } from "./entities.js";
 import { livingEyeHeight } from "./ai.js";
 import { makeStack, copyStack } from "./inventory.js";
@@ -37,23 +39,31 @@ function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop)
  * The non-living entity lists of Explosion.doExplosionA, in main.js order: items, orbs, arrows, thrown entities, the witch and dispenser potions and the snow golem's
  * snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, and the minecarts and boats (attackEntityFrom with the explosion
  * source, then the motion; EntityListProbe). Primed TNT, mobs and the player stay with applyExplosion.
+ * b82 spblast82: also the fireballs and wither skulls, firework rockets, eyes of ender, fishing hooks (`state.rockets`, `state.eyes`, `state.hooks`: an array) and leash knots
+ * (explosion-extras.js); `placer` is getExplosivePlacedBy, whose look a large fireball takes. The dedicated server's ServerMobs.explode runs this same function.
  */
-export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null, orbsBefore = null) {
+export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null, orbsBefore = null, placer = null) {
   const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
   // `itemsBefore`: the item count when the blast collected its entity list; the items after it (a mob the blast just killed dropped them) wait out the blast.
   const born = itemsBefore === null || !items.items ? [] : items.items.splice(itemsBefore);
   // b81 blast81 `orbsBefore`: the same for the orbs (an ore an ender crystal's nested blast broke dropped them, Block.dropXpOnBlockBreak in that blast's doExplosionB).
   const bornOrbs = orbsBefore === null || !xpOrbs?.orbs ? [] : xpOrbs.orbs.splice(orbsBefore);
-  items.explode(world, x, y, z, size, exploder);
-  xpOrbs.explode(world, x, y, z, size, exploder);
-  arrows.explode(world, x, y, z, size, exploder);
-  projectiles.explode(world, x, y, z, size, exploder);
+  items?.explode(world, x, y, z, size, exploder);
+  xpOrbs?.explode(world, x, y, z, size, exploder);
+  arrows?.explode(world, x, y, z, size, exploder);
+  projectiles?.explode(world, x, y, z, size, exploder);
   mobs?.potions?.projectiles?.explode(world, x, y, z, size, exploder);
   mobs?._golemBalls?.projectiles?.explode(world, x, y, z, size, exploder);
   explodeVehicles(state.minecarts, world, x, y, z, size, exploder, creative, vehicleDrop);
   explodeVehicles(state.boats, world, x, y, z, size, exploder, creative, vehicleDrop);
   falling?.explode(x, y, z, size, exploder);
   state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
+  explodeKnots(mobs, x, y, z, size, exploder);
+  explodeFireballs(mobs?._fireballs, world, x, y, z, size, exploder, placer);
+  explodeFireballs(mobs?._skulls, world, x, y, z, size, exploder, placer);
+  explodeRockets(state.rockets?.rockets, world, x, y, z, size, exploder);
+  explodeEyes(state.eyes?.eyes, world, x, y, z, size, exploder);
+  explodeHooks(state.hooks, world, x, y, z, size, exploder);
   if (born.length) items.items.splice(itemsBefore, 0, ...born);
   if (bornOrbs.length) xpOrbs.orbs.splice(orbsBefore, 0, ...bornOrbs);
 }
@@ -146,7 +156,7 @@ export function applyExplosion(state, request, hooks = {}) {
   const itemsBefore = items.items?.length ?? null, orbsBefore = xpOrbs?.orbs?.length ?? null, primedBefore = [...primed];
   const mobHits = explodeMobs(state, { x, y, z, size, exploder, attacker });
 
-  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore, orbsBefore);
+  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore, orbsBefore, attacker);
   const tntProcessed = [];
   for (const entity of primedBefore) {
     if (entity === exploder || isFrozen(entity)) continue;
@@ -184,7 +194,10 @@ export function applyExplosion(state, request, hooks = {}) {
     }
   }
 
-  const explosion = { list, ...explosionOutcome(world, list, size, random, { opaque, smoking, flaming: flaming && !!ignite }) }; // b81 blast81: doExplosionB reads the cells as they are now
+  // b82 spblast82: the fire roll draws on Explosion's own unseeded Random (agw.<init>: new Random()), here a JavaRandom seeded from Math.random, made only for a flaming blast
+  // (as ServerMobs.explode); explosionOutcome's old default seeded it from the clock.
+  const own = flaming && ignite ? new JavaRandom(Math.floor(Math.random() * 2 ** 48)) : null;
+  const explosion = { list, ...explosionOutcome(world, list, size, random, { opaque, smoking, flaming: flaming && !!ignite, ...(own ? { own } : {}) }) }; // b81 blast81: doExplosionB reads the cells as they are now
 
   // S27 reaches only a player within 64 blocks (WorldServer.newExplosion), and the client's huge explosion particle has no other range test (ring-events.js).
   if (explosionReaches(x, y, z, position)) {

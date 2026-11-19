@@ -319,7 +319,7 @@ export function explodeBlocks(world, x, y, z, size, rand, { resistance = explosi
  * the entities, and an ender crystal that the entity part sets off explodes inside it (EntityEnderCrystal.attackEntityFrom -> World.createExplosion, bytecode-read wz.a), so a
  * cell the nested blast already cleared is air here and drops nothing. Nothing is changed in the world; the caller applies `broken`, `fires`, `drops`, `primed`, `released`.
  */
-export function explosionOutcome(world, list, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false } = {}) {
+export function explosionOutcome(world, list, size, rand, { smoking = true, flaming = false, own = null, opaque = () => false } = {}) {
   const pitch = explodePitch(rand), broken = [], drops = [], xp = [], primed = [], fires = [], released = [];
   const removed = new Set(), get = (bx, by, bz) => (removed.has(bx + "," + by + "," + bz) ? 0 : world.get(bx, by, bz));
   const chance = f(1 / size);
@@ -340,6 +340,9 @@ export function explosionOutcome(world, list, size, rand, { smoking = true, flam
       broken.push({ x: bx, y: by, z: bz, id, meta });
       if (id === TNT) primed.push({ x: f(bx + 0.5), y: f(by + 0.5), z: f(bz + 0.5), fuse: chainFuse(rand) });
     }
+  // b82 spblast82: Explosion.explosionRNG is an unseeded new Random() (agw.<init>, bytecode-read); without one from the caller it is drawn from Math.random, only for a flaming
+  // blast (it used to default to the clock, which seeded runs cannot repeat).
+  if (flaming && !own) own = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
   if (flaming)
     for (const [bx, by, bz] of list)
       if (get(bx, by, bz) === 0 && opaque(get(bx, by - 1, bz)) && own.nextInt(3) === 0) fires.push([bx, by, bz]);

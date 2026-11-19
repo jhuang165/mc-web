@@ -103,7 +103,9 @@ export function witherAITick(brain) {
   if ((e.invul ?? 0) > 0) {
     const step = invulStep(e.invul, ticks);
     if (step.explode) {
-      m.events.push({ explode: { x: e.x, y: e.y + WITHER_EYE, z: e.z, size: WITHER.spawnExplosion, source: e, smoking: gameRule("mobGriefing"), flaming: false }, position: { x: e.x, y: e.y, z: e.z } });
+      const ev = { explode: { x: e.x, y: e.y + WITHER_EYE, z: e.z, size: WITHER.spawnExplosion, source: e, smoking: gameRule("mobGriefing"), flaming: false }, position: { x: e.x, y: e.y, z: e.z } };
+      // b82 spblast82: EntityWither.updateAITasks calls World.newExplosion inside the wither's own update (before its move), so a host with explodeInline runs it now; a bare one queues it.
+      if (m.explodeInline) m.explodeInline(ev); else m.events.push(ev);
       levelEvent(m, 1013, Math.floor(e.x), Math.floor(e.y), Math.floor(e.z));
     }
     e.invul = Math.max(0, step.invul);

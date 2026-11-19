@@ -3768,6 +3768,7 @@ const cartHost = {
 function thrownAtStruck(e) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, { player: true, creative: survival.creative })) return false; saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
+    rockets, eyes, hooks: fishing.active && fishing.hook ? [fishing.hook] : [], // b82 spblast82: doExplosionA pushes these too (explosion-extras.js)
     survival, position, velocity, farming, sleeping: bedSleep.sleeping }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, { // b68 fixes68: a lying player's posY, eye and 0.2 box
     ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
