@@ -83,3 +83,17 @@ See [command blocks](command-blocks.md) for the new editor, rising-edge executio
 - Hanging entities accept any byte `Direction` (4, 5, 127, -1 all spawn; native `setDirection` only sets yaw = dir * 90, `onValidSurface` has no table lookup). The port keeps the byte, guards its renderer lookups, and NBT export writes `Direction` only (no `Dir`) outside 0..3. A value like `128b` overflows to a string, so the `Dir` fallback applies. Probed in `summon-reference.json` (`tools/probes/SummonProbe.java`, real CommandSummon).
 - Summoned leash knots are pickable, interactable and attackable like placed knots (stand-in entity `mob-9xxxxxxxx` in horse-gear-live.js `knotEntity`). A summoned knot's tile stays (0,0,0), so several share one tile for `knotAt`.
 - Absolute coordinates without a decimal point get +0.5 (as native), which the summon reference records.
+
+## Batch 82 (2026-11-18): argument forms and Tab completion, executed
+
+`tools/probes/CmdArgsProbe.java` (run by `tools/verify-cmd-args.mjs`) executes the 32 unchanged integrated-server command classes through `ICommandSender`. It writes `cmd-args-reference.json` with 142 Tab texts and 265 processCommand forms, and `src/cmd-args-b82.test.js` replays them. Corrections to the notes above:
+
+- /gamerule never creates an unknown rule. The set and query forms of an unknown name notify `commands.gamerule.norule`; neither throws. The query is a ChatComponentText of the name with " = " and the value appended as siblings.
+- /gamemode's success lines use notify flag 1, so the sender gets no copy. In single player the owner sees only "Your game mode has been updated".
+- /difficulty's argument is the `options.difficulty.*` translation ("Hard"). /seed and the /testforblock success go to the sender only.
+- /testforblock looks up blocks with Block.getBlockFromName. Its failed.tile arguments are the en_US localized names. /setblock's unknown block is `commands.give.notFound`.
+- /enchant checks the held item before the enchantment id. /effect takes ids from 1 up, and its "clear" is case-sensitive. /tp with 5 or more arguments does nothing. /help maps -1, 1.5 and 2147483648 to `commands.generic.notFound`.
+- Tab completion:
+  - defaultgamemode, spawnpoint (indexes 0 and 1) and clear (items) gain lists;
+  - help, testfor, playsound and the effect "clear" word have no completion;
+  - the item, block and entity lists use the registries' native order, and setblock index 5 lists replace, destroy and keep.
