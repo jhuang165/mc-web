@@ -56,6 +56,7 @@ function squidUpdate(m, e, t) {
     m.onLand?.(e, landed);
     m.fall(e, landed);
   }
+  m.push(e, t); // b84 mobs84: sv.e's collideWithNearbyEntities (sv.bo) comes after the move and before ws.e's tail, as in corpse-living.js squidCorpse
   squidLivingUpdate(s, e, { rand, wet: wetNow() });
   legacyBodyTurn(e, e.x - e.px, e.z - e.pz);
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
