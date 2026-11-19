@@ -12,6 +12,7 @@ import { itemFromOriginal } from "./region-import.js";
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs } from "./experience.js";
 import { applyExplosion } from "./explosion-simulation.js";
+import { candidateOrder } from "./candidate-order.js"; // b83 lead
 import { WitchPotions } from "./witch-potions.js";
 import { setGameRuleSource, ruleOn } from "./game-rules.js";
 import { powerCreeper, creeperIgnite } from "./creeper.js";
@@ -152,9 +153,15 @@ function run(r) {
   // World.newExplosion for one creeper event (living-simulation.js explodeEvent): Explosion.doExplosionA and B over the arena's systems.
   const boom = (ev) => {
     const x = ev.explode, src = x.source;
-    const out = applyExplosion({ world: ew.world, random: ew.worldRandom, mobs: ew, items, xpOrbs: orbs, arrows: none, projectiles: none, primed, survival, position: player, velocity: pv, farming: { observe() {} } },
-      { x: x.x, y: x.y, z: x.z, size: x.size, exploder: src, attacker: src, smoking: x.smoking ?? true, flaming: !!x.flaming },
-      { sound: (name, o) => ew.events.push({ sound: name, volume: o.volume, pitch: o.pitch }) });
+    // b83 lead: VillagerProbe.World answers getEntitiesWithinAABBExcludingEntity from one flat ArrayList, so the probe's doExplosionA list is in list order, not
+    // blastorder83's chunk walk (candidate-order.js `flat`, as entity-list-replay.js).
+    const flat = candidateOrder.flat; candidateOrder.flat = true;
+    let out;
+    try {
+      out = applyExplosion({ world: ew.world, random: ew.worldRandom, mobs: ew, items, xpOrbs: orbs, arrows: none, projectiles: none, primed, survival, position: player, velocity: pv, farming: { observe() {} } },
+        { x: x.x, y: x.y, z: x.z, size: x.size, exploder: src, attacker: src, smoking: x.smoking ?? true, flaming: !!x.flaming },
+        { sound: (name, o) => ew.events.push({ sound: name, volume: o.volume, pitch: o.pitch }) });
+    } finally { candidateOrder.flat = flat; }
     booms.push([x.x, x.y, x.z, x.size, x.flaming ? 1 : 0, x.smoking ?? true ? 1 : 0, out.playerHit ? out.playerHit.push : null]);
     for (const c of out.changes) if (c[1] >= 0) cells.push([c[0], c[1], c[2], 0, 0]); // the probe's world tracks no cell of its implicit floor (y < 0)
     if (src) { ew.entities = ew.entities.filter((m) => m !== src); gone.add(ents.indexOf(src)); } // EntityCreeper.func_146077_cc: setDead
