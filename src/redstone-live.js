@@ -2,7 +2,8 @@
 // running game's World as its storage. Evidence and limits: public/research/redstone-live.md.
 //
 //   new LiveRedstone(world, hooks)
-//   hooks (all optional): changed(x,y,z,oldInternalId,newInternalId) (the ids are omitted for a metadata-only change), sound(name,x,y,z,volume,pitch), drop(x,y,z,{id,count,damage}),
+//   hooks (all optional): changed(x,y,z,oldInternalId,newInternalId) (the ids are omitted for a metadata-only change), sound(name,x,y,z,volume,pitch), drop(x,y,z,{id,count,damage,...tags})
+//     (x,y,z is the EntityItem position, the native offset included; spawn it there with delay 10, no second spread), skulls() -> the Skulls store (default SKULLS),
 //     primeTnt(x,y,z), entitiesIn([x0,y0,z0,x1,y1,z1], mode) -> array ("living": player and mobs; "all" adds items,
 //     arrows and xp orbs; the boxes are tested with strict AABB intersection by the hook),
 //     containerSlots(x,y,z,originalBlockId) -> array of {count,max}|null per slot (comparator readings),
@@ -20,6 +21,9 @@ import { toOriginal, fromOriginal, internalIdsFor } from "./block-registry.js";
 import { doorSound } from "./doors-panes.js";
 import { hashSeed, WATER, LAVA } from "./world.js";
 import { potBreakDrop } from "./stone-utility.js";
+import { crushDrops } from "./redstone-drops.js"; // b83 mppiston83
+import { SKULLS } from "./skull.js";
+import { gameRule } from "./game-rules.js";
 
 const REPEATER = 112, FURNACE = 14;
 const PISTON_REACH = 14; // 12 blocks pushed plus the head cell and the one beyond
@@ -27,7 +31,7 @@ const PLATES = [70, 72, 147, 148], SENSOR = 151, TRIPWIRE = 132; // plates and t
 const COMPARATORS = [149, 150];
 const SIZES = { 54: 27, 146: 27, 61: 3, 62: 3, 23: 9, 158: 9, 154: 5, 117: 4 };
 // Original drop item id -> internal item id (block items are 1000 + internal id from 100 up).
-const DROP_ITEMS = { 331: 360, 356: 356, 404: 381, 324: 470, 330: 471, 287: 321 };
+const DROP_ITEMS = { 331: 360, 356: 356, 404: 381, 324: 470, 330: 471, 287: 321, 122: 171 }; // b83 mppiston83: the dragon egg's item is 171 (not 1000 + id)
 const dropItemId = (item) => {
   if (DROP_ITEMS[item] !== undefined) return DROP_ITEMS[item];
   const m = fromOriginal(item, 0);
@@ -231,17 +235,31 @@ export class LiveRedstone extends RedstoneWorld {
     this.primed.length = 0;
     this.hooks.primeTnt?.(x, y, z);
   }
+  // `drop(x, y, z, { id, count, damage, ...tags })` gets the EntityItem position (the native offset is already in it) and the port stack; tags carry rawDamage and
+  // the skull's SkullOwner fields. b83 mppiston83: gamerule doTileDrops gates dropBlockAsItem_do (the chance and item rolls still draw), as it does natively.
   dropBlockAsItem(x, y, z, id, meta) {
-    const before = this.drops.length;
-    super.dropBlockAsItem(x, y, z, id, meta);
-    for (const d of this.drops.splice(before)) {
-      const item = dropItemId(d.item);
-      if (item !== null) this.hooks.drop?.(d.x, d.y, d.z, { id: item, count: d.count, damage: d.damage });
-    }
-    // b82 pots82: a piston breaks a pot (mobility 1) with dropBlockAsItem then setBlockToAir, whose BlockFlowerPot.breakBlock drops the stored stack on three more
-    // world.rand floats (ald.a; bytecode-read). The cell still holds the pot here.
-    const held = id === 140 ? potBreakDrop(this.world, x, y, z, this.rand, this.doTileDrops) : null;
-    if (held?.id) this.hooks.drop?.(held.x, held.y, held.z, { id: held.id, count: 1, damage: held.damage, ...(held.tags ?? {}) });
+    const own = this.doTileDrops;
+    this.doTileDrops = own && gameRule("doTileDrops");
+    try {
+      // b83 mppiston83: the piston-destroyed blocks the engine does not model (redstone-drops.js): liquids, fire, snow, cake and vines drop nothing, crops their
+      // crop and seeds, tall grass seeds, leaves saplings and apples, and so on, each on the native world.rand draws.
+      const crushed = crushDrops(id, meta, x, y, z, this.rand, { tileDrops: this.doTileDrops, cell: { block: this.world.get(x, y, z), meta: this.world.getMeta(x, y, z) },
+        skull: id === 144 ? (this.hooks.skulls?.() ?? SKULLS).tile(x, y, z) : null });
+      if (crushed) {
+        for (const { x: px, y: py, z: pz, ...d } of crushed) this.hooks.drop?.(px, py, pz, d);
+        return;
+      }
+      const before = this.drops.length;
+      super.dropBlockAsItem(x, y, z, id, meta);
+      for (const d of this.drops.splice(before)) {
+        const item = dropItemId(d.item);
+        if (item !== null) this.hooks.drop?.(d.x, d.y, d.z, { id: item, count: d.count, damage: d.damage });
+      }
+      // b82 pots82: a piston breaks a pot (mobility 1) with dropBlockAsItem then setBlockToAir, whose BlockFlowerPot.breakBlock drops the stored stack on three more
+      // world.rand floats (ald.a; bytecode-read). The cell still holds the pot here.
+      const held = id === 140 ? potBreakDrop(this.world, x, y, z, this.rand, this.doTileDrops) : null;
+      if (held?.id) this.hooks.drop?.(held.x, held.y, held.z, { id: held.id, count: 1, damage: held.damage, ...(held.tags ?? {}) });
+    } finally { this.doTileDrops = own; }
   }
 
   // ---- pending ticks: due entries on unloaded cells wait until the cell loads ----

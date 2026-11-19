@@ -58,7 +58,7 @@ export class ServerDimensions {
     // sim.world is swapped while a Nether player's action runs
     pinOverworldVehicles(sim, this); // b63: the Overworld's vehicles see Overworld players only; the Nether has its own (server-nether-vehicles.js)
     // Overworld: a fire block lights a complete frame and a portal block without its frame goes (nether-portal-live.js, chained after Fire).
-    new NetherLive(sim.world, { random: sim.weather.random, apply: noop }).watch();
+    new NetherLive(sim.world, { random: sim.weather.random, apply: noop, drop: (...d) => sim.serverItems.stacksDrop(...d) /* b83 mppiston83: a wart losing its soul sand drops, as in single player */ }).watch();
     for (const name of ENTRY_POINTS) {
       if (typeof sim[name] !== 'function') continue;
       const original = sim[name].bind(sim);
@@ -96,7 +96,7 @@ export class ServerDimensions {
     // The block rules that need no clock: neighbours dropping torches, doors, beds, rails and plants, and the portal itself.
     const drop = (...a) => sim.serverItems.stacksDrop(...a);
     for (const System of [Rails, Torches, Doors, Beds]) new System(world, { drop, apply: noop }).watch();
-    new NetherLive(world, { random: sim.weather.random, apply: noop }).watch();
+    new NetherLive(world, { random: sim.weather.random, apply: noop, drop }).watch(); // b83 mppiston83: + drop (BlockNetherWart support loss, as single player)
     this.nether = n; // set before the inside build: ServerContainers.adopt and the mobs may call back
     this.swap(n, () => buildNetherInside(sim, n, saved)); // systems that register on `sim.*` while they are built (dispensers, hoppers, the mobs)
     sim.dispense?.adopt?.(n.dispense); // b62 lead: saved Nether arrows, balls and potions (the Overworld's stand-in lane) move to the Nether's own instance

@@ -38,6 +38,12 @@ Pistons draw through `pistons.frame(partial)` each rendered frame.
 - Fluids write with `world.put`; their tick changes go through `redstone.external()`.
 - The older inert `RedstoneBlocks` watcher is bypassed for every block the engine ports, tripwire hook and string included.
 - Drops go to the item entities, sounds to the positional sound system, TNT to `lightTnt`.
+- 2026-11-18 (b83 mppiston83): drops spawn at the engine's `dropBlockAsItem_do` position with pickup delay 10 (`redstone-drops.js` `spawnRedstoneDrop`); single player used to add
+  a second `dropBlock` spread on top. gamerule doTileDrops now gates the engine's position floats (the chance and item rolls still draw, as natively). The piston-destroyed
+  blocks the engine did not model drop what their class drops (`crushDrops`, bytecode-read): liquids, fire, snow layer, cake and vine nothing; crops, stems, tall grass,
+  leaves, melon, nether wart, cocoa, bed, web, reeds, double plant, plants and the skull (its breakBlock) their own items. Before, a piston pushing into water dropped a
+  "Water" item. The dedicated server's LiveRedstone (Overworld, Nether, End) had no drop hook at all; it now drops into that dimension's items in Survival
+  (`multiplayer/server-redstone-drops.js`).
 
 ## Save / load
 
