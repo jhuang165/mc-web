@@ -243,6 +243,7 @@ import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplay
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
 import { rightClickSwings } from "./right-click-swing.js"; // b80 spswing80
 import { clientPlacementBlocker } from "./multiplayer/client-placement-entities.js"; // b82 mpplace82
+import { chargeServerCopy } from "./server-copy-stat.js"; // b82 mpplace82
 import { recordAux, noteEvent } from "./multiplayer/client-music.js"; // b66 mpbooks
 import { applyMapMessage, connectMaps, disconnectMaps } from "./multiplayer/client-maps.js"; // b69 mpmaps
 import { applyChunkMessage, presentCells } from "./multiplayer/client-chunks.js"; // b71 mpchunks
@@ -1854,6 +1855,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
+    mobs.serverCopyMoved = (p, e) => { if (!p.riding && !p.sleeping) chargeServerCopy(mobs.world, p, e, { stats, survival, sprinting: !!motion.sprinting }); }; // b82 mpplace82: the copy's own addMovementStat (server-copy-stat.js)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
