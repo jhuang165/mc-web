@@ -59,7 +59,7 @@ public class VillageFightProbe {
   }
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
-  static boolean b37up(String name) { return name.startsWith("b37-") || b38up(name); }
+  static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || b38up(name); }
   static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-"); } // batch 39: b39-* records use the b38 legacy-row layout
   static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
@@ -159,6 +159,7 @@ public class VillageFightProbe {
     VillagerProbe.World.immediateChickens = b36up(name);
     VillagerProbe.World.immediateMobs = b37up(name);
     VillagerProbe.World.localDiff = (float) local;
+    List<String> lootRecs = new ArrayList<>();
     List<sv> extraMobs = mobsForIndex = new ArrayList<>(); List<String> mobRecs = new ArrayList<>(); // batch 37: spiders and skeletons the spawn ops built (a spider jockey's skeleton)
     Log[] logs = new Log[ents.length];
     for (int i = 0; i < ents.length; i++) {
@@ -231,6 +232,9 @@ public class VillageFightProbe {
           case "invisible": player.d(p[3].equals("on")); break; // batch 41: Entity.setInvisible (flag 5 of the data watcher)
           case "sneak": player.b(p[3].equals("on")); break; // Entity.setSneaking (flag 1)
           case "adventure": ServerPlayerProbe.gameType((ServerPlayerProbe.PM) player, p[3].equals("on") ? ahk.d : ahk.b); break; // batch 39: "t creative 7 on|off" the probe player's PlayerCapabilities.disableDamage and isCreativeMode (the player has the index types.length)
+          case "zvillager": ((yq) ents[Integer.parseInt(p[2])]).j(true); break; // batch 85: "t zvillager k" EntityZombie.setVillager(true)
+          case "convert": MobMoveProbe.method(yq.class, "a", int.class).invoke(ents[Integer.parseInt(p[2])], Integer.parseInt(p[3])); break; // batch 85: "t convert k ticks" EntityZombie.startConversion (yq.a(int)): the timer, Weakness off, Strength on
+          case "fire": ((sa) ents[Integer.parseInt(p[2])]).e(Integer.parseInt(p[3])); break; // batch 85: "t fire k seconds" Entity.setFire
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
           case "move": at((sa) ents[Integer.parseInt(p[2])], Double.parseDouble(p[3]), p.length > 5 ? Double.parseDouble(p[5]) : 0, Double.parseDouble(p[4])); break; // batch 33: optional height
           case "rename": VillageLiveProbe.W.players.remove(pname(player)); if (player instanceof P) ((P) player).n = p[2]; else ((ServerPlayerProbe.PM) player).n = p[2]; VillageLiveProbe.W.players.put(p[2], player); break;
@@ -281,15 +285,18 @@ public class VillageFightProbe {
             chickenRecs.add("[" + t + "," + num(ch.s) + "," + num(ch.t) + "," + num(ch.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(ch)).seed + "," + num(ch.y) + "," + num(MobMoveProbe.field(sv.class, "aP").getFloat(ch)) + "," + (ch.bZ() ? 1 : 0) + "," + ch.bu + "]");
             extraChickens.add(ch); arrowList.add(ch); ticking.add(ch);
             if (!VillagerProbe.World.entities.contains(ch)) VillagerProbe.World.entities.add(ch);
-          } else if ((sp instanceof yn || sp instanceof yl) && b37up(name)) {
+          } else if ((sp instanceof yn || sp instanceof yl || sp instanceof yv) && b37up(name)) {
             // Batch 37: a spider built by a spawn op and the skeleton its onSpawnWithEgg seats on it (World.spawnEntityInWorld first, mountEntity after): both join the world list and tick in this pass; the skeleton updates with its mount.
             sv m = (sv) sp;
             for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(m, fn, 0f);
             for (int slot = 0; slot < 5; slot++) equipSync(m, slot);
             int mount = -1; if (((sa) m).m != null) for (int k = 0; k < extraMobs.size(); k++) if (extraMobs.get(k) == ((sa) m).m) mount = k;
-            mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : 1) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
+            mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : sp instanceof yl ? 1 : 2) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
             extraMobs.add(m); arrowList.add(m); ticking.add(m);
             if (!VillagerProbe.World.entities.contains(m)) VillagerProbe.World.entities.add(m);
+          } else if (name.startsWith("b85-") && !(sp instanceof yq)) {
+            // batch 85: items and experience orbs the tick spawned (a corpse's drops), as [tick, class, x, y, z]
+            sa o = (sa) sp; lootRecs.add("[" + t + "," + q(o.getClass().getSimpleName()) + "," + num(o.s) + "," + num(o.t) + "," + num(o.u) + "]");
           } else if (sp instanceof yq) {
             // Batch 32: a zombie spawned mid-pass (EntityZombie.onKillEntity's converted villager, or a Hard reinforcement) joins the world list and ticks in this
             // pass like any entity. A conversion stands exactly where a dead villager did; a reinforcement is built by attackEntityFrom on an integer corner.
@@ -394,7 +401,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -914,5 +921,25 @@ public class VillageFightProbe {
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
     scenario("player-turns-aggressive", 0, 700, open, new String[] {"10 hit 0 7 0.1 player", "31 hit 0 7 0.1 player", "52 hit 0 7 0.1 player", "73 hit 0 7 0.1 player", "94 hit 0 7 0.1 player", "115 hit 0 7 0.1 player", "136 hit 0 7 0.1 player", "157 hit 0 7 0.1 player",
       "178 hit 0 7 0.1 player", "199 hit 0 7 0.1 player", "220 hit 0 7 0.1 player", "241 hit 0 7 0.1 player", "262 hit 0 7 0.1 player", "283 hit 0 7 0.1 player", "304 hit 0 7 0.1 player", "330 move 7 50.5 56.5", "500 hit 4 7 300.0 player", "600 rename alt", "610 hit 1 7 0.1 player"});
+    // Batch 85 (names b85-*): a zombie villager whose conversion timer ends (EntityZombie.convertToVillager, yq.cd) while it hunts two villagers. "0 zvillager 1" and "0 convert 1 N": the timer counts one per
+    // update (the world double has no iron bars or beds, boost 1), so the conversion runs in the zombie's update of tick N - 1: the new villager joins the list at once, the zombie is set dead, and the rest of that
+    // update (AI, attack, push, steps) goes on. The new villager (mobs kind 2) ticks in the same pass; `loot` lists the items and orbs the ticks spawned.
+    difficulty = 2; blocks = new int[][] {};
+    double[][] convArena = {{52.5, 52.5}, {55.5, 52.5}, {58.5, 52.5}, {10.5, 130.5}, {62.5, 58.5}};
+    double[][] convClose = {{52.5, 52.5}, {53.5, 52.5}, {58.5, 52.5}, {10.5, 130.5}, {62.5, 58.5}};
+    for (int sd : new int[] {8501, 8502, 8503}) for (int timer : new int[] {1, 12, 30}) scenario("b85-convert-s" + sd + "-t" + timer, sd, 70, "VZVG", sd == 8503 ? convClose : convArena, new String[] {"0 zvillager 1", "0 convert 1 " + timer});
+    difficulty = 3;
+    scenario("b85-convert-hard-8504-t20", 8504, 70, "VZVG", convClose, new String[] {"0 zvillager 1", "0 convert 1 20"});
+    difficulty = 2;
+    // the zombie is killed by the player k ticks before (or on) the tick its timer ends (timer 30: tick 29): its corpse still counts the timer down and converts on its own update
+    for (int k : new int[] {0, 1, 3, 10, 19, 20, 24}) scenario("b85-convert-dead-k" + k + "-8510", 8510, 70, "VZVG", convArena, new String[] {"0 zvillager 1", "0 convert 1 30", (29 - k) + " hit 1 4 100.0 player"});
+    scenario("b85-convert-dead-k0-hit-8511", 8511, 70, "VZVG", convClose, new String[] {"0 zvillager 1", "0 convert 1 30", "29 hit 1 4 100.0 player"});
+    // killed with no player hit (recentlyHit 0): no experience; a blow by a villager-less source: the golem is far, so use the zombie's own fire-less death via a mob hit by the other villager
+    scenario("b85-convert-dead-mob-8512", 8512, 70, "VZVG", convClose, new String[] {"0 zvillager 1", "0 convert 1 30", "29 hit 1 0 100.0 mob"});
+    // killed by its own fire in the update that converts it: hit for 20.75 at tick 5 (health about 0.8 after the zombie armour), set alight at tick 29; the first fire tick (fire 20, 20 % 20 == 0) deals 1 once the hurt window is over
+    scenario("b85-convert-fire-8520", 8520, 70, "VZVG", convArena, new String[] {"0 zvillager 1", "0 convert 1 30", "5 hit 1 4 20.75 player", "29 fire 1 1"});
+    scenario("b85-convert-fire-nohit-8521", 8521, 70, "VZVG", convClose, new String[] {"0 zvillager 1", "0 convert 1 30", "5 hit 1 0 20.75 mob", "29 fire 1 1"});
+    // ... and a tick before the timer ends: the zombie dies of fire at tick 28 and converts as a corpse at tick 29
+    scenario("b85-convert-fire-early-8522", 8522, 70, "VZVG", convArena, new String[] {"0 zvillager 1", "0 convert 1 30", "5 hit 1 4 20.75 player", "28 fire 1 1"});
   }
 }

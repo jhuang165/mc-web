@@ -1965,6 +1965,7 @@ export class EntityWorld {
   // Nausea for 200 ticks and world event 1017 (mob.zombie.unfect). The zombie is removed.
   cureZombie(e) {
     const v = this.create("villager", e.x, e.y, e.z);
+    this.entitySeed?.(v, "cured"); // replay hook (village-fight-replay.js): the new villager's Entity.rand
     for (const k of ["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch"]) if (e[k] !== undefined) v[k] = e[k];
     this.addSpawnBonus(v, spawnBonus(entityRandom(v))[0]);
     v.profession = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextInt(5);
@@ -1972,6 +1973,7 @@ export class EntityWorld {
     if (e.growingAge < 0) v.growingAge = -24000;
     addMobEffect(v, NAUSEA, CURE_NAUSEA_TICKS, 0);
     this.entities.push(syncInterpolation(v));
+    this.tickOrder?.push(v); // World.spawnEntityInWorld appends to the list being walked: the villager updates in this pass (b85 record)
     e.removedHealth = e.health; // setDead keeps the zombie's health (b53so)
     e.health = 0;
     e.death = 20;
@@ -2463,7 +2465,7 @@ export class EntityWorld {
         e.age++;
         if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
         // b81: EntityZombie.onUpdate (yq.h) counts a converting zombie down with no health test (bytecode-read), so a corpse whose timer runs out in its death becomes the villager.
-        if (e.conversionTime !== undefined) { const death = e.death, hit = e.recentlyHit; if (this.tickConversion(e)) { this.convertedCorpse(e, t, death, hit); continue; } }
+        if (e.conversionTime !== undefined) { const death = e.death, hit = e.recentlyHit; if (this.tickConversion(e)) { e.health = e.removedHealth; e.death = death; e.recentlyHit = hit; this.curedLive = e; } } // b85: yq.cd only sets the corpse dead; the rest of its update (death count, experience at 20, the blocked movement, the push) goes on, and the loop step puts the removal marker back (record b85-convert-dead-k*)
         // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits); b83: and the sprint draws, handleWaterMovement (splash, extinguish) and the air reset (corpse-living.js).
         corpseEntityUpdate(this, e, t);
         e.hurt = Math.max(0, e.hurt - 1);
@@ -2523,7 +2525,7 @@ export class EntityWorld {
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
       tickMobEffects(e, t, () => maxHealthOf(e, base.health), entityRandom(e), this.fx, (m, n, name) => this.attackEntityFrom(m, n, { name })); // Potion.wither / instant damage: DamageSource.wither / magic (both bypass armour)
-      this.talk(e);
+      if (this.curedLive !== e) this.talk(e); // b85: sw.C's ambient roll is gated on isEntityAlive, and yq.cd has set the converted zombie dead (executed, village-fight-b85-reference.json)
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
       if (e.type === "wither") witherUpdate(this, e, t); // wither-boss-mobs.js
@@ -2711,17 +2713,8 @@ export class EntityWorld {
     const e = this.curedLive;
     if (!e) return;
     this.curedLive = null;
-    if (e.health > 0) e.removedHealth = e.health;
+    e.removedHealth = e.health; // what the rest of the tick left (a zombie the fire killed in its converting update keeps that, b85 record b85-convert-fire-*)
     e.health = 0; e.death = 20; e.recentlyHit = 0;
-  }
-  // b82: a dying zombie whose conversion ends (yq.h -> yq.cd: World.removeEntity only sets it dead) still runs the rest of its onUpdate in that tick (bytecode-read): EntityLivingBase's
-  // onEntityUpdate reaches onDeathUpdate (sv.aF), which counts deathTime on; when that makes 20 the experience is dropped as for any corpse (recentlyHit, an adult, doMobLoot), after the
-  // villager in the list, and the 20 puffs are drawn. Below 20 nothing else is observable. `death` and `hit` are the corpse's values before cureZombie cleared them.
-  convertedCorpse(e, t, death, hit) {
-    if ((death || 0) !== 19) return;
-    e.death = death; e.recentlyHit = hit;
-    this.deathUpdate(e, t);
-    e.death = 20; e.recentlyHit = 0;
   }
   // b77 mpperf77: size(o) written into `out` ([width, height]) without a new array; the same two expressions as size().
   sizeInto(o, out) {
