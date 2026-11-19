@@ -4,6 +4,7 @@ import { EntityWorld, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
 import { WOODEN_DOOR, WATER, LAVA, WEB, FENCE, STONE_SLAB } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
+import { setMobFire } from "./armor-enchantments.js";
 import { revengeOf } from "./revenge-target.js"; // the raw field: a dead target is cleared on the target's next own update, as natively
 import { Arrows, arrowTargets } from "./bow.js";
 import { mobTargets } from "./projectiles.js";
@@ -42,6 +43,8 @@ export const fightReference39 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 41: village-fight-b41-reference.json (the probe player is a real EntityPlayerMP built by ServerPlayerProbe: ItemInWorldManager game type, PlayerCapabilities, invisible and sneaking flags; script ops
 // `creative`, `adventure`, `invisible`, `sneak` on the player index).
 export const fightReference41 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b41-reference.json", import.meta.url)));
+// Batch 85: village-fight-b85-reference.json (a zombie villager whose conversion timer ends: script ops `zvillager k` and `convert k ticks`, the new villager as a kind 2 entry of `mobs`, `loot`).
+export const fightReference85 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b85-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -160,6 +163,14 @@ function replayFightUncapped(r, hooks) {
       extraChickens.push(z); chickenLogs.push(lr);
       return;
     }
+    if (z.type === "villager") { // batch 85: the villager a conversion built: Entity.rand seeded from the record (its draws since the constructor are in the row), the constructor's yaw fields
+      const rec = mobsLeft.shift(), lr = new LogRandom(BigInt(rec ? rec[5] : 1));
+      lr.logBooleans = true; setEntityRandom(z, lr);
+      z.growingAge = 0; z.onGround = false;
+      made.push([tick, kind, z.x, z.y, z.z]);
+      extraMobs.push(z); mobLogs.push(lr);
+      return;
+    }
     if (z.type === "spider" || z.type === "skeleton") { // batch 37: a spider built by a spawn op and the skeleton jockey its onSpawnWithEgg seats on it: Entity.rand seeded from the record, the constructor's yaw fields, then ticked like any mob
       const rec = mobsLeft.shift(), lr = new LogRandom(BigInt(rec ? rec[5] : 1));
       lr.logBooleans = true; setEntityRandom(z, lr);
@@ -233,6 +244,9 @@ function replayFightUncapped(r, hooks) {
       else if (p[1] === "invisible") { if (p[3] === "on") survival.effects.add({ id: 14, duration: 1e9, amplifier: 0 }); else survival.effects.remove(14); } // Entity.setInvisible (data watcher flag 5); the probe player wears no armour (visibility 0, floored to 0.1 by the range scaling)
       else if (p[1] === "sneak") ew.ai.player.sneaking = p[3] === "on"; // the host sets the view's flag (living-simulation.js)
       else if (p[1] === "adventure") survival.mode = p[3] === "on" ? "adventure" : "survival"; // GameType 2: disableDamage stays false, so mobs target it as in survival
+      else if (p[1] === "zvillager") ents[Number(p[2])].villager = true;
+      else if (p[1] === "fire") setMobFire(ents[Number(p[2])], Number(p[3])); // Entity.setFire
+      else if (p[1] === "convert") ew.startZombieConversion(ents[Number(p[2])], Number(p[3]));
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
       else if (p[1] === "spawn") spawnZombie(Number(p[2]), Number(p[3]), Number(p[4]), Number(p[5]));
       else if (p[1] === "spawnspider") ew.spawnNatural("spider", Number(p[2]), Number(p[4]), Number(p[3]), "spawn"); // SpawnerAnimals' order: spawnEntityInWorld, then onSpawnWithEgg (the jockey roll and the Hard potion on World.rand)
