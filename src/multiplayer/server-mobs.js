@@ -6,6 +6,7 @@
 // the cap scaled by the union's size / 256. Mob damage to players goes through `host.damagePlayer(player, amount, source)`; the player-state track replaces its no-op.
 // Batch 60: the server's own sounds (S29), status 2 / 3 / 18 (S19) for the clients' hurt and death sounds and hearts, experience orbs of a kill (server-items.js), knockback on the
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
+import { serverCopyOf } from './server-copy-step.js'; // b82 mpplace82
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
@@ -187,6 +188,7 @@ export class ServerMobs {
     if (this.views.has(p.id)) return;
     const mobs = this.mobs, view = new mobs.ai.player.constructor(), self = this;
     view.unticked = true; // the host moves the player; EntityWorld does not step this copy
+    view.motion = serverCopyOf(p).motion; // b82 mpplace82: the AI's copy reads (witch aim) and takes (the kicks through this survival) the server copy's motion (server-copy-step.js)
     // The AI's survival of this player: the real object for everything it reads, with the damage path through the host's hook.
     const survival = Object.create(p.survival);
     Object.assign(survival, {

@@ -20,7 +20,8 @@ import { FISHING_ROD } from './fishing-content.js';
 const FARMLAND = new Set([29, 30]);
 
 // Item.onItemUse's answer on the client world for the held stack on `target` (call before the click changes the world). `state` is { world, survival,
-// position, flowers, yaw } as dryPlace takes it.
+// position, flowers, yaw, entities } as dryPlace takes it; `entities(box)` is the client world's checkNoEntityCollision (b82 mpplace82: bje.a returns
+// false before the C08 when the held ItemBlock's abh.a canPlace -> ahb.a(Block, IIIZ, side, null, stack) meets a copy, so no swing).
 export function clientItemUse(state, target, id, held) {
   if (!target?.block || !id) return false;
   const rule = clientUseResult(state, target, id, held);
@@ -37,16 +38,16 @@ export function clientItemUse(state, target, id, held) {
   return !!state.survival && dryPlace(state, { id, item: ITEMS[id], target }, {}).placed;
 }
 
-// { world, target, held, sneaking, aimed, survival, position, yaw, flowers }: true when this right click swings on the client.
+// { world, target, held, sneaking, aimed, survival, position, yaw, flowers, entities }: true when this right click swings on the client.
 // `aimedType` is the aimed mob's type: EntityCreeper.interact calls swingItem for flint and steel (on the client too, b77).
-export function rightClickSwings({ world, target, held, sneaking = false, aimed = false, aimedType = null, survival = null, position, yaw = 0, flowers }) {
+export function rightClickSwings({ world, target, held, sneaking = false, aimed = false, aimedType = null, survival = null, position, yaw = 0, flowers, entities = null }) {
   const id = held?.id ?? 0;
   if (id === FISHING_ROD) return true; // ItemFishingRod.onItemRightClick swings (or an activated block did)
   if (aimed && aimedType === 'creeper' && ITEMS[id]?.kind === 'flint_and_steel') return true;
   if (aimed || !target?.block) return false;
   if (!(sneaking && id) && activatesOnClick(world.get(...target.block), world, target.block, id, held?.damage ?? 0)) return true;
   if (!id) return false; // onPlayerRightClick: `if (stack == null) return false`
-  return clientItemUse({ world, survival, position, flowers, yaw }, target, id, held);
+  return clientItemUse({ world, survival, position, flowers, yaw, entities }, target, id, held);
 }
 
 // A view of the world whose writes go nowhere (placeSign sets the block; only its answer is wanted).

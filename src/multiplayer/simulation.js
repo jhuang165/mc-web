@@ -88,6 +88,7 @@ import { aimOriginY, serverPosY } from '../sleeper-eye.js'; // b69 mpfixes69
 import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 import { placementEntityBlocker } from '../placement-entities.js'; // b81 collide81
+import { serverCopyBefore, serverCopyAfter } from './server-copy-step.js'; // b82 mpplace82
 
 const noop = () => {};
 // What a server-side survival break needs from the world around it. Item entities are real (`itemHost`); the dedicated world has no experience orbs.
@@ -591,7 +592,9 @@ export class DedicatedSimulation {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       this.sleep.tickPlayer(p); // b66 mpsleep: the sleep timer and the morning wake
       this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
+      const copyFrom = { x: p.position.x, y: p.position.y, z: p.position.z }; serverCopyBefore(p, controls, p.world ?? this.world); // b82 mpplace82: EntityPlayerMP.onUpdateEntity's own move and its addMovementStat (server-copy-step.js)
       const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
+      serverCopyAfter(p, copyFrom); // b82 mpplace82: processPlayer's jump rule and onGround for the copy
       const dead = this.dimensions.within(p, () => this.serverSurvival.tick(p, moved)); // b61: a Nether player's drops and void respawn use the Nether's world and items
       this.stats.tick(p, moved); // b63 mpstats: play time, movement and landing stats
       flightCheck(this, p); // b69 serverprops: allow-flight off kicks after 80 airborne ticks (nh.a(jd))

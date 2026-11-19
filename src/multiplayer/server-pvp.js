@@ -10,7 +10,7 @@
 //   motion * 0.6 with sprinting off, Thorns of the victim, the weapon's durability (only on a landed hit), 0.3 exhaustion; Fire Aspect burns 4 s per level on a landed hit.
 import { heldAttackDamage } from '../entities.js';
 import { weaponEnchantments } from '../enchantment-effects.js';
-import { sendCritFx } from './server-crit-fx.js'; // b73 particles73
+import { sendCritFx, sendOwnCritFx } from './server-crit-fx.js'; // b73 particles73; b82 mpplace82
 import { criticalDamage, isCritical } from '../player-movement.js';
 import { queueVelocity } from '../player-knockback.js';
 import { rayTraceBlocks } from '../buckets.js';
@@ -58,6 +58,7 @@ export class ServerPvp {
     damage = f(damage + weapon.damage);
     const ignite = weapon.fireAspect > 0 && !(vs.fire > 0);
     if (ignite) vs.setFire(1); // undone below when the hit does not land
+    { const at = { x: v.position.x, y: v.position.y, z: v.position.z, w: 0.6, h: 1.8, mx: v.velocity?.x, my: v.velocity?.y, mz: v.velocity?.z, player: v.id }; if (critical) sendOwnCritFx(p, at, false); if (weapon.damage > 0) sendOwnCritFx(p, at, true); } // b82 mpplace82: the attacker's client runs the hit too (bll.a(ro, F) is true), landed or not
     const from = this.fromOf(p), health = vs.health;
     const landed = sim.damagePlayer(v, damage, { name: 'player', from, call: () => vs.damage(damage, 'a player', true, 'player', from) }) !== false;
     if (landed) {
