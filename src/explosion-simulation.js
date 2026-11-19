@@ -59,7 +59,7 @@ export function nonLivingRows(state, b, { creative = false, vehicleDrop = null, 
     ...balls(projectiles), ...balls(mobs?.potions?.projectiles), ...balls(mobs?._golemBalls?.projectiles),
     ...vehicleRows(state.minecarts, b, creative, vehicleDrop), ...vehicleRows(state.boats, b, creative, vehicleDrop),
     ...(falling?.explodeOne ? systemRows(falling.entities, b, (e) => e.y + 0.49, (e) => falling.explodeOne(e, x, y, z, size)) : []),
-    ...(hanging?.explodeOne ? systemRows(hanging.entities, b, (e) => e.y, (e) => { hanging.explodeOne(e, x, y, z, size); if (hangingDrops) hangingDrops(); else if (vehicleDrop && hanging.drain) for (const d of hanging.drain()) vehicleDrop(d); }) : []), // paintings and item frames break (hanging.js)
+    ...(hanging?.explodeOne ? systemRows(hanging.entities, b, (e) => e.y, (e) => { hanging.explodeOne(e, x, y, z, size, creative ? { player: true, creative: true } : null); if (hangingDrops) hangingDrops(); else if (vehicleDrop && hanging.drain) for (const d of hanging.drain()) vehicleDrop(d); }) : []), // paintings and item frames break (hanging.js)
     ...knotRows(mobs, b), ...fireballRows(mobs?._fireballs, b), ...fireballRows(mobs?._skulls, b),
     ...rocketRows(state.rockets?.rockets, b), ...eyeRows(state.eyes?.eyes, b), ...hookRows(state.hooks, b),
   ];

@@ -140,7 +140,7 @@ export function livingHurt(e, amount, source, host) {
     }
     host?.onHurtSound?.(e);
   }
-  e.health -= dealt;
+  e.health = Math.max(0, e.health - dealt); // EntityLivingBase.setHealth clamps to [0, max] (executed: BlastOrderProbe dragon scenes)
   return true;
 }
 
