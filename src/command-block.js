@@ -29,7 +29,10 @@ export function commandBlockSender(host, tile, position, { now = () => new Date(
   Object.defineProperties(sender, { name: { value: tile.customName }, isCommandBlock: { value: true }, playerName: { value: host.playerName ?? host.name, writable: true }, cheats: { value: true } }); // b81 mpcmd81: writable, so the server's redirect (commands.js dispatch: Object.assign(sub, { playerName })) can shadow it; read-only it threw, and /give, /tp, /gamemode ... on another player from a server command block failed with commands.generic.exception
   sender.canUse = command => command.permission <= 2;
   sender.position = () => ({ ...position });
-  sender.playerPosition = () => host.position();
+  // The player-state base's own position (CommandSetSpawnpoint reads the TARGET's EntityPlayerMP.getPlayerCoordinates, bytecode-read bp.b). b82 mpcmd82: a getter, because the server's
+  // redirect (commands.js dispatch) builds its target host on top of this sender and copies the target's `position` onto it; the inherited `() => host.position()` kept reading the base
+  // (nearest) player, so `/spawnpoint <other>` from a server block set the other player's spawn at the base player's block. On the redirected host it is now the target's position.
+  Object.defineProperty(sender, 'playerPosition', { configurable: true, get() { return this.redirected ? () => this.position() : () => host.position(); } });
   // CommandBlockLogic.addChatMessage (agp.a(fj)): with TrackOutput, LastOutput = ChatComponentText("[" + HH:mm:ss + "] ").appendSibling(component), serialized.
   // `component` is the IChatComponent the command sent; a message with only text becomes a ChatComponentText (a leading colour code its colour).
   sender.print = (message, component) => {
