@@ -41,6 +41,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
     } else if (items) ignored.push("Items");
   }
   const cart = minecarts.spawnCart(type, record);
+  if (tag instanceof Map) cart.fire = nbtGet(tag, "Fire", NBT.SHORT, 0); // b84 cmdfix84: Entity.readFromNBT's Fire; EntityMinecart.onUpdate never runs the fire part of sa.C, so it is kept and saved back as read
   const motion = tag instanceof Map ? nbtGet(tag, "Motion", NBT.LIST) : null;
   if (motion?.elementType === NBT.DOUBLE) [cart.vx, cart.vy, cart.vz] = [0, 1, 2].map((i) => (Number.isFinite(motion.items[i]) && Math.abs(motion.items[i]) <= 10 ? motion.items[i] : 0));
   return { ignored, cart };

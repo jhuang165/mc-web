@@ -100,6 +100,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       const e = spawnFalling(cell.id, fallingMetaOf(cell, data), 0, 0, 0, hosts.falling.entityRandom()); // any block falls; Data keeps its whole byte (b76)
       Object.assign(e, { x, y: y - FALLING_Y_OFFSET, z, px: x, py: y - FALLING_Y_OFFSET, pz: z, vx: motion[0], vy: motion[1], vz: motion[2], ticks: nbtGet(t, "Time", NBT.BYTE, 0) & 255 });
       Object.assign(e, fallingDataExtra(cell, data));
+      e.fire = base.fire; // b84 cmdfix84: kept as read; EntityFallingBlock.onUpdate never calls sa.h, so it neither burns, hurts nor goes out in water
       if (hasNumber(t, "DropItem")) e.dropItem = nbtGet(t, "DropItem", NBT.BYTE, 0) !== 0;
       // EntityFallingBlock.readEntityFromNBT: HurtEntities (a number) reads FallHurtAmount (float) and FallHurtMax (int); without it only an anvil hurts.
       if (hasNumber(t, "HurtEntities")) Object.assign(e, { hurtEntities: nbtGet(t, "HurtEntities", NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(t, "FallHurtAmount", NBT.FLOAT, 0), fallHurtMax: nbtGet(t, "FallHurtMax", NBT.INT, 0) });
@@ -122,7 +123,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     if (!hosts.hanging) spawned = false;
     else if (id === "Painting") {
       const motive = nbtGet(t, "Motive", NBT.STRING, ""), art = ARTS.findIndex((a) => a[0] === motive);
-      hosts.hanging.summon("painting", dir, tx, ty, tz, x, y, z, { art: art < 0 ? 0 : art });
+      const h = hosts.hanging.summon("painting", dir, tx, ty, tz, x, y, z, { art: art < 0 ? 0 : art });
+      if (h) h.fire = base.fire; // b84 cmdfix84: EntityHanging.onUpdate never calls sa.h: Fire is only kept
     } else {
       const itemTag = nbtGet(t, "Item", NBT.COMPOUND), stack = itemTag && itemTag.size ? convertItem(itemTag) : null;
       const extra = {};
@@ -131,7 +133,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
         extra.rotation = nbtGet(t, "ItemRotation", NBT.BYTE, 0) % 4;
         if (hasNumber(t, "ItemDropChance")) extra.dropChance = nbtGet(t, "ItemDropChance", NBT.FLOAT, 1);
       }
-      hosts.hanging.summon("frame", dir, tx, ty, tz, x, y, z, extra);
+      const h = hosts.hanging.summon("frame", dir, tx, ty, tz, x, y, z, extra);
+      if (h) h.fire = base.fire;
     }
   } else if (id === "LeashKnot") {
     // su: readEntityFromNBT is empty, so only the base keys are read and the knot's tile stays 0, 0, 0.

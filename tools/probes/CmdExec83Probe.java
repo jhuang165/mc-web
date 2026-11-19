@@ -222,7 +222,7 @@ public class CmdExec83Probe {
     String[] tags = {
       "{Fire:100s,Air:50s,Motion:[0.1d,0.2d,0.3d],Rotation:[45.0f,10.0f],OnGround:1b,FallDistance:3.5f,Dimension:1,Invulnerable:1b,PortalCooldown:7,CustomName:\"Bob\",CustomNameVisible:1b,Fuse:5b}",
       "{Fire:-20s,Motion:[11.0d,-10.0d,0.0d]}",
-      "{}" };
+      "{}", "" }; // b84 cmdfix84: "" is the untagged command (no fifth argument)
     String[] keys = { "Fire", "Air", "Motion", "Rotation", "OnGround", "FallDistance", "Dimension", "Invulnerable", "PortalCooldown", "CustomName", "CustomNameVisible", "Fuse" };
     StringBuilder sum = new StringBuilder("[");
     fresh("solo");
@@ -230,7 +230,7 @@ public class CmdExec83Probe {
     for (Object n : names) for (String tag : tags) {
       W.spawned.clear(); admin.clear();
       String crash = "null";
-      try { byName.get("summon").b(alex, new String[] { (String) n, "0.5", "64", "0.5", tag }); } catch (Throwable t) { crash = q(String.valueOf(t)); }
+      try { byName.get("summon").b(alex, tag.isEmpty() ? new String[] { (String) n, "0.5", "64", "0.5" } : new String[] { (String) n, "0.5", "64", "0.5", tag }); } catch (Throwable t) { crash = q(String.valueOf(t)); }
       StringBuilder sp = new StringBuilder("[");
       for (sa s : W.spawned) {
         dh out = new dh();
@@ -241,7 +241,14 @@ public class CmdExec83Probe {
           for (String k : keys) if (out.c(k)) kb.append(kb.length() > 1 ? "," : "").append(q(k)).append(":").append(q(out.a(k).toString()));
           nbt = kb.append("}").toString();
         } catch (Throwable t) { nbt = q("!" + t); }
-        sp.append(sp.length() > 1 ? "," : "").append("{\"cls\":" + q(s.getClass().getName()) + ",\"fire\":" + fd(sa.class, "e").getInt(s) + ",\"nbt\":" + nbt + "}");
+        // b84 cmdfix84: one Entity.onUpdate (sa.h) of the entity as spawned, for the tags that carry Fire: the counter after it, isBurning (sa.al) and isDead (sa.K). A crash (the world
+        // double is not a world) is recorded as "!..." and means the class's update needs more than this double.
+        int fireRead = fd(sa.class, "e").getInt(s);
+        String tick = "null";
+        if (tag.startsWith("{Fire:")) {
+          try { s.h(); tick = "{\"fire\":" + fd(sa.class, "e").getInt(s) + ",\"burning\":" + s.al() + ",\"dead\":" + fd(sa.class, "K").getBoolean(s) + "}"; } catch (Throwable t) { tick = q("!" + t); }
+        }
+        sp.append(sp.length() > 1 ? "," : "").append("{\"cls\":" + q(s.getClass().getName()) + ",\"fire\":" + fireRead + ",\"tick\":" + tick + ",\"nbt\":" + nbt + "}");
       }
       sp.append("]");
       sum.append(sum.length() > 1 ? "," : "").append("[" + q((String) n) + "," + q(tag) + ",{\"crash\":" + crash + ",\"admin\":[" + String.join(",", admin) + "],\"spawned\":" + sp + "}]");

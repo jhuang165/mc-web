@@ -504,7 +504,7 @@ export class Arrows {
     return this.list.filter((a) => !a.dead).map((a) => ({
       x: a.x, y: a.y, z: a.z, mx: a.mx, my: a.my, mz: a.mz, yaw: a.yaw, pitch: a.pitch,
       xTile: a.xTile, yTile: a.yTile, zTile: a.zTile, life: a.ticksInGround, inTile: a.inTile, inData: a.inData,
-      shake: a.shake, inGround: a.inGround, pickup: a.pickup, damage: a.damage, ...(a.fire > 0 ? { fire: a.fire } : {}),
+      shake: a.shake, inGround: a.inGround, pickup: a.pickup, damage: a.damage, ...(a.fire ? { fire: a.fire } : {}), // b84 cmdfix84: any nonzero short
     }));
   }
   load(list) {
@@ -518,7 +518,7 @@ export class Arrows {
             xTile: int(d.xTile, -1, 2 ** 15, -1), yTile: int(d.yTile, -1, 255, -1), zTile: int(d.zTile, -1, 2 ** 15, -1),
             ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
             shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
-            damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, 0, 2000, 0),
+            damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, -32768, 32767, 0), // b84 cmdfix84: the whole short (was 0..2000)
           }),
         );
       }

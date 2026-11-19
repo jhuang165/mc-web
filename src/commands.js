@@ -428,7 +428,7 @@ export function createCommandRunner(host) {
         // b82 (bytecode-read): CommandTeleport compares the two players' worldObj; different dimensions notify commands.tp.notSameDimension and move nobody.
         if (host.dimensionOf && (host.dimensionOf(who) ?? 0) !== (host.dimensionOf(target) ?? 0)) return feedback("commands.tp.notSameDimension");
         const p = host.positionOf?.(target) ?? pos(); // the destination player's position (a server holds several)
-        host.teleport(p.x, p.y, p.z);
+        host.teleport(p.x, p.y, p.z, host.lookOf?.(target)); // b84 cmdfix84 (bytecode-read bv.b): setPlayerLocation(x, y, z, target.rotationYaw, target.rotationPitch); the coordinate form keeps the rotation
         return feedback("commands.tp.success", who, target);
       }
       usage("commands.tp.usage");

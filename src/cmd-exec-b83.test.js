@@ -38,6 +38,9 @@ const nativeStack = (s) => { if (!s) return null; const o = originalStack(s); re
 // The setups' inventories, read from the rows whose /clear removes nothing (the state after equals the one before).
 const invOf = (setup) => ref.run.find(([n, a, s]) => n === "clear" && s === setup && a.join(" ") === "Alex dirt")[3].state.inv;
 const START = { alex: { x: 0.5, y: 64, z: 0.5 }, steve: { x: 10.25, y: 70, z: -3.75 } };
+// b84 cmdfix84: the probe starts Alex at yaw 30 pitch 10 and Steve at yaw 90 pitch -20 (Minecraft degrees); the port keeps them as game radians (gameYaw / pitch up is negative).
+const LOOK = { alex: { yaw: Math.PI - (30 * Math.PI) / 180, pitch: (-10 * Math.PI) / 180 }, steve: { yaw: Math.PI - (90 * Math.PI) / 180, pitch: (20 * Math.PI) / 180 } };
+const degrees = (l) => ({ yaw: ((Math.PI - l.yaw) * 180) / Math.PI, pitch: (-l.pitch * 180) / Math.PI });
 
 // A two-player server: forPlayer(name) gives the named player's own state operations (the dispatch REDIRECT), teleport dismounts a riding player first
 // (server-broadcast.js playerHost), and /clear runs the real createCommandHost clear over the player's inventory.
@@ -45,14 +48,14 @@ function server(setup, log) {
   const online = setup === "solo" ? ["Alex"] : ["Alex", "Steve"];
   const inv = setup === "inv" || setup === "invCursor" ? invOf(setup) : { main: Array(36).fill(null), armor: Array(4).fill(null), cursor: null };
   const inventories = { Alex: { main: inv.main.map(portStack), armor: inv.armor.map(portStack), cursor: portStack(inv.cursor) }, Steve: { main: Array(36).fill(null), armor: Array(4).fill(null), cursor: null } };
-  const st = { alex: { ...START.alex, riding: setup === "riding" }, steve: { ...START.steve, riding: false }, health: 20, achievements: { Alex: new Set(), Steve: new Set() } };
+  const st = { alex: { ...START.alex, ...LOOK.alex, riding: setup === "riding" }, steve: { ...START.steve, ...LOOK.steve, riding: false }, health: 20, achievements: { Alex: new Set(), Steve: new Set() } };
   const key = (n) => n.toLowerCase();
   const achievementsOf = (n) => ({ has: (id) => st.achievements[n].has(id), trigger: (id) => st.achievements[n].add(id) });
   const ops = (n) => {
     const real = createCommandHost({ survival: () => ({ inventory: inventories[n] }), refreshInventory() {} });
     return {
       position: () => ({ x: st[key(n)].x, y: st[key(n)].y, z: st[key(n)].z }),
-      teleport: (x, y, z) => { const p = st[key(n)]; p.riding = false; Object.assign(p, { x, y, z }); },
+      teleport: (x, y, z, look) => { const p = st[key(n)]; p.riding = false; Object.assign(p, { x, y, z }, look ?? {}); }, // b84 cmdfix84: look is the target player's rotation (/tp <player> <target>)
       kill: () => { if (n === "Alex") st.health = 0; },
       clear: (o, d) => real.clear(o, d),
       achievements: achievementsOf(n), stats: { increment() {} },
@@ -61,7 +64,7 @@ function server(setup, log) {
   const h = {
     name: "Alex", playerName: "Alex", cheats: true, rules: undefined, seed: () => "0",
     players: () => online.map((n) => ({ name: n, position: () => ops(n).position(), mode: 0, level: 0 })), playerNames: () => online,
-    forPlayer: (n) => ops(n), positionOf: (n) => ops(n).position(), dimensionOf: () => 0, deliver() {},
+    forPlayer: (n) => ops(n), positionOf: (n) => ops(n).position(), lookOf: (n) => ({ yaw: st[key(n)].yaw, pitch: st[key(n)].pitch }), dimensionOf: () => 0, deliver() {},
     print: (t, c) => log.sender.push(c ? serializeComponent(c) : t), targetPrint: () => {},
     feedback: (t, c = t) => log.admin.push([0, c.key, (c.args ?? []).map(portArg)]), // commands-extra.js passes the component alone
     inWorld: (x, y, z) => y >= 0 && y < 256,
@@ -111,6 +114,9 @@ test("/kill, /tp, /clear, /achievement, /debug and the height checks match the e
     for (const who of ["alex", "steve"]) {
       const g = st[who], w = s[who];
       if (Math.abs(g.x - w.x) > 1e-9 || Math.abs(g.y - w.y) > 1e-6 || Math.abs(g.z - w.z) > 1e-9 || g.riding !== w.riding) diff.push(`${who} ${JSON.stringify(g)} != ${JSON.stringify(w)}`);
+      // b84 cmdfix84 (executed): /tp <player> <target> leaves the teleported player with the target's yaw and pitch (setPlayerLocation); the coordinate forms keep the own rotation.
+      const look = degrees(g);
+      if (Math.abs(look.yaw - w.yaw) > 1e-4 || Math.abs(look.pitch - w.pitch) > 1e-4) diff.push(`${who} look ${JSON.stringify(look)} != yaw ${w.yaw} pitch ${w.pitch}`);
     }
     if ((st.health === 0) !== (s.health === 0)) diff.push(`health ${st.health} != ${s.health}`);
     const inv = inventories.Alex, gotInv = { main: inv.main.map(nativeStack), armor: inv.armor.map(nativeStack), cursor: nativeStack(inv.cursor) };
@@ -165,7 +171,7 @@ test("/summon keeps Entity.readFromNBT's Fire, OnGround, FallDistance and Air on
     if (nativeOk !== portOk) { bad.push(`${name} ${tag}: success ${portOk} != ${nativeOk} ${lines.join(" | ")}`); continue; }
     if (!nativeOk) continue;
     const n = out.spawned[0], fire = n.fire, nbt = n.nbt;
-    const mob = g.mobs.entities.at(-1), load = g.calls.loads.at(-1)?.[1];
+    const mob = tag ? g.mobs.entities.at(-1) : g.mobs.entities[0], load = g.calls.loads.at(-1)?.[1];
     let e = null, fields = ["fire"];
     if (mob) { e = mob; fields = ["fire", "onGround", "fallDistance", "air"]; }
     else if (g.calls.items.length) { e = g.calls.items.at(-1); fields = ["fire", "onGround"]; }
@@ -175,7 +181,13 @@ test("/summon keeps Entity.readFromNBT's Fire, OnGround, FallDistance and Air on
     else if (g.rockets.rockets.length) { e = g.rockets.rockets.at(-1); fields = ["fire", "onGround"]; }
     else if (load && ["projectiles", "potions"].includes(g.calls.loads.at(-1)[0])) {
       // A throwable keeps only a positive counter (java-projectiles.js: it never moves with moveEntity, so a negative counter never burns or saves back).
-      if ((load.fire ?? 0) !== Math.max(0, fire)) bad.push(`${name} ${tag}: fire ${load.fire} != ${fire}`);
+      if ((load.fire ?? 0) !== fire) bad.push(`${name} ${tag}: fire ${load.fire} != ${fire}`);
+      checked.add(name);
+      continue;
+    } else if (g.calls.falling.length) { e = g.calls.falling.at(-1); fields = ["fire"]; // b84 cmdfix84: FallingSand keeps Fire (never calls Entity.onUpdate)
+    } else if (g.minecarts.carts?.length) { e = g.minecarts.carts.at(-1); fields = ["fire"]; // b84 cmdfix84: carts keep Fire (moveEntity rests a negative counter at -1 after the first update: see the note)
+    } else if (load && ["arrows", "fireballs", "eyes"].includes(g.calls.loads.at(-1)[0])) {
+      if ((load.fire ?? 0) !== fire) bad.push(`${name} ${tag}: fire ${load.fire} != ${fire}`); // b84 cmdfix84: arrows, fireballs and eyes keep the raw short
       checked.add(name);
       continue;
     } else { open.add(name); continue; } // FallingSand, carts, hanging entities, arrows, fireballs, eyes, crystals: no port fire counter on the record
@@ -196,5 +208,5 @@ test("/summon keeps Entity.readFromNBT's Fire, OnGround, FallDistance and Air on
   const g = game();
   g.run("/summon Item 0.5 10 0.5 {Item:{id:264s,Count:1b},Fire:-20s,OnGround:1b}");
   assert.deepEqual([g.calls.items[0].fire, g.calls.items[0].loadedFire, g.calls.items[0].onGround], [-20, -20, true]);
-  assert.ok(open.has("FallingSand") && open.has("MinecartChest") && checked.has("PrimedTnt") && checked.has("Pig") && checked.size >= 30, [...open].join(" "));
+  assert.ok(checked.has("FallingSand") && checked.has("MinecartChest") && checked.has("PrimedTnt") && checked.has("Pig") && checked.size >= 30, [...open].join(" "));
 });

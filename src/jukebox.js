@@ -85,6 +85,8 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
   });
   return {
     tile,
+    // b84 cmdfix84: BlockJukebox.breakBlock's dropRecord for a block replaced outside the redstone engine (/setblock): stop the record, empty the tile, the disc as an item.
+    eject: (x, y, z) => eject(redstone, x, y, z),
     // ItemRecord.onItemUse on a jukebox with metadata 0: insert the disc (the caller takes it from the stack outside Creative).
     insert(x, y, z, item) {
       if (!isDisc(item) || redstone.getBlock(x, y, z) !== JUKEBOX_ID || redstone.getBlockMetadata(x, y, z) !== 0) return false;

@@ -44,7 +44,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
   // EntityThrowable.readEntityFromNBT: ownerName (an empty name is null). A named owner is the local player.
   const owned = String(nbtGet(entity, 'ownerName', NBT.STRING, '')).length > 0;
   // b80 fluids80: Entity.readFromNBT's Fire counter of a snowball, pearl (b81: or thrown potion and bottle) (it burns on in Projectiles.step; a throwable never moves with moveEntity, so it never rests below 0).
-  const thrownFire = nbtGet(entity, 'Fire', NBT.SHORT, 0), burning = thrownFire > 0 ? { fire: thrownFire } : {};
+  const thrownFire = nbtGet(entity, 'Fire', NBT.SHORT, 0), burning = thrownFire !== 0 ? { fire: thrownFire } : {}; // b84 cmdfix84: the raw short (a negative one too: sa.C leaves it, writeToNBT gives it back)
   if (id === 'Snowball') return { list, record: { ...base, ...burning } };
   // EntityEnderPearl.onImpact only teleports an EntityPlayerMP thrower; a pearl without one loads and just dies on impact (pearl-player.js).
   if (id === 'ThrownEnderpearl') return { list, record: { ...base, kind: 'enderPearl', ...(owned ? { owner: 'player' } : {}), ...burning } };
@@ -56,7 +56,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
     if (!direction) return { lost: 'no direction' };
     const power = nbtGet(entity, 'ExplosionPower', NBT.INT);
     return { list, record: { kind: FIREBALL_KINDS[id], x: base.x, y: base.y, z: base.z, vx: direction[0], vy: direction[1], vz: direction[2], ax: 0, ay: 0, az: 0,
-      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), rotation, dimension } }; // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws (b82 fireext82: every fireball keeps it)
+      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), rotation, dimension, ...(nbtGet(entity, 'Fire', NBT.SHORT, 0) !== 0 ? { fire: nbtGet(entity, 'Fire', NBT.SHORT, 0) } : {}) } }; // b84 cmdfix84: Fire (setFire(1) lifts it to 20 on the first update) // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws (b82 fireext82: every fireball keeps it)
   }
   if (id === 'EyeOfEnderSignal') {
     // EntityEnderEye.readEntityFromNBT is empty: the target (0, 0, 0 of the Java world, moved with the import), the age and the
@@ -102,7 +102,7 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
   return { list, record: { ...base,
     xTile: unset ? -1 : Math.max(-1, tile[0] + shiftX), yTile: tile[1], zTile: unset ? -1 : Math.max(-1, tile[2] + shiftZ),
     life: Math.max(0, nbtGet(entity, 'life', NBT.SHORT, 0)), inTile, inData, shake: nbtGet(entity, 'shake', NBT.BYTE, 0) & 255, inGround: stuck, pickup: Math.max(0, Math.min(2, pickup)),
-    damage: nbtGet(entity, 'damage', NBT.DOUBLE) ?? 2, ...(fire > 0 ? { fire } : {}) } };
+    damage: nbtGet(entity, 'damage', NBT.DOUBLE) ?? 2, ...(fire !== 0 ? { fire } : {}) } }; // b84 cmdfix84: raw Fire
 }
 
 // Browser record -> { id, fields } (Entity's own fields are added by the exporter), or null for a record Java cannot hold: an egg

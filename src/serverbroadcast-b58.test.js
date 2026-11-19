@@ -89,7 +89,10 @@ test("an operator's /tp, /give, /gamemode, /xp, /effect act on the named player'
   f.social.command("a", "/gamemode survival Bob");
   assert.equal(b.survival.mode, "survival"); assert.notEqual(a.survival.mode, "survival");
   const ops = (id) => f.log(id).filter((m) => m.type === "playerOp");
-  assert.deepEqual(ops("b").map((m) => m.op), ["setGameMode"]);
+  // b84 cmdfix84 (updated: this used to list only setGameMode): /tp Bob Alex also sends Alex's yaw and pitch (CommandTeleport -> setPlayerLocation) as a "look" op.
+  assert.deepEqual(ops("b").map((m) => m.op), ["look", "setGameMode"]);
+  assert.deepEqual(ops("b")[0].args, [a.yaw, a.pitch]);
+  assert.deepEqual([b.yaw, b.pitch], [a.yaw, a.pitch]);
   assert.ok(texts(f.log("b")).includes("Your game mode has been updated"));
   f.social.command("a", "/give Bob 1 5");
   assert.deepEqual(ops("b").at(-1), { type: "playerOp", op: "give", args: [{ id: ops("b").at(-1).args[0].id, count: 5, damage: 0 }] });
