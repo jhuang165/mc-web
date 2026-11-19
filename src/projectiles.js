@@ -28,6 +28,7 @@ import { torchBounds } from "./torches.js";
 import { REED_BOUNDS } from "./plants.js";
 import { ENTITY_TYPES } from "./entities.js";
 import { dragonPartTargets, aimPart } from "./dragon-parts.js";
+import { mobTargetList } from "./mpperf83-fast.js"; // b83 mpperf83
 export { aimPart };
 
 const f = Math.fround;
@@ -356,7 +357,7 @@ export function inWater(world, x, y, z) {
 // Entity.canBeCollidedWith is true until the entity is dead, so dying mobs
 // still count.
 export function mobTargets(entities, player, width = 0.6, height = 1.8) {
-  const out = entities.flatMap((e) => {
+  const out = mobTargetList(entities, (e) => { // b83 mpperf83: a loop, not flatMap (same list)
     // The ender dragon is not collidable; its parts are (each EntityDragonPart box), and `part` tells aimPart which one was struck.
     if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box, reach }) => ({ ref: target, part, box, reach }));
     const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);

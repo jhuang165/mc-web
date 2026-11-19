@@ -18,6 +18,7 @@ import { entityWet } from "./entity-wet.js"; // b83 rain83
 import { entityPushOut } from "./entities.js";
 import { freshEntityRandom, gaussianFrom } from "./java-random.js";
 import { orderTargets } from "./candidate-order.js"; // b73
+import { fast83, pickupHits, sameTargets, fail83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { mhSin, mhCos } from "./lighting.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
@@ -333,6 +334,15 @@ export class ItemEntities {
   }
   // The items EntityPlayer.onLivingUpdate's grown box (1, 0.5, 1) meets (pickup delay over, not frozen), as order-sortable targets. `width` is the player's width (the box uses its float).
   pickupCandidates(feet, width, height) {
+    // b83 mpperf83: the same test with the bounds in place, an entry only for a hit (pickupHits); a subclass with its own box keeps the loop below
+    if (fast83.mode !== "off" && this.box === ItemEntities.prototype.box) {
+      const got = pickupHits(this.items, feet, width, height, W, H, (e) => e.dead || e.delay > 0 || isFrozen(e), W);
+      if (fast83.mode === "verify" && !sameTargets(got, this.pickupCandidatesReference(feet, width, height))) fail83("pickupCandidates");
+      return got;
+    }
+    return this.pickupCandidatesReference(feet, width, height);
+  }
+  pickupCandidatesReference(feet, width, height) {
     const r = f(width) / 2 + 1, out = [];
     for (const e of this.items) {
       if (e.dead || e.delay > 0 || isFrozen(e)) continue;

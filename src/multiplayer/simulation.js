@@ -3,6 +3,7 @@ import { capeFields } from './cape-wire.js'; // b71 mpcapes
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
+import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
@@ -103,7 +104,8 @@ const isDrinkUse = (id) => id === MILK_BUCKET || id === ITEM_POTION; // b63 (mpp
 // feet + 1.62). ItemFood.onEaten then plays random.burp (0.5, world rand) with World.playSoundAtEntity, which reaches the eater too.
 const SOUND_RANGE = 16, EYE_OFFSET = 1.62;
 const seeded = () => new JavaRandom(Math.floor(Math.random() * 2 ** 48));
-const vector = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
+const vectorSpread = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
+const vector = p => vectorOf(p, vectorSpread); // b83 mpperf83: an {x, y, z} record as one literal, so the player positions share one hidden class
 export function cleanHotbar(slots) {
   if (!Array.isArray(slots) || slots.length !== 9) return null;
   const out = [];
