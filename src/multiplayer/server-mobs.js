@@ -7,6 +7,7 @@
 // Batch 60: the server's own sounds (S29), status 2 / 3 / 18 (S19) for the clients' hurt and death sounds and hearts, experience orbs of a kill (server-items.js), knockback on the
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
 import { serverCopyOf } from './server-copy-step.js'; // b82 mpplace82
+import { fast85 } from '../mpperf85-fast.js'; // b85 mpperf85
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
@@ -419,8 +420,11 @@ export class ServerMobs {
   // EntityTracker.updateTrackedEntities, the server half only: ONE tracker for the world (b61, `SharedMobTracker`): every entry ticks once and sends each packet to the players tracking
   // it, so the entry's `ticks` phase, its last sent position and the S12 velocity flags are the entity's, as natively. Packets leave in the order they were queued (packetSeq).
   track() {
-    const mobs = this.mobs, states = new Map(), size = e => mobs.size(e), t = this.tracker;
-    const stateOf = e => { let s = states.get(e); if (s === undefined) states.set(e, s = mobStateJson(e, mobState)); return s; };
+    const mobs = this.mobs, t = this.tracker, quick = fast85.mode !== 'off';
+    // b85 mpperf85: the size closure is made once (with `into`, for the tracker's scratch) and the state string is not memoised per tick (a pure function of the mob)
+    const size = quick ? (this.sizeFn85 ??= Object.assign(e => mobs.size(e), typeof mobs.sizeInto === 'function' ? { into: (e, out) => mobs.sizeInto(e, out) } : {})) : e => mobs.size(e);
+    const states = quick ? null : new Map();
+    const stateOf = quick ? e => mobStateJson(e, mobState) : e => { let s = states.get(e); if (s === undefined) states.set(e, s = mobStateJson(e, mobState)); return s; };
     t.serverStep(mobs.entities, size);
     const byWatcher = new Map(), outs = new Map();
     for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one

@@ -13,6 +13,7 @@ import { JavaRandom } from "./java-random.js";
 import { potionColor, potionParticles } from "./fx.js";
 import { isInvisible } from "./mob-effects.js";
 import { deathRandom } from "./death-fx.js";
+import { fast85, fail85 } from "./mpperf85-fast.js"; // b85 mpperf85
 
 const NO_FX = { spawn() {} };
 // The client world's own Random (World.rand, ahb.s), one for the single client world: the wither's armour roll draws on it.
@@ -30,12 +31,41 @@ export function copyMetaOf(e) {
   return m;
 }
 // The fields of copyMetaOf that differ from `last` (an earlier copyMetaOf), or null; `last` is updated.
-export function copyMetaDiff(last, e) {
+export function copyMetaDiffReference(last, e) {
   const now = copyMetaOf(e);
   if (!now) return null;
   let out = null;
   for (const k in now) if (last[k] !== now[k]) { (out ??= {})[k] = last[k] = now[k]; }
   return out;
+}
+// b85 mpperf85: the same comparison in copyMetaOf's key order (potion, invisible, burning, air, screaming, invul, health) without the record of the current values.
+function copyMetaDiffFast(last, e) {
+  if (typeof e.health !== "number" || !e.type) return null;
+  let out = null;
+  const fx = e.effects?.length, t = e.type;
+  const potion = fx ? potionColor(e.effects) : 0;
+  if (last.potion !== potion) (out ??= {}).potion = last.potion = potion;
+  const invisible = fx ? isInvisible(e) : false;
+  if (last.invisible !== invisible) (out ??= {}).invisible = last.invisible = invisible;
+  const burning = e.fire > 0;
+  if (last.burning !== burning) (out ??= {}).burning = last.burning = burning;
+  if (t !== "squid") { const air = e.air ?? 300; if (last.air !== air) (out ??= {}).air = last.air = air; }
+  if (t === "enderman") { const screaming = !!e.screaming; if (last.screaming !== screaming) (out ??= {}).screaming = last.screaming = screaming; }
+  if (t === "wither") {
+    const invul = e.invul ?? 0; if (last.invul !== invul) (out ??= {}).invul = last.invul = invul;
+    if (last.health !== e.health) (out ??= {}).health = last.health = e.health;
+  }
+  return out;
+}
+export function copyMetaDiff(last, e) {
+  const mode = fast85.mode;
+  if (mode === "off") return copyMetaDiffReference(last, e);
+  if (mode !== "verify") return copyMetaDiffFast(last, e);
+  const l2 = { ...last }, ref = copyMetaDiffReference(l2, e), got = copyMetaDiffFast(last, e);
+  const ka = Object.keys(l2), kb = Object.keys(last);
+  if ((ref === null) !== (got === null) || ka.length !== kb.length || ka.some((k, i) => k !== kb[i] || !Object.is(l2[k], last[k]))) fail85("copyMetaDiff last");
+  if (ref) { const ra = Object.keys(ref), rb = Object.keys(got); if (ra.length !== rb.length || ra.some((k, i) => k !== rb[i] || !Object.is(ref[k], got[k]))) fail85("copyMetaDiff"); }
+  return got;
 }
 // What S1C / S0F set on the copy.
 export function applyCopyMeta(c, p) {
