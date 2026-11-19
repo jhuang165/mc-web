@@ -2197,7 +2197,7 @@ export class EntityWorld {
   }
   clientAfterMove(c, m) {
     // wi.h()'s animation half on the client copy: its own counters from the watcher-16 flags it holds (the copy's own watcher 16, S0F / S1C through the tracker, entity-tracker.js, not the live horse's), and the tail roll on the copy's own Random (horse-copy.js stepHorseCopy)
-    copyLivingUpdate(c, m); copyWolfShake(c, m); // batch 61: the wolf's shake after the living update; batch 60 (copy-talk.js): onLivingUpdate's particle draws (enderman, blaze, wither, slime landing)
+    copyLivingUpdate(c, m); copyWolfShake(c, m, undefined, this.clientRained); // b83 rain83: the copy's isWet counts the client world's rain // batch 61: the wolf's shake after the living update; batch 60 (copy-talk.js): onLivingUpdate's particle draws (enderman, blaze, wither, slime landing)
     if (m.type === "horse") stepHorseCopy(c, c.horseFlags ?? 0, { alive: m.health > 0, child: m.growingAge < 0, type: m.horse?.type });
     // EntitySquid.onLivingUpdate's second half on the client (isRemote: the swim motion is the server's): rotation, tentacles, body yaw
     if (m.type === "squid" && c.squid) squidLivingUpdate(c.squid, c, { rand: c.rand, wet: this.clientSquidWet(c), remote: true });
@@ -3164,7 +3164,7 @@ export class EntityWorld {
     const rand = entityRandom(e), brain = this.ai.brain(e);
     // No target check here: a dead target ends through EntityAITarget.continueExecuting/resetTask in the 3-tick task update, as in 1.7.10.
     const shook = e.shaking;
-    const out = updateWolf(e, { inWater: !!e.inWater, onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand });
+    const out = updateWolf(e, { inWater: !!e.inWater || !!this.wet?.(e, t.height), onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand }); // b83 rain83: wv.h tests isWet (rain too), so a wolf in the rain stays wet and never shakes
     if (!shook && e.shaking) { this.copyState(e, 8); this.mobStatus?.(e, 8); /* b62 */ } // setEntityState(8): the copy's shake starts
     if (out.shakeSound) this.events.push({ sound: WOLF_SOUNDS.shake, volume: WOLF_SOUNDS.volume, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } });
     for (let i = 0; i < out.splashes; i++) {

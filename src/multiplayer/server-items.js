@@ -1,6 +1,7 @@
 import { ITEMS } from '../survival.js';
 import { PlayerInventory, copyStack, makeStack, sameStackItem } from '../inventory.js';
 import { ExperienceOrbs, Experience } from '../experience.js';
+import { isWet } from '../weather.js'; // b83 rain83
 import { PHYSICS } from '../world.js';
 import { ServerInventory } from './server-inventory.js';
 import { pickupPass, playerBox, ridingBoxOf } from './server-pickup-order.js'; // b74 mppickup74
@@ -43,6 +44,7 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
     this.sim = sim;
     this.survival = sim.gameMode === 'survival';
     this.xp = new ExperienceOrbs(saved.xpOrbs);
+    this.xp.wet = (o) => isWet(sim.weather, sim.world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5); // b83 rain83: Entity.isWet for the Overworld's orbs, as main.js (rain only: EntityXPOrb.handleWaterMovement never sets inWater)
     this.taken = []; // S0D collect item of this tick: { i, by }
     this.inv = new ServerInventory(sim); // b60: the player's own inventory window and tool breaks (server-inventory.js)
     sim.items.load(saved.items, s => reader.read(s), 0);

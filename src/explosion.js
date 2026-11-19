@@ -5,6 +5,7 @@
 import { JavaRandom } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
+import { rainedOn, wetFizz } from "./entity-wet.js";
 import { STAIRS, stairExplosionResistance } from "./stairs.js";
 import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM } from "./dispenser-piston.js";
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem, potBreakDrop } from "./stone-utility.js";
@@ -383,12 +384,16 @@ export function explodeTnt(world, e, x, y, z, size) {
 // b82 fireext82 (bytecode-read, xw.h): EntityTNTPrimed.onUpdate never calls super.onUpdate, so the fire counter is not counted down, flag 0 is never set and isInWater stays false;
 // moveEntity's fire tail still runs on both sides (a client copy too: `remote`). Outside fire the counter rests at -1; a fire block or lava cell in the box (shrunk 0.001) runs
 // dealFireDamage(1) (Entity.attackEntityFrom: setBeenAttacked only, `velocityChanged`) and ++fire, with setFire(8) (160) when that reaches 0; nothing takes it back down, so
-// a block that once burnt keeps a counter above 0 (isBurning: RenderTNTPrimed's fire overlay) for the rest of the fuse. isWet is then only rain (not modelled here: no fizz).
+// a block that once burnt keeps a counter above 0 (isBurning: RenderTNTPrimed's fire overlay) for the rest of the fuse. isWet is then only rain.
 // With `remote` the cauldron (World-changing, !isRemote) is skipped.
-export function tickTnt(world, e, smoke = null, { remote = false } = {}) {
+// b83 rain83: `rain(x, y, z)` is the world's canLightningStrikeAt (entity-wet.js, at floor posY and floor(posY + 0.98)). Rained-on TNT in fire does not count up, and TNT
+// still burning fizzes and rests at -1, so the flames go out: `fizz(sound)` gets random.fizz with two draws on `random` (Entity.rand; Math.random when the entity has none).
+// A client copy (RenderGlobal.playSound is empty) still makes the draws.
+export function tickTnt(world, e, smoke = null, { remote = false, rain = null, fizz = null, random = null } = {}) {
   e.px = e.x; e.py = e.y; e.pz = e.z;
   e.vy -= 0.03999999910593033;
-  moveEntity(world, e, TNT_SIZE, TNT_SIZE, e.vx, e.vy, e.vz, 0, { hurt: () => { e.velocityChanged = true; }, remote });
+  moveEntity(world, e, TNT_SIZE, TNT_SIZE, e.vx, e.vy, e.vz, 0, { hurt: () => { e.velocityChanged = true; }, remote,
+    get wet() { return rainedOn(rain, e.x, e.y + TNT_Y_OFFSET, e.z, TNT_SIZE); }, fizz: () => { const s = wetFizz(random ?? Math.random); fizz?.(s, e.x, e.y, e.z); } });
   e.vx *= 0.9800000190734863;
   e.vy *= 0.9800000190734863;
   e.vz *= 0.9800000190734863;

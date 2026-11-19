@@ -530,6 +530,7 @@ function bindObjectTracker() {
   };
   // Batch 47: what the tracker follows besides the lists trackObjects passes: the live boats and carts, paintings and item frames, and the leash knots (a summoned knot stands on its floored tile)
   objectTracker.hooks.extraLists = () => liveLists(mobs, { boat: (boats?.carts ?? []).filter((b) => !b.dead), minecart: (minecarts?.carts ?? []).filter((m) => !m.dead), painting: (hanging?.pickable() ?? []).filter((e) => e.kind === "painting"), itemFrame: (hanging?.pickable() ?? []).filter((e) => e.kind !== "painting"), leashKnot: (mobs?.knotList ?? []).filter((k) => !k.dead) }); // b61: frozen entities are in no tracker
+  objectTracker.hooks.rained = (x, y, z) => !world.dimension && rainAt(x, y, z); // b83 rain83: the client world's canLightningStrikeAt, for a TNT copy's moveEntity isWet
   objectTracker.hooks.ignite = (ref, fire) => { if (ref?.present !== undefined && ref.type) ref.fire = fire; }; // a client mob copy's Entity.fire (zeroed at its next update, entity-tracker.js)
   objectTracker.hooks.clientOf = (live) => live === "player" ? "player" : live && typeof live === "object" ? mobs?.tracker?.clientIfTracked(live) ?? null : null;
   const balls = objectTracker.sims.balls;
@@ -618,6 +619,7 @@ let survival = new Survival({}, "creative"),
   containerView = null;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
+items.rain = rainAt; // b83 rain83: moveEntity's isWet in the rain (item-entities.js)
 items.joined = (e) => mobs?.joined(e, "item");
 // Every system reads the game rules of the world being played (game-rules.js); a /gamerule edit applies on the next read.
 setGameRuleSource((name) => ruleOn(active, name));
@@ -3207,13 +3209,14 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     carts: cartHooks,
     boats: boatHooks,
     // the live rocket's hooks (fireworks-live.js): the 32-block ring, the 64-block tracking range for status 17, sounds and sparks; the client rocket copies draw the trail and the explosion (object-tracker.js)
-    rocketHooks: () => ({ ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), clientCopies: true }),
+    rocketHooks: () => ({ ringActive: (r) => ringEntityActive(world, r), tracked: (r) => trackedWithin(ROCKET_TRACKING, r.x, r.z, position), sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), clientCopies: true, rain: rainAt }), // b83 rain83: rain
     hangingActive: (e) => !world.streaming || world.isTicking(e.x, e.z),
     hangingDrop: (d) => { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; },
     mobExplosion: (ev) => explodeEvent(ev, explodeAt),
     maxStack: st => survival.inventory.maxStack(st),
     smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),
     explodeTnt: explodeAt,
+    tntRain: rainAt, tntFizz: (sound, x, y, z) => sounds.play(sound.name, { volume: sound.volume, pitch: sound.pitch, position: { x, y, z } }), // b83 rain83: primed TNT in the rain (explosion.js tickTnt)
     itemPicked: ({ item }) => {
       const pickedId = pickedAchievement(item.stack?.id);
       if (pickedId) achievements.trigger(pickedId);
@@ -3764,10 +3767,13 @@ function lightTnt(x, y, z, placer) {
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
 // Furnace, TNT and hopper carts (cart-variants.js): the explosion, smoke, primed sound and the hopper transfer host.
+// b83 rain83: World.canLightningStrikeAt of the current world, the rain half of Entity.isWet (entity-wet.js) for TNT, rockets, items, carts and client TNT copies.
+function rainAt(x, y, z) { return canLightningStrikeAt(weather, world, x, y, z); }
 const cartHost = {
+  rain: rainAt, // b83 rain83: moveEntity's isWet for carts (minecarts.js)
   explode: (cart, x, y, z, power) => { explodeAt(x, y, z, power, { exploder: null, smoking: true }); saved = false; },
   particle: (name, x, y, z, mx, my, mz) => scene.fx?.spawn(name, x, y, z, mx, my, mz),
-  sound: (name, cart) => sounds.play(name, { position: { x: cart.x, y: cart.posY, z: cart.z } }),
+  sound: (name, cart, volume, pitch) => sounds.play(name, { ...(volume === undefined ? {} : { volume, pitch }), position: { x: cart.x, y: cart.posY, z: cart.z } }),
   get transfer() { return hopperTiles.host; },
   changed: () => { saved = false; },
   runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js

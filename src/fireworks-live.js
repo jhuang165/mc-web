@@ -23,7 +23,7 @@ export class FireworkRockets {
     this.joined?.(r); // entity-simulation.js (the away run's walk): the rocket's place in World.loadedEntityList
     return r;
   }
-  // hooks: world (collisions), sound(name,x,y,z,volume,pitch,delay), spark(x,y,z,vx,vy,vz), explode(x,y,z,vx,vy,vz,fireworks).
+  // hooks: world (collisions), sound(name,x,y,z,volume,pitch,delay), spark(x,y,z,vx,vy,vz), explode(x,y,z,vx,vy,vz,fireworks), rain(x,y,z) (b83: canLightningStrikeAt, entity-wet.js).
   // The integrated game is server and client at once: one tick draws the spark trail and makes the death.
   // `ringActive(rocket)` (EntityFireworkRocket updates only where World.updateEntityWithOptionalForce's 32-block test holds) and
   // `tracked(rocket)` (status 17 reaches only a tracking client, 64 blocks; ring-events.js) are optional hooks.
@@ -36,7 +36,8 @@ export class FireworkRockets {
   // One rocket's update, where a walk that holds every kind in one list reaches it (away-entities.js).
   tickOne(world, r, hooks = {}) {
     if (r.dead || (hooks.ringActive && !hooks.ringActive(r))) return;
-    const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true, entityBoxes: (box) => [...(boxProvider?.(box, r) ?? []), ...worldBoatBoxes(box, r, world)] });
+    const out = tickRocket(r, world, this.random, { remote: !hooks.clientCopies, server: true, entityBoxes: (box) => [...(boxProvider?.(box, r) ?? []), ...worldBoatBoxes(box, r, world)], rain: hooks.rain ?? null });
+    if (out.fizz) hooks.sound?.(out.fizz.name, r.x, r.y, r.z, out.fizz.volume, out.fizz.pitch, false); // b83 rain83: a burning rocket in the rain (moveEntity's tail, before the launch sound)
     if (out.launch) hooks.sound?.('fireworks.launch', r.x, r.y, r.z, 3, 1, false);
     if (out.spark) hooks.spark?.(...out.spark);
     if (out.explode && !hooks.clientCopies && (!hooks.tracked || hooks.tracked(r))) hooks.explode?.(out.explode.x, out.explode.y, out.explode.z, out.explode.vx, out.explode.vy, out.explode.vz, out.explode.fireworks);

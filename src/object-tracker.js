@@ -459,7 +459,7 @@ export class ObjectClient extends ClientEntity {
       this.vx = s.vx * 0.9800000190734863; this.vy = s.vy * 0.9800000190734863; this.vz = s.vz * 0.9800000190734863;
     } else if (this.kind === "tnt") {
       s.x = this.x; s.y = this.y - spec.yOff; s.z = this.z; s.vx = this.vx; s.vy = this.vy; s.vz = this.vz; s.onGround = this.onGround;
-      const boom = tickTnt(world, s, null, { remote: true }); // fuse 80 on the client; at 0 it dies without exploding. b82 fireext82: its moveEntity counts its own fire (blockCollisions)
+      const boom = tickTnt(world, s, null, { remote: true, rain: this.tracker.hooks.rained ?? null }); // fuse 80 on the client; at 0 it dies without exploding. b82 fireext82: its moveEntity counts its own fire (blockCollisions); b83 rain83: rain is isWet there too (the copy's flames go out; no fizz sound: RenderGlobal.playSound is empty)
       this.x = s.x; this.y = s.y + spec.yOff; this.z = s.z; this.vx = s.vx; this.vy = s.vy; this.vz = s.vz; this.onGround = s.onGround;
       if (boom) this.present = false;
     }
