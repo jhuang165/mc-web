@@ -229,11 +229,12 @@ export class Arrows {
   // posY is the box bottom; inherited Entity.getEyeHeight is 0. A stuck arrow remains stuck
   // until its next onUpdate sees that the supporting block changed or disappeared.
   explode(world, x, y, z, size, exploder = null) {
-    for (const a of this.list) {
-      if (a.dead || a === exploder || isFrozen(a)) continue;
-      const hit = explosionImpact(world, x, y, z, size, a.x, a.y, a.z, a.y, box(a));
-      if (hit) { a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; }
-    }
+    for (const a of this.list) if (a !== exploder) this.explodeOne(world, a, x, y, z, size);
+  }
+  explodeOne(world, a, x, y, z, size) { // b83 blastorder83: one arrow's turn in doExplosionA's single list
+    if (a.dead || isFrozen(a)) return;
+    const hit = explosionImpact(world, x, y, z, size, a.x, a.y, a.z, a.y, box(a));
+    if (hit) { a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; }
   }
   // EntityArrow.onUpdate for every arrow. `ctx`: targets (arrowTargets), mobs (the
   // EntityWorld, for damage), survival (the player's) and player ({ x, z }, for knockback).

@@ -173,14 +173,14 @@ export class FallingBlocks {
   }
   // EntityFallingBlock ignores blast damage but receives knockback. Its posY is the box centre.
   explode(x, y, z, size, exploder = null) {
-    const half = f(FALLING_SIZE) / 2;
-    for (const e of this.entities) {
-      if (e.dead || e === exploder || isFrozen(e)) continue;
-      const posY = e.y + FALLING_Y_OFFSET;
-      const hit = explosionImpact(this.world, x, y, z, size, e.x, posY, e.z, posY,
-        [e.x - half, e.y, e.z - half, e.x + half, e.y + f(FALLING_SIZE), e.z + half]);
-      if (hit) { e.velocityChanged = true; /* Entity.attackEntityFrom: setBeenAttacked */ e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
-    }
+    for (const e of this.entities) if (e !== exploder) this.explodeOne(e, x, y, z, size);
+  }
+  explodeOne(e, x, y, z, size) { // b83 blastorder83: one falling block's turn in doExplosionA's single list
+    if (e.dead || isFrozen(e)) return;
+    const half = f(FALLING_SIZE) / 2, posY = e.y + FALLING_Y_OFFSET;
+    const hit = explosionImpact(this.world, x, y, z, size, e.x, posY, e.z, posY,
+      [e.x - half, e.y, e.z - half, e.x + half, e.y + f(FALLING_SIZE), e.z + half]);
+    if (hit) { e.velocityChanged = true; /* Entity.attackEntityFrom: setBeenAttacked */ e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
   }
   // EntityFallingBlock.onUpdate (xj.h).
   tickEntity(e) {

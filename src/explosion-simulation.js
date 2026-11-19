@@ -5,9 +5,9 @@ import { isFrozen, liveOrder } from "./saved-order.js"; // b62: an unloaded chun
 import { explosionReaches } from "./ring-events.js";
 import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
-import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
+import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt, primeTnt, TNT_Y_OFFSET } from "./explosion.js";
 import { JavaRandom } from "./java-random.js";
-import { explodeFireballs, explodeRockets, explodeEyes, explodeHooks, explodeKnots } from "./explosion-extras.js"; // b82 spblast82
+import { fireballRows, rocketRows, eyeRows, hookRows, knotRows, blastRow, blastNear, runBlastRows } from "./explosion-extras.js"; // b82 spblast82, b83 blastorder83: one list in the native order
 import { ENTITY_TYPES } from "./entities.js";
 import { livingEyeHeight } from "./ai.js";
 import { makeStack, copyStack } from "./inventory.js";
@@ -24,48 +24,63 @@ import { serverPosY, serverEyeY, SLEEP_BOX } from "./sleeper-eye.js"; // b68 fix
 
 // An EntityMinecart or EntityBoat in the blast: Entity.getEyeHeight is 0, so the eye is posY; attackEntityFrom(explosion source, damage) wobbles it and breaks it
 // above 40 (a creative player's own explosion breaks it outright), then the knockback is added to its motion (vehicles are not EntityLivingBase: no Blast Protection).
-function explodeVehicles(system, world, x, y, z, size, exploder, creative, drop) {
+// A broken vehicle's drops join the entity list at once (Entity.entityDropItem): b83 blastorder83 drains them right after its hit (they are in no row of this blast).
+function vehicleRows(system, b, creative, drop) {
+  const out = [];
   for (const v of [...(system?.carts ?? [])]) {
-    if (v.dead || v === exploder || isFrozen(v)) continue;
-    const hit = explosionImpact(world, x, y, z, size, v.x, v.posY, v.z, v.posY, v.bb);
-    if (!hit) continue;
-    system.attack(v, hit.damage, { source: "explosion", creative });
-    v.vx += hit.push[0]; v.vy += hit.push[1]; v.vz += hit.push[2];
+    const r = blastRow(b, v, v.posY, () => {
+      if (v.dead) return; // EntityMinecart / EntityBoat.attackEntityFrom: !isDead (a nested blast earlier in the list may have broken it)
+      const hit = explosionImpact(b.world, b.x, b.y, b.z, b.size, v.x, v.posY, v.z, v.posY, v.bb);
+      if (!hit) return;
+      system.attack(v, hit.damage, { source: "explosion", creative });
+      v.vx += hit.push[0]; v.vy += hit.push[1]; v.vz += hit.push[2];
+      if (drop && system.drain) for (const d of system.drain()) drop(d);
+    });
+    if (r) out.push(r);
   }
-  // A broken vehicle's drops join the entity list at once (Entity.entityDropItem), so an item dropped mid-pass still updates in this pass.
-  if (drop && system?.drain) for (const d of system.drain()) drop(d);
+  return out;
 }
+// One system's rows through its explodeOne (items, orbs, arrows, thrown entities, falling blocks): `py` is the entity's posY.
+const systemRows = (list, b, py, one) => { const out = []; for (const e of [...(list ?? [])]) { const r = blastRow(b, e, py(e), () => one(e)); if (r) out.push(r); } return out; };
 /**
- * The non-living entity lists of Explosion.doExplosionA, in main.js order: items, orbs, arrows, thrown entities, the witch and dispenser potions and the snow golem's
- * snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, and the minecarts and boats (attackEntityFrom with the explosion
- * source, then the motion; EntityListProbe). Primed TNT, mobs and the player stay with applyExplosion.
- * b82 spblast82: also the fireballs and wither skulls, firework rockets, eyes of ender, fishing hooks (`state.rockets`, `state.eyes`, `state.hooks`: an array) and leash knots
- * (explosion-extras.js); `placer` is getExplosivePlacedBy, whose look a large fireball takes. The dedicated server's ServerMobs.explode runs this same function.
+ * b83 blastorder83: the rows (explosion-extras.js) of every non-living entity of Explosion.doExplosionA's list: items, orbs, arrows, thrown entities, the witch and dispenser
+ * potions and the snow golem's snowballs (EntityThrowable: zero eye height, no damage, motion added), falling blocks, hanging entities, the minecarts and boats, leash knots,
+ * fireballs and wither skulls, rockets, eyes of ender and fishing hooks. `itemsBefore` / `orbsBefore` (optional) cut the item and orb lists where the blast took its list.
+ */
+export function nonLivingRows(state, b, { creative = false, vehicleDrop = null, itemsBefore = null, orbsBefore = null } = {}) {
+  const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
+  const { x, y, z, size } = b, cut = (list, n) => (n === null || !list ? list : list.slice(0, n));
+  const hanging = state.hanging?.h ?? state.hanging, hangingDrops = state.hanging?.h ? () => state.hanging.drops() : null; // the server's ServerHanging wraps a Hanging and spawns its drops at once
+  const balls = (p) => (p ? systemRows(p.balls, b, (e) => e.y, (e) => p.explodeOne(world, e, x, y, z, size)) : []);
+  return [
+    ...(items?.explodeOne ? systemRows(cut(items.items, itemsBefore), b, (e) => e.y + 0.125, (e) => items.explodeOne(world, e, x, y, z, size)) : []), // EntityItem: posY the box centre
+    ...(xpOrbs?.explodeOne ? systemRows(cut(xpOrbs.orbs, orbsBefore), b, (e) => e.posY, (e) => xpOrbs.explodeOne(world, e, x, y, z, size)) : []),
+    ...(arrows?.explodeOne ? systemRows(arrows.list, b, (e) => e.y, (e) => arrows.explodeOne(world, e, x, y, z, size)) : []),
+    ...balls(projectiles), ...balls(mobs?.potions?.projectiles), ...balls(mobs?._golemBalls?.projectiles),
+    ...vehicleRows(state.minecarts, b, creative, vehicleDrop), ...vehicleRows(state.boats, b, creative, vehicleDrop),
+    ...(falling?.explodeOne ? systemRows(falling.entities, b, (e) => e.y + 0.49, (e) => falling.explodeOne(e, x, y, z, size)) : []),
+    ...(hanging?.explodeOne ? systemRows(hanging.entities, b, (e) => e.y, (e) => { hanging.explodeOne(e, x, y, z, size); hangingDrops?.(); }) : []), // paintings and item frames break (hanging.js)
+    ...knotRows(mobs, b), ...fireballRows(mobs?._fireballs, b), ...fireballRows(mobs?._skulls, b),
+    ...rocketRows(state.rockets?.rockets, b), ...eyeRows(state.eyes?.eyes, b), ...hookRows(state.hooks, b),
+  ];
+}
+/** Primed TNT rows (Entity.attackEntityFrom: setBeenAttacked; the push). `done` collects the TNT reached. */
+export const tntRows = (primed, b, done = null) => systemRows(primed, b, (e) => e.y + TNT_Y_OFFSET, (e) => { explodeTnt(b.world, e, b.x, b.y, b.z, b.size); done?.push(e); });
+/** After the pass: the orbs a blast killed leave their list (ExperienceOrbs.explode did this per kind). */
+export function finishBlastRows(state) { const o = state.xpOrbs; if (o?.orbs?.some((e) => e.dead)) o.orbs = o.orbs.filter((e) => !e.dead); }
+const blastOf = (world, x, y, z, size, exploder, placer) => ({ world, x, y, z, size, exploder, placer });
+/**
+ * The non-living entities of Explosion.doExplosionA: items, orbs, arrows, thrown entities, potions and golem snowballs, falling blocks, hanging entities, minecarts and boats
+ * (attackEntityFrom with the explosion source, then the motion; EntityListProbe), b82 spblast82's fireballs and wither skulls, firework rockets, eyes of ender, fishing hooks
+ * (`state.rockets`, `state.eyes`, `state.hooks`: an array) and leash knots (explosion-extras.js); `placer` is getExplosivePlacedBy, whose look a large fireball takes.
+ * Primed TNT, mobs and the player stay with applyExplosion, which runs all of them in one list (b83 blastorder83).
  */
 export function explodeNonLiving(state, x, y, z, size, exploder = null, creative = false, vehicleDrop = null, itemsBefore = null, orbsBefore = null, placer = null) {
-  const { world, mobs, items, xpOrbs, arrows, projectiles, falling } = state;
   // `itemsBefore`: the item count when the blast collected its entity list; the items after it (a mob the blast just killed dropped them) wait out the blast.
-  const born = itemsBefore === null || !items.items ? [] : items.items.splice(itemsBefore);
   // b81 blast81 `orbsBefore`: the same for the orbs (an ore an ender crystal's nested blast broke dropped them, Block.dropXpOnBlockBreak in that blast's doExplosionB).
-  const bornOrbs = orbsBefore === null || !xpOrbs?.orbs ? [] : xpOrbs.orbs.splice(orbsBefore);
-  items?.explode(world, x, y, z, size, exploder);
-  xpOrbs?.explode(world, x, y, z, size, exploder);
-  arrows?.explode(world, x, y, z, size, exploder);
-  projectiles?.explode(world, x, y, z, size, exploder);
-  mobs?.potions?.projectiles?.explode(world, x, y, z, size, exploder);
-  mobs?._golemBalls?.projectiles?.explode(world, x, y, z, size, exploder);
-  explodeVehicles(state.minecarts, world, x, y, z, size, exploder, creative, vehicleDrop);
-  explodeVehicles(state.boats, world, x, y, z, size, exploder, creative, vehicleDrop);
-  falling?.explode(x, y, z, size, exploder);
-  state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
-  explodeKnots(mobs, x, y, z, size, exploder);
-  explodeFireballs(mobs?._fireballs, world, x, y, z, size, exploder, placer);
-  explodeFireballs(mobs?._skulls, world, x, y, z, size, exploder, placer);
-  explodeRockets(state.rockets?.rockets, world, x, y, z, size, exploder);
-  explodeEyes(state.eyes?.eyes, world, x, y, z, size, exploder);
-  explodeHooks(state.hooks, world, x, y, z, size, exploder);
-  if (born.length) items.items.splice(itemsBefore, 0, ...born);
-  if (bornOrbs.length) xpOrbs.orbs.splice(orbsBefore, 0, ...bornOrbs);
+  // b83 blastorder83: the kinds run together in the world's list order (runBlastRows), not one kind after another.
+  runBlastRows(nonLivingRows(state, blastOf(state.world, x, y, z, size, exploder, placer), { creative, vehicleDrop, itemsBefore, orbsBefore }));
+  finishBlastRows(state);
 }
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
@@ -89,9 +104,15 @@ const blueSkullResistance = (id) => skullResistance(true, WITHER_PROOF_INTERNAL.
  * EntityLivingBase.onDeath) and then the push. Returns the hits. `request`: `{x, y, z, size, exploder, attacker}`.
  */
 export function explodeMobs(state, request) {
+  const mobHits = [];
+  runBlastRows(mobRows(state, request, mobHits));
+  return mobHits;
+}
+/** b83 blastorder83: the mob rows of doExplosionA's list (explodeMobs runs them alone); each hit is pushed to `mobHits` at its turn. */
+export function mobRows(state, request, mobHits = []) {
   const { world, mobs, position } = state;
   const { x, y, z, size, exploder = null, attacker = null } = request;
-  const mobHits = [];
+  const b = blastOf(world, x, y, z, size, exploder, null), out = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
   for (const entity of liveOrder(mobs, [...(mobs?.entities ?? [])])) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
@@ -100,33 +121,39 @@ export function explodeMobs(state, request) {
     if (!type) continue;
     // World.newExplosion's getEntitiesWithinAABBExcludingEntity lists the EntityDragonPart boxes: each part inside the blast takes its own
     // distance/exposure damage (Entity.getEyeHeight is 0 for a part) and attackEntityFromPart then divides it for the non-head parts.
+    // Chunk.getEntitiesWithinAABBForEntity lists the parts right after the dragon itself, so the dragon's row runs them.
     if (entity.type === "ender_dragon") {
       // The query box is Explosion.doExplosionA's integer box floor(centre -/+ (2 * size) - 1) (probed: the dragon's own box and chunk gate the parts).
       const r = 2 * size, area = [Math.floor(x - r - 1), Math.floor(y - r - 1), Math.floor(z - r - 1), Math.floor(x + r + 1), Math.floor(y + r + 1), Math.floor(z + r + 1)];
       if (!isDragon(entity) || !reachesDragon(entity, area)) continue;
-      for (const [part, p] of entity.dragon.parts.entries()) {
-        const hit = explosionImpact(world, x, y, z, size, p.x, p.y, p.z, p.y, p.box);
-        if (!hit) continue;
-        mobs.attackEntityFrom(entity, hit.damage, { name: "explosion", part, from: hitFrom ? { x: hitFrom.x, z: hitFrom.z } : undefined, player: attacker === "player", attacker: attacker && attacker !== "player" ? attacker : undefined });
-        mobHits.push({ entity, part, ...hit });
-      }
+      out.push({ key: entity, pos: [entity.x, entity.y, entity.z], run: () => {
+        for (const [part, p] of entity.dragon.parts.entries()) {
+          const hit = explosionImpact(world, x, y, z, size, p.x, p.y, p.z, p.y, p.box);
+          if (!hit) continue;
+          mobs.attackEntityFrom(entity, hit.damage, { name: "explosion", part, from: hitFrom ? { x: hitFrom.x, z: hitFrom.z } : undefined, player: attacker === "player", attacker: attacker && attacker !== "player" ? attacker : undefined });
+          mobHits.push({ entity, part, ...hit });
+        }
+      } });
       continue;
     }
-    const scale = entity.growingAge < 0 ? 0.5 : 1;
-    const width = type.width * scale, height = type.height * scale;
-    const hit = explosionImpact(
-      world, x, y, z, size,
-      entity.x, entity.y, entity.z,
-      entity.y + livingEyeHeight(entity.type, height), // Explosion.doExplosionA reads posY + getEyeHeight()
-      entityBox(entity, width, height),
-    );
-    if (!hit) continue;
-    if (hitFrom) mobs.damage(entity, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
-    else mobs.hazard(entity, hit.damage, "explosion");
-    entity.vx += hit.push[0]; entity.vy += hit.push[1]; entity.vz += hit.push[2];
-    mobHits.push({ entity, ...hit });
+    if (isFrozen(entity) || !blastNear(b, entity.x, entity.y, entity.z)) continue;
+    out.push({ key: entity, pos: [entity.x, entity.y, entity.z], run: () => {
+      const scale = entity.growingAge < 0 ? 0.5 : 1;
+      const width = type.width * scale, height = type.height * scale;
+      const hit = explosionImpact(
+        world, x, y, z, size,
+        entity.x, entity.y, entity.z,
+        entity.y + livingEyeHeight(entity.type, height), // Explosion.doExplosionA reads posY + getEyeHeight()
+        entityBox(entity, width, height),
+      );
+      if (!hit) return;
+      if (hitFrom) mobs.damage(entity, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
+      else mobs.hazard(entity, hit.damage, "explosion");
+      entity.vx += hit.push[0]; entity.vy += hit.push[1]; entity.vz += hit.push[2];
+      mobHits.push({ entity, ...hit });
+    } });
   }
-  return mobHits;
+  return out;
 }
 export function applyExplosion(state, request, hooks = {}) {
   const {
@@ -153,20 +180,22 @@ export function applyExplosion(state, request, hooks = {}) {
   const list = explosionBlocks(world, x, y, z, size, random, blue ? blueSkullResistance : explosionResistance); // blue: a charged wither skull caps resistance (wither-boss.js)
   // Batch 49: a mob this blast kills drops its loot at its hurt call (EntityLivingBase.onDeath), after Explosion.doExplosionA collected its entity list: those items are not in it.
   // b81 blast81: neither are the orbs and primed TNT a nested crystal blast makes (doExplosionA takes its entity list once, before the first attackEntityFrom).
-  const itemsBefore = items.items?.length ?? null, orbsBefore = xpOrbs?.orbs?.length ?? null, primedBefore = [...primed];
-  const mobHits = explodeMobs(state, { x, y, z, size, exploder, attacker });
-
-  explodeNonLiving(state, x, y, z, size, exploder, attacker === "player" && !!survival.creative, hooks.vehicleDrop, itemsBefore, orbsBefore, attacker);
-  const tntProcessed = [];
-  for (const entity of primedBefore) {
-    if (entity === exploder || isFrozen(entity)) continue;
-    explodeTnt(world, entity, x, y, z, size);
-    tntProcessed.push(entity);
-  }
-
+  // b83 blastorder83: that one list, every kind together, in the world's list order (chunk x, chunk z, vertical slice, insertion: candidate-order.js); each row is hurt and pushed at
+  // its own turn, so a nested blast (an ender crystal, a TNT cart) lands between the rows before it and the rows after it, as natively.
+  const b = blastOf(world, x, y, z, size, exploder, attacker), mobHits = [], tntProcessed = [];
+  const rows = [
+    ...mobRows(state, { x, y, z, size, exploder, attacker }, mobHits),
+    ...nonLivingRows(state, b, { creative: attacker === "player" && !!survival.creative, vehicleDrop: hooks.vehicleDrop }),
+    ...tntRows(primed, b, tntProcessed),
+  ];
   let playerHit = null;
-  if (survival.health > 0) {
-    playerHit = explosionImpact(
+  if (survival.health > 0 && blastNear(b, position.x, serverPosY(position.y, sleeping), position.z)) rows.push({ key: "player", pos: [position.x, position.y + Math.fround(1.62), position.z], first: true, run: () => { playerHit = playerBlast(); } });
+  runBlastRows(rows);
+  finishBlastRows(state);
+
+  function playerBlast() {
+    if (!(survival.health > 0)) return null;
+    const playerHit = explosionImpact(
       world, x, y, z, size,
       position.x, serverPosY(position.y, sleeping), position.z, serverEyeY(position.y, sleeping), // EntityPlayerMP.getEyeHeight is the float 1.62F (eye-height-reference.json); creeperwitch-b45 push records; b68: a sleeper's posY is minY + 0.2
       entityBox(position, sleeping ? SLEEP_BOX : PHYSICS.width, sleeping ? SLEEP_BOX : PHYSICS.height),
@@ -192,6 +221,7 @@ export function applyExplosion(state, request, hooks = {}) {
       else if (s12) { velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale; } // no server copy to read: the reduced push
       else { velocity.x += Math.fround(playerHit.push[0]); velocity.y += Math.fround(playerHit.push[1]); velocity.z += Math.fround(playerHit.push[2]); }
     }
+    return playerHit;
   }
 
   // b82 spblast82: the fire roll draws on Explosion's own unseeded Random (agw.<init>: new Random()), here a JavaRandom seeded from Math.random, made only for a flaming blast

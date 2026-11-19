@@ -79,11 +79,10 @@ test("explosion applies all entity hits before burst/sound and ordered block/con
   assert.equal(survival.furnaces[key(2, 10, 0)], undefined);
   assert.equal(survival.chests[key(2, 10, 0)], undefined);
   assert.ok(calls.filter((c) => c === "spill").length >= 2, "furnace and chest contents spill after their block is removed");
-  assert.ok(calls.indexOf("mob.damage") < calls.indexOf("items.explode"));
-  assert.ok(calls.indexOf("items.explode") < calls.indexOf("arrows.explode"));
-  assert.ok(calls.indexOf("arrows.explode") < calls.indexOf("player.damage"));
+  // b83 blastorder83: one list in the world's list order (candidate-order.js), not kind by kind: the player (who joined first) and the pig share a chunk and slice, so he goes first.
   assert.ok(calls.indexOf("player.damage") < calls.indexOf("brokenTool"));
-  assert.ok(calls.indexOf("brokenTool") < calls.indexOf("burst"));
+  assert.ok(calls.indexOf("brokenTool") < calls.indexOf("mob.hazard"), "the pig takes its hit after the player's (no attacker: hazard)"); // the old "mob.damage" check was vacuous (indexOf -1)
+  assert.ok(calls.indexOf("mob.hazard") < calls.indexOf("burst"));
   assert.ok(calls.indexOf("burst") < calls.indexOf("sound"));
   assert.ok(calls.indexOf("sound") < calls.indexOf("farm.observe"));
   assert.ok(calls.indexOf("sound") < firstSet, "entity damage, burst and sound finish before the first block write");

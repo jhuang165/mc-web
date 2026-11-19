@@ -235,13 +235,14 @@ export class Hanging {
   // Explosion.doExplosionA: entities whose box meets the 2 x size cube and whose position is within 2 x size
   // of the centre take attackEntityFrom(explosion source); the explosion source is never a player.
   explode(x, y, z, size) {
+    for (const e of [...this.entities]) this.explodeOne(e, x, y, z, size);
+  }
+  explodeOne(e, x, y, z, size) { // b83 blastorder83: one hanging entity's turn in doExplosionA's single list
     const r = f(size) * 2, cube = [x - r - 1, y - r - 1, z - r - 1, x + r + 1, y + r + 1, z + r + 1];
-    for (const e of [...this.entities]) {
-      if (e.dead || isFrozen(e) || !intersects(cube, e.bb)) continue;
-      const dist = Math.hypot(e.x - x, e.y - y, e.z - z);
-      if (dist > r || dist === 0) continue;
-      this.attack(e, null);
-    }
+    if (e.dead || isFrozen(e) || !intersects(cube, e.bb)) return;
+    const dist = Math.hypot(e.x - x, e.y - y, e.z - z);
+    if (dist > r || dist === 0) return;
+    this.attack(e, null);
   }
 
   // EntityHanging.moveEntity/addVelocity: any movement breaks it (pistons, explosion pushes).

@@ -464,12 +464,13 @@ export class Projectiles {
   }
   // EntityThrowable inherits zero eye height and ignores damage; explosions still add motion.
   explode(world, x, y, z, size, exploder = null) {
-    for (const b of this.balls) {
-      if (b.dead || b === exploder || isFrozen(b)) continue;
-      const hit = explosionImpact(world, x, y, z, size, b.x, b.y, b.z, b.y,
-        [b.x - HW, b.y, b.z - HW, b.x + HW, b.y + HEIGHT, b.z + HW]);
-      if (hit) { b.mx += hit.push[0]; b.my += hit.push[1]; b.mz += hit.push[2]; }
-    }
+    for (const b of this.balls) if (b !== exploder) this.explodeOne(world, b, x, y, z, size);
+  }
+  explodeOne(world, b, x, y, z, size) { // b83 blastorder83: one ball's turn in doExplosionA's single list
+    if (b.dead || isFrozen(b)) return;
+    const hit = explosionImpact(world, x, y, z, size, b.x, b.y, b.z, b.y,
+      [b.x - HW, b.y, b.z - HW, b.x + HW, b.y + HEIGHT, b.z + HW]);
+    if (hit) { b.mx += hit.push[0]; b.my += hit.push[1]; b.mz += hit.push[2]; }
   }
   // EntityThrowable.onUpdate (zk.h) for every ball, then EffectRenderer's
   // update of the particles. `onHit(ref, ball)` handles existing snowball/egg
