@@ -48,6 +48,7 @@ import { mobKnockbackKick, golemLift, attackLandsOnClient } from "./player-knock
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
+import { movedWrongly, needsCorrection, shrunkBox, TOO_QUICKLY } from "./server-process-player.js"; // b85 spcopy85
 import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
@@ -755,6 +756,7 @@ const climbableOf = (world, e) => (isSpider(e.type) ? e.climbing : isOnLadder(wo
 // riding }), shared by the integrated server's PlayerView (serverPlayerUpdate) and the dedicated server's copy (multiplayer/server-copy-step.js). Entity.onEntityUpdate's
 // handleWaterMovement (the flow adds to the motion) and lava flag, EntityLivingBase.onLivingUpdate's snap below 0.005, moveEntityWithHeading with no input (stepHeight 0)
 // and a flying player's motionY * 0.6 (yz.e(FF)). Returns the moved scratch entity; the caller writes back what it keeps (processPlayer puts the position back).
+const quickDelta = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2; // b85 spcopy85
 export function serverCopyMove(world, c, w, h) {
   const m = c.motion;
   const e = { x: c.x, y: c.y, z: c.z, vx: m.x, vy: m.y, vz: m.z, onGround: c.onGround, inWater: false, inLava: false, sneaking: !!c.sneaking, player: true, living: true, inWeb: c.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
@@ -2591,31 +2593,57 @@ export class EntityWorld {
     // EntityLivingBase.onEntityUpdate: the revenge target (getAITarget) is dropped once it is dead or more than 100 ticks old.
     const hb = p.hurtBy;
     if (hb && typeof hb.health === "number" && (!(hb.health > 0) || !this.entities.includes(hb) || this.ai.clock - p.hurtByTime > 100)) p.hurtBy = null;
-    const grounded = p.onGround; // b83 attack83: mw.D going into mw.i() (see the jump rule below)
+    // b85 spcopy85: NetHandlerPlayServer.processPlayer's walking branch from the LAST ACCEPTED position (PlayerView.from; server-process-player.js has the offsets): mw.i() moves the copy
+    // there on its own motion, it is put back, `mw.d(delta)` moves it by the packet's difference with collisions (a clipped axis zeroes its motion), the position becomes the packet's, and the
+    // "moved wrongly" test may answer with setPlayerLocation(from) (S08). Only the live host's copy (`packetGround` given, no mount, not asleep) runs it; the replays and probes that set
+    // the copy where the script puts it keep their harness order. A packet farther than 10 blocks is a server-side teleport (/tp, a portal, a bed), which natively moves the copy itself.
+    const grounded = p.onGround; // b83 attack83: mw.D going into mw.i() (the order of a replay's copy, below)
+    const from = p.from, pkt = { x: p.x, y: p.y, z: p.z };
+    const live = p.packetGround !== undefined && !p.riding && !p.sleeping && !!from && quickDelta(pkt, from) <= TOO_QUICKLY;
+    if (live) { p.x = from.x; p.y = from.y; p.z = from.z; }
     const e = serverCopyMove(world, p, w, h);
     this.serverCopyMoved?.(p, e); // b82 mpplace82: EntityPlayer.moveEntityWithHeading's addMovementStat on the copy's own move (server-copy-stat.js)
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
     p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
-    // b83 attack83: NetHandlerPlayServer.processPlayer's walking branch after mw.i() (nh.a(jd) offsets 1008-1060, bytecode-read): `if (mw.D && !jd.i() && d15 > 0) mw.bj()`, then
-    // `mw.D = jd.i()`. The jump is EntityLivingBase.jump's motion (0.42F, Jump Boost, the sprint push); EntityPlayer.jump's stat and exhaustion are movePlayer's, charged once. The host
-    // gives `packetGround` (a test or replay that leaves it out keeps the copy's own flag); the riding and sleeping branches return before this.
-    // Natively mw.i() starts from the last accepted position; this copy already stands at the new packet's (beginTick), so a jump's packet would lift
-    // it off the floor before the test. The test reads mw.D as it went into mw.i() (the last packet's onGround), which the copy's own step from the
-    // accepted position keeps unless its motion lifts it (port-read approximation).
-    if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
-      if (grounded && !p.packetGround && p.packetDy > 0) {
-        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
-        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
-      }
-      p.onGround = p.packetGround;
-    }
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of liveOrder(this, this.entities)) { // b61: frozen entities are in no chunk list
       if (Math.abs(o.x - at.x) <= 12 && Math.abs(o.z - at.z) <= 12 && Math.abs(o.y - at.y) <= 12 && !o.rider?.player && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
       }
+    }
+    // b83 attack83: processPlayer's jump rule after mw.i() (nh.a(jd) offsets 1008-1060, bytecode-read): `if (mw.D && !jd.i() && d15 > 0) mw.bj()`, then `mw.D = jd.i()`. The jump is
+    // EntityLivingBase.jump's motion (0.42F, Jump Boost, the sprint push); EntityPlayer.jump's stat and exhaustion are movePlayer's, charged once. The host gives `packetGround` (a test or
+    // replay that leaves it out keeps the copy's own flag); the riding and sleeping branches return before this. b85: mw.D is the copy's own onGround after mw.i() from the accepted
+    // position (e.onGround); a copy that was set at the packet's position beforehand (a replay) reads the flag it went in with.
+    if (live) {
+      const dx = pkt.x - from.x, dy = pkt.y - from.y, dz = pkt.z - from.z;
+      const clearBefore = !collisionBoxes(world, shrunkBox(from, w, h), e).length; // d28, at the accepted position after the put back
+      if (e.onGround && !p.packetGround && dy > 0) {
+        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
+        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
+      }
+      const sc = { x: from.x, y: from.y, z: from.z, vx: m.x, vy: m.y, vz: m.z, onGround: e.onGround, inWeb: !!e.inWeb, sneaking: !!p.sneaking, player: true, living: true, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
+      moveEntity(world, sc, w, h, dx, dy, dz, 0); // mw.d(d13, d15, d17): stepHeight 0, a clipped axis zeroes its motion
+      m.x = sc.vx; m.y = sc.vy; m.z = sc.vz;
+      p.inWeb = !!sc.inWeb;
+      p.onGround = p.packetGround; // mw.D = jd.i() (offset 1060), before the tests
+      const wrongly = movedWrongly(pkt, sc, { sleeping: false, creative: !!p.creative });
+      p.x = pkt.x; p.y = pkt.y; p.z = pkt.z; // mw.a(d5, d7, d9, ...)
+      const clearAfter = !collisionBoxes(world, shrunkBox(pkt, w, h), sc).length; // d32
+      if (needsCorrection({ clearBefore, wrongly, clearAfter, sleeping: false })) { // setPlayerLocation(o, p, q): S08, the client's position and motion reset, its C06 answers
+        p.x = from.x; p.y = from.y; p.z = from.z;
+        p.sent = { x: from.x, y: from.y, z: from.z }; p.sinceSent = 0;
+        p.corrected = (p.corrected ?? 0) + 1;
+        this.serverCorrect?.(from);
+      }
+    } else if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
+      if (grounded && !p.packetGround && p.packetDy > 0) {
+        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
+        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
+      }
+      p.onGround = p.packetGround;
     }
   }
   // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement

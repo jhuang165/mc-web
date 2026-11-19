@@ -1869,6 +1869,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.afterEntities = () => redstoneRuntime?.tickTiles(); // World.updateEntities: the tile entities (moving piston blocks) update after every entity (b49po)
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.serverCopyMoved = (p, e) => { if (!p.riding && !p.sleeping) chargeServerCopy(mobs.world, p, e, { stats, survival, sprinting: !!motion.sprinting }); }; // b82 mpplace82: the copy's own addMovementStat (server-copy-stat.js)
+    mobs.serverCorrect = (at) => { position.set(at.x, at.y, at.z); previous.copy(position); velocity.set(0, 0, 0); }; // b85 spcopy85: processPlayer's setPlayerLocation (S08) for the integrated server's copy: bjb.a(fu) puts the client at the position and zeroes its motion (bytecode-read)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
