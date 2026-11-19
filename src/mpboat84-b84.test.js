@@ -80,17 +80,34 @@ test("the rider's own boat runs the physics from the input; a near position pack
   assert.deepEqual([c.v.vx, c.v.vz], [0.1, -0.2]);
 });
 
-test("the rider's copy is put back on the server's exact state past two blocks (the port's seat), and returns to plain following when the ride ends", () => {
+// b85 boatseat85: the 2-block snap is gone; the rider sits on the copy, a left boat stays isBoatEmpty false until another attach.
+test("b85: the rider's copy is never put back on the server's state; the seat follows the copy; leaving keeps it running until another rider attaches", () => {
   const world = pool(), rv = new RemoteVehicles(world);
   const st = (x) => ({ v: "b1", x, y: 8.8, z: 20.5, yaw: 0, pitch: 0, own: 1, tx: x, ty: 8.8, tz: 20.5, vs: 0, rs: 0, mx: 0, my: 0, mz: 0 });
   rv.apply({ set: [st(20.5)] }); rv.ride("b1", { yaw: 0 }); rv.tick();
   rv.apply({ set: [st(26.5)] }); rv.tick();
-  assert.ok(Math.abs(rv.copies.get("b1").v.x - 26.5) < 0.5);
-  rv.ride(null);
   const c = rv.copies.get("b1");
-  assert.equal(c.ride, false); assert.equal(c.v.rider, null);
-  rv.apply({ set: [{ v: "b1", x: 30.5, y: 8.8, z: 20.5, yaw: 0, pitch: 0 }] }); rv.tick();
-  assert.equal(c.v.x, 30.5, "a plain state snaps again");
+  assert.ok(Math.abs(c.v.x - 20.5) < 0.5, "far from the server's state, not moved");
+  const seat = rv.seatOf("b1");
+  assert.ok(Math.abs(seat.x - (c.v.x + 0.4)) < 1e-9 && Math.abs(seat.y - (c.v.posY - f(0.3) - 0.5)) < 1e-9);
+  assert.equal(rv.seatOf("c1"), null);
+  rv.ride(null, { yaw: 0 });
+  assert.equal(c.seated, false); assert.equal(c.v.rider, null); assert.equal(rv.seatOf("b1"), null);
+  c.v.vx = 0.3; const x0 = c.v.x;
+  rv.apply({ set: [{ v: "b1", x: 30.5, y: 8.8, z: 20.5, yaw: 0, pitch: 0, bc: 1, vs: 0, rs: 0, mx: 0, my: 0, mz: 0 }] }); rv.tick();
+  assert.equal(c.own, true); assert.ok(c.v.x > x0 && c.v.x < 22, "still running its own physics, not snapped to 30.5");
+  rv.noteRiders([]); rv.noteRiders(["b1"]);
+  assert.equal(c.own, false, "another rider's S1B: isBoatEmpty true again");
+});
+
+test("b85: the own boat clears snow layers and lily pads at its corners on the client world", () => {
+  const world = pool(), rv = new RemoteVehicles(world), seen = [];
+  rv.cleared = (...a) => seen.push(a);
+  world.put(20, 9, 20, 46, 0, false); // snow layer
+  rv.apply({ set: [{ v: "b1", x: 20.5, y: 8.8, z: 20.5, yaw: 0, pitch: 0, own: 1, tx: 20.5, ty: 8.8, tz: 20.5, vs: 0, rs: 0, mx: 0, my: 0, mz: 0 }] });
+  rv.ride("b1", { yaw: 0 }); rv.tick();
+  assert.equal(world.get(20, 9, 20), 0);
+  assert.equal(seen.length, 1);
 });
 
 test("riderRecord: the steering fields the server reads (yaw in degrees, 0.98 scaled forward, negated strafe)", () => {
