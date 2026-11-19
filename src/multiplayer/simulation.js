@@ -23,6 +23,7 @@ import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { LiveRedstone } from '../redstone-live.js';
+import { installResidency } from './server-residency.js'; // b82 mpcmd82
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
 import { ServerChunkSets } from './server-chunks.js';
@@ -198,6 +199,7 @@ export class DedicatedSimulation {
     this.weather.fire = this.fire.strikes;
     this.chunkSets = new ServerChunkSets(this, this.rules.viewDistance); this.weather.activeChunkSource = this.chunkSets.sourceFor(0); // b67 serverchunks: random ticks, ice, snow and lightning only in the players' chunks
     this.chunkViews = new ServerChunkViews(this); // b71 mpchunks: per-player columns follow the view distance (server-chunk-view.js)
+    if (options.residency === true) installResidency(this); // b82 mpcmd82: optional; scheduled block ticks only in natively loaded columns (spawn area, watched squares; server-residency.js)
     this.lightning = new ServerLightning(this); // b66 mplightning: bolt damage and the boltSpawn packet (server-lightning.js)
     this.farming.sharedRandomTicks = true; this.farming.random = this.farming.stemRandom = this.weather.random; // b68 chunkscan2: farmland, crops and stems tick with the other random blocks over the active chunks
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.farming.randomTick(x, y, z, b);

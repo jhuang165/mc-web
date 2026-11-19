@@ -72,8 +72,10 @@ export class LiveRedstone extends RedstoneWorld {
   }
   // WorldServer.tickUpdates runs a due entry whose own chunk exists (b0 = 0): resident cells, or ring cells whose column and its
   // eight neighbours are held (HeadlessColumns.blockTicks), so the update never reads a missing column as air.
+  // b82 mpcmd82: an optional server residency (World.tickResident, multiplayer/server-residency.js) holds back the entries of columns native would have unloaded.
   tickable(x, y, z) {
     const w = this.world;
+    if (w.tickResident && !w.tickResident(x, z)) return false;
     return w.inside(x, y, z) && (w.isLoaded(x, z) || (w.ringReads && !!w.ringSink?.blockTicks(x, z)));
   }
   // Block events (BlockPistonBase) and the tile-entity loop (TileEntityPiston) have no neighbour chunk test of their own: the tile loop
