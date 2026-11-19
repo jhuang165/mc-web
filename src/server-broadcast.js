@@ -141,15 +141,17 @@ export class ServerSocial {
     if (sim.admin.handles(line)) {
       const live = () => [...sim.players.values()];
       return sim.admin.run(line, { sender: sender.name, level: this.opLevel(sender.name), deliver: (name, c) => this.toPlayer(name, chatMessage(c)),
-        ops: () => live().filter((p) => this.isOp(p.name)).map((p) => p.name), online: () => live().map((p) => ({ id: p.id, name: p.name, uuid: p.resumeKey })) });
+        ops: (need = 0) => live().filter((p) => this.isOp(p.name) && this.opLevel(p.name) >= need).map((p) => p.name), online: () => live().map((p) => ({ id: p.id, name: p.name, uuid: p.resumeKey })) });
     }
     const to = (name, message) => out.push({ to: name, message });
     const records = roster.map((r) => ({ name: r.name, position: () => r.position, mode: r.mode, level: 0 }));
-    const rights = (name) => this.isOp(name);
+    // b85 dedtab85: the notice reaches an op only when its permission level also reaches the running command's (CommandBase.func_152373_a: aa.a(receiver), executed).
+    let running = null;
+    const rights = (name) => this.isOp(name) && this.opLevel(name) >= (running?.permission ?? 0);
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
     const host = Object.assign(Object.create(forPlayer(sender.name)), {
       name: sender.name, playerName: sender.name, cheats: op, scoreboard: sim.scoreboard, // b64 mpscoreboard: /scoreboard acts on the shared board
-      canUse: (command) => (op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false)), // b68: op level; b84 dedicated84: /list is op-only for a player on a dedicated server (mw.a, executed), no longer open to everyone
+      canUse: (command) => (running = command, op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false)), // b68: op level; b84 dedicated84: /list is op-only for a player on a dedicated server (mw.a, executed), no longer open to everyone
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },

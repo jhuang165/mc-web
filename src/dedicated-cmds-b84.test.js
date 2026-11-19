@@ -14,7 +14,8 @@ import { langReady } from "./chat-component.js";
 await langReady;
 const ref = JSON.parse(await readFile(new URL("../public/research/dedicated-cmds-reference.json", import.meta.url)));
 const uuid = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
-const IPS = { Alex: "10.0.0.1", Steve: "10.0.0.2", Eve: "10.0.0.2" };
+const IPS = { Alex: "10.0.0.1", Steve: "10.0.0.2", Eve: "10.0.0.2", Ivy: "10.0.0.5", Kay: "10.0.0.6", Lou: "10.0.0.7" };
+const NAMES = ["Alex", "Steve", "Eve", "Ivy", "Kay", "Lou"];
 const DATE = /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d [+-]\d{4}$/;
 const mask = (rows) => rows.map((r) => ({ ...r, ...(r.created !== undefined ? { created: DATE.test(r.created) ? "<date>" : r.created } : {}) }));
 
@@ -24,13 +25,16 @@ function build(setup, sender) {
   const sim = new DedicatedSimulation({}, { world }), inbox = {}, ids = {};
   const social = new ServerSocial({ simulation: sim, ops: [], deliver: (id, m) => (inbox[id] ??= []).push(m) });
   const log = { kicks: [], stops: 0, saves: 0 };
-  ["Alex", "Steve", "Eve"].forEach((n, i) => { ids[n] = `p${i}`; sim.addPlayer(`p${i}`, n, uuid(i + 1)); });
+  // "levels" (b85 dedtab85): Ivy op 1, Eve op 2, Kay op 3, Lou op 4 watch every command (uuids 5, 3, 6, 7 as the probe)
+  const roster = setup === "levels" ? [["Alex", 1], ["Steve", 2], ["Eve", 3], ["Ivy", 5], ["Kay", 6], ["Lou", 7]] : [["Alex", 1], ["Steve", 2], ["Eve", 3]];
+  roster.forEach(([n, u], i) => { ids[n] = `p${i}`; sim.addPlayer(`p${i}`, n, uuid(u)); });
   const admin = sim.admin;
   admin.host = { kick: (id, r) => log.kicks.push(`${Object.keys(ids).find((k) => ids[k] === id)}:${r}`), ipOf: (id) => IPS[Object.keys(ids).find((k) => ids[k] === id)], stop: () => log.stops++, save: () => { log.saves++; sim.save(); return Promise.resolve(); } };
   admin.directory = (name) => (name.toLowerCase() === "herobrine" ? { uuid: uuid(4), name: "Herobrine" } : null);
   admin.ops.set(uuid(1), { uuid: uuid(1), name: "Alex", level: 4 });
-  if (sender === "eve") admin.ops.set(uuid(3), { uuid: uuid(3), name: "Eve", level: 2 });
-  if (setup === "lists") {
+  if (sender === "eve" || setup === "levels") admin.ops.set(uuid(3), { uuid: uuid(3), name: "Eve", level: 2 });
+  if (setup === "levels") for (const [n, u, level] of [["Ivy", 5, 1], ["Kay", 6, 3], ["Lou", 7, 4]]) admin.ops.set(uuid(u), { uuid: uuid(u), name: n, level });
+  if (setup === "lists" || setup === "levels") {
     const entry = (extra) => ({ created: "2026-01-01 00:00:00 +0000", expires: "forever", ...extra });
     admin.bans.set(uuid(2), { uuid: uuid(2), name: "Steve", ...entry({ source: "Console", reason: "griefing" }) });
     admin.bans.set(uuid(9), { uuid: uuid(9), name: "Notch", ...entry({ source: "Alex", reason: "Banned by an operator." }) });
@@ -41,9 +45,9 @@ function build(setup, sender) {
     admin.ops.set(uuid(9), { uuid: uuid(9), name: "Notch", level: 3 });
     admin.seen(uuid(9), "Notch");
   }
-  if (setup === "lists") { sim.savedPlayers.set(uuid(2), {}); sim.savedPlayers.set(uuid(9), {}); }
+  if (setup === "lists" || setup === "levels") { sim.savedPlayers.set(uuid(2), {}); sim.savedPlayers.set(uuid(9), {}); }
   if (setup === "saveoff") admin.autosave = false;
-  const who = sender === "steve" ? "Steve" : sender === "eve" ? "Eve" : "Alex";
+  const who = NAMES.find((n) => n.toLowerCase() === sender) ?? "Alex";
   for (const k of Object.keys(inbox)) delete inbox[k];
   return { sim, social, admin, inbox, ids, who, log };
 }
@@ -57,7 +61,7 @@ async function observe([line, setup, sender]) {
   await f.admin.pending; // /save-all's completion line
   await new Promise((r) => setImmediate(r)); // /stop defers host.stop() one tick
   const chat = {};
-  for (const n of ["Alex", "Steve", "Eve"]) chat[n] = (f.inbox[f.ids[n]] ?? []).filter((m) => m.type === "chat").map((m) => [styled(m), plain(m)]);
+  for (const n of Object.keys(f.ids)) chat[n] = (f.inbox[f.ids[n]] ?? []).filter((m) => m.type === "chat").map((m) => [styled(m), plain(m)]);
   const s = f.admin.save();
   return { chat, state: { ops: mask(s.ops), banned: mask(s.banned), ips: mask(s.bannedIps), whitelist: s.whitelist, whitelistOn: f.admin.whitelistOn, idle: s.idleMinutes, saving: f.admin.autosave, saveCalls: f.log.saves, dat: f.sim.savedPlayers.size, kicks: f.log.kicks, stops: f.log.stops, profiles: f.admin.profileNames() } };
 }
@@ -90,3 +94,15 @@ for (const [word, group] of byGroup) {
     assert.equal(bad.length, 0, `${bad.length} of ${group.length} rows differ:\n${bad.slice(0, Number(process.env.SHOW ?? 3)).join("\n---\n")}`);
   });
 }
+
+// Batch 85 dedtab85: the 64 recorded tab rows (CommandHandler.getPossibleCommands on the real command classes) replayed through the port's socialTabComplete (Alex, op 4).
+test(`dedicated tab completion: ${ref.tab.length} executed rows`, async () => {
+  const { socialTabComplete } = await import("./multiplayer/server-tabcomplete.js");
+  const bad = [];
+  for (const [text, setup, want] of ref.tab) {
+    const f = build(setup, "alex");
+    const got = socialTabComplete(f.social, f.ids.Alex, "/" + text);
+    if (!isDeepStrictEqual(got, want ?? [])) bad.push(`${JSON.stringify([text, setup])} port ${JSON.stringify(got)} native ${JSON.stringify(want)}`);
+  }
+  assert.equal(bad.length, 0, bad.join("\n"));
+});

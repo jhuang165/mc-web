@@ -126,10 +126,10 @@ export class ServerAdmin {
     while (parts.length && parts[parts.length - 1] === '') parts.pop(); // String.split drops trailing empty strings
     const word = parts.shift(), args = parts, need = ADMIN_COMMANDS[word];
     const print = (c) => ctx.deliver(ctx.sender, c);
-    // CommandBase.func_152373_a: the sender's line, and chat.type.admin (gray italic) to every other op.
+    // CommandBase.func_152373_a: the sender's line, and chat.type.admin (gray italic) to every other op whose level reaches the command's (b85 dedtab85, executed).
     const feedback = (key, ...a) => {
       const c = translation(key, ...a); print(c);
-      for (const o of ctx.ops()) if (o !== ctx.sender) ctx.deliver(o, grayItalic(translation('chat.type.admin', ctx.sender, c)));
+      for (const o of ctx.ops(need)) if (o !== ctx.sender) ctx.deliver(o, grayItalic(translation('chat.type.admin', ctx.sender, c)));
     };
     try {
       if (!(ctx.level >= need)) throw new Fail('commands.generic.permission');
