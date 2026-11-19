@@ -253,8 +253,10 @@ export class Hanging {
       kind: e.kind, dir: e.dir, tx: e.tx, ty: e.ty, tz: e.tz, x: e.x, y: e.y, z: e.z, art: e.kind === "painting" ? ARTS[e.art][0] : undefined,
       item: e.item ? structuredClone(e.item) : undefined, rotation: e.kind === "frame" ? e.rotation : undefined,
       dropChance: e.kind === "frame" && e.dropChance !== 1 ? e.dropChance : undefined,
+      fire: Number.isInteger(e.fire) && e.fire !== 0 ? e.fire : undefined, // b84 cmdfix84
     }));
   }
+  withFire(e, r) { if (Number.isInteger(r.fire)) e.fire = Math.max(-32768, Math.min(32767, r.fire)); return e; } // b84 cmdfix84: Entity's Fire, kept as saved
   // Rebuild entities from saved records (old saves have none). Unknown arts become Kebab (readEntityFromNBT).
   load(records) {
     this.entities = [];
@@ -262,12 +264,12 @@ export class Hanging {
       if (!r || !Number.isInteger(r.dir) || r.dir < -128 || r.dir > 127 || ![r.tx, r.ty, r.tz].every(Number.isInteger)) continue;
       if (r.kind === "painting") {
         const art = artIndex(r.art);
-        this.entities.push(this.make("painting", r.dir, r.tx, r.ty, r.tz, { art: art < 0 ? 0 : art }));
+        this.entities.push(this.withFire(this.make("painting", r.dir, r.tx, r.ty, r.tz, { art: art < 0 ? 0 : art }), r));
       } else if (r.kind === "frame") {
-        this.entities.push(this.make("frame", r.dir, r.tx, r.ty, r.tz, {
+        this.entities.push(this.withFire(this.make("frame", r.dir, r.tx, r.ty, r.tz, {
           item: r.item?.count ? structuredClone(r.item) : null, rotation: ((Number(r.rotation) || 0) % 4 + 4) % 4,
           dropChance: Number.isFinite(r.dropChance) ? r.dropChance : 1,
-        }));
+        }), r));
       }
     }
     return this;

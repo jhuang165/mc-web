@@ -1,4 +1,5 @@
 import { applySetblockTag } from "./setblock-tags.js"; // b83 plants83
+import { JUKEBOX_ID } from "./jukebox.js"; // b84 cmdfix84
 import { itemComponent, originalStack } from "./item-component.js";
 import { readCommandBlock, writeCommandBlock } from "./command-block.js";
 // Connects the command engine (commands.js) to the running game. main.js passes accessors for its live state (`env`), so
@@ -111,7 +112,7 @@ export function createCommandHost(env) {
       else { w.rainTime = ticks; w.thunderTime = ticks; w.raining = true; w.thundering = true; }
       env.changed();
     },
-    teleport(x, y, z) { env.teleport(x, y, z); },
+    teleport(x, y, z, look) { env.teleport(x, y, z, look); }, // look: the target player's { yaw, pitch } (game radians) for /tp <player> <target>
     // /tellraw output goes to the player even when a command block runs it (EntityPlayerMP.addChatComponentMessage).
     printPlayer: (component) => printChat(component),
     get achievements() { return env.achievements?.(); },
@@ -210,7 +211,11 @@ export function createCommandHost(env) {
           return { other: true, vehicle: r.vehicle };
         }
         if (!mobs) return null;
-        if (!nbt) { mobs.spawnNatural(type, x, y, z); return { other: true }; }
+        if (!nbt) { // CommandSummon builds an empty compound with the id and runs Entity.readFromNBT on it, so the untagged mob also has Air 0 (b84 cmdfix84, bytecode-read bu.b; EntityLivingBase.onEntityUpdate restores 300 out of water)
+          const born = mobs.spawnNatural(type, x, y, z);
+          if (born && typeof born === "object") born.air = 0;
+          return { other: true };
+        }
         const parsed = summonedMobRecord(type, nbt, { convertItem });
         if (!parsed) return null;
         const mob = mobs.restore({ ...parsed.record, x, y, z }, { summoned: true });
@@ -252,6 +257,8 @@ export function createCommandHost(env) {
       if (w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
       // b82 pots82: World.setBlock runs the old block's breakBlock on the server even for the same block with another metadata (Chunk.func_150807_a, apx.a;
       // bytecode-read), so a replaced pot drops its stored stack (BlockFlowerPot.breakBlock, ald.a) and its tile entity goes (BlockContainer.breakBlock).
+      // b84 cmdfix84: BlockJukebox.breakBlock (dropRecord, bytecode-read) also runs in this setBlock, so a loaded jukebox ejects its disc (item entity, stop-record) before the new block goes in.
+      if (old !== 0 && old === fromOriginal(JUKEBOX_ID, 0)?.id) env.music?.()?.jukeboxes?.eject?.(x, y, z);
       const potHeld = w.get(x, y, z) === FLOWER_POT ? potBreakDrop(w, x, y, z) : null;
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       if (potHeld) { w.pots?.delete(potKey(x, y, z)); if (potHeld.id) env.dropStacks?.([potEntryStack(potHeld, makeStack)], x, y, z); }
@@ -282,6 +289,8 @@ export function createCommandHost(env) {
         if (id === 'Chest') settleFacing(w, stores.chests, x, y, z);
         this.ignoredTagKeys = loaded.ignored;
       } else if (tag) this.ignoredTagKeys = applySetblockTag(original, x, y, z, tag, { world: w, signs: env.signs?.(), music: env.music?.(), comparators: env.comparators?.() }) ?? [...tag.keys()]; // b83 plants83: pot, sign, note, jukebox, comparator (setblock-tags.js)
+      // b84 cmdfix84: the sign set over a sign with another metadata is a fresh tile (breakBlock removed the old one): empty lines, editable again, unless the tag above read it.
+      if (!tag && (original === 63 || original === 68) && old === cell.id) env.signs?.()?.create(x, y, z);
       // TileEntityEnderChest holds no items (they live with the player); it only needs the lid state the renderer draws.
       if (original === 130) (stores.enderTiles ??= {})[key] ??= newEnderTile(); else if (stores.enderTiles) delete stores.enderTiles[key];
       env.updateBlock(x, y, z);
@@ -300,6 +309,7 @@ export function createCommandHost(env) {
       const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing, lit: (survival().furnaces?.[key]?.burn ?? 0) > 0 });
       return { id: o?.[0] ?? 0, meta: o?.[1] ?? 0 };
     },
+    setLook(yaw, pitch) { env.setLook?.(yaw, pitch); }, // a dedicated server's S08 rotation (player-op.js)
     playSound(name, x, y, z, volume, pitch) { env.playSound?.(name, x, y, z, volume, pitch); },
   };
 }

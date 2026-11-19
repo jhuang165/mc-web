@@ -153,6 +153,7 @@ export class ServerSocial {
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
+      lookOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { yaw: p.yaw, pitch: p.pitch } : undefined; }, // b84 cmdfix84: /tp <player> <target> copies the target's rotation
       dimensionOf: (name) => sim.players.get(this.idOf(name))?.dimension ?? 0, // b82 commands82: /tp between players in two dimensions
       seed: () => sim.world.seed,
       print: (t, c) => to(sender.name, c ?? t),
@@ -189,7 +190,7 @@ export class ServerSocial {
     return {
       position: () => ({ x: p.position.x, y: p.position.y, z: p.position.z }),
       playerMode: () => (p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0),
-      teleport: (x, y, z) => { if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; }, // b83 cmdexec83: CommandTeleport mountEntity(null) first (executed)
+      teleport: (x, y, z, look) => { if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; if (look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch)) { p.yaw = look.yaw; p.pitch = look.pitch; op("look", look.yaw, look.pitch); } }, // b84 cmdfix84: S08 carries the target's yaw and pitch (/tp <player> <target>) // b83 cmdexec83: CommandTeleport mountEntity(null) first (executed)
       setGameMode: (mode) => { p.survival.mode = mode; p.survival.inventory.creative = p.survival.creative; if (!p.survival.creative) p.flying = false; op("setGameMode", mode); },
       kill: () => { op("kill"); (sim.events ??= []).push({ type: "death", id }); },
       give: (original, count, damage, tag) => {

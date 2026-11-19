@@ -169,7 +169,8 @@ test("/setblock flower_pot reads Item and Data into the pot (a fresh tile: missi
   assert.deepEqual(g.dropped.map((s) => [s.id, s.rawDamage]), [[RED_FLOWER, 12]], "the replaced pot dropped its plant");
   assert.deepEqual(potContents(g.world, 5, 60, 5), { id: 48, damage: 0 }, "Data missing reads 0: an oak sapling");
   g.run("/setblock 6 60 5 flower_pot 0 replace {Item:0,Data:3}");
-  assert.equal(g.world.pots.has("6,60,5"), false, "Item 0 names no item: an empty pot");
+  // b84 cmdfix84 (updated: this used to assert no record): the tag read leaves an explicitly empty tile, so the metadata's plant (meta 0 here has none anyway) is not shown.
+  assert.equal(potContents(g.world, 6, 60, 5), null, "Item 0 names no item: an empty pot");
   const out = g.run("/setblock 7 60 5 flower_pot 0 replace {Item:37,Foo:1,x:99}");
   assert.deepEqual(potContents(g.world, 7, 60, 5), { id: YELLOW_FLOWER, damage: 0 });
   assert.match(out.join("\n"), /Not kept in this build: Foo$/m);

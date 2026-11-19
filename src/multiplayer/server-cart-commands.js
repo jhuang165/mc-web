@@ -61,6 +61,7 @@ export function runCommandLogic(social, tile, pos, { commands, chatMessage, dim 
     name: near?.name ?? '', playerName: near?.name ?? '', cheats: true, unsupported: { has: n => !commands.has(n) },
     players: () => records, forPlayer,
     positionOf: name => { const p = sim.players.get(social.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
+    lookOf: name => { const p = sim.players.get(social.idOf(name)); return p ? { yaw: p.yaw, pitch: p.pitch } : undefined; }, // b84 cmdfix84: /tp <player> <target> copies the target's rotation
     seed: () => sim.world.seed,
     print: (t, c) => toOps(c ?? t), broadcast: (t, c) => { for (const r of records) social.toPlayer(r.name, wire(chatMessage, c ?? t)); },
     deliver: (name, t, c) => social.toPlayer(name, wire(chatMessage, c ?? t)), feedback: (t, c) => toOps(c ?? t),

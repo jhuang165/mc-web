@@ -244,6 +244,7 @@ export class Fireballs {
       kind: b.kind, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, ax: b.ax, ay: b.ay, az: b.az, ticks: b.ticks, dimension,
       ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
       ...(b.owner === "player" ? { owner: "player" } : b.owner?.id ? { owner: b.owner.id } : {}),
+      ...(Number.isInteger(b.fire) && b.fire !== 0 ? { fire: b.fire } : {}), // b84 cmdfix84: Entity.writeToNBT's Fire (20 after the first update: ze.h setFire(1))
       rotation: [b.yaw ?? 0, b.pitch ?? 0], // b82 fireext82: Entity.writeToNBT's Rotation, which every entity writes (render81 had it for the skulls only)
     }));
   }
@@ -267,6 +268,7 @@ export class Fireballs {
       const ball = this.build({ ...r, ax: ok(r.ax) ? r.ax : 0, ay: ok(r.ay) ? r.ay : 0, az: ok(r.az) ? r.az : 0 });
       if (ok(r.ticks)) ball.ticks = Math.max(0, r.ticks | 0);
       if (r.blue === true) ball.blue = true;
+      if (Number.isInteger(r.fire) && r.fire !== 0) ball.fire = Math.max(-32768, Math.min(32767, r.fire)); // b84 cmdfix84
       ball.owner = r.owner === "player" ? "player" : typeof r.owner === "string" ? this.mobs.entities.find((e) => e.id === r.owner) ?? null : null;
       this.list.push(ball);
     }

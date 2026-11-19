@@ -212,17 +212,22 @@ export function potFromNbt(tag, itemOf = null) {
 // The colour RenderBlocks.func_147752_a multiplies the plant by: Block.colorMultiplier of the plant at the pot's cell. Only BlockTallGrass (anz.d, bytecode-read)
 // is not white, and it reads the cell metadata, i.e. the POT's: metadata 0 is white, anything else the biome grass colour. Returns true for the grass tint.
 export const potPlantTinted = (content, potMeta) => !!content && potPlantOf(content.id, content.damage)?.[0] === 31 && (potMeta & 15) !== 0;
+// b84 cmdfix84: a pot tile whose readFromNBT left Item 0 (or an unregistered id). BlockFlowerPot.createNewTileEntity (ald.a(ahb,I), bytecode-read) makes the tile from the
+// block metadata's plant, so an untagged /setblock keeps the meta plant; a tag with no registered Item reads over it and leaves the tile empty whatever the metadata is.
+export const EMPTY_POT = Object.freeze({ id: 0, damage: 0, empty: true });
 export const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
 export function potContents(world, x, y, z) {
   const rec = world.pots?.get(potKey(x, y, z));
-  return rec ?? potContentsOfMeta(world.getMeta(x, y, z));
+  if (rec) return rec.empty ? null : rec; // b84 cmdfix84: an explicitly empty tile (EMPTY_POT) hides the metadata's plant
+  return potContentsOfMeta(world.getMeta(x, y, z));
 }
 const validStack = (s) => !!s && Number.isInteger(s.id) && s.id > 0 && Number.isInteger(s.damage) && (s.rawDamage === undefined || (Number.isInteger(s.rawDamage) && s.rawDamage > 0));
 // b81: a stored pot record (save, population hand-off, S35 description) is either a drawn plant or an undrawn registered item.
-export const validPotRecord = (p) => !!p && (Number.isInteger(p.item) ? nativeItemRegistered(p.item) && Number.isInteger(p.data) : !!potPlantOf(p.id, p.damage));
+export const validPotRecord = (p) => !!p && (p.empty === true || (Number.isInteger(p.item) ? nativeItemRegistered(p.item) && Number.isInteger(p.data) : !!potPlantOf(p.id, p.damage)));
 // A copy of a record with only the fields above (the drop stack copied too).
 function potRecord(content) {
+  if (content.empty) return { id: 0, damage: 0, empty: true };
   if (Number.isInteger(content.item)) {
     const s = content.stack;
     return { id: 0, damage: 0, item: content.item, data: content.data | 0, ...(validStack(s) ? { stack: { id: s.id, damage: s.damage, ...(s.rawDamage ? { rawDamage: s.rawDamage } : {}) } } : {}) };

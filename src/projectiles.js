@@ -699,7 +699,7 @@ export class Projectiles {
       if (b.kind === "enderPearl" && b.owner != null && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
       return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
         ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}),
-        ...(b.fire > 0 ? { fire: b.fire } : {}) }; // b80 fluids80: Entity.writeToNBT's Fire
+        ...(b.fire ? { fire: b.fire } : {}) }; // b84 cmdfix84: any nonzero short; b80 fluids80: Entity.writeToNBT's Fire
     });
   }
   load(list) {
@@ -710,7 +710,7 @@ export class Projectiles {
       if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player" || d.owner === undefined)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
         const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
-        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire > 0 ? { fire: Math.min(32767, d.fire) } : {}) });
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}) }); // b84 cmdfix84: a negative counter too
       }
     }
   }

@@ -28,7 +28,7 @@ import { SKULL } from "./skull.js";
 import { BEACON } from "./pyramid.js";
 import { MOB_SPAWNER, FLOWER_POT } from "./world.js";
 import { spawnerJSON } from "./mob-spawner.js";
-import { potContents, setPotContents, validPotRecord } from "./stone-utility.js";
+import { potContents, setPotContents, validPotRecord, potKey, EMPTY_POT } from "./stone-utility.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { newChest } from "./chest.js";
 import { COMMAND_BLOCK, newCommandBlock, normalizeLastOutput } from "./command-block.js"; // b80 mpcmd80
@@ -55,12 +55,13 @@ const potOf = (world, x, y, z) => {
   const c = potContents(world, x, y, z), extra = {};
   if (c && Number.isInteger(c.data)) extra.data = c.data;
   if (c && Number.isInteger(c.item)) { extra.item = c.item; if (c.stack) extra.stack = { ...c.stack }; }
+  if (!c && world.pots?.get(potKey(x, y, z))?.empty) extra.empty = true; // b84 cmdfix84: an explicitly empty tile (the replica must not fall back to the metadata's plant)
   return { kind: "pot", action: TILE_ACTION.pot, x, y, z, id: c?.id ?? 0, damage: c?.damage ?? 0, ...extra };
 };
 // The client's side of a pot description (apf.a(dh) into the tile at the cell). A record neither drawn nor a registered item is an empty pot (Item 0).
 export function applyPotTile(world, t) {
   const rec = Number.isInteger(t.item) ? { item: t.item, data: t.data, stack: t.stack } : { id: t.id, damage: t.damage | 0, ...(Number.isInteger(t.data) ? { data: t.data } : {}) };
-  setPotContents(world, t.x, t.y, t.z, validPotRecord(rec) ? rec : null);
+  setPotContents(world, t.x, t.y, t.z, t.empty === true ? EMPTY_POT : validPotRecord(rec) ? rec : null);
 }
 
 // Batch 60 (mpcontainers2): the 1.7.10 client makes a TileEntityChest from the block alone (the chunk packet has no chest tile; facing is the block's
