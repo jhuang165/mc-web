@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 83 (2026-11-18, ten tracks in `../wt83-<name>` on `batch83-<track>`, cut from 786c05f67, merged --no-ff on `batch83-lead`; shared rules `../artifacts/b83-lead/track-rules.md`; lead note `b83-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.112.0, by track (details in the `*-b83-track.md` notes and "Done in batch 83" in `public/research/remaining-gaps.md`):
+  - mppiston83: `multiplayer/server-redstone-drops.js` server redstone drop hook; `redstone-drops.js` `crushDrops` per block class; doTileDrops inside the drop; single-player spread fixed.
+  - cmdblock83: /gamemode's skip-sender flag honoured for LastOutput; the "You must specify which player" literal for blocks; comparator preview reads SuccessCount.
+  - rain83: `entity-wet.js` (`rainedOn`, `entityWet`, `wetFizz`) for rockets, TNT, items, orbs, carts, arrows, wolves, endermen.
+  - blastorder83: one native-order blast entity list (`orderTargets`, `walkedY`); executed `BlastOrderProbe`; away blasts reach carts and boats.
+  - corpse83: `corpse-living.js`; potions, revenge lapse, squid, enderman, wither, wolf, snowman corpse updates; executed `CorpseLivingProbe`.
+  - attack83: `slowServerAttacker`, client slowdown only where the client target lands; crystal hits; single-player jump rule; sleeping 0.2 box; C08 255 after entity refusals.
+  - tracker83: items and orbs S12 (`vc`), boats on the cart tracker, the 4-block range re-check, `fireball-splash.js`.
+  - mpperf83: `mpperf83-fast.js` behind `MC_MPPERF83=on|off|verify`; two-part JavaRandom seed; 12 to 16 % less heap growth.
+  - plants83: dandelion, shrub and double plant metadata; `setblock-tags.js`; away-world `dropStacks`.
+  - cmdexec83: executed `CmdExec83Probe` replayed in `cmd-exec-b83.test.js`; /kill, /clear, /tp dismount, y limits, /achievement, /summon tags fixed.
+- Lead fixes: the b42 enderman replay host gives rain83's `mobs.wet` hook; its creeper blast runs in the probe world's flat list order (`candidateOrder.flat`), since that test double answers entity queries from one list.
+- Verification: one full `npm test` on ab77d39fb: 9311 tests, 9308 pass, 3 fail (the creeper replays, fixed in 394803b06; every test on that host plus blastorder83 then 494/494). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 83" in `public/research/remaining-gaps.md`.
+
 Batch 82 (2026-11-18, ten tracks in `../wt82-<name>` on `batch82-<track>`, cut from 3b99e1bd4, merged --no-ff on `batch82-lead`; shared rules `../artifacts/b82-lead/track-rules.md`; lead note `b82-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.111.0, by track (details in the `*-b82-track.md` notes and "Done in batch 82" in `public/research/remaining-gaps.md`):
   - spblast82: ghast ball and wither spawn blasts inline; unseeded flaming fire roll; `explosion-extras.js` pushes rockets, eyes, hooks, fireballs and breaks knots; server `explodeNonLiving` pushes items, orbs, carts.

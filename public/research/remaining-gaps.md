@@ -2,6 +2,36 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 83
+
+Batch 83 covered these areas:
+- **Redstone drops.** The dedicated server's redstone now drops items (pistons, pot plants, components losing support, nether wart), into the dimension's own item list, with `doTileDrops` applied inside the drop. A crushed block drops what its 1.7.10 class drops, with the same draws (no more "Water" item or bad bed and skull ids), and single-player piston drops no longer get a second spread.
+- **Command blocks.** /gamemode from a block or cart no longer becomes its LastOutput, and the target's own line reaches the target. Player commands run without a player from a block give "You must specify which player you wish to perform this action on." The multiplayer comparator preview reads the synced SuccessCount; the GUI shows the command in Previous Output when there is no output yet.
+- **Rain.** One `isWet` (water or `canLightningStrikeAt` at the feet or head cell) is used by rockets, primed TNT, items, XP orbs, minecarts, arrows, wolves and endermen, in single player, the away run and the server: burning TNT, rockets and carts fizz out. The minecart fire counter already existed; native never sends a cart's flames.
+- **Explosion order.** A blast fetches one list of every entity kind once, in native chunk-list order, and damages and pushes each in turn (executed, `BlastOrderProbe`: 400 scenes, 0 mismatches, nested crystal blasts included). The away run's blasts reach carts and boats.
+- **Corpses.** A dying mob runs the potion countdown, the revenge lapse, its water flag and splash, and the squid, enderman, wither, wolf and snow golem living updates (executed, `CorpseLivingProbe`, for the squid and enderman). The iron golem's counters already ran.
+- **Attacks and placement.** The attacker's own motion slows by 0.6 only where the client's target returns true (players, dragon parts, crystals, carts, boats); a sprint hit on a mob only stops the sprint. Crystal hits skip crits, enchantments and wear. Single player's server copy gets the jump rule and the sneak, fly and ride state; sleeping players use a 0.2 × 0.2 box; a place refused for entities sends an item use (C08 255); the dedicated server copy has riding and sleeping branches.
+- **Multiplayer tracking.** Blast-pushed items and orbs send S12 to every tracking player; boats use the cart tracker (range 80, frequency 3, velocity, 1/32 steps, the 400-tick teleport) and coast on the client; vehicles drop out of range on the native 4-block re-check (executed vehicle records replay exactly). Fireballs and skulls splash on entering water.
+- **Plants and /setblock tags.** Dandelion, shrub and double plant metadata survive placement, drops, pick and saves; shears and explosions drop the right plants. /setblock applies tags to flower pots, signs, note blocks, jukeboxes and comparators, in single player, the server and the away world, where a replaced pot now drops its plant.
+- **Commands executed.** `CmdExec83Probe` ran /kill, /tp, /clear, the height checks, /achievement and 171 /summon rows on the real classes. Fixes: /kill's message, /clear's matcher, data check and cursor stack, the /tp dismount, the ±30000000 y limit and /summon's truncation, and /summon tags (Fire, OnGround, FallDistance, Air; the dragon and crystal with a tag).
+- **Server speed.** Behind `MC_MPPERF83=on|off|verify` (identical hashes): an exact two-part JavaRandom seed (5 ns a draw instead of 35), frozen per-type sizes, reused push boxes, one player-position shape: 12 to 16 % less heap growth per tick; wall time within noise.
+
+Still open from batch 83:
+- **Multiplayer.**
+  - Boat copies have no splash; the rider's own boat physics; a late joiner gets the last released vehicle state. Rockets, eyes, arrows, thrown balls and hooks have no tracker cadence on the wire.
+  - Only entity refusals send C08 255; occupied and support refusals still send the block edit.
+  - Carpet losing support has no server version; skulls drop only on a piston or player break. The Creative-server "no drops" rule is the port's, not 1.7.10's.
+  - Server commands: /publish stays off; the 15 dedicated-server-only rows are not executed. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: blast-thrown items and boats, boat coasting, fireball splashes, the comparator preview, server piston drops, plus the batch 67 to 82 lists.
+- **Single player.**
+  - A live zombie whose conversion ends skips the rest of its update; an enderman corpse is not teleported by a projectile hit (native has no health test there). Wither head particles use a visual random.
+  - Arrows do not flag a velocity change on a blast hit; the dragon is one list entry, not its parts.
+  - Boats, hooks and falling blocks get no rain in their move step; item and orb fizz plays at posY, not the feet.
+  - /tp to a player keeps the player's own rotation; several kinds keep no fire counter for /summon tags; an empty pot with a non-zero meta shows that meta's plant.
+  - Not seen in a browser: the corpse animations, rain fizzes, the sprint feel, sleeping-player placement, shrub tints, sunflower facing, plus the batch 82 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 82
 
 Batch 82 covered these areas:
@@ -16,23 +46,7 @@ Batch 82 covered these areas:
 - **Flower pots and Mining Fatigue.** Every way of removing a pot drops what it held (explosions, wither, dragon, water and lava, buckets, pistons, /setblock). `rawDamage` pots pick, save, sync and place correctly; exploded saplings keep their type. Under Mining Fatigue V the crack stage is `(int)(p * 10) - 1` and the meter never shows NaN.
 - **Server speed.** Behind `MC_MPPERF82=on|off|verify` (identical results): a pruned `nearestView` scan, cached chunk keys, reused motion buffers and piston walks in place; travel allocation fell from 1293 to 1161 MB sampled.
 
-Still open from batch 82:
-- **Multiplayer.**
-  - Server pistons drop nothing (no drop hook in server redstone). Command blocks running /gamemode still record the success line; the "You must specify which player" text for blocks is unused. The client's comparator prediction reads 0 for a command block.
-  - Residency (flag on only): chunks loaded on demand, the autosave, tile entities and the Nether and End lanes are not modelled.
-  - Whether each server tracker lane sends S12 for a blast push is unchecked; carts and boats reach clients only through the `vehicles` message.
-  - The splash when a fireball enters water; a sleeping remote player blocks placement as 0.6 × 1.8 (native 0.2 × 0.2); a refused place still sends the port's `edit` message.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: fireball flames and turning copies, blast pushes of items and carts, the double crit burst, placement swings, plus the batch 67 to 81 lists.
-- **Single player.**
-  - Blasts still push kind by kind, not in one list order; the away run's blasts get no carts, boats, eyes or hooks.
-  - Corpses skip squid, wolf, snowman, enderman, wither and golem living updates and the potion countdown.
-  - Rain is not part of "wet" (no rocket fizz; TNT in rain keeps burning); minecarts keep no server fire counter; `/summon PrimedTnt` ignores Fire.
-  - The single-player attack slows on every knockback hit (native: only on dragon parts and players); the integrated server copy has no jump rule.
-  - Dandelion and tall grass `rawDamage` cannot place as native; /setblock ignores a pot's tag.
-  - Not seen in a browser: eye, rocket and TNT flames, the Fatigue V crack and meter, helmet breaks, star colours, the new Tab lists, plus the batch 81 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 82: carried into the batch 83 list above, less what batch 83 fixed.
 
 ## Done in batch 81
 
