@@ -102,7 +102,7 @@ export function dryPlace(state, request, hooks = {}) {
   Object.assign(held, { chests: {}, enderTiles: {}, dispensers: {}, hoppers: {}, take() {}, wear() {}, wearBlock() {} });
   Object.defineProperty(held, 'held', { get: () => survival.held });
   const result = placeHeldBlock({ world: scratch, survival: held, position: state.position, flowers: state.flowers, yaw: state.yaw, farming: { observe() {} } },
-    request, { collides: hooks.collides ?? collides, toast: () => {}, updateBlock: () => {}, renderHotbar: () => {}, markUnsaved: () => {}, scheduleFalling: () => {},
+    request, { collides: hooks.collides ?? collides, entities: hooks.entities ?? state.entities ?? null /* b82 mpplace82: checkNoEntityCollision on the client's entities */, toast: () => {}, updateBlock: () => {}, renderHotbar: () => {}, markUnsaved: () => {}, scheduleFalling: () => {},
       sound: hooks.sound, playSound: hooks.playSound });
   return { placed: !!result?.placed, result, cells: result?.placed ? [...writes.values()] : [] };
 }

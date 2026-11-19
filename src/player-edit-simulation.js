@@ -483,7 +483,7 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
     if (activates && block === PISTON_MOVING && hook('pistonMovingTile', x, y, z) === false) {
       // b79 spswing79: the swing is the CLIENT's onItemUse answer on the moving block it still sees (the server's removal never reaches it): the table of
       // spswing79-rules.js, an ItemBlock by the dry run of its placement, any other item false (the hand, food, tools: Item.onItemUse is `return false`).
-      ctx.rule ??= !!item?.block && dryPlace(state, { id, item, target }, {}).placed;
+      ctx.rule ??= !!item?.block && dryPlace(state, { id, item, target }, { entities: hooks.placement?.entities }).placed; // b82 mpplace82: the entities refuse it too
       state.world.set(x, y, z, 0, true, 0);
       hook('updateBlock', x, z, y);
       hook('markUnsaved');
