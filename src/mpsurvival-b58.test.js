@@ -71,7 +71,7 @@ test('items ride in the tick while they exist, once empty after, and in the snap
   assert.equal(s.tick().items, undefined);
 });
 
-test('pickup: only after the 10 tick delay, only in reach, only for a Survival player, and the item leaves with a collect stack', () => {
+test('pickup: only after the 10 tick delay, only in reach, and the item leaves with a collect stack (Creative players collect too)', () => {
   const { s, a } = setup(2, [], 'survival');
   breakIt(s, a);
   const eid = s.itemList()[0].i;
@@ -91,7 +91,9 @@ test('pickup: only after the 10 tick delay, only in reach, only for a Survival p
   s.pickup('a', [eid]);
   assert.equal(a.collectedOut.length, 1, 'a second request finds nothing');
   const cr = setup(3, [], 'creative'); cr.s.items.spawn({ id: 3, count: 1, damage: 0 }, 64.5, 10.2, 64.5);
-  assert.equal(cr.s.pickup('a', [cr.s.items.items[0].eid]), false, 'Creative players collect through no packet');
+  // b85 lead: pickup85 made Creative players collect on the server, as EntityItem.onCollideWithPlayer has no mode gate.
+  assert.notEqual(cr.s.pickup('a', [cr.s.items.items[0].eid]), false, 'Creative players collect too');
+  assert.equal(cr.s.itemList().length, 0, 'the item is gone');
 });
 
 test('items fall and settle on the server (EntityItem physics) and merge when they pile up', () => {
