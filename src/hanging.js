@@ -237,12 +237,14 @@ export class Hanging {
   explode(x, y, z, size) {
     for (const e of [...this.entities]) this.explodeOne(e, x, y, z, size);
   }
-  explodeOne(e, x, y, z, size) { // b83 blastorder83: one hanging entity's turn in doExplosionA's single list
+  // `by`: the explosion source's entity (EntityDamageSource "explosion.player": the TNT's placer, so a creative player's TNT breaks a painting or frame with no drop); b85 blastprobe85
+  // (executed, BlastOrderProbe "hang" scenes).
+  explodeOne(e, x, y, z, size, by = null) { // b83 blastorder83: one hanging entity's turn in doExplosionA's single list
     const r = f(size) * 2, cube = [x - r - 1, y - r - 1, z - r - 1, x + r + 1, y + r + 1, z + r + 1];
     if (e.dead || isFrozen(e) || !intersects(cube, e.bb)) return;
     const dist = Math.hypot(e.x - x, e.y - y, e.z - z);
     if (dist > r || dist === 0) return;
-    this.attack(e, null);
+    this.attack(e, by);
   }
 
   // EntityHanging.moveEntity/addVelocity: any movement breaks it (pistons, explosion pushes).

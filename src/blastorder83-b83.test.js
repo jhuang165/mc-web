@@ -61,7 +61,7 @@ function replay(r) {
 }
 
 test("blastorder83 (executed): every scene's hits come in the native list order, kinds mixed, nested crystal blasts at the crystal's turn", () => {
-  const recs = reference.records;
+  const recs = reference.records.filter((r) => r.case === "blast"); // b85: the file also holds the dragon, hang and crystal cases (blastprobe85-b85.test.js)
   assert.equal(recs.length, 400);
   const nested = recs.filter((r) => r.hits.some((h) => h[0] > 0)).length;
   assert.ok(nested > 100, "many scenes nest a crystal blast");
@@ -81,7 +81,7 @@ test("blastorder83 (executed): every scene's hits come in the native list order,
 
 test("blastorder83 (executed): the old kind-by-kind order would not match (the records discriminate)", () => {
   const order = ["crystal", "item", "orb", "arrow", "tnt", "player"];
-  const differs = reference.records.filter((r) => { const k = r.hits.filter((h) => h[0] === 0).map((h) => order.indexOf(r.ents[h[1]][0])); return k.some((v, i) => i > 0 && v < k[i - 1]); });
+  const differs = reference.records.filter((r) => r.case === "blast").filter((r) => { const k = r.hits.filter((h) => h[0] === 0).map((h) => order.indexOf(r.ents[h[1]][0])); return k.some((v, i) => i > 0 && v < k[i - 1]); });
   assert.ok(differs.length > 100, `${differs.length} scenes list a later kind before an earlier one`);
 });
 
