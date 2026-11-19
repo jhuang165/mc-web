@@ -4,8 +4,9 @@
 // of a renderer's list, sized by the entity's box: width, height and posY - boundingBox.minY (the yOffset renderEntityOnFire starts the flames below posY).
 import { EntityFireRenderer } from "./entity-fire-renderer.js";
 
-// [width, height, posY - minY]: EntityItem 0.25 box (yOffset height / 2), EntityXPOrb 0.5 (height / 2), EntityArrow 0.5 (yOffset 0), EntityBoat 1.5 x 0.6 (height / 2).
-export const FIRE_BOXES = { item: [0.25, 0.25, 0.125], orb: [0.5, 0.5, 0.25], arrow: [0.5, 0.5, 0], boat: [1.5, 0.6, 0.3] };
+// [width, height, posY - minY]: EntityItem 0.25 box (yOffset height / 2), EntityXPOrb 0.5 (height / 2), EntityArrow 0.5 (yOffset 0), EntityBoat 1.5 x 0.6 (height / 2),
+// EntityTNTPrimed 0.98 (yOffset height / 2, b82 fireext82).
+export const FIRE_BOXES = { item: [0.25, 0.25, 0.125], orb: [0.5, 0.5, 0.25], arrow: [0.5, 0.5, 0], boat: [1.5, 0.6, 0.3], tnt: [0.98, 0.98, 0.49] };
 
 // Entity.isBurning as the renderer sees it: a client copy's watched flag 0 (object-tracker.js views set `burning`), else the live entity's counter.
 export const entityBurning = (e) => !!(e && (e.burning ?? e.fire > 0));

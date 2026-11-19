@@ -2,8 +2,33 @@
 // Rules and evidence live in eye-of-ender.js and public/research/eye-of-ender.md.
 import { JavaRandom } from "./java-random.js";
 import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, createEye, moveTowards, tickEye, shatterEffects, useEyeOnFrame, nearestStronghold, hasEye } from "./eye-of-ender.js";
+import { inLava, waterAcceleration, entityWaterBox } from "./fluids.js";
 
 const f = Math.fround;
+
+// The eye's box: setSize(0.25, 0.25) with yOffset 0 (zd's constructors, bytecode-read), so it stands on posY. The server's setPosition at the end of each update keeps
+// it on the position; a client copy's only moves with a position packet (zd.h calls setPosition under !isRemote).
+export const eyeBox = (x, y, z) => [x - 0.125, y, z - 0.125, x + 0.125, y + 0.25, z + 0.125];
+// Entity.handleWaterMovement's wet test (sa.N: the box shrunk 0.4 top and bottom, 0.001 at the sides). The flow push and the entry splash are not modelled for the eye.
+export const eyeWet = (world, box) => !!world?.get && waterAcceleration(world, entityWaterBox(box), false).wet;
+// b82 fireext82: the fire part of Entity.onEntityUpdate, which EntityEnderEye.onUpdate runs through super.onUpdate (zd.h calls sa.h at offset 25, bytecode-read; zd
+// overrides neither attackEntityFrom, isImmuneToFire nor the fire methods). Water zeroes the counter; a client world zeroes it every update; a server eye loses 1 a tick and
+// attackEntityFrom(onFire, 1) on every 20th only runs setBeenAttacked (velocityChanged: the tracker's S12); handleLavaMovement (the box shrunk 0.1 at the sides, 0.4 top
+// and bottom) runs setOnFireFromLava: attackEntityFrom(lava, 4) (velocityChanged) and setFire(15), the larger of the counter and 300. The eye never calls moveEntity, so
+// fire blocks do not light it and the counter never rests below 0. Same order as sa.C: water, counter, lava.
+export function eyeFire(eye, world, { remote = false, inWater = false, box = null } = {}) {
+  eye.fire = eye.fire | 0;
+  if (inWater) eye.fire = 0;
+  if (remote) eye.fire = 0;
+  else if (eye.fire > 0) {
+    if (eye.fire % 20 === 0) eye.velocityChanged = true;
+    eye.fire--;
+  }
+  if (world?.get && inLava(world, box ?? eyeBox(eye.x, eye.y, eye.z))) {
+    eye.velocityChanged = true;
+    eye.fire = Math.max(eye.fire, 300);
+  }
+}
 
 // Stronghold coordList of the world in LOCAL block coordinates (the population keeps native chunk coordinates),
 // or [] when the world has no structure manager (legacy and flat worlds).
@@ -47,10 +72,14 @@ export class EyesOfEnder {
     this.eyes.push(eye);
     return eye;
   }
-  // 20 Hz. hooks: particle(name,x,y,z,vx,vy,vz), drop(stack,x,y,z), inWater(x,y,z).
+  // 20 Hz. hooks: particle(name,x,y,z,vx,vy,vz), drop(stack,x,y,z), inWater(x,y,z), world. With `world` the eye runs Entity.onEntityUpdate's fire part (b82 fireext82,
+  // eyeFire above) and, without an inWater hook, takes handleWaterMovement's wet test on its box.
   tick(hooks = {}) {
+    const world = hooks.world ?? null;
     for (const eye of this.eyes) {
-      const { particles, end } = tickEye(eye, this.random, { inWater: !!hooks.inWater?.(eye.x, eye.y, eye.z) });
+      const inWater = hooks.inWater ? !!hooks.inWater(eye.x, eye.y, eye.z) : !!world && eyeWet(world, eyeBox(eye.x, eye.y, eye.z));
+      if (world) eyeFire(eye, world, { inWater });
+      const { particles, end } = tickEye(eye, this.random, { inWater });
       for (const p of particles) hooks.particle?.(p.name, p.x, p.y, p.z, p.vx, p.vy, p.vz);
       if (end?.drop) hooks.drop?.({ id: ITEM_EYE_OF_ENDER, count: 1, damage: 0 }, end.drop.x, end.drop.y, end.drop.z);
       if (end?.shatter) for (const p of shatterEffects(end.shatter.x, end.shatter.y, end.shatter.z, this.random)) hooks.particle?.(p.name, p.x, p.y, p.z, p.vx, p.vy, p.vz);
@@ -60,7 +89,7 @@ export class EyesOfEnder {
   // Renderer rows ({kind, x, y, z, px, py, pz}) shared with the snowball billboards.
   get balls() { return this.rows(this.eyes); }
   // The rows of eyes or of their client views (object-tracker.js objectView: the client entity's position)
-  rows(list) { return list.map((e) => { const row = ROWS.get(e) ?? ROWS.set(e, { kind: "eyeOfEnder" }).get(e); return Object.assign(row, { x: e.x, y: e.y, z: e.z, px: e.px, py: e.py, pz: e.pz }); }); }
+  rows(list) { return list.map((e) => { const row = ROWS.get(e) ?? ROWS.set(e, { kind: "eyeOfEnder" }).get(e); return Object.assign(row, { x: e.x, y: e.y, z: e.z, px: e.px, py: e.py, pz: e.pz, burning: e.burning ?? e.fire > 0 }); }); }
   serialize() { return { random: this.random.save(), eyes: this.eyes.map(({ ball, entityId, ...e }) => e) }; }
   load(record) {
     this.eyes = [];
@@ -69,7 +98,7 @@ export class EyesOfEnder {
     const keys = ["x", "y", "z", "px", "py", "pz", "vx", "vy", "vz", "yaw", "pitch", "prevYaw", "prevPitch", "tx", "ty", "tz", "age"];
     for (const e of Array.isArray(record.eyes) ? record.eyes : []) {
       if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
-      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false, ...(this.ids ? { entityId: Number.isInteger(e.entityId) ? e.entityId : this.ids.take() } : {}) }); // a saved eye is built anew (a new id); one handed over live (a summon) keeps its own
+      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false, fire: Number.isInteger(e.fire) ? e.fire : 0, ...(this.ids ? { entityId: Number.isInteger(e.entityId) ? e.entityId : this.ids.take() } : {}) }); // a saved eye is built anew (a new id); one handed over live (a summon) keeps its own
     }
   }
 }

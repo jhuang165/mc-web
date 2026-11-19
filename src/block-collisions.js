@@ -25,8 +25,8 @@ export function setInWeb(e, flying = false) {
 // cell setInWeb. Then World.isBoundingBoxBurning on the box contracted by 0.001 (fire or lava):
 // dealFireDamage(1) (inFire) and, unless wet, ++fire with setFire(8) when it reaches 0; outside,
 // a counter <= 0 rests at -fireResistance. A wet entity still burning fizzes and rests too.
-// Without `hooks` (falling blocks, primed TNT) only the web part runs. Hooks:
-// hurt(source, amount), wet, flying, resistance, fizz() and web() (each web cell's call).
+// Without `hooks` (falling blocks) only the web part runs. Hooks:
+// hurt(source, amount), wet, flying, resistance, fizz(), web() (each web cell's call) and remote (a client copy: no cauldron).
 export function blockCollisions(world, box, e, hooks) {
   const x1 = Math.floor(box[3] - 0.001), y1 = Math.floor(box[4] - 0.001), z1 = Math.floor(box[5] - 0.001);
   for (let x = Math.floor(box[0] + 0.001); x <= x1; x++)
@@ -41,7 +41,7 @@ export function blockCollisions(world, box, e, hooks) {
         } else if (b === WEB) {
           hooks?.web?.();
           setInWeb(e, hooks?.flying);
-        } else if (b === CAULDRON && hooks && e.fire > 0) {
+        } else if (b === CAULDRON && hooks && !hooks.remote && e.fire > 0) { // BlockCauldron's test is under !world.isRemote (b82 fireext82: `remote` for client copies)
           // BlockCauldron.onEntityCollidedWithBlock: a burning entity low enough in a filled cauldron is put out and uses one level.
           const level = world.getMeta(x, y, z) & 3;
           if (cauldronExtinguishes(level, true, box[1], y)) { e.fire = 0; world.set(x, y, z, CAULDRON, true, level - 1); }

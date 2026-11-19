@@ -73,7 +73,7 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
     const fire = nbtGet(entity, 'Fire', NBT.SHORT, 0);
     return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround } };
   }
-  if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0) } };
+  if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0), fire: nbtGet(entity, 'Fire', NBT.SHORT, 0) } }; // b82 fireext82: Entity's Fire (moveEntity's counter)
   // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) wins, else Tile & 255; Data; Time.
   const original = hasNumber(entity, 'TileID') ? nbtGet(entity, 'TileID', NBT.INT, 0) : nbtGet(entity, 'Tile', NBT.BYTE, 0) & 255;
   const data = nbtGet(entity, 'Data', NBT.BYTE, 0) & 255, cell = fallingCellOf(original, data);

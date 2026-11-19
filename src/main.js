@@ -1363,7 +1363,7 @@ function save() {
   active.fireballs = [...(mobs?._fireballs?.serialize(world.dimension ?? 0) ?? []), ...(mobs?._skulls?.serialize(world.dimension ?? 0) ?? [])]; // fireballs.js; tagged with the dimension they fly in
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
-  active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
+  active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0 })); // b82 fireext82: Entity's Fire (moveEntity's counter)
   active.weather = weather.saveWeather(); // while in the Nether/End: the Overworld's timers, which keep running (weather.js awayOverworld)
   active.bed = bedSleep.save();
   active.flying = flying && survival.creative ? true : undefined;
@@ -1995,7 +1995,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     fishing.load(record.fishing);
     objectTracker = new ObjectTracker(10, Math.random, entityIds); // a fresh client world: nothing is tracked yet
     bindObjectTracker();
-    primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz })), joinedAs("tnt"));
+    primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 })), joinedAs("tnt"));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
@@ -3171,7 +3171,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, inWater, ...moveFlags, grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
-  eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
+  eyes.tick({ world, particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
   if (compassEpoch !== spriteEpoch()) { compassEpoch = spriteEpoch(); Object.assign(compass, createCompass()); } // new sprite after a pack with another strip

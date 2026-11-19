@@ -13,6 +13,7 @@ import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
+import { fireballTurn } from "./fireball-turn.js";
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
@@ -20,6 +21,12 @@ export const FIRE_IMMUNE = new Set(["blaze", "ghast", "magma_cube", "pigman", "z
 // ze.h: the sweep grows each candidate box by this (getCollisionBorderSize 0.3 for the mob; the player's pick uses 1.0 for the fireball).
 const SWEEP = 0.3, PICK_BORDER = 1;
 const seedOf = (mobs) => Math.floor(mobs.random() * 2 ** 48);
+// b82 fireext82 (render81's skull rule, now for every fireball): Entity.readFromNBT (sa.f(dh), bytecode-read) sets prevRotationYaw/Pitch to the saved Rotation floats and
+// setRotation the current ones to them mod 360 (frem). A record without one (older saves) gives 0, 0.
+export function savedRotation(r) {
+  const [yaw, pitch] = Array.isArray(r?.rotation) && r.rotation.length >= 2 && r.rotation.slice(0, 2).every(Number.isFinite) ? r.rotation.slice(0, 2).map(Math.fround) : [0, 0];
+  return { yaw: Math.fround(yaw % 360), pitch: Math.fround(pitch % 360), prevYaw: yaw, prevPitch: pitch };
+}
 
 export class Fireballs {
   constructor(mobs) {
@@ -35,6 +42,8 @@ export class Fireballs {
   launch({ large, owner = null, x, y, z, dx = 0, dy = 0, dz = 0, power = FIREBALL.defaultPower, exact = null }) {
     const rand = new JavaRandom(this.mobs.fireballSeed?.(owner, large) ?? seedOf(this.mobs)); // fireballSeed: the replays' recorded Entity.rand seed
     const [ax, ay, az] = exact ? fireballAcceleration(...exact) : fireballAcceleration(dx, dy, dz, rand); // the dispenser form normalises too, without the noise
+    // b82 fireext82: ze(world, shooter, ...) calls setLocationAndAngles with the shooter's rotationYaw / rotationPitch; the (world, x, y, z, ax, ay, az) form with its own (0, 0)
+    const look = exact || !owner || owner === "player" ? null : owner, yaw = Math.fround(look?.rotationYaw ?? 0), pitch = Math.fround(look?.rotationPitch ?? 0);
     const ball = {
       id: "fb-" + this.next++, type: "fireball", kind: large ? "fireball" : "smallFireball", large: !!large, owner, health: 1,
       x, y, z, px: x, py: y, pz: z, vx: 0, vy: 0, vz: 0, ax, ay, az, power, ticks: 0, dead: false,
@@ -43,6 +52,7 @@ export class Fireballs {
       // box (the water test, the entity query of the first update) stays there until the end of the first update.
       rand, inGround: false, tile: null, ticksAlive: 0, // inGround: EntityFireball.e/f/g (tile), h (block id), i, and the ticksAlive counter; see stick()
       boxPos: exact || !owner || owner === "player" ? [x, y, z] : [owner.x, owner.y, owner.z],
+      yaw, pitch, prevYaw: yaw, prevPitch: pitch,
     };
     this.list.push(ball);
     const w = this.mobs, seq = w.orderStamp?.(); // World.spawnEntityInWorld: the end of loadedEntityList, walked by index, so a ball launched in the pass updates in it
@@ -79,6 +89,7 @@ export class Fireballs {
     if (b.dead || !mobs.isActive(b)) return; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
     b.px = b.x; b.py = b.y; b.pz = b.z;
     if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
+    b.prevYaw = b.yaw ?? 0; b.prevPitch = b.pitch ?? 0; // Entity.onEntityUpdate (super.onUpdate, before the stuck test)
     const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
     // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
     const water = waterAcceleration(mobs.world, entityWaterBox(box));
@@ -95,6 +106,7 @@ export class Fireballs {
     // (x, y + 0.5, z) of the NEW position (executed: spexec79 fire79; b79 moved the smoke here from before the move and added the bubbles).
     const [ovx, ovy, ovz] = [b.vx, b.vy, b.vz];
     fireballStep(b, water.wet);
+    fireballTurn(b, ovx, ovy, ovz); // b82 fireext82: ze.h turns toward the motion after the move, before the motion update (fireball-turn.js; render81 did the skulls)
     if (water.wet) for (let i = 0; i < 4; i++) mobs.fx?.spawn("bubble", b.x - ovx * 0.25, b.y - ovy * 0.25, b.z - ovz * 0.25, ovx, ovy, ovz);
     mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
   }
@@ -229,6 +241,7 @@ export class Fireballs {
       kind: b.kind, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, ax: b.ax, ay: b.ay, az: b.az, ticks: b.ticks, dimension,
       ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
       ...(b.owner === "player" ? { owner: "player" } : b.owner?.id ? { owner: b.owner.id } : {}),
+      rotation: [b.yaw ?? 0, b.pitch ?? 0], // b82 fireext82: Entity.writeToNBT's Rotation, which every entity writes (render81 had it for the skulls only)
     }));
   }
   accepts(kind) { return kind === "fireball" || kind === "smallFireball"; }
@@ -239,7 +252,7 @@ export class Fireballs {
       id: "fb-" + this.next++, type: "fireball", kind: r.kind, large, owner: null, health: 1,
       x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az,
       power: large && Number.isInteger(r.power) ? r.power : FIREBALL.defaultPower, ticks: 0, dead: false,
-      scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize,
+      scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize, ...savedRotation(r),
     };
   }
   // Restores the records of `dimension`; bad records are skipped. Call after the world's mobs exist (owners are looked up by id).

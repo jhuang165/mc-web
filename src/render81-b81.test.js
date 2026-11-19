@@ -228,7 +228,8 @@ test("a wither skull keeps its Rotation: native import, the browser save and loa
   assert.equal(out.id, "WitherSkull");
   assert.deepEqual(out.fields.Rotation.value, { elementType: NBT.FLOAT, items: [123.25, -12.5] });
   assert.equal(javaProjectileToNbt("fireballs", { kind: "witherSkull", vx: 0, vy: 0, vz: 0 }).fields.Rotation, undefined);
-  assert.equal(javaProjectileToNbt("fireballs", { kind: "fireball", vx: 0, vy: 0, vz: 0, rotation: [1, 2] }).fields.Rotation, undefined);
+  // b82 fireext82: every fireball writes Entity's Rotation (this line used to expect none for a ghast fireball)
+  assert.deepEqual(javaProjectileToNbt("fireballs", { kind: "fireball", vx: 0, vy: 0, vz: 0, rotation: [1, 2] }).fields.Rotation.value, { elementType: NBT.FLOAT, items: [1, 2] });
   skulls.load([{ kind: "witherSkull", x: 1, y: 2, z: 3, vx: 0.1, vy: 0, vz: 0 }]);
   assert.deepEqual([skulls.list[0].yaw, skulls.list[0].pitch], [0, 0], "an older save has no rotation");
 });

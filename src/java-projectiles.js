@@ -56,19 +56,21 @@ export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertI
     if (!direction) return { lost: 'no direction' };
     const power = nbtGet(entity, 'ExplosionPower', NBT.INT);
     return { list, record: { kind: FIREBALL_KINDS[id], x: base.x, y: base.y, z: base.z, vx: direction[0], vy: direction[1], vz: direction[2], ax: 0, ay: 0, az: 0,
-      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), ...(id === 'WitherSkull' ? { rotation } : {}), dimension } }; // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws
+      ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), rotation, dimension } }; // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws (b82 fireext82: every fireball keeps it)
   }
   if (id === 'EyeOfEnderSignal') {
     // EntityEnderEye.readEntityFromNBT is empty: the target (0, 0, 0 of the Java world, moved with the import), the age and the
     // shatter-or-drop flag keep their defaults, so the eye flies for 80 ticks towards that block and shatters.
     return { list, record: { x: base.x, y: base.y, z: base.z, px: base.x, py: base.y, pz: base.z, vx: motion[0], vy: motion[1], vz: motion[2],
-      yaw: base.yaw, pitch: base.pitch, prevYaw: base.yaw, prevPitch: base.pitch, tx: shiftX, ty: 0, tz: shiftZ, age: 0, drops: false } };
+      yaw: base.yaw, pitch: base.pitch, prevYaw: base.yaw, prevPitch: base.pitch, tx: shiftX, ty: 0, tz: shiftZ, age: 0, drops: false, ...burning } }; // b82 fireext82: Entity's Fire (the eye never moves with moveEntity, so it never rests below 0)
   }
   if (id === 'FireworksRocketEntity') {
     // EntityFireworkRocket.readEntityFromNBT: Life and LifeTime (ints, 0 when absent) and FireworksItem when it loads as a stack.
     const item = nbtGet(entity, 'FireworksItem', NBT.COMPOUND), stack = item && convertItem ? convertItem(item) : null;
     const fireworks = stack?.id === ITEM_FIREWORK_ROCKET ? normalizeFireworks(stack.fireworks) : null;
-    return { list, record: { x: base.x, y: base.y, z: base.z, px: base.x, py: base.y, pz: base.z, mx: base.mx, my: base.my, mz: base.mz,
+    // b82 fireext82: Entity's Fire as saved; a rocket's moveEntity rests it at -1 out of fire, so any value loads (the next fire block lights it from -1 to 0: setFire(8))
+    const rocketFire = nbtGet(entity, 'Fire', NBT.SHORT, 0);
+    return { list, record: { x: base.x, y: base.y, z: base.z, px: base.x, py: base.y, pz: base.z, mx: base.mx, my: base.my, mz: base.mz, ...(Number.isInteger(rocketFire) && rocketFire !== 0 ? { fire: rocketFire } : {}),
       yaw: base.yaw, pitch: base.pitch, prevYaw: base.yaw, prevPitch: base.pitch, life: nbtGet(entity, 'Life', NBT.INT, 0), lifetime: nbtGet(entity, 'LifeTime', NBT.INT, 0),
       ...(stack ? { stack: { id: stack.id, count: 1, damage: stack.damage ?? 0, ...(fireworks ? { fireworks } : {}) } } : {}) } };
   }
@@ -126,8 +128,8 @@ export function javaProjectileToNbt(list, e, { ox = 0, oz = 0, itemNbt = null } 
     if (!id || ![e.vx, e.vy, e.vz].every(Number.isFinite)) return null;
     return { id, fields: { xTile: short(-1), yTile: short(-1), zTile: short(-1), inTile: byte(0), inGround: byte(0),
       direction: tag(NBT.LIST, { elementType: NBT.DOUBLE, items: [e.vx, e.vy, e.vz] }), ...(id === 'Fireball' ? { ExplosionPower: int(Number.isInteger(e.power) ? e.power : 1) } : {}),
-      // b81 render81: a wither skull's saved rotation as Entity.writeToNBT's Rotation (replaces the exporter's record yaw/pitch, which skulls lack).
-      ...(id === 'WitherSkull' && Array.isArray(e.rotation) && e.rotation.length === 2 && e.rotation.every(Number.isFinite) ? { Rotation: tag(NBT.LIST, { elementType: NBT.FLOAT, items: e.rotation.map(Math.fround) }) } : {}) } };
+      // b81 render81: a wither skull's saved rotation as Entity.writeToNBT's Rotation (replaces the exporter's record yaw/pitch, which fireball records lack); b82 fireext82: every fireball.
+      ...(Array.isArray(e.rotation) && e.rotation.length === 2 && e.rotation.every(Number.isFinite) ? { Rotation: tag(NBT.LIST, { elementType: NBT.FLOAT, items: e.rotation.map(Math.fround) }) } : {}) } };
   }
   if (list === 'eyes') return { id: 'EyeOfEnderSignal', fields: {} }; // EntityEnderEye saves nothing of its own
   if (list === 'rockets') {

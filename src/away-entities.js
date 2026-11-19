@@ -107,7 +107,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const ownRandom = () => { const r = new JavaRandom(Math.floor(seeder.nextDouble() * 2 ** 48)); return () => r.nextFloat(); };
   items.entityRandom = ownRandom; xp.entityRandom = ownRandom;
   const primed = tnt.inside.filter((t) => [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(num))
-    .map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse, random }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+    .map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse, random }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 }));
   const minecarts = Minecarts.fromJSON({ version: 1, carts: carts.inside }, { ids });
   const boats = Boats.fromJSON(boatsSplit.inside, { ids });
   minecarts.blockHook = (x, y, z) => { rt.redstone.collide(x, y, z); rt.flush(); };
@@ -265,7 +265,7 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     // Every list in its saved form: the records outside the run unchanged, the run's entities serialized.
     finish() {
       // b52so: the run's entities are stamped with their place in the native save walk, above the records the run left alone
-      const run = { mobs: mobs.serialize(), drops: items.serialize(), xpOrbs: xp.serialize(), tnt: primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse })), arrows: arrows.serialize(), projectiles: projectiles.serialize(),
+      const run = { mobs: mobs.serialize(), drops: items.serialize(), xpOrbs: xp.serialize(), tnt: primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse, fire: t.fire | 0 })), arrows: arrows.serialize(), projectiles: projectiles.serialize(),
         carts: minecarts.carts.length ? minecarts.toJSON().carts : [], boats: boats.carts.length ? boats.toJSON() : [], hanging: hanging.toJSON(), rockets: rockets.serialize(), potions: mobs.potions.serialize(),
         fireballs: [...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])], // b53so: stamped like the other records
         falling: self.falling?.serialize() ?? [] }; // b58so: the falling blocks are stamped like the rest (their records are returned in `falling`)

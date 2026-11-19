@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { tntRender, TNT_Y_OFFSET, TNT_SIZE } from "./explosion.js";
+import { FireOverlays, FIRE_BOXES, entityBurning, cameraViewYaw } from "./fire-overlays.js";
 
 export class TntRenderer {
   // `view` supplies the lighting uniforms and Entity.getBrightnessForRender (VoxelScene).
@@ -48,7 +49,10 @@ export class TntRenderer {
       for (const m of r.materials) m.setLight(packed);
       r.white.visible = flash > 0;
       r.white.material.opacity = flash;
+      // b82 fireext82: Render.doRenderShadowAndFire draws the flames over a primed TNT whose counter its own moveEntity raised (explosion.js tickTnt; the copy's: object-tracker.js)
+      (this.fires ??= new FireOverlays(this.scene, FIRE_BOXES.tnt)).draw(e, entityBurning(e), lerp(e.px, e.x), lerp(e.py, e.y), lerp(e.pz, e.z), () => cameraViewYaw(this.view.camera));
     }
+    this.fires?.sweep();
   }
   clear() {
     this.update([]);

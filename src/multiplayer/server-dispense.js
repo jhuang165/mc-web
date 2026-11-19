@@ -309,8 +309,9 @@ export class ServerDispense {
     }
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
     if (this._eyes?.active) out.push(...this._eyes.rows(q)); // b64 mpend2
-    for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse });
-    for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z });
+    // b82 fireext82: `f` for a TNT whose moveEntity counter is above 0 (natively the copy's own counter: xw never sets flag 0) and for a burning rocket or eye (flag 0)
+    for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse, ...(t.fire > 0 ? { f: 1 } : {}) });
+    for (const r of this.rockets.rockets) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z, ...(r.fire > 0 ? { f: 1 } : {}) });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, t: this.ballTracks.row(b) }); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js)
     for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }); // b66 mpgolems: a snow golem's snowball
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b), t: this.ballTracks.row(b) }); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js); b81 blast81: `t` the tracker packets the copy flies on (fireball-copy.js)
@@ -354,7 +355,7 @@ export class ServerDispense {
   // large one ExplosionPower, and no shooter. The records are the browser save's (main.js `active.tnt`, FireworkRockets.serialize, Fireballs.serialize), so single player and
   // the server read one format. Null when there is nothing to write.
   extrasOut() {
-    const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
+    const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0 })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
       own = this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs, fireballs = [...(own?._fireballs?.serialize(this.dim) ?? []), ...(own?._skulls?.serialize(this.dim) ?? [])], out = {}; // b64: wither skulls (kind witherSkull) ride the same list, as the browser save's `active.fireballs`; dimState covers the Nether and the End (mpend2)
     if (tnt.length) out.tnt = tnt;
     if (rockets) out.rockets = rockets;
@@ -366,7 +367,7 @@ export class ServerDispense {
     if (!d || typeof d !== 'object') return;
     for (const t of (Array.isArray(d.tnt) ? d.tnt : []).slice(0, 4096)) {
       if (!t || ![t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)) continue;
-      this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+      this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 }));
     }
     if (d.eyes) this.eyeSystem.load(d.eyes); // b64 mpend2
     if (d.rockets) { const tmp = new FireworkRockets(); tmp.load(d.rockets); this.rockets.rockets.push(...tmp.rockets); if (d.rockets.random) this.rockets.random.restore(d.rockets.random); }

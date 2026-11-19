@@ -45,7 +45,7 @@ export class FireworkRockets {
   // Renderer rows ({kind, x, y, z, px, py, pz}) shared with the snowball billboards (RenderSnowball(Items.fireworks)).
   get balls() { return this.rows(this.rockets); }
   // The rows of rockets or of their client views (object-tracker.js objectView)
-  rows(list) { return list.map((r) => { const row = ROWS.get(r) ?? ROWS.set(r, { kind: 'firework' }).get(r); return Object.assign(row, { x: r.x, y: r.y, z: r.z, px: r.px, py: r.py, pz: r.pz }); }); }
+  rows(list) { return list.map((r) => { const row = ROWS.get(r) ?? ROWS.set(r, { kind: 'firework' }).get(r); return Object.assign(row, { x: r.x, y: r.y, z: r.z, px: r.px, py: r.py, pz: r.pz, burning: r.burning ?? r.fire > 0 }); }); }
   serialize() { return { random: this.random.save(), rockets: this.rockets.map(({ ball, box, ...r }) => r) }; }
   load(record) {
     this.rockets = [];
@@ -55,7 +55,7 @@ export class FireworkRockets {
     for (const e of Array.isArray(record.rockets) ? record.rockets : []) {
       if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
       const r = createRocket(e.x, e.y, e.z, e.stack ? { id: ITEM_FIREWORK_ROCKET, fireworks: normalizeFireworks(e.stack.fireworks) ?? undefined } : null, new JavaRandom(0));
-      Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])));
+      Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])), { fire: Number.isInteger(e.fire) ? e.fire : 0 }); // b82 fireext82: Entity's Fire short
       this.rockets.push(r);
     }
   }

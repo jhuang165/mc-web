@@ -156,7 +156,7 @@ export class ServerDimensions {
     const end = this.end.saveField(); if (end) out.end = end; // b63 mpend
     return Object.keys(out).length ? { dimensions: out } : {};
   }
-  list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz })); }
+  list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}) })); } // b82 fireext82: `b` the fire flag
   // The world snapshot a player in another dimension joins or arrives with (null for an Overworld player).
   snapshotFor(playerId) {
     const p = this.sim.players.get(playerId);

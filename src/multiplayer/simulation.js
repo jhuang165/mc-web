@@ -289,7 +289,8 @@ export class DedicatedSimulation {
   // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
   pickup(id, eids, fits) { return this.serverItems.pickup(this.players.get(id), eids, fits); }
-  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz })); }
+  // b82 fireext82: `b` the fire flag (Entity.isBurning, flag 0 natively) the cadence-off rows lacked; the client draws the flames from it (main.js syncMultiplayerItems)
+  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}) })); }
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
