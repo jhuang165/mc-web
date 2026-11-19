@@ -145,6 +145,20 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 82 (2026-11-18, ten tracks in `../wt82-<name>` on `batch82-<track>`, cut from 3b99e1bd4, merged --no-ff on `batch82-lead`; shared rules `../artifacts/b82-lead/track-rules.md`; lead note `b82-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.111.0, by track (details in the `*-b82-track.md` notes and "Done in batch 82" in `public/research/remaining-gaps.md`):
+  - spblast82: ghast ball and wither spawn blasts inline; unseeded flaming fire roll; `explosion-extras.js` pushes rockets, eyes, hooks, fireballs and breaks knots; server `explodeNonLiving` pushes items, orbs, carts.
+  - mpcmd82: `/spawnpoint` from blocks uses the target; counts above 15 tested (already native); optional `server-residency.js` (`residency: true`, off by default).
+  - mpball82: executed `BallFlagProbe`; `fireballBurn`, fireball turn and angle packets in `BallTracks` (`t.s` 9 fields), copies take angles, S1C flag and flow push; flames over fireballs.
+  - mpplace82: client placement checks entity copies (`client-placement-entities.js`); dragon part hits slow 0.6 and always land; server copy step (`server-copy-step.js`) charges the second exhaustion.
+  - mpperf82: `mpperf82-fast.js` behind `MC_MPPERF82=on|off|verify`; travel 1293 -> 1161 MB sampled.
+  - corpse82: corpses age, love, turn, sun-ignite, pigman countdown; conversion XP at deathTime 20; horse herd only records its target.
+  - pots82: every pot removal drops its stack (`potBreakDrop`, `plant-damage.js`); `rawDamage` kept through saves, sync and placement; `mining-crack.js` Fatigue V stage.
+  - fireext82: fire counters for eyes, rockets, primed TNT; fireball Rotation saves (`savedRotation`); cadence-off item fire flag.
+  - entities82: catalogue audit (every Partial row dated), `daylightHelmet`, firework star tint, server giant.
+  - commands82: executed `CmdArgsProbe` (142 Tab texts, 265 forms) replayed in `cmd-args-b82.test.js`; about 25 command fixes; command catalogue rows dated.
+- Open: "Still open from batch 82" in `public/research/remaining-gaps.md`.
+
 Batch 81 (2026-11-18, ten tracks in `../wt81-<name>` on `batch81-<track>`, cut from f98083f29, merged --no-ff on `batch81-lead`; shared rules `../artifacts/b81-lead/track-rules.md`; lead note `b81-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.110.0, by track (details in the `*-b81-track.md` notes and "Done in batch 81" in `public/research/remaining-gaps.md`):
   - blast81: chained crystal and TNT blasts in the same tick (`explosionOutcome`, `explodeInline`, `tickJoined`); `multiplayer/fireball-copy.js` client fireball and skull copies fly between tracker packets; the "client neighbour updates" gap was wrong (remote worlds run none).
