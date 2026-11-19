@@ -43,6 +43,8 @@ import { SKULL } from '../wither-boss.js';
 import { ItemEntities } from '../item-entities.js';
 import { fireballTurn } from '../fireball-turn.js';
 import { angleInt, angleOfByte } from './skull-look.js';
+import { ballSplash } from '../fireball-splash.js';
+import { JavaRandom } from '../java-random.js';
 
 const f = Math.fround;
 export const BALL_TRACK = Object.freeze({ range: 64, frequency: 10, velocity: false });
@@ -159,6 +161,9 @@ export function stepBallCopy(c, { wet = () => false, water = null, spawn = () =>
   if (c.angles) { c.prevYaw = c.yaw; c.prevPitch = c.pitch; }
   const w = water ? water(c) : null, inWater = w ? !!w.wet : !!wet(c);
   if (w?.push && c.angles) { c.vx += w.push[0]; c.vy += w.push[1]; c.vz += w.push[2]; } // a batch 81 row's copy keeps its batch 81 flight
+  // b83 tracker83: handleWaterMovement's splash on the copy's own Entity.rand (fireball-splash.js): entering water after its first update, 1 + width * 20 bubble and splash
+  // particles at floor(minY) + 1 with the pushed motion; the sound's two floats are drawn but RenderGlobal.playSound is empty (the server's S29 is the one heard).
+  if (w && c.angles) ballSplash(c, w.wet, c.y, BALL_KINDS[c.kind]?.width ?? 1, { fx: { spawn }, rand: (c.rand ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))) });
   if (c.angles) c.fire = 20;
   c.x += c.vx; c.y += c.vy; c.z += c.vz;
   if (c.angles) fireballTurn(c, c.vx, c.vy, c.vz);

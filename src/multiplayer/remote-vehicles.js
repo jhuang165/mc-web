@@ -5,6 +5,7 @@ import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
+import { waterAcceleration, entityWaterBox } from '../fluids.js';
 
 // b70 carts70: EntityMinecart.setPositionAndRotation2 (xl.a(DDDFFI)V, bytecode-read): the client copy stores the target (minecartX/Y/Z, yaw, pitch) and
 // turnProgress = increments + 2; NetHandlerPlayClient passes 3 for the move and teleport packets of an entity (bjb.a(ik) and a(hf)), so 5 ticks.
@@ -31,6 +32,40 @@ export function cartClientStep(c, place) {
   } else place(v, v.x, v.posY, v.z);
 }
 
+// b83 tracker83: a boat state with `bc` comes from the boat's tracker entry (server-cart-track.js): its position is the client entity's serverPos, `vs` counts the S12s and
+// `mx/my/mz` is the last one. EntityBoat on a client world with isBoatEmpty true (every boat but the client player's own, bytecode-read bjb.a(S1B)):
+//   * setVelocity (S12): motion and velocityX/Y/Z = the packet; setPositionAndRotation2 (a position packet): the target, boatPosRotationIncrements = 3 + 5, motion = velocityX/Y/Z.
+//   * onUpdate (xi.h, executed for the numbers in tracker-vehicles-reference.json `boatGlide`): handleWaterMovement first (the flow push into the motion), then with increments left
+//     the step towards the target (position by (target - pos) / n, yaw by wrapAngleTo180(target - yaw) / n, pitch likewise, then % 360), else the coast on the motion
+//     (pos += motion, then 0.99F / 0.95F / 0.99F). So a boat a blast throws flies on its S12 between the 3-tick position packets.
+// Not modelled here: the copy's splash sound draws and particles (ObjectClient.waterMovement / splash in single player), onGround's halving (the copy never runs moveEntity).
+export const BOAT_TURN_EXTRA = 5;
+const DRAG_H = fl(0.99), DRAG_V = fl(0.95);
+export function boatSetVelocity(c, s) { c.cv = [s.mx ?? 0, s.my ?? 0, s.mz ?? 0]; c.vs = s.vs; [c.v.vx, c.v.vy, c.v.vz] = c.cv; }
+export function boatSetPositionAndRotation2(c, s, increments = CART_TURN_INCREMENTS) {
+  c.bt = { x: s.x, y: s.y, z: s.z, yaw: fl(s.yaw), pitch: fl(s.pitch), inc: increments + BOAT_TURN_EXTRA };
+  [c.v.vx, c.v.vy, c.v.vz] = c.cv ?? [0, 0, 0];
+}
+// One client tick of a tracked boat copy. `place(v, x, y, z)` is Boats.setPosition; `world` gives the water push (null: none).
+export function boatClientStep(c, place, world = null) {
+  const v = c.v;
+  v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
+  v.vx ??= 0; v.vy ??= 0; v.vz ??= 0;
+  if (world && v.bb) { const w = waterAcceleration(world, entityWaterBox(v.bb)); if (w.wet) { v.vx += w.push[0]; v.vy += w.push[1]; v.vz += w.push[2]; } }
+  const t = c.bt;
+  if (t && t.inc > 0) {
+    const n = t.inc;
+    const x = v.x + (t.x - v.x) / n, y = v.posY + (t.y - v.posY) / n, z = v.z + (t.z - v.z) / n;
+    v.yaw = fl(fl(v.yaw + wrap180(t.yaw - v.yaw) / n) % 360);
+    v.pitch = fl(fl(v.pitch + (t.pitch - v.pitch) / n) % 360);
+    t.inc--;
+    place(v, x, y, z);
+    return;
+  }
+  place(v, v.x + v.vx, v.posY + v.vy, v.z + v.vz);
+  v.vx *= DRAG_H; v.vy *= DRAG_V; v.vz *= DRAG_H;
+}
+
 export class RemoteVehicles {
   constructor(world) {
     this.world = world;
@@ -46,6 +81,7 @@ export class RemoteVehicles {
     for (const s of message.set ?? []) {
       if (typeof s?.v !== 'string' || ![s.x, s.y, s.z, s.yaw, s.pitch].every(Number.isFinite)) continue;
       let c = this.copies.get(s.v);
+      const fresh = !c;
       if (!c) {
         const boat = s.v[0] === 'b';
         const v = boat ? this.boats.spawnBoat({ x: s.x, y: s.y, z: s.z, yaw: s.yaw }) : this.carts.spawnCart(Number.isInteger(s.t) ? s.t : 0, { x: s.x, y: s.y, z: s.z, items: [] });
@@ -53,12 +89,17 @@ export class RemoteVehicles {
         Object.assign(v, { px: s.x, py: s.y, pz: s.z, yaw: s.yaw, pitch: s.pitch, prevYaw: s.yaw, prevPitch: s.pitch });
         c = { v, target: s, turn: 0, since: CART_SEND_INTERVAL, pending: null };
         this.copies.set(s.v, c);
+        if (boat && s.bc === 1) { boatSetVelocity(c, s); c.bt = null; } // b83 tracker83: the S0E (data 0: no motion), then the spawn's S12
       }
       c.target = s;
       // b70: a cart takes the state through cartSetPositionAndRotation2 on the tracker's cadence (tick). b71 mpreach71: a server that sends `cartCadence` already released it at the
       // tracker cadence (take it at once), and `cartMeta` states carry no new position (only the data fields below)
       if (!c.v.boat && !(message.cartCadence && s.cartMeta)) { c.pending = s; if (message.cartCadence) c.since = CART_SEND_INTERVAL; }
       const v = c.v;
+      if (v.boat) { // b83 tracker83: a tracked boat takes the S12 when its count moved, then the position packet (cartMeta: none this time); a plain state (an older server, or the boat this player rides) snaps in tick
+        c.tracked = s.bc === 1;
+        if (c.tracked && !fresh) { if (s.vs !== c.vs) boatSetVelocity(c, s); if (!s.cartMeta) boatSetPositionAndRotation2(c, s); } else if (!c.tracked) c.bt = null;
+      }
       if (v.boat) { v.timeSinceHit = s.th ?? 0; v.damage = s.dm ?? 0; v.forwardDir = s.fd ?? 1; } else {
         if (v.type === 6 && v.command && typeof s.cmd === 'string') v.command.command = s.cmd; // b63: watcher 23, what the command cart's GUI shows
         v.rolling = s.rl ?? 0; v.rollingDir = s.rd ?? 1; v.damage = s.dm ?? 0; v.lit = !!s.lit; v.fuse = s.fuse ?? -1;
@@ -82,6 +123,7 @@ export class RemoteVehicles {
         cartClientStep(c, (cv, x, y, z) => this.carts.setPosition(cv, x, y, z));
         continue;
       }
+      if (c.tracked) { boatClientStep(c, (bv, x, y, z) => this.boats.setPosition(bv, x, y, z), this.world); continue; } // b83 tracker83
       v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
       (v.boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
       v.yaw = s.yaw; v.pitch = s.pitch;

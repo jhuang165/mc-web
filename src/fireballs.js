@@ -10,6 +10,7 @@ import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
 import { FIREBALL, fireballAcceleration, fireballStep, fireballBurn, deflect, faceCell, lookVector } from "./blaze-ghast.js";
 import { fireballTurn } from "./fireball-turn.js"; // b82 mpball82
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
+import { serverBallSplash } from "./fireball-splash.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
@@ -95,6 +96,7 @@ export class Fireballs {
     // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
     const water = waterAcceleration(mobs.world, entityWaterBox(box));
     b.vx += water.push[0]; b.vy += water.push[1]; b.vz += water.push[2];
+    serverBallSplash(mobs, b, water.wet, box[1], b.width); // b83 tracker83: sa.N's splash on entering water (not on the first update): S29 sound, the particle draws
     fireballBurn(b, water.wet, b.large); // b82 mpball82: the fire counter, the watched burning flag and (large ball) setBeenAttacked; then setFire(1)
     const was = b.inGround;
     if (was && this.stick(b)) return;

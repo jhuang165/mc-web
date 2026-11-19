@@ -182,7 +182,8 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
   // b63 mpnether3: the orbs of `this.xp` (the current dimension's) for a tick message; what was last sent is kept on the orb set itself, one per dimension.
   xpField() {
     const out = {}, orbs = this.xp.orbs;
-    if (orbs.length || this.xp.orbsSent) { this.xp.orbsSent = orbs.length; out.xp = orbs.map(o => ({ i: o.id, x: o.x, y: o.y, z: o.z, v: o.value, c: o.color, vx: o.vx, vy: o.vy, vz: o.vz, ...(o.fire > 0 ? { b: 1 } : {}) })); } // b82 fireext82: `b` the fire flag (main.js syncMultiplayerOrbs reads it)
+    if (orbs.length || this.xp.orbsSent) { this.xp.orbsSent = orbs.length; out.xp = orbs.map(o => ({ i: o.id, x: o.x, y: o.y, z: o.z, v: o.value, c: o.color, vx: o.vx, vy: o.vy, vz: o.vz, ...(o.fire > 0 ? { b: 1 } : {}), ...(o.velocityChanged ? { vc: 1 } : {}) })); } // b82 fireext82: `b` the fire flag (main.js syncMultiplayerOrbs reads it); b83 tracker83: `vc` velocityChanged (EntityXPOrb.attackEntityFrom's setBeenAttacked)
+    for (const o of orbs) o.velocityChanged = false; // b83 tracker83: the entry clears it after its S12 (my.a(List) tail)
     return out;
   }
 }

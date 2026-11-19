@@ -282,24 +282,42 @@ export class ServerVehicles {
     // b71 mpreach71: a cart's position fields are the ones its EntityTrackerEntry last released (every 3 ticks, 4/32 block or 4/256 turn thresholds); other fields go at once
     const cartTrack = (this.cartTrack ??= new CartTracker());
     cartTrack.prune(new Set(all));
-    for (const v of all) if (!v.boat) states.set(v, { ...states.get(v), ...cartTrack.tick(v, states.get(v)) });
+    // b83 tracker83: boats too (80 / 3 / velocity), with the client entity's serverPos (1/32 steps, S18's + 1/64) and a boat's S12 motion (server-cart-track.js). `exact` keeps the
+    // plain state for the boat a viewer rides: the port seats its rider from the server (natively that client runs the boat's physics itself, isBoatEmpty false; not modelled).
+    const exact = new Map();
+    for (const v of all) { const st = states.get(v); if (v.boat) exact.set(v, st); states.set(v, { ...st, ...cartTrack.tick(v, st) }); }
     for (const [id, view] of this.views) {
       const p = this.host.players.get(id);
-      if (!p) { view.known.clear(); continue; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
+      if (!p) { view.known.clear(); view.vis?.clear(); view.ref = null; view.leaving = []; continue; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
       const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map());
+      // b83 tracker83: the range test of EntityTrackerEntry.tryStartWachingThis (the square of side 2 * range around lastScaledPosition / 32, int division), run only when the
+      // vehicle's entry re-lists (it moved over 4 blocks: CartTracker `recheck`, with the scaled position from before its packets) or this player's own entry does (it moved over
+      // 4 blocks, joined, or its columns changed), as EntityTracker.updateTrackedEntities; in between the membership holds. A vehicle that leaves goes at the viewer's next update
+      // (the S13 of EntityPlayerMP.onUpdate's destroyedItemsNetCache): one tick later, as the executed boatFar case. Port-read for the destroy delay (TrackerItemsProbe).
+      const pp = p.position, ref = view.ref, vis = (view.vis ??= new Set()), leaving = view.leaving ?? [];
+      const relist = !ref || (pp.x - ref.x) ** 2 + ((pp.y ?? 0) - ref.y) ** 2 + (pp.z - ref.z) ** 2 > 16 || !!this.host.chunkViews?.takeFresh?.(id, 'vehicles');
+      if (relist) view.ref = { x: pp.x, y: pp.y ?? 0, z: pp.z };
+      view.leaving = [];
       for (const v of all) {
-        if (Math.abs(v.x - p.position.x) > range || Math.abs(v.z - p.position.z) > range) continue;
+        const key = keyOf(v), en = cartTrack.entries.get(v), at = en?.recheck ? en.pre : relist ? cartTrack.scaled(v) : null;
+        if (at) {
+          const inside = Math.abs(pp.x - at[0]) <= range && Math.abs(pp.z - at[1]) <= range;
+          if (inside) vis.add(key); else if (vis.delete(key) && view.known.has(key)) { view.known.delete(key); knownPos.delete(key); view.leaving.push(key); }
+        }
+        if (!vis.has(key)) continue;
         if (this.host.chunkViews && !this.host.chunkViews.sees(id, Math.floor(v.x / 16), Math.floor(v.z / 16))) continue; // b72 mpstream72: the column was not sent (or was unloaded)
-        const key = keyOf(v), json = JSON.stringify(states.get(v));
+        const state = v.boat && p.mount?.key === key ? exact.get(v) : states.get(v), json = JSON.stringify(state);
         seen.add(key);
         if (view.known.get(key) !== json) {
-          const st = states.get(v), pos = v.boat ? '' : `${st.x},${st.y},${st.z},${st.yaw},${st.pitch}`, had = view.known.has(key);
+          const st = state, tracked = !v.boat || st.bc === 1, pos = tracked ? `${st.x},${st.y},${st.z},${st.yaw},${st.pitch},${st.rs ?? ''}` : '', had = view.known.has(key);
           view.known.set(key, json);
-          set.push(!v.boat && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : st); // cartMeta: the position is the one the client holds, do not re-aim it
+          set.push(tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : st); // cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
           knownPos.set(key, pos);
         }
       }
-      for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); del.push(key); }
+      for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); del.push(key); } // dead, or its column not sent
+      for (const key of leaving) if (!vis.has(key)) del.push(key); // last tick's untracked vehicles: the S13 now
+      for (const key of vis) if (!all.some(v => keyOf(v) === key)) vis.delete(key);
       if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
     }
     for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel

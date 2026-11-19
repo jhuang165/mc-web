@@ -156,7 +156,7 @@ export class ServerDimensions {
     const end = this.end.saveField(); if (end) out.end = end; // b63 mpend
     return Object.keys(out).length ? { dimensions: out } : {};
   }
-  list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}) })); } // b82 fireext82: `b` the fire flag
+  list(items) { return items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}), ...(e.velocityChanged ? { vc: 1 } : {}) })); } // b82 fireext82: `b` the fire flag; b83 tracker83: `vc` velocityChanged (simulation.js itemList)
   // The world snapshot a player in another dimension joins or arrives with (null for an Overworld player).
   snapshotFor(playerId) {
     const p = this.sim.players.get(playerId);
@@ -250,6 +250,7 @@ export class ServerDimensions {
       }
       n.dirtyTiles.clear();
       const list = this.list(n.items), items = !list.length && !n.itemsSent ? {} : { items: list };
+      for (const e of n.items.items) e.velocityChanged = false; // b83 tracker83: cleared once its S12 is decided (my.a(List) tail)
       n.itemsSent = list.length;
       out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(dim), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...sim.serverItems.xpField(), ...(n.taken.length ? { taken: n.taken.splice(0) } : {}), ...n.containers.actionsField() }; // b63: this dimension's orbs and pickups (Nether or End)
     });

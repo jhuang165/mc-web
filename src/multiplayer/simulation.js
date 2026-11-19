@@ -296,7 +296,7 @@ export class DedicatedSimulation {
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
   pickup(id, eids, fits) { return this.serverItems.pickup(this.players.get(id), eids, fits); }
   // b82 fireext82: `b` the fire flag (Entity.isBurning, flag 0 natively) the cadence-off rows lacked; the client draws the flames from it (main.js syncMultiplayerItems)
-  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}) })); }
+  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}), ...(e.velocityChanged ? { vc: 1 } : {}) })); } // b83 tracker83: `vc` Entity.velocityChanged (setBeenAttacked: a blast, fire or cactus hurt), the entry's tail S12 (server-object-tracker.js)
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
@@ -685,7 +685,7 @@ export class DedicatedSimulation {
     return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
-  itemsField() { const list = this.itemList(); if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
+  itemsField() { const list = this.itemList(); for (const e of this.items.items) e.velocityChanged = false; /* b83 tracker83: EntityTrackerEntry clears it after its S12 (my.a(List) tail), once a tick */ if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
   presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, ...capeFields(p), using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...velocityField(p, this.ticks), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies

@@ -129,8 +129,8 @@ test("look-only cart update: rotation released, position kept; a move releases t
   cart.x = 10.05; cart.yaw = 40; // creeps 0.05 (under 4/32 block) while turning 40 degrees: only a look goes out
   let last;
   for (let t = 1; t <= 3; t++) last = tr.tick(cart, st());
-  assert.equal(last.yaw, 40); assert.equal(last.x, 10, "position stays at the last released one");
+  assert.equal(last.yaw, 39.375); assert.equal(last.x, 10, "position stays at the last released one"); // b83 tracker83: the client holds the S16 byte: 28 * 360 / 256
   cart.x = 10.5; cart.yaw = 41; // a move of 0.45 block with a 1 degree turn (under 4/256 turn): S15 only
   for (let t = 4; t <= 6; t++) last = tr.tick(cart, st());
-  assert.equal(last.x, 10.5); assert.equal(last.yaw, 40, "a move packet carries no rotation");
+  assert.equal(last.x, 10.5); assert.equal(last.yaw, 39.375, "a move packet carries no rotation");
 });
