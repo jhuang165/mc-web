@@ -545,7 +545,7 @@ export class ObjectTracker extends MobTracker {
   }
   drainEvents() { const e = this.events; this.events = []; return e; }
   // the env of a client fish hook: no angler, no entities, no fish timers (FishHook.tick's remote branch)
-  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, entities: (area) => this.targets().filter((t) => (!t.reach || t.reach(area)) && t.box[3] > area[0] && t.box[0] < area[3] && t.box[4] > area[1] && t.box[1] < area[4] && t.box[5] > area[2] && t.box[2] < area[5]).map((t) => ({ ...t, angler: t.ref === "player" })), hitEntity: (ref, target) => this.attack(ref, 0, target), canSeeSky: () => false, sound: (name, v, p, at) => this.sound(name, at.x, at.y, at.z, v, p), particle() {}, fx: { spawn: (...a) => this.particle(...a) }, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
+  hookEnv(world) { return (this._hookEnv ??= { remote: true, player: { x: 0, y: 0, z: 0, valid: true }, canLightningStrike: () => false, entities: (area) => this.targets().filter((t) => (!t.reach || t.reach(area)) && t.box[3] > area[0] && t.box[0] < area[3] && t.box[4] > area[1] && t.box[1] < area[4] && t.box[5] > area[2] && t.box[2] < area[5]).map((t) => ({ ...t, angler: t.ref === (this.hookAngler ?? "player") })), hitEntity: (ref, target) => this.attack(ref, 0, target), canSeeSky: () => false, sound: (name, v, p, at) => this.sound(name, at.x, at.y, at.z, v, p), particle() {}, fx: { spawn: (...a) => this.particle(...a) }, world: null, worldRand: null }), this._hookEnv.world = world, this._hookEnv; }
   // the simulator state a client entity starts with
   newSim(c) {
     const k = c.kind, s = this.sims;

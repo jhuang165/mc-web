@@ -10,6 +10,11 @@ export class RemoteFishing {
     if (message.type === 'fishHooks') this.setHooks(message.hooks ?? []);
     else if (message.type === 'fishFx') for (const e of message.events ?? []) if (typeof e?.n === 'string' && [e.x, e.y, e.z].every(Number.isFinite)) this.hooks.particle?.(e.n, e.x, e.y, e.z, e.vx || 0, e.vy || 0, e.vz || 0);
   }
+  // b85 mphook85: the hook copies of the thrown-entity lane (thrown-copy.js rows: x/y/z and the previous tick's px/py/pz from the copy's own update, `angler` its S0E data).
+  lane(rows) {
+    this.rows = rows.filter(r => [r.x, r.y, r.z, r.px, r.py, r.pz].every(Number.isFinite));
+    this.map.clear();
+  }
   setHooks(list) {
     const seen = new Set();
     for (const h of list) {

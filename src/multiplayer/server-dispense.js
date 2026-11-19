@@ -50,7 +50,7 @@ export class ServerDispense {
     this.primed = [];
     this.ballTracks = new BallTracks(); // b81 blast81
     // b84 mpthrown84: arrows, thrown balls, rockets and eyes of this instance's own dimension go out as tracker packets (thrown-tracks.js); a stand-in lane keeps the exact rows
-    this.thrownTracks = new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e) });
+    this.thrownTracks = new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e), shooterOf: e => this.shooterRef(e) });
     this.rockets = new FireworkRockets();
     this.ids = new WeakMap(); this.nextId = 0;
     this.fx = [];  // dispFx of this tick, in order
@@ -200,6 +200,7 @@ export class ServerDispense {
 
   // One tick, after the players moved and before ServerMobs.tick (items, TNT, balls, arrows, rockets, then the mobs and their fireballs).
   tick() {
+    this.thrownTracks.birth(this.thrownList()); // b85 mphook85: the join state of what the use / dispense / action pass spawned, before the entity pass
     this.restorePotions(); this.restoreFireballs();
     const mobs = this.mobs;
     this.tntTicked = new WeakSet(); // b81 blast81: the TNT that had its update this tick (tickJoined)
@@ -334,7 +335,16 @@ export class ServerDispense {
     for (const b of this.potions?.projectiles.balls ?? []) if (!b.dead && (b.kind === 'potion' || b.kind === 'expBottle')) out.push({ e: b, kind: b.kind });
     for (const r of this.rockets.rockets) if (!r.dead) out.push({ e: r, kind: 'firework' });
     for (const e of this._eyes?.system.eyes ?? []) if (!e.dead) out.push({ e, kind: 'eyeOfEnder' });
+    out.push(...this.sim.fishing?.trackList(this.dim) ?? []); // b85 mphook85: fishing hooks (64 / 5 / velocity, S0E type 90 with the angler's id)
     return out;
+  }
+  // b85 mphook85: the entity an arrow's S0E data names (its shooter): a player's id or a mob's wire id (the wire carries it as the row's `sh`).
+  shooterRef(e) {
+    const who = this.ownerOf(e);
+    if (who) return { p: who.id };
+    const m = e.shooter;
+    if (m && typeof m === 'object' && typeof m.id === 'string' && m.id.startsWith('mob-')) return { m: Number(m.id.slice(4)) };
+    return null;
   }
   // Called by the simulation's tick tail: queues dispEnts / dispFx / projCollect on each player (`dispOut`, sent by server.js). A player who just saw entities gets one empty
   // snapshot to clear them. Every effect carries its dimension (`dim`, 0 when absent) and goes only to the players of that dimension.

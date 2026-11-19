@@ -15,22 +15,29 @@
 import { ObjectTracker as ObjectReader, ObjectEntry, Watcher, metaValues, OBJECT_KINDS } from '../object-tracker.js';
 import { sizeClass } from '../entity-tracker.js';
 
-export const THROWN = Object.freeze(['arrow', 'snowball', 'egg', 'enderPearl', 'potion', 'expBottle', 'eyeOfEnder', 'firework']);
+export const THROWN = Object.freeze(['arrow', 'snowball', 'egg', 'enderPearl', 'potion', 'expBottle', 'eyeOfEnder', 'firework', 'fishHook']);
 const everywhere = () => true;
 
 export class ThrownTracks {
   // `limit()`: the tracker range limit; `watches(pid, cx, cz)`: the chunk gate; `fresh(pid)`: true when columns changed (re-list); `idOf(e)`: the entity's numeric id.
-  constructor({ limit = () => 144, watches = everywhere, fresh = () => false, idOf }) {
-    this.limit = limit; this.watches = watches; this.fresh = fresh; this.idOf = idOf;
+  // b85 mphook85: `shooterOf(e)` -> { p: playerId } | { m: mobWireId } | null, the entity the S0E data names for an arrow or a hook (the wire carries it as the row's `sh`).
+  constructor({ limit = () => 144, watches = everywhere, fresh = () => false, idOf, shooterOf = () => null }) {
+    this.limit = limit; this.watches = watches; this.fresh = fresh; this.idOf = idOf; this.shooterOf = shooterOf;
+    this.births = new WeakMap(); // b85 mphook85: an entity's state at its join (see `birth`)
     this.reader = new ObjectReader(10, Math.random, null); // only its `read` is used: the live entity -> the stand-in the entry reads
     this.objs = new Map(); this.views = new Map();
     this.late = []; // destroys held back one tick: { pid, id, k, packet }
   }
   get active() { return this.objs.size > 0 || this.late.length > 0; }
+  // b85 mphook85: EntityTrackerEntry is built by World.spawnEntityInWorld (EntityTracker.addEntityToTracker), so its baseline (the scaled position and angles of the constructor, bytecode-read
+  // my.<init>: d/e/f = floor(pos * 32), g/h = the angles) is the entity's state at its join, while the S0E (func_151260_c -> new fw(entity, ...)) reads the entity's position and motion when
+  // the viewer is added, after the join tick's own update (the use / dispense / mob pass runs before the tracker, simulation.js tick). Called before the entity pass: copies the state of every
+  // listed entity not seen yet, so `update` can build the entry from it and then read the flush state, as ObjectTracker.create does with takeBirth.
+  birth(list) { for (const { e } of list) if (!this.objs.has(e) && !this.births.has(e)) this.births.set(e, { ...e }); }
   // Once per tick after the entity pass. `list`: [{ e, kind }]; `players`: Map pid -> player of this dimension. Returns Map pid -> rows [{ i, k, p }].
   update(list, players) {
     const sendOut = new Map();
-    const push = (pid, o, packets) => { if (!packets.length) return; let l = sendOut.get(pid); if (!l) sendOut.set(pid, l = []); l.push({ i: o.p.id, k: o.kind, p: packets }); };
+    const push = (pid, o, packets) => { if (!packets.length) return; let l = sendOut.get(pid); if (!l) sendOut.set(pid, l = []); l.push({ i: o.p.id, k: o.kind, p: packets, ...(o.sh ? { sh: o.sh } : {}) }); };
     // last tick's held destroys go out now (before this tick's packets: the S13 of the previous tick's player update)
     const held = this.late.splice(0);
     for (const h of held) if (players.has(h.pid)) push(h.pid, h, [h.packet]);
@@ -46,7 +53,13 @@ export class ThrownTracks {
     }
     for (const { e, kind } of list) {
       let o = this.objs.get(e);
-      if (!o) this.objs.set(e, o = { kind, p: { id: this.idOf(e) }, entries: new Map(), ticks: 0 });
+      if (!o) {
+        this.objs.set(e, o = { kind, p: { id: e.entityId ?? this.idOf(e) }, entries: new Map(), ticks: 0, sh: null, birth: null }); // (a fishing hook's id is its own entityId, the one the server's mob ids gave)
+        const b = this.births.get(e); this.births.delete(e);
+        if (b) o.birth = this.reader.read(kind, b, { id: o.p.id });
+        if (kind === 'fishHook') o.sh = e.anglerId !== undefined ? { p: e.anglerId } : null; // the hook's S0E data is its angler
+        else if (kind === 'arrow') o.sh = this.shooterOf(e, kind) ?? null;
+      }
       this.reader.read(kind, e, o.p);
       o.vc = !!e.velocityChanged; o.air = e.airBorne === true;
       e.velocityChanged = false;
@@ -65,7 +78,10 @@ export class ThrownTracks {
         const spec = OBJECT_KINDS[o.kind];
         if (!en) {
           const object = { kind: o.kind, data: spec.data(o.p), objectType: spec.type };
+          const now = o.birth && o.ticks === 0 ? { ...o.p } : null; // a viewer of the join tick: the entry starts from the join state, then reads the flush state
+          if (now) Object.assign(o.p, o.birth);
           o.entries.set(pid, en = new ObjectEntry(o.p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object, limit }, v.view, new Watcher(metaValues(o.kind, o.p), o.kind === 'arrow' && o.p.crit)));
+          if (now) Object.assign(o.p, now);
           en.ticks = o.ticks;
         } else if (moved) en.tryStart();
         en.watcher.update(metaValues(o.kind, o.p));

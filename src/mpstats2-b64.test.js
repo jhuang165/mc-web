@@ -33,13 +33,18 @@ test('casting with the rod makes a hook that the players of the dimension are to
   assert.equal(s.fishing.use(p), true);
   assert.ok(s.fishing.hookOf(p));
   s.tick();
-  const seen = messages(q, 'fishHooks').at(-1);
-  assert.equal(seen.hooks.length, 1); assert.equal(seen.hooks[0].o, p.id);
+  // b85 mphook85: the hook rides the thrown-entity tracker lane (S0E type 90 with the angler's id), no `fishHooks` message
+  assert.equal(messages(q, 'fishHooks').length, 0);
+  const rows = q.dispOut.filter(m => m.type === 'dispEnts' && m.trk).flatMap(m => m.trk).filter(r => r.k === 'fishHook');
+  assert.equal(rows.length, 1);
+  const spawn = rows[0].p.find(x => x.type === 'spawn');
+  assert.equal(spawn.data, p.id); assert.deepEqual(rows[0].sh, { p: p.id });
   assert.equal(s.fishing.use(p), true); // reel in: nothing bit, nothing caught, no wear
   assert.equal(s.fishing.hookOf(p), null);
   assert.equal(p.survival.held.damage ?? 0, 0);
-  q.dispOut.length = 0; s.tick();
-  assert.deepEqual(messages(q, 'fishHooks').at(-1)?.hooks, []); // cleared once
+  q.dispOut.length = 0; s.tick(); s.tick();
+  const later = q.dispOut.filter(m => m.type === 'dispEnts' && m.trk).flatMap(m => m.trk).filter(r => r.k === 'fishHook').flatMap(r => r.p);
+  assert.ok(later.some(x => x.type === 'destroy'), 'the destroy follows the reel-in');
 });
 
 test('a bite is landed as loot with the live item ids, an orb, one wear and the catch statistic', () => {
