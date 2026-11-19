@@ -234,7 +234,7 @@ export class Arrows {
   explodeOne(world, a, x, y, z, size) { // b83 blastorder83: one arrow's turn in doExplosionA's single list
     if (a.dead || isFrozen(a)) return;
     const hit = explosionImpact(world, x, y, z, size, a.x, a.y, a.z, a.y, box(a));
-    if (hit) { a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; }
+    if (hit) { a.velocityChanged = true; a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; } // b84 blastparts84: sa.a(ro, F) is setBeenAttacked (sa.Q), so the tracker's tail S12 carries the push
   }
   // EntityArrow.onUpdate for every arrow. `ctx`: targets (arrowTargets), mobs (the
   // EntityWorld, for damage), survival (the player's) and player ({ x, z }, for knockback).
