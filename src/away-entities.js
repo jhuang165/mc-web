@@ -220,9 +220,11 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   const self = {
     items, xp, primed, minecarts, boats, mobs, arrows, projectiles, rockets, hanging, falling: null,
     explode(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
-      const out = applyExplosion({ world, weather, mobs, items, xpOrbs: xp, arrows, projectiles, rockets /* b82 spblast82 */, hanging, falling: self.falling, primed, survival,
+      // b83 blastorder83: the run's minecarts and boats are in the blast's list too (hurt, pushed, a broken one drops at once through the walk's own drop); the run holds no eyes of
+      // ender or fishing hooks (eyes stay in the dimension's saved record, a hook belongs to its absent angler), so there are none to push.
+      const out = applyExplosion({ world, weather, mobs, items, xpOrbs: xp, arrows, projectiles, rockets /* b82 spblast82 */, hanging, falling: self.falling, primed, minecarts, boats, survival,
         position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: { observe() {} } },
-      { x, y, z, size, exploder, attacker, smoking, flaming, blue }, { ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), sound });
+      { x, y, z, size, exploder, attacker, smoking, flaming, blue }, { ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), sound, vehicleDrop: dropVehicle });
       rt.fluidChanges(out.changes.filter((c) => c[4] === 0 && c[3] !== 0));
       return out;
     },

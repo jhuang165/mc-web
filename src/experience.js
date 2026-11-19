@@ -77,16 +77,17 @@ export class ExperienceOrbs {
  // Explosion.doExplosionA visits existing orbs before any blocks are removed or ore XP spawns.
  // EntityXPOrb inherits Entity.getEyeHeight = 0: use posY (the box centre) for the push.
  explode(world,x,y,z,size,exploder=null){
-  for(const o of this.orbs){
-   if(!ringEntityActive(world,o))continue;
-   if(o.dead||o===exploder||isFrozen(o))continue;
-   const hit=explosionImpact(world,x,y,z,size,o.x,o.posY,o.z,o.posY,o.bb);
-   if(!hit)continue;
-   this.hurt(o,'explosion',hit.damage);
-   // Explosion applies motion even when attackEntityFrom returns false or kills the entity.
-   o.vx+=hit.push[0];o.vy+=hit.push[1];o.vz+=hit.push[2];
-  }
+  for(const o of this.orbs)if(o!==exploder)this.explodeOne(world,o,x,y,z,size);
   this.orbs=this.orbs.filter(o=>!o.dead);
+ }
+ // b83 blastorder83: one orb's turn in doExplosionA's single list (the caller filters the dead orbs after the pass).
+ explodeOne(world,o,x,y,z,size){
+  if(!ringEntityActive(world,o)||o.dead||isFrozen(o))return;
+  const hit=explosionImpact(world,x,y,z,size,o.x,o.posY,o.z,o.posY,o.bb);
+  if(!hit)return;
+  this.hurt(o,'explosion',hit.damage);
+  // Explosion applies motion even when attackEntityFrom returns false or kills the entity.
+  o.vx+=hit.push[0];o.vy+=hit.push[1];o.vz+=hit.push[2];
  }
  // EntityPlayer.onLivingUpdate (alive players, any game mode) collides the player's box grown by
  // (1, 0.5, 1) with each orb; EntityXPOrb.onCollideWithPlayer [sq.b_] needs xpCooldown 0 and

@@ -16,6 +16,7 @@ import { impactPlayerPearl } from "./pearl-player.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { explodeEvent, spawnLoot } from "./living-simulation.js";
 import { explodeNonLiving, explodeMobs } from "./explosion-simulation.js";
+import { candidateOrder } from "./candidate-order.js";
 import { JavaRandom } from "./java-random.js";
 import { setEntityRandom } from "./entities.js";
 import { arrowTargets } from "./bow.js";
@@ -30,7 +31,12 @@ export const entityListReference = JSON.parse(readFileSync(new URL("../public/re
 const STONE = 3, PORT_ID = { 1: 3, 9: 10 }, YOFF = { item: 0.125, tnt: TNT_Y_OFFSET };
 
 // `without`: "lootInTurn" (batch 48: death loot spawns at the drain after the walk), "throwTargets" (batch 46: the player's balls miss carts and boats); leave one batch 45 behaviour out to show a record needs it: "blast" (a blast reaches only items, as before), "mobPush" (the vehicles do not push mobs in the walk).
+// b83 blastorder83: EntityListProbe's world double (EW) answers every entity query from one flat list, so a replayed blast runs its rows in the given order, not the chunk order.
 export function replayEntityList(c, onBoom = null, without = null) {
+  const flat = candidateOrder.flat; candidateOrder.flat = true;
+  try { return replayEntityListFlat(c, onBoom, without); } finally { candidateOrder.flat = flat; }
+}
+function replayEntityListFlat(c, onBoom = null, without = null) {
   const ew = new EntityWorld(plain([]), [], () => 0.5);
   ew.brightnessLevel = () => 15; // the probe world's light
   ew.isDaytime = () => false;

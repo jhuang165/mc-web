@@ -233,13 +233,15 @@ export class ItemEntities {
   }
   // Explosion.doExplosionA: posY is the box centre, with inherited eye height 0.
   explode(world, x, y, z, size, exploder = null) {
-    for (const e of this.items) {
-      if (e.dead || e === exploder || isFrozen(e)) continue;
-      const posY = e.y + W, hit = explosionImpact(world, x, y, z, size, e.x, posY, e.z, posY, this.box(e));
-      if (!hit) continue;
-      this.hurt(e, hit.damage);
-      e.mx += hit.push[0]; e.my += hit.push[1]; e.mz += hit.push[2];
-    }
+    for (const e of this.items) if (e !== exploder) this.explodeOne(world, e, x, y, z, size);
+  }
+  // b83 blastorder83: one item's turn in doExplosionA's single list (explosion-simulation.js runs every kind in the native list order).
+  explodeOne(world, e, x, y, z, size) {
+    if (e.dead || isFrozen(e)) return;
+    const posY = e.y + W, hit = explosionImpact(world, x, y, z, size, e.x, posY, e.z, posY, this.box(e));
+    if (!hit) return;
+    this.hurt(e, hit.damage);
+    e.mx += hit.push[0]; e.my += hit.push[1]; e.mz += hit.push[2];
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C), after the water
   // check: burning deals 1 (onFire) every 20 ticks of the counter; touching lava

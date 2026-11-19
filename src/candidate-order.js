@@ -26,8 +26,12 @@ export function stampEntity(ref, x, y, z, first = false, lookup = false) {
 }
 // Batch 73 (mobcells73): the re-slice of one walked entity right after its update (the single-player walk in EntityWorld.tickMobs calls this for every mob, item, orb, arrow, vehicle),
 // so its cell and list place are current when a sweep or pick looks. An entity with a non-finite position is left alone. `posY` is the entity's own y (an orb's `y` is its box bottom).
+// b83 blastorder83 (executed, BlastOrderProbe): primed TNT and falling blocks keep their box bottom in `y` too; their posY (the slice the chunk files them in) is y + 0.49 (yOffset
+// height / 2), so one standing just below a slice border is filed in the slice above.
+const HALF_BLOCK = Math.fround(0.49);
+export const walkedY = (e) => e?.posY ?? (e?.stack && e.hover !== undefined ? e.y + 0.125 : e && e.type === undefined && (("fuse" in e && "placer" in e) || ("block" in e && "ticks" in e)) ? e.y + HALF_BLOCK : e?.y);
 export function stampWalked(e, first = false) {
-  const y = e?.posY ?? (e?.stack && e.hover !== undefined ? e.y + 0.125 : e?.y); // an item's y is its box bottom, its posY the centre (yOffset 0.125)
+  const y = walkedY(e); // an item's y is its box bottom, its posY the centre (yOffset 0.125)
   if (!e || !Number.isFinite(e.x) || !Number.isFinite(y) || !Number.isFinite(e.z)) return;
   stampEntity(e, e.x, y, e.z, first);
 }

@@ -15,9 +15,10 @@ import { SharedMobTracker } from './server-mob-entries.js';
 import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
 import { EntityIds } from '../entity-ids.js';
 import { drainMobEvents } from '../living-simulation.js';
-import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact, explodeTnt } from '../explosion.js';
+import { explosionBlocks, explosionOutcome, explosionResistance, explosionImpact } from '../explosion.js';
 import { JavaRandom } from '../java-random.js';
-import { explodeMobs, explodeNonLiving } from '../explosion-simulation.js';
+import { mobRows, nonLivingRows, tntRows, finishBlastRows } from '../explosion-simulation.js';
+import { blastNear, runBlastRows } from '../explosion-extras.js'; // b83 blastorder83
 import { livingEyeHeight } from '../ai.js';
 import { serverCritical, sendCritFx } from './server-crit-fx.js'; // b73 particles73
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
@@ -239,30 +240,36 @@ export class ServerMobs {
     const host = this.host, { world, weather, items } = host, { x, y, z, size } = ev;
     if (!(size > 0)) return;
     const list = explosionBlocks(world, x, y, z, size, weather.random, ev.blue ? boundedSkullResistance : explosionResistance);
-    const primed = this.host.dispense?.primed, primedBefore = primed ? [...primed] : []; // the entity list doExplosionA took: TNT a nested blast primes is not in it
+    const primed = this.host.dispense?.primed; // the entity list doExplosionA took (the rows below): TNT a nested blast primes is not in it
     const placer = ev.source && 'fuse' in ev.source ? ev.source.placer ?? null : ev.source ?? null; // Explosion.getExplosivePlacedBy: a TNT's placer, a living exploder, else null
-    const itemsBefore = items?.items?.length ?? null, orbsBefore = host.serverItems?.xp?.orbs?.length ?? null; // the entity list is taken before a kill drops its loot
-    explodeMobs({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null });
     // b82 spblast82 (bytecode-read agw.a()): doExplosionA hurts and pushes every entity in its list, so the server's items, orbs, arrows, thrown entities, falling blocks,
-    // minecarts and boats (a broken one drops at once), rockets, eyes, hooks, fireballs and knots get the single-player treatment (explodeNonLiving); only paintings and item
+    // minecarts and boats (a broken one drops at once), rockets, eyes, hooks, fireballs and knots get the single-player treatment (nonLivingRows); only paintings and item
     // frames (b68 mppaintings) were reached before. The vehicles' world is the swapped dimension's (`host.vehicles`), as the primed TNT below.
+    // b83 blastorder83: the mobs, those entities, the other primed TNT (b81 blast81, no damage) and every player in reach are ONE list in the world's list order (candidate-order.js),
+    // taken before the first hurt (a kill's loot, a nested blast's orbs or TNT are in no row), as applyExplosion does.
     const vehicles = host.vehicles, drop = d => { if (d.stack) items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); };
-    explodeNonLiving({ world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
+    const b = { world, x, y, z, size, exploder: ev.source ?? null, placer };
+    const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
-      hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) }, x, y, z, size, ev.source ?? null, false, drop, itemsBefore, orbsBefore, placer);
-    for (const t of primedBefore) if (t !== ev.source) explodeTnt(world, t, x, y, z, size); // b81 blast81: Explosion.doExplosionA pushes other primed TNT (no damage), as applyExplosion
+      hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) };
+    const rows = [...mobRows({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null }),
+      ...nonLivingRows(state, b, { vehicleDrop: drop }), ...(primed ? tntRows(primed, b) : [])];
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
-      const p = v.player.position, s = v.player.survival;
-      if (s.health <= 0) continue;
-      const lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)
-      const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
-      if (!hit) continue;
-      if (!s.creative) this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null }); // a creative player takes no damage but is pushed all the same (the push is in doExplosionA, not attackEntityFrom)
-      const kick = blastKnockback(s.inventory?.armor ?? [], hit.impact), scale = hit.impact && kick !== hit.impact ? kick / hit.impact : 1; // agi.a: Blast Protection on the server's own motion only
-      for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
-      knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
+      const p = v.player.position, s = v.player.survival, lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)
+      if (s.health <= 0 || !blastNear(b, p.x, serverPosY(p.y, lying), p.z)) continue;
+      rows.push({ key: v.player, pos: [p.x, p.y + Math.fround(1.62), p.z], first: true, run: () => {
+        if (s.health <= 0) return;
+        const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
+        if (!hit) return;
+        if (!s.creative) this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null }); // a creative player takes no damage but is pushed all the same (the push is in doExplosionA, not attackEntityFrom)
+        const kick = blastKnockback(s.inventory?.armor ?? [], hit.impact), scale = hit.impact && kick !== hit.impact ? kick / hit.impact : 1; // agi.a: Blast Protection on the server's own motion only
+        for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
+        knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
+      } });
     }
+    runBlastRows(rows);
+    finishBlastRows(state);
     const out = { list, ...explosionOutcome(world, list, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube }) }; // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
