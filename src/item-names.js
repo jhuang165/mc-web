@@ -97,6 +97,9 @@ export function stackName(stack, ITEMS) {
   if (stack.id === POTION_ITEM) { const list = stackPotionEffects(stack); return localizedPotionName(stack.damage | 0, list) ?? potionName(stack.damage | 0, list); } // CustomPotionEffects override the damage value's effects
   if (stack.id === ITEM_SKULL && skullOwnerName(stack)) return localizedSkullOwner(stack) ?? skullOwnerName(stack); // ItemSkull.getItemStackDisplayName
   if (stack.id === ITEM_WRITTEN_BOOK) return bookDisplayName(stack); // ItemEditableBook.getItemStackDisplayName: the title
+  // b83 plants83: ItemColored.getUnlocalizedName (abr, bytecode-read) uses the base tile.tallgrass key past its 3 subtypes, so a shrub (tallgrass:0)
+  // stack with rawDamage 3+ reads "Grass" like ITEM_NAMES[31]'s last entry, not "Shrub".
+  if (stack.id === 83 && Number.isInteger(stack.rawDamage) && stack.rawDamage >= 3 && stack.rawDamage <= 32767) return (lang.table ? tr(ITEM_KEYS[31].at(-1) + '.name') : undefined) ?? nativeName(31, stack.rawDamage);
   return localizedItemName(stack.id, stack.damage, !!item?.variants) ?? item?.variants?.[stack.damage | 0] ?? item?.name ?? '';
 }
 /** The one display-name function (custom name first, then the selected language, then the baked English name). */

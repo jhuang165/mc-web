@@ -760,8 +760,8 @@ export class MeshMethods {
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z);
     // blm.l: d3 = d0 + 0.5 - 0.45, d4 = d0 + 0.5 + 0.45 (and d5/d6 for z) in double arithmetic: not px + 0.05 / px + 0.95, which differ in the last double bit and so, now and then, in the float the Tessellator stores.
     const x0 = px + 0.5 - 0.45, x1 = px + 0.5 + 0.45, z0 = pz + 0.5 - 0.45, z1 = pz + 0.5 + 0.45;
-    // BlockTallGrass (not the dead shrub), BlockReed and BlockDoublePlant grass/fern: the biome grass colour of this one position.
-    const grassy = b === 39 || b === FERN || b === REEDS || (b === DOUBLE_PLANT && ((plantMeta & 7) === 2 || (plantMeta & 7) === 3)),
+    // BlockTallGrass (not the dead shrub; b83 plants83: its meta 3+ cells, colorMultiplier meta != 0), BlockReed and BlockDoublePlant grass/fern: the biome grass colour of this one position.
+    const grassy = b === 39 || b === FERN || b === REEDS || (b === DEAD_SHRUB && (raw & 15) !== 0) || (b === DOUBLE_PLANT && ((plantMeta & 7) === 2 || (plantMeta & 7) === 3)),
       tint = grassy ? this.biomeColors.grassAt(x + this.colorX, y, z + this.colorZ) : null;
     m.quad([[x0, py, z0], [x1, py, z1], [x1, py + 1, z1], [x0, py + 1, z0]], uvs, 1, light, "mirror");
     if (tint !== null) m.tint(tint);

@@ -3,13 +3,14 @@
 // their original positions without requiring a browser or scene.
 import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
 import { validRawDamage } from "./inventory.js"; // b82 pots82
-import { collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
+import { collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, YELLOW_FLOWER, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
 import { canPlaceChest, placeChest, placementFacing } from "./chest.js";
 import { isChestBlock, chestBlockOfItem, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { flowerCanStay } from "./flowers.js";
+import { rawDamageCell } from "./plant-damage.js"; // b83 plants83
 import { isMushroom, mushroomCanStay } from "./plant-light.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
@@ -145,7 +146,10 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if(id===69){
     if(![1,2,29,30].includes(world.get(p[0],p[1]-1,p[2]))||!placementReplaceable(world.get(...p))||world.get(p[0],p[1]+1,p[2])!==0||!withinBounds([p[0],p[1]+1,p[2]]))return result(false,'double-plant-support',id,p);
     if(!survival.creative&&!survival.count(id))return result(false,'empty-stack',id,p);
-    world.put(...p,id,survival.held?.damage||0,true);world.set(p[0],p[1]+1,p[2],id,true,8);
+    // b83 plants83: ItemDoublePlant.getMetadata is the damage (a rawDamage stack's & 15); BlockDoublePlant.onBlockPlacedBy (ako, bytecode-read) then
+    // sets the top to 8 | (((floor(yaw * 4 / 360 + 0.5) & 3) + 2) % 4), the facing bits the port used to leave at 0.
+    const lower=validRawDamage(survival.held?.rawDamage)?survival.held.rawDamage&15:survival.held?.damage||0;
+    world.put(...p,id,lower,true);world.set(p[0],p[1]+1,p[2],id,true,8|(((Math.floor(Math.fround(Math.fround(minecraftYaw(yaw||0)*4)/360)+0.5)&3)+2)%4));
     if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);updateBlock(p[0],p[2],p[1]+1);sound(true,id,p);markUnsaved();return result(true,'double-plant',id,p);
   }
   // ItemSlab.onItemUse (stone-utility.js planSlabUse): merge into a double slab on the open face or in the adjacent cell, else
@@ -203,6 +207,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // BlockPumpkin.canPlaceBlockAt (pumpkin 86, jack o'lantern 91): replaceable cell and a solid top surface below (block-audit-reference.json place rows).
   if ((id === 67 || id === 148) && !railSolidTop(world, p[0], p[1] - 1, p[2])) return result(false, "pumpkin-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
+  // b83 plants83: BlockTallGrass is a BlockBush, so canPlaceBlockAt needs grass, dirt or farmland below like the flowers (ajr.j).
+  if ((id === TALL_GRASS || id === DEAD_SHRUB || id === FERN) && !flowerCanStay(world, flowers, ...p)) return result(false, "plant-support", id, p);
   // BlockBush.canPlaceBlockAt = canBlockStay; the mushroom's adds the full-light < 13 term (plant-light.js).
   if (isMushroom(id) && !mushroomCanStay(world, ...p)) return result(false, "mushroom-support", id, p);
   if (id === SAPLING && !saplingCanStay(world, ...p)) return result(false, "sapling-support", id, p);
@@ -222,6 +228,10 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
+  // b83 plants83: a dandelion or tallgrass:0 stack with rawDamage places that metadata (ItemMultiTexture/ItemColored.getMetadata return the damage,
+  // bytecode-read); tallgrass:1/2 are the port's tall grass and fern cells (plant-damage.js rawDamageCell).
+  const rawCell = (id === YELLOW_FLOWER || id === DEAD_SHRUB) && validRawDamage(survival.held?.rawDamage) ? rawDamageCell(id, survival.held.rawDamage) : null;
+  const cellId = rawCell?.id ?? id;
   // b82 pots82: ItemMultiTexture (adl, the rose and sapling items) returns the damage from getMetadata (bytecode-read), stored as meta & 15: a rawDamage stack places that.
   const meta = isColoredBlock(id) ? coloredPlacedMeta(id, survival.held?.damage || 0, side, doorRotationYaw(yaw)) : id === 67 ? pumpkinFacingMeta(doorRotationYaw(yaw)) : id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? ((id === RED_FLOWER || id === SAPLING) && validRawDamage(survival.held?.rawDamage) ? survival.held.rawDamage & 15 : survival.held?.damage || 0)
     : id === LADDER ? placedLadderMeta(world, ...p, side)
@@ -241,13 +251,14 @@ export function placeHeldBlock(state, request, hooks = {}) {
           : id === HOPPER ? hopperPlacedMeta(side)
           : isDispenserPiston(id) ? pistonOrientation(p[0], p[1], p[2], position.x, position.y, position.z, minecraftYaw(yaw))
           : 0;
-  world.set(...p, id, false, meta);
+  const cellMeta = rawCell ? rawCell.meta : meta;
+  world.set(...p, cellId, false, cellMeta);
   if (intersects(world, position.x, position.y, position.z) || entityBlocked(p)) {
     const player = intersects(world, position.x, position.y, position.z);
     world.set(...p, old, false, oldMeta);
     return result(false, player ? "player-collision" : "entity-collision", id, p);
   }
-  world.set(...p, id, true, meta);
+  world.set(...p, cellId, true, cellMeta);
   if (isChestBlock(id)) placeChest(world, survival.chests, ...p, yaw, id);
   if (id === ENDER_CHEST) (survival.enderTiles ??= {})[p.join(',')] ??= newEnderTile(); // the lid state chest-renderer.js draws
   if (id === DISPENSER || id === DROPPER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
@@ -267,7 +278,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (!survival.creative) survival.take(itemId);
   updateBlock(p[0], p[2], p[1]);
   renderHotbar();
-  sound(true, id, p);
+  sound(true, cellId, p);
   markUnsaved();
-  return result(true, "block", id, p);
+  return result(true, "block", cellId, p);
 }

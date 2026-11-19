@@ -14,6 +14,7 @@ import { breakPlayerBlock } from '../block-break-simulation.js';
 import { Profiler } from '../profiler.js';
 import { profilerTick } from '../commands-extra.js';
 import { collides } from '../world.js';
+import { musicOf } from './server-music.js'; // b83 plants83
 import { playerSpawnPoint, topSolidOrLiquidBlock } from '../world-spawn.js';
 
 export const WORLD_COMMANDS = ['setblock', 'testforblock', 'testfor', 'setworldspawn', 'playsound', 'spreadplayers', 'debug'];
@@ -62,6 +63,7 @@ export function worldCommandsHost(sim, p, forPlayer) {
       world: () => sim.world, survival: () => sim.tiles, changed() {}, updateBlock() {},
       skulls: () => sim.tileEntities.skulls, beaconTile: (x, y, z) => sim.tileEntities.beacons.ensure(x, y, z), spawners: () => sim.tileEntities.spawners,
       commandTile: (x, y, z) => sim.tileEntities.commandBlocks?.tile(x, y, z), // b80 mpcmd80: /setblock and /testforblock read and write the command block's Control data
+      signs: () => sim.tileEntities.signs, music: () => (sim.redstone ? musicOf(sim.redstone) : null), comparators: () => sim.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
       // World.func_147480_a(x, y, z, true): the block breaks with its drops and the 2001 effect for everyone (no breaker). The harvest rule is the hand's (breakPlayerBlock).
       dropStacks: (stacks, x, y, z) => sim.serverItems.stacksDrop(stacks, x, y, z), // b82 pots82: a /setblock-replaced pot's plant (command-host.js)
       destroyBlock: (x, y, z) => {
