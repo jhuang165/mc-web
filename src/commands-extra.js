@@ -178,13 +178,14 @@ export function createExtraCommands(ctx) {
       if (host.printTo) return host.printTo(target, out.component); // a server: the component goes to the named player (EntityPlayerMP.addChatMessage), not the sender
       (host.printPlayer ?? host.print)(out.component);
     },
-    // CommandAchievement: only "give" (1.7.10 has no "take"); another first word does nothing.
+    // CommandAchievement: only "give" (1.7.10 has no "take"); b83 cmdexec83 (bytecode-read ae.b, executed cmd-exec-reference.json): another first word, checked after the
+    // stat and the player, throws the usage line.
     achievement(a) {
       if (a.length < 2) usage("commands.achievement.usage");
       const stat = lookupStat(a[1]);
       if (!stat && a[1] !== "*") throw new CommandException("commands.achievement.unknownAchievement", [a[1]]);
       const target = a.length >= 3 ? player(a[2]) : ctx.targetArg([], 0);
-      if (a[0].toLowerCase() !== "give") return;
+      if (a[0].toLowerCase() !== "give") usage("commands.achievement.usage");
       const achievements = host.achievements;
       if (a[1] === "*") {
         for (const ach of ACHIEVEMENTS) achievements?.trigger(ach.id);

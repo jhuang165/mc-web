@@ -324,7 +324,7 @@ export function createCommandRunner(host) {
     kill() {
       if (host.isCommandBlock) throw senderNotPlayer();
       host.kill();
-      feedback("commands.kill.success");
+      say(tr("commands.kill.success"), translation("commands.kill.success")); // b83 cmdexec83 (executed, cmd-exec-reference.json): CommandKill tells the sender (addChatMessage), not notifyAdmins; arguments are ignored
     },
     gamemode(a) {
       if (a.length < 1) usage("commands.gamemode.usage");
@@ -371,7 +371,8 @@ export function createCommandRunner(host) {
     },
     clear(a) {
       const target = targetArg(a, 0);
-      const item = a.length >= 2 ? findItem(a[1]) : -1, damage = a.length >= 3 ? parseInt32(a[2]) : -1;
+      // b83 cmdexec83 (executed, cmd-exec-reference.json): the data value is parseIntWithMin(.., 0) ("-1" is tooSmall); without it every damage matches.
+      const item = a.length >= 2 ? findItem(a[1]) : -1, damage = a.length >= 3 ? parseIntMin(a[2], 0) : -1;
       const removed = host.clear(item, damage);
       if (removed === 0) throw new CommandException("commands.clear.failure", [target]);
       feedback("commands.clear.success", target, removed);
@@ -527,8 +528,10 @@ export function createCommandRunner(host) {
       if (a.length < 1) usage("commands.summon.usage");
       const p = (host.summonPosition ?? pos)(), here = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y + 0.5), z: Math.floor(p.z) + 0.5 }; // b68 summon2: host.summonPosition is the sender's native position (the dedicated server's End window is shifted)
       let { x, y, z } = here;
-      if (a.length >= 4) { x = parseCoordinate(here.x, a[1]); y = parseCoordinate(here.y, a[2], 0, 0); z = parseCoordinate(here.z, a[3]); }
-      if (!host.inWorld(x, y, z)) return feedback("commands.summon.outOfWorld");
+      // b83 cmdexec83 (executed, cmd-exec-reference.json): y is bounded like x and z (+-30000000, a NumberInvalidException), and World.blockExists takes the
+      // (int) casts, which truncate toward zero: y -0.5 (or ~-64.5 from 64) is row 0, in the world; 256 and above is outOfWorld.
+      if (a.length >= 4) { x = parseCoordinate(here.x, a[1]); y = parseCoordinate(here.y, a[2]); z = parseCoordinate(here.z, a[3]); }
+      if (!host.inWorld(Math.trunc(x), Math.trunc(y), Math.trunc(z))) return feedback("commands.summon.outOfWorld");
       const tag = dataTag(a, 4, "summon");
       if (tag === null) return;
       const type = entityByName.has(a[0]) ? SUMMONABLE[a[0]] : null;
@@ -540,7 +543,8 @@ export function createCommandRunner(host) {
     setblock(a) {
       if (a.length < 4) usage("commands.setblock.usage");
       const here = pos();
-      const x = Math.floor(parseCoordinate(here.x, a[0])), y = Math.floor(parseCoordinate(here.y, a[1], 0, 0)), z = Math.floor(parseCoordinate(here.z, a[2]));
+      // b83 cmdexec83 (executed): y is bounded +-30000000 too (tooBig/tooSmall before outOfWorld), then floored.
+      const x = Math.floor(parseCoordinate(here.x, a[0])), y = Math.floor(parseCoordinate(here.y, a[1])), z = Math.floor(parseCoordinate(here.z, a[2]));
       const id = findBlock(a[3]);
       const meta = a.length >= 5 ? parseIntBounded(a[4], 0, 15) : 0;
       const mode = a.length >= 6 ? a[5] : "replace";
@@ -555,7 +559,7 @@ export function createCommandRunner(host) {
     testforblock(a) {
       if (a.length < 4) usage("commands.testforblock.usage");
       const here = pos();
-      const x = Math.floor(parseCoordinate(here.x, a[0])), y = Math.floor(parseCoordinate(here.y, a[1], 0, 0)), z = Math.floor(parseCoordinate(here.z, a[2]));
+      const x = Math.floor(parseCoordinate(here.x, a[0])), y = Math.floor(parseCoordinate(here.y, a[1])), z = Math.floor(parseCoordinate(here.z, a[2])); // b83 cmdexec83: y bounded as setblock's
       const id = blockFromName(a[3]);
       const meta = a.length >= 5 ? parseIntBounded(a[4], -1, 15) : -1;
       if (!host.inWorld(x, y, z)) throw new CommandException("commands.testforblock.outOfWorld");

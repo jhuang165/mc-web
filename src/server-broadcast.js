@@ -20,6 +20,7 @@ import { makeStack } from "./inventory.js";
 import { stackName } from "./item-names.js";
 import { ITEMS } from "./survival.js";
 import { itemComponent } from "./item-component.js";
+import { clearMatcher } from "./command-host.js"; // b83 cmdexec83
 import { worldHost, playerHost, serverInventory, SERVER_WORLD_COMMANDS } from "./servercommands-b59.js";
 import { drainCartCommands, setCartCommand, runCommandLogic } from "./multiplayer/server-cart-commands.js"; // b63
 import { setBlockCommand } from "./multiplayer/server-command-blocks.js"; // b80 mpcmd80
@@ -188,7 +189,7 @@ export class ServerSocial {
     return {
       position: () => ({ x: p.position.x, y: p.position.y, z: p.position.z }),
       playerMode: () => (p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0),
-      teleport: (x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; },
+      teleport: (x, y, z) => { if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; }, // b83 cmdexec83: CommandTeleport mountEntity(null) first (executed)
       setGameMode: (mode) => { p.survival.mode = mode; p.survival.inventory.creative = p.survival.creative; if (!p.survival.creative) p.flying = false; op("setGameMode", mode); },
       kill: () => { op("kill"); (sim.events ??= []).push({ type: "death", id }); },
       give: (original, count, damage, tag) => {
@@ -199,16 +200,16 @@ export class ServerSocial {
         return { name: "[" + name + "]", component: itemComponent(stack, name), ignored: tag ? ["NBT tag"] : [] };
       },
       // The server clears every slot it holds (serverInventory: the hotbar the client sends, and the rest when inventory authority fills it); the client clears its own.
+      // b83 cmdexec83: matched by the original Item and damage (command-host.js clearMatcher, executed); the op carries the original id and data value.
       clear: (original, damage) => {
-        const want = original === -1 ? null : itemFromOriginal(original, Math.max(damage, 0));
-        if (original !== -1 && !want) return 0;
+        const match = clearMatcher(original, damage);
         let removed = 0;
         for (const list of serverInventory(p).lists) for (let i = 0; i < list.length; i++) {
           const s = list[i];
-          if (!s || (want && (s.id !== want.id || (damage !== -1 && (s.damage ?? 0) !== want.damage)))) continue;
+          if (!s || !match(s)) continue;
           removed += s.count; list[i] = null;
         }
-        if (removed || !want) op("clear", want ? want.id : -1, want ? damage : -1);
+        if (removed || original === -1) op("clear", original, original === -1 ? -1 : damage);
         return removed;
       },
       addExperience: (n) => op("addExperience", n),

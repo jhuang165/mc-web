@@ -1,5 +1,5 @@
 import { applySetblockTag } from "./setblock-tags.js"; // b83 plants83
-import { itemComponent } from "./item-component.js";
+import { itemComponent, originalStack } from "./item-component.js";
 import { readCommandBlock, writeCommandBlock } from "./command-block.js";
 // Connects the command engine (commands.js) to the running game. main.js passes accessors for its live state (`env`), so
 // everything here works on the real World, Survival, Weather and Experience objects and the tests can drive it without a browser.
@@ -35,6 +35,16 @@ const enchantName = new Map(ENCHANTMENT_NAMES.map(([id, name]) => [id, name]));
 import { DEFAULT_RULES, ruleOn } from "./game-rules.js";
 export { DEFAULT_RULES, ruleOn };
 
+// The /clear test of one port stack: original Item id (-1: any) and getItemDamage (-1: any). A variant item's damage is the original's (originalStack);
+// a stack carrying rawDamage (a Data the catalogue has no variant for) compares that.
+export function clearMatcher(original, damage) {
+  return (s) => {
+    if (!s) return false;
+    if (original === -1) return true;
+    const o = originalStack(s);
+    return o.id === original && (damage <= -1 || (Number.isInteger(s.rawDamage) ? s.rawDamage : o.damage) === damage);
+  };
+}
 export function createCommandHost(env) {
   const survival = () => env.survival();
   return {
@@ -71,22 +81,20 @@ export function createCommandHost(env) {
       env.refreshInventory();
       return { name: "[" + name + "]", component: itemComponent(stack, name), ignored }; // ItemStack.func_151000_E
     },
+    // InventoryPlayer.clearInventory(Item, int) (b83 cmdexec83, executed: cmd-exec-reference.json): the main slots, the armour and the cursor stack, matched by the
+    // original Item (so coal takes charcoal, stone every stone damage) and, given a data value, by getItemDamage.
     clear(original, damage) {
-      const inv = survival().inventory;
-      let want = null;
-      if (original !== -1) {
-        want = itemFromOriginal(original, Math.max(damage, 0));
-        if (!want) return 0;
-      }
+      const inv = survival().inventory, match = clearMatcher(original, damage);
       let removed = 0;
       for (const list of [inv.main, inv.armor]) {
         for (let i = 0; i < list.length; i++) {
           const s = list[i];
-          if (!s || (want && (s.id !== want.id || (damage !== -1 && (s.damage ?? 0) !== want.damage)))) continue;
+          if (!s || !match(s)) continue;
           removed += s.count;
           list[i] = null;
         }
       }
+      if (inv.cursor && match(inv.cursor)) { removed += inv.cursor.count; inv.cursor = null; }
       env.refreshInventory();
       return removed;
     },
@@ -209,6 +217,11 @@ export function createCommandHost(env) {
         if (!mob) return null;
         mobs.entities.push(mob); mobs.nextId++;
         mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
+        // b83 cmdexec83 (executed, cmd-exec-reference.json): Entity.readFromNBT also sets OnGround, FallDistance (landing damage counts it) and the air supply (Air, 0 when absent;
+        // EntityLivingBase.onEntityUpdate puts it back to 300 out of water).
+        mob.onGround = nbtGet(nbt, 'OnGround', NBT.BYTE, 0) !== 0;
+        mob.fallDistance = Math.fround(nbtGet(nbt, 'FallDistance', NBT.FLOAT, 0));
+        mob.air = nbtGet(nbt, 'Air', NBT.SHORT, 0);
         const motion = nbtGet(nbt, 'Motion', NBT.LIST);
         const velocity = motion?.elementType === NBT.DOUBLE ? motion.items : [];
         for (const [i, key] of ['vx', 'vy', 'vz'].entries()) mob[key] = Number.isFinite(velocity[i]) && Math.abs(velocity[i]) <= 10 ? velocity[i] : 0;

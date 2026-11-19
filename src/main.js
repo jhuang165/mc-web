@@ -2097,7 +2097,7 @@ const commandHost = createCommandHost({
   refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
   changed: () => { saved = false; },
   setTime: (t) => scene.setTime(t),
-  teleport: (x, y, z) => { position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; },
+  teleport: (x, y, z) => { if (rider.vehicle) { const v = vehicleState(); detachPlayerVehicle(v); applyVehicleState(v); } position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; }, // b83 cmdexec83: CommandTeleport dismounts a riding player first; the mount stays (executed)
   setDifficulty: (d) => { options.difficulty = difficultySetting(d); updateDifficulty(); try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {} },
   lan: () => lan.open,
   shareToLan: (mode, cheats) => lan.share(mode, cheats),

@@ -235,12 +235,12 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
   if (type === 'skeleton' && tagValue(tag, 'SkeletonType', NBT.BYTE, 0) === 1) type = 'wither_skeleton'; // EntitySkeleton.readEntityFromNBT (wither-skeleton.js)
-  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10, wither: 300, giant: 100 }[type];
+  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10, wither: 300, giant: 100, ender_dragon: 200, ender_crystal: 5 }[type]; // b83 cmdexec83 (executed): /summon EnderDragon and EnderCrystal with a data tag succeed natively
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
     effects: readActiveEffects(tag), ...absorptionFields(tag), growingAge: ['pig','cow','mooshroom','sheep','chicken','wolf','villager','ocelot'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','mooshroom','sheep','chicken','wolf','ocelot'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
-  const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'AbsorptionAmount', 'Fire', 'Motion']);
+  const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'AbsorptionAmount', 'Fire', 'Motion', 'OnGround', 'FallDistance', 'Air']); // b83 cmdexec83: the last three are set by command-host.js summon (executed)
   if (type === 'wither_skeleton') kept.add('SkeletonType');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'villager', 'ocelot'].includes(type)) kept.add('Age');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'ocelot'].includes(type)) kept.add('InLove');
@@ -304,9 +304,8 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (GEAR_TYPES.has(type)) { Object.assign(record, mobGearNbtFields(tag, type, convertItem)); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); }
   else if (type !== 'witch') { const g = mobGearNbtFields(tag, type, convertItem); if (g.equipment) { Object.assign(record, g); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); } } // b77 spdispense77: see mobGearNbtFields
   Object.assign(record, portalCooldownFields(tag)); kept.add('PortalCooldown');
-  record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
-  Object.assign(record, gearNbtFields(tag));
-  for (const k of GEAR_NBT_KEYS) kept.add(k);
+  record.health = type === 'ender_crystal' ? health : Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health)); // EntityEnderCrystal is no EntityLivingBase: its health field (5) reads no NBT
+  if (type !== 'ender_crystal') { Object.assign(record, gearNbtFields(tag)); for (const k of GEAR_NBT_KEYS) kept.add(k); } // EntityLiving's keys (b83 cmdexec83, executed: a crystal drops CustomName)
   Object.assign(record, uuidFields(tag)); kept.add('UUIDMost'); kept.add('UUIDLeast');
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
   if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
