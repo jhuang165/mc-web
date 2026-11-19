@@ -129,6 +129,8 @@ test('the dedicated server ticks farmland only inside the active chunks', () => 
   const s = new DedicatedSimulation({}, { world, gameMode: 'survival', mobs: true });
   s.mobs.spawning = false; s.mobs.mobs.entities.length = 0;
   assert.equal(s.farming.sharedRandomTicks, true);
+  // b84 lead: the server now runs BlockFarmland.onNeighborBlockChange (drops84's server-support-loss.js), so the farmland gets open air above it, not the terrain's top block.
+  world.set(9, 31, 9, 0); world.set(120, 31, 120, 0);
   world.set(9, 30, 9, 29); s.farming.observe(9, 30, 9);
   world.set(120, 30, 120, 29); s.farming.observe(120, 30, 120);
   s.chunkSets.radius = 2;
