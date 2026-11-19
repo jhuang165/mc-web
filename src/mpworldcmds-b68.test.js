@@ -63,7 +63,7 @@ test("/testforblock compares id and data, and reports the native failures", () =
   assert.match(f.say("a", "/testforblock 60 10 60 wool")[0], /Successfully found the block at 60,10,60/);
   assert.match(f.say("a", "/testforblock 60 10 60 wool 5")[0], /Successfully/);
   assert.match(f.say("a", "/testforblock 60 10 60 wool 4")[0], /data value of 5 \(expected: 4\)/);
-  assert.match(f.say("a", "/testforblock 60 10 60 stone")[0], /wool|minecraft:wool/);
+  assert.match(f.say("a", "/testforblock 60 10 60 stone")[0], /is Wool \(expected: Stone\)/); // b82: Block.getLocalizedName of both (executed)
   assert.match(f.say("a", "/testforblock 60 300 60 stone")[0], /outside of the world/i);
 });
 

@@ -66,10 +66,17 @@ export function playerHost(simulation, p, op) {
     setSpawnpoint(x, y, z) { p.spawnpoint = [x, y, z]; p.spawnForced = true; /* b66 mpsleep: /spawnpoint is forced */ },
     // CommandEnchant: the held stack; Enchantment.canApply, then canApplyTogether against each enchantment already on it. The server knows the held id
     // and damage; the client holds the real stack (its enchantments), applies it and drops a conflict it alone can see.
-    enchant(id, level) {
+    // b82 commands82: the held-item tests CommandEnchant makes before it parses the level (bytecode-read order).
+    enchantCheck(id) {
       const held = p.survival.inventory.held;
       if (!held) return "noItem";
       const e = ENCHANTMENTS_BY_ID[id], native = liveStackToNative(held);
+      return !e || !native || !canApply(e, native) ? "cantEnchant" : null;
+    },
+    enchant(id, level) {
+      const held = p.survival.inventory.held, e = ENCHANTMENTS_BY_ID[id];
+      if (!held) return "noItem";
+      const native = liveStackToNative(held);
       if (!e || !native || !canApply(e, native)) return "cantEnchant";
       for (const have of held.enchantments ?? []) if (have.id !== id && !canApplyTogether(e, have.id)) return { conflict: enchantName.get(have.id) };
       addEnchantment(held, e, level);

@@ -160,11 +160,17 @@ export function createCommandHost(env) {
       env.refreshInventory();
     },
     // CommandEnchant: the held stack; Enchantment.canApply, then canApplyTogether against each enchantment already on it.
-    enchant(id, level) {
+    // b82 commands82: enchantCheck answers the held-item tests CommandEnchant makes before it parses the level (bytecode-read order).
+    enchantCheck(id) {
       const held = survival().inventory.held;
       if (!held) return "noItem";
-      const e = ENCHANTMENTS_BY_ID[id];
-      const native = liveStackToNative(held); // enchantments.js reads the original item ids
+      const e = ENCHANTMENTS_BY_ID[id], native = liveStackToNative(held); // enchantments.js reads the original item ids
+      return !e || !native || !canApply(e, native) ? "cantEnchant" : null;
+    },
+    enchant(id, level) {
+      const held = survival().inventory.held, e = ENCHANTMENTS_BY_ID[id];
+      if (!held) return "noItem";
+      const native = liveStackToNative(held);
       if (!e || !native || !canApply(e, native)) return "cantEnchant";
       for (const have of held.enchantments ?? []) {
         if (have.id !== id && !canApplyTogether(e, have.id)) return { conflict: enchantName.get(have.id) };

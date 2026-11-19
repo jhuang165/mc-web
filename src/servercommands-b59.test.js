@@ -70,9 +70,9 @@ test("/weather, /toggledownfall act on the server's weather", () => {
 
 test("/difficulty and /defaultgamemode are kept on the server; a new player starts in the default mode", () => {
   const f = two();
-  assert.deepEqual(f.say("a", "/difficulty hard"), ["Set game difficulty to hard"]);
+  assert.deepEqual(f.say("a", "/difficulty hard"), ["Set game difficulty to Hard"]); // b82: the argument is options.difficulty.hard (executed)
   assert.equal(f.sim.difficulty, 3);
-  assert.deepEqual(f.say("a", "/difficulty 0"), ["Set game difficulty to peaceful"]);
+  assert.deepEqual(f.say("a", "/difficulty 0"), ["Set game difficulty to Peaceful"]);
   assert.deepEqual(f.say("a", "/defaultgamemode adventure"), ["The world's default game mode is now Adventure Mode"]);
   const c = f.join("c", "Cara", 3);
   assert.equal(c.survival.mode, "adventure");

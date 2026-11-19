@@ -1,0 +1,7545 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "z": {
+   "name": "CommandHandler",
+   "sha256": "733a3b7fe72e4e9767838999abcad814c140620263f1a3ba51c93e8ea6222e3c"
+  },
+  "y": {
+   "name": "CommandBase",
+   "sha256": "920cdbb8ce963fa16d2c1d068752be19955e3e4371adddae0c692b8cb2f771e4"
+  },
+  "bz": {
+   "name": "CommandTime",
+   "sha256": "5884f44b54106df9bd2cbfd6e003245676b5fda3e94b68a77ec4927311cb08a0"
+  },
+  "ar": {
+   "name": "CommandGameMode",
+   "sha256": "3a7a8d62698d2a9e8a16cb8fe57945f072ab1490ce219d71e92f1daf1b08843b"
+  },
+  "aq": {
+   "name": "CommandDifficulty",
+   "sha256": "055fcd1cc857cdc735c725d1bd968edb003e1a608b80ffd052d0dfb6ddd225b6"
+  },
+  "al": {
+   "name": "CommandDefaultGameMode",
+   "sha256": "cc925b6b02cbc077fa0d577d6f372fb4b5d2dbd7be689bec4f714834caf40d06"
+  },
+  "aw": {
+   "name": "CommandKill",
+   "sha256": "6f6f8a7c732b87487db3e3d5ae4e5977c0ec43bf1208e223a63bcb0d200f2b03"
+  },
+  "ca": {
+   "name": "CommandToggleDownfall",
+   "sha256": "80f3adcca7c6347f19c430f77d6f0e0a0ce40153fc44e223c471b171e2bd44ac"
+  },
+  "cb": {
+   "name": "CommandWeather",
+   "sha256": "cab56a5925bb0e4fdaa7237ed187b5640380242e0317dc042d3b1e0c58b2377c"
+  },
+  "ap": {
+   "name": "CommandXP",
+   "sha256": "7c2132a9a484d4a6e3ee4263b9cddc82dc19c6cc178f9b6333fdc8950a963531"
+  },
+  "bv": {
+   "name": "CommandTeleport",
+   "sha256": "a6d25ef8bfd2ce94f7a751e8c578efd54a51b5b4c13db260487bcd73010d551e"
+  },
+  "at": {
+   "name": "CommandGive",
+   "sha256": "757b2a65dbe3872870b6ef088c63c6148344a5dafb51bd1dec82acdd7d711edf"
+  },
+  "am": {
+   "name": "CommandEffect",
+   "sha256": "b26d35b762fa85133a5df3e8658c740003d4824cd9ea75b4eba4c702cc854464"
+  },
+  "ao": {
+   "name": "CommandEnchant",
+   "sha256": "de44a9f188fde0e54d8d935eadcb438c0313eca81e0d72d7fa566256df525c9c"
+  },
+  "an": {
+   "name": "CommandEmote",
+   "sha256": "a7f5de917806b23a9a316f0e4be0956271c46525595219cdecacb2e44a0794ae"
+  },
+  "bq": {
+   "name": "CommandShowSeed",
+   "sha256": "463bbf4cae2ed26010f76409a36ff488a6102d15082aa4cba256a89d81e09d38"
+  },
+  "au": {
+   "name": "CommandHelp",
+   "sha256": "49f496e9c253a38f80fc0c4414c79b980daf1512618727588bc6285177bab4d6"
+  },
+  "ak": {
+   "name": "CommandDebug",
+   "sha256": "bae544aded127a60d62d4c180f9578bf732864a908a504e86bec6bd5e73cc68e"
+  },
+  "az": {
+   "name": "CommandMessage",
+   "sha256": "9e40e95bb02e30ebf6ce5580f3e36ea78666f921e70e19312d944048232792f7"
+  },
+  "ah": {
+   "name": "CommandBroadcast",
+   "sha256": "b48e9122a892f23ca2d1f320ffc613d3c33edec31d711774b5c9ba067da31832"
+  },
+  "bp": {
+   "name": "CommandSetSpawnpoint",
+   "sha256": "60da28e82f77d31fa5e0f59be3051a335f88e5ce7184a72625032f4a2266779d"
+  },
+  "bn": {
+   "name": "CommandSetDefaultSpawnpoint",
+   "sha256": "ea9ee5089f469e0a6c3b2934c92df7f8fcf527ac53f8511b0ceaa7caa8ee72cf"
+  },
+  "as": {
+   "name": "CommandGameRule",
+   "sha256": "714b4f57bceccf49fa60f851233b381cbe864b378b91dd731415e7b0811f0db9"
+  },
+  "ai": {
+   "name": "CommandClearInventory",
+   "sha256": "c22a8f5ddfd3eec09531008e92b0840da39022835970d22c481af8f28cf729dd"
+  },
+  "by": {
+   "name": "CommandTestFor",
+   "sha256": "8979222e4927ba8f7c612e15933abcda5397af78e10512f949f66597df253766"
+  },
+  "br": {
+   "name": "CommandSpreadPlayers",
+   "sha256": "75e7f9106b904c5eae2ad5e9d3147f39fad32b04eacc8280131743e7bc1ab0e5"
+  },
+  "bf": {
+   "name": "CommandPlaySound",
+   "sha256": "6b8fe7acc1751708842a7479b63203086635b9f38e5c60d936426650ec632ca0"
+  },
+  "bk": {
+   "name": "CommandScoreboard",
+   "sha256": "3aa0dc14b924f9c8652e035cf3d4732b1293a7183b1766ce4151b021bfda9443"
+  },
+  "ae": {
+   "name": "CommandAchievement",
+   "sha256": "674a942b059f29bf25e2a7ad93c827b8c5d1fd0255f325d6b47fb0fc5a8ee4a8"
+  },
+  "bu": {
+   "name": "CommandSummon",
+   "sha256": "1fe1efa99b575ddec8d8f620a28411f8a263e88fdee56d97e79de12867f83a7c"
+  },
+  "bm": {
+   "name": "CommandSetBlock",
+   "sha256": "8b8cd5772b5a24a60d949bf5547d0c443925b7a50e05e09a525f854696cedd5c"
+  },
+  "bx": {
+   "name": "CommandTestForBlock",
+   "sha256": "2f8b07da9b35ac4432cf04c0b692084d2ad653dd9805f36f382eaf65c5ecebaf"
+  },
+  "ba": {
+   "name": "CommandMessageRaw",
+   "sha256": "3680d4f0a41af0daf4d8fcd9552f307a8bad355e065fd758db057bbdd879b9a8"
+  },
+  "bg": {
+   "name": "CommandPublishLocalServer",
+   "sha256": "98280d15a5384357f4244725fee674c0146f36cc9383b9677dc55285b6772767"
+  },
+  "cd": {
+   "name": "CommandException",
+   "sha256": "57dbf9b9a1097e323840b13738ecd4367c51b18b3922ca11b6308fa48c7ab078"
+  },
+  "ce": {
+   "name": "NumberInvalidException?",
+   "sha256": "cafcb048454ca78ce7e466cefc963eb048cf8e192731783fb676febf1fc68f13"
+  },
+  "cf": {
+   "name": "WrongUsageException base",
+   "sha256": "e27629cdb97d2f0f0a5311acf8bf8068624e4b1a518fb4f927d8d98dc2b394e6"
+  },
+  "ci": {
+   "name": "WrongUsageException",
+   "sha256": "ef1bdf765c943058d8f8c5ed39d2bc8aee1b1782826e9d6f5b815cfa03b9207b"
+  }
+ },
+ "method": "Executed on the unchanged command classes of the integrated server (ServerCommandManager order: the 31 common commands, then /publish) with the CmdChatProbe server double: one real EntityPlayerMP double (Alex at 0.5,64,0.5, survival, level 5, the only player online), an allocated WorldServer holding the double world's World fields as worldServers[0..2], and a recording IAdminCommand set with CommandBase.setAdminCommander. tab: [text without \"/\", CommandHandler.getPossibleCommands result (null, a list, or \"!\" + throwable)]. run: [command, args, {thrown: [class, key, args] of the CommandException processCommand threw, crash: any other throwable (the double could not run it: not evidence), admin: [[flags, key, args]] notifyAdmins calls, sender: components Alex received ([fk.a JSON, formatted, unformatted])}]. processCommand is called directly: no permission test and no selector expansion.",
+ "tab": [
+  [
+   "time ",
+   [
+    "set",
+    "add"
+   ]
+  ],
+  [
+   "time s",
+   [
+    "set"
+   ]
+  ],
+  [
+   "time set ",
+   [
+    "day",
+    "night"
+   ]
+  ],
+  [
+   "time set d",
+   [
+    "day"
+   ]
+  ],
+  [
+   "time add ",
+   null
+  ],
+  [
+   "time query ",
+   null
+  ],
+  [
+   "time foo ",
+   null
+  ],
+  [
+   "time set day ",
+   null
+  ],
+  [
+   "gamemode ",
+   [
+    "survival",
+    "creative",
+    "adventure"
+   ]
+  ],
+  [
+   "gamemode c",
+   [
+    "creative"
+   ]
+  ],
+  [
+   "gamemode 1 ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "gamemode creative A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "gamemode creative Alex ",
+   null
+  ],
+  [
+   "difficulty ",
+   [
+    "peaceful",
+    "easy",
+    "normal",
+    "hard"
+   ]
+  ],
+  [
+   "difficulty e",
+   [
+    "easy"
+   ]
+  ],
+  [
+   "difficulty easy ",
+   null
+  ],
+  [
+   "defaultgamemode ",
+   [
+    "survival",
+    "creative",
+    "adventure"
+   ]
+  ],
+  [
+   "defaultgamemode a",
+   [
+    "adventure"
+   ]
+  ],
+  [
+   "defaultgamemode a ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "kill ",
+   null
+  ],
+  [
+   "kill A",
+   null
+  ],
+  [
+   "toggledownfall ",
+   null
+  ],
+  [
+   "weather ",
+   [
+    "clear",
+    "rain",
+    "thunder"
+   ]
+  ],
+  [
+   "weather t",
+   [
+    "thunder"
+   ]
+  ],
+  [
+   "weather rain ",
+   null
+  ],
+  [
+   "weather rain 10 ",
+   null
+  ],
+  [
+   "xp ",
+   null
+  ],
+  [
+   "xp 5 ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "xp 5 A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "xp 5 Alex ",
+   null
+  ],
+  [
+   "tp ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tp A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tp Alex ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tp Alex A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tp 1 2 ",
+   null
+  ],
+  [
+   "tp Alex 1 2 3 ",
+   null
+  ],
+  [
+   "give ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "give A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "give Alex minecraft:dia",
+   [
+    "minecraft:diamond",
+    "minecraft:diamond_sword",
+    "minecraft:diamond_shovel",
+    "minecraft:diamond_pickaxe",
+    "minecraft:diamond_axe",
+    "minecraft:diamond_hoe",
+    "minecraft:diamond_helmet",
+    "minecraft:diamond_chestplate",
+    "minecraft:diamond_leggings",
+    "minecraft:diamond_boots",
+    "minecraft:diamond_horse_armor",
+    "minecraft:diamond_ore",
+    "minecraft:diamond_block"
+   ]
+  ],
+  [
+   "give Alex dia",
+   []
+  ],
+  [
+   "give Alex minecraft:stone_",
+   [
+    "minecraft:stone_sword",
+    "minecraft:stone_shovel",
+    "minecraft:stone_pickaxe",
+    "minecraft:stone_axe",
+    "minecraft:stone_hoe",
+    "minecraft:stone_slab",
+    "minecraft:stone_stairs",
+    "minecraft:stone_pressure_plate",
+    "minecraft:stone_button",
+    "minecraft:stone_brick_stairs"
+   ]
+  ],
+  [
+   "give Alex stone ",
+   null
+  ],
+  [
+   "give Alex stone 1 ",
+   null
+  ],
+  [
+   "effect ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "effect A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "effect Alex ",
+   null
+  ],
+  [
+   "effect Alex c",
+   null
+  ],
+  [
+   "effect Alex 1 ",
+   null
+  ],
+  [
+   "enchant ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "enchant Alex ",
+   null
+  ],
+  [
+   "enchant Alex 1 ",
+   null
+  ],
+  [
+   "me ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "me A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "me hi A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "seed ",
+   null
+  ],
+  [
+   "help ",
+   null
+  ],
+  [
+   "help t",
+   null
+  ],
+  [
+   "help ?",
+   null
+  ],
+  [
+   "help w",
+   null
+  ],
+  [
+   "help m",
+   null
+  ],
+  [
+   "help 1 ",
+   null
+  ],
+  [
+   "help pu",
+   null
+  ],
+  [
+   "debug ",
+   [
+    "start",
+    "stop"
+   ]
+  ],
+  [
+   "debug s",
+   [
+    "start",
+    "stop"
+   ]
+  ],
+  [
+   "debug start ",
+   null
+  ],
+  [
+   "tell ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tell A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tell Alex A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "say ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "say A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "say hi A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "spawnpoint ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "spawnpoint A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "spawnpoint Alex ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "spawnpoint Alex A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "spawnpoint Alex 1 ",
+   null
+  ],
+  [
+   "setworldspawn ",
+   null
+  ],
+  [
+   "setworldspawn 1 ",
+   null
+  ],
+  [
+   "gamerule ",
+   [
+    "commandBlockOutput",
+    "doDaylightCycle",
+    "doFireTick",
+    "doMobLoot",
+    "doMobSpawning",
+    "doTileDrops",
+    "keepInventory",
+    "mobGriefing",
+    "naturalRegeneration"
+   ]
+  ],
+  [
+   "gamerule d",
+   [
+    "doDaylightCycle",
+    "doFireTick",
+    "doMobLoot",
+    "doMobSpawning",
+    "doTileDrops"
+   ]
+  ],
+  [
+   "gamerule keepInventory ",
+   [
+    "true",
+    "false"
+   ]
+  ],
+  [
+   "gamerule keepInventory t",
+   [
+    "true"
+   ]
+  ],
+  [
+   "gamerule nosuch ",
+   [
+    "true",
+    "false"
+   ]
+  ],
+  [
+   "gamerule keepInventory true ",
+   null
+  ],
+  [
+   "clear ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "clear A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "clear Alex ",
+   [
+    "minecraft:iron_shovel",
+    "minecraft:iron_pickaxe",
+    "minecraft:iron_axe",
+    "minecraft:flint_and_steel",
+    "minecraft:apple",
+    "minecraft:bow",
+    "minecraft:arrow",
+    "minecraft:coal",
+    "minecraft:diamond",
+    "minecraft:iron_ingot",
+    "minecraft:gold_ingot",
+    "minecraft:iron_sword",
+    "minecraft:wooden_sword",
+    "minecraft:wooden_shovel",
+    "minecraft:wooden_pickaxe",
+    "minecraft:wooden_axe",
+    "minecraft:stone_sword",
+    "minecraft:stone_shovel",
+    "minecraft:stone_pickaxe",
+    "minecraft:stone_axe",
+    "minecraft:diamond_sword",
+    "minecraft:diamond_shovel",
+    "minecraft:diamond_pickaxe",
+    "minecraft:diamond_axe",
+    "minecraft:stick",
+    "minecraft:bowl",
+    "minecraft:mushroom_stew",
+    "minecraft:golden_sword",
+    "minecraft:golden_shovel",
+    "minecraft:golden_pickaxe",
+    "minecraft:golden_axe",
+    "minecraft:string",
+    "minecraft:feather",
+    "minecraft:gunpowder",
+    "minecraft:wooden_hoe",
+    "minecraft:stone_hoe",
+    "minecraft:iron_hoe",
+    "minecraft:diamond_hoe",
+    "minecraft:golden_hoe",
+    "minecraft:wheat_seeds",
+    "minecraft:wheat",
+    "minecraft:bread",
+    "minecraft:leather_helmet",
+    "minecraft:leather_chestplate",
+    "minecraft:leather_leggings",
+    "minecraft:leather_boots",
+    "minecraft:chainmail_helmet",
+    "minecraft:chainmail_chestplate",
+    "minecraft:chainmail_leggings",
+    "minecraft:chainmail_boots",
+    "minecraft:iron_helmet",
+    "minecraft:iron_chestplate",
+    "minecraft:iron_leggings",
+    "minecraft:iron_boots",
+    "minecraft:diamond_helmet",
+    "minecraft:diamond_chestplate",
+    "minecraft:diamond_leggings",
+    "minecraft:diamond_boots",
+    "minecraft:golden_helmet",
+    "minecraft:golden_chestplate",
+    "minecraft:golden_leggings",
+    "minecraft:golden_boots",
+    "minecraft:flint",
+    "minecraft:porkchop",
+    "minecraft:cooked_porkchop",
+    "minecraft:painting",
+    "minecraft:golden_apple",
+    "minecraft:sign",
+    "minecraft:wooden_door",
+    "minecraft:bucket",
+    "minecraft:water_bucket",
+    "minecraft:lava_bucket",
+    "minecraft:minecart",
+    "minecraft:saddle",
+    "minecraft:iron_door",
+    "minecraft:redstone",
+    "minecraft:snowball",
+    "minecraft:boat",
+    "minecraft:leather",
+    "minecraft:milk_bucket",
+    "minecraft:brick",
+    "minecraft:clay_ball",
+    "minecraft:reeds",
+    "minecraft:paper",
+    "minecraft:book",
+    "minecraft:slime_ball",
+    "minecraft:chest_minecart",
+    "minecraft:furnace_minecart",
+    "minecraft:egg",
+    "minecraft:compass",
+    "minecraft:fishing_rod",
+    "minecraft:clock",
+    "minecraft:glowstone_dust",
+    "minecraft:fish",
+    "minecraft:cooked_fished",
+    "minecraft:dye",
+    "minecraft:bone",
+    "minecraft:sugar",
+    "minecraft:cake",
+    "minecraft:bed",
+    "minecraft:repeater",
+    "minecraft:cookie",
+    "minecraft:filled_map",
+    "minecraft:shears",
+    "minecraft:melon",
+    "minecraft:pumpkin_seeds",
+    "minecraft:melon_seeds",
+    "minecraft:beef",
+    "minecraft:cooked_beef",
+    "minecraft:chicken",
+    "minecraft:cooked_chicken",
+    "minecraft:rotten_flesh",
+    "minecraft:ender_pearl",
+    "minecraft:blaze_rod",
+    "minecraft:ghast_tear",
+    "minecraft:gold_nugget",
+    "minecraft:nether_wart",
+    "minecraft:potion",
+    "minecraft:glass_bottle",
+    "minecraft:spider_eye",
+    "minecraft:fermented_spider_eye",
+    "minecraft:blaze_powder",
+    "minecraft:magma_cream",
+    "minecraft:brewing_stand",
+    "minecraft:cauldron",
+    "minecraft:ender_eye",
+    "minecraft:speckled_melon",
+    "minecraft:spawn_egg",
+    "minecraft:experience_bottle",
+    "minecraft:fire_charge",
+    "minecraft:writable_book",
+    "minecraft:written_book",
+    "minecraft:emerald",
+    "minecraft:item_frame",
+    "minecraft:flower_pot",
+    "minecraft:carrot",
+    "minecraft:potato",
+    "minecraft:baked_potato",
+    "minecraft:poisonous_potato",
+    "minecraft:map",
+    "minecraft:golden_carrot",
+    "minecraft:skull",
+    "minecraft:carrot_on_a_stick",
+    "minecraft:nether_star",
+    "minecraft:pumpkin_pie",
+    "minecraft:fireworks",
+    "minecraft:firework_charge",
+    "minecraft:enchanted_book",
+    "minecraft:comparator",
+    "minecraft:netherbrick",
+    "minecraft:quartz",
+    "minecraft:tnt_minecart",
+    "minecraft:hopper_minecart",
+    "minecraft:iron_horse_armor",
+    "minecraft:golden_horse_armor",
+    "minecraft:diamond_horse_armor",
+    "minecraft:lead",
+    "minecraft:name_tag",
+    "minecraft:command_block_minecart",
+    "minecraft:record_13",
+    "minecraft:record_cat",
+    "minecraft:record_blocks",
+    "minecraft:record_chirp",
+    "minecraft:record_far",
+    "minecraft:record_mall",
+    "minecraft:record_mellohi",
+    "minecraft:record_stal",
+    "minecraft:record_strad",
+    "minecraft:record_ward",
+    "minecraft:record_11",
+    "minecraft:record_wait",
+    "minecraft:stone",
+    "minecraft:grass",
+    "minecraft:dirt",
+    "minecraft:cobblestone",
+    "minecraft:planks",
+    "minecraft:sapling",
+    "minecraft:bedrock",
+    "minecraft:flowing_water",
+    "minecraft:water",
+    "minecraft:flowing_lava",
+    "minecraft:lava",
+    "minecraft:sand",
+    "minecraft:gravel",
+    "minecraft:gold_ore",
+    "minecraft:iron_ore",
+    "minecraft:coal_ore",
+    "minecraft:log",
+    "minecraft:leaves",
+    "minecraft:sponge",
+    "minecraft:glass",
+    "minecraft:lapis_ore",
+    "minecraft:lapis_block",
+    "minecraft:dispenser",
+    "minecraft:sandstone",
+    "minecraft:noteblock",
+    "minecraft:golden_rail",
+    "minecraft:detector_rail",
+    "minecraft:sticky_piston",
+    "minecraft:web",
+    "minecraft:tallgrass",
+    "minecraft:deadbush",
+    "minecraft:piston",
+    "minecraft:wool",
+    "minecraft:yellow_flower",
+    "minecraft:red_flower",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:gold_block",
+    "minecraft:iron_block",
+    "minecraft:double_stone_slab",
+    "minecraft:stone_slab",
+    "minecraft:brick_block",
+    "minecraft:tnt",
+    "minecraft:bookshelf",
+    "minecraft:mossy_cobblestone",
+    "minecraft:obsidian",
+    "minecraft:torch",
+    "minecraft:fire",
+    "minecraft:mob_spawner",
+    "minecraft:oak_stairs",
+    "minecraft:chest",
+    "minecraft:diamond_ore",
+    "minecraft:diamond_block",
+    "minecraft:crafting_table",
+    "minecraft:farmland",
+    "minecraft:furnace",
+    "minecraft:lit_furnace",
+    "minecraft:ladder",
+    "minecraft:rail",
+    "minecraft:stone_stairs",
+    "minecraft:lever",
+    "minecraft:stone_pressure_plate",
+    "minecraft:wooden_pressure_plate",
+    "minecraft:redstone_ore",
+    "minecraft:redstone_torch",
+    "minecraft:stone_button",
+    "minecraft:snow_layer",
+    "minecraft:ice",
+    "minecraft:snow",
+    "minecraft:cactus",
+    "minecraft:clay",
+    "minecraft:jukebox",
+    "minecraft:fence",
+    "minecraft:pumpkin",
+    "minecraft:netherrack",
+    "minecraft:soul_sand",
+    "minecraft:glowstone",
+    "minecraft:portal",
+    "minecraft:lit_pumpkin",
+    "minecraft:stained_glass",
+    "minecraft:trapdoor",
+    "minecraft:monster_egg",
+    "minecraft:stonebrick",
+    "minecraft:brown_mushroom_block",
+    "minecraft:red_mushroom_block",
+    "minecraft:iron_bars",
+    "minecraft:glass_pane",
+    "minecraft:melon_block",
+    "minecraft:vine",
+    "minecraft:fence_gate",
+    "minecraft:brick_stairs",
+    "minecraft:stone_brick_stairs",
+    "minecraft:mycelium",
+    "minecraft:waterlily",
+    "minecraft:nether_brick",
+    "minecraft:nether_brick_fence",
+    "minecraft:nether_brick_stairs",
+    "minecraft:enchanting_table",
+    "minecraft:end_portal",
+    "minecraft:end_portal_frame",
+    "minecraft:end_stone",
+    "minecraft:dragon_egg",
+    "minecraft:redstone_lamp",
+    "minecraft:double_wooden_slab",
+    "minecraft:wooden_slab",
+    "minecraft:cocoa",
+    "minecraft:sandstone_stairs",
+    "minecraft:emerald_ore",
+    "minecraft:ender_chest",
+    "minecraft:tripwire_hook",
+    "minecraft:emerald_block",
+    "minecraft:spruce_stairs",
+    "minecraft:birch_stairs",
+    "minecraft:jungle_stairs",
+    "minecraft:command_block",
+    "minecraft:beacon",
+    "minecraft:cobblestone_wall",
+    "minecraft:carrots",
+    "minecraft:potatoes",
+    "minecraft:wooden_button",
+    "minecraft:anvil",
+    "minecraft:trapped_chest",
+    "minecraft:light_weighted_pressure_plate",
+    "minecraft:heavy_weighted_pressure_plate",
+    "minecraft:daylight_detector",
+    "minecraft:redstone_block",
+    "minecraft:quartz_ore",
+    "minecraft:hopper",
+    "minecraft:quartz_block",
+    "minecraft:quartz_stairs",
+    "minecraft:activator_rail",
+    "minecraft:dropper",
+    "minecraft:stained_hardened_clay",
+    "minecraft:stained_glass_pane",
+    "minecraft:leaves2",
+    "minecraft:log2",
+    "minecraft:acacia_stairs",
+    "minecraft:dark_oak_stairs",
+    "minecraft:hay_block",
+    "minecraft:carpet",
+    "minecraft:hardened_clay",
+    "minecraft:coal_block",
+    "minecraft:packed_ice",
+    "minecraft:double_plant"
+   ]
+  ],
+  [
+   "clear Alex minecraft:dia",
+   [
+    "minecraft:diamond",
+    "minecraft:diamond_sword",
+    "minecraft:diamond_shovel",
+    "minecraft:diamond_pickaxe",
+    "minecraft:diamond_axe",
+    "minecraft:diamond_hoe",
+    "minecraft:diamond_helmet",
+    "minecraft:diamond_chestplate",
+    "minecraft:diamond_leggings",
+    "minecraft:diamond_boots",
+    "minecraft:diamond_horse_armor",
+    "minecraft:diamond_ore",
+    "minecraft:diamond_block"
+   ]
+  ],
+  [
+   "clear Alex dia",
+   []
+  ],
+  [
+   "clear Alex stone ",
+   null
+  ],
+  [
+   "testfor ",
+   null
+  ],
+  [
+   "testfor A",
+   null
+  ],
+  [
+   "testfor Alex ",
+   null
+  ],
+  [
+   "spreadplayers ",
+   null
+  ],
+  [
+   "spreadplayers 0 0 1 10 ",
+   null
+  ],
+  [
+   "spreadplayers 0 0 1 10 false ",
+   null
+  ],
+  [
+   "spreadplayers 0 0 1 10 false A",
+   null
+  ],
+  [
+   "playsound ",
+   null
+  ],
+  [
+   "playsound random.click ",
+   null
+  ],
+  [
+   "playsound random.click A",
+   null
+  ],
+  [
+   "playsound random.click Alex ",
+   null
+  ],
+  [
+   "scoreboard ",
+   [
+    "objectives",
+    "players",
+    "teams"
+   ]
+  ],
+  [
+   "scoreboard o",
+   [
+    "objectives"
+   ]
+  ],
+  [
+   "scoreboard objectives ",
+   [
+    "list",
+    "add",
+    "remove",
+    "setdisplay"
+   ]
+  ],
+  [
+   "scoreboard objectives add x ",
+   [
+    "dummy",
+    "playerKillCount",
+    "totalKillCount",
+    "health",
+    "deathCount"
+   ]
+  ],
+  [
+   "scoreboard objectives setdisplay ",
+   [
+    "list",
+    "sidebar",
+    "belowName"
+   ]
+  ],
+  [
+   "scoreboard players ",
+   [
+    "set",
+    "add",
+    "remove",
+    "reset",
+    "list"
+   ]
+  ],
+  [
+   "scoreboard teams ",
+   [
+    "add",
+    "remove",
+    "join",
+    "leave",
+    "empty",
+    "list",
+    "option"
+   ]
+  ],
+  [
+   "scoreboard teams option ",
+   []
+  ],
+  [
+   "scoreboard players set ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "achievement ",
+   [
+    "give"
+   ]
+  ],
+  [
+   "achievement g",
+   [
+    "give"
+   ]
+  ],
+  [
+   "achievement give ",
+   [
+    "stat.leaveGame",
+    "stat.playOneMinute",
+    "stat.walkOneCm",
+    "stat.swimOneCm",
+    "stat.fallOneCm",
+    "stat.climbOneCm",
+    "stat.flyOneCm",
+    "stat.diveOneCm",
+    "stat.minecartOneCm",
+    "stat.boatOneCm",
+    "stat.pigOneCm",
+    "stat.horseOneCm",
+    "stat.jump",
+    "stat.drop",
+    "stat.damageDealt",
+    "stat.damageTaken",
+    "stat.deaths",
+    "stat.mobKills",
+    "stat.animalsBred",
+    "stat.playerKills",
+    "stat.fishCaught",
+    "stat.junkFished",
+    "stat.treasureFished"
+   ]
+  ],
+  [
+   "achievement give achievement.o",
+   []
+  ],
+  [
+   "achievement give achievement.openInventory ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "achievement give stat.j",
+   [
+    "stat.jump",
+    "stat.junkFished"
+   ]
+  ],
+  [
+   "summon ",
+   [
+    "MinecartChest",
+    "EyeOfEnderSignal",
+    "ItemFrame",
+    "MinecartCommandBlock",
+    "Item",
+    "EntityHorse",
+    "Fireball",
+    "EnderDragon",
+    "MinecartTNT",
+    "Villager",
+    "ThrownPotion",
+    "SnowMan",
+    "LeashKnot",
+    "Arrow",
+    "MushroomCow",
+    "LavaSlime",
+    "Zombie",
+    "MinecartSpawner",
+    "EnderCrystal",
+    "Snowball",
+    "Enderman",
+    "CaveSpider",
+    "MinecartHopper",
+    "XPOrb",
+    "ThrownExpBottle",
+    "FireworksRocketEntity",
+    "Chicken",
+    "FallingSand",
+    "Giant",
+    "VillagerGolem",
+    "PrimedTnt",
+    "Creeper",
+    "ThrownEnderpearl",
+    "Silverfish",
+    "Squid",
+    "Monster",
+    "Skeleton",
+    "SmallFireball",
+    "MinecartRideable",
+    "Wolf",
+    "Witch",
+    "Mob",
+    "Ozelot",
+    "Cow",
+    "Slime",
+    "Painting",
+    "Pig",
+    "MinecartFurnace",
+    "Bat",
+    "Blaze",
+    "WitherBoss",
+    "PigZombie",
+    "Spider",
+    "Ghast",
+    "Sheep",
+    "WitherSkull",
+    "Boat"
+   ]
+  ],
+  [
+   "summon P",
+   [
+    "PrimedTnt",
+    "Painting",
+    "Pig",
+    "PigZombie"
+   ]
+  ],
+  [
+   "summon Pig ",
+   null
+  ],
+  [
+   "summon Pig 1 2 3 ",
+   null
+  ],
+  [
+   "summon minecraft:p",
+   []
+  ],
+  [
+   "setblock ",
+   null
+  ],
+  [
+   "setblock 1 ",
+   null
+  ],
+  [
+   "setblock 1 2 3 ",
+   [
+    "minecraft:air",
+    "minecraft:stone",
+    "minecraft:grass",
+    "minecraft:dirt",
+    "minecraft:cobblestone",
+    "minecraft:planks",
+    "minecraft:sapling",
+    "minecraft:bedrock",
+    "minecraft:flowing_water",
+    "minecraft:water",
+    "minecraft:flowing_lava",
+    "minecraft:lava",
+    "minecraft:sand",
+    "minecraft:gravel",
+    "minecraft:gold_ore",
+    "minecraft:iron_ore",
+    "minecraft:coal_ore",
+    "minecraft:log",
+    "minecraft:leaves",
+    "minecraft:sponge",
+    "minecraft:glass",
+    "minecraft:lapis_ore",
+    "minecraft:lapis_block",
+    "minecraft:dispenser",
+    "minecraft:sandstone",
+    "minecraft:noteblock",
+    "minecraft:bed",
+    "minecraft:golden_rail",
+    "minecraft:detector_rail",
+    "minecraft:sticky_piston",
+    "minecraft:web",
+    "minecraft:tallgrass",
+    "minecraft:deadbush",
+    "minecraft:piston",
+    "minecraft:piston_head",
+    "minecraft:wool",
+    "minecraft:piston_extension",
+    "minecraft:yellow_flower",
+    "minecraft:red_flower",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:gold_block",
+    "minecraft:iron_block",
+    "minecraft:double_stone_slab",
+    "minecraft:stone_slab",
+    "minecraft:brick_block",
+    "minecraft:tnt",
+    "minecraft:bookshelf",
+    "minecraft:mossy_cobblestone",
+    "minecraft:obsidian",
+    "minecraft:torch",
+    "minecraft:fire",
+    "minecraft:mob_spawner",
+    "minecraft:oak_stairs",
+    "minecraft:chest",
+    "minecraft:redstone_wire",
+    "minecraft:diamond_ore",
+    "minecraft:diamond_block",
+    "minecraft:crafting_table",
+    "minecraft:wheat",
+    "minecraft:farmland",
+    "minecraft:furnace",
+    "minecraft:lit_furnace",
+    "minecraft:standing_sign",
+    "minecraft:wooden_door",
+    "minecraft:ladder",
+    "minecraft:rail",
+    "minecraft:stone_stairs",
+    "minecraft:wall_sign",
+    "minecraft:lever",
+    "minecraft:stone_pressure_plate",
+    "minecraft:iron_door",
+    "minecraft:wooden_pressure_plate",
+    "minecraft:redstone_ore",
+    "minecraft:lit_redstone_ore",
+    "minecraft:unlit_redstone_torch",
+    "minecraft:redstone_torch",
+    "minecraft:stone_button",
+    "minecraft:snow_layer",
+    "minecraft:ice",
+    "minecraft:snow",
+    "minecraft:cactus",
+    "minecraft:clay",
+    "minecraft:reeds",
+    "minecraft:jukebox",
+    "minecraft:fence",
+    "minecraft:pumpkin",
+    "minecraft:netherrack",
+    "minecraft:soul_sand",
+    "minecraft:glowstone",
+    "minecraft:portal",
+    "minecraft:lit_pumpkin",
+    "minecraft:cake",
+    "minecraft:unpowered_repeater",
+    "minecraft:powered_repeater",
+    "minecraft:stained_glass",
+    "minecraft:trapdoor",
+    "minecraft:monster_egg",
+    "minecraft:stonebrick",
+    "minecraft:brown_mushroom_block",
+    "minecraft:red_mushroom_block",
+    "minecraft:iron_bars",
+    "minecraft:glass_pane",
+    "minecraft:melon_block",
+    "minecraft:pumpkin_stem",
+    "minecraft:melon_stem",
+    "minecraft:vine",
+    "minecraft:fence_gate",
+    "minecraft:brick_stairs",
+    "minecraft:stone_brick_stairs",
+    "minecraft:mycelium",
+    "minecraft:waterlily",
+    "minecraft:nether_brick",
+    "minecraft:nether_brick_fence",
+    "minecraft:nether_brick_stairs",
+    "minecraft:nether_wart",
+    "minecraft:enchanting_table",
+    "minecraft:brewing_stand",
+    "minecraft:cauldron",
+    "minecraft:end_portal",
+    "minecraft:end_portal_frame",
+    "minecraft:end_stone",
+    "minecraft:dragon_egg",
+    "minecraft:redstone_lamp",
+    "minecraft:lit_redstone_lamp",
+    "minecraft:double_wooden_slab",
+    "minecraft:wooden_slab",
+    "minecraft:cocoa",
+    "minecraft:sandstone_stairs",
+    "minecraft:emerald_ore",
+    "minecraft:ender_chest",
+    "minecraft:tripwire_hook",
+    "minecraft:tripwire",
+    "minecraft:emerald_block",
+    "minecraft:spruce_stairs",
+    "minecraft:birch_stairs",
+    "minecraft:jungle_stairs",
+    "minecraft:command_block",
+    "minecraft:beacon",
+    "minecraft:cobblestone_wall",
+    "minecraft:flower_pot",
+    "minecraft:carrots",
+    "minecraft:potatoes",
+    "minecraft:wooden_button",
+    "minecraft:skull",
+    "minecraft:anvil",
+    "minecraft:trapped_chest",
+    "minecraft:light_weighted_pressure_plate",
+    "minecraft:heavy_weighted_pressure_plate",
+    "minecraft:unpowered_comparator",
+    "minecraft:powered_comparator",
+    "minecraft:daylight_detector",
+    "minecraft:redstone_block",
+    "minecraft:quartz_ore",
+    "minecraft:hopper",
+    "minecraft:quartz_block",
+    "minecraft:quartz_stairs",
+    "minecraft:activator_rail",
+    "minecraft:dropper",
+    "minecraft:stained_hardened_clay",
+    "minecraft:stained_glass_pane",
+    "minecraft:leaves2",
+    "minecraft:log2",
+    "minecraft:acacia_stairs",
+    "minecraft:dark_oak_stairs",
+    "minecraft:hay_block",
+    "minecraft:carpet",
+    "minecraft:hardened_clay",
+    "minecraft:coal_block",
+    "minecraft:packed_ice",
+    "minecraft:double_plant"
+   ]
+  ],
+  [
+   "setblock 1 2 3 minecraft:sto",
+   [
+    "minecraft:stone",
+    "minecraft:stone_slab",
+    "minecraft:stone_stairs",
+    "minecraft:stone_pressure_plate",
+    "minecraft:stone_button",
+    "minecraft:stonebrick",
+    "minecraft:stone_brick_stairs"
+   ]
+  ],
+  [
+   "setblock 1 2 3 sto",
+   []
+  ],
+  [
+   "setblock 1 2 3 stone ",
+   null
+  ],
+  [
+   "setblock 1 2 3 stone 0 ",
+   [
+    "replace",
+    "destroy",
+    "keep"
+   ]
+  ],
+  [
+   "setblock 1 2 3 stone 0 r",
+   [
+    "replace"
+   ]
+  ],
+  [
+   "setblock 1 2 3 stone 0 replace ",
+   null
+  ],
+  [
+   "testforblock ",
+   null
+  ],
+  [
+   "testforblock 1 2 3 minecraft:sto",
+   [
+    "minecraft:stone",
+    "minecraft:stone_slab",
+    "minecraft:stone_stairs",
+    "minecraft:stone_pressure_plate",
+    "minecraft:stone_button",
+    "minecraft:stonebrick",
+    "minecraft:stone_brick_stairs"
+   ]
+  ],
+  [
+   "testforblock 1 2 3 stone ",
+   null
+  ],
+  [
+   "testforblock 1 2 3 stone 0 ",
+   null
+  ],
+  [
+   "tellraw ",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tellraw A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "tellraw Alex ",
+   null
+  ],
+  [
+   "publish ",
+   null
+  ],
+  [
+   "w A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "msg A",
+   [
+    "Alex"
+   ]
+  ],
+  [
+   "? ",
+   null
+  ],
+  [
+   "? t",
+   null
+  ]
+ ],
+ "blocks": [
+  [
+   "minecraft:air",
+   "tile.air",
+   "tile.air.name"
+  ],
+  [
+   "minecraft:stone",
+   "tile.stone",
+   "Stone"
+  ],
+  [
+   "minecraft:grass",
+   "tile.grass",
+   "Grass Block"
+  ],
+  [
+   "minecraft:dirt",
+   "tile.dirt",
+   "tile.dirt.name"
+  ],
+  [
+   "minecraft:cobblestone",
+   "tile.stonebrick",
+   "Cobblestone"
+  ],
+  [
+   "minecraft:planks",
+   "tile.wood",
+   "Wooden Planks"
+  ],
+  [
+   "minecraft:sapling",
+   "tile.sapling",
+   "tile.sapling.name"
+  ],
+  [
+   "minecraft:bedrock",
+   "tile.bedrock",
+   "Bedrock"
+  ],
+  [
+   "minecraft:flowing_water",
+   "tile.water",
+   "Water"
+  ],
+  [
+   "minecraft:water",
+   "tile.water",
+   "Water"
+  ],
+  [
+   "minecraft:flowing_lava",
+   "tile.lava",
+   "Lava"
+  ],
+  [
+   "minecraft:lava",
+   "tile.lava",
+   "Lava"
+  ],
+  [
+   "minecraft:sand",
+   "tile.sand",
+   "tile.sand.name"
+  ],
+  [
+   "minecraft:gravel",
+   "tile.gravel",
+   "Gravel"
+  ],
+  [
+   "minecraft:gold_ore",
+   "tile.oreGold",
+   "Gold Ore"
+  ],
+  [
+   "minecraft:iron_ore",
+   "tile.oreIron",
+   "Iron Ore"
+  ],
+  [
+   "minecraft:coal_ore",
+   "tile.oreCoal",
+   "Coal Ore"
+  ],
+  [
+   "minecraft:log",
+   "tile.log",
+   "Wood"
+  ],
+  [
+   "minecraft:leaves",
+   "tile.leaves",
+   "Leaves"
+  ],
+  [
+   "minecraft:sponge",
+   "tile.sponge",
+   "Sponge"
+  ],
+  [
+   "minecraft:glass",
+   "tile.glass",
+   "Glass"
+  ],
+  [
+   "minecraft:lapis_ore",
+   "tile.oreLapis",
+   "Lapis Lazuli Ore"
+  ],
+  [
+   "minecraft:lapis_block",
+   "tile.blockLapis",
+   "Lapis Lazuli Block"
+  ],
+  [
+   "minecraft:dispenser",
+   "tile.dispenser",
+   "Dispenser"
+  ],
+  [
+   "minecraft:sandstone",
+   "tile.sandStone",
+   "Sandstone"
+  ],
+  [
+   "minecraft:noteblock",
+   "tile.musicBlock",
+   "Note Block"
+  ],
+  [
+   "minecraft:bed",
+   "tile.bed",
+   "Bed"
+  ],
+  [
+   "minecraft:golden_rail",
+   "tile.goldenRail",
+   "Powered Rail"
+  ],
+  [
+   "minecraft:detector_rail",
+   "tile.detectorRail",
+   "Detector Rail"
+  ],
+  [
+   "minecraft:sticky_piston",
+   "tile.pistonStickyBase",
+   "Sticky Piston"
+  ],
+  [
+   "minecraft:web",
+   "tile.web",
+   "Cobweb"
+  ],
+  [
+   "minecraft:tallgrass",
+   "tile.tallgrass",
+   "Grass"
+  ],
+  [
+   "minecraft:deadbush",
+   "tile.deadbush",
+   "Dead Bush"
+  ],
+  [
+   "minecraft:piston",
+   "tile.pistonBase",
+   "Piston"
+  ],
+  [
+   "minecraft:piston_head",
+   "tile.null",
+   "tile.null.name"
+  ],
+  [
+   "minecraft:wool",
+   "tile.cloth",
+   "Wool"
+  ],
+  [
+   "minecraft:piston_extension",
+   "tile.null",
+   "tile.null.name"
+  ],
+  [
+   "minecraft:yellow_flower",
+   "tile.flower1",
+   "tile.flower1.name"
+  ],
+  [
+   "minecraft:red_flower",
+   "tile.flower2",
+   "tile.flower2.name"
+  ],
+  [
+   "minecraft:brown_mushroom",
+   "tile.mushroom",
+   "Mushroom"
+  ],
+  [
+   "minecraft:red_mushroom",
+   "tile.mushroom",
+   "Mushroom"
+  ],
+  [
+   "minecraft:gold_block",
+   "tile.blockGold",
+   "Block of Gold"
+  ],
+  [
+   "minecraft:iron_block",
+   "tile.blockIron",
+   "Block of Iron"
+  ],
+  [
+   "minecraft:double_stone_slab",
+   "tile.stoneSlab",
+   "tile.stoneSlab.name"
+  ],
+  [
+   "minecraft:stone_slab",
+   "tile.stoneSlab",
+   "tile.stoneSlab.name"
+  ],
+  [
+   "minecraft:brick_block",
+   "tile.brick",
+   "Bricks"
+  ],
+  [
+   "minecraft:tnt",
+   "tile.tnt",
+   "TNT"
+  ],
+  [
+   "minecraft:bookshelf",
+   "tile.bookshelf",
+   "Bookshelf"
+  ],
+  [
+   "minecraft:mossy_cobblestone",
+   "tile.stoneMoss",
+   "Moss Stone"
+  ],
+  [
+   "minecraft:obsidian",
+   "tile.obsidian",
+   "Obsidian"
+  ],
+  [
+   "minecraft:torch",
+   "tile.torch",
+   "Torch"
+  ],
+  [
+   "minecraft:fire",
+   "tile.fire",
+   "Fire"
+  ],
+  [
+   "minecraft:mob_spawner",
+   "tile.mobSpawner",
+   "Monster Spawner"
+  ],
+  [
+   "minecraft:oak_stairs",
+   "tile.stairsWood",
+   "Oak Wood Stairs"
+  ],
+  [
+   "minecraft:chest",
+   "tile.chest",
+   "Chest"
+  ],
+  [
+   "minecraft:redstone_wire",
+   "tile.redstoneDust",
+   "Redstone Dust"
+  ],
+  [
+   "minecraft:diamond_ore",
+   "tile.oreDiamond",
+   "Diamond Ore"
+  ],
+  [
+   "minecraft:diamond_block",
+   "tile.blockDiamond",
+   "Block of Diamond"
+  ],
+  [
+   "minecraft:crafting_table",
+   "tile.workbench",
+   "Crafting Table"
+  ],
+  [
+   "minecraft:wheat",
+   "tile.crops",
+   "Crops"
+  ],
+  [
+   "minecraft:farmland",
+   "tile.farmland",
+   "Farmland"
+  ],
+  [
+   "minecraft:furnace",
+   "tile.furnace",
+   "Furnace"
+  ],
+  [
+   "minecraft:lit_furnace",
+   "tile.furnace",
+   "Furnace"
+  ],
+  [
+   "minecraft:standing_sign",
+   "tile.sign",
+   "Sign"
+  ],
+  [
+   "minecraft:wooden_door",
+   "tile.doorWood",
+   "Wooden Door"
+  ],
+  [
+   "minecraft:ladder",
+   "tile.ladder",
+   "Ladder"
+  ],
+  [
+   "minecraft:rail",
+   "tile.rail",
+   "Rail"
+  ],
+  [
+   "minecraft:stone_stairs",
+   "tile.stairsStone",
+   "Stone Stairs"
+  ],
+  [
+   "minecraft:wall_sign",
+   "tile.sign",
+   "Sign"
+  ],
+  [
+   "minecraft:lever",
+   "tile.lever",
+   "Lever"
+  ],
+  [
+   "minecraft:stone_pressure_plate",
+   "tile.pressurePlate",
+   "Pressure Plate"
+  ],
+  [
+   "minecraft:iron_door",
+   "tile.doorIron",
+   "Iron Door"
+  ],
+  [
+   "minecraft:wooden_pressure_plate",
+   "tile.pressurePlate",
+   "Pressure Plate"
+  ],
+  [
+   "minecraft:redstone_ore",
+   "tile.oreRedstone",
+   "Redstone Ore"
+  ],
+  [
+   "minecraft:lit_redstone_ore",
+   "tile.oreRedstone",
+   "Redstone Ore"
+  ],
+  [
+   "minecraft:unlit_redstone_torch",
+   "tile.notGate",
+   "Redstone Torch"
+  ],
+  [
+   "minecraft:redstone_torch",
+   "tile.notGate",
+   "Redstone Torch"
+  ],
+  [
+   "minecraft:stone_button",
+   "tile.button",
+   "Button"
+  ],
+  [
+   "minecraft:snow_layer",
+   "tile.snow",
+   "Snow"
+  ],
+  [
+   "minecraft:ice",
+   "tile.ice",
+   "Ice"
+  ],
+  [
+   "minecraft:snow",
+   "tile.snow",
+   "Snow"
+  ],
+  [
+   "minecraft:cactus",
+   "tile.cactus",
+   "Cactus"
+  ],
+  [
+   "minecraft:clay",
+   "tile.clay",
+   "Clay"
+  ],
+  [
+   "minecraft:reeds",
+   "tile.reeds",
+   "Sugar cane"
+  ],
+  [
+   "minecraft:jukebox",
+   "tile.jukebox",
+   "Jukebox"
+  ],
+  [
+   "minecraft:fence",
+   "tile.fence",
+   "Fence"
+  ],
+  [
+   "minecraft:pumpkin",
+   "tile.pumpkin",
+   "Pumpkin"
+  ],
+  [
+   "minecraft:netherrack",
+   "tile.hellrock",
+   "Netherrack"
+  ],
+  [
+   "minecraft:soul_sand",
+   "tile.hellsand",
+   "Soul Sand"
+  ],
+  [
+   "minecraft:glowstone",
+   "tile.lightgem",
+   "Glowstone"
+  ],
+  [
+   "minecraft:portal",
+   "tile.portal",
+   "Portal"
+  ],
+  [
+   "minecraft:lit_pumpkin",
+   "tile.litpumpkin",
+   "Jack o'Lantern"
+  ],
+  [
+   "minecraft:cake",
+   "tile.cake",
+   "Cake"
+  ],
+  [
+   "minecraft:unpowered_repeater",
+   "tile.diode",
+   "tile.diode.name"
+  ],
+  [
+   "minecraft:powered_repeater",
+   "tile.diode",
+   "tile.diode.name"
+  ],
+  [
+   "minecraft:stained_glass",
+   "tile.stainedGlass",
+   "Stained Glass"
+  ],
+  [
+   "minecraft:trapdoor",
+   "tile.trapdoor",
+   "Trapdoor"
+  ],
+  [
+   "minecraft:monster_egg",
+   "tile.monsterStoneEgg",
+   "tile.monsterStoneEgg.name"
+  ],
+  [
+   "minecraft:stonebrick",
+   "tile.stonebricksmooth",
+   "Stone Bricks"
+  ],
+  [
+   "minecraft:brown_mushroom_block",
+   "tile.mushroom",
+   "Mushroom"
+  ],
+  [
+   "minecraft:red_mushroom_block",
+   "tile.mushroom",
+   "Mushroom"
+  ],
+  [
+   "minecraft:iron_bars",
+   "tile.fenceIron",
+   "Iron Bars"
+  ],
+  [
+   "minecraft:glass_pane",
+   "tile.thinGlass",
+   "Glass Pane"
+  ],
+  [
+   "minecraft:melon_block",
+   "tile.melon",
+   "Melon"
+  ],
+  [
+   "minecraft:pumpkin_stem",
+   "tile.pumpkinStem",
+   "tile.pumpkinStem.name"
+  ],
+  [
+   "minecraft:melon_stem",
+   "tile.pumpkinStem",
+   "tile.pumpkinStem.name"
+  ],
+  [
+   "minecraft:vine",
+   "tile.vine",
+   "Vines"
+  ],
+  [
+   "minecraft:fence_gate",
+   "tile.fenceGate",
+   "Fence Gate"
+  ],
+  [
+   "minecraft:brick_stairs",
+   "tile.stairsBrick",
+   "Brick Stairs"
+  ],
+  [
+   "minecraft:stone_brick_stairs",
+   "tile.stairsStoneBrickSmooth",
+   "Stone Brick Stairs"
+  ],
+  [
+   "minecraft:mycelium",
+   "tile.mycel",
+   "Mycelium"
+  ],
+  [
+   "minecraft:waterlily",
+   "tile.waterlily",
+   "Lily Pad"
+  ],
+  [
+   "minecraft:nether_brick",
+   "tile.netherBrick",
+   "Nether Brick"
+  ],
+  [
+   "minecraft:nether_brick_fence",
+   "tile.netherFence",
+   "Nether Brick Fence"
+  ],
+  [
+   "minecraft:nether_brick_stairs",
+   "tile.stairsNetherBrick",
+   "Nether Brick Stairs"
+  ],
+  [
+   "minecraft:nether_wart",
+   "tile.netherStalk",
+   "Nether Wart"
+  ],
+  [
+   "minecraft:enchanting_table",
+   "tile.enchantmentTable",
+   "Enchantment Table"
+  ],
+  [
+   "minecraft:brewing_stand",
+   "tile.brewingStand",
+   "tile.brewingStand.name"
+  ],
+  [
+   "minecraft:cauldron",
+   "tile.cauldron",
+   "Cauldron"
+  ],
+  [
+   "minecraft:end_portal",
+   "tile.null",
+   "tile.null.name"
+  ],
+  [
+   "minecraft:end_portal_frame",
+   "tile.endPortalFrame",
+   "End Portal"
+  ],
+  [
+   "minecraft:end_stone",
+   "tile.whiteStone",
+   "End Stone"
+  ],
+  [
+   "minecraft:dragon_egg",
+   "tile.dragonEgg",
+   "Dragon Egg"
+  ],
+  [
+   "minecraft:redstone_lamp",
+   "tile.redstoneLight",
+   "Redstone Lamp"
+  ],
+  [
+   "minecraft:lit_redstone_lamp",
+   "tile.redstoneLight",
+   "Redstone Lamp"
+  ],
+  [
+   "minecraft:double_wooden_slab",
+   "tile.woodSlab",
+   "tile.woodSlab.name"
+  ],
+  [
+   "minecraft:wooden_slab",
+   "tile.woodSlab",
+   "tile.woodSlab.name"
+  ],
+  [
+   "minecraft:cocoa",
+   "tile.cocoa",
+   "Cocoa"
+  ],
+  [
+   "minecraft:sandstone_stairs",
+   "tile.stairsSandStone",
+   "Sandstone Stairs"
+  ],
+  [
+   "minecraft:emerald_ore",
+   "tile.oreEmerald",
+   "Emerald Ore"
+  ],
+  [
+   "minecraft:ender_chest",
+   "tile.enderChest",
+   "Ender Chest"
+  ],
+  [
+   "minecraft:tripwire_hook",
+   "tile.tripWireSource",
+   "Tripwire Hook"
+  ],
+  [
+   "minecraft:tripwire",
+   "tile.tripWire",
+   "Tripwire"
+  ],
+  [
+   "minecraft:emerald_block",
+   "tile.blockEmerald",
+   "Block of Emerald"
+  ],
+  [
+   "minecraft:spruce_stairs",
+   "tile.stairsWoodSpruce",
+   "Spruce Wood Stairs"
+  ],
+  [
+   "minecraft:birch_stairs",
+   "tile.stairsWoodBirch",
+   "Birch Wood Stairs"
+  ],
+  [
+   "minecraft:jungle_stairs",
+   "tile.stairsWoodJungle",
+   "Jungle Wood Stairs"
+  ],
+  [
+   "minecraft:command_block",
+   "tile.commandBlock",
+   "Command Block"
+  ],
+  [
+   "minecraft:beacon",
+   "tile.beacon",
+   "Beacon"
+  ],
+  [
+   "minecraft:cobblestone_wall",
+   "tile.cobbleWall",
+   "tile.cobbleWall.name"
+  ],
+  [
+   "minecraft:flower_pot",
+   "tile.flowerPot",
+   "tile.flowerPot.name"
+  ],
+  [
+   "minecraft:carrots",
+   "tile.carrots",
+   "Carrots"
+  ],
+  [
+   "minecraft:potatoes",
+   "tile.potatoes",
+   "Potatoes"
+  ],
+  [
+   "minecraft:wooden_button",
+   "tile.button",
+   "Button"
+  ],
+  [
+   "minecraft:skull",
+   "tile.skull",
+   "tile.skull.name"
+  ],
+  [
+   "minecraft:anvil",
+   "tile.anvil",
+   "Anvil"
+  ],
+  [
+   "minecraft:trapped_chest",
+   "tile.chestTrap",
+   "Trapped Chest"
+  ],
+  [
+   "minecraft:light_weighted_pressure_plate",
+   "tile.weightedPlate_light",
+   "Weighted Pressure Plate (Light)"
+  ],
+  [
+   "minecraft:heavy_weighted_pressure_plate",
+   "tile.weightedPlate_heavy",
+   "Weighted Pressure Plate (Heavy)"
+  ],
+  [
+   "minecraft:unpowered_comparator",
+   "tile.comparator",
+   "tile.comparator.name"
+  ],
+  [
+   "minecraft:powered_comparator",
+   "tile.comparator",
+   "tile.comparator.name"
+  ],
+  [
+   "minecraft:daylight_detector",
+   "tile.daylightDetector",
+   "Daylight Sensor"
+  ],
+  [
+   "minecraft:redstone_block",
+   "tile.blockRedstone",
+   "Block of Redstone"
+  ],
+  [
+   "minecraft:quartz_ore",
+   "tile.netherquartz",
+   "Nether Quartz Ore"
+  ],
+  [
+   "minecraft:hopper",
+   "tile.hopper",
+   "Hopper"
+  ],
+  [
+   "minecraft:quartz_block",
+   "tile.quartzBlock",
+   "tile.quartzBlock.name"
+  ],
+  [
+   "minecraft:quartz_stairs",
+   "tile.stairsQuartz",
+   "Quartz Stairs"
+  ],
+  [
+   "minecraft:activator_rail",
+   "tile.activatorRail",
+   "Activator Rail"
+  ],
+  [
+   "minecraft:dropper",
+   "tile.dropper",
+   "Dropper"
+  ],
+  [
+   "minecraft:stained_hardened_clay",
+   "tile.clayHardenedStained",
+   "tile.clayHardenedStained.name"
+  ],
+  [
+   "minecraft:stained_glass_pane",
+   "tile.thinStainedGlass",
+   "Stained Glass Pane"
+  ],
+  [
+   "minecraft:leaves2",
+   "tile.leaves",
+   "Leaves"
+  ],
+  [
+   "minecraft:log2",
+   "tile.log",
+   "Wood"
+  ],
+  [
+   "minecraft:acacia_stairs",
+   "tile.stairsWoodAcacia",
+   "Acacia Wood Stairs"
+  ],
+  [
+   "minecraft:dark_oak_stairs",
+   "tile.stairsWoodDarkOak",
+   "Dark Oak Wood Stairs"
+  ],
+  [
+   "minecraft:hay_block",
+   "tile.hayBlock",
+   "Hay Bale"
+  ],
+  [
+   "minecraft:carpet",
+   "tile.woolCarpet",
+   "tile.woolCarpet.name"
+  ],
+  [
+   "minecraft:hardened_clay",
+   "tile.clayHardened",
+   "Hardened Clay"
+  ],
+  [
+   "minecraft:coal_block",
+   "tile.blockCoal",
+   "Block of Coal"
+  ],
+  [
+   "minecraft:packed_ice",
+   "tile.icePacked",
+   "Packed Ice"
+  ],
+  [
+   "minecraft:double_plant",
+   "tile.doublePlant",
+   "tile.doublePlant.name"
+  ]
+ ],
+ "run": [
+  [
+   "time",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "100"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.time.set",
+      [
+       "100"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "day"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.time.set",
+      [
+       "1000"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "night"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.time.set",
+      [
+       "13000"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "Day"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "Day"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "abc"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "abc"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "2147483648"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "2147483648"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "add",
+    "50"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.time.added",
+      [
+       "50"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "add",
+    "-5"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-5",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "add",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "query"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "query",
+    "daytime"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "query",
+    "gametime"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "foo",
+    "1"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "1",
+    "2"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.time.set",
+      [
+       "1"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "SET",
+    "5"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "time",
+   [
+    "set",
+    "1.5"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "1.5"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.gamemode.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "s"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.survival\"}",
+        "Survival Mode§r",
+        "Survival Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "c"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.creative\"}",
+        "Creative Mode§r",
+        "Creative Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "a"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.adventure\"}",
+        "Adventure Mode§r",
+        "Adventure Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "survival"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.survival\"}",
+        "Survival Mode§r",
+        "Survival Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.survival\"}",
+        "Survival Mode§r",
+        "Survival Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "2"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.adventure\"}",
+        "Adventure Mode§r",
+        "Adventure Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "3",
+      "2"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "sp"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "sp"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "S"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.survival\"}",
+        "Survival Mode§r",
+        "Survival Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "Creative"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.creative\"}",
+        "Creative Mode§r",
+        "Creative Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "creative",
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.creative\"}",
+        "Creative Mode§r",
+        "Creative Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "creative",
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamemode",
+   [
+    "1",
+    "Alex",
+    "x"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      1,
+      "commands.gamemode.success.self",
+      [
+       [
+        "{\"translate\":\"gameMode.creative\"}",
+        "Creative Mode§r",
+        "Creative Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": [
+     [
+      "packet"
+     ],
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "difficulty",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.difficulty.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "p"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.peaceful\"}",
+        "Peaceful§r",
+        "Peaceful"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "e"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.easy\"}",
+        "Easy§r",
+        "Easy"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "n"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.normal\"}",
+        "Normal§r",
+        "Normal"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "h"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.hard\"}",
+        "Hard§r",
+        "Hard"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "peaceful"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.peaceful\"}",
+        "Peaceful§r",
+        "Peaceful"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.peaceful\"}",
+        "Peaceful§r",
+        "Peaceful"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "3"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.hard\"}",
+        "Hard§r",
+        "Hard"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "4"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "4",
+      "3"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "Hard"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.hard\"}",
+        "Hard§r",
+        "Hard"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "E"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.easy\"}",
+        "Easy§r",
+        "Easy"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "difficulty",
+   [
+    "easy",
+    "extra"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.difficulty.success",
+      [
+       [
+        "{\"translate\":\"options.difficulty.easy\"}",
+        "Easy§r",
+        "Easy"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.defaultgamemode.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "s"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.defaultgamemode.success",
+      [
+       [
+        "{\"translate\":\"gameMode.survival\"}",
+        "Survival Mode§r",
+        "Survival Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "1"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.defaultgamemode.success",
+      [
+       [
+        "{\"translate\":\"gameMode.creative\"}",
+        "Creative Mode§r",
+        "Creative Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "5"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "5",
+      "2"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "Adventure"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.defaultgamemode.success",
+      [
+       [
+        "{\"translate\":\"gameMode.adventure\"}",
+        "Adventure Mode§r",
+        "Adventure Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "defaultgamemode",
+   [
+    "a",
+    "b"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.defaultgamemode.success",
+      [
+       [
+        "{\"translate\":\"gameMode.adventure\"}",
+        "Adventure Mode§r",
+        "Adventure Mode"
+       ]
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "kill",
+   [],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"net.minecraft.server.MinecraftServer.X()\" because \"this.b\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "kill",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"net.minecraft.server.MinecraftServer.X()\" because \"this.b\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "toggledownfall",
+   [
+    "x"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.downfall.success",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.weather.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "clear",
+    "100"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.weather.clear",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "rain",
+    "50"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.weather.rain",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "thunder",
+    "20"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.weather.thunder",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "rain",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "0",
+      "1"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "rain",
+    "1000001"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "1000001",
+      "1000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "rain",
+    "1000000"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.weather.rain",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "rain",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "snow"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.weather.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "CLEAR",
+    "5"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.weather.clear",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "a",
+    "b",
+    "c"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.weather.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "weather",
+   [
+    "snow",
+    "5"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.weather.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.xp.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "10"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success",
+      [
+       "10",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "10L"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success.levels",
+      [
+       "10",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "10l"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success.levels",
+      [
+       "10",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "-5L"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success.negative.levels",
+      [
+       "5",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "-5"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.xp.failure.widthdrawXp",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "L"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "L"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "xL"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "10",
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success",
+      [
+       "10",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "10",
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "2147483648"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "2147483648"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "5",
+    "Alex",
+    "extra"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success",
+      [
+       "5",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success",
+      [
+       "0",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "0L"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success.levels",
+      [
+       "0",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "xp",
+   [
+    "+3"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.xp.success",
+      [
+       "3",
+       "Alex"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.tp.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "1",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "~",
+    "~1",
+    "~"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "Alex",
+    "1",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "1",
+    "2"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "x",
+    "y",
+    "z"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "Alex",
+    "Steve"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "1.5",
+    "64",
+    "-3"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "0",
+    "-5",
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "30000001",
+    "64",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "3.00000015E7",
+      "30000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "~30000000",
+    "64",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "3.00000005E7",
+      "30000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tp",
+   [
+    "Alex",
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"mw.a(double, double, double, float, float)\" because \"this.b\" is null",
+    "admin": [],
+    "sender": [
+     [
+      "packet"
+     ]
+    ]
+   }
+  ],
+  [
+   "tp",
+   [
+    "Nobody",
+    "1",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.give.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.give.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "minecraft:nosuch"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "minecraft:nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "0",
+      "1"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "65"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "65",
+      "64"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "1",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "1",
+    "0",
+    "{bad"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.give.tagError",
+      [
+       "Unbalanced brackets: {bad"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "stone",
+    "1",
+    "0",
+    "[1]"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.give.tagError",
+      [
+       "Unable to locate name/value separator for string: [1]"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Nobody",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "give",
+   [
+    "Alex",
+    "99999"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "99999"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.effect.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.effect.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "99"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.effect.notFound",
+     [
+      "99"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "speed"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "speed"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "1"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "1",
+    "1000001"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "1000001",
+      "1000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "1",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "1",
+    "10",
+    "256"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "256",
+      "255"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "1",
+    "10",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "5",
+    "0"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.effect.failure.notActive",
+     [
+      [
+       "{\"translate\":\"potion.damageBoost\"}",
+       "Strength§r",
+       "Strength"
+      ],
+      "Alex"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "clear"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.effect.failure.notActive.all",
+     [
+      "Alex"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Nobody",
+    "1"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "1",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "effect",
+   [
+    "Alex",
+    "CLEAR"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "CLEAR"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.enchant.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.enchant.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "16"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.enchant.noItem",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "999"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "999",
+      "255"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "257"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "257",
+      "255"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "16",
+    "9"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.enchant.noItem",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "16",
+    "0"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.enchant.noItem",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Nobody",
+    "16"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "enchant",
+   [
+    "Alex",
+    "3"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.enchant.noItem",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "me",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.me.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "seed",
+   [],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"translate\":\"commands.seed.success\",\"with\":[\"0\"]}",
+      "Seed: §r0§r",
+      "Seed: 0"
+     ]
+    ]
+   }
+  ],
+  [
+   "seed",
+   [
+    "x"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"translate\":\"commands.seed.success\",\"with\":[\"0\"]}",
+      "Seed: §r0§r",
+      "Seed: 0"
+     ]
+    ]
+   }
+  ],
+  [
+   "help",
+   [
+    "x",
+    "y"
+   ],
+   {
+    "thrown": [
+     "ch",
+     "commands.generic.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "ch",
+     "commands.generic.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "time"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.time.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "?"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.help.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "w"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.message.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "msg"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.message.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "publish"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.publish.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "0",
+      "1"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ch",
+     "commands.generic.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "6"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "6",
+      "5"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "99"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "99",
+      "5"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "1.5"
+   ],
+   {
+    "thrown": [
+     "ch",
+     "commands.generic.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "help",
+   [
+    "2147483648"
+   ],
+   {
+    "thrown": [
+     "ch",
+     "commands.generic.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "debug",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.debug.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "debug",
+   [
+    "foo"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.debug.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "debug",
+   [
+    "stop"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot read field \"a\" because \"net.minecraft.server.MinecraftServer.I().b\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "debug",
+   [
+    "start",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.debug.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "debug",
+   [
+    "Start"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.debug.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "1",
+    "2"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.spawnpoint.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "~",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "~"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "1.5",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "1.5"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "1",
+    "300",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "300",
+      "256"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "1",
+    "-1",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "30000001",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "30000001",
+      "30000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spawnpoint",
+   [
+    "Alex",
+    "1",
+    "2",
+    "3",
+    "4"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.spawnpoint.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "1",
+    "2"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.setworldspawn.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "~",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "~"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "1",
+    "300",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "300",
+      "256"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "1",
+    "2",
+    "3",
+    "4"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.setworldspawn.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "1.5",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "1.5"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setworldspawn",
+   [
+    "x",
+    "2",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamerule",
+   [],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "\"commandBlockOutput, doDaylightCycle, doFireTick, doMobLoot, doMobSpawning, doTileDrops, keepInventory, mobGriefing and naturalRegeneration\"",
+      "commandBlockOutput, doDaylightCycle, doFireTick, doMobLoot, doMobSpawning, doTileDrops, keepInventory, mobGriefing and naturalRegeneration§r",
+      "commandBlockOutput, doDaylightCycle, doFireTick, doMobLoot, doMobSpawning, doTileDrops, keepInventory, mobGriefing and naturalRegeneration"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "keepInventory"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"extra\":[\" \\u003d \",\"false\"],\"text\":\"keepInventory\"}",
+      "keepInventory§r = §rfalse§r",
+      "keepInventory = false"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "nosuch"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.gamerule.norule",
+      [
+       "nosuch"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "keepInventory",
+    "true"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.gamerule.success",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "custom",
+    "x"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.gamerule.norule",
+      [
+       "custom"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "a",
+    "b",
+    "c"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.gamerule.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "doDaylightCycle"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"extra\":[\" \\u003d \",\"true\"],\"text\":\"doDaylightCycle\"}",
+      "doDaylightCycle§r = §rtrue§r",
+      "doDaylightCycle = true"
+     ]
+    ]
+   }
+  ],
+  [
+   "gamerule",
+   [
+    "KeepInventory"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.gamerule.norule",
+      [
+       "KeepInventory"
+      ]
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"zs.b()\" because \"<local3>.bn\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"zs.b()\" because \"<local3>.bn\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex",
+    "stone"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"zs.b()\" because \"<local3>.bn\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex",
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex",
+    "stone",
+    "1"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"zs.b()\" because \"<local3>.bn\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex",
+    "stone",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "clear",
+   [
+    "Alex",
+    "stone",
+    "1",
+    "x"
+   ],
+   {
+    "thrown": null,
+    "crash": "java.lang.NullPointerException: Cannot invoke \"zs.b()\" because \"<local3>.bn\" is null",
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testfor",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.testfor.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testfor",
+   [
+    "a",
+    "b"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.testfor.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testfor",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testfor.failed",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.spreadplayers.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "1",
+    "10",
+    "false"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.spreadplayers.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "x",
+    "10",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "1",
+    "10",
+    "maybe",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.generic.boolean.invalid",
+     [
+      "maybe"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "-1",
+    "10",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooSmall",
+     [
+      "-1.0",
+      "0.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "5",
+    "1",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooSmall",
+     [
+      "1.0",
+      "6.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "1",
+    "0.5",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooSmall",
+     [
+      "0.5",
+      "2.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "x",
+    "0",
+    "1",
+    "10",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "0",
+    "0",
+    "1",
+    "10",
+    "false",
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "spreadplayers",
+   [
+    "30000001",
+    "0",
+    "1",
+    "10",
+    "false",
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "3.00000015E7",
+      "30000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.playsound.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.playsound.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Alex",
+    "~",
+    "~",
+    "~",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooSmall",
+     [
+      "-1.0",
+      "0.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Alex",
+    "~",
+    "~",
+    "~",
+    "1",
+    "3"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "3.0",
+      "2.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Alex",
+    "~",
+    "~",
+    "~",
+    "1",
+    "1",
+    "2"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "2.0",
+      "1.0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Alex",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "playsound",
+   [
+    "random.click",
+    "Alex",
+    "100",
+    "64",
+    "0"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.playsound.playerTooFar",
+     [
+      "Alex"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "foo"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "objectives"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.objectives.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "players"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.players.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "teams"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.teams.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "objectives",
+    "foo"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.objectives.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "players",
+    "foo"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.players.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "scoreboard",
+   [
+    "teams",
+    "foo"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.scoreboard.teams.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.achievement.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "give"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.achievement.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "give",
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.achievement.unknownAchievement",
+     [
+      "nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "take",
+    "achievement.openInventory"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.achievement.unknownAchievement",
+     [
+      "achievement.openInventory"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "foo",
+    "x"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.achievement.unknownAchievement",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "give",
+    "stat.nosuch"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.achievement.unknownAchievement",
+     [
+      "stat.nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "achievement",
+   [
+    "give",
+    "achievement.openInventory",
+    "Nobody"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.achievement.unknownAchievement",
+     [
+      "achievement.openInventory"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "summon",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.summon.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "summon",
+   [
+    "Nosuch"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.summon.failed",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "summon",
+   [
+    "Pig",
+    "x",
+    "0",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "summon",
+   [
+    "Pig",
+    "0",
+    "300",
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.summon.success",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "summon",
+   [
+    "Pig",
+    "0",
+    "-1",
+    "0"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [
+     [
+      0,
+      "commands.summon.success",
+      []
+     ]
+    ],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.setblock.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.setblock.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "stone",
+    "16"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "16",
+      "15"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "stone",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-1",
+      "0"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "-1",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.setblock.noChange",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "256",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.setblock.noChange",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "x",
+    "64",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "stone",
+    "x"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "chest",
+    "0",
+    "replace",
+    "{bad"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.setblock.tagError",
+     [
+      "Unbalanced brackets: {bad"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "30000001",
+    "64",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.double.tooBig",
+     [
+      "3.00000015E7",
+      "30000000"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "setblock",
+   [
+    "0",
+    "64",
+    "0",
+    "999"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.give.notFound",
+     [
+      "999"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.testforblock.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.testforblock.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "nosuch"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.setblock.notFound",
+     [
+      "nosuch"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "stone",
+    "16"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooBig",
+     [
+      "16",
+      "15"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "stone",
+    "-2"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.tooSmall",
+     [
+      "-2",
+      "-1"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "-1",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testforblock.failed.tile",
+     [
+      "0",
+      "-1",
+      "0",
+      "tile.air.name",
+      "Stone"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "x",
+    "64",
+    "0",
+    "stone"
+   ],
+   {
+    "thrown": [
+     "ce",
+     "commands.generic.num.invalid",
+     [
+      "x"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "chest",
+    "0",
+    "{bad"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.setblock.tagError",
+     [
+      "Unbalanced brackets: {bad"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "1"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testforblock.failed.tile",
+     [
+      "0",
+      "64",
+      "0",
+      "tile.air.name",
+      "Stone"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "minecraft:stone"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testforblock.failed.tile",
+     [
+      "0",
+      "64",
+      "0",
+      "tile.air.name",
+      "Stone"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "dirt",
+    "-1"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testforblock.failed.tile",
+     [
+      "0",
+      "64",
+      "0",
+      "tile.air.name",
+      "tile.dirt.name"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "planks"
+   ],
+   {
+    "thrown": [
+     "cd",
+     "commands.testforblock.failed.tile",
+     [
+      "0",
+      "64",
+      "0",
+      "tile.air.name",
+      "Wooden Planks"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "999"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"translate\":\"commands.testforblock.success\",\"with\":[\"0\",\"64\",\"0\"]}",
+      "Successfully found the block at §r0§r,§r64§r,§r0§r.§r",
+      "Successfully found the block at 0,64,0."
+     ]
+    ]
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "-5"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"translate\":\"commands.testforblock.success\",\"with\":[\"0\",\"64\",\"0\"]}",
+      "Successfully found the block at §r0§r,§r64§r,§r0§r.§r",
+      "Successfully found the block at 0,64,0."
+     ]
+    ]
+   }
+  ],
+  [
+   "testforblock",
+   [
+    "0",
+    "64",
+    "0",
+    "air"
+   ],
+   {
+    "thrown": null,
+    "crash": null,
+    "admin": [],
+    "sender": [
+     [
+      "{\"translate\":\"commands.testforblock.success\",\"with\":[\"0\",\"64\",\"0\"]}",
+      "Successfully found the block at §r0§r,§r64§r,§r0§r.§r",
+      "Successfully found the block at 0,64,0."
+     ]
+    ]
+   }
+  ],
+  [
+   "tellraw",
+   [],
+   {
+    "thrown": [
+     "ci",
+     "commands.tellraw.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tellraw",
+   [
+    "Alex"
+   ],
+   {
+    "thrown": [
+     "ci",
+     "commands.tellraw.usage",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tellraw",
+   [
+    "Nobody",
+    "\"hi\""
+   ],
+   {
+    "thrown": [
+     "cg",
+     "commands.generic.player.notFound",
+     []
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tellraw",
+   [
+    "Alex",
+    "{bad"
+   ],
+   {
+    "thrown": [
+     "cf",
+     "commands.tellraw.jsonException",
+     [
+      "End of input at line 1 column 5 path $.bad"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ],
+  [
+   "tellraw",
+   [
+    "Alex",
+    "["
+   ],
+   {
+    "thrown": [
+     "cf",
+     "commands.tellraw.jsonException",
+     [
+      "End of input at line 1 column 2 path $[0]"
+     ]
+    ],
+    "crash": null,
+    "admin": [],
+    "sender": []
+   }
+  ]
+ ]
+}
