@@ -334,6 +334,7 @@ import { orderGroups, stampSavedOrder, restoreSavedOrder, liveLists, liveOrder }
 import { reachesDragon } from "./dragon-parts.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
+import { spawnRedstoneDrop } from "./redstone-drops.js"; // b83 mppiston83
 import { SkullRenderer } from "./skull-renderer.js";
 import { skinBook } from "./skull-skins.js";
 import { EnchantingBooks, EnchantingScreenExtras } from "./enchanting-book-live.js";
@@ -1765,7 +1766,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
       },
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
-      drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0, undefined, d.rawDamage ? { rawDamage: d.rawDamage } : undefined)], x, y, z), // b82 pots82: a pot's rawDamage plant
+      drop: (x, y, z, d) => spawnRedstoneDrop(items, x, y, z, d), // b83 mppiston83: at the engine's dropBlockAsItem_do position (no second dropBlock spread); keeps rawDamage and SkullOwner
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
       markUnsaved: () => { saved = false; },
       // Pistons push the player through its own moveEntity state (piston-push.js pushPlayer).

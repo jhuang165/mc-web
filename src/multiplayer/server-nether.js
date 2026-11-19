@@ -24,6 +24,7 @@ import { Trees } from '../trees.js';
 import { Plants } from '../plants.js';
 import { Weather } from '../weather.js';
 import { LiveRedstone } from '../redstone-live.js';
+import { serverRedstoneDrop } from './server-redstone-drops.js'; // b83 mppiston83
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
@@ -83,6 +84,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
     entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? n.vehicles?.cartsIn(box, mode) ?? [] : [...sim.players.values()].filter(p => p.dimension === (n.dim ?? NETHER) && p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position })),
     environment: () => ({ sky: 0, skylightSubtracted: 0, celestialAngle: 0, noSky: true }),
     skyLight: () => 0,
+    drop: serverRedstoneDrop(sim, () => n.items), skulls: () => n.tileEntities.skulls, // b83 mppiston83 (server-redstone-drops.js)
   });
   n.redstone.restore(saved.redstone);
   installMusic(sim, n.redstone, n.dim ?? NETHER, saved.redstone); // b66 mpbooks: note blocks and jukeboxes of this dimension

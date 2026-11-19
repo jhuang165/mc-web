@@ -23,6 +23,7 @@ import { Torches } from '../torches.js';
 import { Doors } from '../doors-panes.js';
 import { Beds } from '../bed.js';
 import { LiveRedstone } from '../redstone-live.js';
+import { serverRedstoneDrop } from './server-redstone-drops.js'; // b83 mppiston83
 import { installResidency } from './server-residency.js'; // b82 mpcmd82
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
@@ -187,6 +188,7 @@ export class DedicatedSimulation {
       entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? this.vehicles?.cartsIn(box, mode) ?? [] : [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
       environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
+      drop: serverRedstoneDrop(this, () => this.items), skulls: () => this.tileEntities.skulls, // b83 mppiston83: piston and support-loss drops (server-redstone-drops.js)
     });
     this.redstone.restore(saved.redstone);
     installMusic(this, this.redstone, 0, saved.redstone); // b66 mpbooks: note blocks and jukeboxes (server-music.js)

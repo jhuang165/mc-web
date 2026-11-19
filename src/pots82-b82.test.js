@@ -107,7 +107,7 @@ test("a piston breaking a pot (mobility 1) drops the pot item, then the stored s
   r.dropBlockAsItem(6, 10, 6, 140, 0);
   assert.deepEqual(drops, []);
   r.detach?.();
-  assert.match(src("main.js"), /d\.rawDamage \? \{ rawDamage: d\.rawDamage \} : undefined/);
+  assert.match(src("main.js"), /drop: \(x, y, z, d\) => spawnRedstoneDrop\(items, x, y, z, d\)/); // b83 mppiston83: the hook spawns at the engine position; the rest tags (rawDamage) stay on the stack
 });
 
 test("/setblock over a pot drops its plant (setBlock's breakBlock), pot to pot with another meta too; the record goes", () => {
