@@ -18,7 +18,7 @@ import { skullDrops } from "./skull.js";
 import { makeStack } from "./inventory.js";
 
 const f = Math.fround, F07 = f(0.7), INSET = f(1 - F07) * 0.5;
-// Original item id -> port item id for what these rules drop (redstone-drops83.test.js checks every entry against region-import's itemFromOriginal).
+// Original item id -> port item id for what these rules drop (mppiston83-b83.test.js checks every entry against region-import's itemFromOriginal).
 export const CRUSH_ITEMS = Object.freeze({ 6: 48, 37: 43, 38: 44, 175: 69, 260: 200, 287: 321, 295: 309, 296: 305, 338: 327, 351: 351, 355: 472, 360: 368, 361: 361, 362: 362, 372: 386, 391: 322, 392: 323, 394: 325 });
 // The original ids handled here.
 export const CRUSH_IDS = new Set([6, 8, 9, 10, 11, 18, 26, 30, 31, 32, 37, 38, 51, 59, 78, 83, 92, 103, 104, 105, 106, 115, 127, 141, 142, 144, 161, 175]);
