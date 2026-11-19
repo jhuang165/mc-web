@@ -737,6 +737,23 @@ export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "gian
 const slipOf = (world, e) => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
 // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
 const climbableOf = (world, e) => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
+// b82 mpplace82: the movement half of EntityPlayerMP.onUpdateEntity (mw.i) on a server copy `c` ({ x, y, z, motion, onGround, sneaking, inWeb, flying,
+// riding }), shared by the integrated server's PlayerView (serverPlayerUpdate) and the dedicated server's copy (multiplayer/server-copy-step.js). Entity.onEntityUpdate's
+// handleWaterMovement (the flow adds to the motion) and lava flag, EntityLivingBase.onLivingUpdate's snap below 0.005, moveEntityWithHeading with no input (stepHeight 0)
+// and a flying player's motionY * 0.6 (yz.e(FF)). Returns the moved scratch entity; the caller writes back what it keeps (processPlayer puts the position back).
+export function serverCopyMove(world, c, w, h) {
+  const m = c.motion;
+  const e = { x: c.x, y: c.y, z: c.z, vx: m.x, vy: m.y, vz: m.z, onGround: c.onGround, inWater: false, inLava: false, sneaking: !!c.sneaking, player: true, living: true, inWeb: c.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
+  e.inWater = inWater(world, e, w, h); // Entity.handleWaterMovement (the flow adds to the motion)
+  e.inLava = inLava(world, [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2]);
+  if (Math.abs(e.vx) < 0.005) e.vx = 0; // EntityLivingBase.onLivingUpdate
+  if (Math.abs(e.vy) < 0.005) e.vy = 0;
+  if (Math.abs(e.vz) < 0.005) e.vz = 0;
+  const vy = e.vy;
+  moveEntityWithHeading(world, e, w, h, 0);
+  if (c.flying && !c.riding) e.vy = vy * 0.6; // EntityPlayer.moveEntityWithHeading (yz.e(FF)): a flying player keeps 0.6 of the vertical motion it had
+  return e;
+}
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
@@ -1594,6 +1611,7 @@ export class EntityWorld {
     const part = e.type === "ender_dragon";
     if (part) critical = false;
     info.critical = critical;
+    info.part = part; // b82 mpplace82: the attacker's client slows itself on a part (server-attack-slowdown.js)
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0,
       held = owned && survival.held?.id === tool ? survival.held : null,
@@ -1606,7 +1624,9 @@ export class EntityWorld {
     this.lastAttackDamage = part ? 0 : damage; // b81: no stat for a part (an increment of 0 is none); b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
-    const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
+    // b82 mpplace82: wy.a(ro, F) -> xa.a(wy, ro, F) answers true inside the dragon's hurt window too (bytecode-read: the window is sv.a's, reached only
+    // through xa.e(ro, F), and xa.a(wy) ignores its result), so a part hit always lands; the window only decides the dragon's health (dragon.js livingHurt).
+    const landed = (part || !(e.hurt > 0 && damage <= e.lastDamage)) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
       this.ai.playerHit(e.type === "ender_dragon" ? null : e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
@@ -2554,15 +2574,8 @@ export class EntityWorld {
     // EntityLivingBase.onEntityUpdate: the revenge target (getAITarget) is dropped once it is dead or more than 100 ticks old.
     const hb = p.hurtBy;
     if (hb && typeof hb.health === "number" && (!(hb.health > 0) || !this.entities.includes(hb) || this.ai.clock - p.hurtByTime > 100)) p.hurtBy = null;
-    const e = { x: p.x, y: p.y, z: p.z, vx: m.x, vy: m.y, vz: m.z, onGround: p.onGround, inWater: false, inLava: false, sneaking: !!p.sneaking, player: true, living: true, inWeb: p.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
-    e.inWater = inWater(world, e, w, h); // Entity.handleWaterMovement (the flow adds to the motion)
-    e.inLava = inLava(world, [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2]);
-    if (Math.abs(e.vx) < 0.005) e.vx = 0; // EntityLivingBase.onLivingUpdate
-    if (Math.abs(e.vy) < 0.005) e.vy = 0;
-    if (Math.abs(e.vz) < 0.005) e.vz = 0;
-    const vy = e.vy;
-    moveEntityWithHeading(world, e, w, h, 0);
-    if (p.flying && !p.riding) e.vy = vy * 0.6; // EntityPlayer.moveEntityWithHeading (yz.e(FF)): a flying player keeps 0.6 of the vertical motion it had
+    const e = serverCopyMove(world, p, w, h);
+    this.serverCopyMoved?.(p, e); // b82 mpplace82: EntityPlayer.moveEntityWithHeading's addMovementStat on the copy's own move (server-copy-stat.js)
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
     p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
