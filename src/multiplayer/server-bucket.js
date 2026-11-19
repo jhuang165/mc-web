@@ -11,7 +11,7 @@
 import { traceBucket, useBucketAt } from '../buckets.js';
 import { tracedBucketKind } from '../buckets-simulation.js';
 import { blockProtected } from './server-properties.js';
-import { washStacks } from '../fluid-wash.js';
+import { washStacks, burnStacks } from '../fluid-wash.js';
 
 const f = Math.fround;
 
@@ -31,6 +31,7 @@ export const fluidFizz = (sim, dim) => (x, y, z, pitch) => { sim.soundsOut.push(
 export function installFluidHooks(fluids, sim, dim, itemsOf) {
   fluids.onFizz = fluidFizz(sim, dim);
   fluids.wash = (x, y, z, b) => { const d = washStacks(fluids.world, x, y, z, b); if (d.length) itemsOf().dropBlock(d, x, y, z); };
+  fluids.burn = (x, y, z, b) => { const d = burnStacks(fluids.world, x, y, z, b); if (d.length) itemsOf().dropBlock(d, x, y, z); }; // b82 pots82: lava over a pot drops its plant
 }
 
 /**

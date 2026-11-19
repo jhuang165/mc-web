@@ -114,7 +114,9 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
-import { washStacks } from "./fluid-wash.js";
+import { washStacks, burnStacks } from "./fluid-wash.js";
+import { plantDropDamage } from "./plant-damage.js"; // b82 pots82
+import { meterPercent } from "./mining-crack.js"; // b82 pots82
 import { spActiveChunkSource } from "./sp-active-chunks.js"; // b69 spfarming
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, mobInBox, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
@@ -1530,7 +1532,7 @@ function watchFlowers() {
       if (!isFlower(b) || flowerCanStay(world, FLOWERS, fx, fy, fz)) continue;
       const meta = world.getMeta(fx, fy, fz);
       world.set(fx, fy, fz, 0);
-      items.dropBlock([makeStack(b, 1, b === RED_FLOWER ? meta : 0)], fx, fy, fz);
+      { const pd = plantDropDamage(b, meta); items.dropBlock([makeStack(b, 1, pd?.damage ?? 0, undefined, pd?.tags)], fx, fy, fz); } // b82 pots82: plant-damage.js
       scene.updateBlock(fx, fz, fy);
     }
     // BlockCrops.canBlockStay / BlockFarmland.onNeighborBlockChange on every neighbour update (farming.js farmNeighbourChange).
@@ -1659,7 +1661,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
     world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); if (!muteFizzSmoke) for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + Math.random(), z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = washStacks(world, x, y, z, b); if (d.length) items.dropBlock(d, x, y, z); } }); // b75: fluid-wash.js (shared with the server)
+    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = washStacks(world, x, y, z, b); if (d.length) items.dropBlock(d, x, y, z); }, burn: (x, y, z, b) => { const d = burnStacks(world, x, y, z, b); if (d.length) items.dropBlock(d, x, y, z); } }); // b82 pots82: burn; b75: fluid-wash.js (shared with the server)
     fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
@@ -1756,7 +1758,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
       },
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
-      drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0)], x, y, z),
+      drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0, undefined, d.rawDamage ? { rawDamage: d.rawDamage } : undefined)], x, y, z), // b82 pots82: a pot's rawDamage plant
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
       markUnsaved: () => { saved = false; },
       // Pistons push the player through its own moveEntity state (piston-push.js pushPlayer).
@@ -2100,6 +2102,7 @@ const commandHost = createCommandHost({
   },
   updateBlock: (x, y, z) => scene.updateBlock(x, z, y),
   destroyBlock: (x, y, z) => breakBlock([x, y, z], false),
+  dropStacks: (stacks, x, y, z) => items.dropBlock(stacks, x, y, z), // b82 pots82: a /setblock-replaced pot's plant (command-host.js)
   achievements: () => achievements,
   stats: () => stats,
   profiler,
@@ -4160,7 +4163,7 @@ function pickBlock() {
   const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
   const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
   if (id) {
-    const doPick = () => survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
+    const doPick = () => survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined), stonePick?.rawDamage); // b82 pots82: a rawDamage pot picks its stored stack
     if (survival.creative && multiplayer?.ready && active?.remote) creativePick(survival.inventory, multiplayer, doPick); else doPick(); // b62: C10 for the picked hotbar slot
     mining = null;
     eating = null;
@@ -4629,10 +4632,10 @@ function animate(now) {
     if (mining) {
       $("#mining-meter").setAttribute(
         "aria-valuenow",
-        String(Math.round(mining.progress * 100)),
+        String(Math.round(meterPercent(mining.progress))),
       );
       $("#mining-meter i").style.width =
-        Math.min(100, mining.progress * 100) + "%";
+        meterPercent(mining.progress) + "%"; // b82 pots82: never NaN or negative at Mining Fatigue V (mining-crack.js)
     }
     if (debug) updateDebugOverlay();
     if (elapsed - lastSave > 5) save();

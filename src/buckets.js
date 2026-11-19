@@ -7,6 +7,7 @@ import { WATER, LAVA, isLiquid, WEB, LADDER, isPlant, isCrop, blockBounds } from
 import { isStair, stairRayTrace } from "./stairs.js";
 import { makeStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
+import { FLOWER_POT } from "./stone-utility.js";
 
 export const BUCKET = 340, WATER_BUCKET = 341, LAVA_BUCKET = 342, MILK_BUCKET = 343;
 // Item.getMovingObjectPositionFromPlayer always looks 5.0 blocks along the view.
@@ -135,8 +136,8 @@ const SIDE = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0
 export function placeContainedLiquid(world, x, y, z, liquid, destroy) {
   if (!liquid || !world.inside(x, y, z)) return false;
   const old = world.get(x, y, z);
-  // A ladder has a collision box but Material.circuits is not solid, so the liquid replaces it.
-  if (old !== 0 && old !== LADDER && world.solid(x, y, z)) return false;
+  // A ladder has a collision box but Material.circuits is not solid, so the liquid replaces it; b82 pots82: so is a flower pot's (ald, awt.q; bytecode-read).
+  if (old !== 0 && old !== LADDER && old !== FLOWER_POT && world.solid(x, y, z)) return false;
   if (world.isHell && liquid === WATER) { world.evaporated?.(x, y, z); return true; } // the Nether: fizz and smoke, the water is not placed (dimension-live.js)
   if (old !== 0 && !isLiquid(old)) destroy?.(x, y, z, old);
   world.set(x, y, z, liquid, true, 0);

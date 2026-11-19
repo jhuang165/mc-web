@@ -8,6 +8,7 @@ import { legacyBodyTurn } from "./squid-bat.js";
 import { JavaRandom } from "./lighting.js";
 import { fromOriginal } from "./block-registry.js";
 import { gameRule } from "./game-rules.js";
+import { FLOWER_POT, potContents, potHeldDrop } from "./stone-utility.js";
 import { createExitPortal } from "./exit-portal.js";
 import {
   DRAGON_MAX_HEALTH, DRAGON_WIDTH, DRAGON_HEIGHT, DRAGON_SOUNDS, createDragonState, dragonTick, deathTick, attackFromPart,
@@ -84,8 +85,12 @@ export function dragonHost(mobs, e, ctx = {}) {
       return b === 0 ? 0 : b === OBSIDIAN || b === END_STONE || b === BEDROCK ? 1 : 2;
     },
     removeBlock(x, y, z) {
+      // b82 pots82: setBlockToAir runs BlockFlowerPot.breakBlock, which drops the stored plant (dropBlockAsItem on world.rand, not the dragon's); no pot item.
+      const pot = world.get(x, y, z) === FLOWER_POT && world.getMeta ? potContents(world, x, y, z) : null;
       if (!world.set(x, y, z, 0, true, 0)) return false;
       edits.push([x, y, z]);
+      const held = pot && gameRule("doTileDrops") && potHeldDrop(pot, x, y, z);
+      if (held?.id) mobs.events.push({ drop: held.id, count: 1, ...(held.damage ? { damage: held.damage } : {}), ...(held.tags ?? {}), position: { x, y, z }, blockSpread: true });
       return true;
     },
     griefing: gameRule("mobGriefing"),

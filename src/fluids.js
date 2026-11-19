@@ -21,6 +21,7 @@
 import { WATER, LAVA, REEDS, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";
 import { toOriginal } from "./block-registry.js";
+import { FLOWER_POT } from "./stone-utility.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { pauseUnloadedTicks, ringBlockTickActive } from './streaming-ticks.js';
 
@@ -207,9 +208,10 @@ export class Fluids {
   // ticks and fizz pitches share it with weather/fire/trees as in ahb.s.
   // `nether` selects the lava level step 1 (aqo.f, the Nether only); `skyless` the lava tick rate 10 (aqo.g: the Nether and the End,
   // default: the same as `nether`).
-  constructor(world, { wash = () => {}, fizz = () => {}, seed = 0, random = new JavaRandom(seed), nether = false, skyless = nether } = {}) {
+  constructor(world, { wash = () => {}, burn = () => {}, fizz = () => {}, seed = 0, random = new JavaRandom(seed), nether = false, skyless = nether } = {}) {
     this.world = world;
     this.wash = wash;
+    this.burn = burn; // b82 pots82: `burn(x, y, z, block)` is the setBlock's breakBlock drop under lava (a pot's plant; fluid-wash.js burnStacks)
     this.onFizz = fizz;
     this.nether = nether;
     this.skyless = skyless;
@@ -405,8 +407,10 @@ export class Fluids {
   // portals block liquid, as does any material that blocks movement. Of the first
   // group ladders (they have a collision box) and sugar cane exist here; air,
   // liquids, torches and the other plants are the open cells.
+  // b82 pots82: a flower pot is Material.circuits (awt.q, awq), which does not block movement (bytecode-read), so liquids flow into it.
   blocked(x, y, z) {
-    return (this.world.get(x,y,z)!==73&&solid(this.world, x, y, z)) || this.world.get(x, y, z) === REEDS;
+    const b = this.world.get(x, y, z);
+    return (b !== 73 && b !== FLOWER_POT && solid(this.world, x, y, z)) || b === REEDS;
   }
   // func_149809_q (akr.q): not the same liquid, not lava, and not blocked.
   // Water therefore never flows into lava, while lava can flow into water.
@@ -428,7 +432,7 @@ export class Fluids {
   flowInto(x, y, z, meta, kind) {
     if (!this.canFlowInto(x, y, z, kind)) return;
     const old = this.world.get(x, y, z);
-    if (kind === LAVA) this.fizz(x, y, z);
+    if (kind === LAVA) { this.fizz(x, y, z); if (old) this.burn(x, y, z, old); }
     else if (old) this.wash(x, y, z, old);
     this.place(x, y, z, kind, meta);
   }

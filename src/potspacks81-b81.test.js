@@ -51,7 +51,7 @@ test("a pot holding an item the client does not draw is full, draws nothing, and
     const want = exact ? { id: exact.id, damage: exact.damage } : { id: base.id, damage: base.damage, rawDamage: data };
     assert.deepEqual(potStack(potContents(w, 0, 0, 0)), want, `${item}:${data}`);
     assert.deepEqual(potDrops(w, 0, 0, 0)[0], { ...want, count: 1 });
-    assert.deepEqual(potPick(w, 0, 0, 0), { id: want.id, damage: want.damage });
+    assert.deepEqual(potPick(w, 0, 0, 0), want); // b82 pots82: rawDamage included (was { id, damage } only)
     assert.equal(potUse(w, 0, 0, 0, 43, 0), null, "a full pot takes no plant");
   }
   // Natively registered items the port has no item for (carrots block 141, end portal 119...): kept for export, nothing to drop or pick.

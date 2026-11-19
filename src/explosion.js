@@ -7,7 +7,8 @@ import { rayTraceBlocks } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
 import { STAIRS, stairExplosionResistance } from "./stairs.js";
 import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM } from "./dispenser-piston.js";
-import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem } from "./stone-utility.js";
+import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem, potBreakDrop } from "./stone-utility.js";
+import { plantDropDamage } from "./plant-damage.js";
 import { TNT, MONSTER_EGG, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
 import { SHAPED_RESISTANCE } from "./shaped-blocks.js";
@@ -205,7 +206,9 @@ function itemDropped(id, meta, rand) {
     case 24: return [CLAY_BALL, 0];
     case 23: return [SNOWBALL, 0];
     case WEB: return [STRING, 0];
-    case WOOL: case RED_FLOWER: return [id, meta];
+    case WOOL: return [id, meta];
+    // b82 pots82: BlockFlower.damageDropped is the meta, BlockSapling's clamp(meta & 7, 0, 5) (bytecode-read); a rose past its variants keeps rawDamage (plant-damage.js).
+    case RED_FLOWER: case SAPLING: { const pd = plantDropDamage(id, meta); return [id, pd.damage, pd.tags]; }
     // BlockDoor.getItemDropped: the lower half's door item (original 324 and 330), nothing for the upper half; BlockPane (glass) drops nothing.
     case WOODEN_DOOR: return meta & 8 ? null : [470, 0];
     case IRON_DOOR: return meta & 8 ? null : [471, 0];
@@ -252,9 +255,9 @@ function quantity(id, rand) {
 // Returns { items: [{ id, damage, x, y, z }], xp: [orb values] } using `rand` (world.rand).
 export function explosionDrops(id, meta, x, y, z, chance, rand) {
   const items = [], xp = [];
-  const drop = (item, damage) => {
+  const drop = (item, damage, tags) => {
     const [px, py, pz] = at(rand, x, y, z);
-    items.push({ id: item, damage, x: px, y: py, z: pz });
+    items.push({ id: item, damage, x: px, y: py, z: pz, ...(tags ? { tags } : {}) });
   };
   if (id === 5) {
     // trees.leafDrops already consumes the three position floats; re-derive them here
@@ -273,7 +276,7 @@ export function explosionDrops(id, meta, x, y, z, chance, rand) {
   for (let i = 0; i < n; i++) {
     if (rand.nextFloat() <= chance) {
       const item = itemDropped(id, meta, rand);
-      if (item) drop(item[0], item[1]);
+      if (item) drop(item[0], item[1], item[2]);
     }
   }
   const age = isWheat(id) ? id - 31 : id === CARROTS || id === POTATOES ? meta : -1;
@@ -333,6 +336,9 @@ export function explosionOutcome(world, list, size, rand, { smoking = true, flam
         drops.push(...d.items);
         for (const v of d.xp) xp.push({ value: v, x: bx + 0.5, y: by + 0.5, z: bz + 0.5 });
       }
+      // b82 pots82: doExplosionB's setBlock(air) runs BlockFlowerPot.breakBlock (bytecode-read agw.a(Z): dropBlockAsItemWithChance, setBlock, onBlockDestroyedByExplosion),
+      // so the tile's ItemStack(Item, 1, Data) drops after the pot's own roll, on three more World.rand floats, whatever the chance (stone-utility.js potBreakDrop).
+      if (id === FLOWER_POT) { const held = potBreakDrop(world, bx, by, bz, rand); if (held?.id) drops.push({ id: held.id, damage: held.damage, x: held.x, y: held.y, z: held.z, ...(held.tags ? { tags: held.tags } : {}) }); }
       // BlockSilverfish.dropBlockAsItemWithChance (amb.a, bytecode-read): Explosion.doExplosionB calls it for every block that canDropFromExplosion (aji.a(agw) is true,
       // amb does not override it), and it spawns a silverfish at (x + 0.5, y, z + 0.5) whatever the chance. The callers spawn them after the blocks are gone.
       if (id === MONSTER_EGG) released.push([bx, by, bz]);

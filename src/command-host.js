@@ -20,6 +20,7 @@ import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
+import { FLOWER_POT, potBreakDrop, potEntryStack, potKey } from "./stone-utility.js";
 import { SKULLS } from "./skull.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
@@ -229,7 +230,11 @@ export function createCommandHost(env) {
       if (mode === "keep" && old !== 0) return false;
       if (mode === "destroy" && old !== 0) env.destroyBlock(x, y, z);
       if (w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
+      // b82 pots82: World.setBlock runs the old block's breakBlock on the server even for the same block with another metadata (Chunk.func_150807_a, apx.a;
+      // bytecode-read), so a replaced pot drops its stored stack (BlockFlowerPot.breakBlock, ald.a) and its tile entity goes (BlockContainer.breakBlock).
+      const potHeld = w.get(x, y, z) === FLOWER_POT ? potBreakDrop(w, x, y, z) : null;
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
+      if (potHeld) { w.pots?.delete(potKey(x, y, z)); if (potHeld.id) env.dropStacks?.([potEntryStack(potHeld, makeStack)], x, y, z); }
       const key = `${x},${y},${z}`, stores = survival();
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'tableNames']) delete stores[name]?.[key]; // b75: tableNames, an enchanting table's CustomName goes with the old tile
       if (original === 144) (env.skulls?.() ?? SKULLS).create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), '', profileOfSkullTile(tag)); // TileEntitySkull (skull.js)

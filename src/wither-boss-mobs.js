@@ -12,6 +12,7 @@ import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { gameRule } from "./game-rules.js";
 import { addMobEffect } from "./mob-effects.js";
 import { explosionDrops } from "./explosion.js";
+import { FLOWER_POT, potContents, potHeldDrop } from "./stone-utility.js";
 import { POTION } from "./potions.js";
 import { headPass } from "./wither-targeting.js";
 import { fireballTurn } from "./fireball-turn.js";
@@ -139,9 +140,14 @@ function breakBlocks(m, e, rand) {
     const x = fx + dx, y = fy + dy, z = fz + dz, id = w.get(x, y, z);
     if (id === 0 || WITHER_PROOF_INTERNAL.includes(id)) continue;
     const meta = w.getMeta ? w.getMeta(x, y, z) : 0;
+    // b82 pots82: func_147480_a is dropBlockAsItem then setBlock(air), whose BlockFlowerPot.breakBlock drops the tile's stack on three more rand floats (potBreakDrop).
+    // The pot cell's content is read before it is cleared; the draws follow the pot item's.
+    const pot = id === FLOWER_POT && w.getMeta ? potContents(w, x, y, z) : null;
     w.set(x, y, z, 0);
     m.events.push({ blockEdit: [[x, y, z]], blockBreak: { x, y, z, block: id, meta } });
-    for (const d of explosionDrops(id, meta, x, y, z, 1, rand).items) m.events.push({ drop: d.id, count: 1, ...(d.damage ? { damage: d.damage } : {}), position: { x: d.x, y: d.y, z: d.z } });
+    for (const d of explosionDrops(id, meta, x, y, z, 1, rand).items) m.events.push({ drop: d.id, count: 1, ...(d.damage ? { damage: d.damage } : {}), ...(d.tags ?? {}), position: { x: d.x, y: d.y, z: d.z } });
+    const held = pot && potHeldDrop(pot, x, y, z, rand);
+    if (held?.id) m.events.push({ drop: held.id, count: 1, ...(held.damage ? { damage: held.damage } : {}), ...(held.tags ?? {}), position: { x: held.x, y: held.y, z: held.z } });
     any = true;
   }
   if (any) levelEvent(m, 1012, e.x, e.y, e.z);

@@ -19,6 +19,7 @@ import { RedstoneWorld, pistonTile, refreshDaylightSensor, hasComparatorOverride
 import { toOriginal, fromOriginal, internalIdsFor } from "./block-registry.js";
 import { doorSound } from "./doors-panes.js";
 import { hashSeed, WATER, LAVA } from "./world.js";
+import { potBreakDrop } from "./stone-utility.js";
 
 const REPEATER = 112, FURNACE = 14;
 const PISTON_REACH = 14; // 12 blocks pushed plus the head cell and the one beyond
@@ -235,6 +236,10 @@ export class LiveRedstone extends RedstoneWorld {
       const item = dropItemId(d.item);
       if (item !== null) this.hooks.drop?.(d.x, d.y, d.z, { id: item, count: d.count, damage: d.damage });
     }
+    // b82 pots82: a piston breaks a pot (mobility 1) with dropBlockAsItem then setBlockToAir, whose BlockFlowerPot.breakBlock drops the stored stack on three more
+    // world.rand floats (ald.a; bytecode-read). The cell still holds the pot here.
+    const held = id === 140 ? potBreakDrop(this.world, x, y, z, this.rand, this.doTileDrops) : null;
+    if (held?.id) this.hooks.drop?.(held.x, held.y, held.z, { id: held.id, count: 1, damage: held.damage, ...(held.tags ?? {}) });
   }
 
   // ---- pending ticks: due entries on unloaded cells wait until the cell loads ----

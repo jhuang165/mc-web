@@ -2,6 +2,7 @@
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
 import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
+import { validRawDamage } from "./inventory.js"; // b82 pots82
 import { collides, collisionBoxes, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
@@ -221,7 +222,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
-  const meta = isColoredBlock(id) ? coloredPlacedMeta(id, survival.held?.damage || 0, side, doorRotationYaw(yaw)) : id === 67 ? pumpkinFacingMeta(doorRotationYaw(yaw)) : id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
+  // b82 pots82: ItemMultiTexture (adl, the rose and sapling items) returns the damage from getMetadata (bytecode-read), stored as meta & 15: a rawDamage stack places that.
+  const meta = isColoredBlock(id) ? coloredPlacedMeta(id, survival.held?.damage || 0, side, doorRotationYaw(yaw)) : id === 67 ? pumpkinFacingMeta(doorRotationYaw(yaw)) : id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? ((id === RED_FLOWER || id === SAPLING) && validRawDamage(survival.held?.rawDamage) ? survival.held.rawDamage & 15 : survival.held?.damage || 0)
     : id === LADDER ? placedLadderMeta(world, ...p, side)
         : id === TORCH ? torchMeta
           : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)

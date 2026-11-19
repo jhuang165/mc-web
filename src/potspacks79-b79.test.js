@@ -48,7 +48,7 @@ test("breaking or picking a pot with a native-only damage yields the plant item 
   const world = { pots: new Map(), getMeta: () => 0 };
   setPotContents(world, 0, 0, 0, potFromNbt({ Item: 38, Data: 12 }));
   assert.deepEqual(potDrops(world, 0, 0, 0)[0], { id: 44, count: 1, damage: 0, rawDamage: 12 }); // b81: ItemStack(red_flower, 1, 12)
-  assert.deepEqual(potPick(world, 0, 0, 0), { id: 44, damage: 0 });
+  assert.deepEqual(potPick(world, 0, 0, 0), { id: 44, damage: 0, rawDamage: 12 }); // b82 pots82: the pick is the stored stack too (was the plain poppy)
 });
 
 test("pack descriptions replay getFormattedText for styled chat components", () => {
