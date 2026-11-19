@@ -74,3 +74,20 @@ export function arrowPunch(survival, a, sqrtF) {
   queueVelocity(survival, (a.mx * a.knockback * 0.6000000238418579) / h, 0.1, (a.mz * a.knockback * 0.6000000238418579) / h);
   return true;
 }
+
+// b83 attack83: EntityPlayer.attackTargetEntityWithCurrentItem (yz.r(sa), bytecode-read offsets 205-299) on the SERVER's EntityPlayerMP. Inside
+// `if (target.attackEntityFrom(...))` and `if (knockback > 0)`: target.addVelocity, then this.motionX *= 0.6 and motionZ *= 0.6 (doubles), then
+// setSprinting(false); 1.7.10 has no velocityChanged / S12 step there (that is 1.8). The test is the target's answer, so it holds for every target
+// the server hurts (a mob, a dragon part, a crystal, a cart, a boat, another EntityPlayerMP). This is the copy's half (`survival.serverPlayer`:
+// the integrated server's PlayerView or the dedicated server's copy, server-copy-step.js); the client's own yz.r slows the player's real motion
+// only when the client copy's attackEntityFrom answers true (attackLandsOnClient below).
+export function slowServerAttacker(survival) {
+  const m = survival?.serverPlayer?.motion;
+  if (m) { m.x *= 0.6; m.z *= 0.6; }
+}
+// The attacker's own client runs yz.r too (PlayerControllerMP.attackEntity, bje.a(yz, sa): the C02, then yz.r on the client copy, bytecode-read).
+// EntityLivingBase.attackEntityFrom returns false at once on a remote world (sv.a(ro, F) offsets 9-20), so a hit on a mob copy neither slows
+// nor stops the sprint there (the server's setSprinting(false) reaches the owner as the S1C). The copies that answer true: EntityOtherPlayerMP
+// (bll.a, iconst_1), EntityDragonPart (wy.a -> xa.a(wy, ro, F), iconst_1), EntityEnderCrystal (wz.a: the explosion is server-only, then
+// iconst_1), EntityMinecart and EntityBoat (structure-simulation.js). Hanging entities end yz.r earlier through hitByEntity (ss.j).
+export const attackLandsOnClient = (type) => type === 'player' || type === 'ender_dragon' || type === 'ender_crystal';

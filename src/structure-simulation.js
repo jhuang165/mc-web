@@ -15,6 +15,7 @@ import { syncVehiclePassengers } from "./vehicle-riders.js";
 import { furnaceUse } from "./cart-variants.js";
 import { MOB_SPAWNER } from "./world.js";
 import { mhSin, mhCos } from "./lighting.js";
+import { slowServerAttacker } from "./player-knockback.js";
 
 const f = Math.fround;
 
@@ -265,6 +266,7 @@ export function useMinecart(state, { place, cart }, hooks = {}) {
     cart.vz += f(f(mhCos(rad) * 1) * 0.5);
     state.velocity.x *= 0.6;
     state.velocity.z *= 0.6;
+    slowServerAttacker(survival); // b83 attack83: the integrated server's EntityPlayerMP copy slows as well
     state.motion.sprinting = false;
   }
   survival.exhaust?.(0.3);
@@ -286,6 +288,7 @@ export function useBoat(state, { place, boat }, hooks = {}) {
     boat.vz += f(f(mhCos(rad) * 1) * 0.5);
     state.velocity.x *= 0.6;
     state.velocity.z *= 0.6;
+    slowServerAttacker(survival); // b83 attack83: the integrated server's EntityPlayerMP copy slows as well
     state.motion.sprinting = false;
   }
   survival.exhaust?.(0.3);

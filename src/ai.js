@@ -1323,7 +1323,9 @@ class PlayerView {
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
     // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
     const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
+    this.packetDy = 0; // b83 attack83: processPlayer's d15, the packet's y minus the last accepted posY (0 for a C03 without a position)
     if (!s || d > 9.0E-4 || this.sinceSent >= 20 || this.riding) {
+      if (s) this.packetDy = player.y - s.y;
       this.x = player.x;
       this.y = player.y;
       this.z = player.z;

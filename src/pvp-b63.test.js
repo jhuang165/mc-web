@@ -10,6 +10,7 @@ import { overridesFrom } from './multiplayer/server-properties.js'; // b69 lead
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { ServerPvp, pickPlayer } from './multiplayer/server-pvp.js';
 import { drainKnockback } from './player-knockback.js';
+import { serverCopyOf } from './multiplayer/server-copy-step.js'; // b83 attack83
 import { enchantmentRandom } from './armor-enchantments.js';
 import { CombatTracker } from './combat-tracker.js';
 import { JavaRandom } from './java-random.js';
@@ -58,6 +59,7 @@ test('every executed attack (damage, Sharpness, crits, Knockback, sprint, Fire A
     Object.assign(as, { health: 20, hurtTicks: 0 });
     a.yaw = f(f((180 - r.yaw) * Math.PI) / 180);
     a.velocity.x = a.velocity.z = 1; a.motion.sprinting = r.sprint;
+    const copy = serverCopyOf(a); copy.motion.x = copy.motion.z = 1; copy.motion.y = 0; // b83 attack83: the probe's attacker is the server's EntityPlayerMP
     a.fallDistance = r.fall ? 2 : 0; a.grounded = !r.fall; a.inWater = false; a.mount = null;
     enchantmentRandom.setSeed(BigInt(r.seed));
     s.events = [];
@@ -70,10 +72,15 @@ test('every executed attack (damage, Sharpness, crits, Knockback, sprint, Fire A
       vs.hurtTicks = vs.hurtTicks; // the hits of one record share a tick: no decay between them
     });
     const motion = { x: 0, y: 0, z: 0 }; drainKnockback(vs, motion, v.position);
-    const have = { health: got.map(x => x.health), weapon: got.map(x => x.weapon), motion: [motion.x, motion.y, motion.z].map(x => Number(x.toFixed(6))), attacker: [a.velocity.x, a.velocity.z].map(x => Number(x.toFixed(6))),
+    const have = { health: got.map(x => x.health), weapon: got.map(x => x.weapon), motion: [motion.x, motion.y, motion.z].map(x => Number(x.toFixed(6))), attacker: [copy.motion.x, copy.motion.z].map(x => Number(x.toFixed(6))),
       sprint: !!a.motion.sprinting, burning: vs.fire > 0, armor: [0, 1, 2, 3].map(i => vs.inventory.armor[i]?.damage ?? null) };
     const want = { health: r.results.map(x => f(x.health)), weapon: r.results.map(x => x.weapon), motion: r.victimMotion.map(x => Number(x.toFixed(6))), attacker: r.attackerMotion.map(x => Number(x.toFixed(6))),
       sprint: r.attackerSprinting, burning: r.victimBurning, armor: r.armor };
+    // b83 attack83: the attacker's CLIENT runs yz.r on its EntityOtherPlayerMP copy, whose attackEntityFrom is true (bll), so the port's real motion and
+    // sprint flag (the client's) slow on every hit past the damage gate with knockback, landed or not; the server copy above is what the probe measured.
+    // Up to b82 the real motion was compared with the server's, which only differs where the server refused the hit (the Creative victim).
+    if (a.velocity.x !== 1) want.sprint = false;
+    if (r.case === 'creative' && r.sprint) assert.equal(Number(a.velocity.x.toFixed(6)), 0.6, 'bll.a(ro, F) is true: the client slows on a Creative victim too');
     // the reference weapon column is the weapon's damage after its hit; a non-tool (fist, stick) has none
     want.weapon = want.weapon.map((w, i) => (r.hits[i][0] === 0 ? null : r.hits[i][0] === 280 ? 0 : w));
     if (r.death) { s.serverSurvival.settle(v); const e = s.events.find(x => x.type === 'death'); have.death = e ? 'slain' : null; want.death = /slain by/.test(r.death.text) ? 'slain' : r.death.text; }

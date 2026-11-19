@@ -50,6 +50,21 @@ export function rightClickSwings({ world, target, held, sneaking = false, aimed 
   return clientItemUse({ world, survival, position, flowers, yaw, entities }, target, id, held);
 }
 
+// b83 attack83: true when the native client sends no block C08 for this right click. PlayerControllerMP.onPlayerRightClick (bje.a(yz, ahb, add, IIII, azw),
+// bytecode-read): after Block.onBlockActivated declined (or was skipped by a sneaking click with an item), a held ItemBlock whose
+// func_150936_a (canPlaceItemBlockOnSide -> World.canPlaceEntityOnSide, which includes checkNoEntityCollision against the client's copies and the
+// placer) refuses makes it return false BEFORE the C08 is sent; rightClickMouse then sends only the C08 with direction 255 (sendUseItem ->
+// tryUseItem -> ItemBlock's onItemRightClick, which does nothing). The server never tries the placement and resends no cell. Only the entity refusals
+// are taken here: the client's copies stand where the server's entities no longer do, so this is where the server alone would place.
+export function clientWithholdsPlace({ world, target, held, sneaking = false, survival = null, position, yaw = 0, flowers, entities = null }) {
+  const id = held?.id ?? 0;
+  if (!target?.block || !id || !survival) return false;
+  if (!(sneaking && id) && activatesOnClick(world.get(...target.block), world, target.block, id, held?.damage ?? 0)) return false;
+  if (clientUseResult({ world, survival, position, flowers, yaw, entities }, target, id, held) != null) return false; // an item with its own onItemUse rule: the ItemReed placers (cake, repeater, cauldron ...), slab merges, beds, signs. These are no ItemBlock refusal, so the block C08 goes
+  const reason = dryPlace({ world, survival, position, flowers, yaw, entities }, { id, item: ITEMS[id], target }, {}).result?.reason;
+  return reason === 'entity-collision' || reason === 'player-collision';
+}
+
 // A view of the world whose writes go nowhere (placeSign sets the block; only its answer is wanted).
 function readOnly(world) {
   const view = Object.create(world);
