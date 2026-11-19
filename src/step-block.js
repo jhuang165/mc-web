@@ -4,6 +4,7 @@
 // limited to air). The cell coordinates stay the upper ones. A ladder test (vertical motion counts) and the air test
 // (no step) use the replaced block; Block.onEntityWalking is the replaced block's, so a fence swallows an ore's touch.
 import { toOriginal } from "./block-registry.js";
+import { fast84, fail84 } from "./mpperf84-fast.js"; // b84 mpperf84
 import { originalIdOf } from "./mpperf80-fast.js"; // b80 mpperf80: toOriginal(id, 0)[0] through a per-id table
 
 const FENCE_LIKE = new Set([85, 113, 139, 107]); // BlockFence (render type 11), BlockWall (32), BlockFenceGate (21)
@@ -19,4 +20,20 @@ export function stepBlock(world, px, y, pz) {
   const replaced = isFenceLike(lower);
   if (replaced) id = lower;
   return { x, y: cy, z, id, replaced, ladder: !replaced && originalIdOf(id, toOriginal) === LADDER_ORIGINAL };
+}
+// b84 mpperf84: stepBlock written into `out` (a caller scratch read at once); MC_MPPERF84=off allocates as before.
+export function stepBlockInto(world, px, y, pz, out) {
+  const mode = fast84.mode;
+  if (mode === "off") return stepBlock(world, px, y, pz);
+  const x = Math.floor(px), cy = Math.floor(y - 0.2), z = Math.floor(pz);
+  let id = world.get(x, cy, z) || 0;
+  const lower = world.get(x, cy - 1, z) || 0;
+  const replaced = isFenceLike(lower);
+  if (replaced) id = lower;
+  out.x = x; out.y = cy; out.z = z; out.id = id; out.replaced = replaced; out.ladder = !replaced && originalIdOf(id, toOriginal) === LADDER_ORIGINAL;
+  if (mode === "verify") {
+    const ref = stepBlock(world, px, y, pz);
+    if (ref.x !== out.x || ref.y !== out.y || ref.z !== out.z || ref.id !== out.id || ref.replaced !== out.replaced || ref.ladder !== out.ladder) fail84("stepBlockInto");
+  }
+  return out;
 }

@@ -174,25 +174,28 @@ export class ItemEntities {
     const list = this.boxes(world, Math.min(a, a + dx), Math.min(b, b + dy), Math.min(c, c + dz), Math.max(d, d + dx), Math.max(g, g + dy), Math.max(h, h + dz)),
       box = [a, b, c, d, g, h];
     const ody = dy, odx = dx, odz = dz;
-    for (const o of list)
+    for (let oi = 0, n = list.length; oi < n; oi++) // b84 mpperf84: indexed, no iterator
+      { const o = list[oi];
       if (o[3] > box[0] && o[0] < box[3] && o[5] > box[2] && o[2] < box[5]) {
         if (dy > 0 && o[1] >= box[4]) dy = Math.min(dy, o[1] - box[4]);
         else if (dy < 0 && o[4] <= box[1]) dy = Math.max(dy, o[4] - box[1]);
-      }
+      } }
     box[1] += dy;
     box[4] += dy;
-    for (const o of list)
+    for (let oi = 0, n = list.length; oi < n; oi++) // b84 mpperf84: indexed, no iterator
+      { const o = list[oi];
       if (o[4] > box[1] && o[1] < box[4] && o[5] > box[2] && o[2] < box[5]) {
         if (dx > 0 && o[0] >= box[3]) dx = Math.min(dx, o[0] - box[3]);
         else if (dx < 0 && o[3] <= box[0]) dx = Math.max(dx, o[3] - box[0]);
-      }
+      } }
     box[0] += dx;
     box[3] += dx;
-    for (const o of list)
+    for (let oi = 0, n = list.length; oi < n; oi++) // b84 mpperf84: indexed, no iterator
+      { const o = list[oi];
       if (o[4] > box[1] && o[1] < box[4] && o[3] > box[0] && o[0] < box[3]) {
         if (dz > 0 && o[2] >= box[5]) dz = Math.min(dz, o[2] - box[5]);
         else if (dz < 0 && o[5] <= box[2]) dz = Math.max(dz, o[5] - box[2]);
-      }
+      } }
     e.bxz = [box[0], box[3], c + dz, h + dz];
     e.x = (box[0] + box[3]) / 2;
     e.y += dy;

@@ -134,7 +134,7 @@ export function mobTargetList(entities, one) {
   }
   if (fast83.mode === "verify") {
     const ref = entities.flatMap(one);
-    if (ref.length !== out.length || ref.some((t, k) => t.ref !== out[k].ref || t.part !== out[k].part || t.reach !== out[k].reach || t.box.some((v, j) => !Object.is(v, out[k].box[j])))) fail("mobTargetList");
+    if (ref.length !== out.length || ref.some((t, k) => t.ref !== out[k].ref || t.part !== out[k].part || typeof t.reach !== typeof out[k].reach || /* b84: a dragon part's reach is a fresh closure per call */ t.box.some((v, j) => !Object.is(v, out[k].box[j])))) fail("mobTargetList");
   }
   return out;
 }
