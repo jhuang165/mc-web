@@ -118,6 +118,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     },
     sound: (name, x, y, z, volume, pitch) => game.sound?.(name, x, y, z, volume, pitch),
     drop: (x, y, z, stack) => game.drop?.(x, y, z, stack),
+    skulls: () => game.skulls?.(), // b85 pickup85: the world's own skull tiles (the away world's); undefined keeps the global store
     primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
     entitiesIn,
     containerSlots,

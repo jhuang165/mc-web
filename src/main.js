@@ -755,7 +755,7 @@ function syncMultiplayerItems(list) {
   for (const id of [...remoteItems.keys()]) if (!seen.has(id)) { remoteItems.delete(id); requestedPickups.delete(id); takenDrops.delete(id); }
   items.items = [...remoteItems.values()];
   scene.setDrops(takenDrops.size ? items.items.filter(e => !takenDrops.has(e.eid)) : items.items);
-  if (survival.creative || !multiplayer?.ready) return;
+  if (!multiplayer?.ready) return; // b85 pickup85: EntityItem.onCollideWithPlayer has no game-mode test; a Creative player collects too
   const inv = survival.inventory, wanted = [], fits = [], byStack = new Map(items.items.map(e => [e.stack, e]));
   items.collect(position, PHYSICS.width, PHYSICS.height, stack => {
     const e = byStack.get(stack);

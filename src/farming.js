@@ -7,8 +7,11 @@ export const RANDOM_TICK_CHANCE=3/4096;
 export function cropDrops(block,random=Math.random,meta=0){if(block===CARROTS||block===POTATOES)return rootDrops(block,cropAge(block,meta),n=>Math.floor(random()*n));if(block===39)return random()<1/8?[{id:309,count:1}]:[];if(!isCrop(block))return null;if(block<38)return[{id:309,count:1}];let seeds=0;for(let i=0;i<3;i++)if(Math.floor(random()*15)<=7)seeds++;return[{id:305,count:1},...(seeds?[{id:309,count:seeds}]:[])];}
 // BlockCrops.canBlockStay (farmland below) and BlockFarmland.onNeighborBlockChange (a solid block above turns it to dirt): both run on EVERY
 // neighbour update of the cell (block-sweep-reference.json nb column), not only when the cell below or above changes. Applies the changes
-// around (x, y, z) and returns them as {x, y, z, old, now, drops}.
-const NEIGHBOURS=[[0,0,0],[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
+// around (x, y, z). b85 pickup85 (bytecode-read): World.setBlock notifies the six neighbours of the changed cell (ahb.c) and Chunk.func_150807_a runs only the NEW block's onBlockAdded;
+// BlockFarmland (aky) and BlockCrops / BlockBush (akf, ajr) have no onBlockAdded, so the changed cell itself is NOT checked (farmland set under a solid block, a crop set off farmland
+// stay until a neighbour changes or a random tick), hence no [0,0,0] below. Before b85 the cell itself was checked too.
+// Returns the changes as {x, y, z, old, now, drops}.
+const NEIGHBOURS=[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
 export function farmNeighbourChange(world,x,y,z,random=Math.random){
  const out=[];
  for(const[dx,dy,dz]of NEIGHBOURS){

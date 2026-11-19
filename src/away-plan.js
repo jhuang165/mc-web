@@ -55,6 +55,7 @@ export function awayPlan(root, columns, ticks, difficulty, wallNow = Date.now(),
     spawn: spawnOf(root), columns, ticks: Math.min(ticks | 0, MAX_AWAY_TICKS), editSequence: root.editSequence | 0,
     fluidTicks: root.fluidTicks, fireTicks: root.fireTicks, fallingTicks: root.fallingTicks, falling: root.falling ?? [],
     redstone: root.redstone, pistons: root.pistons, tiles, weather: root.weather,
+    skulls: structuredClone(root.skulls ?? []), // b85 pickup85: the saved skull tiles (BlockSkull.breakBlock drops and a piston's crush read them)
     // The saved entity lists (the run returns them whole); mob riders keep their vehicles out of the run.
     entities: structuredClone({
       drops: root.drops ?? [], xpOrbs: root.xpOrbs ?? [], tnt: root.tnt ?? [], minecarts: root.minecarts ?? null, boats: root.boats ?? [],
