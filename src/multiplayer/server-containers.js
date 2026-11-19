@@ -5,7 +5,7 @@
 // The server only mirrors the client's hotbar (counts are not sent), so on open the client reports its 36 slots (`windowInventory`), and while a
 // window is open the hotbar mirror in DedicatedSimulation.input is ignored. Wire shapes and rules: recalled from NetHandlerPlayServer.processClickWindow.
 import { ITEMS } from '../survival.js';
-import { makeStack, copyStack, OUTSIDE } from '../inventory.js';
+import { makeStack, copyStack, OUTSIDE, validRawDamage } from '../inventory.js';
 import { isChestBlock, ENDER_CHEST } from '../chest-blocks.js';
 import { DISPENSER, DROPPER } from '../dispenser-piston.js';
 import { DispenserContainer, DISPENSER_TITLE, DROPPER_TITLE, newDispenser } from '../dispenser-container.js';
@@ -31,6 +31,7 @@ export function cleanStack(s) {
   if (!Number.isInteger(damage) || damage < 0 || damage > 32767) return undefined;
   const extra = {};
   for (const k of EXTRAS) if (s[k] !== undefined) extra[k] = s[k];
+  if (validRawDamage(s.rawDamage)) extra.rawDamage = s.rawDamage; // b82 pots82: a native damage the catalogue has no variant for (inventory.js read keeps it too)
   if (extra.pages !== undefined || extra.author !== undefined || extra.title !== undefined) { if (!validBookExtra(extra)) return undefined; }
   else if (JSON.stringify(extra).length > 1500) return undefined;
   return makeStack(s.id, s.count, damage, undefined, extra);

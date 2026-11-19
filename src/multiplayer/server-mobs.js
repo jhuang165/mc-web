@@ -267,7 +267,7 @@ export class ServerMobs {
     this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets
     for (const b of out.broken) world.set(b.x, b.y, b.z, 0);
     for (const [fx, fy, fz] of out.fires) world.set(fx, fy, fz, FIRE, true, 0); // Explosion.doExplosionB: flaming fire on the opaque floor, one in three
-    for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
+    for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0, undefined, d.tags), d.x, d.y, d.z, { delay: 10 }); // b82 pots82: tags carry a pot drop's rawDamage
     for (const at of out.released) this.mobs.spawnSilverfishAt?.(...at); // b67: BlockSilverfish.dropBlockAsItemWithChance in doExplosionB (explosion.js released)
     // b81 blast81: BlockTNT.onBlockDestroyedByExplosion (aob.a(ahb,IIIagw), bytecode-read): EntityTNTPrimed at the cell centre, placer getExplosivePlacedBy, fuse rand.nextInt(20) + 10
     // (drawn in explosionOutcome), no sound. It used to be dropped here, so a server TNT block in a blast just vanished.

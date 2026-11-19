@@ -20,6 +20,7 @@ const TAG_LISTS = ["enchantments", "storedEnchantments"];
 const clonePairs = (pairs) => Array.isArray(pairs) ? pairs.map((e) => ({ ...e })) : pairs;
 // Keep the old fourth `stored` argument for enchanted-book call sites; the optional fifth argument
 // carries the remaining native ItemStack tag fields introduced by enchanting/anvil persistence.
+export const validRawDamage = (r) => Number.isInteger(r) && r > 0 && r <= 32767; // a native short damage above the port's variants (b82 pots82)
 export const makeStack = (id, count = 1, damage = 0, stored, metadata = {}) => {
   const stack = { ...metadata, id, count, damage };
   if (stored !== undefined) stack.stored = copyStored(stored);
@@ -72,6 +73,7 @@ export class PlayerInventory {
     if (typeof s.displayName === "string") metadata.displayName = s.displayName;
     if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;
     if (Number.isInteger(s.color) && s.color >= 0 && s.color <= 0xFFFFFF) metadata.color = s.color;
+    if (validRawDamage(s.rawDamage)) metadata.rawDamage = s.rawDamage; // b82 pots82: a native damage the catalogue has no variant for (a pot's stored stack) survives saves and the wire
     if ((s.id === 10 && s.rawId === 8) || (s.id === 42 && s.rawId === 10)) metadata.rawId = s.rawId; // b79 falling79: flowing water/lava ItemBlock (original 8/10) shares the still item; rawId writes the saved id back
     Object.assign(metadata, readFireworkTags(s), readBookTags(s), readItemTags(s));
     const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
@@ -95,7 +97,8 @@ export class PlayerInventory {
   get held() { return this.main[this.current] ?? null; }
   count(id) { return this.main.reduce((n, s) => n + (s?.id === id && s.count > 0 ? s.count : 0), 0); } // size 0 and negative stacks hold nothing
   firstEmpty() { return this.main.findIndex((s) => !s); }
-  find(id, damage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || s.damage === damage)); }
+  // b82 pots82: with a damage, the native damage is matched (InventoryPlayer.func_146030_a, item and damage): a rawDamage stack is its own subtype.
+  find(id, damage, rawDamage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || (s.damage === damage && (s.rawDamage ?? 0) === (rawDamage ?? 0)))); }
   storeItemStack(s) {
     return this.main.findIndex((m) => m && sameStackItem(m, s) && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
   }
@@ -155,19 +158,19 @@ export class PlayerInventory {
   }
   // Middle-click pick block (func_146030_a); `damage` is the block's metadata
   // for subtype items such as wool, otherwise any stack of the item matches.
-  pick(id, creative = this.creative, damage) {
-    const previous = this.held, k = this.find(id, damage);
+  pick(id, creative = this.creative, damage, rawDamage) {
+    const raw = validRawDamage(rawDamage) ? { rawDamage } : undefined, previous = this.held, k = this.find(id, damage, raw?.rawDamage);
     if (k >= 0 && k < 9) { this.current = k; return; }
     if (!creative || !this.items[id]) return;
     const j = this.firstEmpty();
     if (j >= 0 && j < 9) this.current = j;
     if (previous && this.maxStack(previous) === 1 && this.maxDamage(previous) && this.find(previous.id, previous.damage) === this.current) return;
-    const found = this.find(id, damage ?? 0);
+    const found = this.find(id, damage ?? 0, raw?.rawDamage);
     if (found >= 0) {
       const n = this.main[found].count;
       this.main[found] = this.main[this.current];
-      this.main[this.current] = makeStack(id, n, damage ?? 0);
-    } else this.main[this.current] = makeStack(id, 1, damage ?? 0);
+      this.main[this.current] = makeStack(id, n, damage ?? 0, undefined, raw);
+    } else this.main[this.current] = makeStack(id, 1, damage ?? 0, undefined, raw);
   }
   takeAll() {
     // func_146097_a returns null only for stackSize 0, so a size-0 stack is cleared without a drop and a negative one is dropped

@@ -212,7 +212,7 @@ export function potFromNbt(tag, itemOf = null) {
 // The colour RenderBlocks.func_147752_a multiplies the plant by: Block.colorMultiplier of the plant at the pot's cell. Only BlockTallGrass (anz.d, bytecode-read)
 // is not white, and it reads the cell metadata, i.e. the POT's: metadata 0 is white, anything else the biome grass colour. Returns true for the grass tint.
 export const potPlantTinted = (content, potMeta) => !!content && potPlantOf(content.id, content.damage)?.[0] === 31 && (potMeta & 15) !== 0;
-const potKey = (x, y, z) => `${x},${y},${z}`;
+export const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
 export function potContents(world, x, y, z) {
   const rec = world.pots?.get(potKey(x, y, z));
@@ -266,18 +266,41 @@ export function potStack(content) {
 }
 // A break-drop entry ({ id, count, damage, tags? }: block-break-simulation.js and population-blocks.js pass `tags` to makeStack) for a pot's content.
 export const potDropEntry = (content) => { const s = potStack(content); return s ? { id: s.id, count: 1, damage: s.damage, ...(s.rawDamage ? { tags: { rawDamage: s.rawDamage } } : {}) } : null; };
+// b82 pots82: BlockFlowerPot.breakBlock (ald.a(ahb,III,aji,int), bytecode-read) runs inside every server setBlock that replaces the pot: Chunk.func_150807_a
+// (apx.a(IIILaji;I)Z) calls the old block's breakBlock whenever !isRemote, also for a pot replaced by a pot with another metadata. So an explosion, water or
+// lava flowing in, a bucket, a piston, /setblock, the wither and the dragon all drop the tile's ItemStack(Item, 1, Data). The drop is
+// Block.dropBlockAsItem(world, x, y, z, stack) (aji.a(ahb,III,add)): nothing without doTileDrops, else three world.rand floats, rand * 0.7F + 0.15 each.
+// Returns the drop entry (potDropEntry) at its position, { id: 0 } when the tile holds an item the port lacks (the floats are still drawn), or null for a cell
+// that is no pot or an empty pot (no draws). `rand` null: no position.
+const SPREAD = Math.fround(0.7), INSET = Math.fround(1 - SPREAD) * 0.5;
+export function potBreakDrop(world, x, y, z, rand = null, tileDrops = true) {
+  if (world.get(x, y, z) !== FLOWER_POT) return null;
+  const content = world.getMeta ? potContents(world, x, y, z) : world.pots?.get(potKey(x, y, z)) ?? null;
+  return potHeldDrop(content, x, y, z, rand, tileDrops);
+}
+// The same drop from contents read before the cell was cleared.
+export function potHeldDrop(content, x, y, z, rand = null, tileDrops = true) {
+  if (!content || !tileDrops) return null;
+  const e = potDropEntry(content) ?? { id: 0, count: 0, damage: 0 };
+  if (!rand) return e;
+  const at = () => Math.fround(rand.nextFloat() * SPREAD) + INSET;
+  const px = x + at(), py = y + at(), pz = z + at();
+  return { ...e, x: px, y: py, z: pz };
+}
+export const potEntryStack = (e, make) => make(e.id, e.count ?? 1, e.damage || 0, undefined, e.tags);
 // The break drops of a pot: its contents (when Survival) and the pot item itself (harvest).
 export function potDrops(world, x, y, z) {
   const s = potStack(potContents(world, x, y, z));
   return [...(s ? [{ ...s, count: 1 }] : []), { id: ITEM_FLOWER_POT, count: 1, damage: 0 }];
 }
 // BlockFlowerPot.getPickBlock: the plant when it holds one, else the pot. A pot holding an item the port lacks picks nothing (id 0): natively it picks that
-// item. The picked stack has no `rawDamage` (inventory.pick takes an id and a damage).
+// item. b82 pots82: the pick keeps `rawDamage` (Minecraft.middleClickMouse passes getDamageValue = the tile Data to InventoryPlayer.func_146030_a, which finds
+// and makes ItemStack(item, n, Data)); main.js passes it to inventory.pick.
 export function potPick(world, x, y, z) {
   const c = potContents(world, x, y, z);
   if (!c) return { id: ITEM_FLOWER_POT, damage: 0 };
   const s = potStack(c);
-  return s ? { id: s.id, damage: s.damage } : { id: 0, damage: 0 };
+  return s ? { id: s.id, damage: s.damage, ...(s.rawDamage ? { rawDamage: s.rawDamage } : {}) } : { id: 0, damage: 0 };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

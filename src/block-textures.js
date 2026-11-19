@@ -172,7 +172,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===69)return tile('double_plant_'+['sunflower','syringa','grass','fern','rose','paeonia'][meta&7]+'_'+(meta&8?'top':'bottom'));
  if(id===4||id===70){const type=TREE_TEXTURES[(id===70?4:0)+(meta&3)]??'oak',axis=meta&12;return tile('log_'+type+((axis===0&&(face===2||face===3)||axis===4&&(face===0||face===1)||axis===8&&(face===4||face===5))?'_top':''));}
  if(id===5||id===71)return tile('leaves_'+(TREE_TEXTURES[(id===71?4:0)+(meta&3)]??'oak'));
- if(id===48)return tile('sapling_'+((meta&7)===5?'roofed_oak':TREE_TEXTURES[meta&7]??'oak'));
+ if(id===48){const t=Math.min(5,meta&7);return tile('sapling_'+(t===5?'roofed_oak':TREE_TEXTURES[t]??'oak'));} // b82 pots82: BlockSapling.getIcon clamp(meta & 7, 0, 5) (anj.a(II), bytecode-read): 6 and 7 are roofed oak
  if(id===72)return tile('vine');
  if(id===73)return tile('cocoa_stage_'+Math.min(2,meta>>2));
  if(id===74)return tile('cobblestone_mossy');
@@ -201,7 +201,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===LILY_PAD)return tile('waterlily');
  if(id===19)return tile('wool_colored_'+WOOL_COLORS[meta&15].texture);
  if(id===YELLOW_FLOWER)return tile('flower_dandelion');
- if(id===RED_FLOWER)return tile('flower_'+RED_FLOWERS[Math.min(meta,RED_FLOWERS.length-1)].texture);
+ if(id===RED_FLOWER)return tile('flower_'+RED_FLOWERS[meta<RED_FLOWERS.length?meta:0].texture); // b82 pots82: BlockFlower.getIcon draws icon 0 (poppy) past its icons (alc.a(II), bytecode-read)
  if(id===1)return tile(face===2?'grass_top':face===3?'dirt':snowy?'grass_side_snowed':'grass_side');
  if(id===CARROTS||id===POTATOES)return tile((id===CARROTS?'carrots':'potatoes')+'_stage_'+(meta>=7?3:meta===6?2:meta>>1));
  if(id===WEB)return tile('web');

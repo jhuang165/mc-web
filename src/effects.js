@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clientCrackStage } from "./mining-crack.js"; // b82 pots82
 // The block-breaking crack overlay (destroy_stage_0..9). Block particles are
 // particles.js / particle-renderer.js.
 export class WorldEffects {
@@ -27,11 +28,12 @@ export class WorldEffects {
   crack(block, progress = 0) {
     // RenderGlobal drops a partially destroyed block 400 ticks after its last stage (a breaker that died leaves one).
     if (this.mobCracks?.size) for (const [id, mesh] of this.mobCracks) if (performance.now() - mesh.userData.at > 20000) this.mobCrack(id, null, -1);
-    // PlayerControllerMP sends (int)(damage * 10) - 1: a NaN or negative damage (Mining Fatigue V and up) shows no crack.
-    this.crackMesh.visible = !!block && progress >= 0;
+    // PlayerControllerMP sends (int)(damage * 10) - 1: progress 0, a NaN or a negative damage (Mining Fatigue V and up) shows no crack (b82 pots82: mining-crack.js).
+    const stage = block ? clientCrackStage(progress) : -1;
+    this.crackMesh.visible = stage >= 0;
     if (this.crackMesh.visible) {
       this.crackMesh.position.set(...block.map((n) => n + 0.5));
-      const map = this.cracks[Math.min(9, Math.floor(progress * 10))];
+      const map = this.cracks[stage];
       if (this.crackMesh.material.map !== map) {
         this.crackMesh.material.map = map;
         this.crackMesh.material.needsUpdate = true;

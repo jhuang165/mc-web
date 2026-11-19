@@ -3,8 +3,17 @@
 import { WEB, RED_FLOWER, SAPLING, isFlower } from "./world.js";
 import { cropDrops } from "./farming.js";
 import { makeStack } from "./inventory.js";
+import { plantDropDamage } from "./plant-damage.js";
+import { FLOWER_POT, ITEM_FLOWER_POT, potBreakDrop, potEntryStack } from "./stone-utility.js";
 
+// b82 pots82: what the liquid's setBlock leaves through the old block's breakBlock (Chunk.func_150807_a runs it on the server): a flower pot's stored stack
+// (BlockFlowerPot.breakBlock, ald.a; bytecode-read). Lava (no dropBlockAsItem, only the fizz) drops just this.
+export function burnStacks(world, x, y, z, b) {
+  const e = b === FLOWER_POT ? potBreakDrop(world, x, y, z) : null;
+  return e?.id ? [potEntryStack(e, makeStack)] : [];
+}
 export function washStacks(world, x, y, z, b, random = Math.random) {
-  const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b, random, world.getMeta(x, y, z));
-  return (d ?? []).map((e) => makeStack(e.id, e.count, e.damage || 0));
+  if (b === FLOWER_POT) return [makeStack(ITEM_FLOWER_POT, 1, 0), ...burnStacks(world, x, y, z, b)]; // dropBlockAsItem (the pot item), then breakBlock (the plant)
+  const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) || b === SAPLING ? [{ id: b, count: 1, ...(plantDropDamage(b, world.getMeta(x, y, z)) ?? { damage: 0 }) }] : cropDrops(b, random, world.getMeta(x, y, z));
+  return (d ?? []).map((e) => makeStack(e.id, e.count, e.damage || 0, undefined, e.tags)); // b82 pots82: plant-damage.js (rose rawDamage, sapling clamp)
 }

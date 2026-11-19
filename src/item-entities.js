@@ -74,10 +74,12 @@ export class ItemEntities {
   // is EntitySheep's: wool leaves 1.0 up with the kick [mx, my, mz] added to the
   // usual random motion.
   dropMob(id, count, at, damage = 0, shear = null) {
+    // b82 pots82: `blockSpread` events are a block's dropBlockAsItem at the block corner `at`, spread like dropBlock.
+    if (shear?.blockSpread) return this.dropBlock([{ id, count, damage: damage || 0, ...(Number.isInteger(shear.rawDamage) && shear.rawDamage > 0 ? { rawDamage: shear.rawDamage } : {}) }], at.x, at.y, at.z);
     for (let n = 0; n < count; n++) {
       const r = this.random, kick = shear?.kick,
         motion = kick ? [f(f(r() * 0.2 - 0.1) + kick[0]), f(0.2 + kick[1]), f(f(r() * 0.2 - 0.1) + kick[2])] : null;
-      this.spawn({ id, count: 1, damage: damage || 0, ...(shear?.enchantments ? { enchantments: shear.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) }, at.x, at.y + (shear?.offsetY || 0), at.z, { delay: 10, motion });
+      this.spawn({ id, count: 1, damage: damage || 0, ...(Number.isInteger(shear?.rawDamage) && shear.rawDamage > 0 ? { rawDamage: shear.rawDamage } : {}), ...(shear?.enchantments ? { enchantments: shear.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) }, at.x, at.y + (shear?.offsetY || 0), at.z, { delay: 10, motion });
     }
   }
   // BlockFurnace/BlockChest.breakBlock: each stack leaves from a random point

@@ -23,6 +23,8 @@ import { Survival, burnTime } from "./survival.js";
 import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
 import { Weather } from "./weather.js";
 import { makeStack } from "./inventory.js";
+import { FLOWER_POT } from "./stone-utility.js";
+import { washStacks, burnStacks } from "./fluid-wash.js"; // b82 pots82
 import { awayEntities } from "./away-entities.js";
 import { dispenseFirework } from "./fireworks-live.js";
 import { spawnEggMob } from "./spawn-egg-use.js";
@@ -97,7 +99,8 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const rand = Number(BigInt.asUintN(32, BigInt(plan.editSequence | 0) * 2654435761n + BigInt(plan.ticks)));
   const fluids = new Fluids(world, {
     seed: rand,
-    wash: (x, y, z, b) => spill({ id: b, count: 1, damage: 0 }, x + 0.5, y + 0.25, z + 0.5),
+    wash: (x, y, z, b) => { if (b === FLOWER_POT) for (const s of washStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); else spill({ id: b, count: 1, damage: 0 }, x + 0.5, y + 0.25, z + 0.5); }, // b82 pots82: a pot washes to its item and plant
+    burn: (x, y, z, b) => { for (const s of burnStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); },
   });
   const weather = new Weather().restore(plan.weather);
   const fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, 11)) });
