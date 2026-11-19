@@ -2,6 +2,7 @@
 // .attackEntityFrom is always true, so a sprinting attacker adds velocity to it, its own motion x 0.6 and sprinting off). The sweep of left clicks found the server skipped it;
 // the rule is structure-simulation.js useMinecart / useBoat (copied line for line, those functions need a whole browser state).
 import { mhSin, mhCos } from '../lighting.js';
+import { slowServerAttacker } from '../player-knockback.js';
 
 const f = Math.fround;
 
@@ -12,6 +13,7 @@ export function vehicleSprintPush(p, v) {
   v.vy += 0.1;
   v.vz += f(f(mhCos(rad) * 1) * 0.5);
   if (p.velocity) { p.velocity.x *= 0.6; p.velocity.z *= 0.6; }
+  slowServerAttacker(p.survival); // b83 attack83: the server's EntityPlayerMP copy slows too (the cart / boat answers true on both sides)
   p.motion.sprinting = false;
   return true;
 }

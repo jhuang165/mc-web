@@ -28,6 +28,7 @@ import { isBook } from './books.js';
 import { useFirework } from './fireworks-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
+import { slowServerAttacker } from './player-knockback.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { hoeSound } from './block-sounds.js';
 import { playerMiningState } from './enchantment-effects.js';
@@ -284,9 +285,15 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
       if (info.critical ?? critical) hook('criticalHit', aimedEntity.entity); // b81: no critical on a dragon part (EntityWorld.attack clears it)
       if (info.enchantCritical) hook('enchantmentCriticalHit', aimedEntity.entity);
       // The push counts the Knockback enchantment as well as sprinting (EntityPlayer.attackTargetEntityWithCurrentItem).
+      // b83 attack83: yz.r scales motionX/Z by 0.6 only where attackEntityFrom answered true. The integrated server's EntityPlayerMP lands on every hurt target, so its
+      // copy (survival.serverPlayer) slows; the client's own copy of a mob refuses (sv.a returns false when remote), so the client keeps its speed except on a player,
+      // dragon part or crystal (info.clientLands). setSprinting(false) reaches the client through the server's entity metadata either way (bytecode-read).
       if (info.knockback !== undefined ? info.knockback > 0 : state.motion.sprinting) {
-        state.velocity.x *= ATTACK_SLOWDOWN;
-        state.velocity.z *= ATTACK_SLOWDOWN;
+        slowServerAttacker(state.survival);
+        if (info.clientLands ?? info.part) {
+          state.velocity.x *= ATTACK_SLOWDOWN;
+          state.velocity.z *= ATTACK_SLOWDOWN;
+        }
         state.motion.sprinting = false;
       }
       hook('handleEntityEvents');

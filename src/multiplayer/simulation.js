@@ -84,11 +84,13 @@ import { ServerPlayerTracker } from './server-player-tracker.js'; // b73 streamf
 import { ServerProjectiles } from './server-projectiles.js'; // b62: the one projectile system (dispensers, skeletons, witches, players' bows and throws)
 import { ServerDimensions } from './server-dimensions.js'; // b61 mpnether: the Nether, portals and the world swap (server-dimensions.js)
 import { setWorldSpawn } from './server-worldcmds.js'; // b68 mpworldcmds: /setworldspawn
-import { aimOriginY, serverPosY } from '../sleeper-eye.js'; // b69 mpfixes69
+import { aimOriginY, serverPosY, SLEEP_BOX } from '../sleeper-eye.js'; // b69 mpfixes69
+import { boxesIntersect } from '../mob-spawner.js'; // b83 attack83
 import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night skip, the bed spawn (server-sleep.js)
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 import { placementEntityBlocker } from '../placement-entities.js'; // b81 collide81
 import { serverCopyBefore, serverCopyAfter } from './server-copy-step.js'; // b82 mpplace82
+const SLEEP_HALF = SLEEP_BOX / 2; // b83 attack83: a lying player's half width
 
 const noop = () => {};
 // What a server-side survival break needs from the world around it. Item entities are real (`itemHost`); the dedicated world has no experience orbs.
@@ -285,7 +287,7 @@ export class DedicatedSimulation {
   }
   queueEdit(id, message) {
     if (!this.players.has(id) || this.actions.filter(a => a.id === id).length >= 4 || typeof message.place !== 'boolean') return false;
-    this.actions.push({ id, place: message.place }); return true;
+    this.actions.push({ id, place: message.place, ...(message.place && message.air === true ? { air: true } : {}) }); return true; // b83 attack83: `air`, the C08 with direction 255
   }
   // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
@@ -424,7 +426,9 @@ export class DedicatedSimulation {
       }
     }
   }
-  edit(p, place) {
+  // b83 attack83: `air` is the C08 with direction 255 alone (nh.a(jo): tryUseItem = Item.onItemRightClick, no block click, no reach or height gate and no S23 resend).
+  // The client sends it in place of the block C08 when its own ItemBlock canPlaceItemBlockOnSide refused (right-click-swing.js clientWithholdsPlace).
+  edit(p, place, air = false) {
     if (place && this.vehicles.pigs.stick(p)) return true; // b62: ItemCarrotOnAStick.onItemRightClick boosts the pig under the player (server-riding.js)
     // A Survival player breaks only through `dig` and its timer.
     if (!place && !p.survival.creative) return false;
@@ -432,7 +436,7 @@ export class DedicatedSimulation {
     // block coordinate, reach, held item or collision claim is trusted.
     const eye = { x: p.position.x, y: aimOriginY(p.position.y, p.sleeping, PHYSICS.eye), z: p.position.z }; // b69 mpfixes69: a sleeper aims from posY (sleeper-eye.js)
     const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
-    const target = raycast(this.world, eye, dir, 5);
+    const target = air ? null : raycast(this.world, eye, dir, 5);
     if (!target) return place && (bucketUse(this, p, eye, dir) /* b75 mpbuckets75: ItemBucket's own liquid trace, water needs no block target */ || airUse(this, p, eye, dir, null) /* b75 mpusesweep75 */ || this.vehicles.useHeld(p, null) || this.dispense.throwHeld(p) || this.fishing.use(p) || this.maps.useEmpty(p)); /* b64: C08 with the rod */ /* b69 mpmaps: ItemEmptyMap.onItemRightClick */ // b62: thrown items // b61: a boat is placed on water the block ray misses (b63: in the Nether too, sim.vehicles is that dimension's)
     // NetHandlerPlayServer C07 / C08 (server-handlers.js): block centre within 8 of the feet for a place (and the player has sent a position),
     // 6 from the eye offset for a dig, nothing at or above the 256 build limit. The ray's 5 blocks sit inside both distances, so only the height
@@ -487,11 +491,13 @@ export class DedicatedSimulation {
       collides: w => [...this.players.values()].some(other => {
         // The normal placement path tests this callback after its speculative
         // write, so the same collision test must cover every connected player.
-        return collides(w, other.position.x, other.position.y, other.position.z);
+        return !other.sleeping && collides(w, other.position.x, other.position.y, other.position.z); // b83 attack83: a lying player is the 0.2 box below
       }),
       // b81 collide81: World.checkNoEntityCollision also sees the mobs, carts, boats, falling blocks and primed TNT.
-      entities: (this._placementEntities ??= placementEntityBlocker(() => ({ mobs: this.mobs?.mobs, vehicles: [this.vehicles?.carts?.carts, this.vehicles?.boats?.carts],
-        falling: this.mobs?.falling?.entities, primed: this.dispense?.primed }))),
+      // b83 attack83: and a sleeper's 0.2 x 0.2 box (sleepInBedAt setSize(0.2F, 0.2F); minY is position.y, server-sleep.js), not the standing 0.6 x 1.8.
+      entities: box => [...this.players.values()].some(o => o.sleeping && !o.dead && boxesIntersect(box, [o.position.x - SLEEP_HALF, o.position.y, o.position.z - SLEEP_HALF, o.position.x + SLEEP_HALF, o.position.y + SLEEP_BOX, o.position.z + SLEEP_HALF]))
+        || (this._placementEntities ??= placementEntityBlocker(() => ({ mobs: this.mobs?.mobs, vehicles: [this.vehicles?.carts?.carts, this.vehicles?.boats?.carts],
+        falling: this.mobs?.falling?.entities, primed: this.dispense?.primed })))(box),
     }), placed = put.placed;
     if (placed) this.golems.afterPlace(put); // b66 mpgolems: BlockPumpkin.onBlockAdded
     if (placed) this.stats.used(p, id); // b63 mpstats: ItemStack.tryPlaceItemIntoWorld, the use stat
@@ -613,7 +619,7 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp, air } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
       if (veh) { this.dimensions.within(p, () => this.vehicles.act(p, veh)); continue; } // b61 (b63: a Nether rider uses the Nether's vehicles)
@@ -622,7 +628,7 @@ export class DedicatedSimulation {
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
         if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
         // b63 mppvp: pvp = C02 attack on a player
-        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place);
+        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place, air);
       });
     }
     for (const p of this.players.values()) if (p.resendCells) {

@@ -8,7 +8,16 @@ import { boxesIntersect } from '../mob-spawner.js';
 import { TNT_SIZE } from '../explosion.js';
 
 const f = Math.fround;
-const PLAYER_HALF = f(0.6) / 2, PLAYER_HEIGHT = f(1.8);
+const PLAYER_HALF = f(0.6) / 2, PLAYER_HEIGHT = f(1.8), SLEEP_HALF = f(0.2) / 2, SLEEP_HEIGHT = f(0.2);
+
+// b83 attack83: the box of another player's copy. A lying one (the presence row's `sleep` field, the same test as client-sleep.js remoteSleepPose) is the 0.2 x 0.2
+// box of EntityPlayer.sleepInBedAt (setSize(0.2F, 0.2F), bytecode-read b67), whose minY is the wire y (bed y + 0.7375, server-sleep.js); EntityOtherPlayerMP gets it
+// from S0A Use Bed. A standing one is 0.6 x 1.8 from y - ySize.
+export const remoteLying = (sleep) => Array.isArray(sleep) && sleep.length === 4 && sleep.every(Number.isFinite);
+export function remotePlayerBox(p) {
+  const y = p.y - (p.ySize ?? 0), lying = remoteLying(p.sleep), half = lying ? SLEEP_HALF : PLAYER_HALF;
+  return [p.x - half, y, p.z - half, p.x + half, y + (lying ? SLEEP_HEIGHT : PLAYER_HEIGHT), p.z + half];
+}
 
 // The other players' copies: RemotePlayers.entries (wire id -> entry). A player whose death animation ended (entry.hidden, remote-death.js: the
 // copy is setDead at deathTime 20) no longer blocks; a dying one still does (isDead stays false until then).
@@ -16,8 +25,7 @@ function playerBlocks(entries, box) {
   for (const entry of entries?.values?.() ?? []) {
     const p = entry.state ?? entry.last;
     if (!p || entry.hidden) continue;
-    const y = p.y - (p.ySize ?? 0);
-    if (boxesIntersect(box, [p.x - PLAYER_HALF, y, p.z - PLAYER_HALF, p.x + PLAYER_HALF, y + PLAYER_HEIGHT, p.z + PLAYER_HALF])) return true;
+    if (boxesIntersect(box, remotePlayerBox(p))) return true;
   }
   return false;
 }

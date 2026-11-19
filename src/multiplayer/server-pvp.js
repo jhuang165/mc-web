@@ -12,7 +12,8 @@ import { heldAttackDamage } from '../entities.js';
 import { weaponEnchantments } from '../enchantment-effects.js';
 import { sendCritFx, sendOwnCritFx } from './server-crit-fx.js'; // b73 particles73; b82 mpplace82
 import { criticalDamage, isCritical } from '../player-movement.js';
-import { queueVelocity } from '../player-knockback.js';
+import { queueVelocity, slowServerAttacker } from '../player-knockback.js';
+import { remotePlayerBox, remoteLying } from './client-placement-entities.js';
 import { rayTraceBlocks } from '../buckets.js';
 import { ITEMS } from '../survival.js';
 import { mhSin, mhCos } from '../lighting.js';
@@ -59,14 +60,17 @@ export class ServerPvp {
     const ignite = weapon.fireAspect > 0 && !(vs.fire > 0);
     if (ignite) vs.setFire(1); // undone below when the hit does not land
     { const at = { x: v.position.x, y: v.position.y, z: v.position.z, w: 0.6, h: 1.8, mx: v.velocity?.x, my: v.velocity?.y, mz: v.velocity?.z, player: v.id }; if (critical) sendOwnCritFx(p, at, false); if (weapon.damage > 0) sendOwnCritFx(p, at, true); } // b82 mpplace82: the attacker's client runs the hit too (bll.a(ro, F) is true), landed or not
+    // b83 attack83: the attacker's client copy of the victim (bll) answers attackEntityFrom with true whatever the server decides, so the client's slowdown
+    // (motion * 0.6, setSprinting(false)) follows every hit past the damage gate, landed or not (b75 tied it to the server's answer). The port's server moves
+    // the player, so it scales the real motion; the server's EntityPlayerMP copy slows only when the server's victim took the hit (below).
+    if (push > 0 && Number.isFinite(p.yaw)) { p.velocity.x *= 0.6; p.velocity.z *= 0.6; if (p.motion) p.motion.sprinting = false; }
     const from = this.fromOf(p), health = vs.health;
     const landed = sim.damagePlayer(v, damage, { name: 'player', from, call: () => vs.damage(damage, 'a player', true, 'player', from) }) !== false;
     if (landed) {
       if (push > 0 && Number.isFinite(p.yaw)) {
         const rad = f(f(f(180 - p.yaw * (180 / Math.PI)) * f(Math.PI)) / 180); // Java yaw = 180 - the view yaw in degrees
         queueVelocity(vs, f(f(-mhSin(rad) * push) * 0.5), 0.1, f(f(mhCos(rad) * push) * 0.5)); // after the hit's own knockBack, as the queue keeps the order
-        p.velocity.x *= 0.6; p.velocity.z *= 0.6; // b75: native, the attacker's CLIENT does this (EntityOtherPlayerMP.attackEntityFrom returns true, so the local attack call lands); the port's server moves the player, so it scales the real motion
-        if (p.motion) p.motion.sprinting = false;
+        slowServerAttacker(s); // b83 attack83: the server's EntityPlayerMP copy (yz.r inside `if (attackEntityFrom)`)
       }
       vs.thorns?.({ // EnchantmentHelper.func_151384_a(victim, attacker): the victim's Thorns hurt the attacker
         hurt: n => sim.damagePlayer(p, n, { name: 'thorns', from: this.fromOf(v), call: () => s.damage(n, 'thorns', true, 'thorns', this.fromOf(v)) }),
@@ -85,13 +89,13 @@ export class ServerPvp {
   }
 }
 
-/** Ray against the 0.6 x 1.8 box of each other player's copy (the client's aim for C02): the nearest { id, distance } within `reach`, or null. */
+/** Ray against the box of each other player's copy (the client's aim for C02; b83 attack83: 0.2 x 0.2 while lying, client-placement-entities.js remotePlayerBox): the nearest { id, distance } within `reach`, or null. */
 export function pickPlayer(entries, origin, dir, reach) {
   let best = null;
   for (const [id, e] of entries) {
     const p = e.state ?? e.last;
     if (!p || p.dead) continue;
-    const lo = [p.x - 0.3, p.y - (p.ySize ?? 0), p.z - 0.3], hi = [p.x + 0.3, p.y - (p.ySize ?? 0) + 1.8, p.z + 0.3], o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z];
+    const y = p.y - (p.ySize ?? 0), b = remoteLying(p.sleep) ? remotePlayerBox(p) : [p.x - 0.3, y, p.z - 0.3, p.x + 0.3, y + 1.8, p.z + 0.3], lo = [b[0], b[1], b[2]], hi = [b[3], b[4], b[5]], o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z];
     let near = 0, far = reach;
     for (let i = 0; i < 3 && near <= far; i++) {
       if (Math.abs(d[i]) < 1e-9) { if (o[i] < lo[i] || o[i] > hi[i]) near = Infinity; continue; }

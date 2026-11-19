@@ -135,9 +135,30 @@ test('left entity attack clears mining, computes critical/sprint inputs, and rou
   assert.equal(result.branch, 'attack-entity');
   assert.equal(f.state.mining, null);
   assert.deepEqual(calls, [['swing'], ['attack', 1, true], ['crit', entity], ['events'], ['hotbar'], ['dirty']]);
-  assert.equal(f.state.velocity.x, 0.06);
-  assert.equal(f.state.velocity.z, 0.12);
+  // b83 attack83: the client's own copy of a cow refuses attackEntityFrom (sv.a, remote), so only the integrated server's copy slows; this used to expect 0.06/0.12.
+  assert.equal(f.state.velocity.x, 0.1);
+  assert.equal(f.state.velocity.z, 0.2);
   assert.equal(f.state.motion.sprinting, false);
+});
+
+test('b83 attack83: the server copy slows on every landed knockback hit, the client only on a player, part or crystal', () => {
+  for (const [lands, expectX] of [[false, 0.1], [true, 0.06]]) {
+    const f = fixture({ tool: 103, target: { block: [...POS] }, aimedEntity: { entity: { type: lands ? 'ender_crystal' : 'pig' } } });
+    f.state.motion.sprinting = true;
+    f.state.survival.serverPlayer = { motion: { x: 0.5, y: 0.1, z: -0.25 } };
+    f.state.mobs.attack = (...args) => { args[6].knockback = 1; args[6].clientLands = lands; return true; };
+    applyPlayerEdit(f.state, { ...f.request, place: false }, {});
+    assert.equal(f.state.velocity.x, expectX);
+    assert.deepEqual(f.state.survival.serverPlayer.motion, { x: 0.5 * 0.6, y: 0.1, z: -0.25 * 0.6 });
+    assert.equal(f.state.motion.sprinting, false);
+  }
+  // No knockback (not sprinting, no enchant): neither copy slows.
+  const f = fixture({ tool: 103, target: { block: [...POS] }, aimedEntity: { entity: { type: 'pig' } } });
+  f.state.survival.serverPlayer = { motion: { x: 0.5, y: 0, z: 0 } };
+  f.state.mobs.attack = (...args) => { args[6].knockback = 0; return true; };
+  applyPlayerEdit(f.state, { ...f.request, place: false }, {});
+  assert.equal(f.state.survival.serverPlayer.motion.x, 0.5);
+  assert.equal(f.state.velocity.x, 0.1);
 });
 
 test('right entity interaction tries shearing before feeding/dyeing and then food use', () => {

@@ -42,11 +42,11 @@ import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom, creatureAttribute } from "./enchantment-effects.js";
 import { insideOpaqueBlock } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom, skylightSubtracted, celestialAngle } from "./lighting.js";
-import { mobKnockbackKick, golemLift } from "./player-knockback.js";
+import { mobKnockbackKick, golemLift, attackLandsOnClient } from "./player-knockback.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
-import { sneakEdge, criticalDamage } from "./player-movement.js";
+import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { visualRandom } from "./village-ai.js";
@@ -1609,29 +1609,32 @@ export class EntityWorld {
     // b81: the hit entity of a dragon is its EntityDragonPart (wy extends sa, not sv), and yz.r(sa) reads Sharpness / Smite / Bane (afv.a(sv, sv)), the Knockback level (afv.b), the critical,
     // Fire Aspect (both setFire calls), Thorns and the damageDealt stat only for an EntityLivingBase target (bytecode-read). The sprint knockback goes to the part (Entity.addVelocity on an
     // entity nothing moves), while the player still slows and stops sprinting; the weapon wears on the dragon itself (the wy branch before ItemStack.hitEntity).
-    const part = e.type === "ender_dragon";
-    if (part) critical = false;
+    // b83 attack83: the End crystal (wz extends sa) is no EntityLivingBase either: no critical, no Sharpness / Knockback / Fire Aspect, no damageDealt stat, no
+    // setLastAttacker or Thorns, and no ItemStack.hitEntity (the wy branch only swaps in the dragon), so the weapon does not wear; the 0.3 exhaustion stays (bytecode-read yz.r).
+    const part = e.type === "ender_dragon", crystal = e.type === "ender_crystal", living = !part && !crystal;
+    if (!living) critical = false;
     info.critical = critical;
     info.part = part; // b82 mpplace82: the attacker's client slows itself on a part (server-attack-slowdown.js)
+    info.clientLands = attackLandsOnClient(e.type); // b83 attack83: the client copy's attackEntityFrom answers true (a part or a crystal here)
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0,
       held = owned && survival.held?.id === tool ? survival.held : null,
-      weapon = part ? { damage: 0, knockback: 0, fireAspect: 0, looting: weaponEnchantments(held, e.type).looting } : weaponEnchantments(held, e.type);
+      weapon = !living ? { damage: 0, knockback: 0, fireAspect: 0, looting: weaponEnchantments(held, e.type).looting } : weaponEnchantments(held, e.type);
     let damage = heldAttackDamage(tool, survival);
     // EntityPlayer.attackTargetEntityWithCurrentItem: `if (f > 0 || f1 > 0)`. Weakness II on an empty hand (1 - 1.0) or worse does nothing at all.
     if (!(damage > 0 || weapon.damage > 0)) return false;
     if (critical) damage = criticalDamage(damage);
     damage = f(damage + weapon.damage);
-    this.lastAttackDamage = part ? 0 : damage; // b81: no stat for a part (an increment of 0 is none); b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
+    this.lastAttackDamage = living ? damage : 0; // b81: no stat for a part (an increment of 0 is none); b64 mpstats2: the f of attackTargetEntityWithCurrentItem, what the damageDealt statistic rounds (stats-live.js, server-stats.js)
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     // b82 mpplace82: wy.a(ro, F) -> xa.a(wy, ro, F) answers true inside the dragon's hurt window too (bytecode-read: the window is sv.a's, reached only
     // through xa.e(ro, F), and xa.a(wy) ignores its result), so a part hit always lands; the window only decides the dragon's health (dragon.js livingHurt).
     const landed = (part || !(e.hurt > 0 && damage <= e.lastDamage)) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
-      this.ai.playerHit(e.type === "ender_dragon" ? null : e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
+      this.ai.playerHit(living ? e : null); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
-      if (!part) mobThornsOnPlayerHit(e, entityRandom(e), {
+      if (living) mobThornsOnPlayerHit(e, entityRandom(e), {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
         breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
@@ -1650,7 +1653,7 @@ export class EntityWorld {
     }
     // The reference shows no tool wear when the hit is refused by the hurt window.
     if (landed) {
-      if (owned && ["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) survival.wear(tool, item.kind === "sword" ? 1 : 2);
+      if (owned && !crystal && ["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) survival.wear(tool, item.kind === "sword" ? 1 : 2);
       survival.exhaust(0.3);
     }
     if (weapon.fireAspect > 0 && landed) setMobFire(e, weapon.fireAspect * 4);
@@ -2573,11 +2576,25 @@ export class EntityWorld {
     // EntityLivingBase.onEntityUpdate: the revenge target (getAITarget) is dropped once it is dead or more than 100 ticks old.
     const hb = p.hurtBy;
     if (hb && typeof hb.health === "number" && (!(hb.health > 0) || !this.entities.includes(hb) || this.ai.clock - p.hurtByTime > 100)) p.hurtBy = null;
+    const grounded = p.onGround; // b83 attack83: mw.D going into mw.i() (see the jump rule below)
     const e = serverCopyMove(world, p, w, h);
     this.serverCopyMoved?.(p, e); // b82 mpplace82: EntityPlayer.moveEntityWithHeading's addMovementStat on the copy's own move (server-copy-stat.js)
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
     p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
+    // b83 attack83: NetHandlerPlayServer.processPlayer's walking branch after mw.i() (nh.a(jd) offsets 1008-1060, bytecode-read): `if (mw.D && !jd.i() && d15 > 0) mw.bj()`, then
+    // `mw.D = jd.i()`. The jump is EntityLivingBase.jump's motion (0.42F, Jump Boost, the sprint push); EntityPlayer.jump's stat and exhaustion are movePlayer's, charged once. The host
+    // gives `packetGround` (a test or replay that leaves it out keeps the copy's own flag); the riding and sleeping branches return before this.
+    // Natively mw.i() starts from the last accepted position; this copy already stands at the new packet's (beginTick), so a jump's packet would lift
+    // it off the floor before the test. The test reads mw.D as it went into mw.i() (the last packet's onGround), which the copy's own step from the
+    // accepted position keeps unless its motion lifts it (port-read approximation).
+    if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
+      if (grounded && !p.packetGround && p.packetDy > 0) {
+        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
+        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
+      }
+      p.onGround = p.packetGround;
+    }
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of liveOrder(this, this.entities)) { // b61: frozen entities are in no chunk list

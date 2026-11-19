@@ -12,9 +12,13 @@
 // `aw() ? false : wx.a(this, ro, F)` and EntityDragon.attackEntityFromPart (xa.a(wy, ro, F)) ends in `iconst_1; ireturn` with no isRemote test
 // (bytecode-read). On the attacker's client the part copy answers true, so the client slows itself (motion * 0.6) and stops sprinting; the
 // critical and the enchantment sparks stay off (both are gated by `instanceof sv`, and the part is not an EntityLivingBase). `info.part` marks it.
+// b83 attack83: the server's own EntityPlayerMP does land on a mob, so its copy (server-copy-step.js, `survival.serverPlayer`) does slow: motion * 0.6 on every
+// landed knockback hit. A crystal (wz.a answers true unless invulnerable, no isRemote test) slows the client as well (`info.clientLands`).
+import { slowServerAttacker } from '../player-knockback.js';
 export function attackerSlowdown(p, info) {
   if (!(info?.knockback > 0)) return false;
-  if (info.part && p.velocity) { p.velocity.x *= 0.6; p.velocity.z *= 0.6; }
+  slowServerAttacker(p.survival);
+  if ((info.clientLands ?? info.part) && p.velocity) { p.velocity.x *= 0.6; p.velocity.z *= 0.6; }
   if (p.motion) p.motion.sprinting = false;
   return true;
 }
