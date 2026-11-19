@@ -1,5 +1,6 @@
 // A playerOp message of the dedicated server (src/server-broadcast.js playerOps): a command an operator ran on this player, applied to the client's own
 // survival state. The server mirrors only what it holds (game mode, hotbar, effects, position); the inventory, experience and health live here.
+import { clearMatcher } from "./command-host.js";
 const ALLOWED = new Set(["setGameMode", "kill", "give", "clear", "addExperience", "addLevels", "addEffect", "removeEffect", "clearEffects", "enchant"]);
 export function applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack }) {
   if (!ALLOWED.has(message?.op) || !Array.isArray(message.args)) return false;
@@ -13,11 +14,11 @@ export function applyPlayerOp(message, { survival, experience, commandHost, rend
       if (survival.inventory.add(stack)) { renderHotbar(); renderVitals(); }
       break;
     }
-    case "clear": {
-      for (const list of [survival.inventory.main, survival.inventory.armor]) for (let i = 0; i < list.length; i++) {
-        const s = list[i];
-        if (s && (a === -1 || (s.id === a && (b === -1 || (s.damage ?? 0) === b)))) list[i] = null;
-      }
+    case "clear": { // b83 cmdexec83: a is the original Item id (-1 any), b the data value (-1 any); InventoryPlayer.clearInventory also takes the cursor stack
+      if (!Number.isInteger(a) || !Number.isInteger(b)) return false;
+      const match = clearMatcher(a, b), inv = survival.inventory;
+      for (const list of [inv.main, inv.armor ?? []]) for (let i = 0; i < list.length; i++) if (match(list[i])) list[i] = null;
+      if (inv.cursor && match(inv.cursor)) inv.cursor = null;
       renderHotbar(); renderVitals();
       break;
     }

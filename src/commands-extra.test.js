@@ -76,7 +76,7 @@ test("/achievement give unlocks the locked parents first, * gives all, a plain s
   run.run("/achievement give achievement.nope");
   assert.equal(out.at(-1), "§cUnknown achievement or statistic 'achievement.nope'");
   run.run("/achievement take achievement.diamonds");
-  assert.equal(out.length, 4, "take (and any other first word) is silent in 1.7.10");
+  assert.equal(out.at(-1), "§c/achievement give <stat_name> [player]", "b83 cmdexec83 (executed): take (and any other first word) throws the usage line");
   run.run("/achievement give");
   assert.equal(out.at(-1), "§c/achievement give <stat_name> [player]");
   run.run("/achievement give stat.jump Steve");

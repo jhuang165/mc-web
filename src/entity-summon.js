@@ -35,6 +35,9 @@ const list = (tag, key, type, n) => {
   const l = nbtGet(tag, key, NBT.LIST);
   return l?.elementType === type && l.items.length >= n && l.items.slice(0, n).every(Number.isFinite) ? l.items : null;
 };
+// b83 cmdexec83 (executed, cmd-exec-reference.json summon rows): Entity.readFromNBT keeps Fire (any short, -20 too), OnGround and FallDistance on every class
+// CommandSummon creates, and writeToNBT gives them back. The counters the port runs for these objects take them here; FallingSand has no fire counter in the port.
+const baseOf = (tag) => ({ fire: nbtGet(tag, "Fire", NBT.SHORT, 0), onGround: nbtGet(tag, "OnGround", NBT.BYTE, 0) !== 0, fallDistance: Math.fround(nbtGet(tag, "FallDistance", NBT.FLOAT, 0)) });
 const motionOf = (tag) => (list(tag, "Motion", NBT.DOUBLE, 3) ?? [0, 0, 0]).map((v) => (Math.abs(v) > 10 ? 0 : v));
 const pair = (type, value) => ({ type, value });
 const doubles = (items) => pair(NBT.LIST, { elementType: NBT.DOUBLE, items });
@@ -69,19 +72,24 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     } else return { ignored: [`${id} (not kept)`], spawned: false };
     return { ignored: [...t.keys()].filter((k) => !known.has(k) && !PROJECTILE_KEYS.has(k)), spawned: true };
   }
-  const motion = motionOf(t);
+  const motion = motionOf(t), base = baseOf(t);
   let spawned = true;
   if (id === "Item") {
     const item = nbtGet(t, "Item", NBT.COMPOUND), stack = item ? convertItem(item, { allowEmpty: true }) : null; // Count 0 is kept (probed, itemRead)
     if (!stack) spawned = false; // EntityItem.readEntityFromNBT: no readable stack is setDead
-    else hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) }).age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
+    else {
+      const e = hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) });
+      e.age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
+      e.fire = e.loadedFire = base.fire; e.onGround = base.onGround; // b83 cmdexec83: Fire (the item's burn counter, saved back unticked) and OnGround
+    }
   } else if (id === "XPOrb") {
     const value = nbtGet(t, "Value", NBT.SHORT, 0);
     // EntityXPOrb.readEntityFromNBT keeps any Value, 0 and above 2477 too (Executed, object-nbt-reference.json); b76: a Value 0 orb is kept.
-    const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; hosts.xpOrbs.orbs.push(o);
+    const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; o.fire = base.fire; o.onGround = base.onGround; hosts.xpOrbs.orbs.push(o); // b83 cmdexec83: Fire, OnGround
   } else if (id === "PrimedTnt") {
     const e = primeTnt(x, y, z, { fuse: nbtGet(t, "Fuse", NBT.BYTE, 0) });
     [e.vx, e.vy, e.vz] = motion;
+    Object.assign(e, base); // b83 cmdexec83: Fire (moveEntity's counter, b82 fireext82), OnGround, FallDistance
     hosts.primed.push(e);
   } else if (id === "FallingSand") {
     // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) when present, else Tile & 255; Data; Time.
@@ -102,6 +110,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "Boat") {
     const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
     boat.pitch = boat.prevPitch = Math.fround(rotation?.[1] ?? 0);
+    Object.assign(boat, base); // b83 cmdexec83: Fire, OnGround, FallDistance
     vehicle = boat;
   } else if (id === "Painting" || id === "ItemFrame") {
     // EntityHanging.readEntityFromNBT: a numeric "Direction" wins over the pre-1.2 "Dir" (0 to 3 mapped 2, 1, 0, 3; anything else leaves 0); then

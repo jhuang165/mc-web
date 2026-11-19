@@ -16,6 +16,8 @@ export function summonFireworkRocket(rockets, x, y, z, tag) {
   r.lifetime = 0; r.life = 0; r.mx = 0; r.my = 0; r.mz = 0;
   if (tag instanceof Map) {
     r.life = nbtGet(tag, 'Life', NBT.INT, 0);
+    r.fire = nbtGet(tag, 'Fire', NBT.SHORT, 0); // b83 cmdexec83 (executed): Entity.readFromNBT's Fire, the counter tickRocket runs (b82 fireext82)
+    r.onGround = nbtGet(tag, 'OnGround', NBT.BYTE, 0) !== 0;
     r.lifetime = nbtGet(tag, 'LifeTime', NBT.INT, 0);
     const motion = nbtGet(tag, 'Motion', NBT.LIST);
     if (motion?.elementType === NBT.DOUBLE) [r.mx, r.my, r.mz] = [0, 1, 2].map((i) => (Number.isFinite(motion.items[i]) && Math.abs(motion.items[i]) <= 10 ? motion.items[i] : 0));

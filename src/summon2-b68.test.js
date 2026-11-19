@@ -65,8 +65,10 @@ test("End: `~` is the native position, absolute native coordinates map into the 
   assert.deepEqual(f.say("/summon Pig ~-3 ~ ~4"), [OK]);
   const pig2 = em().filter((e) => e.type === "pig")[1];
   assert.deepEqual([pig2.x - pig.x, pig2.z - pig.z], [-3, 4]);
-  // native x -129 and 128 are outside [-128, 127]; local-looking numbers (228) are far outside too
-  assert.match(f.say("/summon Pig -129 60 0")[0], /out of the world|Cannot summon/i);
+  // native x -130 and 128 are outside [-128, 127]; local-looking numbers (228) are far outside too. b83 cmdexec83: CommandSummon passes (int) casts to
+  // World.blockExists (bytecode-read bu: d2i, executed in cmd-exec-reference.json), so -129 (-128.5) truncates to -128, inside; -130 (-129.5) is -129.
+  assert.deepEqual(f.say("/summon Pig -129 60 0"), [OK]);
+  assert.match(f.say("/summon Pig -130 60 0")[0], /out of the world|Cannot summon/i);
   assert.match(f.say("/summon Pig 128 60 0")[0], /out of the world|Cannot summon/i);
   assert.match(f.say("/summon Pig 0 60 228")[0], /out of the world|Cannot summon/i);
   assert.deepEqual(f.say("/summon Pig -128 60 127"), [OK]);

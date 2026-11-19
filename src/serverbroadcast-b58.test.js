@@ -144,7 +144,7 @@ test("the client applies playerOp messages to its own state, and only the listed
   assert.equal(applyPlayerOp({ op: "give", args: [{ id: 1, count: 5, damage: 0 }] }, env), true);
   assert.equal(applyPlayerOp({ op: "give", args: [{ id: 1, count: 500 }] }, env), false);
   assert.equal(applyPlayerOp({ op: "eval", args: [] }, env), false);
-  applyPlayerOp({ op: "clear", args: [3, -1] }, env);
+  applyPlayerOp({ op: "clear", args: [1, -1] }, env); // b83 cmdexec83: the original Item id (stone, build id 3)
   assert.equal(env.survival.inventory.main[0], null);
   applyPlayerOp({ op: "setGameMode", args: ["rm -rf"] }, env);
   applyPlayerOp({ op: "addLevels", args: [30] }, env);
