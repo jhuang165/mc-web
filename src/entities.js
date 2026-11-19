@@ -1144,7 +1144,7 @@ export class EntityWorld {
     if (!this.entities.includes(e)) return false;
     if (e.type === "ender_crystal") return crystalAttack(this, e); // any damage explodes it (ender-crystal-mobs.js)
     if (e.type === "silverfish") this.silverfishHurt(e, source);
-    if (e.type === "enderman" && e.health > 0 && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true;
+    if (e.type === "enderman" && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true; // b84 mobs84: ya.a has no health test (bytecode-read): a projectile hit teleports a corpse too
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     e.idle = 0; // EntityLivingBase.attackEntityFrom: entityAge = 0 (the despawn age EntityAIWander reads) before the health check
     if (e.health <= 0) return false;
@@ -2392,7 +2392,7 @@ export class EntityWorld {
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
     const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); markMoved(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
     beginPushGrid(); // b75: the push grid is built by the first push of this loop
-    for (let oi = 0; oi < order.length; oi++, this.flushLoot()) {
+    for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot()) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); } // the player's place in the list: his mount no longer lists him
@@ -2476,7 +2476,9 @@ export class EntityWorld {
       // EntityPigZombie.onUpdate (yh.h) runs its angry sound before EntityZombie.onUpdate and so before the ambient say roll (b38 records: f f, then i1000).
       if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
       // EntityZombie.onUpdate (yq.h): a converting zombie counts its timer down before EntityLivingBase.onUpdate.
-      if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
+      // b84 mobs84: yq.cd's removeEntity only sets the zombie dead (health stays), so the rest of yq.h / sv.h runs in this tick (AI, attack, push, steps and their draws). The port's removal
+      // marker (health 0) is put back when the entry's turn ends (the loop step).
+      if (e.conversionTime !== undefined) { const hit = e.recentlyHit; if (this.tickConversion(e)) { e.health = e.removedHealth; e.death = 0; e.recentlyHit = hit; this.curedLive = e; } }
       e.age++;
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
@@ -2663,6 +2665,14 @@ export class EntityWorld {
       if (e.growingAge !== 0) e.love = 0;
       if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);
     }
+  }
+  // b84 mobs84: the removal marker of a zombie that converted alive in this entry's turn (see tick).
+  remarkCured() {
+    const e = this.curedLive;
+    if (!e) return;
+    this.curedLive = null;
+    if (e.health > 0) e.removedHealth = e.health;
+    e.health = 0; e.death = 20; e.recentlyHit = 0;
   }
   // b82: a dying zombie whose conversion ends (yq.h -> yq.cd: World.removeEntity only sets it dead) still runs the rest of its onUpdate in that tick (bytecode-read): EntityLivingBase's
   // onEntityUpdate reaches onDeathUpdate (sv.aF), which counts deathTime on; when that makes 20 the experience is dropped as for any corpse (recentlyHit, an adult, doMobLoot), after the

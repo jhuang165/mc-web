@@ -70,15 +70,13 @@ export function witherUpdate(m, e) {
   chase(e, target, armored(e.health));
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }
-// xc.e's tail, drawn by the client copy of the entity (its own Entity.rand `Z`, the client world's rand for the 1 in 4 armour roll): a gaussian
-// smoke puff at each head (0.3 spread), a "mobSpell" at the head one tick in four while armoured, and three bluish "mobSpell"
-// around the body while Invul > 0. The spawn's BlockSkull "snowballpoof" burst is a server-world spawnParticle (a no-op), so none is drawn.
-const visual = new WeakMap();
+// xc.e's tail (bytecode-read: no isRemote test): a gaussian smoke puff at each head (0.3 spread), a "mobSpell" at the head one tick in four while armoured, and three bluish
+// "mobSpell" around the body while Invul > 0. The draws are the SERVER entity's own Entity.rand (Z) and the world's rand (s, the 1 in 4 armour roll), made whether or not
+// anyone sees the particles (the server's spawnParticle is a no-op), so the following draws line up (b84 mobs84: a separate Math.random-seeded visual Random was used before).
+// The spawn's BlockSkull "snowballpoof" burst is a server-world spawnParticle (a no-op), so none is drawn.
 function headParticles(m, e) {
-  if (!m.fx) return;
-  let r = visual.get(e);
-  if (!r) visual.set(e, (r = { z: new JavaRandom(Math.floor(Math.random() * 2 ** 48)), w: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }));
-  for (const [name, x, y, z, vx, vy, vz] of headParticleSpecs(e, r.z, r.w)) m.fx.spawn(name, x, y, z, vx, vy, vz);
+  m.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+  for (const [name, x, y, z, vx, vy, vz] of headParticleSpecs(e, entityRandom(e), m.worldRandom)) m.fx?.spawn(name, x, y, z, vx, vy, vz);
 }
 // xc.e after EntityMob's: the side heads turn to their targets.
 export function witherPost(m, e) {
