@@ -1,7 +1,8 @@
 // GuiCommandBlock (bfh) on the bitmap FontRenderer path (menu-ui.js Gui). Read from the unchanged 1.7.10 bytecode with javap (not probed):
 //   initGui: Done (id 0) at (w/2 - 4 - 150, h/4 + 120 + 12) and Cancel (id 1) at (w/2 + 4, same y), both 150 x 20; the command field
 //   at (w/2 - 150, 50) 300 x 20, max length 32767, focused; the Previous Output field at (w/2 - 150, 135) 300 x 20, max length 32767,
-//   disabled, filled from the tile's last output when it has one. Done is enabled while the trimmed command is not empty.
+//   disabled, set to the COMMAND (agp.i()) and then to the last output's getUnformattedText (fe.c()) when agp.h() is not null; Done is enabled while the trimmed command
+//   is not empty. b83 cmdblock83 (bytecode-read bfh.b() offsets 246-286): a block with no LastOutput shows its command in Previous Output (the port showed nothing).
 //   drawScreen: title advMode.setCommand centred at y 20 (white); "Console Command" at (w/2 - 150, 37) 0xA0A0A0; the three target
 //   hints at (w/2 - 150, 75 + 9 * i) 0xA0A0A0; with a non-empty output field "Previous Output" at y 75 + 3 * 9 + 20 = 122 and the field.
 //   keyTyped: Enter / numpad Enter presses Done when it is enabled; Escape presses Cancel. actionPerformed Done sends MC|AdvCdm
@@ -33,7 +34,7 @@ export function commandBlockScreen({ command = "", lastOutput = null, done, canc
       g.text(t("advMode.setCommand"), ...L.title, { center: true });
       g.text(t("advMode.command"), ...L.commandLabel, { color: gray });
       COMMAND_HINTS.forEach((k, i) => g.text(t(k), ...L.hints[i], { color: gray }));
-      const text = lastOutputText(lastOutput);
+      const text = (lastOutput != null ? lastOutputText(lastOutput) : String(command ?? "")).slice(0, 32767); // GuiTextField.setText after setMaxStringLength(32767)
       if (text) g.text(t("advMode.previousOutput"), ...L.outputLabel, { color: gray });
       const field = g.field(L.command, { value: command, maxLength: 32767, focus: true, label: t("advMode.command"), input: (v) => doneButton.enable(v.trim().length > 0) });
       if (text) {

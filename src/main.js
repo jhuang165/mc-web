@@ -3552,7 +3552,7 @@ function predictPlace() {
   // ItemSnowball / ItemEgg / ItemEnderPearl / ItemExpBottle.onItemRightClick take one from the client stack at once (the entity itself is the server's).
   if (!kind && !aimed && (isThrowable(held) || held === ITEM_EXP_BOTTLE || throwsPotion(held, survival.held?.damage)) && !(target && !motion.sneaking && activatesOnClick(seen.get(...target.block), seen, target.block, held, survival.held?.damage ?? 0))) kind = 'throw';
   if (!kind) return null;
-  const state = { world: seen, survival, position, flowers: FLOWERS, yaw, entities: placementEntities /* b82 mpplace82 */, redstoneHooks: { lit: (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true } }; // b60: client comparator input powers
+  const state = { world: seen, survival, position, flowers: FLOWERS, yaw, entities: placementEntities /* b82 mpplace82 */, redstoneHooks: { lit: (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true, successCount: (x, y, z) => redstoneRuntime?.commandBlocks?.get?.(x, y, z)?.successCount ?? 0 /* b83 cmdblock83: the S35 SuccessCount */ } }; // b60: client comparator input powers
   let soundDone = false, cells = [], smokeDone = false, bucket = null, eggDone = false, potContent = null;
   if (kind === 'activate') {
     cells = dryActivate(state, target) ?? [];

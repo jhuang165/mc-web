@@ -143,9 +143,9 @@ test("give, xp, clear, tp and kill from a command block: queued or run, replayed
   const tp = await run(rootWith("tp @p 1 2 3"));
   assert.equal(tp.playerCommands.length, 0); assert.equal(tp.commandStats.tpDiscarded, 1);
   assert.equal(block(tp).successCount, 1); assert.match(plainText(block(tp).lastOutput), /Teleported Player to 1\.5,2\.5,3\.5/);
-  // kill from a command block is PlayerNotFound natively
+  // kill from a command block is PlayerNotFound natively: getCommandSenderAsPlayer's literal (y.b, bytecode-read b83 cmdblock83; it read "That player cannot be found" before)
   const kill = await run(rootWith("kill"));
-  assert.equal(block(kill).successCount, 0); assert.match(plainText(block(kill).lastOutput), /That player cannot be found/); assert.equal(kill.playerCommands.length, 0);
+  assert.equal(block(kill).successCount, 0); assert.match(plainText(block(kill).lastOutput), /You must specify which player you wish to perform this action on\./); assert.equal(kill.playerCommands.length, 0);
 });
 
 test("a clock firing a give keeps firing order and a bounded chat; the queue is capped and counted", async () => {
