@@ -105,7 +105,9 @@ test("a player who is not an operator cannot run world commands", () => {
   const f = two();
   assert.match(f.say("b", "/time set day")[0], /do not have permission/);
   assert.equal(f.sim.time, 6000);
-  assert.deepEqual(f.say("b", "/list"), ["There are 2/20 players online:", "Alex, Bob"]); // CommandListPlayers is level 0
+  // b84 dedicated84 (executed, dedicated-cmds-reference.json): a dedicated server denies /list to a non-op (EntityPlayerMP.a), so this old "level 0" expectation was a gap
+  assert.match(f.say("b", "/list")[0], /do not have permission/);
+  assert.deepEqual(f.say("a", "/list"), ["There are 2/20 players online:", "Alex, Bob"]);
 });
 
 test("/clear walks every slot the server holds, through serverInventory, and the client clears its own", () => {

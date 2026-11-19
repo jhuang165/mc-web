@@ -149,7 +149,7 @@ export class ServerSocial {
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
     const host = Object.assign(Object.create(forPlayer(sender.name)), {
       name: sender.name, playerName: sender.name, cheats: op, scoreboard: sim.scoreboard, // b64 mpscoreboard: /scoreboard acts on the shared board
-      canUse: (command) => (op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false) || command.name === "list"), // b68: op level
+      canUse: (command) => (op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false)), // b68: op level; b84 dedicated84: /list is op-only for a player on a dedicated server (mw.a, executed), no longer open to everyone
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
