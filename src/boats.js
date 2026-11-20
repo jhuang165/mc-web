@@ -25,6 +25,18 @@ import { entityWet, wetFizz } from "./entity-wet.js";
 
 const f = Math.fround;
 export const BOAT_ITEM = 495, PLANKS = 7, STICK = 300;
+// b86 seat86: xi.h's two clears (bytecode-read, xi.h offsets 1259-1314): a snow layer goes by World.setBlockToAir (ahb.f(III) = setBlock(air, 0, 3): no level event, no drop),
+// a lily pad by World.func_147480_a(x, y, z, true) (ahb.a(IIIZ)): level event 2001 with getIdFromBlock + (meta << 12) to every world access (ahb.c(IIIII) -> a(null, ..):
+// RenderGlobal's break sound and particles on a client, WorldManager's S28 to every player within 64 blocks on a server), then Block.dropBlockAsItem(meta, fortune 0) (nothing on a
+// client world), then setBlock(air, 0, 3). No player takes part: no stat, exhaustion or tool wear. `aux(id, x, y, z, data)`, `drop(stacks, x, y, z)` ({ id, count, damage }) and
+// `set(x, y, z)` are the caller's; the port's 2001 data carries the port block id.
+export function boatClearCell(world, x, y, z, block, { aux = null, drop = null, set = (cx, cy, cz) => world.set(cx, cy, cz, 0) } = {}) {
+  if (block === LILY_PAD) {
+    aux?.(2001, x, y, z, block + ((world.getMeta?.(x, y, z) ?? 0) << 12));
+    drop?.([{ id: LILY_PAD, count: 1, damage: 0 }], x, y, z);
+  }
+  set(x, y, z);
+}
 export const BOAT_WIDTH = f(1.5), BOAT_HEIGHT = f(0.6), BOAT_Y_OFFSET = f(BOAT_HEIGHT / 2);
 const HALF = f(BOAT_WIDTH / 2);
 const MIN_SPEED = 0.07, MAX_SPEED = 0.35, BREAK_DAMAGE = 40;

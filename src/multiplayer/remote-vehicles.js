@@ -2,7 +2,7 @@
 // made by the single-player Minecarts / Boats (every field MinecartRenderer and BoatRenderer read exists) that is never ticked: it only moves to the newest state, one step per client
 // tick, with the previous position kept so the renderers' partial-tick interpolation works. The renderers are injected by main.js (they need three.js), `renderers.minecart` and `.boat`.
 import { Minecarts } from '../minecarts.js';
-import { Boats } from '../boats.js';
+import { Boats, boatClearCell } from '../boats.js';
 import { JavaRandom } from '../java-random.js';
 import { pickMinecart } from '../structure-simulation.js';
 import { ClientHanging } from './client-hanging.js'; // b68 mppaintings
@@ -100,18 +100,35 @@ function boatWake(v, fx) {
 // through xi.a(DDDFFI) and xi.i (bytecode-read): a position packet whose target is over one block (squared distance > 1) away only sets boatPosRotationIncrements = 3 and motion = the last S12, and
 // a nearer one is dropped; the position and angles are never set from it (the increments are read only in the isBoatEmpty branch). An S12 sets the motion. The state carries `own` with the entry's
 // released position (tx/ty/tz), S12 (mx/my/mz, count vs) and position-packet count rs.
-export function riderRecord(input) {
-  const i = moveInput({ forward: input.forward ?? 0, strafe: input.strafe ?? 0 }); // not slowed: a rider is not using an item
-  return { yaw: fl(180 - input.yaw * 180 / Math.PI), moveForward: fl(i.forward * fl(0.98)), moveStrafing: fl(-i.strafe * fl(0.98)), dead: false };
+// b86 seat86: `move` is the input whose moveForward / moveStrafing the boat reads (default: `input`); the yaw is always `input`'s. MovementInputFromOptions (blj) scales a sneaking
+// player's input by 0.3D, so the rider's record does too.
+export function riderRecord(input, move = input) {
+  const p = riderPacket(move ?? {});
+  return { yaw: fl(180 - input.yaw * 180 / Math.PI), moveForward: p.f, moveStrafing: p.s, dead: false };
+}
+// b86 seat86: what a riding client sends each tick (bytecode-read bjk.h, EntityClientPlayerMP.onUpdate): after its own update, `if (isRiding())` C05 Look(rotationYaw,
+// rotationPitch, onGround) then C0C Input(moveStrafing, moveForward, movementInput.jump, movementInput.sneak); sendMotionUpdates (bjk.a, with the C0B sneak / sprint changes and
+// its own `ridingEntity != null` C06(motionX, -999, -999, motionZ) branch) runs only when not riding, so that C06 is never sent by bjk.h. moveForward / moveStrafing are the
+// movement input (blj: +-1, x 0.3D sneaking; the 0.2 item-use slowdown is skipped while riding, blk.e) times sv.e's 0.98F. The port's yaw / pitch already travel in `input`
+// (the C05; its onGround is false for a rider: Entity.updateRidden zeroes the motion before onUpdate, so moveEntity never lands); this is the C0C:
+// { s: moveStrafing, f: moveForward, j: jump, k: sneak } (port strafe is to the right, native moveStrafing to the left).
+export function riderPacket(controls = {}) {
+  const sneak = !!controls.sneak, i = moveInput({ forward: controls.forward ?? 0, strafe: controls.strafe ?? 0, sneak });
+  return { s: fl(-i.strafe * fl(0.98)), f: fl(i.forward * fl(0.98)), j: !!controls.jump, k: sneak };
 }
 // b85 boatseat85: nothing puts the copy back on the server's boat any more (the b84 two-block snap is gone); the local player is seated on this copy (RemoteVehicles.seatOf, main.js).
 // `seated` false: the player left but the copy is still isBoatEmpty false (bjb.a(S1B) only calls setIsBoatEmpty for an attach packet whose vehicle is a boat: the dismount's S1B with vehicle -1
 // changes nothing), so it keeps running xi.h's full physics, with no rider input, until another player's attach sets it true (RemoteVehicles.noteRiders).
 // xi.h clears the snow layers and lily pads at its four corners with no isRemote guard (World.setBlockToAir / breakBlock(true); a client world's drops are none): `clear(x, y, z, block)` does it on the client world.
-export function ownBoatStep(c, boats, world, fx = null, input = null, clear = null) {
+// b86 seat86: the lily pad's World.func_147480_a(x, y, z, true) (ahb.a(IIIZ), bytecode-read) plays level event 2001 first, on a client world through RenderGlobal (bma: the break
+// sound and the destroy particles at the cell): `aux(2001, x, y, z, block + (meta << 12))`; its dropBlockAsItem drops nothing on a client world. A snow layer (ahb.f, setBlockToAir)
+// plays nothing. The server's own boat breaks the same pad and sends its S28 2001 to every player within 64 blocks, the rider included (server-vehicles.js), so the rider sees both.
+// `prev` is the input of the tick before: World.updateEntities skips a rider and updates it from its mount after the mount's onUpdate (ahb.h offsets 323-348, ahb.a(sa, Z)
+// 454-503, bytecode-read), so the client boat's xi.h reads the moveForward / moveStrafing the player computed on the previous tick (and rotationYaw as it is now).
+export function ownBoatStep(c, boats, world, fx = null, input = null, clear = null, aux = null, prev = input) {
   const v = c.v;
-  v.remote = true; v.rider = c.seated === false ? null : riderRecord(input ?? { yaw: 0 });
-  const hooks = { clear: (x, y, z, block) => { world.put(x, y, z, 0, 0, false); clear?.(x, y, z, block); } };
+  v.remote = true; v.rider = c.seated === false ? null : riderRecord(input ?? { yaw: 0 }, prev ?? {});
+  const hooks = { clear: (x, y, z, block) => boatClearCell(world, x, y, z, block, { aux, set: (cx, cy, cz) => { world.put(cx, cy, cz, 0, 0, false); clear?.(cx, cy, cz, block); } }) };
   for (const p of boats.tickBoat(world, v, [], hooks)) fx?.spawn(...p);
 }
 // The packets of the rider's boat (see above): `s` is the state with `own`. Returns nothing; updates c.cv / c.vs / c.rs and the motion.
@@ -134,6 +151,8 @@ export class RemoteVehicles {
     this.fx = null; // b84 mpboat84: { spawn(name, x, y, z, vx, vy, vz) }, the particle sink of the boat copies (main.js)
     this.input = null;
     this.cleared = null; // b85 boatseat85: (x, y, z, block) after the own boat cleared a snow layer or lily pad on the client world (main.js remeshes)
+    this.aux = null; // b86 seat86: (id, x, y, z, data), the client world's level event of the own boat's lily pad break (main.js draws it as an S28 2001)
+    this.prevInput = null; // b86 seat86: the input of the last tick() (the rider's moveForward the boat reads); set at the end of tick()
     this.hanging = new ClientHanging(); // b68 mppaintings: paintings, item frames and knots (the message's hset / hdel)
   }
   // The `vehicles` message: the newest state of each vehicle in range, and the keys that left.
@@ -203,12 +222,13 @@ export class RemoteVehicles {
         cartClientStep(c, (cv, x, y, z) => this.carts.setPosition(cv, x, y, z));
         continue;
       }
-      if (c.own && this.world) { ownBoatStep(c, this.boats, this.world, this.fx, this.input, (x, y, z, block) => this.cleared?.(x, y, z, block)); continue; } // b84 mpboat84 / b85 boatseat85
+      if (c.own && this.world) { ownBoatStep(c, this.boats, this.world, this.fx, this.input, (x, y, z, block) => this.cleared?.(x, y, z, block), (...a) => this.aux?.(...a), this.prevInput); continue; } // b84 mpboat84 / b85 boatseat85 / b86 seat86
       if (c.tracked) { boatClientStep(c, (bv, x, y, z) => this.boats.setPosition(bv, x, y, z), this.world, this.fx); continue; } // b83 tracker83
       v.px = v.x; v.py = v.posY; v.pz = v.z; v.prevYaw = v.yaw; v.prevPitch = v.pitch;
       (v.boat ? this.boats : this.carts).setPosition(v, s.x, s.y, s.z);
       v.yaw = s.yaw; v.pitch = s.pitch;
     }
+    this.prevInput = this.input; // b86 seat86: the player's own update follows its boat's (World.updateEntities)
   }
   // b72 mpstream72: the carts and boats standing in an unloaded column (keys `cx,cz`) leave the client world (Chunk.onChunkUnload).
   dropColumns(columns) { const del = []; for (const [k, c] of this.copies) if (columns.has(`${Math.floor(c.v.x / 16)},${Math.floor(c.v.z / 16)}`)) del.push(k); if (del.length) this.apply({ del }); }
