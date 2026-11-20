@@ -75,7 +75,7 @@ test("throwables and the splash potion lose one unless Creative; a drinkable pot
 test("boat: one is taken when the boat fits on the traced water; a blocked box or Creative keeps the stack", () => {
   const w = pond();
   assert.deepEqual(use(w, survivalOf(BOAT_ITEM, 2)).plan, { dCount: -1 });
-  assert.equal(use(w, survivalOf(BOAT_ITEM, 2), { blocked: () => true }).plan, null);
+  assert.equal(use(w, survivalOf(BOAT_ITEM, 2), { entities: [{ bb: [39, 10, 39, 42, 14, 42], collide: false }] }).plan, null); // b86 predict86: the copies come as clientEntityBoxes rows
   const c = survivalOf(BOAT_ITEM, 2); c.mode = "creative";
   assert.equal(use(w, c).plan, null);
   assert.equal(use(w, survivalOf(BOAT_ITEM, 2), { eye: [40.5, 30, 40.5], dir: [0, 1, 0] }).plan, null);
