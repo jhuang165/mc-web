@@ -15,6 +15,7 @@ import { Projectiles, mobTargets, thrownHit } from '../projectiles.js';
 import { WitchPotions } from '../witch-potions.js';
 import { splashImpact } from '../witch.js';
 import { primeTnt, TNT_POWER, TNT_Y_OFFSET } from '../explosion.js';
+import { entityBaseSave, entityBaseRestore } from '../entity-base-nbt.js'; // b87 summon87
 import { tickPrimedTnt, tickOneTnt } from '../entity-simulation.js';
 import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
 import { rainedOn } from '../entity-wet.js'; // b83 rain83
@@ -395,7 +396,7 @@ export class ServerDispense {
   // large one ExplosionPower, and no shooter. The records are the browser save's (main.js `active.tnt`, FireworkRockets.serialize, Fireballs.serialize), so single player and
   // the server read one format. Null when there is nothing to write.
   extrasOut() {
-    const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0 })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
+    const tnt = this.primed.filter(e => e.fuse > 0).map(e => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0, ...entityBaseSave(e) })), rockets = this.rockets.rockets.filter(r => !r.dead).length ? this.rockets.serialize() : null,
       own = this.dim ? this.dimState(this.dim)?.mobs?.mobs : this.sim.mobs?.mobs, fireballs = [...(own?._fireballs?.serialize(this.dim) ?? []), ...(own?._skulls?.serialize(this.dim) ?? [])], out = {}; // b64: wither skulls (kind witherSkull) ride the same list, as the browser save's `active.fireballs`; dimState covers the Nether and the End (mpend2)
     if (tnt.length) out.tnt = tnt;
     if (rockets) out.rockets = rockets;
@@ -407,7 +408,7 @@ export class ServerDispense {
     if (!d || typeof d !== 'object') return;
     for (const t of (Array.isArray(d.tnt) ? d.tnt : []).slice(0, 4096)) {
       if (!t || ![t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)) continue;
-      this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 }));
+      this.primed.push(Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 }, entityBaseRestore(t)));
     }
     if (d.eyes) this.eyeSystem.load(d.eyes); // b64 mpend2
     if (d.rockets) { const tmp = new FireworkRockets(); tmp.load(d.rockets); this.rockets.rockets.push(...tmp.rockets); if (d.rockets.random) this.rockets.random.restore(d.rockets.random); }

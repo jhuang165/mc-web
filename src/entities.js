@@ -625,9 +625,9 @@ function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
   // EntityLivingBase.updateFallState (sv.a(DZ)V) first runs handleWaterMovement when the entity
   // is not already in water, on the moved box: landing in water (even 1 deep) cancels the fall.
   if ((hooks?.living || e.living) && !e.inWater && !(s && dryBox(world, bb[0], bb[1], bb[2], bb[3], bb[4], bb[5])) && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0; // b81 mpperf81: dryBox skips the scan's boxes when no cell is water
+  // b87 summon87 (bytecode-read Entity.updateFallState sa.a(DZ)): on the ground only a fallDistance above 0 lands (fall, then 0); a negative one read from NBT is kept.
   if (e.onGround) {
-    landed = e.fallDistance;
-    e.fallDistance = 0;
+    if (e.fallDistance > 0) { landed = e.fallDistance; e.fallDistance = 0; }
   } else if (dy < 0) e.fallDistance = f(e.fallDistance - dy);
   blockCollisions(world, bb, e, hooks);
   return landed;

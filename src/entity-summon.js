@@ -11,6 +11,8 @@ import { newOrb } from "./experience.js";
 import { spawnFalling, FALLING_Y_OFFSET } from "./falling.js";
 import { fallingCellOf, fallingMetaOf, fallingDataExtra, fallingTileDataOf } from "./java-objects.js";
 import { ARTS } from "./hanging.js";
+import { entityBaseOf } from "./entity-base-nbt.js";
+import { uuidFields } from "./entity-uuid.js";
 
 export const ENTITY_SUMMON = Object.freeze({
   Item: "entity:Item", XPOrb: "entity:XPOrb", PrimedTnt: "entity:PrimedTnt", FallingSand: "entity:FallingSand", Boat: "entity:Boat",
@@ -80,7 +82,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     if (!stack) spawned = false; // EntityItem.readEntityFromNBT: no readable stack is setDead
     else {
       const e = hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) });
-      e.age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
+      e.age = nbtGet(t, "Age", NBT.SHORT, 0); // b87 summon87 (executed, summon87-reference.json ticks): xk.a(dh) keeps any short; 1.7.10's onUpdate ages a negative one too (no -32768 sentinel, that is 1.8)
       e.fire = e.loadedFire = base.fire; e.onGround = base.onGround; if (base.invulnerable) e.invulnerable = true; // b83 cmdexec83: Fire (the item's burn counter, saved back unticked) and OnGround
       e.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; // b85 fire85 (executed, cmd-exec-reference.json invulnerable rows): EntityItem.readEntityFromNBT reads Health & 255, 0 when absent, so a summoned item dies from the first hit
       // b86 summon86: xk.a(dh) also reads Owner and Thrower (hasKey, then getString; the region import keeps them since b77), which the live item saves and uses.
@@ -93,7 +95,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "PrimedTnt") {
     const e = primeTnt(x, y, z, { fuse: nbtGet(t, "Fuse", NBT.BYTE, 0) });
     [e.vx, e.vy, e.vz] = motion;
-    Object.assign(e, base); // b83 cmdexec83: Fire (moveEntity's counter, b82 fireext82), OnGround, FallDistance (and a no-op invulnerable flag: nothing hurts a primed TNT)
+    Object.assign(e, base, entityBaseOf(t)); // b83 cmdexec83: Fire (moveEntity's counter, b82 fireext82), OnGround, FallDistance (and a no-op invulnerable flag: nothing hurts a primed TNT); b87 summon87: Air, Rotation, PortalCooldown, Dimension, UUID kept
     hosts.primed.push(e);
   } else if (id === "FallingSand") {
     // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) when present, else Tile & 255; Data; Time.
@@ -104,7 +106,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       const e = spawnFalling(cell.id, fallingMetaOf(cell, data), 0, 0, 0, hosts.falling.entityRandom()); // any block falls; Data keeps its whole byte (b76)
       Object.assign(e, { x, y: y - FALLING_Y_OFFSET, z, px: x, py: y - FALLING_Y_OFFSET, pz: z, vx: motion[0], vy: motion[1], vz: motion[2], ticks: nbtGet(t, "Time", NBT.BYTE, 0) & 255 });
       Object.assign(e, fallingDataExtra(cell, data));
-      e.fire = base.fire; // b84 cmdfix84: kept as read; EntityFallingBlock.onUpdate never calls sa.h, so it neither burns, hurts nor goes out in water
+      e.fire = base.fire; Object.assign(e, entityBaseOf(t)); // b87 summon87: OnGround, FallDistance, Invulnerable and the constant base keys (entity-base-nbt.js); b84 cmdfix84: kept as read; EntityFallingBlock.onUpdate never calls sa.h, so it neither burns, hurts nor goes out in water
       if (hasNumber(t, "DropItem")) e.dropItem = nbtGet(t, "DropItem", NBT.BYTE, 0) !== 0;
       // EntityFallingBlock.readEntityFromNBT: HurtEntities (a number) reads FallHurtAmount (float) and FallHurtMax (int); without it only an anvil hurts.
       if (hasNumber(t, "HurtEntities")) Object.assign(e, { hurtEntities: nbtGet(t, "HurtEntities", NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(t, "FallHurtAmount", NBT.FLOAT, 0), fallHurtMax: nbtGet(t, "FallHurtMax", NBT.INT, 0) });
@@ -113,9 +115,9 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       hosts.falling.entities.push(e);
     }
   } else if (id === "Boat") {
-    const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
-    boat.pitch = boat.prevPitch = Math.fround(rotation?.[1] ?? 0);
-    Object.assign(boat, base); // b83 cmdexec83: Fire, OnGround, FallDistance, Invulnerable
+    const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: Math.fround((rotation?.[0] ?? 0) % 360), /* b87 summon87: setRotation's yaw % 360 */ vx: motion[0], vy: motion[1], vz: motion[2] });
+    boat.pitch = boat.prevPitch = Math.fround((rotation?.[1] ?? 0) % 360);
+    Object.assign(boat, base, uuidFields(t)); // b83 cmdexec83: Fire, OnGround, FallDistance, Invulnerable; b87 summon87: UUIDMost/Least
     vehicle = boat;
   } else if (id === "Painting" || id === "ItemFrame") {
     // EntityHanging.readEntityFromNBT: a numeric "Direction" wins over the pre-1.2 "Dir" (0 to 3 mapped 2, 1, 0, 3; anything else leaves 0); then

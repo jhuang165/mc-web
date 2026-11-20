@@ -236,6 +236,7 @@ import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, 
 import { awayCatchUp } from "./away-track.js"; // batch 60: the tracker ticks of the entities that stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
+import { entityBaseSave, entityBaseRestore } from "./entity-base-nbt.js"; // b87 summon87
 import { TntRenderer } from "./tnt-renderer.js";
 import { finishDrinking as finishBucketDrinking, rayTraceBlocks } from "./buckets.js";
 import { finishDrinkingItem } from "./potion-use.js";
@@ -1402,7 +1403,7 @@ function save() {
   active.fireballs = [...(mobs?._fireballs?.serialize(world.dimension ?? 0) ?? []), ...(mobs?._skulls?.serialize(world.dimension ?? 0) ?? [])]; // fireballs.js; tagged with the dimension they fly in
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
-  active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0 })); // b82 fireext82: Entity's Fire (moveEntity's counter)
+  active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse, fire: e.fire | 0, ...entityBaseSave(e) })); // b82 fireext82: Entity's Fire (moveEntity's counter); b87 summon87: Entity.writeToNBT's other keys (entity-base-nbt.js)
   active.weather = weather.saveWeather(); // while in the Nether/End: the Overworld's timers, which keep running (weather.js awayOverworld)
   active.bed = bedSleep.save();
   active.flying = flying && survival.creative ? true : undefined;
@@ -2038,7 +2039,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     fishing.load(record.fishing);
     objectTracker = new ObjectTracker(10, Math.random, entityIds); // a fresh client world: nothing is tracked yet
     bindObjectTracker();
-    primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 })), joinedAs("tnt"));
+    primed = watchJoin((Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz, fire: Number.isInteger(t.fire) ? t.fire : 0 }, entityBaseRestore(t))), joinedAs("tnt"));
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);

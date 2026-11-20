@@ -9,6 +9,7 @@ import { fromOriginal } from './block-registry.js';
 import { TNT_Y_OFFSET } from './explosion.js';
 import { FALLING_Y_OFFSET } from './falling.js';
 import { nbtToJson } from './spawner-data.js';
+import { entityBaseOf, entityBaseSave } from './entity-base-nbt.js';
 
 export const JAVA_OBJECTS = Object.freeze({ XPOrb: 'xpOrbs', PrimedTnt: 'tnt', FallingSand: 'falling' });
 export const IMPORT_OBJECT_LIMIT = { xpOrbs: 512, tnt: 1024, falling: 1024 }; // ExperienceOrbs keeps 512
@@ -62,7 +63,6 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
   // Entity.readFromNBT zeroes a motion component beyond 10.
   const [vx, vy, vz] = (numbers(entity, 'Motion', NBT.DOUBLE, 3) ?? [0, 0, 0]).map((v) => (Math.abs(v) > 10 ? 0 : v));
   const onGround = nbtGet(entity, 'OnGround', NBT.BYTE, 0) !== 0;
-  const fallDistance = Math.max(0, nbtGet(entity, 'FallDistance', NBT.FLOAT, 0));
   if (id === 'XPOrb') {
     // Health, Age and Value are getShort; the orb masks Health with 255. Native keeps every Value (0 and above 2477 too: Executed, object-nbt-reference.json
     // XPOrb Value 0 and Health 0 rows load and save back unchanged) and a Health 0 orb until it is hit; only an Age of 6000 or more ends on the first tick.
@@ -73,14 +73,16 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
     const fire = nbtGet(entity, 'Fire', NBT.SHORT, 0);
     return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround, ...invulnerableFields(entity) } }; // b86 summon86: Invulnerable
   }
-  if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0), fire: nbtGet(entity, 'Fire', NBT.SHORT, 0) } }; // b82 fireext82: Entity's Fire (moveEntity's counter)
+  // b87 summon87: entityBaseOf adds Entity.readFromNBT's OnGround, raw FallDistance, Invulnerable, Air, Rotation, PortalCooldown, Dimension and UUID (entity-base-nbt.js).
+  if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0), fire: nbtGet(entity, 'Fire', NBT.SHORT, 0), ...entityBaseSave(entityBaseOf(entity)) } }; // b82 fireext82: Entity's Fire (moveEntity's counter)
   // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) wins, else Tile & 255; Data; Time.
   const original = hasNumber(entity, 'TileID') ? nbtGet(entity, 'TileID', NBT.INT, 0) : nbtGet(entity, 'Tile', NBT.BYTE, 0) & 255;
   const data = nbtGet(entity, 'Data', NBT.BYTE, 0) & 255, cell = fallingCellOf(original, data);
   if (!cell) return { lost: 'unregistered block' };
   // Any block is kept (Executed: TileID 1 loads as Tile 1; the landing places it like sand). Time is Time & 255 and may be 0: the first tick then checks the
   // block still stands at the entity's cell (Bytecode-read xj.h) instead of being skipped. DropItem is read when present (default true).
-  const record = { block: cell.id, meta: fallingMetaOf(cell, data), x, y: pos[1] - FALLING_Y_OFFSET, z, vx, vy, vz, ticks: nbtGet(entity, 'Time', NBT.BYTE, 0) & 255, onGround, fallDistance };
+  const record = { block: cell.id, meta: fallingMetaOf(cell, data), x, y: pos[1] - FALLING_Y_OFFSET, z, vx, vy, vz, ticks: nbtGet(entity, 'Time', NBT.BYTE, 0) & 255, onGround, ...entityBaseSave(entityBaseOf(entity)), fallDistance: Math.fround(nbtGet(entity, 'FallDistance', NBT.FLOAT, 0)) }; // b87 summon87: raw FallDistance, the base keys
+  { const fire = nbtGet(entity, 'Fire', NBT.SHORT, 0); if (fire) record.fire = fire; } // b87 summon87: Entity.readFromNBT's Fire, kept as read (falling.js b84 cmdfix84)
   Object.assign(record, fallingDataExtra(cell, data));
   if (cell.state?.flowing) record.flowing = true; // b79 falling79: Tile 8/10 (flowing water/lava) share the still port block; the export and drop read this back
   if (hasNumber(entity, 'DropItem')) record.dropItem = nbtGet(entity, 'DropItem', NBT.BYTE, 0) !== 0;

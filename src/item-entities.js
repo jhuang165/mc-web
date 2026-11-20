@@ -525,7 +525,7 @@ export class ItemEntities {
         if (!stack) continue;
         const e = this.spawn(stack, d.x, d.y + W, d.z, { delay: ok(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0, motion: [ok(d.mx) ? d.mx : 0, ok(d.my) ? d.my : 0, ok(d.mz) ? d.mz : 0], death: !!d.death, empty: true });
         if (!e) continue;
-        e.age = ok(d.age) ? Math.max(0, Math.min(LIFETIME - 1, d.age)) : 0;
+        e.age = ok(d.age) ? Math.max(-32768, Math.min(32767, Math.trunc(d.age))) : 0; // b87 summon87: EntityItem.readEntityFromNBT keeps any short Age, a negative one too (summon87-reference.json); 6000 or more dies on the next update
         if (ok(d.hover)) e.hover = d.hover;
         if (typeof d.owner === "string" && d.owner) e.owner = d.owner.slice(0, 64); // EntityItem Owner (func_145797_a)
         if (typeof d.thrower === "string" && d.thrower) e.thrower = d.thrower.slice(0, 64); // EntityItem Thrower (func_145799_b), set by a Q drop

@@ -74,9 +74,13 @@ function stackNbt(s,slot,report,original=false) {
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
 const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',magma_cube:'LavaSlime',pigman:'PigZombie',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat',ender_crystal:'EnderCrystal',wither_skeleton:'Skeleton',blaze:'Blaze',ghast:'Ghast',wither:'WitherBoss',ender_dragon:'EnderDragon',giant:'Giant'};
 // b86 summon86: Entity.writeToNBT (sa.e, bytecode-read) writes the record's Invulnerable flag for every kind; EntityItem/EntityXPOrb.writeEntityToNBT write Health as (short)(byte)health.
+// b87 summon87 (bytecode-read sa.e, sa.<init>; executed summon87-reference.json): Dimension is Entity.dimension, which the constructor sets to the world's provider id
+// (-1 in DIM-1/, 1 in DIM1/) and readFromNBT overwrites (a /summon tag without one leaves 0; a record keeps it as nbtDimension), and PortalCooldown is the live timeUntilPortal
+// of every kind (boats and carts keep portalCooldown; TNT and falling blocks the read value, entity-base-nbt.js). payload() sets exportDimension for its chunk.
+let exportDimension=0;
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
- Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(e.invulnerable?1:0),PortalCooldown:int(0),...uuidTags(uuidOf(e,name==='Player'?`Player|${e.id??''}`:`${name}|${e.x}|${e.posY??e.y}|${e.z}|${e.id??''}`))};
+ Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(Number.isInteger(e.nbtDimension)?e.nbtDimension:exportDimension),Invulnerable:byte(e.invulnerable?1:0),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0),...uuidTags(uuidOf(e,name==='Player'?`Player|${e.id??''}`:`${name}|${e.x}|${e.posY??e.y}|${e.z}|${e.id??''}`))};
 }
 // Entity.writeToNBT's UUIDMost / UUIDLeast (entity-uuid.js).
 function uuidTags(uuid){const {most,least}=uuidLongs(uuid);return {UUIDMost:tag(NBT.LONG,most),UUIDLeast:tag(NBT.LONG,least)};}
@@ -90,7 +94,10 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
  if(typeof e.name==='string'&&(e.name.length>0||name==='dispensers'))n.CustomName=str(e.name); // a dispenser/dropper counts "" as named (k_ is name != null, probed)
  return new Map(Object.entries(n));
 }
-function payload(state,ox,oz,report,blockAt) {
+function payload(state,ox,oz,report,blockAt,dimension=0) {
+ exportDimension=dimension;try{return payloadIn(state,ox,oz,report,blockAt);}finally{exportDimension=0;}
+}
+function payloadIn(state,ox,oz,report,blockAt) {
  const entities=[],tiles=[],ticks=[],built=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);
@@ -313,7 +320,7 @@ async function exportRegions({record,w,owned,runtime,baseId,live=false}, files, 
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=base?base.terrainPopulated:true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=base?.biomes?base.biomes[x+z*16]:w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
   const blockAt=(x,y,z)=>chunk.getBlock(x&15,y,z&15);
-  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...specialTiles(endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt),portals),specials,pots,ox,oz,record.player?.tableNames??{})}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
+  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...specialTiles(endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt,prefix==='DIM-1/'?-1:prefix==='DIM1/'?1:0),portals),specials,pots,ox,oz,record.player?.tableNames??{})}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
   await progress();
  }

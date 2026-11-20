@@ -312,7 +312,7 @@ export class Minecarts {
     cart.onGround = ody !== dy && ody < 0;
     cart.collidedH = odx !== dx || odz !== dz;
     // updateFallState: the cart's fall() only passes it to a rider.
-    if (cart.onGround) { if (cart.fallDistance > 0) { if (cart.type === 3) V.tntFall(cart, cart.fallDistance, this.host); passFall(cart, cart.fallDistance); } cart.fallDistance = 0; }
+    if (cart.onGround) { if (cart.fallDistance > 0) { if (cart.type === 3) V.tntFall(cart, cart.fallDistance, this.host); passFall(cart, cart.fallDistance); cart.fallDistance = 0; } } // b87 summon87: Entity.updateFallState keeps a negative fallDistance on the ground
     else if (dy < 0) cart.fallDistance = f(cart.fallDistance - dy);
     if (odx !== dx) cart.vx = 0;
     if (ody !== dy) cart.vy = 0;
