@@ -22,7 +22,7 @@ const by = (c) => ref.records.filter((r) => r.case === c);
 const terrain = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const world = (recs) => {
   const w = new EntityWorld(terrain, recs.map((r, i) => ({ id: `mob-${i + 1}`, type: "pig", x: 64, y: 0, z: 64, health: 10, ...r })), () => 0.5);
-  Object.assign(w.ai.player, { x: 64, y: 0, z: 64 });
+  Object.assign(w.ai.player, { x: 64, y: 0, z: 64, placed: true }); // b86 spcopy86: the probe moves its player itself (setPosition before the world tick), not by a C03
   for (const e of w.entities) e.onGround = true;
   return w;
 };

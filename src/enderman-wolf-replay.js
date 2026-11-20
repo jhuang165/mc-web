@@ -129,6 +129,7 @@ function run(r) {
   // the rows' player motion is compared every tick (x and z).
   const x48 = /^b(4[89](pp|po)|50lb|51sf)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp") || r.name.startsWith("b46mp"), x46 = x47, b47 = r.name.startsWith("b47h");
   ew.ai.player.unticked = !x46;
+  ew.ai.player.placed = true; // b86 spcopy86: EndermanWolfProbe puts its server copy at the packet's position before the world tick (VillageFightProbe.at), not in a network tick after it
   if (x48) ew.ai.player.onGround = true; // the probe's copy starts as a grounded player (EndermanWolfProbe B46: onGround true)
   if (x46) ew.ai.player.motion.y = -0.0784000015258789; // the probe player starts as a grounded EntityLivingBase (motionY -0.0784), not on its first tick with motionY 0
   ew.ai.budget.perTick = Infinity;

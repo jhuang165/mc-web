@@ -2132,7 +2132,7 @@ const commandHost = createCommandHost({
   changed: () => { saved = false; },
   setTime: (t) => scene.setTime(t),
   setLook: (y, p) => { yaw = y; pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p)); }, // b84 cmdfix84
-  teleport: (x, y, z, look) => { if (look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch)) { yaw = look.yaw; pitch = look.pitch; } if (rider.vehicle) { const v = vehicleState(); detachPlayerVehicle(v); applyVehicleState(v); } position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; }, // b83 cmdexec83: CommandTeleport dismounts a riding player first; the mount stays (executed)
+  teleport: (x, y, z, look) => { if (look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch)) { yaw = look.yaw; pitch = look.pitch; } if (rider.vehicle) { const v = vehicleState(); detachPlayerVehicle(v); applyVehicleState(v); } position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; mobs?.ai?.player?.setLocation?.(position); /* b86 spcopy86: CommandTeleport (bv.b) -> setPlayerLocation: the copy is moved by the server and waits for the C06 */ }, // b83 cmdexec83: CommandTeleport dismounts a riding player first; the mount stays (executed)
   setDifficulty: (d) => { options.difficulty = difficultySetting(d); updateDifficulty(); try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {} },
   lan: () => lan.open,
   shareToLan: (mode, cheats) => lan.share(mode, cheats),
@@ -2297,6 +2297,7 @@ function bedWake(resetTimer, setSpawn, leaveScreen = true) {
   position.set(feet.x, feet.y, feet.z);
   previous.copy(position);
   velocity.set(0, 0, 0);
+  mobs?.ai?.player?.setLocation?.(position); // b86 spcopy86: wakeUpPlayer (mw.a(ZZZ)) -> setPlayerLocation
   hideBedScreen();
   saved = false;
   if (leaveScreen && screen === "inventory" && !containerView) resume();
@@ -3279,6 +3280,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
         teleport:({from,to})=>{
           // Count the physical movement preceding the teleport, not its displacement.
           oldPosition.x+=to.x-from.x;oldPosition.y+=to.y-from.y;oldPosition.z+=to.z-from.z;
+          mobs?.ai?.player?.setLocation?.(to); // b86 spcopy86: EntityEnderPearl -> mw.setPositionAndUpdate -> setPlayerLocation
         },
         markUnsaved:()=>{saved=false;},
       });
@@ -4925,7 +4927,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, eyes, rockets, get objectTracker() { return objectTracker; }, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
+    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); mobs?.ai?.player?.setLocation?.(position); }, items, projectiles, arrows, eyes, rockets, get objectTracker() { return objectTracker; }, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).

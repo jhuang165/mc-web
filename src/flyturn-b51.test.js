@@ -29,6 +29,7 @@ function compare(s, e, t, check) {
 for (const s of ref.scenarios.filter((x) => x.kind === "ghastTurn")) {
   test(`b51ft ghast ${s.name}: yaw, body yaw and head yaw per tick`, () => {
     const w = new EntityWorld(air, [], () => 0.5), surv = new Survival({}), creative = new Survival({}, "creative");
+    w.ai.player.placed = true; // b86 spcopy86: the probe sets its player where the scenario says before each world tick, not by a C03 processed after it
     const e = w.create("ghast", 64.5, 40, 64.5);
     w.entities.push(e); e.health = ENTITY_TYPES[e.type].health;
     for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = 0;
