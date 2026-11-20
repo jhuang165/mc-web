@@ -22,6 +22,8 @@ export function idleActivity(message, prev, chatAllowed = true) {
   const type = message?.type;
   if (type === 'input') {
     const c = message.controls ?? {}, next = { current: message.current, sneak: !!c.sneak, sprint: !!c.sprint };
+    // b86 seat86: a riding client (`ride`, the C0C) sends no C0B: bjk.h skips sendMotionUpdates while riding, so its remembered sneak / sprint (bW / bX) stay as they were.
+    if (message.ride && typeof message.ride === 'object' && prev) { next.sneak = prev.sneak; next.sprint = prev.sprint; }
     // The first input only sets the baseline: the client sent no C09 / C0B for it.
     const reset = !!prev && (prev.current !== next.current || prev.sneak !== next.sneak || prev.sprint !== next.sprint);
     return { reset, state: next };

@@ -79,7 +79,7 @@ import { loadVillages, saveVillages } from './server-villagers.js'; // b66 mpvil
 import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerTrade, installTrade } from './server-trade.js'; // b66 mptrade: villager trading windows
-import { ServerVehicles } from './server-vehicles.js'; // b61: minecarts, boats and riding
+import { ServerVehicles, takeRide } from './server-vehicles.js'; // b61: minecarts, boats and riding; b86 seat86: takeRide (the C0C)
 import { ObjectTracker } from './server-object-tracker.js'; // b71 mptrackers71: per-player item and orb tracking
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { velocityField } from './server-velocity.js'; // b77 mpvelocity77
@@ -291,6 +291,7 @@ export class DedicatedSimulation {
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
     if (!p.window && !this.serverItems.adopt(p, message)) return false; // an open container window owns the server inventory (server-containers.js)
     Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
+    takeRide(p, message.ride); // b86 seat86: a riding client's C0C
     p.survival.inventory.current = message.current;
     return true;
   }

@@ -15,7 +15,8 @@
 import { serverRiderFall } from './server-rider-fall.js';
 import { Minecarts } from '../minecarts.js';
 import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
-import { Boats } from '../boats.js';
+import { Boats, boatClearCell } from '../boats.js';
+import { makeStack } from '../inventory.js';
 import { registerBoatWorld, worldBoatBoxes } from '../entity-collision.js';
 import { EntityIds } from '../entity-ids.js';
 import { placeHeldMinecart } from '../vehicle-simulation.js';
@@ -50,6 +51,25 @@ export function vehicleState(v) {
   return s;
 }
 
+// b86 seat86: the C0C of a riding client (remote-vehicles.js riderPacket): { s: moveStrafing, f: moveForward, j: jump, k: sneak }, or null when the message carries none.
+export function cleanRide(r) {
+  if (!r || typeof r !== 'object') return null;
+  return { s: typeof r.s === 'number' ? r.s : NaN, f: typeof r.f === 'number' ? r.f : NaN, j: r.j === true, k: r.k === true };
+}
+// The `input` message's C0C half (simulation.js input): the newest one is kept on the player; `rideSeen` marks a client that sends them (an older client gets the controls rule).
+export function takeRide(p, ride) { p.ride = cleanRide(ride); if (p.ride) p.rideSeen = true; }
+// NetHandlerPlayServer.processInput (nh.a(jk)) -> EntityPlayerMP.setEntityActionState (mw.a(FFZZ), bytecode-read): only while ridingEntity != null, moveStrafing and moveForward each
+// take the packet's value when it lies in [-1, 1] (else the old one stays), isJumping = jump, setSneaking(sneak). The boat reads them in the world tick that follows (the C05 before it
+// ran mw.i(), whose sv.e scaled the OLD values by 0.98F, then the C0C overwrote them), so a server boat steers on the client's newest C0C.
+export function applyRide(rider, r) {
+  if (r.s >= -1 && r.s <= 1) rider.moveStrafing = f(r.s);
+  if (r.f >= -1 && r.f <= 1) rider.moveForward = f(r.f);
+  rider.jumping = r.j;
+}
+// b86 seat86: AUX range of WorldManager.playAuxSFX (mp.a(yz, IIIII)): S28 through ServerConfigurationManager.sendToAllNearExcept(null, x, y, z, 64, dim): squared distance from the
+// int corner to the player's position under 64 * 64, nobody excluded.
+const AUX_RANGE_SQ = 64 * 64;
+
 export class ServerVehicles {
   // `host` is the DedicatedSimulation (world, players, items, mobs, soundsOut, achievements, actions).
   constructor(host, saved = null) {
@@ -76,6 +96,12 @@ export class ServerVehicles {
     this.pigs = new ServerRiding(host, this); // b62: saddled pigs (server-riding.js)
     this.horses = new ServerHorses(host, this); // b76 mphorse76: horses, donkeys, mules (server-horses.js)
     this.views = new Map(); // player id -> { known: Map(key -> JSON), sent: Set(key) }
+    // b86 seat86: xi.h's snow and lily pad clears on the server world (boats.js boatClearCell): a lily pad sends its 2001 to this dimension's players within 64 blocks (the rider too)
+    // and drops itself; a snow layer is only set to air. Before, both were a plain set (no particles for anyone, no lily pad item).
+    this.boatHooks = { clear: (x, y, z, block) => boatClearCell(host.world, x, y, z, block, {
+      aux: (id, ax, ay, az, data) => { for (const p of this.host.players.values()) { const dx = ax - p.position.x, dy = ay - p.position.y, dz = az - p.position.z; if (dx * dx + dy * dy + dz * dz < AUX_RANGE_SQ) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id, x: ax, y: ay, z: az, data }] }); } },
+      drop: (stacks, dx, dy, dz) => this.host.items?.dropBlock?.(stacks.map(st => makeStack(st.id, st.count, st.damage)), dx, dy, dz),
+    }) };
   }
   // b62: the rail redstone (powered, detector and activator rails: powered-rails.js) and the detector rail's cart touch. The dedicated world never installed them before.
   connect(redstone) {
@@ -236,9 +262,13 @@ export class ServerVehicles {
     for (const p of host.players.values()) {
       const m = p.mount;
       if (!m) continue;
-      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead || p.input?.sneak) { this.dismount(p); continue; }
-      const input = moveInput({ forward: p.input?.forward ?? 0, strafe: p.input?.strafe ?? 0 }); // not slowed: a rider is not using an item (bytecode-read blk.e)
-      Object.assign(m.rider, { yaw: f(180 - p.yaw * 180 / Math.PI), moveForward: f(input.forward * f(0.98)), moveStrafing: f(-input.strafe * f(0.98)), dead: false });
+      // b86 seat86: a client that sends the C0C (p.ride) dismounts on its sneak (setSneaking, then EntityPlayer.updateRidden's `!isRemote && isSneaking()`) and steers with its
+      // moveForward / moveStrafing (applyRide); a tick without one keeps the old values and its sneak is the C0B's (the controls). An older client that never sent a C0C keeps the controls rule.
+      const ride = p.ride ?? null;
+      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead || (ride ? ride.k : p.input?.sneak)) { this.dismount(p); continue; }
+      if (ride) applyRide(m.rider, ride);
+      else if (!p.rideSeen) { const input = moveInput({ forward: p.input?.forward ?? 0, strafe: p.input?.strafe ?? 0 }); Object.assign(m.rider, { moveForward: f(input.forward * f(0.98)), moveStrafing: f(-input.strafe * f(0.98)) }); } // not slowed: a rider is not using an item (bytecode-read blk.e)
+      Object.assign(m.rider, { yaw: f(180 - p.yaw * 180 / Math.PI), dead: false }); // the C05's rotationYaw (processPlayer's riding branch takes the packet's angles)
       if (m.mob?.type === 'horse') this.horses.input(p); // b76 mphorse76: the jump bar
     }
   }
@@ -247,7 +277,7 @@ export class ServerVehicles {
     // Blockers: every player (a rider excludes its own vehicle through `ref`) and every living mob.
     const blockers = [...host.players.values()].map(p => ({ bb: this.playerBox(p), ref: p.mount?.rider ?? p })).concat(this.boxesOfMobs());
     this.carts.tick(world, { entities: [...blockers, ...this.boats.carts.filter(b => !b.dead).map(b => ({ bb: b.bb, ref: b }))], host: this.cartHost });
-    this.boats.tick(world, { entities: [...blockers, ...this.carts.carts.filter(c => !c.dead).map(c => ({ bb: c.bb, ref: c }))] });
+    this.boats.tick(world, { entities: [...blockers, ...this.carts.carts.filter(c => !c.dead).map(c => ({ bb: c.bb, ref: c }))], hooks: this.boatHooks });
     // EntityLivingBase.collideWithNearbyEntities: players and mobs against the vehicles; the vehicle moves too (collide adds its side).
     for (const system of [this.carts, this.boats]) {
       if (!system.carts.length) continue;
