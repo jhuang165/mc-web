@@ -143,7 +143,7 @@ test("mobrec86 conversion: a converting record diverges when replayed on Easy (t
   for (const r of fightRef.records.filter((x) => x.types === "VZ" && x.difficulty === 3)) assert.notEqual(JSON.stringify(firstDivergence(r, replayFight({ ...r, difficulty: 1 }))), "null", r.name);
 });
 
-// 3. A zombie pigman fight (the same probe, names b86-pigman-*): angered by the player's hit at tick 5 it runs at the held player and strikes (7.5 on Normal, 1000-health probe
+// 3. A zombie pigman fight (the same probe, names b86-pigman-*): angered by the player's hit at tick 5 it runs at the held player and strikes (7.5 on Hard: all four records, the d2 names too, ran with difficulty 3 (b87 mobrec87); 1000-health probe
 //    player), the player's lethal hit at tick 50 kills it, the recentlyHit drops and the deathTime 20 orbs.
 test("mobrec86 pigman: the records anger, strike the player and drop loot", () => {
   const pig = fightRef.records.filter((r) => r.types === "P");

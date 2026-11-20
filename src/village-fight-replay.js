@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
-import { EntityWorld, setEntityRandom } from "./entities.js";
+import { EntityWorld, setEntityRandom, ENTITY_TYPES } from "./entities.js";
+import { anchoredShrunkBox } from "./mob-spawner.js";
 import { Survival } from "./survival.js";
 import { WOODEN_DOOR, WATER, LAVA, WEB, FENCE, STONE_SLAB } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
@@ -47,6 +48,9 @@ export const fightReference41 = JSON.parse(readFileSync(new URL("../public/resea
 export const fightReference85 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b85-reference.json", import.meta.url)));
 // Batch 86: village-fight-b86-reference.json (a villager killed by a zombie on Easy, Normal and Hard: EntityZombie.onKillEntity, `conversions` and `zombies`; a zombie pigman fight with `loot`; the b85 fields with the b38 legacy rows and `bright`).
 export const fightReference86 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b86-reference.json", import.meta.url)));
+// Batch 87: village-fight-b87-reference.json (zombie pigmen on Easy and Normal, a group whose anger spreads to the pigmen within 32 blocks, pigmen killed by an iron golem; a villager
+// killed by a baby zombie (script op `baby k`: EntityZombie.setChild(true)) and by a zombie villager, on Easy, Normal and Hard).
+export const fightReference87 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b87-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -247,6 +251,11 @@ function replayFightUncapped(r, hooks) {
       else if (p[1] === "sneak") ew.ai.player.sneaking = p[3] === "on"; // the host sets the view's flag (living-simulation.js)
       else if (p[1] === "adventure") survival.mode = p[3] === "on" ? "adventure" : "survival"; // GameType 2: disableDamage stays false, so mobs target it as in survival
       else if (p[1] === "zvillager") ents[Number(p[2])].villager = true;
+      else if (p[1] === "baby") { // EntityZombie.setChild(true) (yq.i): the baby speed modifier, and setSize keeps the box's minimum corner (the centre moves on the first move)
+        const e = ents[Number(p[2])], w = ENTITY_TYPES[e.type].width, h = ENTITY_TYPES[e.type].height;
+        e.growingAge = -1;
+        e.spawnBox = anchoredShrunkBox(e, w, h, w * 0.5, h * 0.5); e.spawnBoxTick = (ew.worldTicks ?? -1) + 1; e.anchorBox = e.spawnBox.slice();
+      }
       else if (p[1] === "fire") setMobFire(ents[Number(p[2])], Number(p[3])); // Entity.setFire
       else if (p[1] === "convert") ew.startZombieConversion(ents[Number(p[2])], Number(p[3]));
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);

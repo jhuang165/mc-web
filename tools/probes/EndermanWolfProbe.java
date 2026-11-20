@@ -60,7 +60,7 @@ public class EndermanWolfProbe {
     public double nextDouble() { double r = super.nextDouble(); if (!inGauss) log.add("d"); return r; }
     public double nextGaussian() { inGauss = true; try { return super.nextGaussian(); } finally { inGauss = false; } }
   }
-  static boolean B44, B45, BCW, B46, B47, B47H, B48;
+  static boolean B44, B45, BCW, B46, B47, B47H, B48, B87W;
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
     wi h = new wi(w);
@@ -299,6 +299,17 @@ public class EndermanWolfProbe {
         VillageFightProbe.update(e);
         if (B47H && e instanceof wi && e.l != null) ((wi) e).ac(); // World.updateEntityWithOptionalForce then updates the rider: Entity.updateRidden -> updateRiderPosition (the probe never ticks its player)
       }
+      // Batch 87 (mobrec87, b87wf): the witch's EntityPotion (zo) entities update after the mobs in spawn order, as World.loadedEntityList orders them (a potion thrown this tick
+      // joins the list during the witch's update and updates in the same pass): EntityThrowable.onUpdate, the hit on the player and EntityPotion.onImpact's effects. Row element 6 is
+      // [[potion k, x, y, z, motion x, y, z, dead] for every potion that updated, [the player's active effects [id, duration, amplifier] by id]].
+      StringBuilder pots = new StringBuilder();
+      if (B87W) for (int k = 0, pk = 0; k < VillagerProbe.World.spawned.size(); k++) {
+        Object o = VillagerProbe.World.spawned.get(k);
+        if (!(o instanceof zo)) continue;
+        sa e = (sa) o;
+        if (!e.K) { e.aa++; VillageFightProbe.update(e); pots.append(pots.length() > 0 ? "," : "").append("[").append(pk).append(",").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append(",").append(VillageFightProbe.num(e.v)).append(",").append(VillageFightProbe.num(e.w)).append(",").append(VillageFightProbe.num(e.x)).append(",").append(e.K ? 1 : 0).append("]"); }
+        pk++;
+      }
       // Batch 48 (pistonpush): World.updateEntities' tile entity pass: every moving piston block updates (TileEntityPiston.updateEntity, aps.h) after the entities and before the network tick; it pushes whatever is in its box with Entity.moveEntity.
       if (B48) for (aps tile : new ArrayList<>(EW.pistons.values())) tile.h();
       // Batch 46 (mobpush): the network tick after the world tick: EntityPlayerMP.onUpdateEntity (mw.i) runs the real EntityPlayer.onUpdate (onLivingUpdate, motion, collideWithNearbyEntities) on the probe player.
@@ -329,6 +340,13 @@ public class EndermanWolfProbe {
       if (B45) row.append(",[" + kids + "]");
       if (BCW) row.append(",").append(extras(spawnedSeen, cellsBefore, player, ents)); // creeperwitch: [explosions, spawned entities, changed cells, player motion]
       if (BCW) spawnedSeen = VillagerProbe.World.spawned.size();
+      if (B87W) {
+        java.util.TreeMap<Integer, rw> fx = new java.util.TreeMap<>();
+        for (Object o : player.aQ()) fx.put(((rw) o).a(), (rw) o);
+        StringBuilder es = new StringBuilder();
+        for (rw x : fx.values()) es.append(es.length() > 0 ? "," : "").append("[").append(x.a()).append(",").append(x.b()).append(",").append(x.c()).append("]");
+        row.append(",[[").append(pots).append("],[").append(es).append("]]");
+      }
       if (B46) row.append(",").append(gBefore).append(",").append(VillageFightProbe.num(cpy));
       if (B47) row.append(",[").append(VillageFightProbe.num(player.s)).append(",").append(VillageFightProbe.num(player.t)).append(",").append(VillageFightProbe.num(player.u)).append("]"); // row element 8: the server copy's position after the tick // row elements 6 and 7: whether the server copy was onGround when its update began and its y at the start of the tick (the client reports it in the position packet; the replay feeds it as input)
       if (B48) { // row element 9: the moving piston blocks left after the tick [x, y, z, progress, lastProgress]
@@ -378,8 +396,9 @@ public class EndermanWolfProbe {
     B48 = args.length > 0 && (args[0].equals("b48pp") || args[0].equals("b49po") || args[0].equals("b50lb") || args[0].equals("b51sf"));
     B47 = B48 || (args.length > 0 && (args[0].equals("b47sp") || args[0].equals("b46mp"))); // b50: the b46mp scenarios run under the b47 client / server-copy rules (client position, C03 packets, ticksExisted counted by the world tick)
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
-    BCW = B46 || (args.length > 0 && args[0].equals("b45cw"));
+    B87W = args.length > 0 && args[0].equals("b87wf");
+    BCW = B46 || B87W || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B87W) EndermanWolfScenarios.run87(); else if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

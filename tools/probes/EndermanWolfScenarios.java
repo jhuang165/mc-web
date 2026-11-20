@@ -201,6 +201,15 @@ public class EndermanWolfScenarios {
   // Batch 45 (creeperwitch): creeper swell, ignition, lightning, explosion and death drops, and the witch's potion throws, drinking and drops, with a survival player (health scaled by difficulty), on the real
   // EntityPlayerMP. Rows carry [explosions, spawned entities, changed cells, player motion] after the b44 row elements (EW_SET=b45cw). Ops added: difficulty n | grief on|off | power idx | bolt idx | fire idx seconds |
   // arrowkill idx dmg (a skeleton's arrow) | effect idx potionId ticks. Items: 259 flint and steel, 268 wooden sword. X creeper, K witch, Z zombie, C cow, P pig.
+  // Batch 87 (mobrec87, b87wf): a witch fight against the probe player on the b45cw harness, with the thrown EntityPotion entities updated after the mobs (EndermanWolfProbe B87W):
+  // the potions fly, hit the unticked player (its effects never run out, so the witch's next choice sees them: slowness from 8 blocks, then poison, then harming) and splash it.
+  // fight: a witch 10 and 7 blocks away throwing; melee: the player's blows (the unticked player's attack attribute never takes the held sword's modifier: 1 damage) hurt it at
+  // ticks 30 and 90 (it drinks healing while hurt), then a blow kills it at tick 141 (drops, orbs).
+  static void run87() throws Exception {
+    sc("b87wf-witch-fight-8801", 8801, 200, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    sc("b87wf-witch-fight-near-8803", 8803, 200, "K", new double[][] {{71.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
+    for (int sd : new int[] {8811, 8812}) sc("b87wf-witch-melee-" + sd, sd, 165, "K", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "30 melee 0", "90 melee 0", "140 health 0 1", "141 melee 0");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

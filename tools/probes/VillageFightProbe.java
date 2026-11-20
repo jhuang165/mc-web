@@ -60,7 +60,7 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-"); } // batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-"); } // batch 87: b87-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
   static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
@@ -232,7 +232,8 @@ public class VillageFightProbe {
           case "invisible": player.d(p[3].equals("on")); break; // batch 41: Entity.setInvisible (flag 5 of the data watcher)
           case "sneak": player.b(p[3].equals("on")); break; // Entity.setSneaking (flag 1)
           case "adventure": ServerPlayerProbe.gameType((ServerPlayerProbe.PM) player, p[3].equals("on") ? ahk.d : ahk.b); break; // batch 39: "t creative 7 on|off" the probe player's PlayerCapabilities.disableDamage and isCreativeMode (the player has the index types.length)
-          case "zvillager": ((yq) ents[Integer.parseInt(p[2])]).j(true); break; // batch 85: "t zvillager k" EntityZombie.setVillager(true)
+          case "zvillager": ((yq) ents[Integer.parseInt(p[2])]).j(true); break;
+          case "baby": ((yq) ents[Integer.parseInt(p[2])]).i(true); break; // batch 87: "t baby k" EntityZombie.setChild(true): data watcher 12, the baby speed boost modifier (+0.5, operation 1), the half-size box // batch 85: "t zvillager k" EntityZombie.setVillager(true)
           case "convert": MobMoveProbe.method(yq.class, "a", int.class).invoke(ents[Integer.parseInt(p[2])], Integer.parseInt(p[3])); break; // batch 85: "t convert k ticks" EntityZombie.startConversion (yq.a(int)): the timer, Weakness off, Strength on
           case "fire": ((sa) ents[Integer.parseInt(p[2])]).e(Integer.parseInt(p[3])); break; // batch 85: "t fire k seconds" Entity.setFire
           case "walk": vel[Integer.parseInt(p[2])] = new double[] {Double.parseDouble(p[3]), Double.parseDouble(p[4])}; break;
@@ -294,7 +295,7 @@ public class VillageFightProbe {
             mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : sp instanceof yl ? 1 : 2) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
             extraMobs.add(m); arrowList.add(m); ticking.add(m);
             if (!VillagerProbe.World.entities.contains(m)) VillagerProbe.World.entities.add(m);
-          } else if ((name.startsWith("b85-") || name.startsWith("b86-")) && !(sp instanceof yq)) {
+          } else if ((name.startsWith("b85-") || name.startsWith("b86-") || name.startsWith("b87-")) && !(sp instanceof yq)) {
             // batch 85: items and experience orbs the tick spawned (a corpse's drops), as [tick, class, x, y, z]
             sa o = (sa) sp; lootRecs.add("[" + t + "," + q(o.getClass().getSimpleName()) + "," + num(o.s) + "," + num(o.t) + "," + num(o.u) + "]");
           } else if (sp instanceof yq) {
@@ -401,7 +402,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") || name.startsWith("b86-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") || name.startsWith("b86-") || name.startsWith("b87-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -968,6 +969,39 @@ public class VillageFightProbe {
     difficulty = 3;
     scenario("b86-pigman-d3-8623", 8623, 80, "P", pigPos, new String[] {"5 hit 0 1 1.0 player", "50 hit 0 1 100.0 player"});
     difficulty = 2;
+    difficulty = 2;
+    // Batch 87 mobrec87 (names b87-*, the b86 layout). Note: the b86-pigman-d2-* records above ran on Hard (difficulty was still 3 from the conversion loop); their
+    // `difficulty` field says so. b87-pigman-normal-* is the Normal record.
+    // Zombie pigmen: on Easy and Normal (angered at tick 5, strikes the held player, killed at tick 50); a group of three (the player's hit on pigman 0 angers every
+    // EntityPigZombie within the 32-block box (yh.a(ro, float): becomeAngryAt), the far one at x 98.5 stays calm until its own hit; the player kills them one by one);
+    // and a pigman killed by an iron golem (EntityAINearestAttackableTarget IMob selector; the golem's hit is causeMobDamage, so EntityMob.attackEntityFrom sets the
+    // pigman's entityToAttack to the golem but becomeAngryAt is not called; no recentlyHit: dropFewItems(false), no orbs).
+    blocks = new int[][] {}; bright = 15;
+    double[][] pigPos87 = {{60.5, 60.5}, {64.5, 60.5}};
+    difficulty = 1;
+    for (int sd : new int[] {8701, 8702}) scenario("b87-pigman-easy-" + sd, sd, 80, "P", pigPos87, new String[] {"5 hit 0 1 1.0 player", "50 hit 0 1 100.0 player"});
+    difficulty = 2;
+    scenario("b87-pigman-normal-8703", 8703, 80, "P", pigPos87, new String[] {"5 hit 0 1 1.0 player", "50 hit 0 1 100.0 player"});
+    double[][] herd87 = {{60.5, 60.5}, {62.5, 57.5}, {98.5, 60.5}, {64.5, 60.5}};
+    for (int sd : new int[] {8710, 8711}) scenario("b87-pigman-group-" + sd, sd, 130, "PPP", herd87, new String[] {"5 hit 0 3 1.0 player", "50 hit 0 3 100.0 player", "60 hit 1 3 100.0 player", "70 hit 2 3 1.0 player", "120 hit 2 3 100.0 player"});
+    difficulty = 1;
+    scenario("b87-pigman-group-easy-8712", 8712, 100, "PPP", herd87, new String[] {"5 hit 0 3 1.0 player", "60 hit 0 3 100.0 player", "70 hit 1 3 100.0 player"});
+    difficulty = 2;
+    double[][] golemPos87 = {{60.5, 60.5}, {63.5, 60.5}, {10.5, 130.5}};
+    for (int sd : new int[] {8720, 8721, 8722}) scenario("b87-pigman-golem-" + sd, sd, 60, "PG", golemPos87, new String[] {});
+    // A villager killed by a baby zombie ("0 baby 1": EntityZombie.setChild) and by a zombie villager ("0 zvillager 1"), the b86 kill set-up: both in the walled 2x1
+    // cell, a scripted 17.0 blow by the zombie at tick 1, then its own AttackOnCollide hit kills; EntityZombie.onKillEntity (yq.a(sv)) converts on Hard always, on
+    // Normal unless the killer's nextBoolean; Easy never. The new zombie is an adult zombie villager whatever the killer is (the villager is an adult).
+    int[][] pen87 = {{51, 0, 51, 54, 1, 51, 1, 0}, {51, 0, 53, 54, 1, 53, 1, 0}, {51, 0, 52, 51, 1, 52, 1, 0}, {54, 0, 52, 54, 1, 52, 1, 0}};
+    double[][] penPos87 = {{52.5, 52.5}, {53.5, 52.5}, {10.5, 130.5}};
+    for (String kind : new String[] {"baby", "zvillager"}) for (int d = 1; d <= 3; d++) {
+      difficulty = d;
+      for (int sd : d == 2 ? new int[] {8731, 8732, 8733} : new int[] {8731}) {
+        blocks = pen87;
+        scenario("b87-" + (kind.equals("baby") ? "babykill" : "zvkill") + "-d" + d + "-" + sd, sd, 30, "VZ", penPos87, new String[] {"0 " + kind + " 1", "1 hit 0 1 17.0 mob"});
+      }
+    }
+    blocks = new int[][] {};
     difficulty = 2;
   }
 }

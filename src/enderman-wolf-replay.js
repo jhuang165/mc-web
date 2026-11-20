@@ -22,6 +22,7 @@ import { liveAttribute } from "./mob-attributes.js";
 import { slimeFields } from "./slime.js";
 import { RedstoneWorld, pistonTile } from "./redstone.js";
 import { installPistons } from "./piston-live.js";
+import { entityWalkers } from "./entity-simulation.js";
 
 // Replays one EndermanWolfProbe record (public/research/enderman-wolf-b42-reference.json): the same arena, entity Randoms seeded like the probe's (seed * 10 + index) and logging their draws as
 // VillageFightProbe.Log does (nextInt(bound) "i<bound>", nextFloat "f", nextGaussian "g", nextBoolean "b", nextDouble "d"), the player a plain record the host would give the mobs (position, look, helmet,
@@ -67,11 +68,11 @@ function plain(blocks = []) {
 }
 const RAD = Math.PI / 180;
 
-export function replayEndermanWolf(r) {
+export function replayEndermanWolf(r, opts = {}) {
   const was = setPathNodeCap(Infinity);
-  try { return run(r); } finally { setPathNodeCap(was); setGameRuleSource(null); setMovingBoxes(null); }
+  try { return run(r, opts); } finally { setPathNodeCap(was); setGameRuleSource(null); setMovingBoxes(null); }
 }
-function run(r) {
+function run(r, opts) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = 2;
@@ -116,15 +117,25 @@ function run(r) {
   // Batch 45 (creepers and witches): rows carry a fifth element [explosions, spawned entities, changed cells, player motion]; the arena also needs the
   // item, orb and explosion machinery, the witch's potion list (seeded per throw from the record) and the gamerule mobGriefing.
   const xcw = r.rows[0][5] !== undefined && !r.init; // the horse set (b45, record.init) also has a sixth row element
+  const x87 = r.name.startsWith("b87wf"); // b87 mobrec87: the potions fly too (EndermanWolfProbe B87W), after the mobs in the loaded-entity walk
   const items = new ItemEntities(() => 0.5), orbs = new ExperienceOrbs([], () => 0.5), pv = { x: 0, y: 0, z: 0 };
   const potionSeeds = [];
   let grief = true;
   if (xcw) {
     setGameRuleSource((name) => (name === "mobGriefing" ? grief : ruleOn(null, name)));
-    ew.potions = new WitchPotions(ew, () => potionSeeds.shift() / 2 ** 48);
-    ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; // the probe never flies a potion it spawned: the record keeps the launch
+    ew.potions = new WitchPotions(ew, () => (potionSeeds.length ? potionSeeds.shift() : 0) / 2 ** 48); // an impact's glass sound pitch also takes a random (the client world's, natively): it gets 0
+    if (!x87) { ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; } // the probe never flies a potion it spawned: the record keeps the launch
   }
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
+  const thrown = [];
+  let reported = 0;
+  if (x87) { // the potion walk of the live game (entity-simulation.js entityWalkers, kind potion only): each potion updates where World.loadedEntityList has it, after the witch that threw it
+    const wstate = { world: ew.world, mobs: ew, position: player, survival };
+    ew.walks = entityWalkers(() => ({ state: wstate, hooks: {} }));
+    for (const k of [...ew.walks.keys()]) if (k !== "potion" || opts.frozenPotions) ew.walks.delete(k); // opts.frozenPotions (tests): the b86 replay, where a thrown potion never moves
+    const throwAt = ew.potions.throwAt.bind(ew.potions);
+    ew.potions.throwAt = (e, target) => { const b = throwAt(e, target); if (b) thrown.push(b); return b; };
+  }
   // Batch 46 (mobpush): the probe also ticks its player like EntityPlayerMP.onUpdateEntity after the mobs (the world's player collision and motion) and puts the server copy back at the client's place;
   // the rows' player motion is compared every tick (x and z).
   const x48 = /^b(4[89](pp|po)|50lb|51sf)/.test(r.name), x47 = x48 || r.name.startsWith("b47sp") || r.name.startsWith("b46mp"), x46 = x47, b47 = r.name.startsWith("b47h");
@@ -258,7 +269,7 @@ function run(r) {
       ew.events.unshift(...pending);
       for (let i = 0; i < ew.events.length; i++) {
         const ev = ew.events[i];
-        if (ev.sound) sounds.push([ev.sound, ev.volume, ev.pitch]);
+        if (ev.sound && !(x87 && ev.splashBreak)) sounds.push([ev.sound, ev.volume, ev.pitch]); // b87: world event 2002's glass sound is the client's (the probe's playAuxSFX records no sound)
         if (ev.xp) orbs.spawn(ev.xp, ev.position);
         if (ev.explode) boom(ev);
         if (ev.drop) items.dropMob(ev.drop, ev.count, ev.position, ev.damage, ev);
@@ -285,12 +296,18 @@ function run(r) {
       for (const it of items.items.splice(0)) spawned.push(["item-port", it.stack.id, it.stack.damage ?? 0, it.stack.count, it.x, it.y + 0.125, it.z]);
       for (const o of orbs.orbs.splice(0)) spawned.push(["xp", o.value, o.x, o.posY, o.z]);
       for (const _ of primed.splice(0)) spawned.push(["other", "xw"]); // EntityTNTPrimed (xw) a blast chained
-      for (const b of ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]);
+      for (const b of x87 ? thrown.slice(reported) : ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]); // b87: the probe prints a new potion after its first update; the flying ones stay in the list
+      reported = thrown.length;
       const pm = ew.ai.player.motion; // b46mp: the server copy's motion (mob pushes, hits, blasts); the older sets: the blasts' push on `pv` only
       state.push([booms.slice(), spawned, cells.slice(), [pm.x, pm.y, pm.z]]);
       state.gone = [...gone];
       state.pos = [ew.ai.player.x, ew.ai.player.y, ew.ai.player.z]; // b47sp: where the server copy rests
       if (x48) state.pistons = rw.pistonTiles().map((t) => [t.x, t.y, t.z, t.progress, t.lastProgress]);
+      if (x87) { // row element 6: [[k, x, y, z, motion, dead] of each potion that updated, [the player's effects [id, duration, amplifier]]]
+        const live = thrown.map((b, k) => [k, b]).filter(([, b]) => !b.deadBefore); // in the air at the tick's start, or thrown during it (it joins the walk and updates in this pass)
+        state[6] = [live.map(([k, b]) => [k, b.x, b.y, b.z, b.mx, b.my, b.mz, b.dead ? 1 : 0]), [...survival.effects.active.values()].sort((a, b) => a.id - b.id).map((e) => [e.id, e.duration, e.amplifier])];
+        for (const b of thrown) if (b.dead) b.deadBefore = true;
+      }
     }
     states.push(state);
   }
@@ -336,6 +353,10 @@ export function firstDivergence(r, got) {
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
     if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
+    if (r.name.startsWith("b87wf")) { // b87 mobrec87: the flying potions and the player's effects (row element 6)
+      if (!deepSame(want[6][0], have[6][0])) return [t, "potions", want[6][0], have[6][0]];
+      if (!deepSame(want[6][1], have[6][1])) return [t, "player effects", want[6][1], have[6][1]];
+    }
   }
   return null;
 }
