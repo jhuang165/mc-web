@@ -57,6 +57,20 @@ export function cellBoxesOf(id, cellFn) {
   return consts[id] = c;
 }
 export const resetCellBoxes = () => consts.fill(undefined);
+// b86 mpperf86: the same per-id probe for another cell function (item-entities.js boxes: World.solid, then collisionBoxList), with its own table.
+export function constCellTable(cellFn) {
+  const table = new Array(4096);
+  return (id) => {
+    let c = table[id];
+    if (c !== undefined) return c;
+    c = null;
+    if (Number.isInteger(id) && id > 0 && id < 4096 && !SIDE_EFFECT_IDS.has(id)) {
+      const a = probeOnce(id, cellFn, 0, 64, 0), b = a && probeOnce(id, cellFn, 37, 5, -21);
+      if (a && b && sameBoxes(a, b)) c = a;
+    }
+    return table[id] = c;
+  };
+}
 
 // ---- 2. the block scan with constant cells and pooled boxes ----
 export class BoxPool {

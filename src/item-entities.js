@@ -20,9 +20,53 @@ import { freshEntityRandom, gaussianFrom } from "./java-random.js";
 import { orderTargets } from "./candidate-order.js"; // b73
 import { fast83, pickupHits, sameTargets, fail83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { mhSin, mhCos } from "./lighting.js";
+import { World, WATER } from "./world.js";
+import { BoxPool, constCellTable, lavaIn } from "./mpperf81-fast.js";
+import { fast86, fail86 } from "./mpperf86-fast.js"; // b86 mpperf86
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround, PI_F = Math.fround(Math.PI);
+
+// b86 mpperf86: item move's scratch (one non-nested call at a time), the block cells' constant boxes and the reused collision hooks.
+const NO_BOXES = Object.freeze([]);
+const itemCell = (w, x, y, z) => (w.solid(x, y, z) ? collisionBoxList(w, x, y, z) : NO_BOXES);
+const itemCells = constCellTable(itemCell);
+// The collision hooks of move's tail (the reference builds one literal with two closures and a getter per call).
+class ItemHooks86 {
+  constructor() { this.owner = null; this.e = null; this.wetIn = false; this.rain = null; }
+  hurt(source, amount) { return this.owner.hurt(this.e, amount); }
+  get wet() { const e = this.e; return entityWet(this.wetIn, this.rain, e.x, e.y + W, e.z, H); }
+  fizz() {
+    const e = this.e, it = this.owner, r = it.rng(e);
+    it.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+  }
+}
+const MOVE86 = { busy: false, pool: new BoxPool(), list: [], box: [0, 0, 0, 0, 0, 0], hit: [0, 0, 0, 0, 0, 0], hooks: new ItemHooks86() };
+// ItemEntities.boxes into `list` (the moving-block boxes, then each solid cell's boxes as pooled arrays, valid until the next call).
+function itemBoxesInto(world, x0, y0, z0, x1, y1, z1, list, pool) {
+  list.length = 0; pool.reset();
+  const mv = movingBoxes([x0, y0, z0, x1, y1, z1], world);
+  for (let k = 0; k < mv.length; k++) list.push(mv[k]);
+  const xa = Math.floor(x1 + 1), ya = Math.floor(y1 + 1), za = Math.floor(z1 + 1);
+  for (let bx = Math.floor(x0); bx < xa; bx++)
+    for (let by = Math.floor(y0) - 1; by < ya; by++)
+      for (let bz = Math.floor(z0); bz < za; bz++) {
+        const id = world.get(bx, by, bz);
+        if (id === 0) continue; // air is never solid
+        const local = itemCells(id) ?? itemCell(world, bx, by, bz);
+        for (let k = 0; k < local.length; k++) {
+          const l = local[k], a = l[0], b = l[1], c = l[2], d = l[3], e = l[4], g = l[5];
+          if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) list.push(pool.box(bx + a, by + b, bz + c, bx + d, by + e, bz + g));
+        }
+      }
+  return list;
+}
+// tickOne's World.handleMaterialAcceleration pre-test on the item's own box (unshrunk): no water cell in the scanned range means { wet: false, push: [0, 0, 0] }.
+function dryItem(world, e) {
+  const ax = Math.floor(e.x - W), bx = Math.floor(e.x + W + 1), ay = Math.floor(e.y), by = Math.floor(e.y + H + 1), az = Math.floor(e.z - W), bz = Math.floor(e.z + W + 1);
+  for (let x = ax; x < bx; x++) for (let y = ay; y < by; y++) for (let z = az; z < bz; z++) if (world.get(x, y, z) === WATER) return false;
+  return true;
+}
 
 export class ItemEntities {
   constructor(random = Math.random) {
@@ -152,6 +196,7 @@ export class ItemEntities {
   // counter (fireResistance 1) and the wet fizz. A noClip move returns before it. `delta` is an outside move's [dx, dy, dz] (a
   // piston push, push() below) instead of the item's motion; blocked axes still zero the motion.
   move(world, e, noClip, wet = false, delta = null) {
+    if (fast86.mode !== "off" && !MOVE86.busy && this.box === ItemEntities.prototype.box && this.boxes === ItemEntities.prototype.boxes && typeof world.get === "function" && world.solid === World.prototype.solid) { this.moveFast86(world, e, noClip, wet, delta); return; }
     let dx = e.mx, dy = e.my, dz = e.mz;
     if (delta) [dx, dy, dz] = delta;
     if (noClip) {
@@ -215,6 +260,80 @@ export class ItemEntities {
       },
     });
   }
+  // b86 mpperf86: `move` without its temporary arrays: the web move's axis list and result (read in place when the item is not in a web), the box (locals), the box
+  // list (pooled boxes, constant cells from a per-id table), the working box, and the collision hooks (one reused object). Same arithmetic in the same order.
+  moveFast86(world, e, noClip, wet, delta) {
+    let dx = e.mx, dy = e.my, dz = e.mz;
+    if (delta) { dx = delta[0]; dy = delta[1]; dz = delta[2]; }
+    if (noClip) {
+      e.x += dx;
+      e.y += dy;
+      e.z += dz;
+      return;
+    }
+    if (!delta) { if (e.inWeb) [dx, dy, dz] = webMove(e, e, ["mx", "my", "mz"]); }
+    else if (e.inWeb) {
+      e.inWeb = false;
+      dx *= 0.25; dy *= 0.05000000074505806; dz *= 0.25;
+      e.mx = e.my = e.mz = 0;
+    }
+    let a = e.x - W, b = e.y, c = e.z - W, d = e.x + W, g = e.y + H, h = e.z + W;
+    const bxz = e.bxz;
+    if (bxz && (bxz[0] + bxz[1]) / 2 === e.x && (bxz[2] + bxz[3]) / 2 === e.z) { a = bxz[0]; d = bxz[1]; c = bxz[2]; h = bxz[3]; }
+    const S = MOVE86;
+    S.busy = true;
+    try {
+      const x0 = Math.min(a, a + dx), y0 = Math.min(b, b + dy), z0 = Math.min(c, c + dz), x1 = Math.max(d, d + dx), y1 = Math.max(g, g + dy), z1 = Math.max(h, h + dz);
+      const list = itemBoxesInto(world, x0, y0, z0, x1, y1, z1, S.list, S.pool), box = S.box;
+      if (fast86.mode === "verify") {
+        const ref = this.boxes(world, x0, y0, z0, x1, y1, z1);
+        if (ref.length !== list.length || ref.some((r, k) => r.length !== list[k].length || r.some((v, j) => !Object.is(v, list[k][j])))) fail86("item boxes");
+      }
+      box[0] = a; box[1] = b; box[2] = c; box[3] = d; box[4] = g; box[5] = h;
+      const ody = dy, odx = dx, odz = dz, n = list.length;
+      for (let oi = 0; oi < n; oi++) {
+        const o = list[oi];
+        if (o[3] > box[0] && o[0] < box[3] && o[5] > box[2] && o[2] < box[5]) {
+          if (dy > 0 && o[1] >= box[4]) dy = Math.min(dy, o[1] - box[4]);
+          else if (dy < 0 && o[4] <= box[1]) dy = Math.max(dy, o[4] - box[1]);
+        }
+      }
+      box[1] += dy;
+      box[4] += dy;
+      for (let oi = 0; oi < n; oi++) {
+        const o = list[oi];
+        if (o[4] > box[1] && o[1] < box[4] && o[5] > box[2] && o[2] < box[5]) {
+          if (dx > 0 && o[0] >= box[3]) dx = Math.min(dx, o[0] - box[3]);
+          else if (dx < 0 && o[3] <= box[0]) dx = Math.max(dx, o[3] - box[0]);
+        }
+      }
+      box[0] += dx;
+      box[3] += dx;
+      for (let oi = 0; oi < n; oi++) {
+        const o = list[oi];
+        if (o[4] > box[1] && o[1] < box[4] && o[3] > box[0] && o[0] < box[3]) {
+          if (dz > 0 && o[2] >= box[5]) dz = Math.min(dz, o[2] - box[5]);
+          else if (dz < 0 && o[5] <= box[2]) dz = Math.max(dz, o[5] - box[2]);
+        }
+      }
+      list.length = 0;
+      e.bxz = [box[0], box[3], c + dz, h + dz];
+      e.x = (box[0] + box[3]) / 2;
+      e.y += dy;
+      e.z = (e.bxz[2] + e.bxz[3]) / 2;
+      e.onGround = ody !== dy && ody < 0;
+      e.collidedH = odx !== dx || odz !== dz;
+      if (odx !== dx) e.mx = 0;
+      if (odz !== dz) e.mz = 0;
+      if (ody !== dy) e.my = 0;
+      const hit = S.hit, hooks = S.hooks;
+      hit[0] = e.x - W; hit[1] = e.y; hit[2] = e.z - W; hit[3] = e.x + W; hit[4] = e.y + H; hit[5] = e.z + W;
+      hooks.owner = this; hooks.e = e; hooks.wetIn = wet; hooks.rain = this.rain;
+      blockCollisions(world, hit, e, hooks);
+    } finally {
+      S.busy = false; S.hooks.owner = S.hooks.e = S.hooks.rain = null;
+    }
+  }
   // TileEntityPiston pushing the item: Entity.moveEntity by the push delta with the item's own fields, the noClip its last tick's
   // pushOutOfBlocks set (EntityItem.onUpdate: noClip = func_145771_j) and inWater from its last handleWaterMovement.
   push(world, e, dx, dy, dz) {
@@ -261,10 +380,18 @@ export class ItemEntities {
       if (e.fire % 20 === 0) this.hurt(e, 1);
       e.fire--;
     }
-    if (inLava(world, this.box(e))) {
+    if (this.lavaAt86(world, e)) {
       this.hurt(e, 4);
       e.fire = Math.max(e.fire, 300);
     }
+  }
+  // b86 mpperf86: Entity.handleLavaMovement on six numbers (mpperf81 lavaIn) instead of the box and the shrunk box.
+  lavaAt86(world, e) {
+    const mode = fast86.mode;
+    if (mode === "off" || this.box !== ItemEntities.prototype.box || typeof world.get !== "function") return inLava(world, this.box(e));
+    const v = lavaIn(world, e.x - W, e.y, e.z - W, e.x + W, e.y + H, e.z + W);
+    if (mode === "verify" && v !== inLava(world, this.box(e))) fail86("item lava");
+    return v;
   }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
@@ -278,7 +405,11 @@ export class ItemEntities {
     let wasWet = false;
     // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
     // its own box to World.handleMaterialAcceleration, unshrunk.
-    if (world.getMeta) {
+    const quick86 = fast86.mode !== "off" && this.box === ItemEntities.prototype.box && typeof world.get === "function";
+    if (world.getMeta && quick86 && dryItem(world, e)) { // b86 mpperf86: no water cell, so no box, no result object
+      if (fast86.mode === "verify") { const r = waterAcceleration(world, this.box(e)); if (r.wet !== false || r.push.some((v) => !Object.is(v, 0))) fail86("item water"); }
+      e.mx += 0; e.my += 0; e.mz += 0; // the reference adds the zero push (a -0 motion becomes 0)
+    } else if (world.getMeta) {
       const { wet, push } = waterAcceleration(world, this.box(e));
       e.mx += push[0];
       e.my += push[1];
