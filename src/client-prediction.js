@@ -39,7 +39,7 @@ import { swallowsItemUse } from './block-activation.js';
 import { traceBucket, placeContainedLiquid } from './buckets.js';
 import { canPlace as fireCanPlace } from './fire.js';
 import { potInsertion, potContents, potUse } from './stone-utility.js';
-import { makeStack } from './inventory.js';
+import { makeStack, copyStack } from './inventory.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { isSplashDamage, ITEM_POTION } from './potions.js';
 
@@ -250,26 +250,30 @@ export function heldPlan({ kind, stack, creative, placed = false, took = 0 }) {
 }
 // Applies a plan to the real stack object (in place, so every reader of the hotbar sees it) and returns the undo. The undo is relative (a later queued click's
 // own change stays), and a stack that dropped to nothing leaves its slot at once and is put back by the undo.
+// b86 predict86: `swapDamage` / `giveDamage` (the empty map's client id), `equip` (ItemArmor: the armour slot takes a copy). A `give` that finds no room adds nothing: the
+// client's EntityClientPlayerMP.joinEntityItemWithWorld (bjk.a(xk)) is empty, so no item entity appears; the undo also takes back a give that merged into a stack.
 export function applyHeldPlan(inventory, plan) {
   const stack = inventory.held, slot = inventory.current;
   if (!plan || !stack) return null;
-  const was = stack.id;
+  const was = stack.id, wasDamage = stack.damage;
+  let worn = null;
+  if (plan.equip !== undefined) { if (inventory.getStack(plan.equip)) return null; worn = copyStack(stack); inventory.setStack(plan.equip, worn); }
   stack.count += plan.dCount;
   if (plan.dDamage) stack.damage = (stack.damage | 0) + plan.dDamage;
-  if (plan.swap) stack.id = plan.swap[1];
+  if (plan.swap) { stack.id = plan.swap[1]; if (plan.swapDamage !== undefined) stack.damage = plan.swapDamage; }
   if (stack.count <= 0) inventory.main[slot] = null;
-  let given = -1;
-  if (plan.give) { // InventoryPlayer.addItemStackToInventory of the filled bucket: the first free slot
-    const before = inventory.main.slice(), add = makeStack(plan.give);
-    inventory.add(add);
-    given = inventory.main.findIndex((m, i) => m && m !== before[i]);
+  const added = [];
+  if (plan.give) { // InventoryPlayer.addItemStackToInventory (yx.a(add)): a matching stack first, else the first free slot
+    const before = inventory.main.map((m) => [m, m?.count ?? 0]);
+    inventory.add(makeStack(plan.give, 1, plan.giveDamage ?? 0));
+    inventory.main.forEach((m, i) => { if (m && m !== before[i][0]) added.push([i, m, m.count]); else if (m && m.count > before[i][1]) added.push([i, m, m.count - before[i][1]]); });
   }
-  const placed = given >= 0 ? inventory.main[given] : null;
   return () => {
-    if (placed && inventory.main[given] === placed) inventory.main[given] = null;
+    for (const [i, m, n] of added) { if (inventory.main[i] !== m) continue; if (m.count <= n) inventory.main[i] = null; else m.count -= n; }
+    if (worn && inventory.getStack(plan.equip) === worn) inventory.setStack(plan.equip, null);
     stack.count -= plan.dCount;
     if (plan.dDamage) stack.damage = (stack.damage | 0) - plan.dDamage;
-    if (plan.swap && stack.id === plan.swap[1]) stack.id = was;
+    if (plan.swap && stack.id === plan.swap[1]) { stack.id = was; if (plan.swapDamage !== undefined) stack.damage = wasDamage; }
     if (stack.count > 0 && inventory.main[slot] === null) inventory.main[slot] = stack;
   };
 }

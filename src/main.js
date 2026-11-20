@@ -244,7 +244,7 @@ import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
-import { clientUseItem } from "./client-item-use.js"; // b85 mppredict85
+import { clientUseItem, clientEntityBoxes } from "./client-item-use.js"; // b85 mppredict85; b86 predict86: the boat checks' entity copies
 import { rightClickSwings, clientWithholdsPlace } from "./right-click-swing.js"; // b80 spswing80 (b83 attack83: the C08 255)
 import { clientPlacementBlocker } from "./multiplayer/client-placement-entities.js"; // b82 mpplace82
 import { chargeServerCopy } from "./server-copy-stat.js"; // b82 mpplace82
@@ -3658,11 +3658,14 @@ function multiplayerDigStart() {
 function predictMultiplayerUse() {
   if (!eyeRay || !survival.held) return;
   const pbox = [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2];
-  const out = clientUseItem({ world, survival, held: survival.held, eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI), playerBox: pbox, blocked: mpPlacementEntities });
+  const mcYaw = Math.fround(180 - yaw * 180 / Math.PI), mcPitch = Math.fround(-pitch * 180 / Math.PI);
+  const entities = survival.held.id === BOAT_ITEM ? clientEntityBoxes({ players: remotePlayers?.entries, mobs: remoteMobs, vehicles: remoteVehicles, primed: remoteDispense?.primed, arrows: remoteDispense?.arrows, balls: remoteDispense?.balls,
+    items: [...remoteItems.values()].filter(e => !takenDrops.has(e.eid)), orbs: [...remoteOrbs.values()] }) : []; // b86 predict86: ItemBoat's sight and box checks on the client's copies
+  const out = clientUseItem({ world, survival, held: survival.held, eye: eyeRay.origin, dir: eyeRay.dir, yaw: mcYaw, mcYaw, mcPitch, position, ySize: motion.ySize ?? 0, playerBox: pbox, entities, maps: mapStore, dimension: world.dimension ?? 0 });
   const cells = [];
   for (const c of out.cells) { const old = world.get(c.x, c.y, c.z); if (old !== c.block || world.getMeta(c.x, c.y, c.z) !== c.meta) { world.put(c.x, c.y, c.z, c.block, c.meta, false); cells.push([c.x, c.y, c.z, old, c.block]); } }
   if (cells.length) scene.updateBlocks(cells);
-  if (applyHeldPlan(survival.inventory, out.plan)) renderHotbar();
+  if (applyHeldPlan(survival.inventory, out.plan)) { renderHotbar(); if (out.plan.equip !== undefined) renderVitals(); } // b86 predict86: ItemArmor's equip shows on the armour bar at once
 }
 function openMultiplayerBook() {
   const held = survival.held;
