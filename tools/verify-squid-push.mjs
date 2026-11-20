@@ -41,3 +41,14 @@ console.log('squid-push reference:',records.length,'records');
  await writeFile(path.join(root,'../public/research/squid-push-b86-reference.json'),JSON.stringify(reference)+'\n');
  console.log('squid-push b86 reference:',records.length,'records');
 }
+// Batch 87 mobrec87: SQ_B87=1 runs the boat records with a rider (an AI-less EntityCow mounted on the boat, the World.updateEntities rider rule) -> squid-push-b87-reference.json.
+{
+ const {stdout}=await exec('java',['-cp',cp,'SquidPushProbe'],{maxBuffer:1<<28,env:{...process.env,SQ_B87:'1'}});
+ const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
+ assert.equal(records.length,4);
+ const reference={target:'Minecraft Java 1.7.10',tag:'b87squidrider',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+  method:'Batch 87. The b86 pool world and boat records (squid-push-b86-reference.json) with a rider: an EntityCow whose updateAITasks is switched off (EntityListProbe.Cow, Entity.rand Random(7), yaw fields 0), placed 1 above the boat and mounted with Entity.mountEntity before the first tick, listed last. The list is walked by World.updateEntities rules: a rider whose mount is live is skipped at its own place and updated right after its mount (lastTickPos, ticksExisted++, updateRidden: onUpdate, then the mount updateRiderPosition). kind rider: rows [squid state, boat [x, posY, z, vx, vy, vz, yaw, isDead], cow [x, y, z, vx, vy, vz]].',
+  records};
+ await writeFile(path.join(root,'../public/research/squid-push-b87-reference.json'),JSON.stringify(reference)+'\n');
+ console.log('squid-push b87 reference:',records.length,'records');
+}

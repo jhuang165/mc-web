@@ -14,6 +14,9 @@ import java.util.Random;
 //           (boat.applyEntityCollision(squid)); the boat's own update pushes only boats; each blocks the other's move. Rows: squid state, boat [x, posY, z, vx, vy, vz, yaw, isDead]
 //   tplayer a squid and a real EntityPlayerMP (ServerPlayerProbe) ticked after the world's entities by EntityPlayerMP.onUpdateEntity (mw.i: EntityPlayer.onUpdate, onLivingUpdate's
 //           move and collideWithNearbyEntities) and put back where it stood (NetHandlerPlayServer.processPlayer's setPositionAndRotation): both push. Rows: squid state, player motion
+// Batch 87 mobrec87 (SQ_B87, names b87-*): the b86 boat set-up with a rider: an EntityListProbe.Cow (EntityCow with updateAITasks switched off) mounted on the boat (Entity.mountEntity)
+//   rider   the list walked as World.updateEntities does: a rider whose mount is live is skipped at its own place and updated right after its mount (updateRidden, then the
+//           mount's updateRiderPosition); the squid's sv.bo pushes the boat and the cow. Rows: squid state, boat row, cow [x, y, z, vx, vy, vz]
 public class SquidPushProbe {
   public static class World extends SquidBatProbe.World {
     static List<sa> ents = new ArrayList<>();
@@ -139,6 +142,38 @@ public class SquidPushProbe {
     }
     System.out.println("{\"name\":\"" + name + "\",\"kind\":\"boat\",\"seed\":" + seed + ",\"order\":\"" + order + "\",\"at\":[" + num(at[0]) + "," + num(at[1]) + "," + num(at[2]) + "],\"boat\":[" + num(bt[0]) + "," + num(bt[1]) + "," + num(bt[2]) + "," + num(bt[3]) + "," + num(bt[4]) + "],\"boatStart\":" + start + ",\"rows\":[" + rows + "]}");
   }
+  static void rideStep(Pool w) { // World.updateEntities: the rider rule of EntityListProbe's walk
+    for (int i = 0; i < w.entities.size(); i++) {
+      sa e = w.entities.get(i);
+      if (e.m != null) { if (!e.m.K && e.m.l == e) continue; e.m.l = null; e.m = null; }
+      if (!e.K) EntityListProbe.update(e);
+    }
+  }
+  // order "sb": squid, boat, cow; "bs": boat, squid, cow (the cow is listed last; it updates right after the boat either way).
+  static void rider(String name, long seed, String order, double[] at, double[] bt, int ticks) throws Exception {
+    Pool w = pool();
+    CorpseLivingProbe.Log[] logs = new CorpseLivingProbe.Log[1];
+    ws sq = poolSquid(w, seed, at[0], at[1], at[2], logs, 0);
+    xi boat = new xi(w, bt[0], bt[1], bt[2]);
+    boat.y = (float) bt[4]; boat.A = boat.y; boat.v = bt[3];
+    PlayerStepProbe.field(sa.class, "c").setInt(boat, 1);
+    PlayerStepProbe.field(sa.class, "Z").set(boat, new Random(7));
+    EntityListProbe.Cow cow = new EntityListProbe.Cow(w);
+    PlayerStepProbe.field(sa.class, "Z").set(cow, new Random(7));
+    MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(cow, bt[0], bt[1] + 1, bt[2]);
+    SquidBatProbe.zeroYaw(cow);
+    cow.a(boat); // Entity.mountEntity
+    String start = boatRow(boat);
+    if (order.equals("sb")) { w.entities.add(sq); w.entities.add(boat); } else { w.entities.add(boat); w.entities.add(sq); }
+    w.entities.add(cow);
+    StringBuilder rows = new StringBuilder();
+    for (int t = 1; t <= ticks; t++) {
+      int before = logs[0].calls;
+      rideStep(w);
+      rows.append(t > 1 ? "," : "").append("[").append(state(sq, logs[0], before, t)).append(",").append(boatRow(boat)).append(",[").append(num(cow.s)).append(",").append(num(cow.t)).append(",").append(num(cow.u)).append(",").append(num(cow.v)).append(",").append(num(cow.w)).append(",").append(num(cow.x)).append("]]");
+    }
+    System.out.println("{\"name\":\"" + name + "\",\"kind\":\"rider\",\"seed\":" + seed + ",\"order\":\"" + order + "\",\"at\":[" + num(at[0]) + "," + num(at[1]) + "," + num(at[2]) + "],\"boat\":[" + num(bt[0]) + "," + num(bt[1]) + "," + num(bt[2]) + "," + num(bt[3]) + "," + num(bt[4]) + "],\"boatStart\":" + start + ",\"rows\":[" + rows + "]}");
+  }
   static void tplayer(String name, long seed, double[] at, double[] pl, int ticks) throws Exception {
     Pool w = pool();
     CorpseLivingProbe.Log[] logs = new CorpseLivingProbe.Log[1];
@@ -168,6 +203,13 @@ public class SquidPushProbe {
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
+    if (System.getenv("SQ_B87") != null) {
+      rider("b87-rider-sb", 8701, "sb", new double[] {65.1, 9.2, 64.7}, new double[] {64.5, 9.6, 64.5, 0, 0}, 40);
+      rider("b87-rider-bs", 8701, "bs", new double[] {65.1, 9.2, 64.7}, new double[] {64.5, 9.6, 64.5, 0, 0}, 40);
+      rider("b87-rider-drift", 8702, "bs", new double[] {65.2, 9.2, 64.5}, new double[] {63.5, 9.6, 64.6, 0.1, 90}, 40);
+      rider("b87-rider-ram", 8703, "bs", new double[] {65.2, 9.2, 64.5}, new double[] {63.9, 9.6, 64.6, 0.15, 90}, 40);
+      return;
+    }
     if (System.getenv("SQ_B86") != null) {
       boat("b86-boat-sb", 8601, "sb", new double[] {65.1, 9.2, 64.7}, new double[] {64.5, 9.6, 64.5, 0, 0}, 40);
       boat("b86-boat-bs", 8601, "bs", new double[] {65.1, 9.2, 64.7}, new double[] {64.5, 9.6, 64.5, 0, 0}, 40);
