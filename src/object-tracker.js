@@ -474,7 +474,7 @@ export class ObjectTracker extends MobTracker {
   constructor(viewChunks = 10, random = Math.random, ids = null) {
     super(viewChunks);
     this.ids = ids;
-    this.kinds = new Map(); this.nextId = 1 << 24; // `dying` (entity-tracker.js): entries whose entity left the world, their destroy packet is still queued
+    this.kinds = new Map(); this.nextId = 1 << 24; this.birthRecords = new WeakMap(); // b87 sptrack87: live object -> { s: its state before its first update, t: the pass count then } // `dying` (entity-tracker.js): entries whose entity left the world, their destroy packet is still queued
     const items = new ItemEntities(random), orbs = new ExperienceOrbs([], random), arrows = new Arrows(random), balls = new Projectiles(random);
     items.remote = true; balls.remote = true;
     this.sims = { items, orbs, arrows, balls };
@@ -592,7 +592,11 @@ export class ObjectTracker extends MobTracker {
   }
   create(e) {
     const kind = this.kinds.get(e), spec = OBJECT_KINDS[kind];
-    const p = this.read(kind, takeBirth(e) ?? e, {}); // an entity its spawn site recorded starts the entry with its creation state (tracker-birth.js)
+    // an entity its spawn site recorded starts the entry with its creation state (tracker-birth.js); b87 sptrack87: else the state `birth` copied before its first update
+    const own = this.birthRecords.get(e); if (own) this.birthRecords.delete(e);
+    const b = takeBirth(e) ?? (own && this.tick - own.t <= 1 ? own.s : null);
+    const p = this.read(kind, b ?? e, {});
+    if (b && kind === "item" && e.rotationYaw === undefined) e.rotationYaw = p.rotationYaw; // the copy's random yaw is the item's own (read sets it on the live item otherwise)
     const object = spec.orb ? { orb: true, value: e.value } : { kind, data: spec.data(p), objectType: spec.type, ...(kind === "painting" ? { title: p.title } : {}) };
     const dirty = kind === "item" || (kind === "itemFrame" && !!p.stack) || (kind === "arrow" && p.crit) || (kind === "firework" && !!p.stack?.fireworks); // updateObject calls in the entity's constructor
     const entry = new ObjectEntry(p, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width), arrow: !!spec.arrow, object }, this.view, new Watcher(metaValues(kind, p), dirty));
@@ -601,6 +605,18 @@ export class ObjectTracker extends MobTracker {
     client.shooterLive = e.shooter; // the arrow's shooter, for the client copy's 5-tick skip
     return { entry, client, health: p.health, wasGround: false };
   }
+  // b87 sptrack87: the state an object has when it joins the world, for the entry's baseline and the S0E of the player already there. Bytecode-read: World.spawnEntityInWorld (ahb.d(sa))
+  // adds the entity to loadedEntityList, then WorldManager.onEntityCreate (mp.a(sa)) -> EntityTracker.trackEntity (mn.a(sa)) -> my.b(playerEntities): the S0E (my.c) is built from the
+  // entity's fields at the spawn, and the tracker pass after its first update (my.a(List)) sends the move from that baseline. The port's tracker first sees an object at its next pass,
+  // after that update (an object spawned inside the walk, or an eye or hook ticked before the pass), so the call sites copy it before its first update (main.js). A copy older than the
+  // last pass is stale (the entity was never tracked then: an unloaded chunk) and is replaced.
+  birth(e) {
+    if (!e || this.entries.has(e)) return;
+    const r = this.birthRecords.get(e);
+    if (r && this.tick - r.t <= 1) return;
+    this.birthRecords.set(e, { s: { ...e }, t: this.tick });
+  }
+  births(lists) { for (const kind in lists) for (const e of lists[kind] ?? []) this.birth(e); }
   observe(e, en) {
     const p = this.read(this.kinds.get(e), e, en.entry.e);
     en.entry.watcher.update(metaValues(this.kinds.get(e), p));
@@ -651,6 +667,13 @@ export class ObjectTracker extends MobTracker {
     this.clientTick();
   }
   clientEntity(e) { const en = this.entries.get(e); return en?.client.present ? en.client : null; }
+}
+
+// b87 sptrack87: the list walk's ticks (entity-simulation.js entityWalkers) copy an object's state before its first update: an object spawned inside the walk joins the list being walked
+// (World.spawnEntityInWorld appends to loadedEntityList, ahb.d(sa) 98) and updates in the same pass, after trackEntity sent its spawn state. `trackerOf()`: the current ObjectTracker.
+export function birthWalks(walks, trackerOf) {
+  for (const w of walks.values()) { const tick = w.tick; w.tick = (e) => { trackerOf()?.birth(e); return tick(e); }; }
+  return walks;
 }
 
 // What a renderer draws: the live entity with its position replaced by the client entity's (x/y/z and the previous tick, in the live

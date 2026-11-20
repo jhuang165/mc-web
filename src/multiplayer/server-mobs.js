@@ -259,7 +259,7 @@ export class ServerMobs {
     const b = { world, x, y, z, size, exploder: ev.source ?? null, placer };
     const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
-      hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) };
+      hooks: host.fishing?.hooksIn?.(host.dispense?.dim | 0) ?? [] }; // b87 sptrack87: every hook of the blast's world, its angler here or not
     const rows = [...mobRows({ world, mobs: this.mobs, position: byPlayer ? byPlayer.position : this.probe, survival: byPlayer?.survival ?? null }, { x, y, z, size, exploder: ev.source ?? null, attacker: byPlayer ? 'player' : placer }),
       ...nonLivingRows(state, b, { vehicleDrop: drop, creative: !!byPlayer?.survival.creative }), ...(primed ? tntRows(primed, b) : [])];
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)

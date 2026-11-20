@@ -85,9 +85,11 @@ test("the players present when an entity joins get the join state; a player who 
   const read = e.z; step("snowball", e);
   const back = wire(tracks.update(list, new Map([[1, a], [2, b]])).get(2));
   const spawn = back[0].p[0];
-  assert.equal(spawn.type, "spawn", "trackEntity: every entry tries the returning player at once");
-  // port order: the arrival is tried before this tick's tracker pass, so the S0E is the state the shared entry read last (native: the state when the player joins the world's tracker)
-  assert.equal(spawn.z, Math.floor(read * 32));
+  assert.equal(spawn.type, "spawn", "the returning player's first pass here tries every entry");
+  // b87 sptrack87 (was: the state the shared entry read last tick, a port-order gap): natively the chunk send at the player's slot of updateEntities (mw.h -> mn.a(mw, apx)) tries an entity
+  // that is before the player in loadedEntityList, so it has updated: the S0E carries this tick's state, and the pass's delta follows (sptrack87-b87.test.js)
+  assert.notEqual(spawn.z, Math.floor(read * 32));
+  assert.equal(spawn.z, Math.floor(e.z * 32));
   for (let t = 0; t < 12; t++) { step("snowball", e); const o = tracks.update(list, new Map([[1, a], [2, b]])); assert.deepEqual(wire(o.get(1)), wire(o.get(2)), "then the one baseline's packets"); }
 });
 

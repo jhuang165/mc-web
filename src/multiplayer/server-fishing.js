@@ -35,6 +35,9 @@ export class ServerFishing {
   has(p) { return !!this.byPlayer.get(p.id)?.active; }
   hookOf(p) { const fishing = this.byPlayer.get(p.id); return fishing?.active && fishing.dimension === (p.dimension | 0) ? fishing.hook : null; } // b86 lanes86: a hook left in another dimension is not in this one's (blast rows)
   drop(p) { this.byPlayer.delete(p.id); }
+  // b87 sptrack87: the live hooks of dimension `dim`, whatever dimension their anglers are in now: the blast targets of that world (the explosion's entity list is the world's, and a hook
+  // whose angler left stays in it, oi.a(mw, int) 78..86 removes only the player). hookOf(p) misses such a hook.
+  hooksIn(dim = 0) { const out = []; for (const fishing of this.byPlayer.values()) if (fishing.active && fishing.hook && (fishing.dimension | 0) === (dim | 0)) out.push(fishing.hook); return out; }
   // b85 mphook85: the live hooks of dimension `dim` for the tracker lane ({ e, kind }); the hook carries its angler's id (EntityFishHook's S0E data).
   trackList(dim = 0) {
     const out = [];

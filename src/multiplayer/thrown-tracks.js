@@ -58,8 +58,9 @@ export class ThrownTracks {
     this.births = new WeakMap(); // b85 mphook85: an entity's state at its join (see `birth`)
     this.reader = new ObjectReader(10, Math.random, null); // only its `read` is used: the live entity -> the stand-in the entry reads
     this.objs = new Map(); // live entity -> { kind, p, en, sh }
-    this.watchers = new Map(); // pid -> { pid, view, ref, joining } (b86 lanes86: the players of this tracker's dimension, in join order)
+    this.watchers = new Map(); // pid -> { pid, view, ref, joining, seq } (b86 lanes86: the players of this tracker's dimension, in join order)
     this.late = []; // destroys held back one tick: { pid, o, packet }
+    this.seq = 0; // b87 sptrack87: join order of watchers and entries (loadedEntityList order)
     this.out = null;
   }
   get active() { return this.objs.size > 0 || this.late.length > 0; }
@@ -95,13 +96,19 @@ export class ThrownTracks {
     for (const h of this.late.splice(0)) if (players.has(h.pid)) this.push(h.pid, h.o, h.packet);
     // untrackEntity: a player who left this dimension (or the server) leaves every set
     for (const [pid, w] of [...this.watchers]) if (!players.has(pid)) { this.watchers.delete(pid); for (const o of this.objs.values()) o.en.drop(w); }
-    // trackEntity for a player: a new watcher is tried by every entry at once
+    // trackEntity for a player: a new watcher (its `seq` is its place in loadedEntityList, after every entity already there)
     for (const [pid, player] of players) {
       let w = this.watchers.get(pid);
-      if (!w) this.watchers.set(pid, w = { pid, view: { player: null, watches: (cx, cz) => this.watches(pid, cx, cz), log: null }, ref: null, joining: true });
+      if (!w) this.watchers.set(pid, w = { pid, view: { player: null, watches: (cx, cz) => this.watches(pid, cx, cz), log: null }, ref: null, joining: true, seq: ++this.seq });
       w.view.player = player.position;
     }
-    for (const w of this.watchers.values()) if (w.joining) { w.joining = false; for (const o of this.objs.values()) o.en.tryStartFor(w); }
+    // b87 sptrack87: the players whose chunks went out this tick (a returning player's first tick here, or columns just sent) are tried by the entries in those chunks before the pass, as
+    // EntityPlayerMP.onUpdate (mw.h) does at the player's slot of World.updateEntities: after the S26, mn.a(mw, apx) -> my.b(mw) for the chunk's entities. An entity BEFORE the player
+    // in loadedEntityList (an entry older than the watcher) has already updated: the S0E carries this tick's state. One after it has not: the S0E carries the state read last tick. Both
+    // then get this pass's delta from the shared baseline (my.a(List) sends to every watcher, the new one included). The transfer itself (oi.a(mw, int) -> mt.d(sa) -> mn.a(sa)) tries
+    // nobody: the player is not in the new world's PlayerManager yet (mq.a(mw, int, int) fails), so trackEntity's own try is the chunk gate's first open.
+    const look = [];
+    for (const w of this.watchers.values()) { const fresh = !!this.fresh(w.pid); if (w.joining || fresh) look.push(w); w.joining = false; }
     // the entities that ended: a rocket's S1A 17, then the destroy to each tracking watcher
     const alive = new Set(list.map((x) => x.e));
     for (const [e, o] of [...this.objs]) if (!alive.has(e)) {
@@ -109,8 +116,9 @@ export class ThrownTracks {
       o.en.remove();
       this.objs.delete(e);
     }
+    for (const w of look) for (const o of this.objs.values()) if (o.seq > w.seq) o.en.tryStartFor(w); // after the player: the last-read state
     // addEntityToTracker: the new entries, each sent at once to the players in range (from the join state)
-    for (const { e, kind } of list) if (!this.objs.has(e)) { const o = this.entryFor(e, kind); this.objs.set(e, o); o.en.updatePlayerList(); }
+    for (const { e, kind } of list) if (!this.objs.has(e)) { const o = this.entryFor(e, kind); o.seq = ++this.seq; this.objs.set(e, o); o.en.updatePlayerList(); }
     // sendLocationToAllClients, once per entry: the flush state
     for (const { e, kind } of list) {
       const o = this.objs.get(e), en = o.en;
@@ -118,12 +126,13 @@ export class ThrownTracks {
       const air = e.airBorne === true;
       e.velocityChanged = false;
       en.watcher.update(metaValues(kind, o.p));
+      for (const w of look) if (o.seq < w.seq) en.tryStartFor(w); // before the player: this tick's state (the S1C after it lists the current values)
       en.sendLocation(air, en.watcher.hasChanges());
     }
-    // the players whose own entry re-evaluated (moved more than 4 blocks, or new) or whose columns changed re-test every entry
+    // the players whose own entry re-evaluated (moved more than 4 blocks, or new) re-test every entry (mn.a()'s second loop)
     for (const w of this.watchers.values()) {
       const pos = w.view.player;
-      let flagged = !!this.fresh(w.pid);
+      let flagged = false;
       if (!w.ref) flagged = true;
       else { const dx = pos.x - w.ref.x, dy = pos.y - w.ref.y, dz = pos.z - w.ref.z; if (dx * dx + dy * dy + dz * dz > 16) flagged = true; }
       if (flagged) { w.ref = { x: pos.x, y: pos.y, z: pos.z }; for (const o of this.objs.values()) o.en.tryStartFor(w); }
