@@ -115,6 +115,7 @@ test('1.7.10 has one player model (Steve): no Alex or slim model anywhere in the
   const walk = dir => { for (const f of readdirSync(dir, { withFileTypes: true })) {
     const p = dir + f.name; if (f.isDirectory()) { walk(p + '/'); continue; }
     if (!/\.js$/.test(f.name) || /\.test\.js$/.test(f.name)) continue;
+    if (f.name === 'dedicated-cmds-replay.js') continue; // b86 lead: a test harness (console86) whose probe player is named "Alex", not a model
     const text = readFileSync(p, 'utf8');
     if (/\b(alex|slim(?:Arms|Model|Skin)?|isSlim|armWidth)\b/i.test(text.replace(/\bslim(e|es)\b/gi, ''))) hits.push(p);
   } };
