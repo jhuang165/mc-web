@@ -37,7 +37,6 @@ export function findRandomTargetAway(mob, xz, yz, threat) {
 // EntityAIAvoidEntity (tw, class, range, far speed, near speed), mutex 1. The threat is the first living creature of the class
 // in the box grown by (range, 3, range) that the mob can see; a tamed ocelot never avoids the player. The path leads to a spot
 // no nearer to the threat than the mob is; it runs while a path remains, at the near speed within 7 blocks.
-const DEG = 180 / Math.PI;
 export function makeAvoid(m, Task, kind, range, farSpeed, nearSpeed) {
   class Avoid extends Task {
     constructor() {
@@ -117,8 +116,9 @@ export function buildOcelotTasks(m, K) {
     }
     continueExecuting() {
       // vk.f (bytecode-read): startExecuting stores only the player's position; pitch and yaw start at 0 and are stored here (degrees, EntityPlayer.rotationPitch/Yaw).
-      // playerLook gives radians in the port's convention (main.js playerEye): rotationYaw = 180 - yaw, rotationPitch = -pitch.
-      const p = this.player, v = m.ai.ew.playerLook?.(), look = v ? { yaw: 180 - v.yaw * DEG, pitch: -v.pitch * DEG } : { yaw: this.yaw, pitch: this.pitch };
+      // b87 blast87: playerLook gives rotationYaw / rotationPitch in degrees already (main.js playerEye converts the port's radians: 180 - yaw, -pitch); this read them as
+      // radians again (x 57.3), so a turn of about 0.09 degrees broke the temptation where native allows 5.
+      const p = this.player, v = m.ai.ew.playerLook?.(), look = v ? { yaw: v.yaw, pitch: v.pitch } : { yaw: this.yaw, pitch: this.pitch };
       if (m.distSq(p) < 36) {
         if ((p.x - this.px) ** 2 + (p.y - this.py) ** 2 + (p.z - this.pz) ** 2 > 0.01) return false;
         if (Math.abs(look.pitch - this.pitch) > 5 || Math.abs(look.yaw - this.yaw) > 5) return false;
