@@ -343,7 +343,7 @@ export function blockBounds(world,x,y,z){
   // BlockAnvil.setBlockBoundsBasedOnState: metadata low bits 0/2 narrow X,
   // 1/3 narrow Z. The render model itself uses four native component boxes.
   if(b===ANVIL)return (world.getMeta(x,y,z)&1)?[0,0,1/8,1,1,7/8]:[1/8,0,0,7/8,1,1];
-  if(b===75||b===76)return[.3,0,.3,.7,.4,.7];
+  if(b===75||b===76)return[0.30000001192092896,0,0.30000001192092896,0.699999988079071,0.4000000059604645,0.699999988079071]; // BlockMushroom: f = 0.2F, 0.5F - f .. 0.5F + f, f * 2.0F high, in floats (b86 blastcover86: rayTraceBlocks hits)
   if(b===PUMPKIN_STEM||b===MELON_STEM)return stemBounds(world.getMeta(x,y,z)); // BlockStem.setBlockBoundsBasedOnState
   if(b===DRAGON_EGG)return EGG_BOUNDS; // BlockDragonEgg: 1/16 in from the sides
   if(b===PORTAL)return portalBoundsAt(world,x,y,z); // BlockPortal.setBlockBoundsBasedOnState
@@ -355,7 +355,7 @@ export function blockBounds(world,x,y,z){
   if(b===SAPLING||b===TALL_GRASS)return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
   if(isFlower(b))return[0.30000001192092896,0,0.30000001192092896,0.699999988079071,0.6000000238418579,0.699999988079071];
   if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
-  if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
+  if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):normalCube(world.get(x,y+1,z))?[0,15/16,0,1,1,1]:[1,1,1,0,0,0];} // BlockVine.setBlockBoundsBasedOnState: meta 0 takes the top plate only under func_150093_a (a normal cube above); otherwise min 1 / max 0, which no ray hits (b86 blastcover86, bytecode-read aoh)
   if(b===SANDSTONE_SLAB)return[0,0,0,1,.5,1];
   if(b===CARPET)return[0,0,0,1,1/16,1]; // BlockCarpet.setBlockBoundsForCarpet (colored-blocks.js)
   if(isShaped(b))return shapedBounds(world,x,y,z,wallSolid);

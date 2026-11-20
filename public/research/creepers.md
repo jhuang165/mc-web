@@ -93,6 +93,7 @@ The scale is taken about the point 1.5078 above the feet (after `RendererLivingE
 
 - **Damage:** `(int)((impact² + impact) / 2 × 8 × 2size + 1)`, where `impact = (1 − dist) × getBlockDensity`.
 - **Push:** `impact` along the unit vector from the centre to the eyes (posY + eye height).
+- **Exposure through blocks (b86 blastcover86, 2026-11-19, executed).** `getBlockDensity` (`ahb.a(azw, azt)`) samples the box on a 1 / (extent × 2 + 1) float grid and casts `rayTraceBlocks(point, centre)` (collision ray, the end cell never tested); each block's ray box is its `setBlockBoundsBasedOnState` box. 600 BlastOrderProbe `cover` scenes (110 block kinds: glass, fluids, slabs, fences, walls, panes, doors, stairs, plants, redstone parts...) match the port hit for hit after fixes to the ray boxes of skulls, ender and trapped chests, the dragon egg, nether wart, stems, end portal, portal, mushrooms (float bounds) and a meta-0 vine (top plate only under a normal cube, else no box). Fluids and fire are not hit. The end portal frame's ray box is history-dependent natively (full until `g()` or a collision pass, then 13/16); the port models the steady 13/16 state. A button with an invalid facing keeps stale shared bounds and is not modelled.
 
 How each kind of entity is handled:
 
