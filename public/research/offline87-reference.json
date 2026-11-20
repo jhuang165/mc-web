@@ -1,0 +1,231 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "nn": {
+   "name": "NetHandlerLoginServer",
+   "sha256": "c508fcbd5a4a0cef34e96978fed5fc77415017e84461b19827c1fb8e47eb9849"
+  },
+  "yz": {
+   "name": "EntityPlayer",
+   "sha256": "9833d8bb183188c3e2085fcf77cc269b7d7c74cbbadf2b37452958b75eaa54e1"
+  },
+  "eo": {
+   "name": "EnumConnectionState",
+   "sha256": "3616950098bec1c54bb89b39f6749a077af6fcfa3f96100c77e0d6d8316f4043"
+  },
+  "fa": {
+   "name": "MessageSerializer",
+   "sha256": "ecbba16788f8988e221839add6da7914e21e1027a600d92914cde6f7b80ad94a"
+  },
+  "ez": {
+   "name": "MessageDeserializer",
+   "sha256": "4cbd3870db0fb700ea3dd945e01976c9b1fc94fbc3db6949b7efa7aa2a371094"
+  },
+  "ayq": {
+   "name": "SaveHandler",
+   "sha256": "87eda0300c29ee15fb0b9dfeaeb9c790f9a973c623972df6209b068c8c21c927"
+  },
+  "oi": {
+   "name": "ServerConfigurationManager",
+   "sha256": "e3908fb09b75c8565f99eaf99c9af9b8a299cb6af4fed482ec56e164381e7f14"
+  }
+ },
+ "method": "Executed on the unchanged classes (tools/probes/Offline87Probe.java): NetHandlerLoginServer.func_152506_a on a handler allocated without its constructor (the method reads no fields), EntityPlayer.func_146094_a on a name-only and a complete profile, and EnumConnectionState.values() with its a() (client to server) and b() (server to client) packet BiMaps; class names mapped with joined-1.7.10.srg.",
+ "offline": [
+  [
+   "Alex",
+   "36532b5e-c442-3dbb-a24c-c7e55d0f979a",
+   "Alex"
+  ],
+  [
+   "alex",
+   "bf20048c-a55a-322c-a100-5493e7b87286",
+   "alex"
+  ],
+  [
+   "ALEX",
+   "3ed83c4c-c325-3481-ae8d-74d03d7b33fa",
+   "ALEX"
+  ],
+  [
+   "Steve",
+   "5627dd98-e6be-3c21-b8a8-e92344183641",
+   "Steve"
+  ],
+  [
+   "Eve",
+   "4dca2802-6411-3946-8684-5bbfa38f452b",
+   "Eve"
+  ],
+  [
+   "Herobrine",
+   "25966168-dc9c-360c-8f32-ed022bfa1070",
+   "Herobrine"
+  ],
+  [
+   "Notch",
+   "b50ad385-829d-3141-a216-7e7d7539ba7f",
+   "Notch"
+  ],
+  [
+   "a",
+   "52428a0e-1e30-3cb1-976c-e728b2614047",
+   "a"
+  ],
+  [
+   "Player",
+   "a01e3843-e521-3998-958a-f459800e4d11",
+   "Player"
+  ],
+  [
+   "Name_With_16chr",
+   "8f81119d-b57a-395b-b452-8b423ef6f161",
+   "Name_With_16chr"
+  ]
+ ],
+ "entity": [
+  [
+   "Alex",
+   null,
+   "36532b5e-c442-3dbb-a24c-c7e55d0f979a"
+  ],
+  [
+   "Alex",
+   "00000000-0000-0000-0000-000000000001",
+   "00000000-0000-0000-0000-000000000001"
+  ]
+ ],
+ "states": [
+  {
+   "name": "HANDSHAKING",
+   "id": -1,
+   "serverbound": {
+    "0": "C00Handshake"
+   },
+   "clientbound": {}
+  },
+  {
+   "name": "PLAY",
+   "id": 0,
+   "serverbound": {
+    "0": "C00PacketKeepAlive",
+    "1": "C01PacketChatMessage",
+    "2": "C02PacketUseEntity",
+    "3": "C03PacketPlayer",
+    "4": "C03PacketPlayer$C04PacketPlayerPosition",
+    "5": "C03PacketPlayer$C05PacketPlayerLook",
+    "6": "C03PacketPlayer$C06PacketPlayerPosLook",
+    "7": "C07PacketPlayerDigging",
+    "8": "C08PacketPlayerBlockPlacement",
+    "9": "C09PacketHeldItemChange",
+    "10": "C0APacketAnimation",
+    "11": "C0BPacketEntityAction",
+    "12": "C0CPacketInput",
+    "13": "C0DPacketCloseWindow",
+    "14": "C0EPacketClickWindow",
+    "15": "C0FPacketConfirmTransaction",
+    "16": "C10PacketCreativeInventoryAction",
+    "17": "C11PacketEnchantItem",
+    "18": "C12PacketUpdateSign",
+    "19": "C13PacketPlayerAbilities",
+    "20": "C14PacketTabComplete",
+    "21": "C15PacketClientSettings",
+    "22": "C16PacketClientStatus",
+    "23": "C17PacketCustomPayload"
+   },
+   "clientbound": {
+    "0": "S00PacketKeepAlive",
+    "1": "S01PacketJoinGame",
+    "2": "S02PacketChat",
+    "3": "S03PacketTimeUpdate",
+    "4": "S04PacketEntityEquipment",
+    "5": "S05PacketSpawnPosition",
+    "6": "S06PacketUpdateHealth",
+    "7": "S07PacketRespawn",
+    "8": "S08PacketPlayerPosLook",
+    "9": "S09PacketHeldItemChange",
+    "10": "S0APacketUseBed",
+    "11": "S0BPacketAnimation",
+    "12": "S0CPacketSpawnPlayer",
+    "13": "S0DPacketCollectItem",
+    "14": "S0EPacketSpawnObject",
+    "15": "S0FPacketSpawnMob",
+    "16": "S10PacketSpawnPainting",
+    "17": "S11PacketSpawnExperienceOrb",
+    "18": "S12PacketEntityVelocity",
+    "19": "S13PacketDestroyEntities",
+    "20": "S14PacketEntity",
+    "21": "S14PacketEntity$S15PacketEntityRelMove",
+    "22": "S14PacketEntity$S16PacketEntityLook",
+    "23": "S14PacketEntity$S17PacketEntityLookMove",
+    "24": "S18PacketEntityTeleport",
+    "25": "S19PacketEntityHeadLook",
+    "26": "S19PacketEntityStatus",
+    "27": "S1BPacketEntityAttach",
+    "28": "S1CPacketEntityMetadata",
+    "29": "S1DPacketEntityEffect",
+    "30": "S1EPacketRemoveEntityEffect",
+    "31": "S1FPacketSetExperience",
+    "32": "S20PacketEntityProperties",
+    "33": "S21PacketChunkData",
+    "34": "S22PacketMultiBlockChange",
+    "35": "S23PacketBlockChange",
+    "36": "S24PacketBlockAction",
+    "37": "S25PacketBlockBreakAnim",
+    "38": "S26PacketMapChunkBulk",
+    "39": "S27PacketExplosion",
+    "40": "S28PacketEffect",
+    "41": "S29PacketSoundEffect",
+    "42": "S2APacketParticles",
+    "43": "S2BPacketChangeGameState",
+    "44": "S2CPacketSpawnGlobalEntity",
+    "45": "S2DPacketOpenWindow",
+    "46": "S2EPacketCloseWindow",
+    "47": "S2FPacketSetSlot",
+    "48": "S30PacketWindowItems",
+    "49": "S31PacketWindowProperty",
+    "50": "S32PacketConfirmTransaction",
+    "51": "S33PacketUpdateSign",
+    "52": "S34PacketMaps",
+    "53": "S35PacketUpdateTileEntity",
+    "54": "S36PacketSignEditorOpen",
+    "55": "S37PacketStatistics",
+    "56": "S38PacketPlayerListItem",
+    "57": "S39PacketPlayerAbilities",
+    "58": "S3APacketTabComplete",
+    "59": "S3BPacketScoreboardObjective",
+    "60": "S3CPacketUpdateScore",
+    "61": "S3DPacketDisplayScoreboard",
+    "62": "S3EPacketTeams",
+    "63": "S3FPacketCustomPayload",
+    "64": "S40PacketDisconnect"
+   }
+  },
+  {
+   "name": "STATUS",
+   "id": 1,
+   "serverbound": {
+    "0": "C00PacketServerQuery",
+    "1": "C01PacketPing"
+   },
+   "clientbound": {
+    "0": "S00PacketServerInfo",
+    "1": "S01PacketPong"
+   }
+  },
+  {
+   "name": "LOGIN",
+   "id": 2,
+   "serverbound": {
+    "0": "C00PacketLoginStart",
+    "1": "C01PacketEncryptionResponse"
+   },
+   "clientbound": {
+    "0": "S00PacketDisconnect",
+    "1": "S01PacketEncryptionRequest",
+    "2": "S02PacketLoginSuccess"
+   }
+  }
+ ]
+}

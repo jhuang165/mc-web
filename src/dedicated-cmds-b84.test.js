@@ -1,8 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
 // Batch 84 dedicated84: replays dedicated-cmds-reference.json (tools/probes/Dedicated84Probe.java, executed on the unchanged 1.7.10 ServerCommandManager and the dedicated
 // command classes with a real ServerConfigurationManager, UserLists and PlayerProfileCache) through the port's server chat path (ServerSocial.command -> ServerAdmin).
-// Rows left out here: the console sender and offline mode (b86 console86: replayed in console86-b86.test.js) and the partly-off world saving states (one saving flag;
-// the commands only ever switch all worlds together).
+// Rows left out here: the console sender and offline mode (b86 console86: replayed in console86-b86.test.js). b87 offline87: the partly-off world saving rows replay
+// here too (ServerAdmin.levelSaving keeps one flag per world).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -12,8 +12,8 @@ import { build, observe, expected, wordOf, differences } from "./dedicated-cmds-
 await langReady;
 const ref = JSON.parse(await readFile(new URL("../public/research/dedicated-cmds-reference.json", import.meta.url)));
 // b86 console86: the player rows also compare the server log (the admin notices bl.a logs for a non-server sender); the console sender and offline-mode rows replay in
-// console86-b86.test.js. A save row of the native saves each world; the port has one save call (host.save), so the partly-off saving rows stay out.
-const reachable = (row) => row[2] !== "console" && row[1] !== "offline" && row[1] !== "partial";
+// console86-b86.test.js. A save row of the native saves each world; the port has one save call (host.save), compared with world 0's save calls.
+const reachable = (row) => row[2] !== "console" && row[1] !== "offline";
 
 const rows = ref.run.filter(reachable);
 const byGroup = new Map();

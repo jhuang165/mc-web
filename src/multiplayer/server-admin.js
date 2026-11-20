@@ -38,7 +38,7 @@ export const CONSOLE_NAME = 'Server'; // b86 console86: MinecraftServer.b_() (ge
 export const NOT_FOR_PLAYERS = 'Command is not available for players';
 
 // b86 console86: NetworkStatistics (eu: two ex trackers, read c and write d, of 100 packet ids; ey = {totalBytes, count, averageBytes}). The netty decoder (ez) and encoder (fa)
-// record every packet (id, bytes) (bytecode-read). The port's WebSocket messages carry no packet id: server.js records every message under id 0.
+// record every packet (id, bytes) (bytecode-read). b87 offline87: server.js records each WebSocket message under its native packet id (net-packet-ids.js).
 const javaDouble = (x) => (Number.isInteger(x) ? x.toFixed(1) : String(x)); // Double.toString for the small averages (no exponent forms below 1e7)
 class PacketTracker {
   constructor() { this.bytes = new Array(100).fill(0); this.counts = new Array(100).fill(0); }
@@ -69,7 +69,10 @@ export class ServerAdmin {
     this.profiles = new UserMap((Array.isArray(saved.profiles) ? saved.profiles : []).filter((r) => r && typeof r.uuid === 'string' && typeof r.name === 'string').map((r) => [r.name.toLowerCase(), { uuid: r.uuid, name: r.name }]));
     this.whitelistOn = typeof saved.whitelistOn === 'boolean' ? saved.whitelistOn : whitelist === true; // white-list property
     this.idleMinutes = Number.isInteger(saved.idleMinutes) && saved.idleMinutes >= 0 ? saved.idleMinutes : 0; // player-idle-timeout
-    this.autosave = true; // /save-off: runtime only, as WorldServer.levelSaving
+    // b87 offline87: one levelSaving flag (mt.c, true = saving off) per WorldServer, as MinecraftServer.c[] (Overworld, Nether, End). /save-off and /save-on set every flag
+    // and report a change when any flag changed (bytecode-read bi.b / bj.b; executed in the "partial" rows); runtime only. The port writes one save file, so the
+    // periodic and the shutdown saves follow the Overworld's flag (`autosave`); the commands only ever switch all three together.
+    this.levelSaving = [false, false, false];
     this.whitelistFile = null; // b70 sptab70: { read(): rows | null, write(rows) } for whitelist.json beside server.properties (set by server/server.js)
     this.listFiles = null; // b71 mpadmin71: { read(name) -> rows | null, write(name, rows) } for ops, whitelist, banned-players and banned-ips (.json beside server.properties; set by server/server.js)
     this.written = new Map(); // list name -> the text last written to (or read from) its file
@@ -78,6 +81,13 @@ export class ServerAdmin {
     this.host = null; // { kick(id, reason), ipOf(id), stop(), save() } set by server/server.js
     this.pending = null; this.lastAction = new Map(); this.looks = new Map();
   }
+  get autosave() { return !this.levelSaving[0]; } // /save-off: runtime only
+  set autosave(on) { this.levelSaving.fill(!on); }
+  // b87 offline87: the profile a login gets (NetHandlerLoginServer.func_147326_c; executed func_152506_a in offline87-reference.json). Online mode: the authenticated
+  // profile (the port's account id stands for the Mojang UUID). Offline mode (online-mode=false): an incomplete profile becomes (UUID.nameUUIDFromBytes("OfflinePlayer:" +
+  // typed name), typed name), the name's case kept. EntityPlayer.func_146094_a makes that the entity UUID, the key of playerdata/<uuid>.dat, the stats file and
+  // the list entries; the port keys the saved player, the tamed owners, /list uuids and the four lists by it (the player's resumeKey).
+  loginProfile({ id, name }) { return this.onlineMode ? { uuid: id, name } : { uuid: offlineUuid(name), name }; }
   /** The server's save data, in the shapes of ops.json, banned-players.json, banned-ips.json, whitelist.json and usercache.json. */
   save() {
     const rows = (m) => userListValues(m).map((r) => ({ ...r })); // b71 mpadmin71: UserList.saveToFile writes values() = HashMap order
@@ -245,12 +255,16 @@ export class ServerAdmin {
         try { const r = host?.save(); this.pending = Promise.resolve(r).then(done, failed); } catch (e) { failed(e); }
         return;
       }
-      case 'save-on':
-        if (this.autosave) throw new Fail('commands.save-on.alreadyOn');
-        this.autosave = true; return ctx.feedback('commands.save.enabled');
-      case 'save-off':
-        if (!this.autosave) throw new Fail('commands.save-off.alreadyOff');
-        this.autosave = false; return ctx.feedback('commands.save.disabled');
+      case 'save-on': { // bj.b: every world with levelSaving set is cleared; "already on" only when none was
+        let changed = false; this.levelSaving.forEach((off, i) => { if (off) { this.levelSaving[i] = false; changed = true; } });
+        if (!changed) throw new Fail('commands.save-on.alreadyOn');
+        return ctx.feedback('commands.save.enabled');
+      }
+      case 'save-off': { // bi.b: every world without levelSaving gets it; "already off" only when none changed
+        let changed = false; this.levelSaving.forEach((off, i) => { if (!off) { this.levelSaving[i] = true; changed = true; } });
+        if (!changed) throw new Fail('commands.save-off.alreadyOff');
+        return ctx.feedback('commands.save.disabled');
+      }
       case 'setidletimeout': {
         if (a.length !== 1) throw usage('commands.setidletimeout.usage');
         if (!/^[+-]?\d+$/.test(a[0]) || Math.abs(Number(a[0])) > 2147483647) throw new Fail('commands.generic.num.invalid', a[0]);
