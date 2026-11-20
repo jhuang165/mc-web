@@ -15,6 +15,7 @@ import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
 import { isDragon, reachesDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
+import { getLootingModifier } from "./enchantments.js"; // b87 blast87
 import { clientDropDraws } from "./multiplayer/client-explosion.js"; // b80 mpfx80
 import { s27Loopback } from "./multiplayer/server-explosion-packet.js"; // b79 explfx79: the integrated client sees the blast as S27 does
 import { velocityPacket } from "./multiplayer/server-velocity.js"; // S12 quantisation
@@ -110,11 +111,17 @@ export function explodeMobs(state, request) {
 }
 /** b83 blastorder83: the mob rows of doExplosionA's list (explodeMobs runs them alone); each hit is pushed to `mobHits` at its turn. */
 export function mobRows(state, request, mobHits = []) {
-  const { world, mobs, position } = state;
+  const { world, mobs, position, survival = null } = state;
   const { x, y, z, size, exploder = null, attacker = null } = request;
   const b = blastOf(world, x, y, z, size, exploder, null), out = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
+  // b87 blast87 (bytecode-read ro.a(agw), rp.j, sv.a(ro, F), sv.a(ro)): DamageSource.setExplosionSource is EntityDamageSource("explosion.player", getExplosivePlacedBy) with the
+  // explosion flag. Its getEntity, the placer, is the knockback origin and the revenge target (a skeleton that lit the TNT; the wither refuses an undead one); a player placer
+  // sets recentlyHit 100 and attackingPlayer (XP and the player-only drops), gets the kill (onKillEntity) and lends the Looting level of the item in his hand
+  // (EnchantmentHelper.getLootingModifier(placer) in onDeath). The source keeps its explosion flag, so a mob's Blast Protection counts (the old "player" / "mob" name lost it).
+  const looting = attacker === "player" ? getLootingModifier(survival?.held ?? null) : 0;
+  const source = attacker === "player" ? { name: "explosion", looting } : { name: "explosion", shooter: attacker && typeof attacker === "object" ? attacker : null };
   for (const entity of liveOrder(mobs, [...(mobs?.entities ?? [])])) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
     if (entity === exploder) continue;
     const type = ENTITY_TYPES[entity.type];
@@ -156,7 +163,7 @@ export function mobRows(state, request, mobHits = []) {
         crystal ? [entity.x - 1, entity.y - 1, entity.z - 1, entity.x + 1, entity.y + 1, entity.z + 1] : entityBox(entity, width, height),
       );
       if (!hit) return;
-      if (hitFrom) mobs.damage(entity, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
+      if (hitFrom) mobs.damage(entity, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null, source);
       else mobs.hazard(entity, hit.damage, "explosion");
       entity.vx += hit.push[0]; entity.vy += hit.push[1]; entity.vz += hit.push[2];
       mobHits.push({ entity, ...hit });
@@ -198,7 +205,8 @@ export function applyExplosion(state, request, hooks = {}) {
     ...tntRows(primed, b, tntProcessed),
   ];
   let playerHit = null;
-  if (survival.health > 0 && blastNear(b, position.x, serverPosY(position.y, sleeping), position.z)) rows.push({ key: "player", pos: [position.x, position.y + Math.fround(1.62), position.z], first: true, run: () => { playerHit = playerBlast(); } });
+  // b87 blast87 (executed, BlastOrderProbe "feet"): the list files EntityPlayerMP by posY, the feet (a sleeper's minY + 0.2), not the eye.
+  if (survival.health > 0 && blastNear(b, position.x, serverPosY(position.y, sleeping), position.z)) rows.push({ key: "player", pos: [position.x, serverPosY(position.y, sleeping), position.z], first: true, run: () => { playerHit = playerBlast(); } });
   runBlastRows(rows);
   finishBlastRows(state);
 

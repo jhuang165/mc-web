@@ -29,7 +29,7 @@ function scene(r) {
   mobs.hazard = hurt; mobs.damage = hurt;
   const ents = r.ents.map(([kind, x, y, z], i) => {
     if (kind === "player") {
-      Object.assign(position, { x, y: y - Math.fround(1.62), z });
+      Object.assign(position, { x, y, z }); // b87 blast87: the list files a player by posY; the port's posY (EntityPlayerMP) is position.y, so it takes the probe player's posY
       Object.assign(survival, { health: 1000, scaledDamage: () => { log.push([depth, i]); return false; } });
       return "player";
     }
@@ -41,10 +41,10 @@ function scene(r) {
     mobs.entities.push(c);
     return c;
   });
-  const stamp = (i) => (ents[i] === "player" ? stampEntity("player", position.x, position.y + Math.fround(1.62), position.z, true) : stampEntity(ents[i], ents[i].x, walkY(ents[i]), ents[i].z));
+  const stamp = (i) => (ents[i] === "player" ? stampEntity("player", position.x, position.y, position.z, true) : stampEntity(ents[i], ents[i].x, walkY(ents[i]), ents[i].z));
   const place = (i, [x, y, z]) => {
     const e = ents[i], kind = r.ents[i][0];
-    if (kind === "player") return Object.assign(position, { x, y: y - Math.fround(1.62), z });
+    if (kind === "player") return Object.assign(position, { x, y, z });
     if (kind === "item") return Object.assign(e, { x, y: y - 0.125, z });
     if (kind === "orb") { const o = newOrb(3, x, y, z, () => 0.5); return Object.assign(e, { x, y: o.y, posY: y, z, bb: o.bb }); }
     if (kind === "tnt") return Object.assign(e, { x, y: y - TNT_Y_OFFSET, z });
@@ -67,12 +67,10 @@ test("blastorder83 (executed): every scene's hits come in the native list order,
   assert.ok(nested > 100, "many scenes nest a crystal blast");
   let mismatch = 0;
   const first = [];
-  // The probe's player is an EntityPlayer (posY the eye, getEyeHeight 0.12F); the port's is the integrated EntityPlayerMP (posY the feet, eye 1.62F). They differ only where the eye vector
-  // is degenerate: a player whose eye sits exactly on a crystal's centre (a nested blast from there). Those scenes are left out.
-  const onCrystal = (r) => { const pos = r.ents.map((e) => e.slice(1)); for (const op of r.ops) if (op[0] === "move") pos[op[1]] = op[2]; return r.ents[0][0] === "player" && r.ents.some((e, i) => e[0] === "crystal" && pos[i].every((v, k) => v === pos[0][k])); };
-  const kept = recs.filter((r) => !onCrystal(r));
-  assert.ok(kept.length >= 395, `${recs.length - kept.length} degenerate scenes`);
-  for (const r of kept) {
+  // The probe's player is an EntityPlayer (posY the eye, getEyeHeight 0.12F); the port's is the integrated EntityPlayerMP (posY the feet, eye 1.62F). b87 blast87: the replay gives the
+  // port's player the probe player's posY (the y the list files him by and the reach gate reads), so the scenes where the old replay put the port's eye on a crystal's centre
+  // (degenerate, once left out) replay too: all 400.
+  for (const r of recs) {
     const got = replay(r);
     if (JSON.stringify(got) !== JSON.stringify(r.hits)) { mismatch++; if (first.length < 3) first.push({ r, got }); }
   }

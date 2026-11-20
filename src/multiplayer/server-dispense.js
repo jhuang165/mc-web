@@ -238,7 +238,7 @@ export class ServerDispense {
     if (lane.potions?.projectiles.balls.length) this.tickPotions(lane);
     if (lane.arrows.list.length) {
       const arrows = lane.arrows, targets = arrowTargets(this.targets(lane), false);
-      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer) : undefined, hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
+      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z, shooter) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer ?? (shooter && typeof shooter === 'object' ? shooter : null)) : undefined, /* b87 blast87: aob.a(ahb,III,sa) takes zc.c when it is an EntityLivingBase: a skeleton's burning arrow makes it the placer */ hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
       for (const a of [...arrows.list]) {
         if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
         ctx.hanging = this.hangingOf(dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings

@@ -121,6 +121,7 @@ public class BlastOrderProbe {
     }
     extra(w, out);
     cover(w, out);
+    feet(w, out);
     for (String s : out) System.out.println(s);
   }
 
@@ -371,6 +372,59 @@ public class BlastOrderProbe {
         + "],\"events\":" + evs + ",\"motion\":" + motion() + ",\"dead\":" + deadFlags() + "}");
     }
     dmgLog = false; BW.blocks.clear();
+  }
+  // ---- b87 blast87: the player filed by his feet. Chunk.addEntity (apx.a(sa)) and updateEntityWithOptionalForce file an entity by floor(posY / 16), and EntityPlayerMP's posY is
+  // the feet (yOffset 0), so a player whose feet and eye (posY + 1.62F) lie in different vertical slices is listed in the feet's slice. Scenes: a player (LMPlayer) first, feet
+  // just below a slice border (mostly) or anywhere, then 2-6 items, orbs, arrows, TNT, zombies, pigs and up to one crystal around the border, some moved after they joined
+  // (the player too: across the border by the feet only, or by both). Same record as "cover" without blocks, plus "move" ops.
+  static void feet(BW w, List<String> out) throws Exception {
+    Random rnd = new Random(87);
+    double[] corner = { -0.4, -0.1, 0.0, 0.2, 0.5 };
+    String[] kinds = { "item", "orb", "arrow", "tnt", "zombie", "pig", "crystal" };
+    double[] border = { 16.0, 16.0, 16.0, 32.0 };
+    dmgLog = true;
+    for (int n = 0; n < 200; n++) {
+      ChunkOrderProbe.load(-3, 4);
+      hits.clear(); ents.clear(); evs.clear(); cur = -1;
+      double b = border[rnd.nextInt(border.length)];
+      double cx = 16.0 + corner[rnd.nextInt(corner.length)], cy = b + corner[rnd.nextInt(corner.length)], cz = 16.0 + corner[rnd.nextInt(corner.length)];
+      float size = new float[] { 4.0f, 4.0f, 3.0f, 2.0f, 6.0f }[rnd.nextInt(5)];
+      int count = 3 + rnd.nextInt(5), crystals = 0;
+      List<String> desc = new ArrayList<>(), ops = new ArrayList<>();
+      for (int i = 0; i < count; i++) {
+        String kind = i == 0 ? "player" : kinds[rnd.nextInt(kinds.length)];
+        if (kind.equals("crystal") && ++crystals > 1) kind = "item";
+        double x = cx + (rnd.nextInt(13) - 6) * 0.5, z = cz + (rnd.nextInt(13) - 6) * 0.5;
+        double y = kind.equals("player") && rnd.nextInt(4) != 0 ? b - 0.0625 * (1 + rnd.nextInt(25)) : b + (rnd.nextInt(17) - 8) * 0.25;
+        if (Math.abs(x - cx) < 0.3 && Math.abs(z - cz) < 0.3) x += 1.25;
+        sa e;
+        switch (kind) {
+          case "item": e = new LItem(w, x, y, z); break;
+          case "orb": e = new LOrb(w, x, y, z); break;
+          case "arrow": e = new LArrow(w, x, y, z); break;
+          case "tnt": e = new LTnt(w, x, y, z); break;
+          case "crystal": e = new LCrystal(w, x, y, z); break;
+          case "player": { LMPlayer p = new LMPlayer(w); MobMoveProbe.set(p, "Z", new Random(0)); p.a(yj.a).a(1000.0); p.g(1000.0f); ChunkOrderProbe.place(p, x, y, z); e = p; break; }
+          default: { sv m = kind.equals("zombie") ? new LZombie(w) : new LPig(w); m.a(yj.a).a(1000.0); m.g(1000.0f); ChunkOrderProbe.place(m, x, y, z); e = m; }
+        }
+        desc.add("[\"" + kind + "\"," + num(e.s) + "," + num(e.t) + "," + num(e.u) + "]");
+        ents.add(e); ChunkOrderProbe.spawn(w, e); ops.add("[\"add\"," + i + "]");
+        if (i > 0 && rnd.nextInt(3) == 0) { // move an earlier entity; the player half the time, by the feet across the border (eye slice kept) or anywhere
+          int j = rnd.nextInt(2) == 0 ? 0 : rnd.nextInt(i + 1);
+          sa m = ents.get(j);
+          double mx = cx + (rnd.nextInt(13) - 6) * 0.5, mz = cz + (rnd.nextInt(13) - 6) * 0.5;
+          double my = j == 0 && rnd.nextInt(2) == 0 ? (m.t < b ? b + 0.0625 * rnd.nextInt(4) : b - 0.0625 * (1 + rnd.nextInt(4))) : b + (rnd.nextInt(17) - 8) * 0.25;
+          if (Math.abs(mx - cx) < 0.3 && Math.abs(mz - cz) < 0.3) mx += 1.25;
+          ChunkOrderProbe.place(m, mx, my, mz);
+          ChunkOrderProbe.reslice(w, m);
+          ops.add("[\"move\"," + j + "," + arr(m.s, m.t, m.u) + "]");
+        }
+      }
+      zero(); new agw(w, null, cx, cy, cz, size).a();
+      out.add("{\"case\":\"feet\",\"centre\":" + arr(cx, cy, cz) + ",\"size\":" + num(size) + ",\"ents\":[" + String.join(",", desc) + "],\"ops\":[" + String.join(",", ops)
+        + "],\"events\":" + evs + ",\"motion\":" + motion() + ",\"dead\":" + deadFlags() + "}");
+    }
+    dmgLog = false;
   }
   // ChunkOrderProbe.world() for this subclass (the same fields).
   static BW world() throws Exception {

@@ -87,8 +87,8 @@ function scene(r) {
     for (const k of MOTION[kind] ?? []) e[k] = 0;
     return e;
   });
-  // the port files its player by the eye (stampPlayerCell); the probe keeps the feet and the eye in one slice
-  const stamp = (i) => (ents[i] === "player" ? stampEntity("player", position.x, position.y + Math.fround(1.62), position.z, true) : stampEntity(ents[i], ents[i].x, walkedY(ents[i]), ents[i].z));
+  // b87 blast87: the port files its player by the feet, posY (stampPlayerCell), as the chunk files EntityPlayerMP
+  const stamp = (i) => (ents[i] === "player" ? stampEntity("player", position.x, position.y, position.z, true) : stampEntity(ents[i], ents[i].x, walkedY(ents[i]), ents[i].z));
   events.length = 0;
   return { events, ents, stamp, boom, serverPlayer, playerIndex };
 }
@@ -201,7 +201,7 @@ test("blastcover86: a burning arrow's TNT on the server takes the shooter (aob.a
   assert.equal(sim.dispense.primed[0].placer, p);
   const src = readFileSync(new URL("./multiplayer/server-dispense.js", import.meta.url), "utf8");
   assert.match(src, /ctx\.tntPlacer = this\.ownerOf\(a\)/);
-  assert.match(src, /igniteTnt: lane === this \? \(x, y, z\) => this\.igniteBlockTnt\(x, y, z, ctx\.tntPlacer\)/);
+  assert.match(src, /igniteTnt: lane === this \? \(x, y, z, shooter\) => this\.igniteBlockTnt\(x, y, z, ctx\.tntPlacer \?\? /); // b87 blast87: a mob shooter when no player owns the arrow
 });
 
 test("blastcover86: a large fireball in the single-player player's blast turns to the player's look vector, not NaN (main.js playerLook gives degrees)", () => {
