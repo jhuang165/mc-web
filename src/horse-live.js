@@ -101,8 +101,7 @@ export function horseSeats(mobs) {
       rider.vehicle = vehicle;
       if (e.horse) { e.horse.eating = false; e.eatTicks = 0; } // wi.i(yz) (bytecode-read): o(false) and p(false) on mounting stop the grass eating and the rear
       e.rearing = false; e.rearTicks = 0;
-      rider.jumpCounter = 0;
-      rider.jumpPower = 0;
+      rider.jumpPower = 0; // b87 ride87: the bar is 0 off a horse (blk.e's else branch); mountEntity leaves EntityPlayerSP's counter `a` alone
       seats.updateRiderPosition(vehicle);
       return true;
     },
@@ -114,7 +113,7 @@ export function horseSeats(mobs) {
       const e = v.entity;
       const spot = landing && e && world ? dismountSpot(world, rider, { x: e.x, minY: e.y, height: f(mobs.size(e)[1]), z: e.z }, (box) => Minecarts.prototype.boxes.call({ railKind: () => null }, world, null, box, []).length === 0) : null;
       if (e) e.rider = null;
-      Object.assign(rider, { ...spot, vehicle: null, fallDistance: 0, jumpCounter: 0, jumpPower: 0 });
+      Object.assign(rider, { ...spot, vehicle: null, fallDistance: 0, jumpPower: 0 }); // b87 ride87: the counter `a` survives the dismount (blk.e only touches it on a horse)
       return true;
     },
     // Entity.updateRiderPosition: feet = posY + mountedOffset (height * 0.75 * scale) - 0.5 (probe: rider eye at y + 1.2 + 1.12).
@@ -127,27 +126,30 @@ export function horseSeats(mobs) {
       const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : e.type === "horse" ? H.mountedOffset(view(e)) : mountedYOffset(mobs.size(e)[1]);
       Object.assign(rider, { x: e.x + r.dx, y: e.y + offset - 0.5 + lift, z: e.z + r.dz });
     },
-    // EntityPlayerSP's jump key counter: charged while Space is held, sent as (int)(power * 100) on release.
+    // EntityPlayerSP's jump key counter (horseJumpCounter); the release reaches the horse as C0B action 6 does on the integrated server (wi.w).
     charge(rider, controls) {
-      const v = rider.vehicle;
-      if (!v?.horse || v.entity?.type !== "horse") return;
-      const jump = !!controls.jump;
-      if (jump) {
-        if (rider.jumpCounter < 0) {
-          if (++rider.jumpCounter === 0) rider.jumpPower = 0;
-        } else {
-          rider.jumpCounter++;
-          rider.jumpPower = H.heldJumpPower(rider.jumpCounter);
-        }
-      } else if (rider.wasJump) {
-        rider.jumpCounter = -10;
-        if (rider.jumpPower > 0) mobs.horseJump(v.entity, Math.trunc(rider.jumpPower * 100));
-        rider.jumpPower = 0;
-      }
-      rider.wasJump = jump;
+      const v = rider.vehicle, e = v?.horse ? v.entity : null;
+      horseJumpCounter(rider, !!controls.jump, !!e && (e.type ?? "horse") === "horse", (power) => mobs.horseJump(e, power));
     },
   };
   return seats;
+}
+
+// b87 ride87: EntityPlayerSP.onLivingUpdate's horse jump bar (blk.e 949-1102, bytecode-read). `flag` is the previous tick's movementInput.jump (read at 328, before
+// updatePlayerMoveState); isRidingHorse (blk.u) is only `ridingEntity instanceof EntityHorse` (no saddle or tame test). On a horse:
+//   if (a < 0) { a++; if (a == 0) bO = 0; }   then   flag && !jump: a = -10, i()   |   !flag && jump: a = 0, bO = 0   |   flag: a++, bO = heldJumpPower(a);
+// off a horse bO = 0. i() is EntityClientPlayerMP's C0B action 6 with (int)(bO * 100.0F) (bjk.i), sent whatever the value (0 included, and before the tick's C05 / C0C);
+// bO itself is not cleared by the release, so the bar stays until the -10 cooldown reaches 0. Pressing again inside the cooldown restarts at a = 0 at once.
+// `rider` keeps jumpCounter (a), jumpPower (bO) and wasJump (flag); `send(int)` is the C0B.
+export function horseJumpCounter(rider, jump, onHorse, send) {
+  const flag = !!rider.wasJump;
+  rider.wasJump = !!jump;
+  if (!onHorse) { rider.jumpPower = 0; return; }
+  rider.jumpCounter = rider.jumpCounter | 0;
+  if (rider.jumpCounter < 0 && ++rider.jumpCounter === 0) rider.jumpPower = 0;
+  if (flag && !jump) { rider.jumpCounter = -10; send(Math.trunc(f(f(rider.jumpPower || 0) * 100))); }
+  else if (!flag && jump) { rider.jumpCounter = 0; rider.jumpPower = 0; }
+  else if (flag) { rider.jumpCounter++; rider.jumpPower = H.heldJumpPower(rider.jumpCounter); }
 }
 
 // wi.e(F,F) with a rider (cu() and a living rider): the rider's yaw and half pitch are copied, strafe is halved, backwards is
@@ -214,8 +216,9 @@ export function closestBredHorse(mobs, e, d) {
 export function installHorse(EntityWorld) {
   const proto = EntityWorld.prototype;
   Object.defineProperty(proto, "horseSeats", { get() { return (this._horseSeats ??= horseSeats(this)); }, configurable: true });
-  // wi.w(int): the jump power the client sends.
+  // wi.w(int): the jump power the client sends (b87 ride87, bytecode-read: an unsaddled horse (cu() false) changes nothing; a negative value counts as 0 without the rear).
   proto.horseJump = function (e, p) {
+    if (!e.horse?.saddled) return;
     const j = H.jumpPower(!!e.horse.saddled, p);
     e.jumpPower = j.power;
     e.jumpHeld = j.held;

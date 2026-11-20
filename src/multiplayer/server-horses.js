@@ -6,8 +6,12 @@
 // The rider is the record ServerVehicles keeps (`riderOf`, `p.mount = { key: 'm<id>', mob, rider }`), exactly as for a saddled pig (server-riding.js), so presence (`riding`), the sneak
 // dismount, the seat copy, the death / unload checks and the mob packets are the existing code. What this file adds:
 //   * mount: the `mount` action of horseInteract seats the player (EntityHorse.interact -> func_110237_h -> player.mountEntity);
-//   * the jump: C0B action 6 (EntityPlayerSP sends (int)(jumpPower * 100) when the jump key is released) -> EntityHorse.setJumpPower(int); new wire `horseJump { power }`. A client that never
-//     sends it still jumps: the server then charges the bar from the held jump key itself (horseSeats.charge, the EntityPlayerSP counter);
+//   * the jump: C0B action 6 (EntityPlayerSP sends (int)(jumpPower * 100) when the jump key is released) -> EntityHorse.setJumpPower(int); new wire `horseJump { power }`.
+//     b87 ride87: that is the only way a server horse jumps. The C0C's jump flag (rider.jumping, server-vehicles.js applyRide) is EntityPlayerMP.isJumping (mw.a(FFZZ));
+//     its one reader in the jar is EntityLivingBase.onLivingUpdate (sv.e 423-488, the rider's own update, mw.i() from processPlayer's riding branch): in water / lava
+//     motionY += 0.04, else jump() only when onGround, which the riding client's C05 never sets; the seat put-back and the next updateRidden discard both. No mount reads it
+//     (EntityHorse, the pig's EntityAIControlledByPlayer, EntityBoat and EntityMinecart steer on moveForward / moveStrafing only). The b76/b77 fallback that charged
+//     the bar from the held key on the server is gone;
 //   * C0B action 7 (open the horse inventory while riding) -> EntityHorse.openGUI(player): new wire `horseInventory`; and the right click's own "gui" action (saddle / armour / sneak on a tame horse);
 //   * the window: S2D `openWindow` with `kind: 'horse'` and `horse: { type, chested, ... }`, then the usual S30 / S2F / S32 traffic of ServerContainers.
 // Bytecode-read (NetHandlerPlayServer.processEntityAction, jar class nh.a(jj)): action 6 calls wi.w(param) and action 7 calls wi.g(player) when the player's ridden entity is a wi (EntityHorse), with
@@ -35,7 +39,6 @@ export class ServerHorses {
     if (!seats.mount(e, rider)) return false;
     p.mount = { key: 'm' + String(e.id).replace(/^mob-/, ''), mob: e, rider };
     rider.fallHit ??= serverRiderFall(this.host, p).hit; // b77: EntityHorse.fall damages the rider by the horse's own amount (horse-live.js horseLand)
-    p.horseJumpWire = false; // until a `horseJump` arrives the server counts the jump key
     this.vehicles.seat(p);
     return true;
   }
@@ -44,25 +47,18 @@ export class ServerHorses {
     const rider = this.vehicles.riderOf(p);
     return { sneak, horses: { player: rider, mount: (e) => this.mount(p, e) }, open: (e) => this.open(p, e) };
   }
-  // Each tick before the mobs move (ServerVehicles.riderInput): without a `horseJump` wire message the jump key charges the bar (EntityPlayerSP, horse-live.js charge).
+  // Each tick before the mobs move (ServerVehicles.riderInput). The held jump key charges nothing here (b87 ride87: only C0B 6 jumps a horse).
   input(p) {
     const e = this.horseOf(p);
     if (!e) return;
     // b77: wi.e(FF) copies the rider's pitch * 0.5 (native pitch: positive looks down, the server's `p.pitch` positive looks up).
     p.mount.rider.pitch = f(-p.pitch * 180 / Math.PI);
-    if (p.horseJumpWire) return;
-    const was = p.mount.rider.wasJump;
-    this.mobs.horseSeats.charge(p.mount.rider, { jump: !!p.input?.jump });
-    if (was && !p.input?.jump) p.horseAutoAt = this.host.ticks; // b77 mphorseclient77: the fallback fired this tick; a `horseJump` just behind it is the same release
   }
-  // C0B action 6: wi.w(param). Only a riding player's own horse; the value is the client's (int)(power * 100), clamped here to what a bar can show.
+  // C0B action 6: wi.w(param) whenever the ridden entity is a horse (nh.a(jj) 109-158: no other test). The parameter is any int (C0B's jumpBoost field); wi.w clamps it.
   jump(p, power) {
     const e = this.horseOf(p);
-    if (!e || !Number.isInteger(power) || power < -1 || power > 100000) return false;
-    const late = !p.horseJumpWire && p.horseAutoAt != null && (this.host.ticks ?? 0) - p.horseAutoAt <= 3;
-    p.horseJumpWire = true; // b77: from the first wire message on the key fallback is off
-    if (late) { p.horseAutoAt = null; return true; }
-    this.mobs.horseJump(e, Math.max(-1, power));
+    if (!e || !Number.isInteger(power) || power < -2147483648 || power > 2147483647) return false;
+    this.mobs.horseJump(e, power);
     return true;
   }
   // C0B action 7: wi.g(player) for the ridden horse.

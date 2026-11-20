@@ -1,6 +1,6 @@
 // Batch 75 mpusesweep75: item uses that the dedicated server's edit path did not reach (sweep: every item id right-clicked in the air and on a block, tools/sweep-use75.mjs).
 // Each calls the single-player module with the server's own ray:
-//   * armour (ItemArmor.onItemRightClick): the piece moves into its empty armour slot (player-edit-simulation.js equip-armor);
+//   * armour (ItemArmor.onItemRightClick): the piece moves into its empty armour slot (player-edit-simulation.js equip-armor; Creative keeps it in hand, b87);
 //   * a glass bottle on water (ItemGlassBottle.onItemRightClick, potion-use.js useGlassBottle): a water bottle; spawn protection refuses it (Adventure does not: canPlayerEdit is true with a stack in hand, b78);
 //   * a spawn egg aimed at water (ItemMonsterPlacer.onItemRightClick, spawn-egg-use.js useEggOnWater);
 //   * a firework rocket on a block (ItemFirework.onItemUse, fireworks-live.js useFirework): the dimension's rockets launch it.
@@ -22,7 +22,13 @@ export function airUse(sim, p, eye, dir, target) {
   if (!id || p.dead || s.health <= 0) return false;
   if (item?.armor !== undefined) { // the slot is 39 - armour type: helmet 0 .. boots 3
     const inv = s.inventory, slot = 39 - item.armor;
-    if (!inv.getStack(slot)) { inv.setStack(slot, copyStack(inv.held)); inv.main[inv.current] = null; }
+    if (inv.getStack(slot)) return true; // mx.a: the same stack at the same size and damage is "not used": nothing changes and nothing is resent (the click still ends here)
+    inv.setStack(slot, copyStack(inv.held));
+    // b87 ride87: tryUseItem (mx.a, bytecode-read) restores the size in Creative (mx.d()), so the piece is worn and also stays in the hand; then, the player not using
+    // an item, sendContainerToPlayer (mw.a(zs): S30 of the whole window) puts it back on the client, whose own sendUseItem had emptied the slot (client-item-use.js).
+    if (!s.creative) inv.main[inv.current] = null;
+    const window = sim.serverItems?.inv;
+    if (window?.win) { window.win(p); window.resend(p); }
     return true;
   }
   if (id === ITEM_GLASS_BOTTLE || (id === ITEM_SPAWN_EGG && !target)) { // an egg aimed at a block was ItemMonsterPlacer.onItemUse (true whatever happened): server-use.js
