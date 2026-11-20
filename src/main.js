@@ -274,6 +274,8 @@ import { displayTicks } from "./display-ticks.js";
 import { importedRuntime, importedDimensionState } from "./world-import.js";
 import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
+import { sensorSky } from "./daylight-sensor-time.js"; // b88 tiles88
+import { heldTiles, tilesReplaced } from "./container-tiles.js"; // b88 tiles88
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
@@ -1853,8 +1855,9 @@ async function launch(record, prepared, { slice = false } = {}) {
         boneMeal: (x, y, z, original, rand) => { const g = useBoneMeal({ world, trees, farming, flowers: FLOWERS, grassRandom: boneRandom, items, rand }, x, y, z); for (const q of g.changed) scene.updateBlock(q[0], q[2], q[1]); if (g.farm) applyFarmUpdates(farming.drain()); return g.used; }, // b67 bonemeal3: ItemDye.func_150919_a, world Random from the dispenser
       },
       maxStack: (st) => survival.inventory.maxStack(st),
-      subtracted: () => scene.subtracted ?? 0,
-      angle: () => scene.angle ?? 0,
+      subtracted: () => sensorSky(survival.time, !survival.timeFrozen, weather.rainStrength(1), weather.weightedThunder(1)).subtracted, // b88 tiles88: WorldServer.tick's skylightSubtracted (before the clock moved; daylight-sensor-time.js)
+      angle: () => sensorSky(survival.time).angle, // b88 tiles88: getCelestialAngle(1.0F) at this tick's world time (it read the scene's, a tick old at partial 0)
+      totalTime: () => (mobs ? (mobs.worldTicks ?? -1) + 2 : undefined), // b88 tiles88: getTotalWorldTime in the tile entity pass, as the beacons' clock (tickBeacons below)
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
     } });
     {
@@ -2490,6 +2493,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   if (kind === "beacon") drawBeaconLabels($("#modal"));
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
+  if (!(multiplayer?.ready && active?.remote)) containerView.tiles = heldTiles(survival, kind, key, container.keys); // b88 tiles88: the tile records isUseableByPlayer compares (container-tiles.js)
   enchantExtras?.dispose();
   enchantExtras = kind === "enchanting" ? new EnchantingScreenExtras(document.querySelector("#modal .enchanting-modal"), (canvas) => new EnchantingGuiBookView(canvas)) : null;
   const creative = kind === "creative",
@@ -2952,6 +2956,7 @@ function tickChests() {
   if (containerView?.kind === "horse") { const m = containerView.horseMob; if (!m && containerView.remote?.window) { /* b76 mphorse76: the server window checks its own reach */ } else if (!m || !horseReach(m.health > 0 && mobs.entities.includes(m), Math.hypot(m.x - position.x, m.y - position.y, m.z - position.z))) resume(); }
   if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => { const b = world.get(...k.split(",").map(Number)); return !isChestBlock(b) && b !== ENDER_CHEST; })) resume();
+  if (containerView?.tiles && tilesReplaced(survival, containerView.tiles)) resume(); // b88 tiles88: getTileEntity != this (a /setblock over the chest, furnace, dispenser, hopper or stand made a new tile)
   if (containerView?.kind === "enchanting") {
     // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
     const [x, y, z] = containerView.key.split(",").map(Number);

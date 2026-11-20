@@ -29,6 +29,7 @@ import { serverRedstoneDrop, installServerSkullBreak } from './server-redstone-d
 import { installResidency } from './server-residency.js'; // b82 mpcmd82
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '../lighting.js';
+import { sensorSky, celestialRadians } from '../daylight-sensor-time.js'; // b88 tiles88
 import { ServerChunkSets } from './server-chunks.js';
 import { ServerRules, blockProtected, flightCheck, hardcoreTick } from './server-properties.js'; // b69 serverprops
 import { tickWorldSystems } from '../world-tick.js';
@@ -73,6 +74,7 @@ import { ServerAchievements } from './server-achievements.js';
 import { ServerWither } from './server-wither.js'; // b63 mpwither
 import { ServerGolems } from './server-golems.js'; // b66 mpgolems
 import { ServerContainers } from './server-containers.js';
+import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
 import { ContainerTicks } from './server-container-ticks.js';
 import { ServerMobs, MOB_LIMIT } from './server-mobs.js';
 import { loadVillages, saveVillages } from './server-villagers.js'; // b66 mpvillage
@@ -194,7 +196,8 @@ export class DedicatedSimulation {
     installServerSkullBreak(this, this.world, () => this.tileEntities.skulls, () => this.items); // b84 drops84
     this.redstone = new LiveRedstone(this.world, {
       entitiesIn: (box, mode) => mode === 'minecart' || mode === 'inventory' ? this.vehicles?.cartsIn(box, mode) ?? [] : [...this.players.values()].filter(p => p.position.x + .3 > box[0] && p.position.x - .3 < box[3] && p.position.y + 1.8 > box[1] && p.position.y < box[4] && p.position.z + .3 > box[2] && p.position.z - .3 < box[5]).map(p => ({ ...p.position, player: true, living: true })),
-      environment: () => ({ sky: 15, skylightSubtracted: this.darkness, celestialAngle: celestialAngle(this.time, 1) * Math.PI * 2, noSky: false }),
+      environment: () => { const s = sensorSky(this.time, String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true', this.weather.rainStrength(), this.weather.weightedThunder()); return { sky: 15, skylightSubtracted: s.subtracted, celestialAngle: celestialRadians(s.angle), noSky: false }; }, // b88 tiles88: skylightSubtracted from the clock before this tick's step, the angle in float (daylight-sensor-time.js; executed, tiles88-reference.json)
+      totalTime: () => this.ticks, // b88 tiles88: the sensors' getTotalWorldTime gate (apa.h), as the beacons' clock below
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
       drop: serverRedstoneDrop(this, () => this.items), skulls: () => this.tileEntities.skulls, // b83 mppiston83: piston and support-loss drops (server-redstone-drops.js)
     });
@@ -217,12 +220,14 @@ export class DedicatedSimulation {
     this.weather.blockTick = (x, y, z, b) => this.fire.randomTick(x, y, z, b) || this.trees.randomTick(x, y, z, b) || this.plants.randomTick(x, y, z, b) || this.farming.randomTick(x, y, z, b);
     // Instance hook sees *every* write, including untracked and fluid/redstone
     // writes. Store only the final cell value per tick; never wrap World globally.
-    const put = this.world.put.bind(this.world);
+    const put = this.world.put.bind(this.world), ownWorld = this.world;
+    const self = this, swaps = { get signs() { return self.tileEntities?.signs; }, get containers() { return self.containers; }, own: () => self.world === ownWorld }; // b88 tiles88
     this.world.put = (x, y, z, b, m = 0, track = true) => {
       const old = this.world.get(x, y, z), meta = this.world.getMeta(x, y, z);
       const result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
       if (result && old !== b && isSign(old)) this.tileEntities?.signs.remove(x, y, z); // b87 tiles87: BlockSign's breakBlock on any id change (a 63 <-> 68 swap starts a fresh tile)
+      if (result) swapTiles(swaps, x, y, z, old, meta, b, m); // b88 tiles88: a meta-only sign rewrite and a chest <-> trapped chest swap (server-tile-swaps.js)
       return result;
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).

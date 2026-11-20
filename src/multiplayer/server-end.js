@@ -31,6 +31,7 @@ import { FiniteDimensionWorld, END } from './client-dimensions.js';
 import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
 import { setupEnd, dragonState, addEndCrystals, legacyCrystalKeys } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
 import { isSign } from '../signs.js'; // b87 tiles87
+import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
 
 const OVERWORLD = 0, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
 // b65 mpendwindow: the replica's own origin says where it lies in the End (native = local + origin), for the 256 window and for a 0.93.0 save's 128 window alike.
@@ -77,11 +78,12 @@ export class ServerEnd {
     const n = { dim: END, world, changes: new Map(), items: new ItemEntities(), itemsSent: 0, dirtyTiles: new Set(), xp: new ExperienceOrbs(saved.xpOrbs), taken: [], overMobs: dims.mobsOf(OVERWORLD) };
     n.items.joined = e => { e.eid = ++sim.nextItemId; };
     buildNetherSystems(sim, n, {}, saved); // the generic part of the Nether's systems (no fortress list: no `source.provider`)
-    const put = world.put.bind(world);
+    const put = world.put.bind(world), swaps = { get signs() { return n.tileEntities?.signs; }, get containers() { return n.containers; }, own: () => sim.world === world }; // b88 tiles88
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
       if (result && old !== b && isSign(old)) n.tileEntities?.signs.remove(x, y, z); // b87 tiles87: a 63 <-> 68 swap starts a fresh tile (simulation.js)
+      if (result) swapTiles(swaps, x, y, z, old, meta, b, m); // b88 tiles88: meta-only sign rewrite, chest <-> trapped chest (server-tile-swaps.js; inside this dimension's swap only)
       return result;
     };
     const drop = (...a) => sim.serverItems.stacksDrop(...a);

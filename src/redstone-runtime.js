@@ -18,6 +18,7 @@
 //   game.chests() / furnaces() / dispensers() / hoppers()    keyed "x,y,z" stores (survival.js)
 //   game.maxStack(stack)
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
+//   game.totalTime() -> World.getTotalWorldTime in the tile entity pass (b88 tiles88; the daylight sensors' 20-tick gate)
 //   game.skyLight(x, y, z)
 import { installCommandBlocks } from "./command-block.js";
 import { installNoteBlocks } from "./note-blocks.js";
@@ -38,6 +39,7 @@ import { TRAPPED_CHEST, trappedPower, trappedStrongPower } from "./chest-blocks.
 import { hopperBehaviour } from "./hopper.js";
 import { installPoweredRails } from "./powered-rails.js";
 import { installDispensers } from "./dispense.js";
+import { celestialRadians } from "./daylight-sensor-time.js"; // b88 tiles88
 
 // Blocks a right click operates through the redstone engine (lever, both buttons, repeater, both comparators).
 export const USE_BLOCKS = new Set([LEVER, STONE_BUTTON, WOODEN_BUTTON, REPEATER, COMPARATOR, COMPARATOR_POWERED]);
@@ -122,7 +124,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
     entitiesIn,
     containerSlots,
-    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15, noSky: !!world.hasNoSky }), // BlockDaylightDetector.func_149957_e returns early where provider.hasNoSky (aqo.g)
+    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: celestialRadians(game.angle?.() ?? 0) /* b88 tiles88: ahb.d's float products */, sky: 15, noSky: !!world.hasNoSky }), // BlockDaylightDetector.func_149957_e returns early where provider.hasNoSky (aqo.g)
+    totalTime: () => game.totalTime?.(), // b88 tiles88: the sensors' getTotalWorldTime gate (redstone-live.js); undefined keeps LiveRedstone's own count
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });

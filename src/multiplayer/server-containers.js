@@ -258,6 +258,15 @@ export class ServerContainers {
     forgetTableName(t, key, block); // b75: the table's CustomName goes with the block
     if (t.enderTiles[key] && block !== ENDER_CHEST) { delete t.enderTiles[key]; this.closeAt(key); }
   }
+  // b88 tiles88: BlockChest.breakBlock (ajx.a) when a chest becomes the other chest kind (server-tile-swaps.js): the slots spill, the record goes
+  // (the reap's ensureChest makes the new block's empty one) and any window on it closes.
+  swapChest(x, y, z) {
+    const key = `${x},${y},${z}`, e = this.tiles.chests[key];
+    if (!e) return;
+    delete this.tiles.chests[key];
+    this.sim.items.spill(e.items.filter(Boolean).map(copyStack), x, y, z);
+    this.closeAt(key);
+  }
   // b60: a chest block with no tile record (a saved world's, or placed by a command) gets the facing onBlockAdded settles; the cell and its chest neighbours
   // are described to the clients (`contChest`, tile-sync.js) so a never-opened chest is drawn with its closed lid.
   ensureChest(x, y, z, block) {
