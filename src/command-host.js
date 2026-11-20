@@ -196,6 +196,18 @@ export function createCommandHost(env) {
     // the same point, spawned and ridden (current.mountEntity(mount)) until one cannot be created. Mounts are kept between mobs
     // (mob-riding.js); a vehicle, projectile or item on either end is spawned but not linked, and the command says so.
     summon(type, x, y, z, tag) {
+      // b87 summon87 (executed, summon87-reference.json head rows, 300 summons each of eight mobs and five tags): Entity.readFromNBT's setRotation (sa.b(FF)) sets
+      // rotationYaw = Rotation[0] % 360 and rotationPitch = Rotation[1] % 360 while prevRotationYaw/Pitch keep the raw floats (0 for an id-only tag). Nothing touches
+      // rotationYawHead: it keeps EntityLivingBase's constructor roll (float)(Math.random() * PI * 2), degrees in [0, 6.28), and renderYawOffset, prevRenderYawOffset
+      // and prevRotationYawHead stay 0, with or without a Rotation tag. The tracker's head byte (S0F, then S19 on a change of 4 or more) follows from those fields.
+      const facing = (mob, nbt) => {
+        if (!mob || typeof mob !== "object") return;
+        const rot = nbt ? nbtGet(nbt, 'Rotation', NBT.LIST) : null, items = rot?.elementType === NBT.FLOAT ? rot.items : [];
+        const rawYaw = Number.isFinite(items[0]) ? Math.fround(items[0]) : 0, rawPitch = Number.isFinite(items[1]) ? Math.fround(items[1]) : 0, yaw = Math.fround(rawYaw % 360) + 0;
+        Object.assign(mob, { rotationYaw: yaw, prevRotationYaw: rawYaw, rotationPitch: Math.fround(rawPitch % 360) + 0, prevRotationPitch: rawPitch });
+        if (mob.type !== 'ender_crystal') Object.assign(mob, { rotationYawHead: Math.fround(Math.random() * 3.1415927410125732 * 2.0), prevRotationYawHead: 0, renderYawOffset: 0, prevRenderYawOffset: 0, bodyHeadYaw: 0 });
+        mob.yaw = (-yaw * Math.PI) / 180;
+      };
       const ignored = [], convertItem = (t, o) => itemStackFromNbt(t, { ...o, ignored });
       const mobs = env.mobs();
       const spawnOne = (type, nbt) => {
@@ -222,7 +234,7 @@ export function createCommandHost(env) {
             mobs.onSpawnWithEgg(born);
             mobs.entities.push(born);
           } else born = mobs.spawnNatural(type, x, y, z);
-          if (born && typeof born === "object") born.air = 0;
+          if (born && typeof born === "object") { born.air = 0; facing(born, null); }
           return { other: true };
         }
         const parsed = summonedMobRecord(type, nbt, { convertItem });
@@ -230,6 +242,7 @@ export function createCommandHost(env) {
         const mob = mobs.restore({ ...parsed.record, x, y, z }, { summoned: true });
         if (!mob) return null;
         mobs.entities.push(mob); mobs.nextId++;
+        facing(mob, nbt);
         mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
         if (nbtGet(nbt, 'Invulnerable', NBT.BYTE, 0) !== 0) mob.invulnerable = true; // b85 fire85: Entity.readFromNBT's flag (sa.i); attackEntityFrom refuses it
         // b83 cmdexec83 (executed, cmd-exec-reference.json): Entity.readFromNBT also sets OnGround, FallDistance (landing damage counts it) and the air supply (Air, 0 when absent;

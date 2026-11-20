@@ -15,6 +15,7 @@ import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
 import { anvilImpact } from './anvil-block.js';
 import { fallingDropStack } from './falling-drops.js';
 import { fallingBlockDamage, fallingBlockSource } from './falling-damage.js';
+import { entityBaseSave, entityBaseRestore } from './entity-base-nbt.js';
 
 const f = Math.fround;
 export const FLINT = 313;
@@ -263,17 +264,18 @@ export class FallingBlocks {
     if (stack) this.drop(stack, e.x, posY, e.z);
   }
   serialize() {
-    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax, dropItem, data, tileData, flowing, fire }) => ({ ...(flowing ? { flowing } : {}), block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
+    return this.entities.map((e) => { const { block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax, dropItem, data, tileData, flowing, fire } = e; return { ...entityBaseSave(e), ...(flowing ? { flowing } : {}), block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
       ...(dropItem === undefined ? {} : { dropItem }),
       ...(Number.isInteger(fire) && fire !== 0 ? { fire } : {}), // b84 cmdfix84
       ...(Number.isInteger(data) ? { data } : {}),
       ...(tileData ? { tileData } : {}),
-      ...(hurtEntities === undefined ? {} : { hurtEntities, fallHurtAmount, fallHurtMax }) }));
+      ...(hurtEntities === undefined ? {} : { hurtEntities, fallHurtAmount, fallHurtMax }) }; }); // b87 summon87: entityBaseSave adds Entity.writeToNBT's Air, Rotation, PortalCooldown, Dimension, UUID and Invulnerable (entity-base-nbt.js)
   }
   restoreEntity(s) {
     if (!s || !Number.isInteger(s.block) || s.block <= 0 || ![s.x, s.y, s.z, s.vx, s.vy, s.vz, s.ticks].every(Number.isFinite)) return;
     const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 255 : 0, 0, 0, 0, this.entityRandom());
-    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(0, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
+    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(0, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance) ? Math.fround(s.fallDistance) : 0 }); // b87 summon87: Entity.readFromNBT keeps a negative FallDistance (summon87-reference.json)
+    Object.assign(e, entityBaseRestore({ ...s, onGround: undefined, fallDistance: undefined }));
     if (Number.isInteger(s.data)) e.data = s.data & 255; // the saved Data byte the port block cannot hold (java-objects.js fallingDataExtra)
     if (s.flowing === true) e.flowing = true; // original Tile 8/10 (java-objects.js)
     if (s.tileData && typeof s.tileData === "object") e.tileData = s.tileData; // EntityFallingBlock.TileEntityData (a nbtToJson tree, java-objects.js)
