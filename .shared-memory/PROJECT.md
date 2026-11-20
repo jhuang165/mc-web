@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 86 (2026-11-19, ten tracks in `../wt86-<name>` on `batch86-<track>`, cut from e814bef37, merged --no-ff on `batch86-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b86-lead/track-rules.md`; lead note `b86-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.115.0, by track (details in the `*-b86-track.md` notes and "Done in batch 86" in `public/research/remaining-gaps.md`):
+  - seat86: riders send C05 and C0C (`riderPacket`); the server's ridden branch (`takeRide`, `cleanRide`, `applyRide` in `server-vehicles.js`); `boatClearCell` plays the lily pad 2001 effect and the server drops the pad.
+  - predict86: client empty maps, instant armour, the native boat ray and entity checks (`boatRay`, `clientBoatFits`, `clientEntityBoxes`).
+  - lanes86: `thrown-tracks.js` rewritten to one shared entry per entity; dimension changes drop and re-spawn watchers; stand-in lanes get their own trackers; hooks survive the angler's dimension change.
+  - spcopy86: `PlayerView` holds the packet for the network tick; `setLocation` on /tp, pearls and bed wake; hasMoved wait and 20-tick resend; harnesses mark `placed`.
+  - summon86: untagged /summon adds the mob after onSpawnWithEgg (executed `Summon86Probe`); `Invulnerable`, item Health and OnGround saved and exported.
+  - awaystore86: the away run uses its own game rules; sign, beacon, pot, note block and jukebox stores; support-loss pops; beacon pyramid checks; five hidden redstone hooks restored.
+  - blastcover86: 600 executed cover scenes (1900 records); native ray boxes for skulls, chests, stems, portals and more; server TNT placers from flint and steel and burning arrows; Creative flag on server hanging rows.
+  - mobrec86: 22 executed squid, conversion and pigman records, no port change.
+  - console86: console sender ("Server", level 4, log), offline profiles, /netstat; probe 1979 rows; `dedicated-cmds-replay.js` harness.
+  - mpperf86: `mpperf86-fast.js` behind `MC_MPPERF86=on|off|verify`; `track` queue, parse and walk allocations cut; pooled item move boxes (heap per tick -5 to -6%).
+- Lead fixes: kept both dated `commands.md` entries (summon86 and console86, the only conflict); `skins73-b73.test.js` skips `dedicated-cmds-replay.js`, whose probe player is named Alex.
+- Verification: cross-track run of 55 files with MC_MPPERF83/84/85/86=verify: 692/692. One full `npm test` on 2a2fcf16b: 9612 tests, 9611 pass, 1 fail (that skins test, fixed in d06d54958 and rerun 22/22). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 86" in `public/research/remaining-gaps.md`.
+
 Batch 85 (2026-11-19, ten tracks in `../wt85-<name>` on `batch85-<track>`, cut from 3bf09d50a, merged --no-ff on `batch85-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b85-lead/track-rules.md`; lead note `b85-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.114.0, by track (details in the `*-b85-track.md` notes and "Done in batch 85" in `public/research/remaining-gaps.md`):
   - boatseat85: `RemoteVehicles.seatOf` seats the rider on the client's boat copy (the 2-block snap is gone); `noteRiders` keeps a boat non-empty after a dismount; the copy clears snow and lily pads.

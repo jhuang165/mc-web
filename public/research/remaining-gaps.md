@@ -2,6 +2,39 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 86
+
+Batch 86 covered these areas (track agents ran on Opus, by request):
+- **Riding in multiplayer.** A rider sends C05 and C0C every tick (sneak and 0.98 factors), and the server's ridden branch takes only the angles, onGround and the steer values in range; the rider's own boat steers on the previous tick's input. A boat breaking a lily pad plays the 2001 effect on the rider's client and to everyone within 64 blocks, and the dedicated server drops the pad.
+- **Item-use prediction.** The empty map makes the client's own map (id counter from 0 per connection); armour equips at once; the boat ray starts at the native eye with the native sin/cos tables, and the sight and box checks see every entity copy. A client never spawns an overflow drop, as natively.
+- **Thrown-entity tracking.** One shared tracker entry per thrown entity with a set of watchers; a late viewer gets the current state; a player who changes dimension is dropped from the old trackers and gets a fresh spawn on return. The stand-in lanes have their own trackers at the native range and frequency. A hook survives its angler's dimension change and dies past 32 blocks.
+- **The single-player copy.** Mobs see only the accepted position (the packet is processed in the network tick). The 10-block guard and the `packetGround` gate are gone; server moves go through `setLocation` (/tp, pearls, bed wake); the hasMoved wait and the 20-tick correction resend are ported.
+- **/summon.** An untagged summon runs onSpawnWithEgg before adding the mob, so kittens and jockey riders precede it in the world list (executed `Summon86Probe`). `Invulnerable` saves and loads on items, orbs, hanging entities, boats and carts, and exports per record. Item Health and OnGround are saved.
+- **The away run.** It uses the world's own game rules (doTileDrops, doFireTick, mobGriefing), and every drop is gated. Sign, beacon, pot, note block and jukebox tiles ride the plan and come back; support loss pops blocks; beacons recheck their pyramid every 80 ticks. Five redstone hooks hidden by a stray comment since batch 84 are back.
+- **Explosion cover.** `BlastOrderProbe` adds 600 executed scenes with blocks between the blast and the entities (1900 records, 0 mismatches). Fixed ray boxes: end portal, stems, trapped and ender chests, portals, nether wart, dragon egg, skulls, mushrooms and vines. On the server, flint and steel and burning arrows give primed TNT its placer, and a Creative placer's TNT breaks hanging entities with no drop. Dispensed TNT has no placer natively. A large fireball no longer gets NaN motion from the player's TNT.
+- **Mob records.** 22 executed records replay with no port change: squids pushing boats and ticked players, villager-to-zombie conversion on each difficulty, and a zombie pigman fight.
+- **Console and offline mode.** The console runs as "Server" at level 4 with its log; /netstat answers the console; `online-mode=false` gives unknown names their offline profile (`OfflinePlayer:` UUIDs). The probe holds 1979 executed rows, and the 675 new console and offline rows replay with 0 mismatches.
+- **Server speed.** Behind `MC_MPPERF86=on|off|verify` (identical state hashes): no packet queue triples, cached state parses and wire numbers, one-pass tracker walks, pooled item move boxes. Heap growth per tick is 5 to 6% lower; tick time is unchanged.
+
+Still open from batch 86:
+- **Multiplayer.**
+  - Riding: the C0C jump flag is stored but unused; horses still jump through `horseJump`. In single player a boat breaking a lily pad charges the player exhaustion, the mine-block stat and tool wear (not native).
+  - Item use: Creative armour on the server and in single player empties the hand (natively it stays). Hooks, falling blocks, dragon parts and non-mob crystals are missing from the client's boat check; the server's boat check misses hanging entities, primed TNT, items, orbs and arrows.
+  - Tracking: the single-player tracker still sends its first spawn with the end-of-tick state; a returning player gets last tick's state; explosions do not push a hook whose angler left the dimension.
+  - The single-player copy ignores entity boxes in its collision checks; the riding and sleeping branches are not ported; fall tracking stays with the client. Any new `main.js` move that skips `setLocation` is checked like a walk.
+  - Explosions on the server: fireballs caught in a player's TNT do not take the player's look; TNT kills give the player no credit or XP; a skeleton's burning arrow gives its TNT no placer.
+  - Console and offline mode: players log in with account ids, so offline entries match only by chance; /netstat counts everything under packet id 0; the "partial" saving rows are not replayed; `command-parity-catalogue.md` still lists /netstat as out of scope.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: steering with the one-tick lag, lily pad effects, the client's own map id, armour on right-click, late-viewer and portal-return copies, rubber-banding from the new copy checks, the flint-and-steel click on server TNT, plus the batch 67 to 85 lists.
+- **Single player.**
+  - /summon: primed TNT and falling blocks do not save Invulnerable, OnGround or FallDistance; item `Age` is clamped to 0 or more; a summoned mob's head yaw is unchecked.
+  - The away run: daylight sensors read noon; a spawner removed in the run stays in the saved list. In the live game beacons check on world time, not total time, and a standing-to-wall sign swap keeps its text; `/setblock` over a chest deletes its contents without spilling them (native rule not re-read).
+  - Explosions: the port files a player by eye height, not feet; history-dependent native bounds (the end portal frame before its first collision, the brewing stand, invalid buttons) are modelled in their steady state only. `ocelot-ai.js` may read the player's look as radians.
+  - Mob records: no witch fight; no pigman on Easy, in a group or killed by a golem; no squid against a ridden boat; no villager killed by a baby zombie.
+  - Not seen in a browser: away-run tiles after a real Nether trip, blast pushes through cover, squid and boat pushes, plus the batch 85 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 85
 
 Batch 85 covered these areas (track agents ran on Sonnet):
@@ -22,23 +55,7 @@ Found wrong in the batch 84 list:
 - onSpawnWithEgg runs only with no tag (`{}` skips it), so the ocelot summon already matched.
 - The farmland self-check was not native (removed, above).
 
-Still open from batch 85:
-- **Multiplayer.**
-  - A rider's C03 while seated is not checked against native; lily pads broken by a boat draw no particles.
-  - Item-use prediction: no empty-map or overflow-drop prediction; the boat placement skips the sight check.
-  - Extra-dimension stand-in lanes keep exact rows; a late viewer's thrown baseline is not re-recorded.
-  - The single-player copy: mobs still see the packet position for part of the tick; a 10-block teleport guard is not native; the new path is gated on `packetGround`; `nh.r` and the 20-tick teleport branch are not ported.
-  - The dedicated server passes no Creative flag to the blast's hanging rows, so a Creative player's TNT still drops their items there; dispensed TNT has no placer record.
-  - Server commands: /publish stays off; console-sender rows and offline mode are skipped. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: riding and dismounting the boat copy, item-use prediction, hook copies, possible rubber-banding from the new single-player copy moves, plus the batch 67 to 84 lists.
-- **Single player.**
-  - Summons: the spawn order of kittens and jockeys is unchecked; `Invulnerable` is not saved on item, orb and hanging records.
-  - The away run has no live eyes or hooks for blasts, no doTileDrops gate on its skull store, and no sign or beacon stores.
-  - Explosion probe worlds have no blocks, so partial-cover exposure is not exercised.
-  - Squids against boats and a ticked pushing player are port-read only.
-  - Not seen in a browser: the corpse and the converted villager in the same frame, squid pushes, blast pushes and drops, plus the batch 84 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 85: carried into the batch 86 list above, less what batch 86 fixed.
 
 ## Done in batch 84
 
