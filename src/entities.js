@@ -48,7 +48,7 @@ import { mobKnockbackKick, golemLift, attackLandsOnClient } from "./player-knock
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
-import { movedTooQuickly, movedWrongly, needsCorrection, shrunkBox, awaitedAnswer } from "./server-process-player.js"; // b85 spcopy85, b86 spcopy86
+import { movedTooQuickly, movedWrongly, needsCorrection, shrunkBox, awaitedAnswer, updateFallResets, handleFalling } from "./server-process-player.js"; // b85 spcopy85, b86 spcopy86, b87 spcopy87
 import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
@@ -2598,6 +2598,7 @@ export class EntityWorld {
     // tick after the world's entities, so the mobs of this tick read the position it accepted last (b85 gated this on `packetGround`, which only the live host gave; native has no
     // such gate, and the harnesses that place the copy themselves now say so with `placed`). The client's C06 answer to an S08 comes first (bjb.a(fu) sends it from inside its S08
     // handler, before its own tick's C03), then the tick's C03; a C03 without a position is the accepted position. NetworkManager.processReceivedPackets then runs nh.a(), ++e.
+    p.fallOwner = !p.placed; // b87 spcopy87: the copy's handleFalling deals the fall damage (player-environment.js landPlayer leaves it); a harness that places the copy keeps the client's
     if (!p.direct) {
       const ground = p.packetGround, answer = p.answer, packet = p.packet; // a caller that gives no packet onGround (a unit test) takes the copy's own, below
       p.answer = p.packet = null;
@@ -2606,7 +2607,24 @@ export class EntityWorld {
       p.netTicks++;
       return;
     }
-    // A copy the server places (riding, asleep, the dismount and respawn ticks, a harness): it rests where the update put it; mw.i() runs there and the position is put back.
+    // b87 spcopy87: the riding branch (nh.a(jd) 94-300): seated by mw.m.ac() (`serverSeat`, main.js: the live mount's updateRiderPosition; a host without one keeps the client's
+    // spot), mw.D := the packet's onGround, mw.i() there and back on the seat, o / p / q := it, then World.updateEntity's updateRidden: the motion and fallDistance zeroed.
+    if (p.branch === "riding") {
+      const seat = this.serverSeat?.() ?? p.reported;
+      if (seat) { p.x = seat.x; p.y = seat.y; p.z = seat.z; }
+      if (p.packetGround !== undefined) p.onGround = !!p.packetGround;
+      this.serverCopyUpdate(p);
+      p.accepted = { x: p.x, y: p.y, z: p.z };
+      p.motion.x = p.motion.y = p.motion.z = 0; p.fallDistance = 0;
+      return;
+    }
+    // The sleeping branch (301-359): mw.i(), then back at o / p / q (sleepInBedAt's setPlayerLocation); the packet is not read.
+    if (p.branch === "sleeping") {
+      this.serverCopyUpdate(p);
+      p.x = p.accepted.x; p.y = p.accepted.y; p.z = p.accepted.z;
+      return;
+    }
+    // A copy the server places (the mount, dismount, bed, login and respawn ticks, a harness): it rests where the update put it; mw.i() runs there and the position is put back.
     const grounded = p.onGround; // b83 attack83: mw.D going into mw.i()
     this.serverCopyUpdate(p);
     if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
@@ -2625,6 +2643,7 @@ export class EntityWorld {
     this.serverCopyMoved?.(p, e); // b82 mpplace82: EntityPlayer.moveEntityWithHeading's addMovementStat on the copy's own move (server-copy-stat.js)
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
+    if (p.isPlayer) updateFallResets(this.world, p, e); // b87 spcopy87: mw.i()'s own fallDistance writes (water, lava, ladder, web); its move counts none (mw.a(DZ) is empty)
     p.onGround = e.onGround; // Entity.moveEntity wrote it on the copy: the next piston push (World.updateEntities' tile loop) moves a sneaking copy with the edge guard only if this stayed true (b48pp)
     const at = { x: e.x, y: e.y, z: e.z, width: w, height: h };
     const box = pushBox(at, w, h), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
@@ -2669,6 +2688,8 @@ export class EntityWorld {
     const clearAfter = !collisionBoxes(world, shrunkBox(to, w, h), sc).length; // d32
     if (needsCorrection({ clearBefore, wrongly, clearAfter, sleeping: false })) { this.setPlayerLocation(p, from); return; }
     p.onGround = !!ground; // 1464: mw.D = jd.i() again (the floating check before it never counts: the integrated server allows flight)
+    if (sc.inWeb) p.fallDistance = 0; // b87 spcopy87: mw.d's setInWeb (sa.as)
+    handleFalling(world, p, to.y - from.y, !!ground); // 1506: mw.b(mw.t - d3, jd.i()), the fall distance and damage from the accepted move
   }
   // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF)) from processPlayer: the copy waits for the client's answer (ai.js PlayerView.setLocation); the S08 reaches the client through
   // `serverCorrect` (main.js: bjb.a(fu) puts the client there and zeroes its motion), whose C06 answer is queued. With no client to take it, the copy keeps waiting.

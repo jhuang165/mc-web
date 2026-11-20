@@ -65,7 +65,9 @@ export function landPlayer({ world, position, survival, inWater }, distance, { t
     const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(position.y - 0.20000000298023224),
       fall = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(position.x), by, Math.floor(position.z)) });
     for (const sound of fall.sounds) fallSound(sound);
-    if (fall.points > 0) {
+    // b87 spcopy87: with the integrated server's copy ticking (ai.js PlayerView fallOwner), the damage is the copy's handleFalling (server-process-player.js), as the client's
+    // EntityClientPlayerMP.attackEntityFrom takes none; the sounds, the dust and the trample stay here.
+    if (fall.points > 0 && !survival.serverPlayer?.fallOwner) {
       // CombatTracker's fall description and Entity.fallDistance, sampled for the entry (combat-tracker.js).
       const cell = world.get(Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
       survival.combatSite = cell === 65 ? "ladder" : cell === 72 ? "vines" : inWater ? "water" : null;

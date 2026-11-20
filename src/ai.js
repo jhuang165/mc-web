@@ -1324,6 +1324,15 @@ class PlayerView {
     this.netTicks = 0;
     this.placed = false;
     this.wasRiding = false;
+    // b87 spcopy87: the copy's own Entity.fallDistance (R) and isInWater, which processPlayer's handleFalling (mw.b(DZ)) counts from the accepted moves and lands
+    // (server-process-player.js); `fallOwner` (set by the network tick, entities.js serverPlayerUpdate) tells the client's landing (player-environment.js landPlayer) to leave
+    // the damage to the copy, as EntityClientPlayerMP.attackEntityFrom does. `branch`: the processPlayer branch this tick's packet takes ("walk", "riding", "sleeping") or
+    // "direct" for a copy the server places itself.
+    this.fallDistance = 0;
+    this.inWater = false;
+    this.fallOwner = false;
+    this.branch = "direct";
+    this.wasSleeping = false;
   }
   // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF), bytecode-read): r = false, o / p / q and the entity's position := the spot, S08 to the client. Its packets are then ignored
   // until one gives o and q exactly and p within 0.1 (processPlayer offsets 31-87): the C06 that bjb.a(fu) sends from inside its S08 handler (onGround false). `answered`: the
@@ -1342,19 +1351,28 @@ class PlayerView {
     this.height = f(this.sleeping ? 0.2 : 1.8);
     this.eyeHeight = this.sleeping ? f(0.2) + PLAYER_EYE_HEIGHT : PLAYER_EYE_HEIGHT; // b68 fixes68: posY = minY + yOffset 0.2 while lying, eye = posY + 1.62 (sleeper-eye.js)
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
-    // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
+    // counts every call and restarts at a send. A mounted player's copy is seated on the mount by the network tick (b87 spcopy87, the riding branch).
     const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
     const alive = !(survival.health <= 0);
     // b86 spcopy86: the server places the copy itself (no processPlayer walking branch) at login (initializeConnectionToPlayer), on a respawn (respawnPlayer: a new EntityPlayerMP),
     // while riding (the mount carries it) and on the dismount (mountEntity -> setPlayerLocation), while asleep (the sleeping branch puts it back at o / p / q, which sleepInBedAt
     // set), while dead, for a copy nothing ticks (`unticked`) and for a harness that places it (`placed`). Their S08 / C06 exchange is not modelled: copy and client already agree.
     this.direct = !s || this.riding || this.wasRiding || this.sleeping || this.placed || this.unticked || !alive || !this.alive;
+    // b87 spcopy87: the riding branch (94-300) takes only the angles and seats the copy on its mount in the network tick, and the sleeping branch (301-359) keeps it at o / p / q.
+    // Their first tick (mountEntity / sleepInBedAt -> setPlayerLocation, whose S08 / C06 wait is not modelled) still places it; so do the harness, unticked and dead copies.
+    const placedAnyway = !s || this.wasRiding !== this.riding || this.placed || this.unticked || !alive || !this.alive;
+    this.branch = !this.direct ? "walk" : placedAnyway ? "direct" : this.riding ? "riding" : this.sleeping && this.wasSleeping && this.accepted ? "sleeping" : "direct";
     this.wasRiding = this.riding;
+    this.wasSleeping = this.sleeping;
     this.packetDy = 0; // b83 attack83: processPlayer's d15, the packet's y minus the last accepted posY (0 for a C03 without a position)
     this.packet = null;
     if (!s || d > 9.0E-4 || this.sinceSent >= 20 || this.riding) {
       if (s) this.packetDy = player.y - s.y;
-      if (this.direct) {
+      if (this.branch === "riding" || this.branch === "sleeping") { // a C05 (riding) or any packet (sleeping): the position is not read; see the note above
+        this.hasMoved = true; this.answer = null;
+        this.reported = { x: player.x, y: player.y, z: player.z }; // only a host with no mount seat (entities.js serverSeat) falls back to it
+      }
+      else if (this.direct) {
         this.x = player.x;
         this.y = player.y;
         this.z = player.z;
@@ -1365,7 +1383,7 @@ class PlayerView {
       this.sent = { x: player.x, y: player.y, z: player.z };
       this.sinceSent = 0;
     } else this.sinceSent++;
-    if (alive && !this.alive) this.motion.x = this.motion.y = this.motion.z = 0; // a respawned player is a new EntityPlayerMP
+    if (alive && !this.alive) { this.motion.x = this.motion.y = this.motion.z = 0; this.fallDistance = 0; this.inWater = false; } // a respawned player is a new EntityPlayerMP
     this.alive = alive;
     survival.serverPlayer = this; // player-knockback.js gives this copy the hits' motion at once
     this.creative = !!survival.creative;
