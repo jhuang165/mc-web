@@ -167,7 +167,7 @@ export function tickNether(sim, n, players) {
   tickWorldSystems({ farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, hoppers: n.containers.ticks.hoppers },
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.pistons.flush(); // b66 mppistons
-  tickBeacons(n.tileEntities.beacons, { world: w, time: sim.time, apply: (pl, e) => {
+  tickBeacons(n.tileEntities.beacons, { world: w, time: sim.ticks /* b87 tiles87: getTotalWorldTime (DerivedWorldInfo reads the Overworld's) */, apply: (pl, e) => {
     const p = pl.player;
     p.survival.effects.add(e);
     (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });

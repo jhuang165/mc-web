@@ -10,6 +10,7 @@
 // the change reaches the clients through the world's own change map (the tick message of that dimension).
 import { createCommandHost } from '../command-host.js';
 import { Survival } from '../survival.js';
+import { copyStack } from '../inventory.js'; // b87 tiles87
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { Profiler } from '../profiler.js';
 import { profilerTick } from '../commands-extra.js';
@@ -66,6 +67,7 @@ export function worldCommandsHost(sim, p, forPlayer) {
       signs: () => sim.tileEntities.signs, music: () => (sim.redstone ? musicOf(sim.redstone) : null), comparators: () => sim.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
       // World.func_147480_a(x, y, z, true): the block breaks with its drops and the 2001 effect for everyone (no breaker). The harvest rule is the hand's (breakPlayerBlock).
       dropStacks: (stacks, x, y, z) => sim.serverItems.stacksDrop(stacks, x, y, z), // b82 pots82: a /setblock-replaced pot's plant (command-host.js)
+      spillTile: (stacks, x, y, z, key) => { sim.items.spill(stacks.map(copyStack), x, y, z); sim.containers?.closeAt?.(key); }, // b87 tiles87: the replaced container's slots spill (as server-containers.js reap) and its windows close
       destroyBlock: (x, y, z) => {
         const state = { world: sim.world, survival: scratch, farming: sim.farming, trees: sim.trees, items: sim.itemHost, xpOrbs: sim.serverItems.xp, heldTool: 0 };
         sim.serverItems.afterBreak({ dimension: dim }, [x, y, z], () => breakPlayerBlock(state, [x, y, z], { creative: false, releaseSilverfish: (sx, sy, sz) => sim.golems.release(sx, sy, sz) }));

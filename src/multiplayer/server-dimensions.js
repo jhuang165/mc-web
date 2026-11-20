@@ -18,7 +18,7 @@ import { javaSeed } from '../java-world.js';
 import { JavaRandom } from '../java-random.js';
 import { materialSolid } from '../plants.js';
 import { ItemEntities } from '../item-entities.js';
-import { Signs } from '../signs.js';
+import { Signs, isSign } from '../signs.js';
 import { Skulls } from '../skull.js';
 import { Beacons } from '../pyramid.js';
 import { MobSpawners } from '../mob-spawner.js';
@@ -91,6 +91,7 @@ export class ServerDimensions {
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      if (result && old !== b && isSign(old)) n.tileEntities?.signs.remove(x, y, z); // b87 tiles87: a 63 <-> 68 swap starts a fresh tile (simulation.js)
       return result;
     };
     // The block rules that need no clock: neighbours dropping torches, doors, beds, rails and plants, and the portal itself.

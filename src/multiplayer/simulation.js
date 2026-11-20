@@ -222,6 +222,7 @@ export class DedicatedSimulation {
       const old = this.world.get(x, y, z), meta = this.world.getMeta(x, y, z);
       const result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      if (result && old !== b && isSign(old)) this.tileEntities?.signs.remove(x, y, z); // b87 tiles87: BlockSign's breakBlock on any id change (a 63 <-> 68 swap starts a fresh tile)
       return result;
     };
     // The mobs (server-mobs.js): EntityWorld on this world, every connected player a target; `mobs: false` leaves them out (a test of something else).
@@ -671,7 +672,7 @@ export class DedicatedSimulation {
     this.pistons.flush(); // b66 mppistons: S24 and the new moving blocks to the players in range
     // TileEntityBeacon.updateEntity: every 80 world ticks the pyramid check, then the effects for the players in range (pyramid-live.js, the
     // singleplayer tick). Each grant also goes to that player as an S1D entity-effect message (`effectsOut`, delivered by the connection).
-    tickBeacons(this.tileEntities.beacons, { world: this.world, time: this.time, apply: (pl, e) => {
+    tickBeacons(this.tileEntities.beacons, { world: this.world, time: this.ticks /* b87 tiles87: getTotalWorldTime (aoq.h), not the world time */, apply: (pl, e) => {
       const p = pl.player;
       p.survival.effects.add(e);
       (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });

@@ -17,6 +17,7 @@ import { Fluids } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { FallingBlocks } from "./falling.js";
 import { createRedstoneRuntime } from "./redstone-runtime.js";
+import { DAYLIGHT_SENSOR } from "./redstone.js"; // b87 tiles87 (the 1.7.10 id; LiveRedstone.watchIds maps the world's ids to it)
 import { Hoppers } from "./hopper.js";
 import { cartInventoryAt } from "./cart-inventory.js"; // b71 mpreach71
 import { Survival, burnTime } from "./survival.js";
@@ -33,6 +34,9 @@ import { ENDER_CHEST } from "./chest-blocks.js";
 import { Skulls, installSkullBreak } from "./skull.js"; // b85 pickup85
 import { Signs, isSign } from "./signs.js"; // b86 awaystore86
 import { Beacons, BEACON, tickBeacon } from "./pyramid.js"; // b86 awaystore86
+import { MobSpawners } from "./mob-spawner.js"; // b87 tiles87
+import { watchSpawnerBlocks } from "./spawner-block.js"; // b87 tiles87
+import { skylightSubtracted, celestialAngle } from "./lighting.js"; // b87 tiles87: the daylight sensors' sky
 import { watchSupportLoss } from "./multiplayer/server-support-loss.js"; // b86 awaystore86: BlockSign / BlockBush / ladder / carpet onNeighborBlockChange
 import { setGameRuleSource, ruleOn } from "./game-rules.js";
 import { JavaRandom } from "./java-random.js";
@@ -131,6 +135,18 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if (!b || !tileDrops()) return;
     if (b === FLOWER_POT) for (const s of washStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); else spill({ id: b, count: 1, damage: 0 }, x + 0.5, y + 0.25, z + 0.5);
   };
+  // b87 tiles87: BlockChest / BlockFurnace / BlockDispenser / BlockHopper / BlockBrewingStand.breakBlock under /setblock (command-host.js env.spillTile): each stack from a random
+  // point 0.1-0.9 inside the cell in pieces of 10-30 (ItemEntities.spill, the run's item random and motion). No doTileDrops test: the spill spawns EntityItems directly.
+  // Without the entity run the pieces are saved records at the same offsets (no motion).
+  const spillTile = (stacks, x, y, z) => {
+    if (ents?.items) { ents.items.spill(stacks.map((st) => ({ ...st, ...(st.tags ? { tags: structuredClone(st.tags) } : {}) })), x, y, z); return; }
+    const r = Math.random, f = Math.fround;
+    for (const st of stacks) {
+      if (!st?.count) continue;
+      const ox = f(f(r() * 0.8) + 0.1), oy = f(f(r() * 0.8) + 0.1), oz = f(f(r() * 0.8) + 0.1);
+      for (let left = st.count; left > 0;) { const n = Math.min(left, Math.floor(r() * 21) + 10); left -= n; drops.push({ stack: { ...st, count: n }, x: x + ox, y: y + oy, z: z + oz, age: 0, delay: 0 }); }
+    }
+  };
   const weather = new Weather().restore(plan.weather);
   const fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, 11)) });
   fire.watch(); fire.sharedRandomTicks = true;
@@ -162,6 +178,11 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if (old !== now && old === ENCHANTING_TABLE && tiles.tableNames) delete tiles.tableNames[`${x},${y},${z}`]; // TileEntityEnchantmentTable's CustomName goes with it (main.js)
     if (old !== now && old === ENDER_CHEST && tiles.enderTiles) delete tiles.enderTiles[`${x},${y},${z}`];
   }; }
+  // b87 tiles87: the saved spawner tiles (root.spawners, only when the world has the list: structure-simulation.js reads a missing list as a fresh world). A spawner does nothing
+  // here (MobSpawnerBaseLogic.updateSpawner needs a player within range, agq.f), but a spawner replaced in the run loses its tile (BlockContainer.breakBlock, World.removeTileEntity;
+  // spawner-block.js, as main.js) and a /setblock spawner gets one (command-host.js env.spawners). The list comes back whole, in the live game's own save form (MobSpawners.toJSON).
+  const spawnerTiles = Array.isArray(plan.spawners) ? MobSpawners.fromJSON(plan.spawners) : null;
+  if (spawnerTiles) watchSpawnerBlocks(world, spawnerTiles);
   // BlockSign.onNeighborBlockChange (and the other support checks single player runs from main.js watchFlowers): the neighbour update of a setBlock runs with no player test.
   // The popped block's item goes through dropBlockAsItem, so doTileDrops applies; a refused write (a column outside the loaded area) drops nothing.
   watchSupportLoss(world, (stacks, x, y, z) => { if (ticking(x, z) && world.get(x, y, z) === 0) dropBlock(stacks, x, y, z); });
@@ -179,6 +200,24 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
       tickBeacon(tile, { time, get, canSeeSky: sky, players: [] });
     }
   };
+  // b87 tiles87: TileEntityDaylightDetector.updateEntity (apa.h, bytecode-read): when getTotalWorldTime() % 20 == 0, BlockDaylightDetector.func_149957_e (akg.e): the saved sky
+  // light at the sensor (ahb.b(EnumSkyBlock.Sky)) less World.skylightSubtracted, and getCelestialAngleRadians(1.0F). The run never called LiveRedstone.endTick (the live loop's
+  // sensor refresh), so a sensor kept the meta it left with. It is a tile entity: only while the gate is open, only in a ticking column. WorldServer.tick (mt.b) sets
+  // skylightSubtracted from the world time before it adds 1 (then tickUpdates, then updateEntities), so the darkening reads the time one tick behind the angle's.
+  // The world time at tick n is away-commands.js's clock (the saved time is the end of the trip); doDaylightCycle false holds it.
+  const sensorSky = { angle: 0, subtracted: 0 };
+  const cycling = () => (rules.read ? rules.read("doDaylightCycle") : ruleOn({ gameRules: plan.gameRules }, "doDaylightCycle"));
+  const worldTimeAt = (n) => (plan.time ?? 0) + (cmds?.state.timeShift ?? 0) - (cycling() ? plan.ticks - n - 1 : 0);
+  const sensorTick = (n) => {
+    if (totalAt(n) % 20 !== 0) return;
+    let sensors = null;
+    for (const p of live.watched.values()) if (p.orig === DAYLIGHT_SENSOR && ticking(p.x, p.z) && live.watchIds.get(world.get(p.x, p.y, p.z)) === DAYLIGHT_SENSOR) (sensors ??= []).push(p);
+    if (!sensors) return;
+    const t = worldTimeAt(n);
+    sensorSky.angle = celestialAngle(t, 1);
+    sensorSky.subtracted = skylightSubtracted(celestialAngle(cycling() ? t - 1 : t, 1), weather.rainStrength(1), weather.weightedThunder(1));
+    for (const p of sensors) live.refreshSensor(p.x, p.y, p.z);
+  };
   const sv = new Survival({}, "survival");
   const unsupported = { hit: false }; // a dispense the run cannot make (arrow, potion, fireball, firework): the stack is put back
   const dispRand = new JavaRandom(BigInt(rand) * 40503n + 7n);
@@ -186,6 +225,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
     skulls: () => skullTiles, drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset
     sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host, // b86 awaystore86: b84's comment above had swallowed these hooks
+    subtracted: () => sensorSky.subtracted, angle: () => sensorSky.angle, skyLight: (x, y, z) => light.skyAt(x, y, z) ?? 15, // b87 tiles87: the daylight sensors (sensorTick below)
     transfer: () => hoppers.host, // b72 smallfixes72: droppers push into containers through the run's hopper host (main.js game.transfer; built below, read only while ticking)
     items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,
@@ -217,7 +257,8 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
   } });
   rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks, musicTiles: plan.musicTiles }); // b86 awaystore86: musicTiles (note pitch / powered, jukebox record)
   const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: destroyBlock,
-    stores: { signs: () => signTiles, skulls: () => skullTiles, beaconTile: (x, y, z) => beaconTiles.ensure(x, y, z) }, // b86 awaystore86: /setblock's tiles land in the run's stores
+    stores: { signs: () => signTiles, skulls: () => skullTiles, beaconTile: (x, y, z) => beaconTiles.ensure(x, y, z), // b86 awaystore86: /setblock's tiles land in the run's stores
+      spawners: () => spawnerTiles, spillTile }, // b87 tiles87: a /setblock spawner's tile; a replaced container's slots spill (command-host.js)
     // b83 plants83: /setblock's replaced pot drops its plant (command-host.js env.dropStacks) as ItemEntities.dropBlock does in single player: one entity per
     // item at x/y/z + (rand * 0.7 + 0.15) each, through the run's item random when the entity run is on.
     dropStacks: dropBlock }); // b86 awaystore86: under doTileDrops, as main.js's items.dropBlock
@@ -293,7 +334,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if (entities) { if (ents) falling.tick({ entities: false }); else falling.tick(); }
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
-    if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); beaconTick(ran); sv.tickFurnaces(); }
+    if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); beaconTick(ran); sensorTick(ran); sv.tickFurnaces(); }
     // MinecraftServer.tick: after the worlds tick, `tickCounter % 900 == 0` saves them, and the save queues every unwatched chunk outside the CURRENT spawn area (see above).
     if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
@@ -302,7 +343,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
   return {
     entities: entityLists,
     columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: entityLists?.falling ?? falling.serialize(), // b58so: the stamped records when the entity run held them
-    editSequence: world.nextEditOrder, skulls: skullTiles.toJSON(), signs: signTiles.toJSON(), beacons: beaconTiles.toJSON(), pots: serializePots(world), musicTiles: rt.music.save() /* b86 awaystore86 */, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
+    editSequence: world.nextEditOrder, skulls: skullTiles.toJSON(), signs: signTiles.toJSON(), beacons: beaconTiles.toJSON(), pots: serializePots(world), musicTiles: rt.music.save() /* b86 awaystore86 */, ...(spawnerTiles ? { spawners: spawnerTiles.toJSON() } : {}) /* b87 tiles87 */, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
     ...cmds.result(),
     stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}), commands: cmds.stats, light: { emitters: light.emitters, floods: light.floods, floodMs: Math.round(light.floodMs) } },
   };

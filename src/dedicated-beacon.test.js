@@ -32,15 +32,15 @@ function join(sim, name, n, x, y, z) {
   p.position.copy({ x, y, z }); p.previous.copy(p.position);
   return p;
 }
-// Runs ticks until the world time passes 80 (the tick that makes time 80 runs the beacon) and returns the first message's effects.
-const toEighty = (sim) => { sim.time = 79; sim.tick(); };
+// Runs ticks until the total time (sim.ticks; b87 tiles87: getTotalWorldTime, not the world time) passes 80 (the tick that makes time 80 runs the beacon) and returns the first message's effects.
+const toEighty = (sim) => { sim.ticks = 79; sim.tick(); };
 const triple = (e) => [e.id, e.duration, e.amplifier, e.ambient];
 
-test("a beacon grants its primary effect only on ticks where the world time is a multiple of 80, to players in range", () => {
+test("a beacon grants its primary effect only on ticks where the total time is a multiple of 80, to players in range", () => {
   const { sim, tile } = fixture(2);
   tile.primary = 1;
   const near = join(sim, "Near", 1, 74.5, BY, 64.5), far = join(sim, "Far", 2, 105.5, BY, 64.5);
-  sim.time = 10; for (let i = 0; i < 20; i++) sim.tick();
+  sim.ticks = 10; for (let i = 0; i < 20; i++) sim.tick();
   assert.equal(near.effectsOut?.length ?? 0, 0, "times 11..30: nothing");
   toEighty(sim);
   assert.deepEqual(near.effectsOut.map(triple), [[1, 180, 0, true]], "Speed, 180 ticks, ambient");
@@ -89,7 +89,7 @@ test("no sky above, no primary or a broken pyramid: nothing is granted, and the 
   assert.equal(b.effectsOut, undefined, "no primary chosen");
   plain.tile.primary = 1;
   plain.sim.world.put(63, BY - 1, 64, 0, 0, false); // a hole in layer 1
-  plain.sim.time = 159; plain.sim.tick();
+  plain.sim.ticks = 159; plain.sim.tick();
   assert.equal(b.effectsOut, undefined, "level 0 after the hole");
   assert.equal(plain.tile.levels, 0);
 });

@@ -422,6 +422,7 @@ export class DimensionLive {
       root.redstone = r.redstone; root.pistons = r.pistons;
       if (r.skulls) { if (r.skulls.length) root.skulls = r.skulls; else delete root.skulls; } // b85 pickup85: skull tiles the run consumed
       for (const k of ["signs", "beacons", "pots", "musicTiles"]) if (Array.isArray(r[k])) { if (r[k].length) root[k] = r[k]; else delete root[k]; } // b86 awaystore86: the run's other tile stores, whole
+      if (Array.isArray(r.spawners) && Array.isArray(root.spawners)) root.spawners = r.spawners; // b87 tiles87: whole, and kept even when empty (an absent list means a fresh world)
       root.player = { ...(root.player ?? {}), ...r.tiles };
       if (r.entities) { // away-entities.js: the saved entity lists, whole
         root.drops = r.entities.drops; root.xpOrbs = r.entities.xpOrbs; root.tnt = r.entities.tnt;

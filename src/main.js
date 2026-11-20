@@ -1555,7 +1555,7 @@ function watchFlowers() {
   world.onChange = (x, y, z, old, now) => {
     next?.(x, y, z, old, now);
     // TileEntitySign goes with its block; BlockSign.onNeighborBlockChange drops a sign whose support is gone.
-    if (isSign(old) && !isSign(now)) signs.remove(x, y, z);
+    if (isSign(old) && old !== now) signs.remove(x, y, z); // b87 tiles87: a standing <-> wall swap too (Chunk.func_150807_a runs breakBlock on any id change; the next edit makes a fresh tile)
     if (old === SKULL && now !== SKULL) SKULLS.remove(x, y, z); // TileEntitySkull goes with its block
     if (old === BEACON || now === BEACON) beacons.sync(x, y, z, now); // TileEntityBeacon goes with its block
     if (old === ENCHANTING_TABLE && now !== ENCHANTING_TABLE && survival.tableNames) delete survival.tableNames[`${x},${y},${z}`]; // b75: its CustomName goes with the block
@@ -2148,6 +2148,7 @@ const commandHost = createCommandHost({
   updateBlock: (x, y, z) => scene.updateBlock(x, z, y),
   destroyBlock: (x, y, z) => breakBlock([x, y, z], false),
   dropStacks: (stacks, x, y, z) => items.dropBlock(stacks, x, y, z), // b82 pots82: a /setblock-replaced pot's plant (command-host.js)
+  spillTile: (stacks, x, y, z) => items.spill(stacks.map(copyStack), x, y, z), // b87 tiles87: a /setblock-replaced container's slots (BlockContainer breakBlock spill)
   achievements: () => achievements,
   stats: () => stats,
   profiler,
@@ -3213,7 +3214,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const moveFlags = { eyeInWater: clientEyeInWater(), onLadder: isOnLadder(world, position.x, position.y, position.z) /* b72: EntityPlayer.k uses isOnLadder (ladder or vine at floor(minY)), no flying test */ };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition, ...moveFlags, riding: !!rider.vehicle }, playerLanding()); // b81 exhaust81: yz.k's exhaustion (none riding)
   ({ fallDistance, landedFall } = movement);
-  tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
+  // b87 tiles87: TileEntityBeacon.updateEntity reads World.getTotalWorldTime (aoq.h -> ahb.I, bytecode-read), not the world time /time and doDaylightCycle move. The mobs' tick later in
+  // this step moves worldTicks to this tick's value before WorldServer.tick's increment, so the beacon (World.updateEntities, after it) sees the previous worldTicks + 2.
+  tickBeacons(beacons, { world, time: (mobs?.worldTicks ?? -1) + 2, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, inWater, ...moveFlags, grounded });
