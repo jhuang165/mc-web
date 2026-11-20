@@ -323,7 +323,7 @@ export function createCommandHost(env) {
       // b84 cmdfix84: the sign set over a sign with another metadata is a fresh tile (breakBlock removed the old one): empty lines, editable again, unless the tag above read it.
       if (!tag && (original === 63 || original === 68) && old === cell.id) env.signs?.()?.create(x, y, z);
       // TileEntityEnderChest holds no items (they live with the player); it only needs the lid state the renderer draws.
-      if (original === 130) (stores.enderTiles ??= {})[key] ??= newEnderTile(); else if (stores.enderTiles) delete stores.enderTiles[key];
+      if (original === 130) { if (stores.enderTiles?.[key]) env.closeTile?.(key); (stores.enderTiles ??= {})[key] = newEnderTile(); } else if (stores.enderTiles) delete stores.enderTiles[key]; // b88 tiles88: over an ender chest too, BlockContainer.breakBlock removed the old tile (Chunk.func_150807_a on a meta-only change), so the lid restarts and a window on it closes (its isUseableByPlayer, ape.a, tests getTileEntity == this)
       env.updateBlock(x, y, z);
       env.changed();
       return true;

@@ -36,7 +36,7 @@ import { Signs, isSign } from "./signs.js"; // b86 awaystore86
 import { Beacons, BEACON, tickBeacon } from "./pyramid.js"; // b86 awaystore86
 import { MobSpawners } from "./mob-spawner.js"; // b87 tiles87
 import { watchSpawnerBlocks } from "./spawner-block.js"; // b87 tiles87
-import { skylightSubtracted, celestialAngle } from "./lighting.js"; // b87 tiles87: the daylight sensors' sky
+import { sensorSky as skyAt } from "./daylight-sensor-time.js"; // b87 tiles87 / b88 tiles88: the daylight sensors' sky (World.skylightSubtracted and the angle)
 import { watchSupportLoss } from "./multiplayer/server-support-loss.js"; // b86 awaystore86: BlockSign / BlockBush / ladder / carpet onNeighborBlockChange
 import { setGameRuleSource, ruleOn } from "./game-rules.js";
 import { JavaRandom } from "./java-random.js";
@@ -214,8 +214,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     for (const p of live.watched.values()) if (p.orig === DAYLIGHT_SENSOR && ticking(p.x, p.z) && live.watchIds.get(world.get(p.x, p.y, p.z)) === DAYLIGHT_SENSOR) (sensors ??= []).push(p);
     if (!sensors) return;
     const t = worldTimeAt(n);
-    sensorSky.angle = celestialAngle(t, 1);
-    sensorSky.subtracted = skylightSubtracted(celestialAngle(cycling() ? t - 1 : t, 1), weather.rainStrength(1), weather.weightedThunder(1));
+    Object.assign(sensorSky, skyAt(t, cycling(), weather.rainStrength(1), weather.weightedThunder(1))); // b88 tiles88: the shared helper (daylight-sensor-time.js, executed against Tiles88Probe)
     for (const p of sensors) live.refreshSensor(p.x, p.y, p.z);
   };
   const sv = new Survival({}, "survival");

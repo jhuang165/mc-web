@@ -68,6 +68,7 @@ export function worldCommandsHost(sim, p, forPlayer) {
       // World.func_147480_a(x, y, z, true): the block breaks with its drops and the 2001 effect for everyone (no breaker). The harvest rule is the hand's (breakPlayerBlock).
       dropStacks: (stacks, x, y, z) => sim.serverItems.stacksDrop(stacks, x, y, z), // b82 pots82: a /setblock-replaced pot's plant (command-host.js)
       spillTile: (stacks, x, y, z, key) => { sim.items.spill(stacks.map(copyStack), x, y, z); sim.containers?.closeAt?.(key); }, // b87 tiles87: the replaced container's slots spill (as server-containers.js reap) and its windows close
+      closeTile: (key) => sim.containers?.closeAt?.(key), // b88 tiles88: a /setblock-replaced ender chest's windows close (command-host.js)
       destroyBlock: (x, y, z) => {
         const state = { world: sim.world, survival: scratch, farming: sim.farming, trees: sim.trees, items: sim.itemHost, xpOrbs: sim.serverItems.xp, heldTool: 0 };
         sim.serverItems.afterBreak({ dimension: dim }, [x, y, z], () => breakPlayerBlock(state, [x, y, z], { creative: false, releaseSilverfish: (sx, sy, sz) => sim.golems.release(sx, sy, sz) }));

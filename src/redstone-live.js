@@ -8,6 +8,7 @@
 //     arrows and xp orbs; the boxes are tested with strict AABB intersection by the hook),
 //     containerSlots(x,y,z,originalBlockId) -> array of {count,max}|null per slot (comparator readings),
 //     environment() -> {sky, skylightSubtracted, celestialAngle (radians), noSky} and skyLight(x,y,z) (daylight sensors).
+//     totalTime() -> World.getTotalWorldTime during this tick's tile entity pass (the sensors' 20-tick gate; b88 tiles88), else the own tick count.
 //   tick() once per 20 TPS game tick; placed / removed / use; save() / restore(data); registerBehaviour (inherited).
 //
 // Storage: the World holds internal ids with 4-bit metadata, the engine works in original 1.7.10 ids, so every read
@@ -317,6 +318,7 @@ export class LiveRedstone extends RedstoneWorld {
     this.sendQueuedBlockEvents();
     if (!deferTiles) this.updateTileEntities();
     if (this.clock - this.lastScan >= 100) this.scan();
+    let sensorTotal; // b88 tiles88: read once per tick, only when a sensor is watched
     for (const [key, p] of this.watched) {
       if (!this.loaded(p.x, p.y, p.z)) continue;
       const orig = this.getBlock(p.x, p.y, p.z), o = this.watchIds.get(this.world.get(p.x, p.y, p.z));
@@ -326,7 +328,7 @@ export class LiveRedstone extends RedstoneWorld {
         continue;
       }
       if (o === SENSOR) {
-        if (this.time % 20 === 0) this.refreshSensor(p.x, p.y, p.z);
+        if ((sensorTotal ??= this.hooks.totalTime?.() ?? this.time) % 20 === 0) this.refreshSensor(p.x, p.y, p.z); // b88 tiles88: TileEntityDaylightDetector.updateEntity gates on getTotalWorldTime (apa.h -> ahb.I), the host's total time
       } else if (o === TRIPWIRE) {
         // Only an entity that calls Entity.func_145775_I touches the string (a stuck arrow or a thrown snowball does not).
         if ((this.getBlockMetadata(p.x, p.y, p.z) & 1) === 0 && this.getEntities("collider", [p.x, p.y, p.z, p.x + 1, p.y + 1, p.z + 1]).length) this.collide(p.x, p.y, p.z);

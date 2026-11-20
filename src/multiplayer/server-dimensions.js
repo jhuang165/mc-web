@@ -39,6 +39,7 @@ import { ServerEnd } from './server-end.js'; // b63 mpend: the End
 import { ExperienceOrbs } from '../experience.js';
 import { pinOverworldVehicles } from './server-nether-vehicles.js'; // b63: vehicles, leads and animal clicks in the Nether
 import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tickNether, applyPopulation } from './server-nether.js';
+import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
 
 const OVERWORLD = 0, END = 1, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
@@ -87,11 +88,12 @@ export class ServerDimensions {
     sim.stats?.watchItems(n.items); // b63 mpstats: drops in the Nether count too
     buildNetherSystems(sim, n, source, saved); // b62: tiles, tile entities, redstone, containers, light, fluids, fire, trees, plants, falling, farming, weather
     if (!saved.tiles) applyPopulation(n, source); // a Nether nobody has saved yet: the fortress chests' loot and the blaze spawners
-    const put = world.put.bind(world);
+    const put = world.put.bind(world), swaps = { get signs() { return n.tileEntities?.signs; }, get containers() { return n.containers; }, own: () => sim.world === world }; // b88 tiles88
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
       if (result && old !== b && isSign(old)) n.tileEntities?.signs.remove(x, y, z); // b87 tiles87: a 63 <-> 68 swap starts a fresh tile (simulation.js)
+      if (result) swapTiles(swaps, x, y, z, old, meta, b, m); // b88 tiles88: meta-only sign rewrite, chest <-> trapped chest (server-tile-swaps.js; inside this dimension's swap only)
       return result;
     };
     // The block rules that need no clock: neighbours dropping torches, doors, beds, rails and plants, and the portal itself.

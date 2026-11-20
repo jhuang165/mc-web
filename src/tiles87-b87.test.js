@@ -69,7 +69,7 @@ test("server beacon: the pyramid check runs on total time (sim.ticks) % 80, and 
   assert.match(src("multiplayer/server-nether.js"), /tickBeacons\(n\.tileEntities\.beacons, \{ world: w, time: sim\.ticks/, "the Nether: DerivedWorldInfo reads the Overworld's total time");
 });
 
-test("server: a standing <-> wall sign swap starts a fresh tile; a same-id write keeps it", () => {
+test("server: a standing <-> wall sign swap starts a fresh tile; a same-id write with another metadata does too (b88 tiles88)", () => {
   const world = new World("tiles87-signs");
   for (let x = 0; x < 32; x++) for (let z = 0; z < 32; z++) { world.put(x, 9, z, 3, 0, false); for (let y = 10; y <= 14; y++) world.put(x, y, z, 0, 0, false); }
   world.spawn = () => ({ x: 8.5, y: 10, z: 8.5 });
@@ -77,7 +77,7 @@ test("server: a standing <-> wall sign swap starts a fresh tile; a same-id write
   const signs = sim.tileEntities.signs;
   sim.world.put(5, 10, 5, SIGN_POST, 0); signs.create(5, 10, 5).text = ["old", "", "", ""];
   sim.world.put(5, 10, 5, SIGN_POST, 4);
-  assert.equal(signs.tile(5, 10, 5)?.text[0], "old", "the server put wrapper only clears on an id change (a same-id metadata write is BlockSign's own path)");
+  assert.equal(signs.tile(5, 10, 5)?.text[0], "", "b88 tiles88: Chunk.func_150807_a runs breakBlock on a metadata-only change too, so the rotated sign is a fresh tile (this asserted the text was kept)");
   sim.world.put(5, 10, 5, WALL_SIGN, 2);
   assert.equal(signs.tile(5, 10, 5), null, "Chunk.func_150807_a: BlockSign.breakBlock on 63 -> 68, so the wall sign gets a fresh TileEntitySign");
   signs.create(5, 10, 5).text = ["wall", "", "", ""];
