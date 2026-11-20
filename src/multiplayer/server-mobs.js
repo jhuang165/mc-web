@@ -8,6 +8,7 @@
 // hit player (`knock`), and one velocity / airBorne flag for every watcher (`track`). Not connected: other mob types, riding, leads, and the contents of a chest a creeper's blast breaks.
 import { serverCopyOf } from './server-copy-step.js'; // b82 mpplace82
 import { fast85 } from '../mpperf85-fast.js'; // b85 mpperf85
+import { fast86, fail86, seqOrder, seqScratch, seqDone, plainPacket, wireNum, parsedState, samePacket, stateDiffs86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
@@ -428,13 +429,11 @@ export class ServerMobs {
     t.serverStep(mobs.entities, size);
     const byWatcher = new Map(), outs = new Map();
     for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
-    const queue = [], parts = t.queued();
-    for (const en of parts) for (const pk of en.entry.packets) queue.push([packetSeq(pk), en, pk]);
-    queue.sort((a, b) => a[0] - b[0]);
-    for (const [, en, pk] of queue) {
+    const parts = t.queued(), m86 = fast86.mode, q86 = m86 !== 'off';
+    const send = (en, pk) => {
       const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
-      if (pk.type === 'attach' && pk.mode === 1 && holder?.kind === 'mob') continue; // b62: a lead held by a mob (no server path); players and knots are forwarded below
-      if (pk.type === 'attach' && pk.mode !== 0 && pk.mode !== 1) continue;
+      if (pk.type === 'attach' && pk.mode === 1 && holder?.kind === 'mob') return; // b62: a lead held by a mob (no server path); players and knots are forwarded below
+      if (pk.type === 'attach' && pk.mode !== 0 && pk.mode !== 1) return;
       for (const w of en.entry.dest.get(pk) ?? []) {
         const v = byWatcher.get(w);
         if (!v) continue;
@@ -445,14 +444,53 @@ export class ServerMobs {
         else if (pk.type === 'destroy') { later.push({ ...rest, i }); v.known.delete(e); } // S13 is flushed by the player's next update: one tick later than the rest (batch 52, bytecode-read)
         else out.push({ ...rest, i });
       }
+    };
+    // b86 mpperf86: a packet with none of the dropped keys is copied whole (no rest object), the wire number is cached, a spawn's state string is asked once
+    const plain = (en, pk) => {
+      const type = pk.type;
+      if (type === 'attach' || !plainPacket(pk)) { send(en, pk); return; }
+      const ws = en.entry.dest.get(pk);
+      if (ws === undefined || ws.length === 0) return;
+      const e = en.live, i = wireNum(e, num);
+      let s;
+      for (let k = 0; k < ws.length; k++) {
+        const v = byWatcher.get(ws[k]);
+        if (!v) continue;
+        const o = outs.get(v);
+        let c;
+        if (type === 'spawn') { o.out.push(c = { ...pk, i, mob: e.type, ...mobState(e) }); v.known.set(e, s ??= stateOf(e)); }
+        else if (type === 'destroy') { o.later.push(c = { ...pk, i }); v.known.delete(e); }
+        else o.out.push(c = { ...pk, i });
+        if (m86 === 'verify') { const { entity, vehicle, holder, after, ...rest } = pk; if (!samePacket(c, type === 'spawn' ? { ...rest, i: num(e), mob: e.type, ...mobState(e) } : { ...rest, i: num(e) })) fail86('track packet'); }
+      }
+    };
+    const sc = q86 ? (this.seq86 ??= seqScratch()) : null, n = q86 ? seqOrder(parts, packetSeq, sc) : -1;
+    if (n >= 0) {
+      if (m86 === 'verify') { const ref = []; for (const en of parts) for (const pk of en.entry.packets) ref.push([packetSeq(pk), en, pk]); ref.sort((a, b) => a[0] - b[0]); if (ref.length !== n || ref.some(([, en, pk], k) => sc.pk[k] !== pk || sc.en[k] !== en)) fail86('packet order'); }
+      for (let k = 0; k < n; k++) plain(sc.en[k], sc.pk[k]);
+      seqDone(sc);
+    } else {
+      const queue = [];
+      for (const en of parts) for (const pk of en.entry.packets) queue.push([packetSeq(pk), en, pk]);
+      queue.sort((a, b) => a[0] - b[0]);
+      for (const [, en, pk] of queue) (q86 ? plain : send)(en, pk);
     }
     for (const en of parts) en.entry.packets.length = 0;
     t.dying.length = 0;
-    const diffs = stateDiffs(this.views.values(), t.entries, stateOf); // b77 mpperf77: per entry's watcher set, not every (view, entry) pair
+    let diffs; // b77 mpperf77: per entry's watcher set, not every (view, entry) pair
+    if (!q86) diffs = stateDiffs(this.views.values(), t.entries, stateOf);
+    else {
+      diffs = stateDiffs86(this.views.values(), t.entries, stateOf); // b86 mpperf86: without the Map entry pairs and Set iterators
+      if (m86 === 'verify') { const ref = stateDiffs(this.views.values(), t.entries, stateOf); if (ref.size !== diffs.size || [...ref].some(([v, l]) => { const m = diffs.get(v); return !m || m.length !== l.length || l.some(([e, s], k) => m[k][0] !== e || m[k][1] !== s); })) fail86('stateDiffs'); }
+    }
     for (const v of this.views.values()) {
       const { out, later } = outs.get(v);
       v.destroys = later;
-      for (const [e, s] of diffs.get(v) ?? []) { v.known.set(e, s); out.push({ type: 'state', i: num(e), ...JSON.parse(s) }); }
+      for (const [e, s] of diffs.get(v) ?? []) {
+        v.known.set(e, s);
+        if (!q86) out.push({ type: 'state', i: num(e), ...JSON.parse(s) });
+        else { const c = { type: 'state', i: wireNum(e, num), ...parsedState(s) }; if (m86 === 'verify' && !samePacket(c, { type: 'state', i: num(e), ...JSON.parse(s) })) fail86('state packet'); out.push(c); } // b86 mpperf86: the parse cached per string
+      }
       for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.set.has(v.watcher)) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
       if (out.length) (v.player.mobPackets ??= []).push(...out);
     }
