@@ -251,19 +251,22 @@ export class ServerMobs {
     // taken before the first hurt (a kill's loot, a nested blast's orbs or TNT are in no row), as applyExplosion does.
     const vehicles = host.vehicles, drop = d => { if (d.stack) items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); };
     // b86 blastcover86: a player's TNT (flint and steel, a burning arrow, a chain from either) is "explosion.player" with that player (ro.a(agw)), so EntityHanging.onBroken(player)
-    // drops nothing for a Creative player, as nonLivingRows does in single player. A fireball still takes no look from a server player (b.placer null for one; see the note).
+    // drops nothing for a Creative player, as nonLivingRows does in single player.
+    // b87 blast87: a large fireball in the blast takes that player's look and becomes his (ze.a(ro, F), Fireballs.hitBall: owner "player", punchedBy him, as a punch); the mobs get
+    // the placer as the source entity (mobRows: knockback, revenge, and for a player recentlyHit, XP, Looting and the kill, credited below through `attacker`). A TNT with no
+    // placer (powered, dispensed, burnt) is a plain "explosion": no source entity, so no knockback (it used to push from the TNT itself).
     const byPlayer = placer?.survival ? placer : null;
-    const b = { world, x, y, z, size, exploder: ev.source ?? null, placer: byPlayer ? null : placer };
+    const b = { world, x, y, z, size, exploder: ev.source ?? null, placer };
     const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
       hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) };
-    const rows = [...mobRows({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null }),
+    const rows = [...mobRows({ world, mobs: this.mobs, position: byPlayer ? byPlayer.position : this.probe, survival: byPlayer?.survival ?? null }, { x, y, z, size, exploder: ev.source ?? null, attacker: byPlayer ? 'player' : placer }),
       ...nonLivingRows(state, b, { vehicleDrop: drop, creative: !!byPlayer?.survival.creative }), ...(primed ? tntRows(primed, b) : [])];
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival, lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)
       if (s.health <= 0 || !blastNear(b, p.x, serverPosY(p.y, lying), p.z)) continue;
-      rows.push({ key: v.player, pos: [p.x, p.y + Math.fround(1.62), p.z], first: true, run: () => {
+      rows.push({ key: v.player, pos: [p.x, serverPosY(p.y, lying), p.z], first: true, run: () => {
         if (s.health <= 0) return;
         const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
         if (!hit) return;
@@ -273,7 +276,10 @@ export class ServerMobs {
         knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
       } });
     }
-    runBlastRows(rows);
+    // b87 blast87: kills in this list are the placer's (server-stats.js / achievements read `attacker`), and the mobs' "player" (revenge, reinforcements) is his view.
+    const ach = host.achievements, was = ach?.attacker, placerView = byPlayer && this.views.get(byPlayer.id);
+    if (byPlayer) { if (placerView) this.use(placerView); if (ach) ach.attacker = byPlayer; }
+    try { runBlastRows(rows); } finally { if (byPlayer && ach) ach.attacker = was; }
     finishBlastRows(state);
     const out = { list, ...explosionOutcome(world, list, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube }) }; // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)
     this.s27 = { x, y, z, size, map: knock, list: ev.smoking !== false ? out.list : [] }; // WorldServer.newExplosion clears the affected list when !smoking, so the S27 carries no offsets

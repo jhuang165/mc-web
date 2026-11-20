@@ -15,6 +15,7 @@ import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
+const isServerPlayer = (e) => !!e && typeof e === "object" && !!e.survival && !!e.position && Number.isFinite(e.yaw); // b87 blast87: a dedicated server player record
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
@@ -174,15 +175,18 @@ export class Fireballs {
     b.dead = true;
   }
   // ze.a(ro, F) for a damage source whose entity is `shooter`: the ball takes the shooter's look vector (motion and acceleration) and the shooter as its own.
+  // b87 blast87: `shooter` may be a dedicated server's player record (a TNT he placed): the ball is then his as after a punch (owner "player", `punchedBy` him, ServerMobs.fireballWatch).
   hitBall(target, shooter) {
     if (!shooter || target.dead) return false;
     const look = this.lookOf(shooter);
     if (!look) return false;
     deflect(target, look);
-    target.owner = shooter;
+    if (isServerPlayer(shooter)) { target.owner = "player"; target.punchedBy = shooter; } else target.owner = shooter;
     return true;
   }
   lookOf(e) {
+    // b87 blast87: a server player's yaw and pitch are radians in the port's frame; rotationYaw = 180 - yaw in degrees, rotationPitch = -pitch (server-player-tracker.js).
+    if (isServerPlayer(e)) return lookVector(Math.fround(180 - (e.yaw * 180) / Math.PI), Math.fround((-e.pitch * 180) / Math.PI), mhSin, mhCos);
     // b86 blastcover86: main.js playerLook gives rotationYaw / rotationPitch in degrees (playerEye), not a vector, so a player's TNT blast deflected a large ball to NaN; a replay
     // that hands a vector keeps it. getLookVec is EntityLivingBase.getLook(1.0F), the formula lookVector reproduces.
     if (e === "player") { const l = this.mobs.playerLook?.(); return !l ? null : Array.isArray(l) ? l : lookVector(l.yaw, l.pitch, mhSin, mhCos); }

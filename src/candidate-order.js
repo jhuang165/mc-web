@@ -36,7 +36,9 @@ export function stampWalked(e, first = false) {
   stampEntity(e, e.x, y, e.z, first);
 }
 // The player (key "player", the first entity in the world's list) at his own turn in the walk.
-export const stampPlayerCell = (p) => { if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) stampEntity("player", p.x, p.y + Math.fround(1.62), p.z, true); }; // his posY is the eye
+// b87 blast87 (executed, BlastOrderProbe "feet"): the world that lists him is the (integrated) server's, whose EntityPlayerMP has yOffset 0, so posY, the y Chunk.addEntity and
+// updateEntityWithOptionalForce slice him by, is the feet (box minY), not the eye; a player whose feet and eye straddle a slice border is listed in the feet's slice.
+export const stampPlayerCell = (p) => { if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) stampEntity("player", p.x, p.y, p.z, true); }; // his posY is the feet
 export const hasCell = (ref) => cellStore(ref).has(ref);
 export const forgetEntity = (ref) => cellStore(ref).delete(ref);
 
@@ -46,7 +48,7 @@ const posOf = (t) => {
   if (t.pos) return t.pos; // a candidate without a box names its position
   const cx = (t.box[0] + t.box[3]) / 2, cz = (t.box[2] + t.box[5]) / 2, k = t.key ?? t.ref ?? t.target;
   const own = k !== null && typeof k === "object" && Number.isFinite(k.x) && Number.isFinite(k.z) && Math.abs(k.x - cx) < 1e-6 && Math.abs(k.z - cz) < 1e-6;
-  return [own ? k.x : cx, t.posY ?? (k === "player" ? t.box[1] + Math.fround(1.62) : t.box[1]), own ? k.z : cz]; // the player's posY is his eye
+  return [own ? k.x : cx, t.posY ?? t.box[1], own ? k.z : cz]; // b87 blast87: the player's posY is his feet too (EntityPlayerMP)
 };
 const keyOf = (t) => t.key ?? t.ref ?? t.target ?? t;
 

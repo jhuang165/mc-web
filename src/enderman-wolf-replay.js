@@ -148,8 +148,9 @@ function run(r) {
       }
     };
   }
-  ew.look = { yaw: 180 * RAD, pitch: 0 };
-  ew.playerLook = () => ew.look; // OcelotTempt's scared check reads the player's view
+  ew.look = { yaw: 180 * RAD, pitch: 0 }; // the port's radians (main.js mobs.look: the enderman stare rule)
+  let javaLook = { yaw: 0, pitch: 0 }; // b87 blast87: rotationYaw / rotationPitch in degrees, as main.js playerLook gives them
+  ew.playerLook = () => javaLook; // OcelotTempt's scared check reads the player's view
   const booms = [], cells = [], primed = [], gone = new Set(), none = { explode() {} };
   // World.newExplosion for one creeper event (living-simulation.js explodeEvent): Explosion.doExplosionA and B over the arena's systems.
   const boom = (ev) => {
@@ -174,7 +175,7 @@ function run(r) {
     for (const p of script) {
       if (Number(p[0]) !== t) continue;
       const op = p[1];
-      if (op === "look") ew.look = { yaw: f32((180 - Number(p[2])) * RAD), pitch: f32(-Number(p[3]) * RAD) }, player.yaw = ew.look.yaw;
+      if (op === "look") ew.look = { yaw: f32((180 - Number(p[2])) * RAD), pitch: f32(-Number(p[3]) * RAD) }, player.yaw = ew.look.yaw, javaLook = { yaw: f32(Number(p[2])), pitch: f32(Number(p[3])) };
       else if (op === "helmet") survival.inventory.armor[3] = p[2] === "0" ? null : { id: p[2] === "86" ? 67 : 1, count: 1, damage: 0 };
       else if (op === "day") day = p[2] === "on";
       else if (op === "rain") rain = p[2] === "on";
