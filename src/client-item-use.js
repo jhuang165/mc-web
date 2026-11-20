@@ -37,9 +37,11 @@ import { isThrowable } from './player-throw-simulation.js';
 import { ITEM_EXP_BOTTLE } from './spawn-eggs.js';
 import { ITEM_EMPTY_MAP, ITEM_FILLED_MAP, createEmptyMapData } from './maps.js';
 import { mhSin, mhCos } from './fishing-line.js';
-import { mobBox, boxesIntersect } from './mob-spawner.js';
+import { mobBox } from './mob-spawner.js';
 import { TNT_SIZE } from './explosion.js';
 import { remotePlayerBox } from './multiplayer/client-placement-entities.js';
+import { crystalBox, BOAT_ENTITY_SIZES } from './boat-place-entities.js'; // b87 boatcheck87
+import { dragonListed } from './dragon-part-query.js';
 
 const f = Math.fround, RAD = f(0.017453292), PI = f(3.1415927), Y_OFFSET = f(1.62);
 
@@ -83,43 +85,47 @@ export function boatRay(position, ySize, mcYaw, mcPitch) {
 
 // Whether ItemBoat.onItemRightClick reaches its decrement on the client world. `state`: { world, position, ySize, mcYaw, mcPitch, yaw (boat yaw: Minecraft degrees), playerBox,
 // entities: clientEntityBoxes(...) }. Without position / mcYaw the caller's eye / dir are used.
+// b87 boatcheck87: the sight test is Boats.place's, against the START rayTraceBlocks leaves (the entry point of the last cell it visited: World.rayTraceBlocks moves its first
+// vector, bytecode-read ahb.a(azw, azw, Z, Z, Z) putfield azw.a/b/c; executed, boat-reference.json `sight` records), not the ray's eye.
 export function clientBoatFits(state) {
   const ray = state.position && Number.isFinite(state.mcYaw) ? boatRay(state.position, state.ySize, state.mcYaw, state.mcPitch ?? 0) : { eye: state.eye, dir: state.dir };
   if (!ray.eye || !ray.dir) return false;
-  const box = state.playerBox, list = state.entities ?? [], [sx, sy, sz] = ray.eye;
-  if (box) {
-    const look = ray.dir.map((v) => v * 5);
-    const reach = [0, 1, 2].map((i) => (look[i] < 0 ? box[i] + look[i] : box[i]) - 1).concat([3, 4, 5].map((i) => (look[i - 3] > 0 ? box[i] + look[i - 3] : box[i]) + 1));
-    for (const e of list) {
-      if (!e.collide || !boxesIntersect(reach, e.bb)) continue;
-      const b = e.bb, g = e.border ?? 0.1;
-      if (sx > b[0] - g && sx < b[3] + g && sy > b[1] - g && sy < b[4] + g && sz > b[2] - g && sz < b[5] + g) return false; // azt.a(azw): strict
-    }
-  }
-  const solid = [...(box ? [{ bb: box }] : []), ...list.map((e) => ({ bb: e.bb }))];
-  return !!new Boats().place(state.world, { eye: ray.eye, dir: ray.dir, yaw: state.yaw ?? 0, box }, solid, []);
+  const box = state.playerBox, list = state.entities ?? [];
+  return !!new Boats().place(state.world, { eye: ray.eye, dir: ray.dir, yaw: state.yaw ?? 0, box }, [...(box ? [{ bb: box }] : []), ...list], list);
 }
 
-// The client world's entity copies as boxes for the boat checks: { bb, collide (canBeCollidedWith), border }. canBeCollidedWith (bytecode-read): EntityLivingBase (sv) and the boat,
-// minecart, falling block and primed TNT (xi, xl, xj, xw) while not dead, EntityHanging (ss), EntityEnderCrystal (wy) and EntityFireball (ze, border 1.0) always; EntityDragon (xa),
-// the small fireball and wither skull (zi, zp) and every other entity (items, orbs, arrows, throwables, rockets, eyes, hooks) never. Boxes are from the wire rows: items
-// 0.25 and orbs 0.5 from their box bottom (port-read: item-entities.js, main.js), arrows 0.5, throwables / rockets / eyes 0.25, fireball 1.0, small fireball and skull 0.3125.
+// The client world's entity copies as boxes for the boat checks: { bb, collide (canBeCollidedWith), border, listed }. canBeCollidedWith and the box sizes are executed per kind
+// (b87 boatcheck87: tools/probes/BoatEntityProbe.java, boat-entity-reference.json; see boat-place-entities.js): EntityLivingBase (sv) and the boat, minecart, falling block and
+// primed TNT (xi, xl, xj, xw) while not dead, EntityHanging (ss), EntityDragonPart (wy), EntityEnderCrystal (wz) and EntityFireball (ze, border 1.0) always; EntityDragon (xa),
+// the small fireball and wither skull (zi, zp) and every other entity (items, orbs, arrows, throwables, rockets, eyes, hooks) never. Wire rows (port-read y conventions,
+// matching the native boxes): items 0.25 and orbs 0.5 from their box bottom (posY - 0.125 / - 0.25), arrows 0.5, throwables / rockets / eyes / hooks 0.25, fireball 1.0,
+// small fireball and skull 0.3125 from posY (yOffset 0), primed TNT and falling blocks 0.98 from their box bottom (posY - 0.49), an ender crystal copy (posY, yOffset 1)
+// [y - 1, y + 1], the dragon's body (not collidable) and its parts (collidable), both only while the body is listed (dragon-part-query.js).
 const BALL = { fireball: 1, smallFireball: 0.3125, witherSkull: 0.3125 };
 const cube = (x, y, z, s) => [x - s / 2, y, z - s / 2, x + s / 2, y + s, z + s / 2];
-export function clientEntityBoxes({ players, mobs, vehicles, primed = [], items = [], orbs = [], arrows = [], balls = [] } = {}) {
+export function clientEntityBoxes({ players, mobs, vehicles, primed = [], items = [], orbs = [], arrows = [], balls = [], hooks = [], falling = [] } = {}) {
   const out = [];
   for (const entry of players?.values?.() ?? []) { const p = entry.state ?? entry.last; if (p && !entry.hidden) out.push({ bb: remotePlayerBox(p), collide: true }); }
   for (const o of mobs?.list?.() ?? []) {
     if (!(o.health > 0 || (o.death ?? 0) < 20)) continue;
+    if (o.type === 'ender_crystal') { out.push({ bb: crystalBox(o.x, o.y, o.z), collide: true }); continue; }
     const [w, h] = mobs.factory.size(o);
-    out.push({ bb: mobBox(o.x, o.y, o.z, w, h), collide: o.type !== 'ender_dragon' });
+    if (o.type === 'ender_dragon') {
+      const listed = (area) => dragonListed(o, area);
+      out.push({ bb: mobBox(o.x, o.y, o.z, w, h), collide: false, listed });
+      for (const p of o.dragon?.parts ?? []) if (p.box) out.push({ bb: p.box, collide: true, listed });
+      continue;
+    }
+    out.push({ bb: mobBox(o.x, o.y, o.z, w, h), collide: true });
   }
   for (const list of [vehicles?.carts?.carts, vehicles?.boats?.carts]) for (const c of list ?? []) if (!c.dead && c.bb) out.push({ bb: c.bb, collide: true });
   for (const e of vehicles?.hanging?.copies?.values?.() ?? []) if (e.bb) out.push({ bb: e.bb, collide: true });
   for (const t of primed) if (!t.dead) out.push({ bb: cube(t.x, t.y, t.z, TNT_SIZE), collide: true });
+  for (const e of falling) if (!e.dead) out.push({ bb: cube(e.x, e.y, e.z, BOAT_ENTITY_SIZES.falling), collide: true });
   for (const e of items) out.push({ bb: cube(e.x, e.y, e.z, 0.25), collide: false });
   for (const o of orbs) out.push({ bb: cube(o.x, o.y, o.z, 0.5), collide: false });
   for (const a of arrows) out.push({ bb: cube(a.x, a.y, a.z, 0.5), collide: false });
   for (const b of balls) out.push(b.kind === 'fireball' ? { bb: cube(b.x, b.y, b.z, 1), collide: true, border: 1 } : { bb: cube(b.x, b.y, b.z, BALL[b.kind] ?? 0.25), collide: false });
+  for (const h of hooks) if (!h.dead) out.push({ bb: cube(h.x, h.y, h.z, BOAT_ENTITY_SIZES.hook), collide: false });
   return out;
 }

@@ -354,6 +354,8 @@ export class Boats extends Minecarts {
   // whose box grown by collisionBorderSize (0.1) contains the rayTraceBlocks start vector (which the trace has moved to the
   // entry point of the last cell it visited, not the eye) cancels the placement. `sight` lists those entities' boxes
   // ({ bb } or boxes; default `entities`), `entities` every box the spawned boat must not overlap.
+  // b87 boatcheck87: a row may carry `collide: false` (canBeCollidedWith false: skipped by the sight test only), `border` (getCollisionBorderSize, default 0.1) and
+  // `listed(area)` (false when the world query would not list it: a dragon's body and parts, dragon-parts.js reachesDragon). Rows: boat-place-entities.js.
   place(world, { eye, dir, yaw, box }, entities = [], sight = entities) {
     const trace = {}, hit = traceBucket(world, eye, dir, true, trace);
     if (!hit) return null;
@@ -362,15 +364,16 @@ export class Boats extends Minecarts {
       reach = feet.map((v, i) => (i < 3 ? (look[i] < 0 ? v + look[i] : v) : look[i - 3] > 0 ? v + look[i - 3] : v)).map((v, i) => (i < 3 ? v - 1 : v + 1)),
       [sx, sy, sz] = trace.start;
     for (const o of sight) {
-      const b = o.bb ?? o;
-      if (!intersects(reach, b)) continue;
-      if (sx > b[0] - 0.1 && sx < b[3] + 0.1 && sy > b[1] - 0.1 && sy < b[4] + 0.1 && sz > b[2] - 0.1 && sz < b[5] + 0.1) return null;
+      const b = o.bb ?? o, g = o.border ?? 0.1;
+      if (o.collide === false || !intersects(reach, b) || (o.listed && !o.listed(reach))) continue;
+      if (sx > b[0] - g && sx < b[3] + g && sy > b[1] - g && sy < b[4] + g && sz > b[2] - g && sz < b[5] + g) return null;
     }
     let [x, y, z] = hit.block;
     if (world.get(x, y, z) === SNOW_LAYER) y--;
     const boat = this.spawnBoat({ x: x + 0.5, y: y + 1, z: z + 0.5, yaw: ((Math.floor(f(f(f(yaw) * 4) / 360) + 0.5) & 3) - 1) * 90 }, { born: true });
     const b = boat.bb, shrunk = [b[0] + 0.1, b[1] + 0.1, b[2] + 0.1, b[3] - 0.1, b[4] - 0.1, b[5] - 0.1];
-    if (this.boxes(world, boat, shrunk, entities).length) { this.carts.pop(); this.nextId--; return null; }
+    const query = [shrunk[0] - 0.25, shrunk[1] - 0.25, shrunk[2] - 0.25, shrunk[3] + 0.25, shrunk[4] + 0.25, shrunk[5] + 0.25]; // ahb.a(sa, azt) lists box.expand(0.25)
+    if (this.boxes(world, boat, shrunk, entities.filter((o) => !o.listed || o.listed(query))).length) { this.carts.pop(); this.nextId--; return null; }
     return boat;
   }
 

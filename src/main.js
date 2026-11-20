@@ -244,6 +244,7 @@ import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
+import { boatPlaceEntities, mobBallLists } from "./boat-place-entities.js"; // b87 boatcheck87
 import { clientUseItem, clientEntityBoxes } from "./client-item-use.js"; // b85 mppredict85; b86 predict86: the boat checks' entity copies
 import { rightClickSwings, clientWithholdsPlace } from "./right-click-swing.js"; // b80 spswing80 (b83 attack83: the C08 255)
 import { clientPlacementBlocker } from "./multiplayer/client-placement-entities.js"; // b82 mpplace82
@@ -3673,7 +3674,7 @@ function predictMultiplayerUse() {
   const pbox = [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2];
   const mcYaw = Math.fround(180 - yaw * 180 / Math.PI), mcPitch = Math.fround(-pitch * 180 / Math.PI);
   const entities = survival.held.id === BOAT_ITEM ? clientEntityBoxes({ players: remotePlayers?.entries, mobs: remoteMobs, vehicles: remoteVehicles, primed: remoteDispense?.primed, arrows: remoteDispense?.arrows, balls: remoteDispense?.balls,
-    items: [...remoteItems.values()].filter(e => !takenDrops.has(e.eid)), orbs: [...remoteOrbs.values()] }) : []; // b86 predict86: ItemBoat's sight and box checks on the client's copies
+    items: [...remoteItems.values()].filter(e => !takenDrops.has(e.eid)), orbs: [...remoteOrbs.values()], hooks: remoteFishing?.rows ?? [] }) : []; // b86 predict86: ItemBoat's sight and box checks on the client's copies (b87 boatcheck87: + hooks)
   const out = clientUseItem({ world, survival, held: survival.held, eye: eyeRay.origin, dir: eyeRay.dir, yaw: mcYaw, mcYaw, mcPitch, position, ySize: motion.ySize ?? 0, playerBox: pbox, entities, maps: mapStore, dimension: world.dimension ?? 0 });
   const cells = [];
   for (const c of out.cells) { const old = world.get(c.x, c.y, c.z); if (old !== c.block || world.getMeta(c.x, c.y, c.z) !== c.meta) { world.put(c.x, c.y, c.z, c.block, c.meta, false); cells.push([c.x, c.y, c.z, old, c.block]); } }
@@ -3798,11 +3799,10 @@ function edit(place = false) {
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
     placeBoat: () => {
-      // Entities the new boat must not overlap (the player, mobs, boats, carts) and the canBeCollidedWith ones its line of sight checks.
+      // Entities the new boat must not overlap (the player and every entity) and the canBeCollidedWith ones its line of sight checks (b87 boatcheck87: every kind, boat-place-entities.js).
       const pbox = [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2];
-      const alive = mobs.entities.filter((e) => e.health > 0).map((e) => { const [w, h] = mobs.size(e); return { bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2] }; });
-      const solid = [...boats.carts, ...(minecarts?.carts ?? [])].filter((c) => !c.dead && c.bb).map((c) => ({ bb: c.bb }));
-      const sight = [...alive, ...solid];
+      const sight = boatPlaceEntities({ mobs, items: items.items, orbs: xpOrbs.orbs, arrows: arrows.list, balls: [projectiles.balls, ...mobBallLists(mobs)], fireballs: [mobs._fireballs, mobs._skulls].filter(Boolean),
+        falling: falling?.entities ?? [], primed, rockets: rockets.rockets, eyes: eyes.eyes, hooks: fishing.active && fishing.hook ? [fishing.hook] : [], vehicles: [boats.carts, minecarts?.carts], hanging: hanging.entities });
       if (!eyeRay || !boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI), box: pbox }, [{ bb: pbox }, ...sight], sight)) return false;
       if (!survival.creative) survival.take(BOAT_ITEM, 1);
       animation.swing(); renderHotbar(); saved = false;
