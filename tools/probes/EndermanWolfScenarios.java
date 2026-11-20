@@ -210,6 +210,25 @@ public class EndermanWolfScenarios {
     sc("b87wf-witch-fight-near-8803", 8803, 200, "K", new double[][] {{71.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
     for (int sd : new int[] {8811, 8812}) sc("b87wf-witch-melee-" + sd, sd, 165, "K", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "30 melee 0", "90 melee 0", "140 health 0 1", "141 melee 0");
   }
+  // Batch 88 (mobrec88, b88mr): the b47 serverplayer harness (the probe player a ticked EntityPlayerMP: its potion effects and hurt window run) with snowballs flying (every EntityThrowable after the mobs)
+  // and spiders' entityToAttack as their target. Cave spiders (J) bite the player at night (bright 0) on Normal, Hard and Easy; the player kills the spider (health 1, then a blow) so the poison runs out with
+  // its damage ticks. Iron golems (G) fight a creeper (X), a spider (B) and a cave spider; snow golems (N) pelt a zombie (Z) and a creeper. The player stands over 40 blocks away from those fights.
+  static void sc88(String name, long seed, int ticks, String types, double[][] pos, int bright, String... script) throws Exception { EndermanWolfProbe.scenario(name, seed, ticks, types, pos, script, new int[0][0], new int[0][0], false, bright); }
+  static void run88() throws Exception {
+    double[][] cave = {{68.5, 64.5}, {64.5, 64.5}};
+    for (int sd : new int[] {8801, 8802, 8803}) sc88("b88mr-cave-normal-" + sd, sd, 230, "J", cave, 0, "0 look 90 0", "60 health 0 1", "61 melee 0");
+    for (int sd : new int[] {8811, 8812, 8813}) sc88("b88mr-cave-hard-" + sd, sd, 390, "J", cave, 0, "0 look 90 0", "0 difficulty 3", "60 health 0 1", "61 melee 0");
+    sc88("b88mr-cave-easy-8821", 8821, 120, "J", cave, 0, "0 look 90 0", "0 difficulty 1", "60 health 0 1", "61 melee 0");
+    sc88("b88mr-cave-creative-8822", 8822, 230, "J", cave, 0, "0 look 90 0", "60 health 0 1", "61 melee 0", "90 creative 1 on", "150 creative 1 off");
+    // EntityLiving.canAttackClass (sw.a(Class)) refuses EntityCreeper and EntityGhast, so neither golem picks a creeper on its own (8831, 8861); in the others the creeper's hit (DamageSource.causeMobDamage, 1) comes first.
+    sc88("b88mr-golem-creeper-8831", 8831, 200, "GX", new double[][] {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}}, 15);
+    for (int sd : new int[] {8832, 8833}) sc88("b88mr-golem-creeper-" + sd, sd, 200, "GX", new double[][] {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}}, 15, "10 hit 0 1 1");
+    for (int sd : new int[] {8841, 8842}) sc88("b88mr-golem-spider-" + sd, sd, 200, "GB", new double[][] {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}}, 0);
+    for (int sd : new int[] {8843, 8844}) sc88("b88mr-golem-cave-" + sd, sd, 200, "GJ", new double[][] {{120.5, 64.5}, {125.5, 64.5}, {64.5, 64.5}}, 0);
+    for (int sd : new int[] {8851, 8852, 8853}) sc88("b88mr-snow-zombie-" + sd, sd, 200, "NZ", new double[][] {{120.5, 64.5}, {128.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b88mr-snow-creeper-8861", 8861, 200, "NX", new double[][] {{120.5, 64.5}, {127.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b88mr-snow-creeper-8862", 8862, 200, "NX", new double[][] {{120.5, 64.5}, {127.5, 64.5}, {64.5, 64.5}}, 15, "10 hit 0 1 1");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

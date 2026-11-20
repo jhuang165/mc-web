@@ -42,7 +42,7 @@ export function updateSnowGolem(e, ctx) {
 // (dx, target eye - 1.1 - ball y + horizontal * 0.2, dz) with velocity 1.6 and inaccuracy 12.
 export function aimFor(shooter, target, ballY) {
   const dx = target.x - shooter.x, dy = target.y + target.eyeHeight - SNOW_GOLEM.ballOffsetY - ballY, dz = target.z - shooter.z;
-  const flat = f(Math.sqrt(dx * dx + dz * dz) * f(0.2));
+  const flat = f(f(Math.sqrt(dx * dx + dz * dz)) * f(0.2)); // b88 mobrec88: MathHelper.sqrt_double is a float, times 0.2F in float (wr.a(sv, F), bytecode-read; executed, enderman-wolf-b88mr snow-*)
   return { dx, dy: dy + flat, dz };
 }
 
