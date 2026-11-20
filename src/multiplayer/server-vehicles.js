@@ -33,6 +33,8 @@ import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: proce
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
 import { CartTracker } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
+import { boatPlaceEntities, mobBallLists } from '../boat-place-entities.js'; // b87 boatcheck87
+import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5, 6]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
@@ -154,14 +156,31 @@ export class ServerVehicles {
     const pos = p.position, half = PHYSICS.width / 2, eye = [pos.x, pos.y + PHYSICS.eye, pos.z];
     const dir = [-Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch), -Math.cos(p.yaw) * Math.cos(p.pitch)];
     const pbox = [pos.x - half, pos.y, pos.z - half, pos.x + half, pos.y + PHYSICS.height, pos.z + half];
-    const sight = [...this.boxesOfMobs(), ...this.all.filter(v => !v.dead && v.bb).map(v => ({ bb: v.bb }))];
-    const others = [...this.host.players.values()].filter(q => q !== p).map(q => ({ bb: this.playerBox(q) }));
-    if (!this.boats.place(this.host.world, { eye, dir, yaw: f(180 - p.yaw * 180 / Math.PI), box: pbox }, [{ bb: pbox }, ...others, ...sight], [...others, ...sight])) return false;
+    const sight = this.boatEntities(p); // b87 boatcheck87: every entity kind of this dimension with its native box, canBeCollidedWith and border (boat-place-entities.js)
+    if (!this.boats.place(this.host.world, { eye, dir, yaw: f(180 - p.yaw * 180 / Math.PI), box: pbox }, [{ bb: pbox }, ...sight], sight)) return false;
     if (!p.survival.creative) p.survival.take(held.id, 1);
     p.swing = 6;
     return true;
   }
 
+  // b87 boatcheck87: ItemBoat's entity rows for player `p`: the other players of this dimension (a lying one's 0.2 box), mobs (dying ones until their 20th tick), crystals,
+  // the dragon's body and parts, knots, items, orbs, arrows, thrown balls and potions, fireballs and skulls, falling blocks, primed TNT, rockets, eyes, hooks, vehicles and
+  // hanging entities. The dimension's lists are the host's (the Nether's swap puts its own there, as explode does in server-mobs.js).
+  boatEntities(p) {
+    const host = this.host, mobs = host.mobs?.mobs, d = host.dispense, players = [...host.players.values()];
+    return boatPlaceEntities({
+      players: players.filter(q => q !== p && q.position).map(q => this.boatPlayerBox(q)), mobs, items: host.items?.items ?? [], orbs: host.serverItems?.xp?.orbs ?? [],
+      arrows: d?.arrows?.list ?? [], balls: [d?.balls?.balls, d?.potions?.projectiles?.balls, ...mobBallLists(mobs)], fireballs: [mobs?._fireballs, mobs?._skulls].filter(Boolean),
+      falling: host.falling?.entities ?? [], primed: d?.primed ?? [], rockets: d?.rockets?.rockets ?? [], eyes: d?._eyes?.system.eyes ?? [],
+      hooks: players.map(q => host.fishing?.hookOf?.(q)).filter(Boolean), vehicles: [this.carts.carts, this.boats.carts], hanging: this.hanging?.entities ?? [],
+    });
+  }
+  // A lying player's 0.2 box (sleeper-eye.js), else playerBox.
+  boatPlayerBox(p) {
+    if (!p.sleeping) return this.playerBox(p);
+    const h = SLEEP_BOX / 2, y = serverPosY(p.position.y, true);
+    return [p.position.x - h, y, p.position.z - h, p.position.x + h, y + SLEEP_BOX, p.position.z + h];
+  }
   playerBox(p) { const h = PHYSICS.width / 2; return [p.position.x - h, p.position.y, p.position.z - h, p.position.x + h, p.position.y + PHYSICS.height, p.position.z + h]; }
   boxesOfMobs() {
     const mobs = this.host.mobs.mobs;

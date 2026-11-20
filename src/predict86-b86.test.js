@@ -100,12 +100,14 @@ test("boat ray: posY + 1.62 - yOffset (feet - ySize + 1.62, not the camera) alon
 });
 
 const boatState = (entities, extra = {}) => ({ world: pond(), position: { x: 40.5, y: 13, z: 40.5 }, ySize: 0, mcYaw: 0, mcPitch: 90, yaw: 0, playerBox: [40.2, 13, 40.2, 40.8, 14.8, 40.8], entities, ...extra });
+// b87 boatcheck87: the start is where rayTraceBlocks left it (the water cell's entry, y 12), not the eye (14.62); a box round the eye no longer refuses.
 test("boat sight check: a collidable copy whose box (grown by its border) holds the ray start refuses; a non-collidable one does not", () => {
   assert.equal(clientBoatFits(boatState([])), true);
-  const round = [40.3, 14.5, 40.3, 40.7, 14.6, 40.7]; // 0.02 below the start: inside with the 0.1 border
+  assert.equal(clientBoatFits(boatState([{ bb: [40.3, 14.5, 40.3, 40.7, 14.6, 40.7], collide: true }])), true); // round the eye
+  const round = [40.3, 11.85, 40.3, 40.7, 11.95, 40.7]; // 0.05 below the start: inside with the 0.1 border, below the shrunk boat box
   assert.equal(clientBoatFits(boatState([{ bb: round, collide: true }])), false);
   assert.equal(clientBoatFits(boatState([{ bb: round, collide: false }])), true);
-  const far = [40.3, 13.9, 40.3, 40.7, 14.0, 40.7]; // 0.62 below: only EntityFireball's 1.0 border reaches
+  const far = [40.3, 11.3, 40.3, 40.7, 11.4, 40.7]; // 0.6 below: only EntityFireball's 1.0 border reaches
   assert.equal(clientBoatFits(boatState([{ bb: far, collide: true }])), true);
   assert.equal(clientBoatFits(boatState([{ bb: far, collide: true, border: 1 }])), false);
 });
