@@ -21,15 +21,20 @@ import { Hoppers } from "./hopper.js";
 import { cartInventoryAt } from "./cart-inventory.js"; // b71 mpreach71
 import { Survival, burnTime } from "./survival.js";
 import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
-import { Weather, canLightningStrikeAt } from "./weather.js";
+import { Weather, canLightningStrikeAt, canSeeSky } from "./weather.js";
 import { makeStack, validRawDamage } from "./inventory.js";
-import { FLOWER_POT } from "./stone-utility.js";
+import { FLOWER_POT, restorePots, serializePots } from "./stone-utility.js"; // b86 awaystore86: world.pots in the run
 import { washStacks, burnStacks } from "./fluid-wash.js"; // b82 pots82
 import { awayEntities } from "./away-entities.js";
 import { dispenseFirework } from "./fireworks-live.js";
 import { spawnEggMob } from "./spawn-egg-use.js";
-import { WATER, LAVA } from "./world.js";
+import { WATER, LAVA, ENCHANTING_TABLE } from "./world.js";
+import { ENDER_CHEST } from "./chest-blocks.js";
 import { Skulls, installSkullBreak } from "./skull.js"; // b85 pickup85
+import { Signs, isSign } from "./signs.js"; // b86 awaystore86
+import { Beacons, BEACON, tickBeacon } from "./pyramid.js"; // b86 awaystore86
+import { watchSupportLoss } from "./multiplayer/server-support-loss.js"; // b86 awaystore86: BlockSign / BlockBush / ladder / carpet onNeighborBlockChange
+import { setGameRuleSource, ruleOn } from "./game-rules.js";
 import { JavaRandom } from "./java-random.js";
 import { awayCommands } from "./away-commands.js";
 import { AwayBlockLight } from "./away-light.js";
@@ -42,7 +47,13 @@ const EDGE = 8; // blocks: how near an entity may come to a natively loaded colu
 
 // Runs `plan.ticks` away ticks over `plan.chunks` (live column copies) and `plan.records` (the columns' stored edits, as readChunkColumns returns them).
 // Resolves { columns, fluidTicks, fireTicks, fallingTicks, falling, redstone, pistons, tiles, drops, stats } or null when nothing ran.
-export async function runAway(plan, { now = () => performance.now(), budgetMs = WALL_BUDGET_MS, world: given = null, trace = null } = {}) {
+export async function runAway(plan, options = {}) {
+  // b86 awaystore86: every system the run drives reads the run's game rules (GameRules is per world and read on each call: doTileDrops in Block.dropBlockAsItem, doFireTick,
+  // mobGriefing, doMobLoot), as /gamerule leaves them during the run; the worker has no other source. The body runs without an await, so nothing else reads the source meanwhile.
+  const rules = { read: null }, was = setGameRuleSource((name) => (rules.read ? rules.read(name) : ruleOn({ gameRules: plan.gameRules }, name)));
+  try { return runAwayTicks(plan, options, rules); } finally { setGameRuleSource(was); }
+}
+function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUDGET_MS, world: given = null, trace = null } = {}, rules) {
   const started = now();
   if (!plan.ticks || plan.biome !== "javaStreamed") return null;
   // The away World is a Superflat shell (no terrain generation): its columns are the live blocks the main thread copied at departure
@@ -97,12 +108,29 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     if (ents) ents.spill(made, x, y, z); else drops.push({ stack: made, x, y, z, age: 0, delay: 10 });
   };
   let ents = null;
+  // Block.dropBlockAsItem (aji.a(ahb,III,add), bytecode-read): nothing on a world whose doTileDrops is false (no random draws either), else one entity per item at
+  // x/y/z + (rand * 0.7F + 0.15F) each, through the run's item random (main.js items.dropBlock).
+  const tileDrops = () => (rules.read ? rules.read("doTileDrops") : ruleOn({ gameRules: plan.gameRules }, "doTileDrops"));
+  const dropBlock = (stacks, x, y, z) => {
+    if (!tileDrops()) return;
+    const r = ents?.items?.random ?? Math.random, f = Math.fround, off = () => f(f(r() * 0.7) + f(0.15));
+    for (const s of stacks) for (let n = 0; n < (s?.count ?? 0); n++) spill({ ...s, count: 1, ...(s.tags ? { tags: s.tags } : {}) }, x + off(), y + off(), z + off());
+  };
   const rand = Number(BigInt.asUintN(32, BigInt(plan.editSequence | 0) * 2654435761n + BigInt(plan.ticks)));
   const fluids = new Fluids(world, {
     seed: rand,
-    wash: (x, y, z, b) => { if (b === FLOWER_POT) for (const s of washStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); else spill({ id: b, count: 1, damage: 0 }, x + 0.5, y + 0.25, z + 0.5); }, // b82 pots82: a pot washes to its item and plant
-    burn: (x, y, z, b) => { for (const s of burnStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); },
+    // b86 awaystore86: as main.js's Fluids hook: Block.dropBlockAsItem of what the block drops (fluid-wash.js: string for a cobweb, a crop's seeds, a pot and its plant), under
+    // doTileDrops at the 0.7 spread. It spilled the washed block's own id at +0.5 / +0.25 before, with no gamerule.
+    wash: (x, y, z, b) => { const d = washStacks(world, x, y, z, b); if (d.length) dropBlock(d, x, y, z); },
+    burn: (x, y, z, b) => { const d = burnStacks(world, x, y, z, b); if (d.length) dropBlock(d, x, y, z); },
   });
+  // World.func_147480_a(x, y, z, true) for /setblock destroy and a dispensed bucket's replaced block: the port still drops the block's own item at +0.5 / +0.25 (a pot: the pot
+  // and its plant) as before batch 86, not its harvest drops (the dedicated server runs breakPlayerBlock); now under doTileDrops.
+  const destroyBlock = (x, y, z) => {
+    const b = world.get(x, y, z);
+    if (!b || !tileDrops()) return;
+    if (b === FLOWER_POT) for (const s of washStacks(world, x, y, z, b)) spill(s, x + 0.5, y + 0.25, z + 0.5); else spill({ id: b, count: 1, damage: 0 }, x + 0.5, y + 0.25, z + 0.5);
+  };
   const weather = new Weather().restore(plan.weather);
   const fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, 11)) });
   fire.watch(); fire.sharedRandomTicks = true;
@@ -114,13 +142,50 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   // b85 pickup85: the away world's skull tiles (from the saved chunk tile entities). World.setBlock -> BlockSkull.breakBlock drops the tile's item (installSkullBreak) at the native
   // 0.7 spread through the run's item random; a piston's crush reads the same store (game.skulls below), so it drops its own type instead of 0.
   const skullTiles = Skulls.fromJSON(plan.skulls);
-  installSkullBreak(world, () => skullTiles, (stacks, x, y, z) => { const r = ents?.items?.random ?? Math.random, f = Math.fround, off = () => f(f(r() * 0.7) + f(0.15)); for (const s of stacks) for (let n = 0; n < (s?.count ?? 0); n++) spill({ ...s, count: 1, ...(s.tags ? { tags: s.tags } : {}) }, x + off(), y + off(), z + off()); });
+  // b86 awaystore86: BlockSkull.breakBlock drops through Block.dropBlockAsItem (anl.a(ahb,III,aji,I) -> aji.a(ahb,III,add), bytecode-read), so doTileDrops gates it as in
+  // main.js (items.dropBlock); the tile leaves the store either way.
+  installSkullBreak(world, () => skullTiles, dropBlock);
+  // b86 awaystore86: sign, beacon and flower pot tiles. BlockSign (ank) and BlockBeacon (ajg) are BlockContainers (ajc) without their own breakBlock: ajc.a(ahb,III,aji,I) is
+  // super.breakBlock then World.removeTileEntity (bytecode-read), and Chunk.func_150807_a (apx.a(III,aji,I)) runs the old block's breakBlock on the server for any change of the
+  // block OR its metadata, then makes a fresh tile (akw.a(ahb,I)) when the new block is a container and has none. So a sign or beacon replaced, blown up or popped loses its tile
+  // and drops nothing from it (a sign's or beacon's own item comes from dropBlockAsItem, which explosions and the sign's support check call); a new sign starts empty, a new beacon
+  // at Levels -1 (pyramid.js createBeacon).
+  const signTiles = Signs.fromJSON(plan.signs), beaconTiles = new Beacons().fromJSON(plan.beacons);
+  for (const [k, v] of world.edits) if ((v & 255) === BEACON) beaconTiles.ensure(...k.split(",").map(Number)); // as main.js's load: a beacon block always has its tile
+  restorePots(world, plan.pots); // world.pots (stone-utility.js): World.put drops a replaced pot's record; washStacks / potBreakDrop read it
+  { const next = world.onChange; world.onChange = (x, y, z, old, now) => {
+    next?.(x, y, z, old, now);
+    if (isSign(old)) signTiles.remove(x, y, z);
+    if (isSign(now)) signTiles.create(x, y, z);
+    if (old === BEACON) beaconTiles.remove(x, y, z);
+    if (now === BEACON) beaconTiles.ensure(x, y, z);
+    if (old !== now && old === ENCHANTING_TABLE && tiles.tableNames) delete tiles.tableNames[`${x},${y},${z}`]; // TileEntityEnchantmentTable's CustomName goes with it (main.js)
+    if (old !== now && old === ENDER_CHEST && tiles.enderTiles) delete tiles.enderTiles[`${x},${y},${z}`];
+  }; }
+  // BlockSign.onNeighborBlockChange (and the other support checks single player runs from main.js watchFlowers): the neighbour update of a setBlock runs with no player test.
+  // The popped block's item goes through dropBlockAsItem, so doTileDrops applies; a refused write (a column outside the loaded area) drops nothing.
+  watchSupportLoss(world, (stacks, x, y, z) => { if (ticking(x, z) && world.get(x, y, z) === 0) dropBlock(stacks, x, y, z); });
+  // TileEntityBeacon.updateEntity (aoq.h, bytecode-read): the pyramid check (y) and the effects (x) when World.getTotalWorldTime() % 80 == 0. It runs in World.updateEntities, so only
+  // while the gate is open and only for a tile in a loaded chunk; the effects go to the world's players, and the Overworld has none, so only Levels changes. Tick n of the run sees
+  // the total time end - (ticks - n - 1) (WorldServer.tick adds 1 before the world ticks, as the command blocks' clock in away-commands.js).
+  const totalAt = (n) => (Number.isSafeInteger(plan.totalTime) ? plan.totalTime : (plan.time ?? 0) + (cmds?.state.timeShift ?? 0)) - (plan.ticks - n - 1);
+  const beaconTick = (n) => {
+    const time = totalAt(n);
+    if (!beaconTiles.tiles.size || time % 80 !== 0) return;
+    const get = (x, y, z) => world.get(x, y, z), sky = (x, y, z) => canSeeSky(world, x, y, z);
+    for (const [k, tile] of [...beaconTiles.tiles]) {
+      if (!ticking(tile.x, tile.z)) continue;
+      if (get(tile.x, tile.y, tile.z) !== BEACON) { beaconTiles.tiles.delete(k); continue; }
+      tickBeacon(tile, { time, get, canSeeSky: sky, players: [] });
+    }
+  };
   const sv = new Survival({}, "survival");
   const unsupported = { hit: false }; // a dispense the run cannot make (arrow, potion, fireball, firework): the stack is put back
   const dispRand = new JavaRandom(BigInt(rand) * 40503n + 7n);
   const rt = createRedstoneRuntime({ world, scene: null, game: {
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
-    skulls: () => skullTiles,     drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host,
+    skulls: () => skullTiles, drop: (x, y, z, d) => spill(d, x, y, z), // b84 drops84: LiveRedstone's drop hook gets the EntityItem position (native offset included); the old +0.5 added a second offset
+    sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => cmds.host, // b86 awaystore86: b84's comment above had swallowed these hooks
     transfer: () => hoppers.host, // b72 smallfixes72: droppers push into containers through the run's hopper host (main.js game.transfer; built below, read only while ticking)
     items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,
@@ -133,7 +198,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); rt.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
       setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); rt.fluidChanges([[x, y, z, old, 0]]); },
       setFire: (x, y, z) => { fire.ignite(x, y, z); },
-      breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
+      breakBlock: destroyBlock,
       boneMeal: () => false,
       boat: (x, y, z) => { if (ents) ents.boats.spawnBoat({ x, y, z }, { born: true }); else unsupported.hit = true; }, // BehaviorDispenseBoat (b76: the away run threw the boat as an item)
       isReplaceable: (id, w, x, y, z) => replaceableCell(world, x, y, z), nether: () => !!world.isHell, fizz() {}, // b76: tryPlaceContainedLiquid (sp-dispense76.js); the Nether's water only fizzes. b77: silent by design like every away sound (`sound() {}` above): World.playSoundEffect sends S29 to the world's own players and the only player is in another dimension; the event itself is the live path's `netherFizz`
@@ -150,11 +215,13 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       firework: (stack, x, y, z, fx, fz) => { if (ents) dispenseFirework(ents.rockets, x, y, z, fx, fz, stack); else unsupported.hit = true; },
     },
   } });
-  rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks });
-  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
+  rt.restore({ redstone: plan.redstone, pistons: plan.pistons, commandBlocks: plan.commandBlocks, musicTiles: plan.musicTiles }); // b86 awaystore86: musicTiles (note pitch / powered, jukebox record)
+  const cmds = awayCommands({ plan, world, rt, weather, tiles, entities: () => ents, loadedChunk, wanted: (cx, cz) => wanted.has(key(cx, cz)), breakBlock: destroyBlock,
+    stores: { signs: () => signTiles, skulls: () => skullTiles, beaconTile: (x, y, z) => beaconTiles.ensure(x, y, z) }, // b86 awaystore86: /setblock's tiles land in the run's stores
     // b83 plants83: /setblock's replaced pot drops its plant (command-host.js env.dropStacks) as ItemEntities.dropBlock does in single player: one entity per
     // item at x/y/z + (rand * 0.7 + 0.15) each, through the run's item random when the entity run is on.
-    dropStacks: (stacks, x, y, z) => { const r = ents?.items?.random ?? Math.random, f = Math.fround, off = () => f(f(r() * 0.7) + f(0.15)); for (const s of stacks) for (let n = 0; n < (s?.count ?? 0); n++) spill({ ...s, count: 1 }, x + off(), y + off(), z + off()); } });
+    dropStacks: dropBlock }); // b86 awaystore86: under doTileDrops, as main.js's items.dropBlock
+  rules.read = cmds.rule;
   const live = rt.redstone;
   // Dispensers and droppers fire through the entity systems above (items, TNT, carts, buckets, flint and steel). A dispense that
   // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks run through away-commands.js.
@@ -226,7 +293,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     if (entities) { if (ents) falling.tick({ entities: false }); else falling.tick(); }
     else { const kept = falling.entities; falling.entities = []; falling.tick(); falling.entities = [...kept, ...falling.entities]; } // frozen entities
     if (entities && ents) ents.tick();
-    if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); sv.tickFurnaces(); }
+    if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); beaconTick(ran); sv.tickFurnaces(); }
     // MinecraftServer.tick: after the worlds tick, `tickCounter % 900 == 0` saves them, and the save queues every unwatched chunk outside the CURRENT spawn area (see above).
     if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
@@ -235,7 +302,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   return {
     entities: entityLists,
     columns: world.takeDirtyColumns(), fluidTicks: fluids.save(), fireTicks: fire.save(), fallingTicks: falling.save(), falling: entityLists?.falling ?? falling.serialize(), // b58so: the stamped records when the entity run held them
-    editSequence: world.nextEditOrder, skulls: skullTiles.toJSON(), redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
+    editSequence: world.nextEditOrder, skulls: skullTiles.toJSON(), signs: signTiles.toJSON(), beacons: beaconTiles.toJSON(), pots: serializePots(world), musicTiles: rt.music.save() /* b86 awaystore86 */, redstone: rt.save(), pistons: rt.pistons.save(), tiles: Object.fromEntries(Object.entries(tiles).map(([k, v]) => [k, v])), drops: entityLists ? [] : drops,
     ...cmds.result(),
     stats: { requested: plan.ticks, ran, stopped, columns: plan.columns.length, ms: Math.round(now() - started), setupMs, ...(entityLists ? { entities: entityLists.counts } : {}), commands: cmds.stats, light: { emitters: light.emitters, floods: light.floods, floodMs: Math.round(light.floodMs) } },
   };

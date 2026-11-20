@@ -14,6 +14,7 @@ export const spawnOf = (root) => (Array.isArray(root?.worldSpawn) ? root.worldSp
 
 const col = (v) => Math.floor(v / 16);
 const TILE_SIM = ["furnaces", "hoppers", "brewing"], TILE_DATA = ["dispensers", "chests"];
+const TILE_NAMED = ["tableNames", "enderTiles"]; // b86 awaystore86: an enchanting table's CustomName, an ender chest's lid tile (the run removes them with their block)
 const tileCols = (map) => Object.keys(map ?? {}).map((k) => { const [x, , z] = k.split(",").map(Number); return [col(x), col(z)]; });
 
 // The spawn-area columns that hold anything an away run advances: scheduled ticks, falling blocks, redstone state, tile entities.
@@ -36,6 +37,9 @@ export function stateColumns(root) {
   all(xyz((root.fireballs ?? []).filter((b) => (b?.dimension ?? 0) === 0))); all(xyz(root.hanging));
   for (const name of TILE_SIM) all(tileCols(root.player?.[name]));
   if (!work.size) return [];
+  // b86 awaystore86: a beacon's tile updates while the gate is open (its 80-tick pyramid check), so its column joins a run that has other work: something in the run may change
+  // its pyramid. With no work nothing changes, so the recheck would give the saved Levels back (a never-checked -1 tile takes its level on the live world's next check instead).
+  all(xyz(root.beacons));
   const out = new Map();
   for (const [cx, cz] of work.values()) for (let dx = -HALO; dx <= HALO; dx++) for (let dz = -HALO; dz <= HALO; dz++) {
     if (inSpawnArea(spawn, cx + dx, cz + dz)) out.set(key(cx + dx, cz + dz), [cx + dx, cz + dz]);
@@ -50,12 +54,18 @@ export function stateColumns(root) {
 export function awayPlan(root, columns, ticks, difficulty, wallNow = Date.now(), wallStart = null, rawTicks = ticks) {
   const tiles = {};
   for (const name of [...TILE_SIM, ...TILE_DATA]) tiles[name] = structuredClone(root.player?.[name] ?? {});
+  for (const name of TILE_NAMED) if (root.player?.[name]) tiles[name] = structuredClone(root.player[name]); // b86 awaystore86: only when saved, so a world without them stays as it was
   return {
     seed: root.seed, biome: root.biome, generationVersion: root.generationVersion ?? 13, worldType: root.worldType, generatorOptions: root.generatorOptions ?? "",
     spawn: spawnOf(root), columns, ticks: Math.min(ticks | 0, MAX_AWAY_TICKS), editSequence: root.editSequence | 0,
     fluidTicks: root.fluidTicks, fireTicks: root.fireTicks, fallingTicks: root.fallingTicks, falling: root.falling ?? [],
     redstone: root.redstone, pistons: root.pistons, tiles, weather: root.weather,
     skulls: structuredClone(root.skulls ?? []), // b85 pickup85: the saved skull tiles (BlockSkull.breakBlock drops and a piston's crush read them)
+    // b86 awaystore86: the other tile entities a block change in the run removes (BlockContainer.breakBlock -> World.removeTileEntity) or a tick reads: signs (text), beacons
+    // (Primary, Secondary, Levels; TileEntityBeacon.updateEntity rechecks the pyramid every 80 total ticks while the gate is open), flower pots (world.pots: a washed or replaced
+    // pot drops its plant), note blocks and jukeboxes (the note's pitch and powered state, the jukebox's record a comparator reads). The run returns each list whole.
+    signs: structuredClone(root.signs ?? []), beacons: structuredClone(root.beacons ?? []), pots: structuredClone(root.pots ?? []), musicTiles: structuredClone(root.musicTiles ?? []),
+    totalTime: Number.isSafeInteger(root.totalTime) ? root.totalTime : undefined, // World.getTotalWorldTime at the end of the trip (dimension-live.js passes its clock)
     // The saved entity lists (the run returns them whole); mob riders keep their vehicles out of the run.
     entities: structuredClone({
       drops: root.drops ?? [], xpOrbs: root.xpOrbs ?? [], tnt: root.tnt ?? [], minecarts: root.minecarts ?? null, boats: root.boats ?? [],

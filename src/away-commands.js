@@ -32,6 +32,7 @@
 // with state the worker does not have: give, tp, xp, gamemode, effect, clear, kill, enchant, spawnpoint, difficulty, tellraw/tell to the player...)
 // is SKIPPED: the block's SuccessCount and LastOutput stay as they were and the skip is counted in the run's stats. Skips are not native behaviour.
 import { createCommandHost, DEFAULT_RULES } from "./command-host.js";
+import { ruleOn } from "./game-rules.js"; // b86 awaystore86
 import { createCommandRunner, CommandException } from "./commands.js";
 import { commandBlockSender } from "./command-block.js";
 import { cartCommandPosition } from "./command-cart.js";
@@ -56,7 +57,7 @@ const NEEDS_PLAYER = new Set(["scoreboard", "spreadplayers", "debug", "publish"]
 const SELECTOR = /^@([parf])(?:\[([\w=,!-]*)\])?$/;
 const CHAT_CAP = 100;
 
-export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted, breakBlock, dropStacks, loadedChunk = (cx, cz) => inSpawnArea(plan.spawn ?? [0, 0, 0], cx, cz) }) {
+export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted, breakBlock, dropStacks, stores = {}, loadedChunk = (cx, cz) => inSpawnArea(plan.spawn ?? [0, 0, 0], cx, cz) }) {
   const spawn = plan.spawn ?? [0, 0, 0];
   const active = { allowCommands: true, gameRules: { ...DEFAULT_RULES, ...(plan.gameRules ?? {}) }, worldSpawn: [...spawn], defaultGameMode: plan.defaultGameMode };
   const initial = JSON.stringify(active), initialWeather = JSON.stringify(weather.save());
@@ -87,6 +88,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     updateBlock() {}, destroyBlock: (x, y, z) => breakBlock(x, y, z),
     dropStacks, // b83 plants83: a /setblock-replaced pot's plant (away-world.js spills it)
     music: () => rt.music ?? null, comparators: () => rt.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
+    ...stores, // b86 awaystore86: the run's own sign, skull and beacon tiles (signs(), skulls(), beaconTile()), so /setblock writes them and not the module-level stores
   };
   const host = createCommandHost(env);
   // The shadow player: the player's state, advanced by the queued commands at the moment they fire (see the header). Batch 36: it follows the main thread's TRACE of the
@@ -305,6 +307,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     host, stats, chat, state, queue,
     execute,
     spawn: () => active.worldSpawn,
+    rule: (name) => ruleOn(active, name), // b86 awaystore86: the run's game rules as /gamerule leaves them (GameRules is read on every call)
     // The block: BlockCommandBlock.updateTick, then the comparator update.
     installBlock(live) {
       const b = live.behaviours[137];
