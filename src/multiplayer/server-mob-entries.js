@@ -4,9 +4,10 @@
 // and sends each packet to all of them (sendPacketToAllTrackingPlayers), the spawn packet to the one player that starts watching (tryStartWachingThis).
 // Batches 59 and 60 gave every player an own MobTracker: each watcher's entries ticked their own phase (an entry made while a player was elsewhere sent its first update on that
 // player's own count). `SharedEntry` is the TrackerEntry with a watcher set; `SharedMobTracker` is the MobTracker whose entries are SharedEntry and whose tick runs once.
-import { MobTracker, TrackerEntry, PlayerWatch } from '../entity-tracker.js';
+import { MobTracker, TrackerEntry, PlayerWatch, nextPacketSeq, stampPacketSeq, packetSeq } from '../entity-tracker.js';
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
+import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
 
 // A TrackerEntry whose `tracked` is "somebody tracks me" for the packets sent to everyone (send), and "this watcher tracks me" while `cur` is set (the range test of one player).
 // `dest` maps each emitted packet to the watchers it goes to, decided when it was emitted (a watcher that joins later gets the spawn instead).
@@ -14,16 +15,31 @@ export class SharedEntry extends TrackerEntry {
   constructor(e, options, view, owner) {
     super(e, options, view);
     this.owner = owner; this.set = new Set(); this.cur = null; this.dest = new WeakMap();
+    this.stamps = null; // b87 mpperf87: EntryStamps (the sequence number and destinations of each packet) once the entry emits with the flag on
   }
+  // b87 mpperf87: the stamp and destinations of one of this entry's packets (the WeakMaps when it emitted with the flag off).
+  seqOf(p) { const s = this.stamps; return s !== null && s.at(p) >= 0 ? s.seqOf(p) : packetSeq(p); }
+  destOf(p) { const s = this.stamps, k = s === null ? -1 : s.at(p); return k >= 0 ? s.dest[k] : this.dest.get(p); }
   get tracked() { return this.cur ? this.set.has(this.cur) : this.set.size > 0; }
   set tracked(v) { if (this.cur) { if (v) this.set.add(this.cur); else this.set.delete(this.cur); } }
   emit(packet) {
+    if (fast87.mode !== 'off' && fast85.mode !== 'off') { this.emit87(packet); return; }
     super.emit(packet);
     if (fast85.mode === 'off') { this.dest.set(packet, this.cur ? [this.cur] : [...this.set]); return; }
     // b85 mpperf85: one shared (never written) destination array while the watcher set is what it was
     const d = this.cur ? (this.cur.solo ??= [this.cur]) : this.destinations();
     if (fast85.mode === 'verify') { const r = this.cur ? [this.cur] : [...this.set]; if (r.length !== d.length || r.some((w, i) => w !== d[i])) fail85('emit dest'); }
     this.dest.set(packet, d);
+  }
+  // b87 mpperf87: TrackerEntry.emit with the stamp and destinations kept in EntryStamps beside `packets` (no WeakMap write per packet); verify also writes the
+  // WeakMaps and track() compares the two.
+  emit87(packet) {
+    const s = nextPacketSeq(), d = this.cur ? (this.cur.solo ??= [this.cur]) : this.destinations();
+    if (fast85.mode === 'verify') { const r = this.cur ? [this.cur] : [...this.set]; if (r.length !== d.length || r.some((w, i) => w !== d[i])) fail85('emit dest'); }
+    this.packets.push(packet);
+    (this.stamps ??= new EntryStamps()).put(this.packets, packet, s, d);
+    if (fast87.mode === 'verify') { stampPacketSeq(packet, s); this.dest.set(packet, d); }
+    this.view.log?.(packet);
   }
   destinations() {
     const s = this.snap, set = this.set;

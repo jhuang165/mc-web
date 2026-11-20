@@ -9,10 +9,14 @@
 import { serverCopyOf } from './server-copy-step.js'; // b82 mpplace82
 import { fast85 } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86, seqOrder, seqScratch, seqDone, plainPacket, wireNum, parsedState, samePacket, stateDiffs86 } from '../mpperf86-fast.js'; // b86 mpperf86
+import { fast87, fail87, shareDone } from '../mpperf87-fast.js'; // b87 mpperf87
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
 import { MobTracker, packetSeq } from '../entity-tracker.js';
+// b87 mpperf87: a packet's stamp and destinations through its entry (a SharedEntry keeps them beside its packets; packetSeq and `dest` otherwise)
+const seqOf87 = (pk, en) => (en.entry.seqOf !== undefined ? en.entry.seqOf(pk) : packetSeq(pk));
+const destOf87 = (en, pk) => (en.entry.destOf !== undefined ? en.entry.destOf(pk) : en.entry.dest.get(pk));
 import { SharedMobTracker } from './server-mob-entries.js';
 import { removedAtSpawn } from './server-properties.js'; // b69 serverprops
 import { EntityIds } from '../entity-ids.js';
@@ -438,12 +442,12 @@ export class ServerMobs {
     t.serverStep(mobs.entities, size);
     const byWatcher = new Map(), outs = new Map();
     for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
-    const parts = t.queued(), m86 = fast86.mode, q86 = m86 !== 'off';
+    const parts = t.queued(), m86 = fast86.mode, q86 = m86 !== 'off', m87 = fast87.mode;
     const send = (en, pk) => {
       const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
       if (pk.type === 'attach' && pk.mode === 1 && holder?.kind === 'mob') return; // b62: a lead held by a mob (no server path); players and knots are forwarded below
       if (pk.type === 'attach' && pk.mode !== 0 && pk.mode !== 1) return;
-      for (const w of en.entry.dest.get(pk) ?? []) {
+      for (const w of destOf87(en, pk) ?? []) {
         const v = byWatcher.get(w);
         if (!v) continue;
         const { out, later } = outs.get(v);
@@ -458,29 +462,33 @@ export class ServerMobs {
     const plain = (en, pk) => {
       const type = pk.type;
       if (type === 'attach' || !plainPacket(pk)) { send(en, pk); return; }
-      const ws = en.entry.dest.get(pk);
+      const ws = destOf87(en, pk);
       if (ws === undefined || ws.length === 0) return;
       const e = en.live, i = wireNum(e, num);
-      let s;
+      let s, one; // b87 mpperf87: `one`, the copy every watcher gets of a packet that is not a spawn (nothing after track writes into a packet: see the mpperf87 note)
       for (let k = 0; k < ws.length; k++) {
         const v = byWatcher.get(ws[k]);
         if (!v) continue;
         const o = outs.get(v);
         let c;
         if (type === 'spawn') { o.out.push(c = { ...pk, i, mob: e.type, ...mobState(e) }); v.known.set(e, s ??= stateOf(e)); }
-        else if (type === 'destroy') { o.later.push(c = { ...pk, i }); v.known.delete(e); }
-        else o.out.push(c = { ...pk, i });
+        else {
+          if (m87 === 'off') c = { ...pk, i };
+          else { c = one ??= shareDone({ ...pk, i }); if (m87 === 'verify' && !samePacket(c, { ...pk, i })) fail87('shared packet'); }
+          if (type === 'destroy') { o.later.push(c); v.known.delete(e); } else o.out.push(c);
+        }
         if (m86 === 'verify') { const { entity, vehicle, holder, after, ...rest } = pk; if (!samePacket(c, type === 'spawn' ? { ...rest, i: num(e), mob: e.type, ...mobState(e) } : { ...rest, i: num(e) })) fail86('track packet'); }
       }
     };
-    const sc = q86 ? (this.seq86 ??= seqScratch()) : null, n = q86 ? seqOrder(parts, packetSeq, sc) : -1;
+    if (m87 === 'verify') for (const en of parts) for (const pk of en.entry.packets) if (seqOf87(pk, en) !== packetSeq(pk) || (en.entry.dest !== undefined && destOf87(en, pk) !== en.entry.dest.get(pk))) fail87('packet stamp');
+    const sc = q86 ? (this.seq86 ??= seqScratch()) : null, n = q86 ? seqOrder(parts, seqOf87, sc) : -1;
     if (n >= 0) {
-      if (m86 === 'verify') { const ref = []; for (const en of parts) for (const pk of en.entry.packets) ref.push([packetSeq(pk), en, pk]); ref.sort((a, b) => a[0] - b[0]); if (ref.length !== n || ref.some(([, en, pk], k) => sc.pk[k] !== pk || sc.en[k] !== en)) fail86('packet order'); }
+      if (m86 === 'verify') { const ref = []; for (const en of parts) for (const pk of en.entry.packets) ref.push([seqOf87(pk, en), en, pk]); ref.sort((a, b) => a[0] - b[0]); if (ref.length !== n || ref.some(([, en, pk], k) => sc.pk[k] !== pk || sc.en[k] !== en)) fail86('packet order'); }
       for (let k = 0; k < n; k++) plain(sc.en[k], sc.pk[k]);
       seqDone(sc);
     } else {
       const queue = [];
-      for (const en of parts) for (const pk of en.entry.packets) queue.push([packetSeq(pk), en, pk]);
+      for (const en of parts) for (const pk of en.entry.packets) queue.push([seqOf87(pk, en), en, pk]);
       queue.sort((a, b) => a[0] - b[0]);
       for (const [, en, pk] of queue) (q86 ? plain : send)(en, pk);
     }
