@@ -45,6 +45,8 @@ export const fightReference39 = JSON.parse(readFileSync(new URL("../public/resea
 export const fightReference41 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b41-reference.json", import.meta.url)));
 // Batch 85: village-fight-b85-reference.json (a zombie villager whose conversion timer ends: script ops `zvillager k` and `convert k ticks`, the new villager as a kind 2 entry of `mobs`, `loot`).
 export const fightReference85 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b85-reference.json", import.meta.url)));
+// Batch 86: village-fight-b86-reference.json (a villager killed by a zombie on Easy, Normal and Hard: EntityZombie.onKillEntity, `conversions` and `zombies`; a zombie pigman fight with `loot`; the b85 fields with the b38 legacy rows and `bright`).
+export const fightReference86 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b86-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;

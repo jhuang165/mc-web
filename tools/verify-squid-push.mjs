@@ -16,12 +16,12 @@ async function library(prefix){
  }
  throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
-const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-'].map(library));
+const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-','netty-buffer-','netty-common-','netty-codec-','netty-transport-4','netty-handler-4','netty-resolver-4','gson-','commons-io-','commons-codec-'].map(library)); // b86: netty and the rest for the real EntityPlayerMP (ServerPlayerProbe)
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','WolfProbe','ModelProbe','SquidBatProbe','EndermanProbe','CorpseLivingProbe','SquidPushProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','WolfProbe','ModelProbe','SquidBatProbe','EndermanProbe','CorpseLivingProbe','PlantProbe','PlayerStepProbe','XpOrbProbe','NbtProbe','MinecartProbe','HangingProbe','EntityListProbe','ServerPlayerProbe','SquidPushProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'SquidPushProbe'],{maxBuffer:1<<28});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 assert.equal(records.length,7);
@@ -30,3 +30,14 @@ const reference={target:'Minecraft Java 1.7.10',tag:'b85squidpush',clientSha1:'e
  records};
 await writeFile(path.join(root,'../public/research/squid-push-reference.json'),JSON.stringify(reference)+'\n');
 console.log('squid-push reference:',records.length,'records');
+// Batch 86 mobrec86: SQ_B86=1 runs the pool-world records (a squid and a boat in one walked list; a squid and a ticked EntityPlayerMP) -> squid-push-b86-reference.json.
+{
+ const {stdout}=await exec('java',['-cp',cp,'SquidPushProbe'],{maxBuffer:1<<28,env:{...process.env,SQ_B86:'1'}});
+ const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
+ assert.equal(records.length,7);
+ const reference={target:'Minecraft Java 1.7.10',tag:'b86squidpush',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',
+  method:'Batch 86. Unchanged original classes on EntityListProbe.EW (map-backed blocks: still water 9 at x 44..85, z 44..85, y 0..9, stone walls; real handleMaterialAcceleration, isAABBInMaterial and getCollidingBoundingBoxes with entity boxes). kind boat: a squid (Entity.rand an LCG copy with a draw counter) and an empty EntityBoat walked in `order` (sb squid first, bs boat first; lastTickPos, ticksExisted++, onUpdate); `boat` [x, y, z, vx, yaw] given to new xi(world, x, y, z); rows [squid state, boat [x, posY, z, vx, vy, vz, yaw, isDead]]. kind tplayer: a squid and a real EntityPlayerMP (ServerPlayerProbe) at `player`, ticked after the squid by mw.i() and put back at its position; rows [squid state, player motion after the squid, player motion after its own update].',
+  records};
+ await writeFile(path.join(root,'../public/research/squid-push-b86-reference.json'),JSON.stringify(reference)+'\n');
+ console.log('squid-push b86 reference:',records.length,'records');
+}
