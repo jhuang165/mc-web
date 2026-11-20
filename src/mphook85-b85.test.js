@@ -42,7 +42,7 @@ test("no angler found: handleSpawnObject builds no hook", () => {
   assert.equal(copies.tick(wire(out.get(1)), world(), null).hooks.length, 0); assert.equal(copies.size, 0);
 });
 
-test("an arrow's entry starts from its join state: the S0E is the flush state, the first move is the delta from the join", () => {
+test("an arrow's entry starts from its join state: the S0E is the join state (corrected b86 lanes86: mn.a(sa,int,int,boolean) calls my.b(playerEntities) at join), the first move is the delta from the join", () => {
   const arrows = new Arrows(() => 0.5), a = arrows.make({ x: 0.5, y: 5, z: 0.5, mx: 0, my: 0, mz: 0.1, yaw: 0, pitch: 0 }, arrows.rng(), {});
   a.entityId = undefined;
   const tracks = new ThrownTracks({ idOf }), list = [{ e: a, kind: "arrow" }];
@@ -50,7 +50,7 @@ test("an arrow's entry starts from its join state: the S0E is the flush state, t
   a.z += 3; // the join tick's own update
   const rows = wire(tracks.update(list, new Map([[1, player]])).get(1));
   const spawn = rows[0].p.find((p) => p.type === "spawn"), move = rows[0].p.find((p) => p.type === "move" || p.type === "moveLook");
-  assert.equal(spawn.z, Math.floor(3.5 * 32)); // flush state
+  assert.equal(spawn.z, Math.floor(0.5 * 32)); // join state (b85 encoded the flush state, 112)
   assert.equal(move.dz, 96); // from the join's scaled position (0.5 * 32 = 16): 112 - 16
 });
 
