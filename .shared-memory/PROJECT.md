@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 87 (2026-11-20, ten tracks in `../wt87-<name>` on `batch87-<track>`, cut from b95bfd9ac, merged --no-ff on `batch87-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b87-lead/track-rules.md`; lead note `b87-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.116.0, by track (details in the `*-b87-track.md` notes and "Done in batch 87" in `public/research/remaining-gaps.md`):
+  - ride87: horses jump through C0B 6 and `horseJumpCounter` only; single-player lily pads through `boatClearCell`; Creative armour stays in the hand with a window resend.
+  - boatcheck87: `boat-place-entities.js`; `Boats.place` checks every collidable kind and the border (server, single player, client `clientBoatFits`); `clientEntityBoxes` adds hooks, falling blocks, dragon parts and the crystal box; `BoatEntityProbe` 60 records.
+  - sptrack87: `birth`/`birthWalks` in `object-tracker.js` (first spawn from the pre-update state); `ThrownTracks.update` gives a returning watcher this tick's state with the native double delta; `hooksIn(dim)` for blast rows.
+  - spcopy87: the copy's riding and sleeping branches; fall damage from the copy's `handleFalling`.
+  - blast87: players filed by feet (2100 feet records); server fireballs take the player's look and owner; TNT kill credit through the placer; no placerless knockback on mobs; Blast Protection on mobs; skeleton arrow TNT placers; ocelot look units.
+  - offline87: offline UUID logins (`ServerAdmin.loginProfile`); `net-packet-ids.js` for /netstat; per-world `levelSaving` and the 4 partial rows replayed; `Offline87Probe`.
+  - summon87: `entity-base-nbt.js` (the shared Entity NBT fields on TNT, falling blocks, boats and carts); negative item `Age` kept; native summoned-mob head and body yaw; export PortalCooldown and Dimension; `Summon87Probe`.
+  - tiles87: beacons on total time; sign id swaps give a fresh tile; `/setblock` spills containers (`env.spillTile`); away daylight sensors and spawner list.
+  - mobrec87: 27 executed witch, pigman, squid-boat and villager-kill records; dying pigmen get angered (`nether-melee-live.js`).
+  - mpperf87: `MC_MPPERF87=on|off|verify`; closure-free `tickMobs`, index-walk `push`, in-place item boxes, array packet stamps, shared non-spawn packet copies (heap per tick -6 to -18%).
+- Lead fixes: kept both changes in three merge conflicts: the server blast rows in `server-mobs.js` (sptrack87's `hooksIn` line with blast87's placer and attacker arguments), the dated `commands.md` entries (offline87 and summon87), and the fall-state lines in `entities.js` (mpperf87's `dryBoxOf87` with summon87's negative FallDistance rule). No test needed a lead fix.
+- Verification: cross-track run of 190 files with MC_MPPERF83/84/85/86/87=verify: 2337/2337. One full `npm test` on 3eb71d4b5: 9844 tests, 9844 pass, 0 fail. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 87" in `public/research/remaining-gaps.md`.
+
 Batch 86 (2026-11-19, ten tracks in `../wt86-<name>` on `batch86-<track>`, cut from e814bef37, merged --no-ff on `batch86-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b86-lead/track-rules.md`; lead note `b86-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.115.0, by track (details in the `*-b86-track.md` notes and "Done in batch 86" in `public/research/remaining-gaps.md`):
   - seat86: riders send C05 and C0C (`riderPacket`); the server's ridden branch (`takeRide`, `cleanRide`, `applyRide` in `server-vehicles.js`); `boatClearCell` plays the lily pad 2001 effect and the server drops the pad.
