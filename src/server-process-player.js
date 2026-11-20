@@ -21,6 +21,27 @@
 //   setPlayerLocation callers (javap over the jar): bv.b (CommandTeleport), mw.a(ZZZ) wakeUpPlayer, mw.a(DDD) setPositionAndUpdate (the ender pearl, a dismount), mw.a(sa)
 //   mountEntity, mw.b(I) travelToDimension, mw.a(III) sleepInBedAt, oi.a(mw, int, boolean) respawnPlayer, oi.a(ej, mw) initializeConnectionToPlayer, oi.a(mw, int)
 //   transferPlayerToDimension, and nh.a(jd) itself.
+// b87 spcopy87 (bytecode-read, 1.7.10 jar):
+//   94-300   the riding branch (mw.m != null): f3 / f4 := the entity's yaw / pitch, mw.m.ac() (updateRiderPosition), d5 / d7 / d9 := the seated position, jd.k() ? the packet's angles,
+//            mw.D := jd.i(), mw.i(), mw.V := 0, mw.a(d5, d7, d9, f3, f4) (back on the seat), mw.m.ac() again, oi.d(mw), `if (r)` o / p / q := the position, mt.g(mw) (World.updateEntity:
+//            the rider's updateRidden: EntityPlayer.updateRidden -> Entity.updateRidden zeroes the motion and seats it, EntityLivingBase.updateRidden (sv.ab) zeroes fallDistance), return.
+//            The packet's position is never read: a riding client sends C05 (look) packets.
+//   301-359  the sleeping branch (mw.bm()): mw.i(), mw.a(o, p, q, yaw, pitch) (the spot sleepInBedAt's setPlayerLocation set), mt.g(mw), return. The packet is not read at all.
+//   1464-1506 the walking branch's tail: mw.D := jd.i(), oi.d(mw), then mw.b(mw.t - d3, jd.i()) with d3 the posY when the packet arrived (offset 360): handleFalling.
+//   mw.a(DZ) (updateFallState) is a no-op, so no move of the copy (mw.i(), mw.d, a piston push) counts fall distance; mw.b(DZ) is invokespecial yz.a(DZ), which resolves to
+//   EntityLivingBase.updateFallState (sv.a(DZ)): `if (!M()) N()` (handleWaterMovement at the new position when not already in water: R := 0), then on the ground with R > 0 the
+//   2006 landing dust (server side) and Block.onFallenUpon (only BlockFarmland aky overrides it: a javap scan of every class), then Entity.updateFallState (sa.a(DZ)): on the ground
+//   R > 0 -> fall(R) (yz.b(F): nothing with allowFlying, the stat at >= 2, sv.b(F): ceil(R - 3 - (Jump Boost amplifier + 1)) > 0 -> attackEntityFrom(fall)) and R := 0, else
+//   dy < 0 -> R := (float) (R - dy). The other writers of R (putfield sa.R): sa.C onEntityUpdate's lava (R *= 0.5), sa.N handleWaterMovement (0), sa.as setInWeb (0),
+//   sv.e(FF) moveEntityWithHeading's ladder branch (0, outside a liquid), sv.ab updateRidden (0), sa.f(dh) readFromNBT.
+//   World.getCollidingBoundingBoxes (ahb.a(sa, azt)) adds, for every other entity in the box grown by 0.25, other.J() (getBoundingBox) and mover.h(other) (getCollisionBox) when
+//   they meet the box. A javap scan of every class: only EntityBoat (xi.J) returns a box; EntityMinecart's J is null (xl.J), its h(other) matters only to a cart that moves,
+//   and the player's h is Entity's null. So the copy stands on boats and walks through minecarts, like the client (entities.js collisionBoxes, entity-collision.js).
+//   There is no slime block in 1.7.10 (none in Block's registry), and BlockHay keeps Block's empty onFallenUpon: a hay bale takes no damage off a fall.
+import { landingEffects, JUMP_BOOST } from "./damage-fx.js";
+import { entityWaterBox, waterAcceleration } from "./fluids.js";
+import { isOnLadder } from "./ladders.js";
+import { sampleFallSite } from "./combat-tracker.js";
 const f = Math.fround;
 export const SHRINK = f(0.0625);
 export const TOO_QUICKLY = 100.0, WRONGLY = 0.0625;
@@ -58,4 +79,45 @@ export function awaitedAnswer(pkt, at) {
   if (!pkt) return false;
   const dy = pkt.y - at.y;
   return pkt.x === at.x && dy * dy < 0.01 && pkt.z === at.z;
+}
+
+/** The copy's box at (x, minY, z) in water, as Entity.handleWaterMovement tests it (the box shrunk 0.4 vertically and 0.001 around). */
+export function copyInWater(world, at, w, h) {
+  const hw = f(w) / 2;
+  return waterAcceleration(world, entityWaterBox([at.x - hw, at.y, at.z - hw, at.x + hw, at.y + f(h), at.z + hw]), false).wet;
+}
+/** EntityPlayerMP.onUpdateEntity's (mw.i) changes to the copy's fallDistance, on the copy `p` at the spot the update ran from and `moved`, the update's scratch (inWater and inLava
+ *  at the start, inWeb after the move): water zeroes it, lava halves it (Entity.onEntityUpdate), the ladder branch of moveEntityWithHeading zeroes it outside a liquid (a flying
+ *  player takes that branch in a liquid too), and setInWeb zeroes it. The move itself adds nothing (mw.a(DZ) is empty). Also keeps isInWater for handleFalling. */
+export function updateFallResets(world, p, moved) {
+  let r = p.fallDistance ?? 0;
+  p.inWater = !!moved.inWater;
+  if (moved.inWater) r = 0;
+  else if (moved.inLava) r = f(r * f(0.5));
+  if (!((moved.inWater || moved.inLava) && !p.flying) && isOnLadder(world, p.x, p.y, p.z)) r = 0;
+  if (moved.inWeb) r = 0;
+  p.fallDistance = r;
+}
+/** EntityPlayer.fall (yz.b(F)) on the copy: nothing in Creative (allowFlying), else EntityLivingBase.fall's damage ceil(distance - 3 - Jump Boost level) to the player's Survival,
+ *  with the CombatTracker's fall site and distance. The sounds are the client's own (EntityPlayer.playSound skips the player it is about). Returns the points dealt. */
+export function copyFall(world, p, distance) {
+  const s = p.survival;
+  if (!s || p.creative || s.creative || !(s.health > 0) || !(distance > 0)) return 0;
+  const jump = s.effects?.get?.(JUMP_BOOST), by = Math.floor(p.y - 0.20000000298023224);
+  const out = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(p.x), by, Math.floor(p.z)) });
+  if (!(out.points > 0)) return 0;
+  s.combatSite = sampleFallSite(world, p.x, p.y, p.z, !!p.inWater);
+  s.combatFall = distance;
+  s.damage?.(out.points, "a fall");
+  return out.points;
+}
+/** NetHandlerPlayServer.processPlayer's handleFalling (mw.b(DZ) -> EntityLivingBase.updateFallState), on the copy at the accepted packet position: `dy` is the packet's y minus
+ *  the copy's posY when the packet arrived, `ground` the packet's onGround. */
+export function handleFalling(world, p, dy, ground) {
+  if (!p.inWater && copyInWater(world, p, p.width, p.height)) { p.inWater = true; p.fallDistance = 0; }
+  const r = p.fallDistance ?? 0;
+  if (ground) {
+    if (r > 0) copyFall(world, p, r);
+    p.fallDistance = 0;
+  } else if (dy < 0) p.fallDistance = f(r - dy);
 }
