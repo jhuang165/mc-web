@@ -43,6 +43,9 @@
 //   max-build-height   MinecraftServer.af() (the field E) replaces the 256 in nh C07 / C08 and in the "build.tooHigh" text. The (v + 8) / 16 * 16 rounding and the 64..256 clamp are
 //                      RECALLED from DedicatedServer.
 //   player-idle-timeout  MinecraftServer.d() / nh idle kick (batch 68, "/setidletimeout"); the property is the starting value.
+//   online-mode        MinecraftServer.Y() (b86 console86): off, PlayerProfileCache.a(String) gives an unknown name its offline profile (UUID.nameUUIDFromBytes("OfflinePlayer:" + lowercased
+//                      name)) for /op, /ban and /whitelist add (bytecode-read, executed). The port's logins stay account-authenticated with account ids (a native offline login would
+//                      take the offline UUID of the typed name, recalled), so an offline entry only matches a player whose account id is that UUID.
 
 import { collisionBoxes } from '../world.js';
 
@@ -56,7 +59,7 @@ export const PROPERTY_DEFAULTS = Object.freeze([
 
 export const HONOURED_KEYS = Object.freeze(['view-distance', 'max-players', 'spawn-protection', 'allow-nether', 'allow-flight', 'spawn-animals', 'spawn-monsters', 'spawn-npcs',
   'generate-structures', 'difficulty', 'gamemode', 'force-gamemode', 'hardcore', 'pvp', 'enable-command-block', 'op-permission-level', 'white-list', 'motd', 'max-build-height',
-  'player-idle-timeout']);
+  'player-idle-timeout', 'online-mode' /* b86 console86: only the commands' profile lookup (server-admin.js profile()); joins still authenticate by account */]);
 
 export const FLY_KICK_TEXT = 'Flying is not enabled on this server'; // nh ldc, bytecode-read
 export const FULL_TEXT = 'The server is full!'; // oi ldc, bytecode-read
@@ -213,7 +216,7 @@ export function resolveSettings(props) {
   const gameType = gameTypeId(props.string('gamemode', '0'));
   return {
     rules, difficulty, gameType, gameMode: MODE_NAMES[gameType], pvp: props.bool('pvp', true), commandBlocks: props.bool('enable-command-block', false),
-    opLevel: props.int('op-permission-level', 4), whitelist: props.bool('white-list', false), motd: props.string('motd', 'A Minecraft Server'),
+    opLevel: props.int('op-permission-level', 4), whitelist: props.bool('white-list', false), onlineMode: props.bool('online-mode', true), motd: props.string('motd', 'A Minecraft Server'),
   };
 }
 

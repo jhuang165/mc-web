@@ -27,6 +27,7 @@ import { setBlockCommand } from "./multiplayer/server-command-blocks.js"; // b80
 import { pickedAchievement } from "./achievements-live.js";
 import { summonHost } from "./multiplayer/server-summon.js"; // b67 mpsummon
 import { worldCommandsHost } from "./multiplayer/server-worldcmds.js"; // b68 mpworldcmds
+import { CONSOLE_NAME } from "./multiplayer/server-admin.js"; // b86 console86
 
 // Commands an operator can run on the dedicated server: the ones whose state this server holds or relays. The rest answer that they are unavailable.
 export const SERVER_COMMANDS = new Set(["tell", "me", "say", "scoreboard", /* b64 mpscoreboard */ "help", "seed", "give", "clear", "xp", "effect", "gamemode", "tp", "achievement", "kill", "summon" /* b67 mpsummon */, /* b68 mpadmin */ "op", "deop", "kick", "ban", "ban-ip", "pardon", "pardon-ip", "banlist", "whitelist", "stop", "save-all", "save-on", "save-off", "setidletimeout", ...SERVER_WORLD_COMMANDS]);
@@ -58,6 +59,19 @@ export function voidDeathComponent(name, rawName = name) {
 
 const unsupported = (text) => new CommandException("commands.generic.exception", [text], "unsupported");
 const grayItalic = (c) => { c.style.color = "gray"; c.style.italic = true; return c; };
+const LOG = Symbol("server log"); // b86 console86: a collected line for the server log
+// b86 console86: the console has no player record. CommandBase.getCommandSenderAsPlayer (y) throws PlayerNotFoundException with this raw text for a non-player sender;
+// MinecraftServer.f_() (the sender position for selectors and ~) is 0, 0, 0 (bytecode-read).
+const NOT_A_PLAYER = "You must specify which player you wish to perform this action on.";
+function consoleSelf(ops) {
+  const self = {};
+  for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(ops))) {
+    const fail = () => { throw new CommandException(NOT_A_PLAYER); };
+    Object.defineProperty(self, k, d.get ? { get: fail, enumerable: true, configurable: true } : { value: typeof d.value === "function" ? fail : d.value, enumerable: true, configurable: true, writable: true });
+  }
+  self.position = () => ({ x: 0, y: 0, z: 0 });
+  return self;
+}
 
 /**
  * Chat, commands, deaths and achievements for the connected players of one DedicatedSimulation.
@@ -133,40 +147,51 @@ export class ServerSocial {
   }
 
   /** A chat line starting with "/": the lines go to their recipients, and the state changes to the player records. */
-  command(id, line) {
-    const sim = this.simulation, sender = sim.players.get(id);
+  command(id, line) { return this.runCommand(this.simulation.players.get(id), line); }
+  /**
+   * b86 console86: a line typed at the server console (DedicatedServer's stdin, MinecraftServer as the ICommandSender: name "Server", every permission level, sender position
+   * 0, 0, 0). Its own lines go to `this.log`; the other ops get the chat.type.admin notices as from a player. Executed in Dedicated84Probe's console rows.
+   */
+  consoleCommand(line) { return this.runCommand(null, line); }
+  /** `this.log(message)`: the server log (MinecraftServer.a(fj) logs the unformatted text): the console's own lines and every other sender's admin notice (wire chat messages). */
+  logLine(c) { this.log?.(typeof c === "string" || isComponent(c) ? chatMessage(c) : c); }
+  runCommand(from, line) {
+    const sim = this.simulation, isConsole = !from, sender = from ?? { name: CONSOLE_NAME, dimension: 0, position: { x: 0, y: 0, z: 0 } }; // b86 console86: the server's world 0 and f_() 0, 0, 0
     const roster = [...sim.players.values()].map((p) => ({ name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, mode: p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0 }));
-    const op = this.isOp(sender.name), out = [];
+    const op = isConsole || this.isOp(sender.name), out = [];
+    const senderLevel = isConsole ? 4 : this.opLevel(sender.name);
     // b68 mpadmin: /op /kick /ban /whitelist /stop ... run in server-admin.js (they are not in the single-player registry)
     if (sim.admin.handles(line)) {
       const live = () => [...sim.players.values()];
-      return sim.admin.run(line, { sender: sender.name, level: this.opLevel(sender.name), deliver: (name, c) => this.toPlayer(name, chatMessage(c)),
+      return sim.admin.run(line, { sender: sender.name, level: senderLevel, console: isConsole, log: (c) => this.logLine(c), deliver: (name, c) => this.toPlayer(name, chatMessage(c)),
         ops: (need = 0) => live().filter((p) => this.isOp(p.name) && this.opLevel(p.name) >= need).map((p) => p.name), online: () => live().map((p) => ({ id: p.id, name: p.name, uuid: p.resumeKey })) });
     }
+    const SELF = isConsole ? Symbol("console") : sender.name; // the console's lines are collected under a key no player name can equal
     const to = (name, message) => out.push({ to: name, message });
     const records = roster.map((r) => ({ name: r.name, position: () => r.position, mode: r.mode, level: 0 }));
     // b85 dedtab85: the notice reaches an op only when its permission level also reaches the running command's (CommandBase.func_152373_a: aa.a(receiver), executed).
     let running = null;
     const rights = (name) => this.isOp(name) && this.opLevel(name) >= (running?.permission ?? 0);
     const forPlayer = (name) => this.playerOps(this.idOf(name), (n, m) => to(n, m));
-    const host = Object.assign(Object.create(forPlayer(sender.name)), {
+    const host = Object.assign(Object.create(isConsole ? consoleSelf(this.playerOps(undefined, () => {})) : forPlayer(sender.name)), {
       name: sender.name, playerName: sender.name, cheats: op, scoreboard: sim.scoreboard, // b64 mpscoreboard: /scoreboard acts on the shared board
-      canUse: (command) => (running = command, op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false)), // b68: op level; b84 dedicated84: /list is op-only for a player on a dedicated server (mw.a, executed), no longer open to everyone
+      canUse: (command) => (running = command, isConsole ? true : op ? (SERVER_COMMANDS.has(command.name) && this.opLevel(sender.name) >= command.permission) || canUse(command, false) : canUse(command, false)), // b68: op level; b84 dedicated84: /list is op-only for a player on a dedicated server (mw.a, executed), no longer open to everyone; b86 console86: MinecraftServer.a(int, String) is true
       unsupported: { has: (n) => op && !SERVER_COMMANDS.has(n) },
       players: () => records, forPlayer,
       positionOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { x: p.position.x, y: p.position.y, z: p.position.z } : undefined; },
       lookOf: (name) => { const p = sim.players.get(this.idOf(name)); return p ? { yaw: p.yaw, pitch: p.pitch } : undefined; }, // b84 cmdfix84: /tp <player> <target> copies the target's rotation
       dimensionOf: (name) => sim.players.get(this.idOf(name))?.dimension ?? 0, // b82 commands82: /tp between players in two dimensions
       seed: () => sim.world.seed,
-      print: (t, c) => to(sender.name, c ?? t),
+      print: (t, c) => to(SELF, c ?? t),
       broadcast: (t, c) => { for (const r of records) to(r.name, c ?? t); },
       deliver: (name, t, c) => to(name, c ?? t),
       // CommandBase.func_152373_a: the sender's own line, and chat.type.admin (gray italic) to every other op.
       // b82 commands82: flag 1 (CommandGameMode's success lines, bytecode-read) skips the sender's own copy.
       feedback: (t, c, flags = 0) => {
         const component = isComponent(t) ? t : c;
-        if (!(flags & 1)) to(sender.name, component ?? t);
-        if (component) for (const r of records) if (r.name !== sender.name && rights(r.name)) to(r.name, grayItalic(translation("chat.type.admin", sender.name, component)));
+        if (!(flags & 1)) to(SELF, component ?? t);
+        if (component) for (const r of records) if ((isConsole || r.name !== sender.name) && rights(r.name)) to(r.name, grayItalic(translation("chat.type.admin", sender.name, component)));
+        if (component && !isConsole) to(LOG, grayItalic(translation("chat.type.admin", sender.name, component))); // b86 console86: bl.a logs the notice unless the server sent it
       },
     });
     // World commands act on the simulation (time, weather, rules, difficulty); /list and /tellraw see every connected player.
@@ -180,7 +205,8 @@ export class ServerSocial {
     // The per-player achievements of a target are reached through forPlayer (below); deliver everything collected in order.
     for (const { to: name, message } of out) {
       const wire = typeof message === "string" || isComponent(message) ? chatMessage(message) : message;
-      this.toPlayer(name, wire);
+      if (name === LOG || name === SELF && isConsole) this.logLine(wire);
+      else this.toPlayer(name, wire);
     }
     return out.length;
   }

@@ -13,7 +13,8 @@ import { debugFileWriter } from '../src/multiplayer/server-debugfile.js'; // b74
 import { setCapeShow } from '../src/multiplayer/cape-wire.js'; // b71 mpcapes
 import { applyClientSettings, chatDelivered as settingsChatDelivered, chatSendAllowed } from '../src/multiplayer/server-settings.js'; // b72 mpsettings
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
-import { ServerSocial } from '../src/server-broadcast.js';
+import { ServerSocial, chatDisplay } from '../src/server-broadcast.js';
+import readline from 'node:readline'; // b86 console86: the server console
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
@@ -161,7 +162,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (ws.readyState !== WebSocket.OPEN) return;
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
-    ws.send(JSON.stringify(message));
+    const text = JSON.stringify(message);
+    simulation.admin.netStats.write(0, Buffer.byteLength(text)); // b86 console86: /netstat (the encoder fa records each packet; the port's messages have no packet id)
+    ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
   // b61 mpnether: `alt` maps a dimension to the tick message for the players in it (server-dimensions.js); everyone else gets `message`.
@@ -185,6 +188,11 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   simulation.admin.loadFiles();
   simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save(), stop: () => { void close().then(() => onStop?.()); } };
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
+  // b86 console86: console lines (DedicatedServer.func_71331_a queues them, func_71333_ah runs them after the tick's world and network work) and the server log
+  // (MinecraftServer.a(fj): the unformatted text): the console's own lines and the admin notices of every other sender.
+  const consoleQueue = [];
+  social.log = (m) => { const d = chatDisplay(m); console.log(typeof d === 'string' ? d.replace(/\u00a7./g, '') : d.unformatted()); };
+  const consoleCommand = (line) => { if (typeof line === 'string' && line.trim()) consoleQueue.push(line); };
   simulation.rules.opSource = { any: () => social.ops.size > 0 || simulation.admin.ops.size > 0, is: name => social.isOp(name) }; // b69 serverprops: spawn-protection counts MC_WEB_OPS and the saved ops
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
@@ -204,6 +212,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     ws.on('pong', () => { alive = true; });
     ws.heartbeat = () => { if (!alive) return ws.terminate(); alive = false; ws.ping(); };
     ws.on('message', (data, binary) => {
+      simulation.admin.netStats.read(0, data.length); // b86 console86: /netstat (the decoder ez records each packet)
       try {
         const now = Date.now();
         budget = Math.min(80, budget + (now - budgetAt) * .06); budgetAt = now;
@@ -303,6 +312,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       for (const pid of simulation.admin.idle()) simulation.admin.host.kick(pid, 'You have been idle for too long!'); // b68 mpadmin: /setidletimeout
       pings.tick(); // b68 mpping: keep-alives every 40 ticks, one S38 per tick in rotation
       social.drain(); // death messages queued by the tick, to every player
+      for (const line of consoleQueue.splice(0)) social.consoleCommand(line); // b86 console86: the pending console commands
       // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).
       // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.
       for (const [pid, player] of simulation.players) {
@@ -349,7 +359,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (simulation.admin.autosave) await save(); // b68 mpadmin: native /save-off also skips the shutdown save
     await accounts.save();
   }
-  return { server, simulation, accounts, save, close, port: server.address().port };
+  return { server, simulation, accounts, save, close, consoleCommand, social, port: server.address().port };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -360,7 +370,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   settings.rules.persistIdleTimeout = n => saveProperty(settings, 'player-idle-timeout', n, { warn: m => console.warn(m) }); // b70 serverprops2: /setidletimeout writes the property back
   const favicon = await loadFavicon(path.dirname(dataFile), { warn: m => console.warn(m) });
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist, onlineMode: settings.onlineMode /* b86 console86 */ }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
+  readline.createInterface({ input: process.stdin }).on('line', (line) => app.consoleCommand(line)); // b86 console86: DedicatedServer's console reader (stdin)
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
 }
