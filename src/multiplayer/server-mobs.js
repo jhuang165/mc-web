@@ -249,12 +249,15 @@ export class ServerMobs {
     // b83 blastorder83: the mobs, those entities, the other primed TNT (b81 blast81, no damage) and every player in reach are ONE list in the world's list order (candidate-order.js),
     // taken before the first hurt (a kill's loot, a nested blast's orbs or TNT are in no row), as applyExplosion does.
     const vehicles = host.vehicles, drop = d => { if (d.stack) items.spawn(d.stack, d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); };
-    const b = { world, x, y, z, size, exploder: ev.source ?? null, placer };
+    // b86 blastcover86: a player's TNT (flint and steel, a burning arrow, a chain from either) is "explosion.player" with that player (ro.a(agw)), so EntityHanging.onBroken(player)
+    // drops nothing for a Creative player, as nonLivingRows does in single player. A fireball still takes no look from a server player (b.placer null for one; see the note).
+    const byPlayer = placer?.survival ? placer : null;
+    const b = { world, x, y, z, size, exploder: ev.source ?? null, placer: byPlayer ? null : placer };
     const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
       hooks: [...this.views.values()].map(v => host.fishing?.hookOf?.(v.player)).filter(Boolean) };
     const rows = [...mobRows({ world, mobs: this.mobs, position: this.probe }, { x, y, z, size, exploder: ev.source ?? null, attacker: ev.source ?? null }),
-      ...nonLivingRows(state, b, { vehicleDrop: drop }), ...(primed ? tntRows(primed, b) : [])];
+      ...nonLivingRows(state, b, { vehicleDrop: drop, creative: !!byPlayer?.survival.creative }), ...(primed ? tntRows(primed, b) : [])];
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
       const p = v.player.position, s = v.player.survival, lying = !!v.player.sleeping; // b68 fixes68: posY = minY + 0.2, a 0.2 x 0.2 box (sleeper-eye.js)

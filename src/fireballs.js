@@ -183,7 +183,9 @@ export class Fireballs {
     return true;
   }
   lookOf(e) {
-    if (e === "player") return this.mobs.playerLook?.() ?? null;
+    // b86 blastcover86: main.js playerLook gives rotationYaw / rotationPitch in degrees (playerEye), not a vector, so a player's TNT blast deflected a large ball to NaN; a replay
+    // that hands a vector keeps it. getLookVec is EntityLivingBase.getLook(1.0F), the formula lookVector reproduces.
+    if (e === "player") { const l = this.mobs.playerLook?.(); return !l ? null : Array.isArray(l) ? l : lookVector(l.yaw, l.pitch, mhSin, mhCos); }
     return lookVector(e.rotationYaw ?? 0, e.rotationPitch ?? 0, mhSin, mhCos);
   }
   // The ball EntityRenderer.getMouseOver picks (blt.a(F), composed over the real objects in FireballPickProbe, fireball-pick-reference.json): the ray is `reach` long

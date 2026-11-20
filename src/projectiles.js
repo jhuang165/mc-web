@@ -168,7 +168,8 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 // Batch 33: wood slab, fence gate, trapdoor and cobblestone wall (aoe/ala/... collisionRayTrace) ray against their shaped box too, not a full cube.
 // b74 mpperf74: the id list is a Set built once (it was an array literal built on every call)
-const RAY_BOUND_IDS = new Set([107,108,109,110,111,112,113,114,175,176,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,CAKE,138,141,142,165,167,168,169]);
+const RAY_BOUND_IDS = new Set([107,108,109,110,111,112,113,114,175,176,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,CAKE,138,141,142,165,167,168,169,149,159,160,162,163,164,170,171,172]);
+// b86 blastcover86: the end portal, stems, trapped and ender chests, portal, nether wart, dragon egg and skull ray against their blockBounds box too (collisionRayTrace after setBlockBoundsBasedOnState; executed in the BlastOrderProbe cover scenes)
 export const rayBounds = (world, x, y, z, id) =>
   RAY_BOUND_IDS.has(id) ? blockBounds(world, x, y, z) : (id === FENCE || id === NETHER_FENCE) ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 

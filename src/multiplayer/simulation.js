@@ -1,4 +1,4 @@
-import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, raycast, collides } from '../world.js';
+import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, TNT, raycast, collides } from '../world.js';
 import { capeFields } from './cape-wire.js'; // b71 mpcapes
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
@@ -472,6 +472,9 @@ export class DedicatedSimulation {
     if (place && b === CAULDRON && !(p.input.sneak && p.survival.held) && cauldronActivate(this, p, x, y, z)) return true; // b76 mpcauldron76: water bucket, glass bottle, leather armour
     const noRightClick = place && clientSwallows(b, p); // b76 mpcauldron76: the client sends no item-use packet after a cauldron click
     if (place && serverMusicUse(this, p, target.block, b, p.survival.held?.id ?? 0)) return true; // b66 mpbooks: BlockNote / BlockJukebox.onBlockActivated, ItemRecord.onItemUse
+    // b86 blastcover86: BlockTNT.onBlockActivated (aob.a(ahb,III,yz,IFFF), bytecode-read): flint and steel in hand primes the block with the player as placer (func_150114_a, meta 1),
+    // sets it to air and damages the item by 1 (not in Creative). The server had no such branch, so the click lit the face cell and the TNT burnt with no placer.
+    if (place && b === TNT && !(p.input.sneak && p.survival.held) && ITEMS[state.heldTool]?.kind === 'flint_and_steel') { this.dispense.prime(x + 0.5, y + 0.5, z + 0.5, true, { placer: p }); this.world.set(x, y, z, 0, true, 0); if (!p.survival.creative) p.survival.wear(state.heldTool); return true; }
     if (b === BED && !(p.input.sneak && p.survival.held) && this.sleep.use(p, x, y, z)) return true; // b66 mpsleep: BlockBed.onBlockActivated
     if (this.containers.use(p, x, y, z, b, !(p.input.sneak && p.survival.held))) return true; // BlockChest / BlockFurnace ... onBlockActivated: S2D open window
     if (place && isFence(b) && this.leads.fence(p, [x, y, z], { eye, dir, distance: target.distance })) return true; // b62: BlockFence.onBlockActivated: a lead in hand ties the holder's mobs to a knot

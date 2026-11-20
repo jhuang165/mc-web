@@ -55,7 +55,7 @@ export class ServerDispense {
     this.ids = new WeakMap(); this.nextId = 0;
     this.fx = [];  // dispFx of this tick, in order
     this.vehicles = null; // set by the vehicle track: { dispenseBoat(x, y, z), dispenseCart(type, x, y, z, stack) } -> boolean
-    sim.redstone.hooks.primeTnt = (x, y, z) => this.prime(x + 0.5, y + 0.5, z + 0.5, true); // flint and steel on a TNT block (BlockTNT.func_150114_a)
+    sim.redstone.hooks.primeTnt = (x, y, z) => this.prime(x + 0.5, y + 0.5, z + 0.5, true); // a powered TNT block (BlockTNT.onBlockAdded / onNeighborBlockChange: func_150114_a, no placer); flint and steel is simulation.js edit (b86 blastcover86)
     this.load(saved);
   }
   // b64 mpend2: the state object of a dimension (-1 the Nether, 1 the End), once built; null for the Overworld
@@ -231,10 +231,11 @@ export class ServerDispense {
     if (lane.potions?.projectiles.balls.length) this.tickPotions(lane);
     if (lane.arrows.list.length) {
       const arrows = lane.arrows, targets = arrowTargets(this.targets(lane), false);
-      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z) => this.igniteBlockTnt(x, y, z) : undefined, hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
+      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer) : undefined, hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
       for (const a of [...arrows.list]) {
         if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
         ctx.hanging = this.hangingOf(dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings
+        ctx.tntPlacer = this.ownerOf(a); // b86 blastcover86: BlockTNT.onEntityCollidedWithBlock (aob.a(ahb,III,sa), bytecode-read): a burning arrow's TNT has the shooter as placer
         this.credit(this.ownerOf(a), () => arrows.tickOne(world, a, ctx));
       }
       arrows.reap();
@@ -264,7 +265,7 @@ export class ServerDispense {
       for (const e of fresh) { done.add(e); tickOneTnt(this.sim.world, this.primed, e, { explode: (x, y, z, size, ctx) => this.explode(x, y, z, size, ctx), rain: this.rainAt, fizz: this.tntFizz }); }
   }
   // A burning arrow lights a TNT block (EntityArrow.onUpdate -> BlockTNT.onBlockDestroyedByPlayer): the block goes, a primed TNT appears.
-  igniteBlockTnt(x, y, z) { if (this.sim.world.set(x, y, z, 0)) this.prime(x + 0.5, y + 0.5, z + 0.5, true); }
+  igniteBlockTnt(x, y, z, placer = null) { if (this.sim.world.set(x, y, z, 0)) this.prime(x + 0.5, y + 0.5, z + 0.5, true, { placer }); }
   // Explosion.doExplosionA / B (ServerMobs.explode: mobs, players, blocks, drops), then the clients' burst and the random.explode sound (World.newExplosion plays it).
   explode(x, y, z, size, ctx = {}) {
     this.sim.mobs.explode({ x, y, z, size, source: ctx.exploder ?? null });
