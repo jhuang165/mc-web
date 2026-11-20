@@ -50,7 +50,8 @@ export class ServerDispense {
     this.primed = [];
     this.ballTracks = new BallTracks(); // b81 blast81
     // b84 mpthrown84: arrows, thrown balls, rockets and eyes of this instance's own dimension go out as tracker packets (thrown-tracks.js); a stand-in lane keeps the exact rows
-    this.thrownTracks = new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e), shooterOf: e => this.shooterRef(e) });
+    this.thrownTracks = this.makeTracks();
+    sim.dispenseHome ??= this; // b86 lanes86: the first instance is the Overworld's (simulation.js); a dimension instance routes lane 0 to it (laneFor)
     this.rockets = new FireworkRockets();
     this.ids = new WeakMap(); this.nextId = 0;
     this.fx = [];  // dispFx of this tick, in order
@@ -64,7 +65,10 @@ export class ServerDispense {
   get world() { return this.dim ? (this.dimState(this.dim)?.world ?? this.sim.world) : this.sim.world; } // b62 lead: an instance is a lane too (lane.world / lane.mobs)
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
   get eyeSystem() { return this._eyes ??= new ServerEyes(this); } // b64 mpend2: made on first use (the constructor's load may reach it first)
-  get any() { return this._eyes?.active || this.thrownTracks.active || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
+  // b86 lanes86: an EntityTracker per lane (this instance's dimension and each stand-in lane), each sending only to the players of its own dimension (flush)
+  makeTracks() { const sim = this.sim; return new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e), shooterOf: e => this.shooterRef(e) }); }
+  tracksOf(lane) { return lane === this ? this.thrownTracks : lane.tracks ??= this.makeTracks(); }
+  get any() { return this._eyes?.active || this.thrownTracks.active || [...this.extra.values()].some(l => l.tracks?.active) || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }
 
   // The host of dispense.js's engine (installDispensers). `stop(...)` is the old "put the stack back" for what has no entity path here.
@@ -123,13 +127,15 @@ export class ServerDispense {
   laneFor(dim) {
     dim |= 0;
     if (dim === this.dim) return this;
+    const home = this.sim.dispenseHome;
+    if (!dim && home && home !== this && !(home.dim | 0)) return home; // b86 lanes86: the Overworld's lane is the Overworld instance (dimState(0) is null), not a stand-in of the Nether's or the End's
     const own = this.dimState(dim)?.dispense; // b62 lead: the dimension's own instance, once it is built
     if (own && own !== this && (own.dim | 0) === dim) return own;
     let lane = this.extra.get(dim);
     if (!lane) {
       const sim = this.sim, self = this, balls = new Projectiles(Math.random);
       balls.clientParticles = true;
-      lane = { dim, arrows: new Arrows(Math.random), balls, potions: null, get world() { return self.dimState(dim)?.world ?? null; },
+      lane = { dim, arrows: new Arrows(Math.random), balls, potions: null, tracks: this.makeTracks(), get world() { return self.dimState(dim)?.world ?? null; },
         mobs: { entities: [], events: [], worldRandom: sim.weather.random, joined() {}, attackEntityFrom() {}, get world() { return lane.world; } } };
       this.extra.set(dim, lane);
     }
@@ -200,7 +206,8 @@ export class ServerDispense {
 
   // One tick, after the players moved and before ServerMobs.tick (items, TNT, balls, arrows, rockets, then the mobs and their fireballs).
   tick() {
-    this.thrownTracks.birth(this.thrownList()); // b85 mphook85: the join state of what the use / dispense / action pass spawned, before the entity pass
+    for (const [dim, lane] of [...this.extra]) { const own = this.dimState(dim)?.dispense; if (own && own !== this && (own.dim | 0) === dim) this.adopt(own); } // b86 lanes86: a stand-in whose dimension has its own instance now moves there (it would never tick or be seen here)
+    for (const lane of this.lanes) this.tracksOf(lane).birth(this.thrownList(lane)); // b85 mphook85: the join state of what the use / dispense / action pass spawned, before the entity pass (b86 lanes86: every lane)
     this.restorePotions(); this.restoreFireballs();
     const mobs = this.mobs;
     this.tntTicked = new WeakSet(); // b81 blast81: the TNT that had its update this tick (tickJoined)
@@ -307,16 +314,10 @@ export class ServerDispense {
     }
   }
 
-  // The snapshot of what `player` sees this tick: [] when nothing flies. Only the lane of the player's own dimension is sent.
+  // The snapshot of what `player` sees this tick: [] when nothing flies. Only the entities of the player's own dimension are sent.
+  // b86 lanes86: arrows, thrown balls and potions of every lane (stand-in lanes too) are tracker rows now (`trk`, flush); the exact rows (`k: 'a'`, `k: 'b'`) are left for TNT and the balls below.
   snapshot(player) {
-    const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0, lane = dim === this.dim ? this : this.extra.get(dim);
-    if (lane) {
-      // b81 throwfire81: `f` 1 while the fire counter runs (Entity.isBurning, the watched flag 0 natively): the client draws the flames (fire-overlays.js, projectile-renderer.js)
-      const tracked = lane === this; // b84 mpthrown84: this instance's arrows, balls, potions, rockets and eyes ride the tracker lane (`trk`)
-      for (const a of tracked ? [] : lane.arrows.list) if (near(a)) out.push({ k: 'a', i: this.id(a), x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch, g: a.inGround ? 1 : 0, s: a.shake ?? 0, c: a.crit ? 1 : 0, ...(a.fire > 0 ? { f: 1 } : {}) });
-      for (const b of tracked ? [] : lane.balls.balls) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, ...(b.fire > 0 ? { f: 1 } : {}) });
-      for (const b of tracked ? [] : lane.potions?.projectiles.balls ?? []) if (near(b)) out.push({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, damage: b.damage ?? 0, ...(b.fire > 0 ? { f: 1 } : {}) });
-    }
+    const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0;
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
     // b84 mpthrown84: eyes (b64 mpend2 rows) and rockets are tracker rows now
     // b82 fireext82: `f` for a TNT whose moveEntity counter is above 0 (natively the copy's own counter: xw never sets flag 0) and for a burning rocket or eye (flag 0)
@@ -327,12 +328,13 @@ export class ServerDispense {
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b), t: this.ballTracks.row(b) }); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js); b81 blast81: `t` the tracker packets the copy flies on (fireball-copy.js)
     return out;
   }
-  // b84 mpthrown84: the live entities of the tracker lane, with their OBJECT_KINDS names
-  thrownList() {
+  // b84 mpthrown84: the live entities of the tracker lane, with their OBJECT_KINDS names (b86 lanes86: of any lane; rockets, eyes and hooks belong to this instance's own)
+  thrownList(lane = this) {
     const out = [];
-    for (const a of this.arrows.list) if (!a.dead) out.push({ e: a, kind: 'arrow' });
-    for (const b of this.balls.balls) if (!b.dead && ['snowball', 'egg', 'enderPearl'].includes(b.kind)) out.push({ e: b, kind: b.kind });
-    for (const b of this.potions?.projectiles.balls ?? []) if (!b.dead && (b.kind === 'potion' || b.kind === 'expBottle')) out.push({ e: b, kind: b.kind });
+    for (const a of lane.arrows.list) if (!a.dead) out.push({ e: a, kind: 'arrow' });
+    for (const b of lane.balls.balls) if (!b.dead && ['snowball', 'egg', 'enderPearl'].includes(b.kind)) out.push({ e: b, kind: b.kind });
+    for (const b of lane.potions?.projectiles.balls ?? []) if (!b.dead && (b.kind === 'potion' || b.kind === 'expBottle')) out.push({ e: b, kind: b.kind });
+    if (lane !== this) return out;
     for (const r of this.rockets.rockets) if (!r.dead) out.push({ e: r, kind: 'firework' });
     for (const e of this._eyes?.system.eyes ?? []) if (!e.dead) out.push({ e, kind: 'eyeOfEnder' });
     out.push(...this.sim.fishing?.trackList(this.dim) ?? []); // b85 mphook85: fishing hooks (64 / 5 / velocity, S0E type 90 with the angler's id)
@@ -353,14 +355,19 @@ export class ServerDispense {
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
     for (const b of [...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]) if (!b.dead) b.track ??= skullEntry(b); // b81 mpcopies81: the S0E angles of the join (a ball that never ran the tickOne hooks)
     this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass; b82 mpball82: the one entry also sends the look packets and the burning flag's S1C (fireball-copy.js), and sets `lookSent` for skullWire
-    const here = new Map(); for (const [id, p] of this.sim.players) if ((p.dimension | 0) === this.dim) here.set(id, p);
-    const trk = this.thrownTracks.update(this.thrownList(), here); // b84 mpthrown84
+    // b84 mpthrown84: the tracker lane; b86 lanes86: one per lane, each sending only to the players of its own dimension
+    const trk = new Map(), tracks = new Map();
+    for (const lane of this.lanes) {
+      const dim = lane.dim | 0, here = new Map(), t = this.tracksOf(lane);
+      for (const [id, p] of this.sim.players) if ((p.dimension | 0) === dim) here.set(id, p);
+      trk.set(dim, t.update(this.thrownList(lane), here)); tracks.set(dim, t);
+    }
     for (const p of this.sim.players.values()) {
       const dim = p.dimension | 0;
       if (dim !== this.dim && !this.extra.has(dim)) continue; // b62: each dimension's instance serves its own players (a stand-in lane, until that dimension's instance adopts it)
       const ents = this.snapshot(p), events = fx.filter(e => ((e.dim ?? this.dim) | 0) === dim && (e.k === 'explode' ? s27Reaches(e, p.position) : (e.x - p.position.x) ** 2 + (e.z - p.position.z) ** 2 < NEAR)).map(e => e.k === 'explode' ? s27Of(e, p) : e);
       const msgs = p.dispOut ??= [];
-      const rows = dim === this.dim ? trk.get(p.id) : null, live = dim === this.dim && this.thrownTracks.tracking(p.id);
+      const rows = trk.get(dim)?.get(p.id) ?? null, live = !!tracks.get(dim)?.tracking(p.id);
       if (ents.length || p.dispSeen > 0 || rows || live) msgs.push({ type: 'dispEnts', ents, ...(rows || live ? { trk: rows ?? [] } : {}) }); // b84: while a copy exists the client needs a message each tick to update it
       p.dispSeen = ents.length ? (ents.some(e => e.t) ? 2 : 1) : Math.max(0, (p.dispSeen | 0) - 1); // b81 blast81: a ball's copy runs two more updates after its row is gone (fireball-copy.js), so two empty snapshots
       if (events.length) msgs.push({ type: 'dispFx', events });
