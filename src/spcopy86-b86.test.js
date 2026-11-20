@@ -204,7 +204,7 @@ test("server-side moves are setPlayerLocation: a /tp through a wall is kept, and
   assert.match(main, /mobs\?\.ai\?\.player\?\.setLocation\?\.\(position\); \/\/ b86 spcopy86: wakeUpPlayer/, "bed wake");
 });
 
-test("the server places the copy itself while riding, on the dismount, asleep and for a `placed` harness", () => {
+test("the server places the copy itself while riding, asleep and for a `placed` harness; the dismount is a setPlayerLocation (b88)", () => {
   const h = host("spcopy86-direct");
   const p = h.p;
   p.riding = true;
@@ -212,7 +212,9 @@ test("the server places the copy itself while riding, on the dismount, asleep an
   assert.equal(p.direct, true); assert.equal(p.x, 44.5, "the mount carries it");
   p.riding = false;
   p.update({ ...body, x: 46.5, y: 10, z: 44.5 }, h.s, 0);
-  assert.equal(p.direct, true, "the dismount (mountEntity -> setPlayerLocation)"); assert.equal(p.x, 46.5);
+  // b88 spcopy88: the dismount is mountEntity(null) -> setPlayerLocation (mw.a(sa), bytecode-read): the copy is put there and waits for the client's C06, no longer placed directly.
+  assert.equal(p.direct, false, "the dismount (mountEntity -> setPlayerLocation)"); assert.equal(p.x, 46.5);
+  assert.equal(p.hasMoved, false); assert.deepEqual(p.answer, { x: 46.5, y: 10, z: 44.5, onGround: false });
   p.update({ ...body, x: 46.0, y: 10, z: 44.5 }, h.s, 0);
   assert.equal(p.direct, false); assert.equal(p.x, 46.5, "a walking packet waits for the network tick"); assert.deepEqual(p.packet, { x: 46.0, y: 10, z: 44.5 });
   p.placed = true;

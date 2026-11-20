@@ -38,6 +38,18 @@
 //   they meet the box. A javap scan of every class: only EntityBoat (xi.J) returns a box; EntityMinecart's J is null (xl.J), its h(other) matters only to a cart that moves,
 //   and the player's h is Entity's null. So the copy stands on boats and walks through minecarts, like the client (entities.js collisionBoxes, entity-collision.js).
 //   There is no slime block in 1.7.10 (none in Block's registry), and BlockHay keeps Block's empty onFallenUpon: a hay bale takes no damage off a fall.
+// b88 spcopy88 (bytecode-read, 1.7.10 jar):
+//   sv.a(DZ) 12-212: on the ground with R > 0, the block at (floor s, floor(t - 0.2 - L), floor u); air -> the block below if its render type is 11 / 32 / 21 (fence, wall, gate),
+//            else `!ahb.E && R > 3` -> ahb.c(2006, x, y, z, qh.f(R - 3)) (the landing dust, broadcast); then aji.a(ahb, x, y, z, sa, R) (onFallenUpon; only aky, BlockFarmland:
+//            `!E && rand.nextFloat() < R - 0.5`, a non-player (not yz) only with mobGriefing, -> dirt). So the dust and the trample are the server's (the client's isRemote skips both).
+//   yz.b(F): allowFlying (bE.c) returns; R >= 2 -> a(pp.j, round(R * 100)). pp.j (stat.fallOneCm) is independent (ph.i()), so EntityClientPlayerMP.addStat (bjk.a(ph, I)) passes
+//            it on, but to EntityPlayer's empty a(ph, I) (blk / blg do not override it): only the server's mw.a(ph, I) (StatisticsFile) counts it.
+//   681-688  after mw.i() and the put-back at o / p / q: `if (!r) return`. A setPlayerLocation inside mw.i() (sa.C's nether portal travelToDimension) ends the packet there.
+//   sa.ab (Entity.updateRidden): `if (m.K) { m = null; return; }` (no move); ahb.h (World.updateEntities): an entity whose m is dead or whose m.l is not it drops both links.
+//            Neither calls mountEntity, so no setPlayerLocation: a dead mount leaves the copy at its seat. mw.a(sa) (EntityPlayerMP.mountEntity) always sends S1B and
+//            setPlayerLocation(s, t, u); yz.a(sa) runs dismountEntity (sv.m) first on the server for mountEntity(null). EntityBoat / EntityMinecart.attackEntityFrom call
+//            rider.mountEntity(this) (a re-link: Entity.mountEntity has no toggle in 1.7.10) before setDead, so a broken boat or cart sends an S08 at the seat.
+//   oi.a(mw, int) (transferPlayerToDimension): the same mw moves to the new world (mt.f, a(sa, int, mt, mt), Teleporter ahp.a(sa, DDDF)), then setPlayerLocation; no write of R.
 import { landingEffects, JUMP_BOOST } from "./damage-fx.js";
 import { entityWaterBox, waterAcceleration } from "./fluids.js";
 import { isOnLadder } from "./ladders.js";
@@ -112,12 +124,22 @@ export function copyFall(world, p, distance) {
   return out.points;
 }
 /** NetHandlerPlayServer.processPlayer's handleFalling (mw.b(DZ) -> EntityLivingBase.updateFallState), on the copy at the accepted packet position: `dy` is the packet's y minus
- *  the copy's posY when the packet arrived, `ground` the packet's onGround. */
-export function handleFalling(world, p, dy, ground) {
+ *  the copy's posY when the packet arrived, `ground` the packet's onGround. b88 spcopy88: `hooks` are the landing's server-side effects, in sv.a(DZ)'s order (bytecode-read):
+ *  the block at (floor x, floor(posY - 0.2 - yOffset), floor z) (yOffset 0 for EntityPlayerMP); when it is not air and R > 3, `dust(x, y, z, ceil(R - 3))` (World.playAuxSFX 2006,
+ *  `!isRemote` only, which the client gets as S28); `trample(R)` (Block.onFallenUpon, of the block under a fence, wall or gate when that cell is air: only BlockFarmland's does
+ *  anything, `!isRemote && rand.nextFloat() < R - 0.5`, and a player tramples whatever mobGriefing says); then Entity.updateFallState's fall(R): EntityPlayer.fall returns with
+ *  allowFlying, else `stat(R)` for R >= 2 (addStat(distanceFallen, round(R * 100)); the client's EntityClientPlayerMP.addStat reaches EntityPlayer's empty one), then the damage. */
+export function handleFalling(world, p, dy, ground, hooks = {}) {
   if (!p.inWater && copyInWater(world, p, p.width, p.height)) { p.inWater = true; p.fallDistance = 0; }
   const r = p.fallDistance ?? 0;
   if (ground) {
-    if (r > 0) copyFall(world, p, r);
+    if (r > 0) {
+      const x = Math.floor(p.x), y = Math.floor(p.y - 0.20000000298023224), z = Math.floor(p.z);
+      if (world.get(x, y, z) && r > 3) hooks.dust?.(x, y, z, Math.ceil(f(r - 3)));
+      hooks.trample?.(r);
+      if (!p.creative && !p.survival?.creative && r >= 2) hooks.stat?.(r);
+      copyFall(world, p, r);
+    }
     p.fallDistance = 0;
   } else if (dy < 0) p.fallDistance = f(r - dy);
 }
