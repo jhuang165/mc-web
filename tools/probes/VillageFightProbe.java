@@ -59,8 +59,8 @@ public class VillageFightProbe {
   }
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
-  static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-"); } // batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-"); } // batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
   static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
@@ -294,7 +294,7 @@ public class VillageFightProbe {
             mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : sp instanceof yl ? 1 : 2) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
             extraMobs.add(m); arrowList.add(m); ticking.add(m);
             if (!VillagerProbe.World.entities.contains(m)) VillagerProbe.World.entities.add(m);
-          } else if (name.startsWith("b85-") && !(sp instanceof yq)) {
+          } else if ((name.startsWith("b85-") || name.startsWith("b86-")) && !(sp instanceof yq)) {
             // batch 85: items and experience orbs the tick spawned (a corpse's drops), as [tick, class, x, y, z]
             sa o = (sa) sp; lootRecs.add("[" + t + "," + q(o.getClass().getSimpleName()) + "," + num(o.s) + "," + num(o.t) + "," + num(o.u) + "]");
           } else if (sp instanceof yq) {
@@ -401,7 +401,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") || name.startsWith("b86-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -941,5 +941,33 @@ public class VillageFightProbe {
     scenario("b85-convert-fire-nohit-8521", 8521, 70, "VZVG", convClose, new String[] {"0 zvillager 1", "0 convert 1 30", "5 hit 1 0 20.75 mob", "29 fire 1 1"});
     // ... and a tick before the timer ends: the zombie dies of fire at tick 28 and converts as a corpse at tick 29
     scenario("b85-convert-fire-early-8522", 8522, 70, "VZVG", convArena, new String[] {"0 zvillager 1", "0 convert 1 30", "5 hit 1 4 20.75 player", "28 fire 1 1"});
+    // Batch 86 mobrec86 (names b86-*, the b85 layout): a villager killed by a zombie, the native EntityZombie.onKillEntity path (yq.a(sv)): on Hard always, on Normal unless the killer's
+    // nextBoolean is true, a new EntityZombie takes the villager's place (copyLocationAndAnglesFrom, World.removeEntity of the villager, onSpawnWithEgg, setVillager, setChild
+    // for a baby, spawnEntityInWorld, aux SFX 1016); Easy never converts. "kill": a scripted 17.0 blow by the zombie leaves the villager on 3 health, the zombie's own
+    // AttackOnCollide hit kills it (both stand in a 2x1 cell walled two high with stone, so the villager cannot flee: EntityAIAvoidEntity finds no target); "blow": a
+    // scripted lethal hit by the zombie (causeMobDamage) kills it outright in the open (the same onDeath -> onKillEntity call).
+    water = false; light = 15; bright = 15; patches = new int[][] {};
+    int[][] pen = {{51, 0, 51, 54, 1, 51, 1, 0}, {51, 0, 53, 54, 1, 53, 1, 0}, {51, 0, 52, 51, 1, 52, 1, 0}, {54, 0, 52, 54, 1, 52, 1, 0}};
+    double[][] penPos = {{52.5, 52.5}, {53.5, 52.5}, {10.5, 130.5}}, killPos = {{52.5, 52.5}, {54.5, 52.5}, {10.5, 130.5}};
+    for (int d = 1; d <= 3; d++) {
+      difficulty = d;
+      for (int sd : d == 2 ? new int[] {8601, 8602, 8603, 8604} : new int[] {8601, 8602}) {
+        blocks = pen;
+        scenario("b86-kill-d" + d + "-" + sd, sd, 50, "VZ", penPos, new String[] {"1 hit 0 1 17.0 mob"});
+      }
+      blocks = new int[][] {};
+      scenario("b86-blow-d" + d + "-8610", 8610, 40, "VZ", killPos, new String[] {"5 hit 0 1 100.0 mob"});
+    }
+    blocks = new int[][] {};
+    // Batch 86 mobrec86: a zombie pigman fight (EntityPigZombie yh, the legacy EntityCreature AI of the b38 records): the player's hit at tick 5 angers it (becomeAngryAt), it runs
+    // at the player and strikes (EntityMob.attackEntity, attackTime 20, held still 4 blocks off), and the player's lethal hit at tick 50 kills it: the recentlyHit drops
+    // (EntityPigZombie.dropFewItems: rotten flesh and gold nuggets, nextInt(2 + looting) each; dropRareDrop) and the deathTime 20 orbs (experienceValue 5) are `loot`.
+    bright = 15;
+    double[][] pigPos = {{60.5, 60.5}, {64.5, 60.5}};
+    for (int sd : new int[] {8620, 8621, 8622}) scenario("b86-pigman-d2-" + sd, sd, 80, "P", pigPos, new String[] {"5 hit 0 1 1.0 player", "50 hit 0 1 100.0 player"});
+    difficulty = 3;
+    scenario("b86-pigman-d3-8623", 8623, 80, "P", pigPos, new String[] {"5 hit 0 1 1.0 player", "50 hit 0 1 100.0 player"});
+    difficulty = 2;
+    difficulty = 2;
   }
 }
