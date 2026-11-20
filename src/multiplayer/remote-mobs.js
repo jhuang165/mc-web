@@ -38,6 +38,7 @@ export class RemoteMobs {
         const mob = this.factory.create(p.mob, p.x / 32, p.y / 32, p.z / 32), client = new ClientEntity(p.mob);
         mob.id = 'mob-' + p.i;
         this.state(mob, p); // first: a slime's size and a horse's type decide the box
+        if (mob.equipment) mob.equipment = [null, null, null, null, null]; // b88 track88: the client constructor's empty slots; the S04 after the spawn fill them (the server sends one per held slot)
         client.apply(p, this.ctx);
         if (client.dragon) mob.dragon = client.dragon; // b64 mpdragon: the copy's own state (ring, wings, seven part boxes) is what the renderer and the aim read
         client.height = this.factory.size(mob)[1];
@@ -49,6 +50,7 @@ export class RemoteMobs {
       if (p.type === 'mobStatus') this.status(c, p.status);
       else if (p.type === 'state') this.state(c.mob, p);
       else if (p.type === 'attach') this.attach(c, p);
+      else if (p.type === 'equipment') (c.mob.equipment ??= [null, null, null, null, null])[p.slot] = p.item ? { ...p.item } : null; // b88 track88: S04 (handleEntityEquipment: setCurrentItemOrArmor)
       else {
         c.client.apply(p, this.ctx);
         if (!c.client.present) this.copies.delete(p.i);

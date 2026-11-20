@@ -53,8 +53,9 @@ export class ThrownEntry extends ObjectEntry {
 export class ThrownTracks {
   // `limit()`: the tracker range limit; `watches(pid, cx, cz)`: the chunk gate; `fresh(pid)`: true when columns changed (re-test); `idOf(e)`: the entity's numeric id.
   // b85 mphook85: `shooterOf(e)` -> { p: playerId } | { m: mobWireId } | null, the entity the S0E data names for an arrow or a hook (the wire carries it as the row's `sh`).
-  constructor({ limit = () => 144, watches = everywhere, fresh = () => false, idOf, shooterOf = () => null }) {
+  constructor({ limit = () => 144, watches = everywhere, fresh = () => false, idOf, shooterOf = () => null, arrived = () => false }) {
     this.limit = limit; this.watches = watches; this.fresh = fresh; this.idOf = idOf; this.shooterOf = shooterOf;
+    this.arrived = arrived; // b88 track88: `arrived(player)`: the player came through a portal earlier in this port tick (see update)
     this.births = new WeakMap(); // b85 mphook85: an entity's state at its join (see `birth`)
     this.reader = new ObjectReader(10, Math.random, null); // only its `read` is used: the live entity -> the stand-in the entry reads
     this.objs = new Map(); // live entity -> { kind, p, en, sh }
@@ -99,7 +100,7 @@ export class ThrownTracks {
     // trackEntity for a player: a new watcher (its `seq` is its place in loadedEntityList, after every entity already there)
     for (const [pid, player] of players) {
       let w = this.watchers.get(pid);
-      if (!w) this.watchers.set(pid, w = { pid, view: { player: null, watches: (cx, cz) => this.watches(pid, cx, cz), log: null }, ref: null, joining: true, seq: ++this.seq });
+      if (!w) this.watchers.set(pid, w = { pid, view: { player: null, watches: (cx, cz) => this.watches(pid, cx, cz), log: null }, ref: null, joining: true, seq: this.arrived(player) ? Infinity : ++this.seq });
       w.view.player = player.position;
     }
     // b87 sptrack87: the players whose chunks went out this tick (a returning player's first tick here, or columns just sent) are tried by the entries in those chunks before the pass, as
@@ -119,6 +120,10 @@ export class ThrownTracks {
     for (const w of look) for (const o of this.objs.values()) if (o.seq > w.seq) o.en.tryStartFor(w); // after the player: the last-read state
     // addEntityToTracker: the new entries, each sent at once to the players in range (from the join state)
     for (const { e, kind } of list) if (!this.objs.has(e)) { const o = this.entryFor(e, kind); o.seq = ++this.seq; this.objs.set(e, o); o.en.updatePlayerList(); }
+    // b88 track88: a player who came through a portal earlier in this port tick (the destination ticks after afterTick's transfer: the Nether and the End) joins loadedEntityList after the
+    // entities this pass spawned. Natively the transfer runs in networkTick (oi.a(mw, int) -> ahb.d(sa) appends the player), after every world's walk and tracker pass of that tick, so the
+    // spawns of the walk the port is running now come before the player: their S0E, when the chunk gate opens, carries the state of that tick's update, not the one read before it.
+    for (const w of this.watchers.values()) if (w.seq === Infinity) w.seq = ++this.seq;
     // sendLocationToAllClients, once per entry: the flush state
     for (const { e, kind } of list) {
       const o = this.objs.get(e), en = o.en;

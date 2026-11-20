@@ -3320,7 +3320,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     return liveLists(mobs, lists); // b61: entities of unloaded chunks are in no tracker
   };
   if (!isWalked(mobs) && world && screen !== "home") objectTracker.births(trackLists()); // b87 sptrack87: no walk: the spawn states before this tick's updates
-  tickEntitySimulation(entityTick.state, entityTick.hooks);
+  tickEntitySimulation(entityTick.state, !isWalked(mobs) && world && screen !== "home" ? { ...entityTick.hooks, born: () => objectTracker.births(trackLists()) } : entityTick.hooks); // b88 track88: objects spawned inside the pass keep their spawn state
   const afterTrack = () => {
     for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
