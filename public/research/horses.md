@@ -13,6 +13,15 @@ Evidence: `tools/probes/HorseProbe.java` drives the unchanged obfuscated classes
 - Rearing timeout of 20 ticks, client jump-key counter and `(int)(power*100)` send, `setLivingAnimations` pose, donkey/mule render scale.
 - Overlay armour/marking rendering in `src/horse-renderer.js` (part boxes dumped from the probe; never viewed in a browser).
 
+## Batch 88 (horse88): ridden ticks
+Executed: `tools/probes/Horse88Probe.java` (`tools/verify-horse88.mjs`, `horse88-reference.json`) runs whole server `wi.h()` ticks with a rider and calls `wi.w(int)`, `cU()` and mountEntity between ticks; `src/horse88-b88.test.js` replays it tick for tick and the single `ride` moves of `horse-reference.json`. Corrected in the port:
+- The rider's moveForward/moveStrafing are moved with directly (not decayed by 0.98, as the horse's own fields are).
+- `bt` (jumpPower) and `br` (horseJumping) clear only after a ridden move on ground: a power stored in the air is dropped at the landing (no jump), and one left on a horse the rider got off in the air stays, while `br` stays set too, so the next ridden tick does not jump either.
+- `bI` (jumpHeld) is cleared on every tick the horse is not rearing; yaw is wrapped by `% 360`; the forward push uses the MathHelper table; the gallop counter resets when forward <= 0; motionY uses the jumpStrength attribute with modifiers (0..2).
+- stepHeight 0.5 and jumpMovementFactor 0.02 apply from the first unridden or unsaddled tick, before its move.
+- Single player: the jump key is tracked off the horse (mounting with it held counts on), and the dismount tick runs the counter without a send.
+Open: natively the sneak tick still makes one ridden move before the dismount; the first ridden tick of a freshly loaded horse uses `aiMoveSpeed` 0 natively for the air factor.
+
 ## Files
 `src/horse.js` (rules), `src/horse-live.js` (engine wiring, riding), `src/horse-renderer.js`, tests.
 

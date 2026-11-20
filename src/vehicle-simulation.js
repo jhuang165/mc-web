@@ -124,11 +124,16 @@ export function restorePlayerVehicle(state) {
 // Returns null when ordinary movement should run. Dismount is itself captured and dispatched.
 export function moveRidingPlayer(state, controls, hooks = {}) {
   const {rider}=state;
-  if (!rider.vehicle) return null;
+  // b88 horse88: EntityPlayerSP.onLivingUpdate reads `flag` (the previous tick's movementInput.jump) on every tick and clears bO whenever the player is not on a horse
+  // (blk.e 321-328 and 1100, bytecode-read), so the key is tracked on foot too: mounting with the key held continues the count (horse-live.js horseJumpCounter's off-horse branch).
+  if (!rider.vehicle) { rider.wasJump = !!controls.jump; rider.jumpPower = 0; return null; }
   const minecarts=vehicleSystem(state);
   syncRider(state);
   Object.assign(state.previous,state.position);
   if (controls.sneak || rider.dead || rider.vehicle.dead) {
+    // The client still rides on the dismount tick, so its counter runs (b88 horse88). Its C0B is dropped: natively the horse makes one more ridden move with it before
+    // EntityPlayer.updateRidden dismounts the sneaking rider, a move the port's same-tick dismount has no place for.
+    state.horses?.charge(rider, controls, false);
     if (!rider.dead && !rider.vehicle.dead) {
       minecarts.updateRiderPosition(rider.vehicle); // the server seats the dismount from the live cart; the client's seat (a cart's copy) trails it
       const action=captureVehicleAction({dismount:true}); hooks.trace?.(action); dispatchVehicleAction(state,action,hooks);
