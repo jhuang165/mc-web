@@ -13,6 +13,7 @@ import { translation, text as textComponent } from '../chat-component.js';
 import { joinNiceString } from '../commands-scoreboard.js';
 import { UserMap, userListValues, userListKeys } from './user-list-order.js'; // b70 sptab70: HashMap-ordered lists; b71 mpadmin71: listings, files and the profile cache use it
 import { idleActivity } from './server-idle.js'; // b74 mpmisc74: which messages reset the idle clock
+import { offlineUuid } from '../stats.js'; // b86 console86: UUID.nameUUIDFromBytes("OfflinePlayer:" + name), as EntityPlayer.func_146094_a (yz.a(GameProfile))
 
 export const ADMIN_COMMANDS = { op: 3, deop: 3, kick: 2, ban: 3, 'ban-ip': 3, pardon: 3, 'pardon-ip': 3, banlist: 3, whitelist: 3, stop: 4, 'save-all': 4, 'save-on': 4, 'save-off': 4, setidletimeout: 3, netstat: 1 }; // netstat: CommandNetstat (permission 0) is denied to non-ops by mw.a, and a player gets only a refusal line (b84 dedicated84, executed)
 export const DEFAULT_OP_LEVEL = 4; // server.properties op-permission-level
@@ -33,13 +34,33 @@ const removedOn = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pa
 /** A client address as the server keeps it: no port, no IPv4-mapped prefix (BanList.func_152707_c strips "/" and ":port"). */
 export const normalizeIp = (a) => String(a ?? '').replace(/^\//, '').replace(/^::ffff:/i, '').replace(/:\d+$/, (m, i, s) => (s.includes('.') || s.indexOf(':') === i ? '' : m));
 
+export const CONSOLE_NAME = 'Server'; // b86 console86: MinecraftServer.b_() (getCommandSenderName), the console sender's name in notices and ban sources
+export const NOT_FOR_PLAYERS = 'Command is not available for players';
+
+// b86 console86: NetworkStatistics (eu: two ex trackers, read c and write d, of 100 packet ids; ey = {totalBytes, count, averageBytes}). The netty decoder (ez) and encoder (fa)
+// record every packet (id, bytes) (bytecode-read). The port's WebSocket messages carry no packet id: server.js records every message under id 0.
+const javaDouble = (x) => (Number.isInteger(x) ? x.toFixed(1) : String(x)); // Double.toString for the small averages (no exponent forms below 1e7)
+class PacketTracker {
+  constructor() { this.bytes = new Array(100).fill(0); this.counts = new Array(100).fill(0); }
+  add(id, bytes) { if (!(id >= 0 && id < 100)) return; this.bytes[id] += bytes; this.counts[id]++; } // ex.a(int, long): ids outside 0..99 are dropped
+  totalBytes() { return this.bytes.reduce((a, b) => a + b, 0); } // ex.a()
+  totalCount() { return this.counts.reduce((a, b) => a + b, 0); } // ex.b()
+  // ex.c() / ex.d(): the first id with the largest total bytes / count, starting from a -1 sentinel (so id 0 with no traffic)
+  hottest() { let at = -1, best = -1; for (let i = 0; i < 100; i++) if (this.bytes[i] > best) { best = this.bytes[i]; at = i; } return at; }
+  most() { let at = -1, best = -1; for (let i = 0; i < 100; i++) if (this.counts[i] > best) { best = this.counts[i]; at = i; } return at; }
+  stat(id) { const n = this.counts[id], b = this.bytes[id]; return `PacketStat(${id}){totalBytes=${b}, count=${n}, averageBytes=${javaDouble(n ? b / n : 0)}}`; } // ew.toString + ey.toString
+}
+export class NetStats { constructor() { this.reads = new PacketTracker(); this.writes = new PacketTracker(); } read(id, bytes) { this.reads.add(id, bytes); } write(id, bytes) { this.writes.add(id, bytes); } }
+
 const red = (c) => { c.style.color = 'red'; return c; };
 const grayItalic = (c) => { c.style.color = 'gray'; c.style.italic = true; return c; };
 class Fail extends Error { constructor(key, ...args) { super(key); this.key = key; this.args = args; } }
 
 export class ServerAdmin {
-  constructor(saved = {}, { opLevel = DEFAULT_OP_LEVEL, whitelist = false, now = () => Date.now(), clock = () => Math.floor(performance.now()) } = {}) {
+  constructor(saved = {}, { opLevel = DEFAULT_OP_LEVEL, whitelist = false, onlineMode = true, now = () => Date.now(), clock = () => Math.floor(performance.now()) } = {}) {
     this.now = now; this.clock = clock; // b75 mpplayerfx75: `clock` = MinecraftServer.getSystemTimeMillis (System.nanoTime() / 1000000, monotonic), the idle timer's time base
+    this.onlineMode = onlineMode !== false; // b86 console86: server.properties online-mode (MinecraftServer.Y()); off, an unknown name resolves to its offline profile (profile())
+    this.netStats = new NetStats(); // b86 console86: what /netstat reports to the console
     this.opLevel = Number.isInteger(opLevel) && opLevel >= 1 && opLevel <= 4 ? opLevel : DEFAULT_OP_LEVEL;
     const keyed = (rows) => new UserMap((Array.isArray(rows) ? rows : []).filter((r) => r && typeof r.uuid === 'string').map((r) => [r.uuid, { ...r }]));
     this.ops = keyed(saved.ops); this.bans = keyed(saved.banned); this.allow = keyed(saved.whitelist);
@@ -71,9 +92,13 @@ export class ServerAdmin {
   /** ns.func_152654_a: the lowercase names, in HashMap order (the /whitelist add completion). */
   profileNames() { return userListKeys(this.profiles); }
   // ns.func_152655_a (a(String)): a cache miss asks the profile repository and, on a hit, adds the profile to the cache (b84 dedicated84: executed, the name joins the usercache and the tab names).
+  // b86 console86 (bytecode-read ns.a(String) and ns.a(MinecraftServer, String), executed in the offline rows): the name is lowercased (Locale.ROOT) before the cache and the
+  // repository see it; when the repository misses and the server is not in online mode, the profile is (UUID.nameUUIDFromBytes("OfflinePlayer:" + lowercased name), lowercased name).
+  // Only /op, /ban and /whitelist add resolve profiles; /deop, /pardon and /whitelist remove match the list entries by name, /ban-ip and /kick online players.
   profile(name) {
-    const hit = this.profiles.get(String(name).toLowerCase()); if (hit) return hit;
-    const known = this.directory?.(name); if (!known) return null;
+    const lower = String(name).toLowerCase();
+    const hit = this.profiles.get(lower); if (hit) return hit;
+    const known = this.directory?.(lower) ?? (this.onlineMode ? null : { uuid: offlineUuid(lower), name: lower }); if (!known) return null;
     this.seen(known.uuid, known.name); return this.profiles.get(String(known.name).toLowerCase());
   }
   /** An entry past its expiry is removed on lookup (UserList.func_152683_b). */
@@ -119,17 +144,22 @@ export class ServerAdmin {
 
   /**
    * Runs one admin command line for `ctx`: { sender, level, deliver(name, component), ops(): online op names, online(): [{ id, name, uuid }] }.
+   * b86 console86: `console: true` runs it as the DedicatedServer sender (name "Server", every level: MinecraftServer.a(int, String) returns true), whose own lines go to `log`;
+   * `log(component)` is the server log (MinecraftServer.a(fj) logs fj.c(), the unformatted text), which also gets every other sender's admin notice.
    * Failures print the command's red translation, as CommandHandler.func_71556_a.
    */
   run(line, ctx) {
     let parts = String(line).trim().replace(/^\//, '').split(' ');
     while (parts.length && parts[parts.length - 1] === '') parts.pop(); // String.split drops trailing empty strings
     const word = parts.shift(), args = parts, need = ADMIN_COMMANDS[word];
-    const print = (c) => ctx.deliver(ctx.sender, c);
-    // CommandBase.func_152373_a: the sender's line, and chat.type.admin (gray italic) to every other op whose level reaches the command's (b85 dedtab85, executed).
+    const print = ctx.console ? (c) => ctx.log?.(c) : (c) => ctx.deliver(ctx.sender, c);
+    // CommandBase.func_152373_a: the sender's line, and chat.type.admin (gray italic) to every other op whose level reaches the command's (b85 dedtab85, executed),
+    // then (b86 console86, executed) the same notice to the server log unless the sender is the server itself.
     const feedback = (key, ...a) => {
       const c = translation(key, ...a); print(c);
-      for (const o of ctx.ops(need)) if (o !== ctx.sender) ctx.deliver(o, grayItalic(translation('chat.type.admin', ctx.sender, c)));
+      const notice = () => grayItalic(translation('chat.type.admin', ctx.sender, translation(key, ...a)));
+      for (const o of ctx.ops(need)) if (ctx.console || o !== ctx.sender) ctx.deliver(o, notice());
+      if (!ctx.console) ctx.log?.(notice());
     };
     try {
       if (!(ctx.level >= need)) throw new Fail('commands.generic.permission');
@@ -206,7 +236,7 @@ export class ServerAdmin {
         return ctx.print(textComponent(joinNiceString(names)));
       }
       case 'whitelist': return this.whitelistCommand(a, ctx);
-      case 'netstat': return ctx.print(textComponent('Command is not available for players')); // CommandNetstat: a raw ChatComponentText, not red, not translated
+      case 'netstat': return this.netstat(a, ctx);
       case 'stop': ctx.feedback('commands.stop.start'); return void setImmediate(() => host?.stop());
       case 'save-all': {
         ctx.print(translation('commands.save.start')); // sender only (ac.a)
@@ -229,6 +259,29 @@ export class ServerAdmin {
         return ctx.feedback('commands.setidletimeout.success', n);
       }
       default: throw new Fail('commands.generic.notFound');
+    }
+  }
+  // CommandNetstat (bb.b, bytecode-read; b86 console86: every branch executed from the console): a player gets one raw line; the console gets the NetworkStatistics texts.
+  netstat(a, ctx) {
+    const say = (t) => ctx.print(textComponent(t)), s = this.netStats;
+    if (!ctx.console) return say(NOT_FOR_PLAYERS); // `instanceof yz` (EntityPlayer); a raw ChatComponentText, not red, not translated
+    if (!(a.length > 0 && a[0].length > 1)) return say(`reads: ${s.reads.totalBytes()}, writes: ${s.writes.totalBytes()}`);
+    const packet = (tracker) => {
+      if (!(a.length > 1 && a[1].length > 0)) return say('Packet id is missing');
+      const t = a[1].trim();
+      if (!/^[+-]?\d+$/.test(t) || Math.abs(Number(t)) > 2147483647) return say(`Packet ${a[1]} not found!`); // NumberFormatException
+      const id = Number(t); return say(id >= 0 && id < 100 ? tracker.stat(id) : `Packet ${id} not found!`); // ex.a(int) is null outside 0..99
+    };
+    switch (a[0]) { // String.equals: case-sensitive
+      case 'hottest-read': return say(s.reads.stat(s.reads.hottest()));
+      case 'hottest-write': return say(s.writes.stat(s.writes.hottest()));
+      case 'most-read': return say(s.reads.stat(s.reads.most()));
+      case 'most-write': return say(s.writes.stat(s.writes.most()));
+      case 'packet-read': return packet(s.reads);
+      case 'packet-write': return packet(s.writes);
+      case 'read-count': return say(`total-read-count${s.reads.totalCount()}`);
+      case 'write-count': return say(`total-write-count${s.writes.totalCount()}`);
+      default: return say(`Unrecognized: ${a[0]}`);
     }
   }
   whitelistCommand(a, ctx) {

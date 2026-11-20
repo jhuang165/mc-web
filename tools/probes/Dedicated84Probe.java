@@ -233,6 +233,16 @@ public class Dedicated84Probe {
     for (String f : new String[] { "op Herobrine", "op Nobody", "ban Herobrine", "ban Nobody", "whitelist add Nobody", "whitelist add Herobrine", "ban-ip Nobody" }) rows.add(run(f, "offline", "alex"));
     for (String f : new String[] { "save-on", "save-off", "save-all", "save-all flush" }) { rows.add(run(f, "saveoff", "alex")); rows.add(run(f, "partial", "alex")); }
     for (String f : forms) for (String sd : new String[] { "alex", "kay", "eve", "ivy", "lou", "steve" }) rows.add(run(f, "levels", sd));
+    // b86 console86: the console sender (the DedicatedServer itself: b_() "Server", a(int, String) true, a(fj) logs the unformatted text) in the base, levels and
+    // offline setups, every form in offline mode for a player, and the netstat sub-commands (only the console gets past CommandNetstat's player check).
+    for (String f : forms) { rows.add(run(f, "base", "console")); rows.add(run(f, "levels", "console")); }
+    List<String> offline7 = Arrays.asList("op Herobrine", "op Nobody", "ban Herobrine", "ban Nobody", "whitelist add Nobody", "whitelist add Herobrine", "ban-ip Nobody");
+    String[] offlineMore = { "op nobody", "op NoBody", "ban nobody why", "whitelist add nobody", "whitelist add NOBODY", "deop nobody", "pardon nobody", "whitelist remove nobody", "op Herobrine2" };
+    for (String f : forms) { if (!offline7.contains(f)) rows.add(run(f, "offline", "alex")); rows.add(run(f, "offline", "console")); }
+    for (String f : offlineMore) { rows.add(run(f, "offline", "alex")); rows.add(run(f, "offline", "console")); rows.add(run(f, "base", "console")); }
+    String[] net = { "netstat read-count", "netstat write-count", "netstat read-count x", "netstat foo", "netstat ab", "netstat packet-read", "netstat packet-read 3", "netstat packet-read x", "netstat packet-read  ",
+      "netstat packet-write", "netstat packet-write 5", "netstat packet-write -1", "netstat hottest-read", "netstat hottest-write", "netstat most-read", "netstat most-write", "netstat READ-COUNT", "NETSTAT" };
+    for (String f : net) { rows.add(run(f, "lists", "console")); rows.add(run(f, "lists", "alex")); rows.add(run(f, "lists", "steve")); }
     List<String> tabs = new ArrayList<>();
     for (String t : new String[] { "op ", "op S", "op s", "deop ", "ban ", "ban S", "ban-ip ", "ban-ip S", "ban-ip 10", "pardon ", "pardon S", "pardon-ip ", "pardon-ip 1", "banlist ", "banlist i", "banlist ips ", "whitelist ", "whitelist a", "whitelist add ", "whitelist add S", "whitelist remove ", "whitelist remove S", "whitelist x ", "kick ", "kick S", "kick Steve ", "list ", "list u", "save-all ", "setidletimeout ", "netstat ", "stop " })
       for (String s : new String[] { "base", "lists" }) tabs.add(tab(t, s, "alex"));
