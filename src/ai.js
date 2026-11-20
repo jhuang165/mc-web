@@ -1313,6 +1313,27 @@ class PlayerView {
     this.invisible = false;
     this.armorPieces = 0;
     this.sleeping = false; // set by the host: EntityPlayer.sleepInBedAt setSize(0.2, 0.2) (bytecode-read, b67); no AI class reads isPlayerSleeping
+    // b86 spcopy86: NetHandlerPlayServer's own state (nh, bytecode-read; server-process-player.js). `packet`: the tick's C03 position (jd.j()), or null for a C03 without one, held
+    // until the network tick (entities.js serverPlayerUpdate), so the world tick's mobs read the position processPlayer last accepted. `answer`: the client's C06 reply to an S08
+    // (bjb.a(fu)). `hasMoved` is nh.r, `accepted` nh.o / p / q, `netTicks` nh.e. `placed`: a harness that puts the copy where its script says before the world tick, as the
+    // EndermanWolfProbe does (VillageFightProbe.at); no native player has it.
+    this.packet = null;
+    this.answer = null;
+    this.hasMoved = true;
+    this.accepted = null;
+    this.netTicks = 0;
+    this.placed = false;
+    this.wasRiding = false;
+  }
+  // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF), bytecode-read): r = false, o / p / q and the entity's position := the spot, S08 to the client. Its packets are then ignored
+  // until one gives o and q exactly and p within 0.1 (processPlayer offsets 31-87): the C06 that bjb.a(fu) sends from inside its S08 handler (onGround false). `answered`: the
+  // client has taken the S08 (the host moved it there), so that C06 is queued; a C03 already in flight is dropped (it arrives while r is false).
+  setLocation(at, { answered = true } = {}) {
+    this.hasMoved = false;
+    this.accepted = { x: at.x, y: at.y, z: at.z };
+    this.x = at.x; this.y = at.y; this.z = at.z;
+    this.packet = null;
+    this.answer = answered ? { x: at.x, y: at.y, z: at.z, onGround: false } : null;
   }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
@@ -1323,17 +1344,27 @@ class PlayerView {
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
     // counts every call and restarts at a send. A mounted player's copy follows the mount (updateRiderPosition), so it is simply the client's position.
     const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
-    this.from = s ? { x: this.x, y: this.y, z: this.z } : null; // b85 spcopy85: the last accepted position (nh.o / p / q = EntityPlayerMP's position when the packet arrives): mw.i() and the packet's move start there (entities.js serverPlayerUpdate)
+    const alive = !(survival.health <= 0);
+    // b86 spcopy86: the server places the copy itself (no processPlayer walking branch) at login (initializeConnectionToPlayer), on a respawn (respawnPlayer: a new EntityPlayerMP),
+    // while riding (the mount carries it) and on the dismount (mountEntity -> setPlayerLocation), while asleep (the sleeping branch puts it back at o / p / q, which sleepInBedAt
+    // set), while dead, for a copy nothing ticks (`unticked`) and for a harness that places it (`placed`). Their S08 / C06 exchange is not modelled: copy and client already agree.
+    this.direct = !s || this.riding || this.wasRiding || this.sleeping || this.placed || this.unticked || !alive || !this.alive;
+    this.wasRiding = this.riding;
     this.packetDy = 0; // b83 attack83: processPlayer's d15, the packet's y minus the last accepted posY (0 for a C03 without a position)
+    this.packet = null;
     if (!s || d > 9.0E-4 || this.sinceSent >= 20 || this.riding) {
       if (s) this.packetDy = player.y - s.y;
-      this.x = player.x;
-      this.y = player.y;
-      this.z = player.z;
+      if (this.direct) {
+        this.x = player.x;
+        this.y = player.y;
+        this.z = player.z;
+        this.accepted = { x: player.x, y: player.y, z: player.z };
+        this.hasMoved = true;
+        this.answer = null;
+      } else this.packet = { x: player.x, y: player.y, z: player.z }; // b86 spcopy86: processed in the network tick, after the world's entities (entities.js serverPlayerUpdate)
       this.sent = { x: player.x, y: player.y, z: player.z };
       this.sinceSent = 0;
     } else this.sinceSent++;
-    const alive = !(survival.health <= 0);
     if (alive && !this.alive) this.motion.x = this.motion.y = this.motion.z = 0; // a respawned player is a new EntityPlayerMP
     this.alive = alive;
     survival.serverPlayer = this; // player-knockback.js gives this copy the hits' motion at once

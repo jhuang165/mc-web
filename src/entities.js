@@ -48,7 +48,7 @@ import { mobKnockbackKick, golemLift, attackLandsOnClient } from "./player-knock
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
-import { movedWrongly, needsCorrection, shrunkBox, TOO_QUICKLY } from "./server-process-player.js"; // b85 spcopy85
+import { movedTooQuickly, movedWrongly, needsCorrection, shrunkBox, awaitedAnswer } from "./server-process-player.js"; // b85 spcopy85, b86 spcopy86
 import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
@@ -756,7 +756,6 @@ const climbableOf = (world, e) => (isSpider(e.type) ? e.climbing : isOnLadder(wo
 // riding }), shared by the integrated server's PlayerView (serverPlayerUpdate) and the dedicated server's copy (multiplayer/server-copy-step.js). Entity.onEntityUpdate's
 // handleWaterMovement (the flow adds to the motion) and lava flag, EntityLivingBase.onLivingUpdate's snap below 0.005, moveEntityWithHeading with no input (stepHeight 0)
 // and a flying player's motionY * 0.6 (yz.e(FF)). Returns the moved scratch entity; the caller writes back what it keeps (processPlayer puts the position back).
-const quickDelta = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2; // b85 spcopy85
 export function serverCopyMove(world, c, w, h) {
   const m = c.motion;
   const e = { x: c.x, y: c.y, z: c.z, vx: m.x, vy: m.y, vz: m.z, onGround: c.onGround, inWater: false, inLava: false, sneaking: !!c.sneaking, player: true, living: true, inWeb: c.inWeb, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
@@ -2592,19 +2591,37 @@ export class EntityWorld {
   // its own motion, then collideWithNearbyEntities against the moved box. NetHandlerPlayServer.processPlayer puts the copy's position back right after the update
   // (setPositionAndRotation at the position it had), so only the motion, the web flag and the pushes keep what the move did (b47sp records).
   serverPlayerUpdate(p) {
-    const m = p.motion, w = p.width, h = p.height, world = this.world;
     // EntityLivingBase.onEntityUpdate: the revenge target (getAITarget) is dropped once it is dead or more than 100 ticks old.
     const hb = p.hurtBy;
     if (hb && typeof hb.health === "number" && (!(hb.health > 0) || !this.entities.includes(hb) || this.ai.clock - p.hurtByTime > 100)) p.hurtBy = null;
-    // b85 spcopy85: NetHandlerPlayServer.processPlayer's walking branch from the LAST ACCEPTED position (PlayerView.from; server-process-player.js has the offsets): mw.i() moves the copy
-    // there on its own motion, it is put back, `mw.d(delta)` moves it by the packet's difference with collisions (a clipped axis zeroes its motion), the position becomes the packet's, and the
-    // "moved wrongly" test may answer with setPlayerLocation(from) (S08). Only the live host's copy (`packetGround` given, no mount, not asleep) runs it; the replays and probes that set
-    // the copy where the script puts it keep their harness order. A packet farther than 10 blocks is a server-side teleport (/tp, a portal, a bed), which natively moves the copy itself.
-    const grounded = p.onGround; // b83 attack83: mw.D going into mw.i() (the order of a replay's copy, below)
-    const from = p.from, pkt = { x: p.x, y: p.y, z: p.z };
-    const live = p.packetGround !== undefined && !p.riding && !p.sleeping && !!from && quickDelta(pkt, from) <= TOO_QUICKLY;
-    if (live) { p.x = from.x; p.y = from.y; p.z = from.z; }
-    const e = serverCopyMove(world, p, w, h);
+    // b86 spcopy86: every copy the server does not place itself (ai.js PlayerView.update `direct`) runs NetHandlerPlayServer.processPlayer for the tick's packets here, in the network
+    // tick after the world's entities, so the mobs of this tick read the position it accepted last (b85 gated this on `packetGround`, which only the live host gave; native has no
+    // such gate, and the harnesses that place the copy themselves now say so with `placed`). The client's C06 answer to an S08 comes first (bjb.a(fu) sends it from inside its S08
+    // handler, before its own tick's C03), then the tick's C03; a C03 without a position is the accepted position. NetworkManager.processReceivedPackets then runs nh.a(), ++e.
+    if (!p.direct) {
+      const ground = p.packetGround, answer = p.answer, packet = p.packet; // a caller that gives no packet onGround (a unit test) takes the copy's own, below
+      p.answer = p.packet = null;
+      if (answer) this.processPlayer(p, answer, answer.onGround);
+      this.processPlayer(p, packet, ground);
+      p.netTicks++;
+      return;
+    }
+    // A copy the server places (riding, asleep, the dismount and respawn ticks, a harness): it rests where the update put it; mw.i() runs there and the position is put back.
+    const grounded = p.onGround; // b83 attack83: mw.D going into mw.i()
+    this.serverCopyUpdate(p);
+    if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
+      if (grounded && !p.packetGround && p.packetDy > 0) {
+        p.motion.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
+        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); p.motion.x += push.x; p.motion.z += push.z; }
+      }
+      p.onGround = p.packetGround;
+    }
+  }
+  // EntityPlayerMP.onUpdateEntity (mw.i) on the copy where it stands: its own move on its motion (serverCopyMove), then collideWithNearbyEntities against the moved box. Only the motion,
+  // the web flag, onGround and the pushes keep what it did; the caller puts the position back. Returns the moved scratch entity.
+  serverCopyUpdate(p) {
+    const m = p.motion, w = p.width, h = p.height;
+    const e = serverCopyMove(this.world, p, w, h);
     this.serverCopyMoved?.(p, e); // b82 mpplace82: EntityPlayer.moveEntityWithHeading's addMovementStat on the copy's own move (server-copy-stat.js)
     m.x = e.vx; m.y = e.vy; m.z = e.vz;
     p.inWeb = !!e.inWeb;
@@ -2616,38 +2633,49 @@ export class EntityWorld {
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
       }
     }
-    // b83 attack83: processPlayer's jump rule after mw.i() (nh.a(jd) offsets 1008-1060, bytecode-read): `if (mw.D && !jd.i() && d15 > 0) mw.bj()`, then `mw.D = jd.i()`. The jump is
-    // EntityLivingBase.jump's motion (0.42F, Jump Boost, the sprint push); EntityPlayer.jump's stat and exhaustion are movePlayer's, charged once. The host gives `packetGround` (a test or
-    // replay that leaves it out keeps the copy's own flag); the riding and sleeping branches return before this. b85: mw.D is the copy's own onGround after mw.i() from the accepted
-    // position (e.onGround); a copy that was set at the packet's position beforehand (a replay) reads the flag it went in with.
-    if (live) {
-      const dx = pkt.x - from.x, dy = pkt.y - from.y, dz = pkt.z - from.z;
-      const clearBefore = !collisionBoxes(world, shrunkBox(from, w, h), e).length; // d28, at the accepted position after the put back
-      if (e.onGround && !p.packetGround && dy > 0) {
-        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
-        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
-      }
-      const sc = { x: from.x, y: from.y, z: from.z, vx: m.x, vy: m.y, vz: m.z, onGround: e.onGround, inWeb: !!e.inWeb, sneaking: !!p.sneaking, player: true, living: true, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
-      moveEntity(world, sc, w, h, dx, dy, dz, 0); // mw.d(d13, d15, d17): stepHeight 0, a clipped axis zeroes its motion
-      m.x = sc.vx; m.y = sc.vy; m.z = sc.vz;
-      p.inWeb = !!sc.inWeb;
-      p.onGround = p.packetGround; // mw.D = jd.i() (offset 1060), before the tests
-      const wrongly = movedWrongly(pkt, sc, { sleeping: false, creative: !!p.creative });
-      p.x = pkt.x; p.y = pkt.y; p.z = pkt.z; // mw.a(d5, d7, d9, ...)
-      const clearAfter = !collisionBoxes(world, shrunkBox(pkt, w, h), sc).length; // d32
-      if (needsCorrection({ clearBefore, wrongly, clearAfter, sleeping: false })) { // setPlayerLocation(o, p, q): S08, the client's position and motion reset, its C06 answers
-        p.x = from.x; p.y = from.y; p.z = from.z;
-        p.sent = { x: from.x, y: from.y, z: from.z }; p.sinceSent = 0;
-        p.corrected = (p.corrected ?? 0) + 1;
-        this.serverCorrect?.(from);
-      }
-    } else if (p.packetGround !== undefined && !p.riding && !p.sleeping) {
-      if (grounded && !p.packetGround && p.packetDy > 0) {
-        m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
-        if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
-      }
-      p.onGround = p.packetGround;
+    return e;
+  }
+  // b85 spcopy85 / b86 spcopy86: NetHandlerPlayServer.processPlayer (nh.a(jd), bytecode-read; server-process-player.js has the offsets) for one packet `pkt` ({ x, y, z } or null for
+  // a C03 without a position) with its onGround flag `ground`, on a walking copy (the riding and sleeping branches are the `direct` path above).
+  processPlayer(p, pkt, ground) {
+    const m = p.motion, w = p.width, h = p.height, world = this.world;
+    const acc = p.accepted ?? { x: p.x, y: p.y, z: p.z };
+    // Offsets 31-87: while r (hasMoved) is false only a packet at o and q exactly and p within 0.1 sets it; 87 -> 1512: otherwise nothing runs (no mw.i()) and every 20th network
+    // tick (e % 20 == 0) setPlayerLocation(o, p, q) is sent again.
+    if (!p.hasMoved && awaitedAnswer(pkt, acc)) p.hasMoved = true;
+    if (!p.hasMoved) { if (p.netTicks % 20 === 0) this.setPlayerLocation(p, acc); return; }
+    // 360-426: o / p / q := the entity's position; a C03 without a position (jd.j() false) leaves d5 / d7 / d9 there too.
+    const from = { x: p.x, y: p.y, z: p.z }, to = pkt ?? from;
+    p.accepted = from;
+    const e = this.serverCopyUpdate(p); // 643-678: mw.i() from the accepted position, put back (mw.a(o, p, q))
+    if (ground === undefined) ground = e.onGround;
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    // 725-966: "moved too quickly" (d25 > 100) answers with setPlayerLocation, except for the integrated server's owner (N() && M().equals(name)): the single-player copy is always the owner.
+    if (movedTooQuickly({ x: dx, y: dy, z: dz }, m, { owner: true })) { this.setPlayerLocation(p, from); return; }
+    const clearBefore = !collisionBoxes(world, shrunkBox(from, w, h), e).length; // d28
+    // b83 attack83: the jump rule (1008-1036) `if (mw.D && !jd.i() && d15 > 0) mw.bj()`: EntityLivingBase.jump's motion (0.42F, Jump Boost, the sprint push); mw.D is the copy's own
+    // onGround after mw.i(). EntityPlayer.jump's stat and exhaustion are movePlayer's, charged once.
+    if (e.onGround && !ground && dy > 0) {
+      m.y = JUMP_MOTION + (p.survival?.effects?.jumpBoost?.() ?? 0);
+      if (p.sprinting) { const push = sprintJumpPush(p.yaw ?? 0); m.x += push.x; m.z += push.z; }
     }
+    const sc = { x: from.x, y: from.y, z: from.z, vx: m.x, vy: m.y, vz: m.z, onGround: e.onGround, inWeb: !!e.inWeb, sneaking: !!p.sneaking, player: true, living: true, fallDistance: 0, stepHeight: 0, moveStrafing: 0, aiMoveSpeed: 0, rotationYaw: 0 };
+    if (dx || dy || dz) moveEntity(world, sc, w, h, dx, dy, dz, 0); // mw.d(d13, d15, d17): stepHeight 0, a clipped axis zeroes its motion
+    m.x = sc.vx; m.y = sc.vy; m.z = sc.vz;
+    p.inWeb = !!sc.inWeb;
+    p.onGround = !!ground; // mw.D = jd.i() (offset 1060), before the tests
+    const wrongly = movedWrongly(to, sc, { sleeping: false, creative: !!p.creative });
+    p.x = to.x; p.y = to.y; p.z = to.z; // mw.a(d5, d7, d9, ...)
+    const clearAfter = !collisionBoxes(world, shrunkBox(to, w, h), sc).length; // d32
+    if (needsCorrection({ clearBefore, wrongly, clearAfter, sleeping: false })) { this.setPlayerLocation(p, from); return; }
+    p.onGround = !!ground; // 1464: mw.D = jd.i() again (the floating check before it never counts: the integrated server allows flight)
+  }
+  // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF)) from processPlayer: the copy waits for the client's answer (ai.js PlayerView.setLocation); the S08 reaches the client through
+  // `serverCorrect` (main.js: bjb.a(fu) puts the client there and zeroes its motion), whose C06 answer is queued. With no client to take it, the copy keeps waiting.
+  setPlayerLocation(p, at) {
+    p.corrected = (p.corrected ?? 0) + 1;
+    p.setLocation(at, { answered: !!this.serverCorrect });
+    this.serverCorrect?.(at);
   }
   // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement
   // blocked (sv.bh): it slides on its knockback, falls and is pushed, with no AI input.

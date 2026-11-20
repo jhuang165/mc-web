@@ -70,7 +70,9 @@ test("a packet into a wall: mw.d clips the delta, the copy is wrongly placed, an
   assert.deepEqual(fixes, [from], "the S08 carries the last accepted position");
   assert.deepEqual({ x: p.x, y: p.y, z: p.z }, from);
   assert.equal(p.motion.x, 0, "the clipped axis zeroes the motion");
-  assert.equal(p.sent.x, from.x, "the client's C06 answer restarts the packet counter at the corrected place");
+  // b86 spcopy86: the S08 does not reset the client's last reported position (bjb.a(fu) sends its C06 from the handler); the copy now waits for that answer (nh.r, spcopy86-b86.test.js)
+  assert.equal(p.hasMoved, false);
+  assert.deepEqual(p.answer, { ...from, onGround: false }, "the host took the S08: its C06 answer is queued");
   // Creative is exempt from "moved wrongly" but the collision test at the packet's position still answers.
   const c = setup("spcopy85-wall-creative", (world) => { for (let y = 10; y <= 12; y++) world.put(41, y, 43, 1, 0, false); });
   c.s.mode = "creative";
@@ -96,7 +98,8 @@ test("a free move is accepted untouched; a jump packet under a ceiling clips the
   assert.equal(open.p.motion.y, JUMP_MOTION, "open air: the jump's motion stays");
 });
 
-test("a packet over 10 blocks is a server-side teleport: the copy snaps, no correction (the owner is exempt from 'moved too quickly')", () => {
+// b86 spcopy86: the 10-block guard is gone; a far packet runs the native checks: the owner is exempt from "moved too quickly" and an open path is not "moved wrongly".
+test("a packet over 10 blocks through open air: the owner skips 'moved too quickly' and the copy takes it with no correction", () => {
   const { w, s, p } = setup("spcopy85-teleport");
   const fixes = [];
   w.serverCorrect = (at) => fixes.push(at);
@@ -105,10 +108,11 @@ test("a packet over 10 blocks is a server-side teleport: the copy snaps, no corr
   assert.equal(p.x, 49.5);
 });
 
-test("the replay / probe copy (no packetGround) keeps its old order; main.js hooks the S08; the dedicated server keeps its own copy path", () => {
+test("the replay / probe copy (`placed`, b86) keeps its old order; main.js hooks the S08; the dedicated server keeps its own copy path", () => {
   const world = flat("spcopy85-legacy"), w = new EntityWorld(world, [], () => 0.5), s = new Survival({});
   for (let i = 0; i < 3; i++) w.tick(client, s);
   const p = w.ai.player;
+  p.placed = true;
   p.motion.x = 0.2;
   p.update({ ...client, x: 40.6 }, s, 0);
   w.serverPlayerUpdate(p);

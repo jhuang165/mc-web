@@ -98,6 +98,7 @@ test("a sneaking player is only found by a legacy mob inside 0.8 x its range (ho
   const run = (sneaking, d) => {
     spider.spiderTarget = false;
     w.ai.player.sneaking = sneaking;
+    w.ai.player.placed = true; // b86 spcopy86: the test places the player view itself (no network tick runs here)
     w.ai.beginTick({ x: MOB.x + d, y: 0, z: MOB.z }, survival, 0);
     w.ai.player.sneaking = sneaking;
     return w.ai.closestVulnerablePlayer(w.ai.brain(spider), 16) !== null;
