@@ -67,7 +67,7 @@ export class ServerDispense {
   id(e) { let i = this.ids.get(e); if (!i) this.ids.set(e, i = ++this.nextId); return i; }
   get eyeSystem() { return this._eyes ??= new ServerEyes(this); } // b64 mpend2: made on first use (the constructor's load may reach it first)
   // b86 lanes86: an EntityTracker per lane (this instance's dimension and each stand-in lane), each sending only to the players of its own dimension (flush)
-  makeTracks() { const sim = this.sim; return new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), idOf: e => this.id(e), shooterOf: e => this.shooterRef(e) }); }
+  makeTracks() { const sim = this.sim; return new ThrownTracks({ limit: () => sim.rules?.trackerLimit ?? 144, watches: (pid, cx, cz) => sim.chunkViews?.sees ? sim.chunkViews.sees(pid, cx, cz) : true, fresh: pid => !!sim.chunkViews?.takeFresh?.(pid, 'thrown'), arrived: p => p.arrivedAt === sim.ticks /* b88 track88 */, idOf: e => this.id(e), shooterOf: e => this.shooterRef(e) }); }
   tracksOf(lane) { return lane === this ? this.thrownTracks : lane.tracks ??= this.makeTracks(); }
   get any() { return this._eyes?.active || this.thrownTracks.active || [...this.extra.values()].some(l => l.tracks?.active) || this.primed.length + this.rockets.rockets.length + (this.mobs._fireballs?.list.length ?? 0) + (this.mobs._skulls?.list.length ?? 0) + (this.mobs._golemBalls?.balls.length ?? 0) > 0 || this.lanes.some(laneBusy); }
   get lanes() { return [this, ...this.extra.values()]; }

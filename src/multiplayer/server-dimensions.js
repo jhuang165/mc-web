@@ -219,6 +219,7 @@ export class ServerDimensions {
     sim.vehicles?.dismount(p); // b61 lead: a rider leaves the vehicle (Entity.travelToDimension mounts nothing across)
     this.mobsOf(from).removePlayer(p.id); this.mobsOf(to).addPlayer(p); // b62: each dimension's mobs see only its own players
     p.world = dest; p.dimension = to;
+    p.arrivedAt = sim.ticks; // b88 track88: the port tick of the transfer (ThrownTracks `arrived`: a destination ticked later in this port tick lists its spawns before the player)
     p.position.copy({ x: e.x, y: e.y, z: e.z }); p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); Object.assign(p, { fallDistance: 0, landedFall: 0, grounded: false });
     if (!at) p.yaw = gameYaw(e.yaw);

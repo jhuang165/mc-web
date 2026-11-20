@@ -54,12 +54,16 @@ export function tickEntitySimulation(state, hooks = {}) {
   const { maxStack = () => 64, smoke = null, explodeTnt = () => {}, projectileTargets = () => [], projectileHit = () => {}, projectilePearlImpact,
     projectileEvent = () => {}, handleEntityEvents = () => {}, arrowOptions = () => ({}) } = hooks;
 
+  // b88 track88: `born()` (main.js, no walk) copies the objects that joined since the last call before anything else moves them (ObjectTracker.birth): the drops and the TNT one
+  // explosion spawns keep their spawn state when a later explosion or projectile hit in this pass pushes them (natively their S0E is built in spawnEntityInWorld, mp.a(sa) -> mn.a(sa))
+  const born = hooks.born ?? null;
   items.tick(world, maxStack);
-  tickPrimedTnt(world, primed, { smoke, explode: explodeTnt, rain: hooks.tntRain ?? null, fizz: hooks.tntFizz ?? null });
+  tickPrimedTnt(world, primed, { smoke, explode: born ? (...a) => { explodeTnt(...a); born(); } : explodeTnt, rain: hooks.tntRain ?? null, fizz: hooks.tntFizz ?? null });
   collectItems(state, hooks);
 
-  projectiles.tick(world, projectileTargets(state), projectileHit, projectilePearlImpact);
+  projectiles.tick(world, projectileTargets(state), born ? (...a) => { const r = projectileHit(...a); born(); return r; } : projectileHit, projectilePearlImpact);
   for (const event of projectiles.drain()) projectileEvent(event);
+  born?.(); // b88 track88: the hatch events' spawns
 
   if (state.mobs) handleEntityEvents();
 

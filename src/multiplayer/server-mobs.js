@@ -206,6 +206,7 @@ export class ServerMobs {
     // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
     const watcher = this.tracker.addWatcher(p.id, () => p.position);
     const views = this.host.chunkViews; if (views) { watcher.watch.gate = (cx, cz) => views.sees(p.id, cx, cz); watcher.fresh = () => views.takeFresh(p.id, 'mobs'); } // b72 mpstream72: tracking needs the column sent
+    { const at = this.host.ticks; watcher.sameTick = () => this.host.ticks === at; if (views) watcher.peek = () => !!views.watches?.get(p.id)?.fresh?.has('mobs'); } // b88 track88: the arrival's tick, and columns queued for this tick (SharedMobTracker.beforePass)
     dropViewList(this.views);
     this.views.set(p.id, { player: p, view, survival, watcher, known: new Map(), destroys: [] });
     // b62: the creature that hurts this player is what the player's tamed wolves hit back (Survival.damage -> onRevenge; ai.js playerHurtBy would write to whichever view is current).
@@ -357,6 +358,7 @@ export class ServerMobs {
       // b73 mpspawn73: the flat cull at 80 is gone (native has no global cap; the per-type cap of spawnPass bounds natural spawns)
     }
     this.use(first);
+    this.tracker.beforePass(); // b88 track88: the equipment check of each update and the copies for a watcher whose slot comes first (server-mob-entries.js)
     const lead = first.player.position;
     mobs.tick({ x: lead.x, y: lead.y, z: lead.z }, first.survival, first.player.survival.held?.id ?? 0);
     const statusSounds = mobs.clientSounds.splice(0); // taken first: drainMobEvents would play them as server sounds
