@@ -66,6 +66,7 @@ import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crysta
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
+import { takeRideMove } from "./horse-live.js";
 import { HORSE_ENTITY, horseArmorValue, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { hurtSoundName as horseHurtSoundName } from "./horse.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
@@ -2903,6 +2904,7 @@ export class EntityWorld {
     } else e.jumpTicks = 0;
     e.moveForward = f(e.moveForward * f(0.98));
     if (e.moveStrafing) e.moveStrafing = f(e.moveStrafing * f(0.98)); // EntitySlime strafes (moveStrafing x 0.98)
+    if (e.type === "horse") takeRideMove(e); // b88 horse88: wi.e(FF) moves a saddled horse with the rider's input in place of its own decayed fields (horse-live.js horseRideThink)
     this.moveWith(e, t, e.moveForward);
   }
   // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.

@@ -14,6 +14,8 @@ import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
 import { rearSeat, newHorseAnim, stepHorseAnim, horseFlagsOf } from "./horse-copy.js";
 import { Minecarts, dismountSpot } from "./minecarts.js";
 import { mountedYOffset, maxHealthOf, mountEntity } from "./mob-riding.js";
+import { mhSin, mhCos } from "./lighting.js";
+import { liveAttribute } from "./mob-attributes.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
@@ -127,9 +129,9 @@ export function horseSeats(mobs) {
       Object.assign(rider, { x: e.x + r.dx, y: e.y + offset - 0.5 + lift, z: e.z + r.dz });
     },
     // EntityPlayerSP's jump key counter (horseJumpCounter); the release reaches the horse as C0B action 6 does on the integrated server (wi.w).
-    charge(rider, controls) {
+    charge(rider, controls, send = true) {
       const v = rider.vehicle, e = v?.horse ? v.entity : null;
-      horseJumpCounter(rider, !!controls.jump, !!e && (e.type ?? "horse") === "horse", (power) => mobs.horseJump(e, power));
+      horseJumpCounter(rider, !!controls.jump, !!e && (e.type ?? "horse") === "horse", (power) => { if (send) mobs.horseJump(e, power); });
     },
   };
   return seats;
@@ -154,25 +156,34 @@ export function horseJumpCounter(rider, jump, onHorse, send) {
 
 // wi.e(F,F) with a rider (cu() and a living rider): the rider's yaw and half pitch are copied, strafe is halved, backwards is
 // quartered, a standing rearing horse is held still, and a stored jump power launches it (probe: ride rows).
+// b88 horse88 (bytecode-read wi.e(FF) 0-498, replayed against the executed horse-reference.json `ride` rows in horse88-b88.test.js):
+//   rotationYaw = rider.rotationYaw (prevRotationYaw too, not kept on the record), then setRotation (sa.b(FF): yaw % 360, pitch * 0.5 % 360), renderYawOffset = rotationYawHead = the wrapped yaw;
+//   forward <= 0: forward * 0.25 and the gallop counter bP = 0 (mob-steps.js gallopSteps);
+//   the jump: motionY = getHorseJumpStrength() (the horse.jumpStrength attribute with its modifiers, RangedAttribute 0..2) * bt, the horse's own MathHelper sin / cos (float) for the
+//   forward push -0.4F * sin * bt / 0.4F * cos * bt; then W = 1.0, aQ = bl() * 0.1F, setAIMoveSpeed(attribute) and EntityLivingBase.moveEntityWithHeading(strafe, forward).
+//   The move takes the rider's input directly: the horse's own moveStrafing / moveForward (zeroed by isMovementBlocked) are what sv.e decays by 0.98, so the rider's values are
+//   not decayed (entities.js walk -> takeRideMove). After the move, onGround clears bt and horseJumping (horseTick, riddenMoves).
+const rideMoves = new WeakMap(), riddenMoves = new WeakSet();
 export function horseRideThink(mobs, e) {
   const rider = e.rider, h = e.horse;
-  e.rotationYaw = rider.yaw;
-  e.yaw = f(-rider.yaw * Math.PI / 180);
+  e.rotationYaw = f(rider.yaw % 360);
+  e.yaw = f(-e.rotationYaw * Math.PI / 180);
   // wi.e(FF): rotationPitch = rider.rotationPitch * 0.5, then renderYawOffset = rotationYawHead = rotationYaw (bytecode-read b77; a rider record without a pitch leaves the pitch alone).
   if (Number.isFinite(rider.pitch)) e.rotationPitch = f(f(rider.pitch * f(0.5)) % 360);
-  e.renderYawOffset = e.rotationYawHead = rider.yaw;
+  e.renderYawOffset = e.rotationYawHead = e.rotationYaw;
   let strafe = f(rider.moveStrafing * f(0.5)), forward = rider.moveForward;
-  if (forward <= 0) forward = f(forward * f(0.25));
+  if (forward <= 0) { forward = f(forward * f(0.25)); e.gallopSteps = 0; }
   if (e.onGround && !(e.jumpPower > 0) && e.rearing && !e.jumpHeld) strafe = forward = 0;
   if (e.jumpPower > 0 && !e.jumpingHorse && e.onGround) {
-    e.vy = h.jump * e.jumpPower;
+    const strength = Math.max(0, Math.min(2, liveAttribute(e, "horse.jumpStrength", h.jump)));
+    e.vy = strength * e.jumpPower;
     const boost = e.effects?.find?.((x) => x.id === JUMP_BOOST); // wi.e(FF): motionY += (amplifier + 1) * 0.1 with Jump Boost (rv.j)
     if (boost) e.vy += f(f(boost.amplifier + 1) * f(0.1));
     e.jumpingHorse = true;
     if (forward > 0) {
-      const sin = Math.sin(e.rotationYaw * Math.PI / 180), cos = Math.cos(e.rotationYaw * Math.PI / 180);
-      e.vx += -0.4 * sin * e.jumpPower;
-      e.vz += 0.4 * cos * e.jumpPower;
+      const r = f(f(e.rotationYaw * f(3.1415927)) / f(180)), sin = mhSin(r), cos = mhCos(r);
+      e.vx += f(f(f(-0.4) * sin) * e.jumpPower);
+      e.vz += f(f(f(0.4) * cos) * e.jumpPower);
       mobs.events.push({ sound: "mob.horse.jump", volume: 0.4, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
     }
     e.jumpPower = 0;
@@ -183,9 +194,24 @@ export function horseRideThink(mobs, e) {
   e.stepHeight = 1;
   e.jumpFactor = f((Number.isFinite(e.aiMoveSpeed) ? e.aiMoveSpeed : speed) * f(0.1));
   e.aiMoveSpeed = speed;
-  e.moveStrafing = strafe;
-  e.moveForward = forward;
+  rideMoves.set(e, { strafe, forward });
   e.jumping = false;
+}
+// entities.js walk, where sv.e calls moveEntityWithHeading: a horse ridden this tick (horseRideThink ran) moves with the rider's input; any other horse takes wi.e(FF)'s
+// else branch: stepHeight 0.5 and jumpMovementFactor 0.02 (set every tick before the move, so a dismount or a removed saddle counts from that tick) and its own
+// moveStrafing, which no horse task sets (0).
+export function takeRideMove(e) {
+  const m = rideMoves.get(e);
+  if (m) {
+    rideMoves.delete(e);
+    riddenMoves.add(e);
+    e.moveStrafing = m.strafe;
+    e.moveForward = m.forward;
+  } else {
+    riddenMoves.delete(e);
+    e.stepHeight = e.jumpFactor = undefined;
+    e.moveStrafing = 0;
+  }
 }
 
 // main.js hands the live player rider over each time it builds the vehicle state, so interaction can mount it.
@@ -248,14 +274,17 @@ export function installHorse(EntityWorld) {
   // Per tick (EntityHorse.onUpdate / onLivingUpdate): the rearing timer, regeneration, taming while ridden and the land sound.
   proto.horseTick = function (e) {
     const rand = entityRandom(e);
-    if (!e.rider) { e.stepHeight = e.jumpFactor = undefined; e.moveStrafing = 0; } // wi.e(): no rider restores 0.5 and 0.02
     if (e.mouthTicks > 0 && ++e.mouthTicks > 30) e.mouthTicks = 0; // wi.h(): the mouth counter bE ends above 30 and clears flag 128 (started by every sound getter, wi.cS)
     if (e.rearing && ++e.rearTicks > 20) { e.rearing = false; e.rearTicks = 0; } // the rear counter starts at 1 and ends above 20 (b44pd records: AI resumes 20 ticks after the rear)
+    if (!e.rearing) e.jumpHeld = false; // b88 horse88: wi.h() 270-327 (bytecode-read): bI (set by wi.w with the rear) is cleared on every tick the horse is not rearing
     // the horse's own animation counters from its own flags (wi.h(); the same stepHorseAnim as the client copy, executed in horse-rear-reference.json `anim`)
     const anim = (e.horseAnim ??= newHorseAnim());
     anim.flags = horseFlagsOf(e);
     stepHorseAnim(anim);
-    if (e.onGround) { e.jumpingHorse = false; if (!e.rider) e.jumpPower = 0; }
+    // b88 horse88: wi.e(FF) 393-407 clears bt and horseJumping only in the ridden branch, after the move, when onGround. No other code touches them (bytecode-read: bt is
+    // written only in e(FF) and w(int), br only through j(Z) in e(FF)), so a jump power stored in the air waits for the landing and is dropped there, and one left on an
+    // unridden horse (the rider got off in the air) stays until the next ridden tick.
+    if (riddenMoves.has(e) && e.onGround) { e.jumpPower = 0; e.jumpingHorse = false; }
     const max = maxHealthOf(e, e.horse.maxHealth);
     // wi.e (bytecode-read): nextInt(200) moves the tail before wf.e (EntityWorld, ahead of the AI); after it (server side) nextInt(900) with a live horse heals 1 (the draw is not gated on health),
     // then a horse not eating and with no rider draws nextInt(300) and starts eating when the block below is grass; eating stops after 50 ticks.
