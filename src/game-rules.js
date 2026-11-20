@@ -9,5 +9,5 @@ export const DEFAULT_RULES = Object.freeze(Object.fromEntries(GAME_RULES));
 export const ruleOn = (record, name) => String(record?.gameRules?.[name] ?? DEFAULT_RULES[name]).toLowerCase() === "true";
 
 let source = null;
-export function setGameRuleSource(fn) { source = fn; }
+export function setGameRuleSource(fn) { const was = source; source = fn; return was; } // b86 awaystore86: returns the previous source (away-world.js puts it back after its run)
 export const gameRule = (name) => (source ? source(name) : ruleOn(null, name));

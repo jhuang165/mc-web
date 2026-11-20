@@ -408,7 +408,7 @@ export class DimensionLive {
     const rawTicks = (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50), ticks = Math.min(MAX_AWAY_TICKS, rawTicks);
     try {
       if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
-      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.(), Date.now(), a.wall0, rawTicks), chunks: a.chunks, records: a.records, tickBase: a.ticks0, trace: a.trace, idBase: this.host.entityIds?.next };
+      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.(), Date.now(), a.wall0, rawTicks), chunks: a.chunks, records: a.records, tickBase: a.ticks0, trace: a.trace, idBase: this.host.entityIds?.next, totalTime: this.clock(root) }; // b86 awaystore86: totalTime, the beacons' 80-tick clock
       Object.assign(plan.player, this.host.awayPlayer?.() ?? {}); // the player's live state: the run's shadow player (away-commands.js)
       const msg = await new Promise((resolve) => {
         const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
@@ -421,6 +421,7 @@ export class DimensionLive {
       root.fluidTicks = r.fluidTicks; root.fireTicks = r.fireTicks; root.fallingTicks = r.fallingTicks; root.falling = r.falling;
       root.redstone = r.redstone; root.pistons = r.pistons;
       if (r.skulls) { if (r.skulls.length) root.skulls = r.skulls; else delete root.skulls; } // b85 pickup85: skull tiles the run consumed
+      for (const k of ["signs", "beacons", "pots", "musicTiles"]) if (Array.isArray(r[k])) { if (r[k].length) root[k] = r[k]; else delete root[k]; } // b86 awaystore86: the run's other tile stores, whole
       root.player = { ...(root.player ?? {}), ...r.tiles };
       if (r.entities) { // away-entities.js: the saved entity lists, whole
         root.drops = r.entities.drops; root.xpOrbs = r.entities.xpOrbs; root.tnt = r.entities.tnt;
