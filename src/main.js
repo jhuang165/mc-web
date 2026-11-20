@@ -277,7 +277,7 @@ import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation, finishEntitySimulation, entityWalkers, watchJoin, isWalked, vehicleTargets, thrownAtVehicleOrHanging } from "./entity-simulation.js";
-import { ObjectTracker, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
+import { ObjectTracker, birthWalks, objectViews, vehicleViews, hangingViews, knotViews, aimBox, aimKnotBox, rideCopy, boatSeat, clientRiderFall } from "./object-tracker.js";
 import { pushClientPlayer, CLIENT_PUSHES_PLAYER } from "./client-push.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { predictUse, slotReplacesUse, finishPredictedUse } from "./multiplayer/client-use-predict.js";
@@ -1936,7 +1936,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.potions = new WitchPotions(mobs);
     mobs.riderLook = () => ({ yaw: Math.fround(180 - (yaw * 180) / Math.PI), pitch: Math.fround((-pitch * 180) / Math.PI) }); // the local player's look, which the ridden horse's client copy turns to (horse-copy.js)
     mobs.explodeInline = (ev) => explodeEvent(ev, explodeAt); // a creeper explodes inside its own update (entities.js)
-    mobs.walks = entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }); // arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
+    mobs.walks = birthWalks(entityWalkers(() => entityTick ?? { state: { items, arrows, projectiles, primed, xpOrbs, falling, world, position }, hooks: {} }), () => objectTracker); // b87 sptrack87: + each object's state before its first update (the S0E of its spawn); arrows, thrown entities, items, orbs, TNT and falling blocks tick in the one list walk
     mobs.spawnLoot = (events) => spawnLoot({ xpOrbs, items }, events); // a death's drops and orbs join the list in the dying entity's own turn (entities.js flushLoot)
     mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
@@ -3218,6 +3218,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, inWater, ...moveFlags, grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
+  for (const e of eyes.eyes) objectTracker.birth(e); // b87 sptrack87: an eye's spawn state, before its first update (the tracker pass comes after)
   eyes.tick({ world, particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
@@ -3300,12 +3301,13 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     arrowsCollected: () => { renderHotbar(); saved = false; },
     flushArrows,
   } };
-  tickEntitySimulation(entityTick.state, entityTick.hooks);
   const trackLists = () => {
     const lists = { item: items.items.filter((e) => e.stack), orb: xpOrbs.orbs, arrow: arrows.list, falling: falling?.entities ?? [], tnt: primed, eyeOfEnder: eyes.eyes, firework: rockets.rockets, fishHook: fishing.active ? [fishing.hook] : [] };
     for (const k of THROWN_KINDS) lists[k] = thrownOf(k);
     return liveLists(mobs, lists); // b61: entities of unloaded chunks are in no tracker
   };
+  if (!isWalked(mobs) && world && screen !== "home") objectTracker.births(trackLists()); // b87 sptrack87: no walk: the spawn states before this tick's updates
+  tickEntitySimulation(entityTick.state, entityTick.hooks);
   const afterTrack = () => {
     for (const e of objectTracker.drainEvents()) if (e.firework) fireworkFx.spawnStarter(e.firework.x, e.firework.y, e.firework.z, e.firework.vx, e.firework.vy, e.firework.vz, e.firework.fireworks); // S1A 17
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
@@ -3322,6 +3324,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   };
   entityTick.track = () => { if (mobs?.jointRan) mobs.jointRan = false; else trackObjects(); }; // the walked tick's tracker pass ran in tickMobs when `jointRan`
   if (!isWalked(mobs)) trackObjects();
+  if (fishing.active) objectTracker.birth(fishing.hook); // b87 sptrack87: the hook's spawn state, before its first update (the walked tick's tracker pass comes after)
   fishing.tick(fishingHost());
   statsLive.fishing(fishing);
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
