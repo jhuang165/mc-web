@@ -1,0 +1,933 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "fa": {
+   "name": "MessageSerializer",
+   "sha256": "ecbba16788f8988e221839add6da7914e21e1027a600d92914cde6f7b80ad94a"
+  },
+  "et": {
+   "name": "PacketBuffer",
+   "sha256": "81ab003c4658dd545b5c1fe2d7d7604470d10e7b9ee1ab534e37d99c9f387666"
+  },
+  "eo": {
+   "name": "EnumConnectionState",
+   "sha256": "3616950098bec1c54bb89b39f6749a077af6fcfa3f96100c77e0d6d8316f4043"
+  },
+  "fk": {
+   "name": "IChatComponent$Serializer",
+   "sha256": "c1055cad3419208d7c22b2b6d4f73409f854d135803c99a981bc268cdfe7e8ce"
+  }
+ },
+ "method": "Executed on the unchanged classes (tools/probes/Console88Probe.java): each packet class of each EnumConnectionState and direction, built with its no-argument constructor and empty fields (0, \"\", empty arrays and collections, fq(\"\"), first enum constant, a static instance), written with ft.b(et) after the id VarInt (et.b), as the encoder fa does before eu.b(id, readableBytes); plus samples with chosen fields. Class names via joined-1.7.10.srg.",
+ "base": [
+  {
+   "state": "HANDSHAKING",
+   "dir": "serverbound",
+   "id": 0,
+   "class": "jp",
+   "bytes": 10,
+   "name": "C00Handshake"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 0,
+   "class": "jc",
+   "bytes": 5,
+   "name": "C00PacketKeepAlive"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 1,
+   "class": "ir",
+   "bytes": 2,
+   "name": "C01PacketChatMessage"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 2,
+   "class": "ja",
+   "bytes": 6,
+   "name": "C02PacketUseEntity"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 3,
+   "class": "jd",
+   "bytes": 2,
+   "name": "C03PacketPlayer"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 4,
+   "class": "je",
+   "bytes": 34,
+   "name": "C03PacketPlayer$C04PacketPlayerPosition"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 5,
+   "class": "jg",
+   "bytes": 10,
+   "name": "C03PacketPlayer$C05PacketPlayerLook"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 6,
+   "class": "jf",
+   "bytes": 42,
+   "name": "C03PacketPlayer$C06PacketPlayerPosLook"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 7,
+   "class": "ji",
+   "bytes": 12,
+   "name": "C07PacketPlayerDigging"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 8,
+   "class": "jo",
+   "bytes": 16,
+   "name": "C08PacketPlayerBlockPlacement"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 9,
+   "class": "jl",
+   "bytes": 3,
+   "name": "C09PacketHeldItemChange"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 10,
+   "class": "ip",
+   "bytes": 6,
+   "name": "C0APacketAnimation"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 11,
+   "class": "jj",
+   "bytes": 10,
+   "name": "C0BPacketEntityAction"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 12,
+   "class": "jk",
+   "bytes": 11,
+   "name": "C0CPacketInput"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 13,
+   "class": "iy",
+   "bytes": 2,
+   "name": "C0DPacketCloseWindow"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 14,
+   "class": "ix",
+   "bytes": 10,
+   "name": "C0EPacketClickWindow"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 15,
+   "class": "iv",
+   "bytes": 5,
+   "name": "C0FPacketConfirmTransaction"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 16,
+   "class": "jm",
+   "bytes": 5,
+   "name": "C10PacketCreativeInventoryAction"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 17,
+   "class": "iw",
+   "bytes": 3,
+   "name": "C11PacketEnchantItem"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 18,
+   "class": "jn",
+   "bytes": 15,
+   "name": "C12PacketUpdateSign"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 19,
+   "class": "jh",
+   "bytes": 10,
+   "name": "C13PacketPlayerAbilities"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 20,
+   "class": "iq",
+   "bytes": 2,
+   "name": "C14PacketTabComplete"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 21,
+   "class": "iu",
+   "bytes": 7,
+   "name": "C15PacketClientSettings"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 22,
+   "class": "is",
+   "bytes": 2,
+   "name": "C16PacketClientStatus"
+  },
+  {
+   "state": "PLAY",
+   "dir": "serverbound",
+   "id": 23,
+   "class": "iz",
+   "bytes": 4,
+   "name": "C17PacketCustomPayload"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 0,
+   "class": "gw",
+   "bytes": 5,
+   "name": "S00PacketKeepAlive"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 1,
+   "class": "hd",
+   "bytes": 17,
+   "name": "S01PacketJoinGame"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 2,
+   "class": "gj",
+   "bytes": 4,
+   "name": "S02PacketChat"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 3,
+   "class": "ih",
+   "bytes": 17,
+   "name": "S03PacketTimeUpdate"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 4,
+   "class": "hz",
+   "bytes": 9,
+   "name": "S04PacketEntityEquipment"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 5,
+   "class": "ig",
+   "bytes": 13,
+   "name": "S05PacketSpawnPosition"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 6,
+   "class": "ib",
+   "bytes": 11,
+   "name": "S06PacketUpdateHealth"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 7,
+   "class": "hs",
+   "bytes": 15,
+   "name": "S07PacketRespawn"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 8,
+   "class": "fu",
+   "bytes": 34,
+   "name": "S08PacketPlayerPosLook"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 9,
+   "class": "hu",
+   "bytes": 2,
+   "name": "S09PacketHeldItemChange"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 10,
+   "class": "hp",
+   "bytes": 14,
+   "name": "S0APacketUseBed"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 11,
+   "class": "gc",
+   "bytes": 3,
+   "name": "S0BPacketAnimation"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 12,
+   "class": "gb",
+   "bytes": 58,
+   "name": "S0CPacketSpawnPlayer"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 13,
+   "class": "ij",
+   "bytes": 9,
+   "name": "S0DPacketCollectItem"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 14,
+   "class": "fw",
+   "bytes": 21,
+   "name": "S0EPacketSpawnObject"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 15,
+   "class": "fz",
+   "bytes": 25,
+   "name": "S0FPacketSpawnMob"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 16,
+   "class": "ga",
+   "bytes": 19,
+   "name": "S10PacketSpawnPainting"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 17,
+   "class": "fx",
+   "bytes": 16,
+   "name": "S11PacketSpawnExperienceOrb"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 18,
+   "class": "hy",
+   "bytes": 11,
+   "name": "S12PacketEntityVelocity"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 19,
+   "class": "hq",
+   "bytes": 2,
+   "name": "S13PacketDestroyEntities"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 20,
+   "class": "hf",
+   "bytes": 5,
+   "name": "S14PacketEntity"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 21,
+   "class": "hg",
+   "bytes": 8,
+   "name": "S14PacketEntity$S15PacketEntityRelMove"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 22,
+   "class": "hi",
+   "bytes": 7,
+   "name": "S14PacketEntity$S16PacketEntityLook"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 23,
+   "class": "hh",
+   "bytes": 10,
+   "name": "S14PacketEntity$S17PacketEntityLookMove"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 24,
+   "class": "ik",
+   "bytes": 19,
+   "name": "S18PacketEntityTeleport"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 25,
+   "class": "ht",
+   "bytes": 6,
+   "name": "S19PacketEntityHeadLook"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 26,
+   "class": "gt",
+   "bytes": 6,
+   "name": "S19PacketEntityStatus"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 27,
+   "class": "hx",
+   "bytes": 10,
+   "name": "S1BPacketEntityAttach"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 28,
+   "class": "hw",
+   "bytes": 6,
+   "name": "S1CPacketEntityMetadata"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 29,
+   "class": "in",
+   "bytes": 9,
+   "name": "S1DPacketEntityEffect"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 30,
+   "class": "hr",
+   "bytes": 6,
+   "name": "S1EPacketRemoveEntityEffect"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 31,
+   "class": "ia",
+   "bytes": 9,
+   "name": "S1FPacketSetExperience"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 32,
+   "class": "il",
+   "bytes": 9,
+   "name": "S20PacketEntityProperties"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 33,
+   "class": "gx",
+   "bytes": 18,
+   "name": "S21PacketChunkData"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 34,
+   "class": "gk",
+   "bytes": 15,
+   "name": "S22PacketMultiBlockChange"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 35,
+   "class": "gh",
+   "bytes": 16,
+   "name": "S23PacketBlockChange"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 36,
+   "class": "gg",
+   "bytes": 15,
+   "name": "S24PacketBlockAction"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 37,
+   "class": "ge",
+   "bytes": 15,
+   "name": "S25PacketBlockBreakAnim"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 38,
+   "class": "gz",
+   "bytes": 8,
+   "name": "S26PacketMapChunkBulk"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 39,
+   "class": "gu",
+   "bytes": 33,
+   "name": "S27PacketExplosion"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 40,
+   "class": "ha",
+   "bytes": 19,
+   "name": "S28PacketEffect"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 41,
+   "class": "hc",
+   "bytes": 19,
+   "name": "S29PacketSoundEffect"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 42,
+   "class": "hb",
+   "bytes": 34,
+   "name": "S2APacketParticles"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 43,
+   "class": "gv",
+   "bytes": 6,
+   "name": "S2BPacketChangeGameState"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 44,
+   "class": "fy",
+   "bytes": 15,
+   "name": "S2CPacketSpawnGlobalEntity"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 45,
+   "class": "gn",
+   "bytes": 6,
+   "name": "S2DPacketOpenWindow"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 46,
+   "class": "gm",
+   "bytes": 2,
+   "name": "S2EPacketCloseWindow"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 47,
+   "class": "gq",
+   "bytes": 6,
+   "name": "S2FPacketSetSlot"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 48,
+   "class": "go",
+   "bytes": 4,
+   "name": "S30PacketWindowItems"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 49,
+   "class": "gp",
+   "bytes": 6,
+   "name": "S31PacketWindowProperty"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 50,
+   "class": "gl",
+   "bytes": 5,
+   "name": "S32PacketConfirmTransaction"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 51,
+   "class": "ii",
+   "bytes": 15,
+   "name": "S33PacketUpdateSign"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 52,
+   "class": "he",
+   "bytes": 4,
+   "name": "S34PacketMaps"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 53,
+   "class": "gf",
+   "bytes": 38,
+   "name": "S35PacketUpdateTileEntity"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 54,
+   "class": "hj",
+   "bytes": 13,
+   "name": "S36PacketSignEditorOpen"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 55,
+   "class": "gd",
+   "bytes": 2,
+   "name": "S37PacketStatistics"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 56,
+   "class": "ho",
+   "bytes": 5,
+   "name": "S38PacketPlayerListItem"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 57,
+   "class": "hk",
+   "bytes": 10,
+   "name": "S39PacketPlayerAbilities"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 58,
+   "class": "gi",
+   "bytes": 2,
+   "name": "S3APacketTabComplete"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 59,
+   "class": "ic",
+   "bytes": 4,
+   "name": "S3BPacketScoreboardObjective"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 60,
+   "class": "ie",
+   "bytes": 8,
+   "name": "S3CPacketUpdateScore"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 61,
+   "class": "hv",
+   "bytes": 3,
+   "name": "S3DPacketDisplayScoreboard"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 62,
+   "class": "id",
+   "bytes": 9,
+   "name": "S3EPacketTeams"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 63,
+   "class": "gr",
+   "bytes": 4,
+   "name": "S3FPacketCustomPayload"
+  },
+  {
+   "state": "PLAY",
+   "dir": "clientbound",
+   "id": 64,
+   "class": "gs",
+   "bytes": 4,
+   "name": "S40PacketDisconnect"
+  },
+  {
+   "state": "STATUS",
+   "dir": "serverbound",
+   "id": 0,
+   "class": "kj",
+   "bytes": 1,
+   "name": "C00PacketServerQuery"
+  },
+  {
+   "state": "STATUS",
+   "dir": "serverbound",
+   "id": 1,
+   "class": "ki",
+   "bytes": 9,
+   "name": "C01PacketPing"
+  },
+  {
+   "state": "STATUS",
+   "dir": "clientbound",
+   "id": 0,
+   "class": "ka",
+   "bytes": 4,
+   "name": "S00PacketServerInfo"
+  },
+  {
+   "state": "STATUS",
+   "dir": "clientbound",
+   "id": 1,
+   "class": "jz",
+   "bytes": 9,
+   "name": "S01PacketPong"
+  },
+  {
+   "state": "LOGIN",
+   "dir": "serverbound",
+   "id": 0,
+   "class": "jw",
+   "bytes": 2,
+   "name": "C00PacketLoginStart"
+  },
+  {
+   "state": "LOGIN",
+   "dir": "serverbound",
+   "id": 1,
+   "class": "jx",
+   "bytes": 5,
+   "name": "C01PacketEncryptionResponse"
+  },
+  {
+   "state": "LOGIN",
+   "dir": "clientbound",
+   "id": 0,
+   "class": "ju",
+   "bytes": 4,
+   "name": "S00PacketDisconnect"
+  },
+  {
+   "state": "LOGIN",
+   "dir": "clientbound",
+   "id": 1,
+   "class": "jt",
+   "bytes": "error NullPointerException",
+   "name": "S01PacketEncryptionRequest"
+  },
+  {
+   "state": "LOGIN",
+   "dir": "clientbound",
+   "id": 2,
+   "class": "js",
+   "bytes": 39,
+   "name": "S02PacketLoginSuccess"
+  }
+ ],
+ "samples": [
+  {
+   "name": "S02 chat.type.text Alex hello",
+   "id": 2,
+   "bytes": 56,
+   "note": "{\"translate\":\"chat.type.text\",\"with\":[\"Alex\",\"hello\"]}"
+  },
+  {
+   "name": "S02 text hello",
+   "id": 2,
+   "bytes": 9,
+   "note": "\"hello\""
+  },
+  {
+   "name": "S40 Server closed",
+   "id": 64,
+   "bytes": 17,
+   "note": "\"Server closed\""
+  },
+  {
+   "name": "S29 random.click",
+   "id": 41,
+   "bytes": 31,
+   "note": ""
+  },
+  {
+   "name": "S2A flame",
+   "id": 42,
+   "bytes": 39,
+   "note": ""
+  },
+  {
+   "name": "S13 three ids",
+   "id": 19,
+   "bytes": 14,
+   "note": ""
+  },
+  {
+   "name": "S3A /help /home",
+   "id": 58,
+   "bytes": 14,
+   "note": ""
+  },
+  {
+   "name": "S38 Alex",
+   "id": 56,
+   "bytes": 9,
+   "note": ""
+  },
+  {
+   "name": "S30 three empty slots",
+   "id": 48,
+   "bytes": 10,
+   "note": ""
+  },
+  {
+   "name": "S30 one stone, one empty",
+   "id": 48,
+   "bytes": 13,
+   "note": "ItemStack(Blocks.stone, 1, 0)"
+  },
+  {
+   "name": "S2F stone x64",
+   "id": 47,
+   "bytes": 11,
+   "note": ""
+  },
+  {
+   "name": "S22 three records",
+   "id": 34,
+   "bytes": 27,
+   "note": ""
+  },
+  {
+   "name": "S2D container.chest",
+   "id": 45,
+   "bytes": 21,
+   "note": ""
+  },
+  {
+   "name": "S0E data 1",
+   "id": 14,
+   "bytes": 27,
+   "note": "the three velocity shorts follow a non-zero data int"
+  },
+  {
+   "name": "S0F empty watcher",
+   "id": 15,
+   "bytes": 25,
+   "note": "DataWatcher with no entries: the 127 end byte"
+  },
+  {
+   "name": "S37 stat.leaveGame 7",
+   "id": 55,
+   "bytes": 18,
+   "note": "stat.leaveGame"
+  },
+  {
+   "name": "S01 default",
+   "id": 1,
+   "bytes": 17,
+   "note": "default"
+  },
+  {
+   "name": "S07 default",
+   "id": 7,
+   "bytes": 15,
+   "note": ""
+  },
+  {
+   "name": "S21 unload, one biome",
+   "id": 33,
+   "bytes": 30,
+   "note": "mask 0, full chunk, 256 equal biome bytes"
+  }
+ ]
+}

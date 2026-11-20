@@ -16,6 +16,8 @@ import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial, chatDisplay } from '../src/server-broadcast.js';
 import readline from 'node:readline'; // b86 console86: the server console
 import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.js'; // b87 offline87: /netstat's native packet ids
+import { planSave, savePlayerData, STOP_LOG, STOP_KICK, worldSaveLine } from '../src/multiplayer/server-save.js'; // b88 console88: saves under /save-off, the stop sequence
+import { readPacketBytes, writePacketBytes } from '../src/multiplayer/net-packet-ids.js'; // b88 console88: /netstat's native record sizes
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
@@ -31,7 +33,7 @@ const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === B
 // creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
   accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
-  origins = DEFAULT_ORIGINS, debugFs = { mkdirSync, writeFileSync } /* b74 mpmisc74: stubbed by tests */, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], rules = null /* b69 serverprops: a ServerRules */, newPlayerMode = null, adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
+  origins = DEFAULT_ORIGINS, debugFs = { mkdirSync, writeFileSync } /* b74 mpmisc74: stubbed by tests */, gameMode = 'creative', difficulty = 2, pvp = true, commandBlocks = false, legacyOwner = null, motd = DEFAULT_MOTD, favicon = null, ops = [], rules = null /* b69 serverprops: a ServerRules */, newPlayerMode = null, adminOptions = {} /* b68 mpadmin: { opLevel, whitelist } */, onStop = null /* b68: after /stop closed the server */, simulation = null, tickMs = 50, saveMs = 10000, levelName = 'world' /* b88 console88: level-name, for the stop log */, kickGraceMs = 1000, log = (m) => console.log(m) /* b88 console88: the stop sequence's lines */, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
   accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
@@ -43,11 +45,18 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   const pings = new ServerPings({ send: (pid, m) => { const ws = sockets.get(pid); if (ws) send(ws, m); } }); // b68 mpping: keep-alive pings and the tab list's S38 items
   let closing = false, saving = Promise.resolve(), saveError = null;
-  const save = () => {
+  const save = ({ force = false } = {}) => {
     // Serialize in tick order; atomic rename never truncates the last good save.
-    const data = JSON.stringify(simulation.save());
-    // (b68 mpadmin: /save-off only stops the timer and the shutdown save, as native; /save-all calls this directly)
+    // b88 console88 (src/multiplayer/server-save.js): /save-all (`force`) saves every world; the timer and the shutdown save always write the player data
+    // (oi.j) and each world only while its levelSaving flag is off, keeping the file's part of the others.
+    const plan = planSave(simulation, { force }), ready = plan.data ? JSON.stringify(plan.data) : null;
     saving = saving.catch(() => {}).then(async () => {
+      let data = ready;
+      if (data === null) {
+        let previous = null;
+        try { previous = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
+        data = JSON.stringify(plan.compose(previous));
+      }
       await mkdir(path.dirname(dataFile), { recursive: true, mode: 0o700 });
       await writeFile(dataFile + '.tmp', data, { mode: 0o600 });
       await rename(dataFile + '.tmp', dataFile);
@@ -164,7 +173,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
-    const packetId = writePacketId(message); if (packetId !== null) simulation.admin.netStats.write(packetId, Buffer.byteLength(text)); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id
+    const packetId = writePacketId(message); if (packetId !== null) simulation.admin.netStats.write(packetId, writePacketBytes(message) /* b88 console88: the native frame bytes, not the JSON length */); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -189,7 +198,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     write: (name, rows) => { mkdirSync(path.dirname(dataFile), { recursive: true }); writeFileSync(listPath(name) + '.tmp', JSON.stringify(rows, null, 2) + '\n'); renameSync(listPath(name) + '.tmp', listPath(name)); },
   };
   simulation.admin.loadFiles();
-  simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save(), stop: () => { void close().then(() => onStop?.()); } };
+  simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save({ force: true }) /* b88 console88: bh clears every levelSaving flag around its save */, stop: () => { void close().then(() => onStop?.()); } };
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
   // b86 console86: console lines (DedicatedServer.func_71331_a queues them, func_71333_ah runs them after the tick's world and network work) and the server log
   // (MinecraftServer.a(fj): the unformatted text): the console's own lines and the admin notices of every other sender.
@@ -221,7 +230,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (--budget < 0 || binary) return ws.close(1008, 'Message rate or format rejected');
         const m = JSON.parse(data.toString());
         if (!m || typeof m !== 'object') return ws.close(1008, 'Invalid message');
-        { const packetId = readPacketId(m); if (packetId !== null) simulation.admin.netStats.read(packetId, data.length); } // b86 console86: /netstat (the decoder ez records each packet); b87 offline87: under its native id, after the parse (ez counts only registered ids)
+        { const packetId = readPacketId(m); if (packetId !== null) simulation.admin.netStats.read(packetId, readPacketBytes(m) /* b88 console88: native frame bytes */); } // b86 console86: /netstat (the decoder ez records each packet); b87 offline87: under its native id, after the parse (ez counts only registered ids)
         if (!joined && handleStatus(m, r => send(ws, r), () => ({ motd, online: sockets.size, max: simulation.rules.maxPlayers, names: [...simulation.players.values()].map(p => p.name), favicon }))) return; // b68 mpping: pre-login status request and ping (NetHandlerStatusServer)
         if (!joined) {
           if (m.type !== 'join' || m.protocol !== PROTOCOL) return ws.close(1008, 'This game version differs from the server. Reload the page.');
@@ -348,7 +357,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
   }, tickMs);
-  const saveTimer = setInterval(() => { if (simulation.admin.autosave) void save().catch(() => {}); }, saveMs); // b68 mpadmin: /save-off
+  const saveTimer = setInterval(() => { void save().catch(() => {}); }, saveMs); // b68 mpadmin: /save-off; b88 console88: the player data is still saved (MinecraftServer.u: oi.j, then a(true))
   const heartbeatTimer = setInterval(() => { for (const ws of wss.clients) ws.heartbeat(); }, 10000);
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, bind, resolve); }); }
   catch (error) { clearInterval(tickTimer); clearInterval(saveTimer); clearInterval(heartbeatTimer); wss.close(); throw error; }
@@ -357,10 +366,20 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     closing = true;
     clearInterval(tickTimer); clearInterval(saveTimer); clearInterval(heartbeatTimer);
     simulation.shuttingDown = true; // b78 mphorse78: the sockets' close events are not logouts (stopServer never runs playerLoggedOut), a rider's horse stays in the world
-    for (const ws of wss.clients) ws.terminate();
+    // b88 console88: MinecraftServer.o() order (src/multiplayer/server-save.js): stop listening, save the players, kick them with "Server closed", save the worlds.
+    log(STOP_LOG.stopping);
+    const serverClosed = new Promise(resolve => server.close(resolve)); // nc.b(): no new connections (`closing` refuses upgrades)
+    log(STOP_LOG.players);
+    savePlayerData(simulation); // oi.j(): taken before the kicks, as natively (the file is written with the worlds below: the port has one save file)
+    const open = [...wss.clients];
+    for (const ws of open) ws.close(1008, STOP_KICK); // oi.u(): the S40 reason, then the channel closes
+    await Promise.race([Promise.all(open.map(ws => (ws.readyState === WebSocket.CLOSED ? null : new Promise(resolve => ws.once('close', resolve))))), new Promise(resolve => setTimeout(resolve, kickGraceMs).unref?.())]);
+    for (const ws of wss.clients) ws.terminate(); // a client that never answers the close
     await new Promise(resolve => wss.close(resolve));
-    await new Promise(resolve => server.close(resolve));
-    if (simulation.admin.autosave) await save(); // b68 mpadmin: native /save-off also skips the shutdown save
+    await serverClosed;
+    log(STOP_LOG.worlds);
+    for (let dim = 0; dim < 3; dim++) log(worldSaveLine(levelName, dim)); // a(false): logged for every world, saved or not
+    await save(); // the player data always; each world only while its levelSaving flag is off (b68's whole-save skip under /save-off was not native)
     await accounts.save();
   }
   return { server, simulation, accounts, save, close, consoleCommand, social, port: server.address().port };
@@ -374,7 +393,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   settings.rules.persistIdleTimeout = n => saveProperty(settings, 'player-idle-timeout', n, { warn: m => console.warn(m) }); // b70 serverprops2: /setidletimeout writes the property back
   const favicon = await loadFavicon(path.dirname(dataFile), { warn: m => console.warn(m) });
   const app = await createDedicatedServer({ port: Number(argument('--port', 8089)), bind: argument('--bind', '127.0.0.1'), token: process.env.MC_WEB_TOKEN,
-    gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist, onlineMode: settings.onlineMode /* b86 console86 */ }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
+    gameMode: settings.gameType === 2 ? 'survival' : settings.gameMode, newPlayerMode: settings.gameType === 2 ? 'adventure' : null, rules: settings.rules, favicon, motd: settings.motd, /* b68 mpping */ difficulty: settings.difficulty, pvp: settings.pvp, /* b63 mppvp: server.properties pvp */ commandBlocks: settings.commandBlocks, /* b64: enable-command-block (default false) */ legacyOwner: argument('--legacy-owner', process.env.MC_WEB_LEGACY_OWNER || null), /* b64: owner name of untagged wolves */ dataFile, ops: (process.env.MC_WEB_OPS ?? '').split(',').filter(Boolean), /* b68 mpadmin */ levelName: settings.props?.map?.get('level-name') ?? 'world', adminOptions: { opLevel: settings.opLevel, whitelist: settings.whitelist, onlineMode: settings.onlineMode /* b86 console86 */ }, onStop: () => process.exit(0), origins: [...DEFAULT_ORIGINS, ...(process.env.MC_WEB_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Dedicated world listening on ${app.server.address().address}:${app.port}`);
   readline.createInterface({ input: process.stdin }).on('line', (line) => app.consoleCommand(line)); // b86 console86: DedicatedServer's console reader (stdin)
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });
