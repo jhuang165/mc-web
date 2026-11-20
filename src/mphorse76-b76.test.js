@@ -60,12 +60,13 @@ test("horseJump needs a ridden horse; negative counts as 0.4; an unsaddled horse
   e.horse.saddled = false; e.jumpPower = 0; side.s.horseJump("a", 90); assert.equal(e.jumpPower, 0);
 });
 
-test("without a horseJump message the held jump key charges the bar and releasing jumps", () => {
+// b87 ride87: the server's key fallback is gone (only C0B action 6 jumps a horse, nh.a(jj) -> wi.w; the C0C jump flag is the rider's own isJumping).
+test("without a horseJump message the held jump key does not jump the horse", () => {
   const side = makeSide(), e = tameSaddled(side);
   mountIt(side, e); tick(side.s, 3);
   ctl(side, { jump: true }); tick(side.s, 6);
   ctl(side, { jump: false }); tick(side.s, 1);
-  assert.ok(e.jumpPower > 0 || e.jumpingHorse || e.vy > 0, "the release started a jump");
+  assert.ok(!(e.jumpPower > 0) && !e.jumpingHorse, "no jump without C0B 6");
 });
 
 test("C0B action 7 opens the inventory window of the ridden horse; it is a horse window the client builds", () => {

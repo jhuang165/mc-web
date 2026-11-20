@@ -326,7 +326,7 @@ import { spawnPointOf } from "./dimension-spawning.js"; // SpawnerAnimals' spawn
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { CartSounds } from "./cart-sounds.js";
 import { BoatRenderer } from "./boat-renderer.js";
-import { Boats, BOAT_ITEM } from "./boats.js";
+import { Boats, BOAT_ITEM, boatClearCell } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { placementEntityBlocker } from "./placement-entities.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
@@ -3238,8 +3238,14 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     particle: ([kind, x, y, z, mx, my, mz]) => scene.fx.spawn(kind, x, y, z, mx, my, mz),
     splash: (b, volume, pitch) => sounds.play("game.neutral.swim.splash", { volume, pitch, position: { x: b.x, y: b.posY, z: b.z } }),
     rain: rainAt, fizz: (b, volume, pitch) => sounds.play("random.fizz", { volume, pitch, position: { x: b.x, y: b.y, z: b.z } }), // b84 rain84: moveEntity's isWet and the wet-and-burning fizz at the feet (boats.js)
+    // b87 ride87: xi.h's clears are World.setBlockToAir (snow) and World.func_147480_a(x, y, z, true) (lily pad: 2001, the pad's own drop, then air), with no player:
+    // no exhaustion, mine stat or tool wear (breakPlayerBlock charged all three before). boats.js boatClearCell is the server's path too.
     clear: (x, y, z, block) => {
-      if (block === SNOW_LAYER) { if (world.set(x, y, z, 0)) scene.updateBlock(x, z, y); } else breakBlock([x, y, z]);
+      boatClearCell(world, x, y, z, block, {
+        aux: (id, ax, ay, az, data) => multiplayerBreakFx([ax, ay, az], data & 4095, data >> 12), // RenderGlobal 2001: break sound and destroy particles
+        drop: (stacks, dx, dy, dz) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), dx, dy, dz),
+        set: (cx, cy, cz) => { if (world.set(cx, cy, cz, 0)) scene.updateBlock(cx, cz, cy); },
+      });
       saved = false;
     },
   };

@@ -148,8 +148,8 @@ export function jumpPower(saddled, p) {
   if (p < 0) return { power: f(0.4), held: false, rearing: false };
   return { power: p >= 90 ? 1 : f(f(0.4) + f(f(f(0.4) * p) / 90)), held: true, rearing: true };
 }
-// EntityPlayerSP jump counter (bytecode-unverified, recalled): hold counter -> bar fill.
-export const heldJumpPower = (counter) => (counter < 10 ? counter * 0.1 : 0.8 + (2 / (counter - 9)) * 0.1);
+// EntityPlayerSP's held-key bar fill (blk.e 1043-1094, bytecode-read b87 ride87): a < 10 ? (float) a * 0.1F : 0.8F + 2.0F / (float) (a - 9) * 0.1F, all float.
+export const heldJumpPower = (counter) => (counter < 10 ? f(counter * f(0.1)) : f(f(0.8) + f(f(2 / (counter - 9)) * f(0.1))));
 
 // wi.a(rx) createChild type/variant/attribute rules over plain states.
 export function childOf(a, b, r) {

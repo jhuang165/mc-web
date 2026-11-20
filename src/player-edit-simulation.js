@@ -327,11 +327,13 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
 
   // Native ItemStack.useItemRightClick armor equip is reached only after the
   // clicked block declines activation. A wet cauldron consumes leather first.
+  // b87 ride87 (bytecode-read): ItemArmor.onItemRightClick (abb.a) puts a copy in the empty slot and sets the stack's size to 0; ItemInWorldManager.tryUseItem (mx.a 59-128)
+  // then puts the result back in the hand and, in Creative (mx.d()), restores its size and damage before the size-0 test, so a Creative player keeps the piece in hand.
   if (place && item?.armor !== undefined && !usesBlock) {
     const inv = state.survival.inventory, slot = 39 - item.armor;
     if (!inv.getStack(slot)) {
       inv.setStack(slot, copyStack(inv.held));
-      inv.main[inv.current] = null;
+      if (!state.survival.creative) inv.main[inv.current] = null;
       hook('renderHotbar');
       hook('renderVitals');
       hook('markUnsaved');

@@ -16,30 +16,35 @@ const tick = (s, n = 1) => { for (let i = 0; i < n; i++) s.tick(); };
 const ctl = (side, c) => side.s.input("a", { type: "input", controls: { forward: 0, strafe: 0, jump: false, sneak: false, sprint: false, ...c }, yaw: 0, pitch: 0, current: 0, hotbar: Array(9).fill(null) });
 const saddled = (extra = {}) => ({ type: "horse", health: 30, growingAge: 0, horse: { type: 0, tame: true, saddled: true, ...extra } });
 
+// b87 ride87: the counter is the bytecode-read blk.e block (horse-live.js horseJumpCounter): the press tick sets a = 0, each held tick after it a++, the release sends
+// (int)(bO * 100) and keeps bO through the -10 cooldown; a press inside the cooldown restarts at once.
 test("the jump counter charges while the key is held and sends (int)(power * 100) on release", () => {
   const sent = [], r = new MpHorseRider((p) => sent.push(p)), mob = saddled();
-  for (let i = 0; i < 6; i++) r.tick(mob, true);
+  for (let i = 0; i < 7; i++) r.tick(mob, true); // press + 6 held ticks: a = 6
   assert.deepEqual(sent, []);
   assert.equal(r.rider.jumpPower, heldJumpPower(6));
   r.tick(mob, false);
-  assert.deepEqual(sent, [Math.trunc(heldJumpPower(6) * 100)]);
-  assert.equal(r.rider.jumpPower, 0);
-  for (let i = 0; i < 9; i++) r.tick(mob, true); // the -10 cooldown after a release swallows the key
-  assert.equal(r.rider.jumpPower, 0);
+  assert.deepEqual(sent, [Math.trunc(Math.fround(heldJumpPower(6) * 100))]);
+  assert.equal(r.rider.jumpPower, heldJumpPower(6), "the bar keeps the released fill");
+  for (let i = 0; i < 9; i++) r.tick(mob, false);
+  assert.equal(r.rider.jumpPower, heldJumpPower(6), "still drawn at a = -1");
+  r.tick(mob, false);
+  assert.equal(r.rider.jumpPower, 0, "a reaches 0 after 10 ticks");
   r.tick(mob, true); r.tick(mob, true);
-  assert.ok(r.rider.jumpPower > 0);
+  assert.equal(r.rider.jumpPower, heldJumpPower(1));
 });
 
-test("the bar is the jump bar of the single-player HUD and only shows on a saddled horse", () => {
+test("the bar is the jump bar of the single-player HUD and shows on any ridden horse (isRidingHorse)", () => {
   const r = new MpHorseRider(() => {}), mob = saddled();
   assert.deepEqual(r.bar(), { visible: false, width: 0 });
-  for (let i = 0; i < 20; i++) r.tick(mob, true);
+  for (let i = 0; i < 21; i++) r.tick(mob, true);
   assert.equal(r.bar().visible, true);
   assert.equal(r.bar().width, Math.trunc(Math.fround(heldJumpPower(20)) * 183));
-  const bare = saddled({ saddled: false }), q = new MpHorseRider(() => {});
+  const bare = saddled({ saddled: false }), sent = [], q = new MpHorseRider((p) => sent.push(p));
   for (let i = 0; i < 5; i++) q.tick(bare, true);
-  assert.equal(q.bar().visible, false); assert.equal(q.rider.jumpPower, 0);
-  q.tick(null, true); assert.equal(q.bar().visible, false);
+  assert.equal(q.bar().visible, true); assert.equal(q.rider.jumpPower, heldJumpPower(4));
+  q.tick(bare, false); assert.deepEqual(sent, [40], "sent on an unsaddled horse too (wi.w ignores it)");
+  q.tick(null, true); assert.equal(q.bar().visible, false); assert.equal(q.rider.jumpPower, 0);
 });
 
 test("mountedHorse finds the stand-in from the players row's seat key", () => {
@@ -49,23 +54,14 @@ test("mountedHorse finds the stand-in from the players row's seat key", () => {
   assert.equal(mountedHorse(rm, "c5"), null); assert.equal(mountedHorse(rm, false), null);
 });
 
-test("server: the first horseJump wire message ends the key fallback and a release it just duplicated is not a second jump", () => {
+test("server: only the horseJump wire message jumps the horse; the held key charges nothing", () => {
   const side = makeSide(), e = spawn(side, "horse");
   Object.assign(e.horse, { tame: true, saddled: true, speed: 0.3, jump: 0.7 }); e.health = 30; e.growingAge = 0; e.onGround = true;
   side.p.survival.inventory.main[0] = null; side.s.mobs.interact(side.p, Number(String(e.id).slice(4)), false);
   assert.ok(side.p.mount); tick(side.s, 3);
-  ctl(side, { jump: true }); tick(side.s, 5);
-  ctl(side, { jump: false }); tick(side.s, 1); // the fallback fires
-  assert.ok(e.jumpingHorse || e.vy > 0 || e.jumpPower > 0, "the fallback started the jump");
-  const vy = e.vy, power = e.jumpPower;
-  assert.equal(side.s.horseJump("a", 50), true);
-  assert.equal(e.jumpPower, power, "the duplicate of the same release is dropped");
-  assert.equal(side.p.horseJumpWire, true);
-  tick(side.s, 40); e.jumpPower = 0; e.jumpingHorse = false;
   ctl(side, { jump: true }); tick(side.s, 8); ctl(side, { jump: false }); tick(side.s, 1);
-  assert.equal(e.jumpPower, 0, "with the wire on, the held key charges nothing");
+  assert.ok(!(e.jumpPower > 0) && !e.jumpingHorse, "the held key charges nothing");
   assert.equal(side.s.horseJump("a", 50), true); assert.ok(e.jumpPower > 0);
-  void vy;
 });
 
 test("mob state carries tame, health and the live maximum; the copy's stand-in reads them", () => {
