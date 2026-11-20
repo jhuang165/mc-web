@@ -48,6 +48,9 @@ export function ensureUuid(record) {
   if (!isUuid(record.uuid)) record.uuid = newUuid();
   return record.uuid;
 }
+// b86 summon86: Entity.readFromNBT's Invulnerable (a byte, sa.i) -> { invulnerable: true } or {}; Entity.writeToNBT (sa.e) writes it back for every entity kind
+// (bytecode-read; no subclass overrides sa.e).
+export const invulnerableFields = (tag) => (nbtGet(tag, "Invulnerable", NBT.BYTE, 0) !== 0 ? { invulnerable: true } : {});
 // Entity.readFromNBT: UUIDMost and UUIDLeast (both longs) when present -> { uuid }, else {} (the record then gets a fresh one).
 export function uuidFields(tag) {
   const most = nbtGet(tag, "UUIDMost", NBT.LONG), least = nbtGet(tag, "UUIDLeast", NBT.LONG);

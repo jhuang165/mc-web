@@ -27,7 +27,7 @@ const KEYS = {
 };
 // What this build keeps of each key set (the rest is reported).
 const KEPT = {
-  Item: ["Age", "Item", "PickupDelay", "Motion"], XPOrb: ["Value", "Motion"], PrimedTnt: ["Fuse"], FallingSand: ["Tile", "TileID", "Data", "Time", "DropItem", "HurtEntities", "FallHurtMax", "FallHurtAmount", "TileEntityData"], Boat: ["Motion", "Rotation"],
+  Item: ["Age", "Item", "PickupDelay", "Motion", "Health", "Owner", "Thrower"], XPOrb: ["Value", "Motion", "Health", "Age"], PrimedTnt: ["Fuse"], FallingSand: ["Tile", "TileID", "Data", "Time", "DropItem", "HurtEntities", "FallHurtMax", "FallHurtAmount", "TileEntityData"], Boat: ["Motion", "Rotation"],
   Painting: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Motive"], ItemFrame: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Item", "ItemRotation", "ItemDropChance"], LeashKnot: [],
 };
 
@@ -83,11 +83,13 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       e.age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
       e.fire = e.loadedFire = base.fire; e.onGround = base.onGround; if (base.invulnerable) e.invulnerable = true; // b83 cmdexec83: Fire (the item's burn counter, saved back unticked) and OnGround
       e.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; // b85 fire85 (executed, cmd-exec-reference.json invulnerable rows): EntityItem.readEntityFromNBT reads Health & 255, 0 when absent, so a summoned item dies from the first hit
+      // b86 summon86: xk.a(dh) also reads Owner and Thrower (hasKey, then getString; the region import keeps them since b77), which the live item saves and uses.
+      for (const [key, field] of [["Owner", "owner"], ["Thrower", "thrower"]]) { const s = nbtGet(t, key, NBT.STRING, ""); if (s) e[field] = s.slice(0, 64); }
     }
   } else if (id === "XPOrb") {
     const value = nbtGet(t, "Value", NBT.SHORT, 0);
     // EntityXPOrb.readEntityFromNBT keeps any Value, 0 and above 2477 too (Executed, object-nbt-reference.json); b76: a Value 0 orb is kept.
-    const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; o.fire = base.fire; o.onGround = base.onGround; if (base.invulnerable) o.invulnerable = true; o.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; /* b85 fire85: EntityXPOrb.readEntityFromNBT, same */ hosts.xpOrbs.orbs.push(o); // b83 cmdexec83: Fire, OnGround
+    const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; o.fire = base.fire; o.onGround = base.onGround; if (base.invulnerable) o.invulnerable = true; o.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; /* b85 fire85: EntityXPOrb.readEntityFromNBT, same */ o.age = nbtGet(t, "Age", NBT.SHORT, 0); /* b86 summon86: sq.a(dh) reads xpOrbAge = getShort("Age") too (bytecode-read); 6000 or more dies on the first update */ hosts.xpOrbs.orbs.push(o); // b83 cmdexec83: Fire, OnGround
   } else if (id === "PrimedTnt") {
     const e = primeTnt(x, y, z, { fuse: nbtGet(t, "Fuse", NBT.BYTE, 0) });
     [e.vx, e.vy, e.vz] = motion;
@@ -140,7 +142,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     }
   } else if (id === "LeashKnot") {
     // su: readEntityFromNBT is empty, so only the base keys are read and the knot's tile stays 0, 0, 0.
-    if (hosts.mobs?.knotSummon) hosts.mobs.knotSummon(x, y, z); else spawned = false;
+    if (hosts.mobs?.knotSummon) { const k = hosts.mobs.knotSummon(x, y, z); if (k && base.invulnerable) k.invulnerable = true; } else spawned = false; // b86 summon86: ss.a (attackEntityFrom) refuses an invulnerable knot first; su.d (writeToNBTOptional) is false, so a knot is never saved
   } else return { ignored: [`${id} (not kept)`], spawned: false };
   for (const k of t.keys()) if (!known.has(k) || (KEYS[id].includes(k) && !KEPT[id].includes(k))) ignored.push(k);
   return { ignored: ignored.filter((k) => k !== "id"), spawned, vehicle };

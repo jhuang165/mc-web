@@ -160,7 +160,7 @@ export function installHorseGear(EntityWorld) {
     if (out.kill) this.knotKill(k);
   };
   // EntityHanging.attackEntityFrom: any hit kills a knot without a drop. (An aimed knot's left click reaches it through `attack` above.)
-  proto.knotAttack = function (k) { if (k.dead) return false; this.knotKill(k); return true; };
+  proto.knotAttack = function (k) { if (k.dead || k.invulnerable) return false; /* b86 summon86: EntityHanging.attackEntityFrom (ss.a) tests isEntityInvulnerable first */ this.knotKill(k); return true; };
   // The mobs the player holds whose bounding box meets the 7-block box around `centre` (ahb.getEntitiesWithinAABB).
   proto.leashedNear = function (centre) {
     // b78: a mob in its death animation is still an EntityLiving of the world (getEntitiesWithinAABB), so it is re-tied too.

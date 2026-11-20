@@ -368,7 +368,7 @@ export class Boats extends Minecarts {
   serializeOne(c) {
     return {
       id: c.id, uuid: ensureUuid(c), x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
-      onGround: c.onGround, ...(c.rider?.player === true ? { rider: true } : {}), ...(c.portalCooldown > 0 ? { portalCooldown: c.portalCooldown } : {}),
+      onGround: c.onGround, ...(c.invulnerable ? { invulnerable: true } : {}), ...(c.rider?.player === true ? { rider: true } : {}), ...(c.portalCooldown > 0 ? { portalCooldown: c.portalCooldown } : {}),
     };
   }
   static fromJSON(list, options) {
@@ -388,6 +388,7 @@ export class Boats extends Minecarts {
       if (ok(c.fallDistance)) boat.fallDistance = f(c.fallDistance);
       if (Number.isInteger(c.fire)) boat.fire = c.fire;
       boat.onGround = !!c.onGround;
+      if (c.invulnerable === true) boat.invulnerable = true; // b86 summon86: Entity.writeToNBT/readFromNBT's Invulnerable
       if (Number.isInteger(c.portalCooldown) && c.portalCooldown > 0) boat.portalCooldown = Math.min(300, c.portalCooldown);
     }
     return m;
