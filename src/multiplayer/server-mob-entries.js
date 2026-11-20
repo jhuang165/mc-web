@@ -6,6 +6,7 @@
 // player's own count). `SharedEntry` is the TrackerEntry with a watcher set; `SharedMobTracker` is the MobTracker whose entries are SharedEntry and whose tick runs once.
 import { MobTracker, TrackerEntry, PlayerWatch } from '../entity-tracker.js';
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
+import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 
 // A TrackerEntry whose `tracked` is "somebody tracks me" for the packets sent to everyone (send), and "this watcher tracks me" while `cur` is set (the range test of one player).
 // `dest` maps each emitted packet to the watchers it goes to, decided when it was emitted (a watcher that joins later gets the spawn instead).
@@ -78,11 +79,14 @@ export class SharedMobTracker extends MobTracker {
     let alive = null;
     if (fast) { for (let i = 0; i < mobs.length; i++) { const en = this.entries.get(mobs[i]); if (en !== undefined) en.seen85 = tick; } } // b85 mpperf85: a stamp, not a Set of every mob
     if (!fast || fast85.mode === 'verify') alive = new Set(mobs);
-    for (const [e, en] of this.entries) {
+    const sweep = (en, e) => {
       const dead = fast ? en.seen85 !== tick : !alive.has(e);
       if (fast && alive && alive.has(e) === dead) fail85('alive');
       if (dead) { en.entry.remove(); this.entries.delete(e); this.forget(e); this.dying.push(en); }
-    }
+    };
+    const m86 = fast86.mode;
+    if (m86 === 'off') for (const [e, en] of this.entries) sweep(en, e);
+    else this.entries.forEach(sweep); // b86 mpperf86: no [key, value] pair per entry (forEach visits in the same order and skips the deleted ones alike)
     for (const w of this.watchers.values()) if (w.joining) { w.joining = false; for (const e of this.walk()) this.entries.get(e).entry.tryStartFor(w); }
     if (!fast) for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
     else for (let i = 0; i < mobs.length; i++) { // b85 mpperf85: an existing entry needs no size (entryOf only reads it for a new entry)
@@ -90,13 +94,17 @@ export class SharedMobTracker extends MobTracker {
       if (this.entries.has(e)) continue;
       if (size.into) { size.into(e, SIZE_SCRATCH); this.entryOf(e, SIZE_SCRATCH[0], SIZE_SCRATCH[1]); } else { const [width, height] = size(e); this.entryOf(e, width, height); }
     }
-    for (const e of this.walk()) this.stepEntry(e);
+    const order = this.walk(); // b86 mpperf86: the one walk list of this pass (stepEntry and tryStartFor add or remove no entry)
+    for (const e of order) this.stepEntry(e);
     for (const w of this.watchers.values()) {
       const p = w.view.player, g = w.flag, dx = p.x - g.x, dy = (p.y ?? 0) - g.y, dz = p.z - g.z;
       w.flagged = false;
       if (w.fresh?.()) g.initialised = false; // b72 mpstream72: columns sent / unloaded this tick: re-evaluate every entry
       if (!g.initialised || dx * dx + dy * dy + dz * dz > 16) { g.x = p.x; g.y = p.y ?? 0; g.z = p.z; g.initialised = true; w.flagged = true; }
-      if (w.flagged) for (const e of this.walk()) this.entries.get(e).entry.tryStartFor(w);
+      if (!w.flagged) continue;
+      const list = m86 === 'off' ? this.walk() : order;
+      if (m86 === 'verify') { const r = this.walk(); if (r.length !== list.length || r.some((e, k) => e !== list[k])) fail86('flagged walk'); }
+      for (const e of list) this.entries.get(e).entry.tryStartFor(w);
     }
   }
 }

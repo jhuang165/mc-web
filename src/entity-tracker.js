@@ -36,6 +36,7 @@ import { horseFlagsOf } from "./horse-copy.js";
 import { copyDeathUpdate } from "./death-fx.js";
 import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
 import { fast85, fail85, SIZE_SCRATCH } from "./mpperf85-fast.js"; // b85 mpperf85
+import { fast86, fail86 } from "./mpperf86-fast.js"; // b86 mpperf86
 import { transientIds } from "./tracker-transient.js"; // b64: entities that spawned and died inside one tick
 
 export const TRACKER_LIMIT = trackerLimit(10); // EntityTracker.e with the integrated view distance 10
@@ -527,7 +528,16 @@ export class MobTracker {
     return m ? Number(m[1]) | 0 : ++this.surrogateId;
   }
   // The entries in the order updateTrackedEntities walks them: HashSet bucket order of their ids
-  walk() { const keys = this.order.keys(); return this.order.shared || this.playerKey ? keys.filter((e) => this.entries.has(e)) : keys; }
+  walk() {
+    const o = this.order, mode = fast86.mode;
+    if (mode === "off" || o.keys !== JavaHashSetOrder.prototype.keys) return this.walkReference();
+    // b86 mpperf86: one pass over the table (no keys() array, no filter array, no iterators)
+    const tb = o.table, only = o.shared || this.playerKey, entries = this.entries, out = [];
+    for (let j = 0; j < tb.length; j++) { const bin = tb[j]; for (let k = 0; k < bin.length; k++) { const key = bin[k].key; if (!only || entries.has(key)) out.push(key); } }
+    if (mode === "verify") { const r = this.walkReference(); if (r.length !== out.length || r.some((e, k) => e !== out[k])) fail86("walk"); }
+    return out;
+  }
+  walkReference() { const keys = this.order.keys(); return this.order.shared || this.playerKey ? keys.filter((e) => this.entries.has(e)) : keys; }
   // Batch 53: the player's own EntityTrackerEntry is one of the keys of the set (executed: tracker-joint-reference.json, its id takes a slot and so counts toward the table's
   // resize). It enters the set at the player's join (the first update: the entities loaded with the world are in the set before it, and are sent to it in the set's order; the entities
   // spawned later are sent at their spawn) and at a respawn (a new EntityPlayerMP with a new id, appended at the end of the list). `id` is the player's entity id.
@@ -728,9 +738,14 @@ export class MobTracker {
   serverTick(mobs, player, size) {
     this.beginTick(mobs, player, size);
     if (this.pendingJoin && this.playerId !== undefined) { this.pendingJoin = false; this.addPlayerKey(); }
-    for (const e of this.walk()) this.stepEntry(e);
+    const order = this.walk();
+    for (const e of order) this.stepEntry(e);
     this.flagPlayer(player);
-    if (this.lastFlagged) for (const e of this.walk()) this.entries.get(e).entry.tryStart(); // the second loop of updateTrackedEntities, in set order
+    if (this.lastFlagged) { // the second loop of updateTrackedEntities, in set order (b86 mpperf86: the first loop's list; stepEntry adds or removes no entry)
+      const list = fast86.mode === "off" ? this.walk() : order;
+      if (fast86.mode === "verify") { const r = this.walk(); if (r.length !== list.length || r.some((e, k) => e !== list[k])) fail86("second walk"); }
+      for (const e of list) this.entries.get(e).entry.tryStart();
+    }
     this.endTick();
   }
   // The part of updateTrackedEntities before the walk: the removals and the entries of new entities. Batch 51 split serverTick into beginTick, stepEntry (one entry of the
