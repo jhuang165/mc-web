@@ -15,6 +15,7 @@ import { applyClientSettings, chatDelivered as settingsChatDelivered, chatSendAl
 import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 import { ServerSocial, chatDisplay } from '../src/server-broadcast.js';
 import readline from 'node:readline'; // b86 console86: the server console
+import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.js'; // b87 offline87: /netstat's native packet ids
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
@@ -163,7 +164,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
-    simulation.admin.netStats.write(0, Buffer.byteLength(text)); // b86 console86: /netstat (the encoder fa records each packet; the port's messages have no packet id)
+    const packetId = writePacketId(message); if (packetId !== null) simulation.admin.netStats.write(packetId, Buffer.byteLength(text)); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -177,7 +178,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   // b68 mpadmin: what /kick, /ban-ip, /stop and /save-all reach (src/multiplayer/server-admin.js); `ips` is the address of each connection.
   const ips = new Map();
   const closeReason = (text) => { let t = String(text); while (Buffer.byteLength(t) > 123) t = t.slice(0, -1); return t; }; // a WebSocket close reason holds 123 bytes
-  simulation.admin.directory = (name) => { const a = accounts.byName(name); return a ? { uuid: a.id, name: a.name } : null; };
+  // b87 offline87: the port's account store stands in for the profile repository. It is also the login authority, so it answers with the profile that account logs in with
+  // (loginProfile: the account id online, the offline UUID of its name offline), and /op, /ban and /whitelist entries match the player who joins.
+  simulation.admin.directory = (name) => { const a = accounts.byName(name); return a ? simulation.admin.loginProfile(a) : null; };
   // b71 mpadmin71: ops.json, whitelist.json, banned-players.json and banned-ips.json beside server.properties (the world file's directory): read at start-up (the file wins over the
   // save's `admin` lists), written atomically (temp file + rename) after every change; /whitelist reload re-reads whitelist.json
   const listPath = (name) => path.join(path.dirname(dataFile), `${name}.json`);
@@ -212,13 +215,13 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     ws.on('pong', () => { alive = true; });
     ws.heartbeat = () => { if (!alive) return ws.terminate(); alive = false; ws.ping(); };
     ws.on('message', (data, binary) => {
-      simulation.admin.netStats.read(0, data.length); // b86 console86: /netstat (the decoder ez records each packet)
       try {
         const now = Date.now();
         budget = Math.min(80, budget + (now - budgetAt) * .06); budgetAt = now;
         if (--budget < 0 || binary) return ws.close(1008, 'Message rate or format rejected');
         const m = JSON.parse(data.toString());
         if (!m || typeof m !== 'object') return ws.close(1008, 'Invalid message');
+        { const packetId = readPacketId(m); if (packetId !== null) simulation.admin.netStats.read(packetId, data.length); } // b86 console86: /netstat (the decoder ez records each packet); b87 offline87: under its native id, after the parse (ez counts only registered ids)
         if (!joined && handleStatus(m, r => send(ws, r), () => ({ motd, online: sockets.size, max: simulation.rules.maxPlayers, names: [...simulation.players.values()].map(p => p.name), favicon }))) return; // b68 mpping: pre-login status request and ping (NetHandlerStatusServer)
         if (!joined) {
           if (m.type !== 'join' || m.protocol !== PROTOCOL) return ws.close(1008, 'This game version differs from the server. Reload the page.');
@@ -226,7 +229,8 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           if (!account) return ws.close(1008, 'Sign in again.');
           // b68 mpadmin: banned, not white-listed, IP banned (ServerConfigurationManager.func_148542_a), with the native texts
           const ip = (req.socket.remoteAddress === '127.0.0.1' || req.socket.remoteAddress === '::1' || req.socket.remoteAddress === '::ffff:127.0.0.1') && typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.socket.remoteAddress; // behind the tunnel the client address is the forwarded one
-          const refused = simulation.admin.refusal({ uuid: account.id, name: account.name }, ip, { op: social.ops.has(account.name.toLowerCase()) });
+          const profile = simulation.admin.loginProfile(account); // b87 offline87: NetHandlerLoginServer: online the account id, offline UUID.nameUUIDFromBytes("OfflinePlayer:" + name)
+          const refused = simulation.admin.refusal(profile, ip, { op: social.ops.has(account.name.toLowerCase()) });
           if (refused) return ws.close(1008, closeReason(refused));
           // NetHandlerLoginServer: a second login replaces the first connection.
           const previous = [...owners].find(([, owner]) => owner === account.id)?.[0];
@@ -237,7 +241,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
             social.forget(previous); simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
             old.replaced = true; old.close(1008, 'You logged in from another location');
           }
-          simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash, cape: account.capeHash ?? null });
+          simulation.addPlayer(id, account.name, profile.uuid /* b87 offline87: the saved player's key is the profile UUID (playerdata/<uuid>.dat) */, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.playerTracker.snapshot(id, simulation.objectTracker.snapshot(id, simulation.snapshot(id))) /* b73 streamfix73 */ /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)) });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list

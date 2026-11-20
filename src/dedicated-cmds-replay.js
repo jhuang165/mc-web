@@ -45,6 +45,7 @@ export function build(setup, sender) {
   }
   if (setup === "lists" || setup === "levels") { sim.savedPlayers.set(uuid(2), {}); sim.savedPlayers.set(uuid(9), {}); }
   if (setup === "saveoff") admin.autosave = false;
+  if (setup === "partial") admin.levelSaving = [true, false, false]; // b87 offline87: the probe's world 0 saving off, worlds 1 and 2 on (mt.c per WorldServer)
   const who = sender === "console" ? null : NAMES.find((n) => n.toLowerCase() === sender) ?? "Alex";
   for (const k of Object.keys(inbox)) delete inbox[k];
   return { sim, social, admin, inbox, ids, who, log, calls };
@@ -61,13 +62,13 @@ export async function observe([line, setup, sender]) {
   const chat = {};
   for (const n of Object.keys(f.ids)) chat[n] = (f.inbox[f.ids[n]] ?? []).filter((m) => m.type === "chat").map((m) => [styled(m), plain(m)]);
   const s = f.admin.save();
-  return { chat, console: f.log.map((m) => [styled(m), plain(m)]), state: { ops: mask(s.ops), banned: mask(s.banned), ips: mask(s.bannedIps), whitelist: s.whitelist, whitelistOn: f.admin.whitelistOn, idle: s.idleMinutes, saving: f.admin.autosave, saveCalls: f.calls.saves, dat: f.sim.savedPlayers.size, kicks: f.calls.kicks, stops: f.calls.stops, profiles: f.admin.profileNames() } };
+  return { chat, console: f.log.map((m) => [styled(m), plain(m)]), state: { ops: mask(s.ops), banned: mask(s.banned), ips: mask(s.bannedIps), whitelist: s.whitelist, whitelistOn: f.admin.whitelistOn, idle: s.idleMinutes, saving: f.admin.levelSaving.map((off) => !off), saveCalls: f.calls.saves, dat: f.sim.savedPlayers.size, kicks: f.calls.kicks, stops: f.calls.stops, profiles: f.admin.profileNames() } };
 }
-/** The probe's record of a row in the same shape (the save calls of world 0: the port has one world save). */
+/** The probe's record of a row in the same shape (the save calls of world 0: the port has one world save; b87 offline87: every world's saving flag). */
 export function expected([, , , o]) {
   const st = o.state, chat = {};
   for (const [n, list] of Object.entries(o.chat)) chat[n] = list.map((c) => [c[1], c[2]]);
-  return { chat, console: o.console.map((c) => [c[1], c[2]]), state: { ops: mask(st.ops), banned: mask(st.banned), ips: mask(st.ips), whitelist: st.whitelist, whitelistOn: st.whitelistOn, idle: st.idle, saving: st.saving[0], saveCalls: st.saves.filter((x) => x.startsWith("save0")).length, dat: st.dat, kicks: st.kicks, stops: st.stops, profiles: st.profiles } };
+  return { chat, console: o.console.map((c) => [c[1], c[2]]), state: { ops: mask(st.ops), banned: mask(st.banned), ips: mask(st.ips), whitelist: st.whitelist, whitelistOn: st.whitelistOn, idle: st.idle, saving: st.saving, saveCalls: st.saves.filter((x) => x.startsWith("save0")).length, dat: st.dat, kicks: st.kicks, stops: st.stops, profiles: st.profiles } };
 }
 /** The first word of a row's line, lowercased: the replay groups. */
 export const wordOf = (row) => row[0].replace(/^[\s/]+/, "").split(" ")[0].toLowerCase();
