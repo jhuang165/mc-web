@@ -54,8 +54,11 @@ export function playerMoveTail({ world, weather, survival, flying, inWater }, bo
 // that lands the player calls it at once (the port has one player; the integrated server's EntityPlayerMP takes the same landing
 // from the client's movement packets through handleFalling).
 export function landPlayer({ world, position, survival, inWater }, distance, { trample = () => {}, landingDust = () => {}, fallSound = () => {} } = {}) {
-  if (distance > 0) trample(position, distance);
-  if (distance > 3) {
+  // b88 spcopy88: with the integrated server's copy ticking (fallOwner), the trample (BlockFarmland.onFallenUpon: `!isRemote`) and the 2006 dust (sv.a(DZ): `!isRemote`) are the copy's
+  // handleFalling (server-process-player.js); the client's own updateFallState does neither.
+  const owner = !!survival.serverPlayer?.fallOwner;
+  if (distance > 0 && !owner) trample(position, distance);
+  if (distance > 3 && !owner) {
     const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
     if (world.get(bx, by, bz)) landingDust(bx, by, bz, Math.ceil(Math.fround(distance - 3)));
   }

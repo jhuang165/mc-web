@@ -2652,6 +2652,12 @@ export class EntityWorld {
     // b87 spcopy87: the riding branch (nh.a(jd) 94-300): seated by mw.m.ac() (`serverSeat`, main.js: the live mount's updateRiderPosition; a host without one keeps the client's
     // spot), mw.D := the packet's onGround, mw.i() there and back on the seat, o / p / q := it, then World.updateEntity's updateRidden: the motion and fallDistance zeroed.
     if (p.branch === "riding") {
+      // b88 spcopy88: `serverMount` (main.js: rider.vehicle) is the copy's ridingEntity. One that died or was removed in this tick's world pass has already let the copy go there
+      // (Entity.updateRidden from the mount's World.updateEntity, or the player's own list entry: no move, no setPlayerLocation), so the packet (a C05: no position) takes the
+      // walking branch from the copy's last seat.
+      const mount = this.serverMount?.();
+      if (mount) p.mount = mount;
+      if (p.mount?.dead) { this.processPlayer(p, null, p.packetGround); p.netTicks++; return; }
       const seat = this.serverSeat?.() ?? p.reported;
       if (seat) { p.x = seat.x; p.y = seat.y; p.z = seat.z; }
       if (p.packetGround !== undefined) p.onGround = !!p.packetGround;
@@ -2709,6 +2715,7 @@ export class EntityWorld {
     const from = { x: p.x, y: p.y, z: p.z }, to = pkt ?? from;
     p.accepted = from;
     const e = this.serverCopyUpdate(p); // 643-678: mw.i() from the accepted position, put back (mw.a(o, p, q))
+    if (!p.hasMoved) { p.x = p.accepted.x; p.y = p.accepted.y; p.z = p.accepted.z; return; } // b88 spcopy88: 681-688 `if (!r) return`: a setPlayerLocation inside mw.i() (a portal's travelToDimension) ends the packet at the new o / p / q
     if (ground === undefined) ground = e.onGround;
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     // 725-966: "moved too quickly" (d25 > 100) answers with setPlayerLocation, except for the integrated server's owner (N() && M().equals(name)): the single-player copy is always the owner.
@@ -2731,7 +2738,13 @@ export class EntityWorld {
     if (needsCorrection({ clearBefore, wrongly, clearAfter, sleeping: false })) { this.setPlayerLocation(p, from); return; }
     p.onGround = !!ground; // 1464: mw.D = jd.i() again (the floating check before it never counts: the integrated server allows flight)
     if (sc.inWeb) p.fallDistance = 0; // b87 spcopy87: mw.d's setInWeb (sa.as)
-    handleFalling(world, p, to.y - from.y, !!ground); // 1506: mw.b(mw.t - d3, jd.i()), the fall distance and damage from the accepted move
+    handleFalling(world, p, to.y - from.y, !!ground, this.copyLanding(p)); // 1506: mw.b(mw.t - d3, jd.i()), the fall distance and damage from the accepted move
+  }
+  // b88 spcopy88: the server-side effects of the copy's landing (EntityLivingBase.updateFallState, sv.a(DZ), and EntityPlayer.fall, yz.b(F); server-process-player.js handleFalling):
+  // the 2006 landing dust the WorldServer broadcasts (`landingDust`, main.js draws it as the client's S28 handler would), Block.onFallenUpon (`onLand`: main.js tramples farmland)
+  // and the distance-fallen stat the server's StatisticsFile counts (`serverFallStat`, main.js stats-live.js addFallStat). The client's own landing does none of them now.
+  copyLanding(p) {
+    return { dust: (x, y, z, n) => this.landingDust?.(p, x, y, z, n), trample: (d) => this.onLand?.(p, d), stat: (d) => this.serverFallStat?.(p, d) };
   }
   // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF)) from processPlayer: the copy waits for the client's answer (ai.js PlayerView.setLocation); the S08 reaches the client through
   // `serverCorrect` (main.js: bjb.a(fu) puts the client there and zeroes its motion), whose C06 answer is queued. With no client to take it, the copy keeps waiting.

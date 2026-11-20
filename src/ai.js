@@ -1333,6 +1333,22 @@ class PlayerView {
     this.fallOwner = false;
     this.branch = "direct";
     this.wasSleeping = false;
+    // b88 spcopy88: `mount` is the live vehicle record the riding branch last seated the copy on (entities.js serverMount), so the tick the link ends can tell a mount that died
+    // or was removed (Entity.updateRidden / World.updateEntities drop the link: no setPlayerLocation, the copy stays at its seat) from a dismount (mountEntity(null) ->
+    // setPlayerLocation at the dismount spot). `arriving`: a portal trip's new world (arriveFrom), whose first tick is transferPlayerToDimension's setPlayerLocation.
+    this.mount = null;
+    this.arriving = false;
+  }
+  // b88 spcopy88: ServerConfigurationManager.transferPlayerToDimension (oi.a(mw, int), bytecode-read) moves the same EntityPlayerMP into the new WorldServer (no new entity, unlike
+  // respawnPlayer after the End's credits or a death), so its fallDistance and isInWater go with it; nothing on the way writes sa.R (Teleporter.placeInPortal zeroes or turns the
+  // motion only). It ends in setPlayerLocation(arrival): the copy then waits for the client's C06 there (update below). The motion is not carried (the port's copy has only what
+  // mobs gave it, and the Teleporter turns or zeroes it).
+  arriveFrom(old) {
+    if (!old) return;
+    this.fallDistance = old.fallDistance ?? 0;
+    this.inWater = !!old.inWater;
+    this.corrected = old.corrected;
+    this.arriving = true;
   }
   // NetHandlerPlayServer.setPlayerLocation (nh.a(DDDFF), bytecode-read): r = false, o / p / q and the entity's position := the spot, S08 to the client. Its packets are then ignored
   // until one gives o and q exactly and p within 0.1 (processPlayer offsets 31-87): the C06 that bjb.a(fu) sends from inside its S08 handler (onGround false). `answered`: the
@@ -1352,15 +1368,27 @@ class PlayerView {
     this.eyeHeight = this.sleeping ? f(0.2) + PLAYER_EYE_HEIGHT : PLAYER_EYE_HEIGHT; // b68 fixes68: posY = minY + yOffset 0.2 while lying, eye = posY + 1.62 (sleeper-eye.js)
     // EntityClientPlayerMP.sendMotionUpdates (bjk.a, bytecode-read): the position goes out when (x, minY, z) moved over 0.03 since the last one sent or its counter reached 20; the counter
     // counts every call and restarts at a send. A mounted player's copy is seated on the mount by the network tick (b87 spcopy87, the riding branch).
-    const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
     const alive = !(survival.health <= 0);
+    // b88 spcopy88: the first tick in a portal trip's new world: setPlayerLocation(arrival) (transferPlayerToDimension), not a login's direct placement.
+    const arrival = this.arriving && !this.sent && alive && !this.riding && !this.sleeping && !this.placed && !this.unticked;
+    this.arriving = false;
+    if (arrival) { this.sent = { x: player.x, y: player.y, z: player.z }; this.sinceSent = 0; }
+    const s = this.sent, d = s ? (player.x - s.x) ** 2 + (player.y - s.y) ** 2 + (player.z - s.z) ** 2 : Infinity;
+    // b88 spcopy88: the tick the copy's ridingEntity link ends. A mount that died or was removed (`mount.dead`: the boats' and carts' flag, the horse seat's isDead) is dropped by
+    // Entity.updateRidden (sa.ab: `if (m.K) m = null`, no move) or World.updateEntities (ahb.h: m.K or m.l != this -> both links null): no setPlayerLocation, so the copy stays at
+    // its seat and this tick's packet takes the walking branch from there. Anything else is EntityPlayerMP.mountEntity(null) (mw.a(sa): S1B, then setPlayerLocation(s, t, u)
+    // after EntityLivingBase.dismountEntity's spot): the copy is put on the client's spot and waits for the C06 (setLocation).
+    const unseat = this.wasRiding && !this.riding && !!s && alive && this.alive && !this.placed && !this.unticked && !this.sleeping;
+    const gone = unseat && !!this.mount?.dead, dismount = unseat && !gone;
+    if (!this.riding) this.mount = null;
     // b86 spcopy86: the server places the copy itself (no processPlayer walking branch) at login (initializeConnectionToPlayer), on a respawn (respawnPlayer: a new EntityPlayerMP),
     // while riding (the mount carries it) and on the dismount (mountEntity -> setPlayerLocation), while asleep (the sleeping branch puts it back at o / p / q, which sleepInBedAt
     // set), while dead, for a copy nothing ticks (`unticked`) and for a harness that places it (`placed`). Their S08 / C06 exchange is not modelled: copy and client already agree.
-    this.direct = !s || this.riding || this.wasRiding || this.sleeping || this.placed || this.unticked || !alive || !this.alive;
+    // b88 spcopy88: except the dismount and a dead mount (`unseat`, above), which now take the walking branch.
+    this.direct = !s || this.riding || (this.wasRiding && !unseat) || this.sleeping || this.placed || this.unticked || !alive || !this.alive;
     // b87 spcopy87: the riding branch (94-300) takes only the angles and seats the copy on its mount in the network tick, and the sleeping branch (301-359) keeps it at o / p / q.
     // Their first tick (mountEntity / sleepInBedAt -> setPlayerLocation, whose S08 / C06 wait is not modelled) still places it; so do the harness, unticked and dead copies.
-    const placedAnyway = !s || this.wasRiding !== this.riding || this.placed || this.unticked || !alive || !this.alive;
+    const placedAnyway = !s || (this.wasRiding !== this.riding && !unseat) || this.placed || this.unticked || !alive || !this.alive;
     this.branch = !this.direct ? "walk" : placedAnyway ? "direct" : this.riding ? "riding" : this.sleeping && this.wasSleeping && this.accepted ? "sleeping" : "direct";
     this.wasRiding = this.riding;
     this.wasSleeping = this.sleeping;
@@ -1383,6 +1411,7 @@ class PlayerView {
       this.sent = { x: player.x, y: player.y, z: player.z };
       this.sinceSent = 0;
     } else this.sinceSent++;
+    if (dismount || arrival) this.setLocation(player); // b88 spcopy88: mountEntity(null) / transferPlayerToDimension -> setPlayerLocation; the client is already there, so its C06 is queued
     if (alive && !this.alive) { this.motion.x = this.motion.y = this.motion.z = 0; this.fallDistance = 0; this.inWater = false; } // a respawned player is a new EntityPlayerMP
     this.alive = alive;
     survival.serverPlayer = this; // player-knockback.js gives this copy the hits' motion at once

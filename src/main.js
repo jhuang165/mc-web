@@ -1810,7 +1810,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         get fallDistance() { return fallDistance; }, set fallDistance(v) { fallDistance = v; },
         // The push's moveEntity tail (cactus, fire, webs) and its landing (fall damage), as in the player's own move.
         tail: (body) => playerMoveTail({ world, weather, survival, flying, inWater: wasInWater }, body, { fizz: playerFizz }),
-        land: (d) => { addFallStat(stats, d, survival.creative); landPlayer({ world, position, survival, inWater: wasInWater }, d, playerLanding()); } }),
+        land: (d) => { if (!survival.serverPlayer?.fallOwner) addFallStat(stats, d, survival.creative); landPlayer({ world, position, survival, inWater: wasInWater }, d, playerLanding()); } }),
       mobs: () => mobs,
       items: () => items.items, itemSystem: () => items, // the systems: pistons push items and orbs through their own move (piston-push.js)
       arrows: () => arrows.list,
@@ -1886,6 +1886,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
     for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
+    const leftCopy = mobs?.ai?.player; // b88 spcopy88: the copy that walked into the portal (transferPlayerToDimension keeps the EntityPlayerMP)
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
     mobs.thrownDiamond = (name) => { if (name === PLAYER_NAME) achievements.trigger("diamondsToYou"); }; // b79 spswing79: sw.e picks a thrown diamond up -> the thrower's achievement
@@ -1899,6 +1900,9 @@ async function launch(record, prepared, { slice = false } = {}) {
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.serverCopyMoved = (p, e) => { if (!p.riding && !p.sleeping) chargeServerCopy(mobs.world, p, e, { stats, survival, sprinting: !!motion.sprinting }); }; // b82 mpplace82: the copy's own addMovementStat (server-copy-stat.js)
     mobs.serverSeat = () => { const v = rider.vehicle, sys = v && vehicleSystem(vehicleState()); if (!sys) return null; const was = { x: rider.x, y: rider.y, z: rider.z }; sys.updateRiderPosition(v); const seat = { x: rider.x, y: rider.y, z: rider.z }; Object.assign(rider, was); return seat; }; // b87 spcopy87: the riding branch's mw.m.ac() on the live mount
+    if (tripLoading && record.transit && !record.transit.exit && !record.transit.death) mobs.ai.player.arriveFrom(leftCopy); // b88 spcopy88: its fallDistance, and setPlayerLocation at the arrival (an End exit or a death is respawnPlayer: a new one)
+    mobs.serverMount = () => rider.vehicle ?? null; // b88 spcopy88: the copy's ridingEntity, so a dead or removed mount lets it go at its seat (entities.js serverPlayerUpdate)
+    mobs.serverFallStat = (p, d) => addFallStat(stats, d, false); // b88 spcopy88: the copy's EntityPlayer.fall (yz.b(F)) adds the distance-fallen stat (handleFalling tests allowFlying)
     mobs.serverCorrect = (at) => { position.set(at.x, at.y, at.z); previous.copy(position); velocity.set(0, 0, 0); }; // b85 spcopy85: processPlayer's setPlayerLocation (S08) for the integrated server's copy: bjb.a(fu) puts the client at the position and zeroes its motion (bytecode-read)
     mobs.blockParticle = (id, meta, x, y, z, vx, vy, vz) => scene.particles.spawn("blockcrack", id, meta, x, y, z, vx, vy, vz, [position.x, position.y + PHYSICS.eye, position.z]); // EntityIronGolem's walking dust
     linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
@@ -3212,7 +3216,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
   tickSpawnersClient({ spawners, minecarts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
-  if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
+  if (grounded && !survival.serverPlayer?.fallOwner) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall (b88 spcopy88: the copy's handleFalling counts it when it ticks)
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
   const moveFlags = { eyeInWater: clientEyeInWater(), onLadder: isOnLadder(world, position.x, position.y, position.z) /* b72: EntityPlayer.k uses isOnLadder (ladder or vine at floor(minY)), no flying test */ };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition, ...moveFlags, riding: !!rider.vehicle }, playerLanding()); // b81 exhaust81: yz.k's exhaustion (none riding)
@@ -3400,7 +3404,7 @@ function touchRedstoneOre(x, y, z) {
 }
 function trampleFarmland(entity, distance) {
   const x = Math.floor(entity.x), y = Math.floor(entity.y - 0.2), z = Math.floor(entity.z);
-  if (farming.trample(x, y, z, distance, Math.random, entity === position || gameRule("mobGriefing"))) {
+  if (farming.trample(x, y, z, distance, Math.random, entity === position || !!entity?.isPlayer || gameRule("mobGriefing"))) { // BlockFarmland.onFallenUpon: a player (yz) tramples whatever mobGriefing says
     applyFarmUpdates(farming.drain());
     saved = false;
   }
