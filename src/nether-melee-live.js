@@ -12,11 +12,12 @@ export const pigmanFieldsFrom = (e) => ({
 });
 
 // yh.a(ro, F) with a player source (after the invulnerability check): every pigman inside the 32 block box around this one is angered,
-// then this one, each on its own Entity.rand.
+// then this one, each on its own Entity.rand. b87 mobrec87: a dying pigman (health 0, deathTime below 20) is still in the chunk lists World.getEntitiesWithinAABBExcludingEntity
+// reads (Chunk.getEntitiesWithinAABBForEntity has no isDead or health test), so it is angered too and its sound delay counts down while it dies (b87-pigman-group records).
 export function pigmanHurt(ew, e, source, randOf) {
   if (!source.player || e.health <= 0) return false;
   const r = PIGMAN.angerRange, t = { w: PIGMAN.width / 2, h: PIGMAN.height };
-  const near = (o) => o.health > 0 && o.x - t.w < e.x + t.w + r && o.x + t.w > e.x - t.w - r && o.z - t.w < e.z + t.w + r && o.z + t.w > e.z - t.w - r && o.y < e.y + t.h + r && o.y + t.h > e.y - r;
+  const near = (o) => !o.removedNow && o.x - t.w < e.x + t.w + r && o.x + t.w > e.x - t.w - r && o.z - t.w < e.z + t.w + r && o.z + t.w > e.z - t.w - r && o.y < e.y + t.h + r && o.y + t.h > e.y - r;
   pigmanProvoke(e, ew.entities.filter((o) => o.type === "pigman"), randOf, near, (o) => { ew.silverfishState(o).target = ew.ai.player; }); // c(sa): entityToAttack
   return true;
 }
