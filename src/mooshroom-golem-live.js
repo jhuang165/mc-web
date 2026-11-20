@@ -22,6 +22,7 @@ export class GolemBalls {
   // EntitySnowman.attackEntityWithRangedAttack (wr.a(sv, F)); `target` is the AI's view of the victim.
   shoot(e, target) {
     const rand = entityRandom(e), at = throwSpawn(e, f((-e.yaw * 180) / Math.PI), SNOW_GOLEM.eyeHeight), rng = this.projectiles.rng(),
+      pre = heading(rng, 0, 1, 0, 0, 0), // b88 mobrec88: EntityThrowable(world, thrower) (zk.<init>) already aims once (setThrowableHeading, inaccuracy 1): three gaussians on the ball's own random before wr.a(sv, F)'s aim (executed, enderman-wolf-b88mr snow-*)
       a = aimFor(e, target, at.y), h = heading(rng, a.dx, a.dy, a.dz, SNOW_GOLEM.ballVelocity, SNOW_GOLEM.ballInaccuracy);
     const ball = { ...h, ...at, kind: "snowball", owner: e, px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
@@ -59,6 +60,7 @@ export function buildSnowGolemTasks(m, K) {
       const d = this.range();
       let best = null, bd = Infinity;
       for (const o of m.nearby(d, 4, d, (b) => SNOW_GOLEM_TARGETS.has(b.e.type) && b.alive)) {
+        if (o.e?.type === "creeper") continue; // b88 mobrec88: EntityAITarget.isSuitableTarget asks EntityLiving.canAttackClass (sw.a(Class)), false for EntityCreeper and EntityGhast (bytecode-read; executed, enderman-wolf-b88mr snow-creeper-*)
         const s = m.distSq(o);
         if (s < bd && this.isSuitableTarget(o) && s <= d * d) { best = o; bd = s; }
       }
