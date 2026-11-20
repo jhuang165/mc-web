@@ -87,6 +87,9 @@ const leashKey = (e) => { const h = holderOf(e.leash); return h ? `${h.kind}:${h
 const SEQ = new WeakMap();
 let seqCounter = 0, joinCounter = 0;
 export const packetSeq = (p) => SEQ.get(p) ?? 0;
+// b87 mpperf87: the next stamp, and the WeakMap stamp itself, for an entry that keeps its stamps beside its packets (server-mob-entries.js SharedEntry).
+export const nextPacketSeq = () => ++seqCounter;
+export const stampPacketSeq = (p, s) => { SEQ.set(p, s); };
 
 // The tracker entry for one mob and one player. `view` is { player, watches(cx, cz) }.
 export class TrackerEntry {

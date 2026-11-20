@@ -24,7 +24,7 @@ export function seqOrder(parts, seqOf, sc) {
   for (let a = 0; a < parts.length; a++) {
     const e = parts[a], list = e.entry.packets;
     for (let b = 0; b < list.length; b++) {
-      const p = list[b], s = seqOf(p);
+      const p = list[b], s = seqOf(p, e); // b87 mpperf87: the entry too (a SharedEntry keeps its stamps beside its packets)
       pk[n] = p; en[n] = e; sq[n] = s; n++;
       if (s < lo) lo = s;
       if (s > hi) hi = s;

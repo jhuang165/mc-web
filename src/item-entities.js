@@ -23,8 +23,12 @@ import { mhSin, mhCos } from "./lighting.js";
 import { World, WATER } from "./world.js";
 import { BoxPool, constCellTable, lavaIn } from "./mpperf81-fast.js";
 import { fast86, fail86 } from "./mpperf86-fast.js"; // b86 mpperf86
+import { fast87, fail87, sameBxz } from "./mpperf87-fast.js"; // b87 mpperf87
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
+// b87 mpperf87: pushOut's box in a scratch array (the same six numbers as box()).
+const PUSH_BOX87 = [0, 0, 0, 0, 0, 0];
+const itemBoxInto = (out, e) => { out[0] = e.x - W; out[1] = e.y; out[2] = e.z - W; out[3] = e.x + W; out[4] = e.y + H; out[5] = e.z + W; return out; };
 const f = Math.fround, PI_F = Math.fround(Math.PI);
 
 // b86 mpperf86: item move's scratch (one non-nested call at a time), the block cells' constant boxes and the reused collision hooks.
@@ -186,7 +190,7 @@ export class ItemEntities {
   }
   // Entity.func_145771_j at the item's centre (entities.js entityPushOut).
   pushOut(world, e) {
-    const p = entityPushOut(world, e.x, e.y + W, e.z, this.box(e), this.rng(e));
+    const p = entityPushOut(world, e.x, e.y + W, e.z, fast87.mode !== "off" && this.box === ItemEntities.prototype.box ? itemBoxInto(PUSH_BOX87, e) : this.box(e), this.rng(e)); // b87 mpperf87: a scratch box (entityPushOut only reads it)
     if (!p) return false;
     e[["mx", "my", "mz"][p[0]]] = p[1];
     return true;
@@ -317,7 +321,7 @@ export class ItemEntities {
         }
       }
       list.length = 0;
-      e.bxz = [box[0], box[3], c + dz, h + dz];
+      if (fast87.mode === "off" || !sameBxz(e.bxz, box[0], box[3], c + dz, h + dz)) e.bxz = [box[0], box[3], c + dz, h + dz]; // b87 mpperf87: a resting item's box numbers are unchanged, so its array stays (bxz arrays are never written)
       e.x = (box[0] + box[3]) / 2;
       e.y += dy;
       e.z = (e.bxz[2] + e.bxz[3]) / 2;
@@ -439,13 +443,26 @@ export class ItemEntities {
         e.mz = f(f(r() - r()) * 0.2);
         this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z }); // b84 rain84: playSoundAtEntity plays at posY - yOffset, the feet
       }
-      const [a, b, c, d, g, h] = this.box(e);
-      for (const o of this.remote ? [] : this.items) {
+      // b87 mpperf87: with the class's own box, the boxes are read in place (no array per item and candidate); the list is walked by index (as its iterator does)
+      const q87 = fast87.mode !== "off" && this.box === ItemEntities.prototype.box;
+      let a, b, c, d, g, h;
+      if (q87) { a = e.x - W; b = e.y; c = e.z - W; d = e.x + W; g = e.y + H; h = e.z + W; } else [a, b, c, d, g, h] = this.box(e);
+      const list = this.remote ? [] : this.items;
+      for (let k = 0; k < list.length; k++) {
+        const o = list[k];
         if (o === e || o.dead || isFrozen(o)) continue;
         // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
         if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
-        const [oa, ob, oc, od, og, oh] = this.box(o);
-        if (od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5) this.combine(e, o, maxStack);
+        let meet;
+        if (q87) {
+          const oa = o.x - W, ob = o.y, oc = o.z - W, od = o.x + W, og = o.y + H, oh = o.z + W;
+          meet = od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5;
+          if (fast87.mode === "verify") { const [ra, rb, rc, rd, rg, rh] = this.box(e), [oa2, ob2, oc2, od2, og2, oh2] = this.box(o); if (meet !== (od2 > ra - 0.5 && oa2 < rd + 0.5 && og2 > rb && ob2 < rg && oh2 > rc - 0.5 && oc2 < rh + 0.5)) fail87("item merge box"); }
+        } else {
+          const [oa, ob, oc, od, og, oh] = this.box(o);
+          meet = od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5;
+        }
+        if (meet) this.combine(e, o, maxStack);
         if (e.dead) break;
       }
     }

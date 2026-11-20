@@ -4,7 +4,8 @@ import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
 import { fast84, fail84, moveSpeedQuick } from "./mpperf84-fast.js"; // b84 mpperf84
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
-import { typeSize, pushNearBox, pushNearDone, meetsArg } from "./mpperf83-fast.js"; // b83 mpperf83
+import { typeSize, pushNearBox, pushNearDone, meetsArg, fast83 } from "./mpperf83-fast.js"; // b83 mpperf83
+import { fast87, fail87, attackEquipment87, dryEntity, dryBounds, addZero } from "./mpperf87-fast.js"; // b87 mpperf87
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -423,13 +424,23 @@ function collisionBoxes(world, b, e, s = null) {
   else blockBoxes(world, b, out, cellCollisionBoxes); // b79 mpperf79: the cell scan, air cells skipped (Block.addCollisionBoxesToList: fence arms etc. stay separate boxes)
   return out;
 }
+// b87 mpperf87: entityPushOut's `collisionBoxes(world, box).length` test with moveEntity's scratch list and pooled block boxes (no fresh list or box arrays). The
+// scratch path is collisionBoxes' own (mpperf81 blockBoxes81 gives the same boxes as blockBoxes); a nested call (scratch taken) asks the reference.
+function anyCollisionBox87(world, box) {
+  const s = takeMoveScratch();
+  if (!s) return collisionBoxes(world, box).length > 0;
+  let any;
+  try { any = collisionBoxes(world, box, null, s).length > 0; } finally { s.pool.reset(); releaseMoveScratch(s); }
+  if (fast87.mode === "verify" && any !== collisionBoxes(world, box).length > 0) fail87("pushOut boxes");
+  return any;
+}
 // Entity.func_145771_j [sa.j(DDD)Z], used by items and XP orbs (the player overrides it,
 // pushOutOfBlocks): when the box overlaps a block collision box or the cell of (cx, cy, cz) is a
 // normal cube, push towards the nearest side whose neighbour is not a normal cube, never down and
 // up by default, at rand.nextFloat() * 0.2F + 0.1F. Returns [axis (0 x, 1 y, 2 z), motion] or null.
 export function entityPushOut(world, cx, cy, cz, box, random) {
   const x = Math.floor(cx), y = Math.floor(cy), z = Math.floor(cz);
-  if (!collisionBoxes(world, box).length && !normalCube(world.get(x, y, z))) return null;
+  if (!(fast87.mode !== "off" ? anyCollisionBox87(world, box) : collisionBoxes(world, box).length) && !normalCube(world.get(x, y, z))) return null;
   const fx = cx - x, fy = cy - y, fz = cz - z, open = (dx, dy, dz) => !normalCube(world.get(x + dx, y + dy, z + dz));
   let side = 3, best = 9999;
   if (open(-1, 0, 0) && fx < best) (best = fx), (side = 0);
@@ -624,7 +635,7 @@ function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
   let landed = 0;
   // EntityLivingBase.updateFallState (sv.a(DZ)V) first runs handleWaterMovement when the entity
   // is not already in water, on the moved box: landing in water (even 1 deep) cancels the fall.
-  if ((hooks?.living || e.living) && !e.inWater && !(s && dryBox(world, bb[0], bb[1], bb[2], bb[3], bb[4], bb[5])) && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0; // b81 mpperf81: dryBox skips the scan's boxes when no cell is water
+  if ((hooks?.living || e.living) && !e.inWater && !(s && dryBoxOf87(world, bb)) && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0; // b81 mpperf81: dryBox skips the scan's boxes when no cell is water
   if (e.onGround) {
     landed = e.fallDistance;
     e.fallDistance = 0;
@@ -683,8 +694,13 @@ export function clientBodyTurn(c) {
 // box shrunk 0.4 vertically and 0.001 all round is wet below each cell's liquid
 // surface, and living entities are pushed 0.014 along the summed flow vector.
 export function inWater(world, e, w, h) {
-  const r = w / 2;
-  if (dryBox(world, e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r)) { addVelocity(e, 0, 0, 0); return false; } // b81 mpperf81: no water cell, so no wet flag and a zero push
+  const r = w / 2, m87 = fast87.mode;
+  // b87 mpperf87: dryEntity reads the entity's numbers itself (the six box numbers were boxed for dryBox's call); verify asks dryBox too
+  if (m87 !== "off" && fast81.mode === "on" && typeof world.get === "function") {
+    const dry = dryEntity(world, e, w, h, WATER);
+    if (m87 === "verify" && dry !== dryBox(world, e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r)) fail87("dryEntity");
+    if (dry) { if (m87 === "verify") { const v = { vx: e.vx, vy: e.vy, vz: e.vz }; addZero(e); addVelocity(v, 0, 0, 0); if (!Object.is(v.vx, e.vx) || !Object.is(v.vy, e.vy) || !Object.is(v.vz, e.vz)) fail87("addZero"); } else addZero(e); return false; }
+  } else if (dryBox(world, e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r)) { addVelocity(e, 0, 0, 0); return false; } // b81 mpperf81: no water cell, so no wet flag and a zero push
   const { wet, push } = waterAcceleration(world, entityWaterBox([e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r]));
   addVelocity(e, ...push);
   return wet;
@@ -901,6 +917,32 @@ function clearSpentStack(survival) {
 }
 export const SPAWN_RUNAWAY_GUARD = 5000; // b72: the one shared runaway guard (native has no entity count test on eggs, /summon, babies, chicks, silverfish, reinforcements, slime splits or natural spawning beyond SpawnerAnimals' per-type caps); far above any reachable count
 const SLIME_SPLIT_GUARD = SPAWN_RUNAWAY_GUARD;
+// b87 mpperf87: tickMobs' per-mob closures as module functions, so the loop body captures nothing (no context per mob). mobThink is the AI step of a mob that walks
+// (the expression the loop passed to walk); MOB_THINK tells walk to run it, mobThinkOf is the reference closure.
+function mobThink(w, e, t) {
+  return e.type === "horse" && e.rider && e.horse.saddled ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(w, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(w, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(w, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? w.silverfishThink(e) : e.type === "giant" ? w.giantThink(e) : e.type === "blaze" ? blazeThink(w, e, t, aiMoveSpeed) : w.ai.think(e);
+}
+const MOB_THINK = () => { throw new Error("MOB_THINK is a walk() sentinel"); };
+const mobThinkOf = (w, e, t) => () => mobThink(w, e, t);
+const riddenThink = (w, e) => () => w.ridden(e);
+const vehicleFallOf = (w, e) => (d) => w.fall(e, d);
+const mobEffects = (w, e, t, base) => tickMobEffects(e, t, () => maxHealthOf(e, base.health), entityRandom(e), w.fx, (m, n, name) => w.attackEntityFrom(m, n, { name }));
+
+// b87 mpperf87: mpperf81 dryBox on a box array, read in the callee (no boxed numbers for the call); verify asks dryBox too.
+function dryBoxOf87(world, bb) {
+  const m = fast87.mode;
+  if (m === "off" || fast81.mode !== "on" || typeof world.get !== "function") return dryBox(world, bb[0], bb[1], bb[2], bb[3], bb[4], bb[5]);
+  const dry = dryBounds(world, bb, WATER);
+  if (m === "verify" && dry !== dryBox(world, bb[0], bb[1], bb[2], bb[3], bb[4], bb[5])) fail87("dryBoxOf");
+  return dry;
+}
+// b87 mpperf87: push's pair test as the push grid's `meets` (made only when the grid verifies), and the reference loop's pairs for push87's verify.
+const pushMeetsOf = (w, e, near) => (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, w, pushBox);
+function pushPairsReference(w, e, near, list) {
+  const out = [];
+  for (const o of list) if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, w, pushBox)) out.push(o);
+  return out;
+}
 export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
   constructor(world, saved, random = Math.random, ids = new EntityIds()) {
@@ -2440,7 +2482,7 @@ export class EntityWorld {
       if (e.removedNow || !this.isActive(e)) continue;
       // Loot queued before this entry (a kill outside the tick: a horse's saddle at onDeath) is flushed first, so the far mob's flushLoot cannot shrink the list below the mark (holes in events)
       if (this.ring && !this.world.isTicking(e.x, e.z)) { this.flushLoot(); farMark = this.events.length; }
-      if (e.ridingEntity) { rider = e; beginRidden(e); if (!e.vehicleFall) Object.defineProperty(e, "vehicleFall", { value: (d) => this.fall(e, d), writable: true, configurable: true, enumerable: false }); /* b74 order74: later falls go straight in (vehicle-riders.js passFall) */ for (const d of takeVehicleFalls(e)) this.fall(e, d); } // b72: a boat or cart under a mob rider fell (Entity.fall hands it to riddenByEntity)
+      if (e.ridingEntity) { rider = e; beginRidden(e); if (!e.vehicleFall) Object.defineProperty(e, "vehicleFall", { value: vehicleFallOf(this, e), writable: true, configurable: true, enumerable: false }); /* b74 order74: later falls go straight in (vehicle-riders.js passFall) */ for (const d of takeVehicleFalls(e)) this.fall(e, d); } // b72: a boat or cart under a mob rider fell (Entity.fall hands it to riddenByEntity)
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
@@ -2523,7 +2565,7 @@ export class EntityWorld {
       }
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
-      tickMobEffects(e, t, () => maxHealthOf(e, base.health), entityRandom(e), this.fx, (m, n, name) => this.attackEntityFrom(m, n, { name })); // Potion.wither / instant damage: DamageSource.wither / magic (both bypass armour)
+      if (fast87.mode === "off" || e.effects?.length) mobEffects(this, e, t, base); else entityRandom(e); // b87 mpperf87: tickMobEffects returns at once without effects (its random is still made); the hooks only for a mob with effects. Potion.wither / instant damage: DamageSource.wither / magic (both bypass armour)
       if (this.curedLive !== e) this.talk(e); // b85: sw.C's ambient roll is gated on isEntityAlive, and yq.cd has set the converted zombie dead (executed, village-fight-b85-reference.json)
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
@@ -2535,16 +2577,16 @@ export class EntityWorld {
       this.sunIgnite(e, t);
       // EntityLivingBase.onUpdate's equipment block (before onLivingUpdate, so before the AI): when a slot differs from the last update's, the old stack's attribute modifiers leave the
       // attribute map and the new one's join it. A sword given after a mob's own update (loot pickup, another mob's hit) therefore adds its damage from the NEXT update (b36 records).
-      if (e.equipment) e.attackEquipment = e.equipment.map((s) => (s ? { id: s.id } : null));
+      if (e.equipment) e.attackEquipment = attackEquipment87(e.attackEquipment, e.equipment); // b87 mpperf87: the last update's array is kept while the slots hold the same ids
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
       if (e.type === "horse" && entityRandom(e).nextInt(200) === 0) (e.horseAnim ??= newHorseAnim()).tail = 1; // EntityHorse.onLivingUpdate (wi.e): the tail roll (wi.cR starts bp) comes before EntityAnimal.onLivingUpdate (the AI); horseTick steps it
-      if (e.ridingEntity) this.walk(e, t, 0, () => this.ridden(e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
+      if (e.ridingEntity) this.walk(e, t, 0, riddenThink(this, e)); // mob-riding.js: a rider runs its whole update (AI, then its own move from the seat it was left at), then the seat takes it
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider && e.horse.saddled ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(this, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(this, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(this, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : e.type === "blaze" ? blazeThink(this, e, t, aiMoveSpeed) : this.ai.think(e));
+        this.walk(e, t, 0, fast87.mode === "off" ? mobThinkOf(this, e, t) : MOB_THINK); // b87 mpperf87: the AI step below (mobThink), no closure per mob
       }
       this.push(e, t);
       this.lootPickupOne(e);
@@ -2760,6 +2802,7 @@ export class EntityWorld {
   // server: every pushable entity (living mobs until setDead, and the player) whose box meets
   // this one's grown by 0.2 sideways runs applyEntityCollision against it.
   push(e, t) {
+    if (fast87.mode !== "off") { this.push87(e, t); return; }
     const near = pushNearBox(e, t.width, t.height, pushBox); // b83 mpperf83: pushBox(e, w, h) grown by 0.2 sideways, in a reused array (released at the end)
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
@@ -2774,6 +2817,38 @@ export class EntityWorld {
     this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
     if (p?.alive && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
+    pushNearDone(near);
+    if (e.type === "iron_golem") this.golemTailTick(e);
+  }
+  // b87 mpperf87: push without its closures (the grid's verify-only `meets` is made only when the grid asks), with an indexed candidate loop and the player's
+  // box tested in place. The same tests in the same order; verify also lists the pairs the reference loop takes (the tests read nothing the pushes write).
+  push87(e, t) {
+    const near = pushNearBox(e, t.width, t.height, pushBox);
+    const meets = fast83.mode === "off" || fineConfig.mode === "verify" ? pushMeetsOf(this, e, near) : null; // mpperf83 meetsArg
+    const cand = pushNear(this.entities, e, near, pushHalf, meets) ?? pushCandidates(this.entities, e);
+    // liveOrder without its filtered copy: the frozen entities (unloaded chunks) are skipped in the loop (nothing in it freezes or thaws one)
+    const list = cand ?? this.entities, fz = this.frozen?.set.size ? this.frozen.set : null, ref = fast87.mode === "verify" ? pushPairsReference(this, e, near, liveOrder(this, list)) : null;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (fz !== null && (fz.has(o) || !(i in list))) continue; // (filter also skips holes)
+      if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) {
+        if (ref && ref[n] !== o) fail87("push pairs");
+        n++;
+        if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o);
+        applyEntityCollision(o, e);
+      }
+    }
+    if (ref && ref.length !== n) fail87("push pairs");
+    this.walks?.get("cart")?.pushMob?.(e);
+    this.walks?.get("boat")?.pushMob?.(e);
+    const p = this.ai.player;
+    if (p?.alive && !e.rider?.player) {
+      const pw = f(f(p.width) / 2), ph = f(p.height), x = p.x, y = p.y, z = p.z;
+      const hit = x + pw > near[0] && x - pw < near[3] && y + ph > near[1] && y < near[4] && z + pw > near[2] && z - pw < near[5]; // boxesMeet(near, pushBox(p, p.width, p.height))
+      if (fast87.mode === "verify" && hit !== boxesMeet(near, pushBox(p, p.width, p.height))) fail87("push player box");
+      if (hit) pushServerPlayer(p, e);
+    }
     pushNearDone(near);
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
@@ -2795,7 +2870,8 @@ export class EntityWorld {
     if (Math.abs(e.vy) < 0.005) e.vy = 0;
     if (Math.abs(e.vz) < 0.005) e.vz = 0;
     e.moveForward = 0;
-    if (think) think();
+    if (think === MOB_THINK) mobThink(this, e, t); // b87 mpperf87: tickMobs' AI step without a closure
+    else if (think) think();
     else if (speed > 0) e.aiMoveSpeed = e.moveForward = speed;
     if (e.jumping) {
       if (e.inWater || e.inLava) e.vy += 0.03999999910593033;
