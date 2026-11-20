@@ -257,9 +257,10 @@ export class Hanging {
       item: e.item ? structuredClone(e.item) : undefined, rotation: e.kind === "frame" ? e.rotation : undefined,
       dropChance: e.kind === "frame" && e.dropChance !== 1 ? e.dropChance : undefined,
       fire: Number.isInteger(e.fire) && e.fire !== 0 ? e.fire : undefined, // b84 cmdfix84
+      invulnerable: e.invulnerable || undefined, // b86 summon86: Entity.writeToNBT writes Invulnerable for paintings and frames too (sa.e; ss, the painting tb and the frame st never override it, bytecode-read)
     }));
   }
-  withFire(e, r) { if (Number.isInteger(r.fire)) e.fire = Math.max(-32768, Math.min(32767, r.fire)); return e; } // b84 cmdfix84: Entity's Fire, kept as saved
+  withFire(e, r) { if (Number.isInteger(r.fire)) e.fire = Math.max(-32768, Math.min(32767, r.fire)); if (r.invulnerable === true) e.invulnerable = true; return e; } // b84 cmdfix84: Entity's Fire, kept as saved
   // Rebuild entities from saved records (old saves have none). Unknown arts become Kebab (readEntityFromNBT).
   load(records) {
     this.entities = [];

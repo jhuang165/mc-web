@@ -65,7 +65,7 @@ export class ExperienceOrbs {
   this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value].every(Number.isFinite)).map(o=>{
    // Saves before 0.21.4 stored the remaining lifetime (`life`) instead of xpOrbAge.
    const age=Number.isFinite(o.age)?o.age:Number.isFinite(o.life)?LIFETIME-o.life:0,n=k=>Number.isFinite(o[k])?o[k]:0;
-   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.trunc(age),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})},undefined,ids);
+   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.trunc(age),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(o.invulnerable===true?{invulnerable:true}:{}),/* b86 summon86: Entity.writeToNBT's Invulnerable (sa.e, every entity) */...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})},undefined,ids);
   }).filter(o=>o.age<LIFETIME):[]; // b76: native keeps Value 0 or above 2477, a negative Age and Health 0 (an orb dies when hit, EntityXPOrb.attackEntityFrom)
  }
  rng(o){if(!this.entityRandom)return this.random;let r=this.rands.get(o);if(!r)this.rands.set(o,r=this.entityRandom());return r;}

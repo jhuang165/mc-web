@@ -3,7 +3,7 @@
 // EntityXPOrb, EntityTNTPrimed and EntityFallingBlock.readEntityFromNBT (object-nbt-reference.json, tools/probes/ObjectNbtProbe.java: Health and Value are
 // shorts, Fuse a byte, TileID/Tile/Data/Time/HurtEntities/FallHurtAmount/FallHurtMax) after Entity.readFromNBT (Pos, Motion beyond 10 zeroed, OnGround, FallDistance, Fire).
 import { NBT } from './nbt.js';
-import { uuidFields } from './entity-uuid.js';
+import { uuidFields, invulnerableFields } from './entity-uuid.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { fromOriginal } from './block-registry.js';
 import { TNT_Y_OFFSET } from './explosion.js';
@@ -71,7 +71,7 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
     const age = nbtGet(entity, 'Age', NBT.SHORT, 0);
     if (age >= 6000) return { lost: 'expired' };
     const fire = nbtGet(entity, 'Fire', NBT.SHORT, 0);
-    return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround } };
+    return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround, ...invulnerableFields(entity) } }; // b86 summon86: Invulnerable
   }
   if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0), fire: nbtGet(entity, 'Fire', NBT.SHORT, 0) } }; // b82 fireext82: Entity's Fire (moveEntity's counter)
   // EntityFallingBlock.readEntityFromNBT: TileID (any numeric) wins, else Tile & 255; Data; Time.

@@ -375,7 +375,7 @@ export class ItemEntities {
     return this.items.map((e) => this.serializeOne(e));
   }
   serializeOne(e) {
-    return { stack: copyStack(e.stack), x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, age: e.age, delay: e.delay, hover: e.hover, death: e.death || undefined, owner: e.owner || undefined, thrower: e.thrower || undefined, portalCooldown: e.portalCooldown || undefined, fire: e.ticks === 0 && Number.isInteger(e.loadedFire) ? e.loadedFire : this.tickedFire(e) };
+    return { stack: copyStack(e.stack), x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, age: e.age, delay: e.delay, hover: e.hover, death: e.death || undefined, owner: e.owner || undefined, thrower: e.thrower || undefined, portalCooldown: e.portalCooldown || undefined, invulnerable: e.invulnerable || undefined, health: e.health !== 5 && Number.isInteger(e.health) ? e.health : undefined, onGround: e.onGround || undefined, fire: e.ticks === 0 && Number.isInteger(e.loadedFire) ? e.loadedFire : this.tickedFire(e) };
   }
   // b80 fluids80: Entity.writeToNBT writes the counter (Fire short) of any item, ticked or not (fluids80-reference.json fire80, executed). Left out when it is the value
   // the export assumes (-1, fireResistance, once an aged item has moved; 0 before), so a quiet item's save stays as it was.
@@ -400,6 +400,11 @@ export class ItemEntities {
         if (typeof d.thrower === "string" && d.thrower) e.thrower = d.thrower.slice(0, 64); // EntityItem Thrower (func_145799_b), set by a Q drop
         if (Number.isInteger(d.fire)) e.fire = e.loadedFire = d.fire; // b79 falling79: the saved Fire of an item that has not ticked since (serializeOne writes it back); b80 fluids80: Entity.readFromNBT also sets the counter, which burns on (fire80 load, executed)
         if (Number.isInteger(d.portalCooldown) && d.portalCooldown > 0) e.portalCooldown = Math.min(300, d.portalCooldown); // PortalCooldown (entity-portal.js)
+        // b86 summon86: Entity.writeToNBT (sa.e) writes Invulnerable and OnGround for every entity and EntityItem.writeEntityToNBT Health ((short)(byte)health; read back & 255),
+        // so a summoned flag, a summoned Health (0 when the tag had none) and a hit item's health survive the save (bytecode-read sa.e, xk.b/xk.a).
+        if (d.invulnerable === true) e.invulnerable = true;
+        if (Number.isInteger(d.health)) e.health = d.health & 255;
+        if (d.onGround === true) e.onGround = true;
       } else if (Array.isArray(d?.stacks) && d.position && ok(d.position.x, d.position.y, d.position.z)) {
         const age = ok(d.expires) ? Math.max(0, Math.min(LIFETIME - 1, LIFETIME - (d.expires - time))) : 0;
         for (const s of d.stacks) {

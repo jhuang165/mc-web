@@ -212,7 +212,16 @@ export function createCommandHost(env) {
         }
         if (!mobs) return null;
         if (!nbt) { // CommandSummon builds an empty compound with the id and runs Entity.readFromNBT on it, so the untagged mob also has Air 0 (b84 cmdfix84, bytecode-read bu.b; EntityLivingBase.onEntityUpdate restores 300 out of water)
-          const born = mobs.spawnNatural(type, x, y, z);
+          // b86 summon86 (executed, summon86-reference.json; bytecode-read bu.b 274-301): onSpawnWithEgg(null) runs BEFORE spawnEntityInWorld, so the extras it spawns (an ocelot's
+          // two kittens, a spider jockey's skeleton, a chicken jockey's chicken) join the world list ahead of the summoned mob; their ids still follow its own (constructed first).
+          // SpawnerAnimals and the spawn egg spawn first (spawnNatural, spawn-egg-use.js), so this path has its own order.
+          let born;
+          if (typeof mobs.create === "function" && typeof mobs.onSpawnWithEgg === "function") {
+            born = mobs.create(type, x, y, z);
+            mobs.entitySeed?.(born, "spawn"); // replay hook, as spawnNatural
+            mobs.onSpawnWithEgg(born);
+            mobs.entities.push(born);
+          } else born = mobs.spawnNatural(type, x, y, z);
           if (born && typeof born === "object") born.air = 0;
           return { other: true };
         }

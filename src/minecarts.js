@@ -690,7 +690,7 @@ export class Minecarts {
   serializeOne(c) {
     return {
       id: c.id, uuid: ensureUuid(c), type: c.type, rider: c.rider?.player === true || undefined,
-      x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
+      x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround, invulnerable: c.invulnerable || undefined,
       portalCooldown: c.portalCooldown > 0 ? c.portalCooldown : undefined, // Entity.timeUntilPortal (PortalCooldown)
       customName: c.customName || undefined, ...V.variantJSON(c),
       items: c.slots.flatMap((s, slot) => {
@@ -724,6 +724,7 @@ export class Minecarts {
       if (ok(c.fallDistance)) cart.fallDistance = f(c.fallDistance);
       if (Number.isInteger(c.fire)) cart.fire = c.fire;
       cart.onGround = !!c.onGround;
+      if (c.invulnerable === true) cart.invulnerable = true; // b86 summon86: Entity.writeToNBT/readFromNBT's Invulnerable
       if (Number.isInteger(c.portalCooldown) && c.portalCooldown > 0) cart.portalCooldown = Math.min(300, c.portalCooldown);
     }
     return m;

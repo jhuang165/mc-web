@@ -4,7 +4,7 @@ import { readNbt as readHorseNbt } from './horse.js';
 // JAVA_SUMMON_MOBS reuse summonedMobRecord. The record is what EntityWorld's
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
-import { uuidFields } from './entity-uuid.js';
+import { uuidFields, invulnerableFields } from './entity-uuid.js';
 import { attributeFieldsFromNbt } from './mob-attributes.js';
 import { livingAttributeFields } from './mob-attribute-list.js';
 import { maxHealthOf, OWN_MAX_HEALTH } from './mob-riding.js';
@@ -171,7 +171,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
     yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
     fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)),
-    effects: readActiveEffects(entity), ...absorptionFields(entity),
+    effects: readActiveEffects(entity), ...absorptionFields(entity), ...invulnerableFields(entity),
   };
   if (type === 'villager') {
     record.profession = tagValue(entity, 'Profession', NBT.INT, 0);
@@ -242,6 +242,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     effects: readActiveEffects(tag), ...absorptionFields(tag), growingAge: ['pig','cow','mooshroom','sheep','chicken','wolf','villager','ocelot'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','mooshroom','sheep','chicken','wolf','ocelot'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
   const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'AbsorptionAmount', 'Fire', 'Motion', 'OnGround', 'FallDistance', 'Air']); // b83 cmdexec83: the last three are set by command-host.js summon (executed)
   if (type === 'wither_skeleton') kept.add('SkeletonType');
+  Object.assign(record, invulnerableFields(tag)); kept.add('Invulnerable'); // b86 summon86: Entity.readFromNBT's flag (sa.i), honoured by attackEntityFrom (b85) and written back by writeToNBT
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'villager', 'ocelot'].includes(type)) kept.add('Age');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'ocelot'].includes(type)) kept.add('InLove');
   if (type === 'pig') { record.saddled = !!tagValue(tag, 'Saddle', NBT.BYTE, 0); kept.add('Saddle'); } // EntityPig.readEntityFromNBT
