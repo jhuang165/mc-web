@@ -65,6 +65,8 @@ export function awayPlan(root, columns, ticks, difficulty, wallNow = Date.now(),
     // (Primary, Secondary, Levels; TileEntityBeacon.updateEntity rechecks the pyramid every 80 total ticks while the gate is open), flower pots (world.pots: a washed or replaced
     // pot drops its plant), note blocks and jukeboxes (the note's pitch and powered state, the jukebox's record a comparator reads). The run returns each list whole.
     signs: structuredClone(root.signs ?? []), beacons: structuredClone(root.beacons ?? []), pots: structuredClone(root.pots ?? []), musicTiles: structuredClone(root.musicTiles ?? []),
+    // b87 tiles87: the spawner tiles, so one the run replaces leaves the list (away-world.js). Only a saved list: a world without one is read as fresh (structure-simulation.js).
+    ...(Array.isArray(root.spawners) ? { spawners: structuredClone(root.spawners) } : {}),
     totalTime: Number.isSafeInteger(root.totalTime) ? root.totalTime : undefined, // World.getTotalWorldTime at the end of the trip (dimension-live.js passes its clock)
     // The saved entity lists (the run returns them whole); mob riders keep their vehicles out of the run.
     entities: structuredClone({

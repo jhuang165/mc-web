@@ -273,7 +273,15 @@ export function createCommandHost(env) {
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       if (potHeld) { w.pots?.delete(potKey(x, y, z)); if (potHeld.id) env.dropStacks?.([potEntryStack(potHeld, makeStack)], x, y, z); }
       const key = `${x},${y},${z}`, stores = survival();
-      for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'tableNames']) delete stores[name]?.[key]; // b75: tableNames, an enchanting table's CustomName goes with the old tile
+      // b75: tableNames, an enchanting table's CustomName goes with the old tile. b87 tiles87: CommandSetBlock (bm) clears no tile itself, it only calls World.setBlock (ahb.d(IIILaji;II)Z,
+      // flags 3; bytecode-read), and Chunk.func_150807_a runs the old block's breakBlock: BlockChest (ajx), BlockFurnace, BlockDispenser, BlockHopper (aln) and BlockBrewingStand spill
+      // the slots (EntityItem pieces of 10-30, no doTileDrops test) before the new block's tile. `env.spillTile` is the host's container spill (ItemEntities.spill).
+      for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'tableNames']) {
+        const gone = stores[name]?.[key];
+        if (gone === undefined) continue;
+        delete stores[name][key];
+        if (name !== 'tableNames' && Array.isArray(gone?.items)) env.spillTile?.(gone.items.filter(Boolean), x, y, z, key);
+      }
       if (original === 144) (env.skulls?.() ?? SKULLS).create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), '', profileOfSkullTile(tag)); // TileEntitySkull (skull.js)
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
       if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (pyramid.js)

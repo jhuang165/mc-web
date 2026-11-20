@@ -30,6 +30,7 @@ import { GAME_IDS, transferTarget } from '../dimensions.js';
 import { FiniteDimensionWorld, END } from './client-dimensions.js';
 import { buildNetherSystems, buildNetherInside, saveNether } from './server-nether.js';
 import { setupEnd, dragonState, addEndCrystals, legacyCrystalKeys } from './server-dragon.js'; // b64 mpdragon: the dragon, the crystals, the fight's state
+import { isSign } from '../signs.js'; // b87 tiles87
 
 const OVERWORLD = 0, END_PORTAL = GAME_IDS.endPortal, noop = () => {};
 // b65 mpendwindow: the replica's own origin says where it lies in the End (native = local + origin), for the 256 window and for a 0.93.0 save's 128 window alike.
@@ -80,6 +81,7 @@ export class ServerEnd {
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      if (result && old !== b && isSign(old)) n.tileEntities?.signs.remove(x, y, z); // b87 tiles87: a 63 <-> 68 swap starts a fresh tile (simulation.js)
       return result;
     };
     const drop = (...a) => sim.serverItems.stacksDrop(...a);
