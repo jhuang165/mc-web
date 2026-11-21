@@ -1391,7 +1391,7 @@ class PlayerView {
     this.riding = false; this.wasRiding = false;
     this.direct = false; this.branch = "walk";
     this.packet = null; this.packetDy = 0;
-    this.setLocation(at);
+    this.setLocation(at, { late: true }); // b90 lead: a world-pass S08, answered in the next network tick (spcopy90 `answerFrom`)
   }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
