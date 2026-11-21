@@ -36,6 +36,7 @@ export class SharedEntry extends TrackerEntry {
     this.gear = null; // b88 track88: EntityLivingBase.g, the equipment the last check saw (SharedMobTracker.create sets it: the port's entry follows the mob's first update)
     this.pre = null; // b88 track88: the state before this tick's entity pass, for a watcher whose slot comes before this entity (SharedMobTracker.beforePass)
     this.birth = null; // b89 mobpackets89: the mob's state at its spawn while the entry is being made (SharedMobTracker.create / entryOf)
+    this.bumps = {}; // b90 mobpackets90: e.attrBumps as the last gated pass saw it
     this.attrKeys = null; // b89 mobpackets89: the watched attribute rows the last pass saw (name -> rowKey); null before the first pass
   }
   // b87 mpperf87: the stamp and destinations of one of this entry's packets (the WeakMaps when it emitted with the flag off).
@@ -106,21 +107,14 @@ export class SharedEntry extends TrackerEntry {
   // b89 mobpackets89: EntityTrackerEntry.sendLocationToAllClients with func_111190_b (my.b(), bytecode-read): inside the gated branch (ticks % frequency, isAirBorne or a changed data
   // watcher), after the position packets, the S1C and then S20 of the dirty attribute set go to the tracking players and the set is cleared, whether anyone tracks or not. The port
   // has no attribute map: a row is dirty when its base, modifiers or value changed since the last gated pass (the first pass sends what the construction left, firstDirty). The
-  // head S19 natively follows S1C / S20; entity-tracker.js sends it before its S1C (not changed here). The S12 of velocityChanged comes after both.
-  sendLocation(airBorne = false, dataChanged = false) {
-    if (this.object || !(this.ticks % this.frequency === 0 || airBorne || dataChanged)) { super.sendLocation(airBorne, dataChanged); return; }
-    const e = this.e, knocked = !!e.velocityChanged;
-    e.velocityChanged = false;
-    super.sendLocation(airBorne, dataChanged);
-    this.sendAttributes();
-    if (knocked) this.send({ type: 'velocity', vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) });
-  }
+  // head S19 follows S1C / S20 (b90: entity-tracker.js holds it until this hook has run), and the S12 of velocityChanged comes after all three.
   sendAttributes() {
+    if (this.object) return;
     const rows = watchedAttributes(this.e);
     if (!rows.length) return;
     let keys = this.attrKeys, out;
-    if (keys === null) { out = firstDirty(this.e, rows); keys = this.attrKeys = new Map(); for (const r of rows) keys.set(r.name, rowKey(r)); }
-    else { out = null; for (const r of rows) { const k = rowKey(r); if (keys.get(r.name) !== k) { keys.set(r.name, k); (out ??= []).push(r); } } }
+    if (keys === null) { out = firstDirty(this.e, rows); for (const r of rows) this.bumps[r.name] = this.e.attrBumps?.[r.name] ?? 0; keys = this.attrKeys = new Map(); for (const r of rows) keys.set(r.name, rowKey(r)); }
+    else { out = null; for (const r of rows) { const k = rowKey(r), bump = this.e.attrBumps?.[r.name] ?? 0; if (keys.get(r.name) !== k || bump !== (this.bumps[r.name] ?? 0)) { keys.set(r.name, k); (out ??= []).push(r); } this.bumps[r.name] = bump; } }
     if (out !== null && out.length) this.send({ type: 'attributes', list: out });
   }
   // b88 track88: EntityLivingBase.onUpdate (sv.h 65..178, bytecode-read), at the start of each server update: every slot whose stack is not ItemStack.areItemStacksEqual (add.b) to the

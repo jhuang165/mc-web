@@ -81,6 +81,11 @@ export function addMobEffect(e, id, duration = 2147483647, amplifier = 0, ambien
     if (old) { old.boost = false; clampHealth(e); }
     effect.boost = true;
   }
+  // b90 mobpackets90: EntityLivingBase.addPotionEffect runs onNewPotionEffect / onChangedPotionEffect (sv.a(rw) / sv.a(rw, Z)), which remove and apply the effect's attribute modifier, and every
+  // applyModifier flags the watched instance dirty even when the value ends unchanged (executed b89: re-adding the same Speed dirties movementSpeed again). attrBumps counts those flags
+  // for the tracker's next S20 (Speed and Slowness move generic.movementSpeed, Health Boost generic.maxHealth).
+  const bumped = id === 1 || id === 2 ? "generic.movementSpeed" : id === HEALTH_BOOST ? "generic.maxHealth" : null;
+  if (bumped) { const b = (e.attrBumps ??= {}); b[bumped] = (b[bumped] ?? 0) + 1; }
   if (list.length > 12) e.effectsWide = true;
   // PotionAbsorption (rr): onNewPotionEffect adds 4 * (amplifier + 1) to the absorption amount. Re-adding an effect the mob has runs onChangedPotionEffect(effect, true):
   // remove (the amount minus 4 * (amplifier + 1) of the COMBINED effect, floored at 0), then apply it again, so a spent shield is refilled to the full amount.

@@ -122,6 +122,7 @@ export class TrackerEntry {
   }
   emit(packet) { SEQ.set(packet, ++seqCounter); this.packets.push(packet); this.view.log?.(packet); } // to the client's queue (and a test log)
   send(packet) { if (this.tracked) this.emit(packet); }
+  sendAttributes() {} // b90 mobpackets90: the S20 hook (SharedEntry overrides it)
   // EntityTrackerEntry.sendLocationToAllClients
   sendLocation(airBorne = false, dataChanged = false) {
     const e = this.e;
@@ -141,6 +142,7 @@ export class TrackerEntry {
       this.lastRiding = e.ridingEntity ?? null;
       this.send({ type: "attach", mode: 0, entity: e, vehicle: this.lastRiding });
     }
+    let gated = false, headPacket = null;
     if (this.ticks % this.frequency === 0 || airBorne || dataChanged) {
       const yaw = angle(e.rotationYaw ?? 0), pitch = angle(e.rotationPitch ?? 0);
       if (!e.ridingEntity) {
@@ -180,8 +182,10 @@ export class TrackerEntry {
         this.lastX = encodeAxis(this.size, e.x); this.lastY = encodeY(e.y); this.lastZ = encodeAxis(this.size, e.z);
         this.ridden = true;
       }
+      // b90 mobpackets90: the head S19 (ht) is built after the S1C / S20 (my.b(), bytecode-read: my.a(List) 974 / 1188 call it, the head test starts at 1200), so it is held until the metadata below
       const head = angle(e.rotationYawHead ?? 0);
-      if (Math.abs(head - this.lastHead) >= 4) { this.send({ type: "head", head: byte(head) }); this.lastHead = head; }
+      if (Math.abs(head - this.lastHead) >= 4) { headPacket = { type: "head", head: byte(head) }; this.lastHead = head; }
+      gated = true;
     }
     // sendMetadataToAllAssociatedPlayers: the bat's hanging flag (data watcher index 16) is the one watched object that moves a client entity
     if (e.type === "bat" && !!e.batHanging !== this.lastHang) { this.lastHang = !!e.batHanging; this.send({ type: "meta", batHanging: this.lastHang }); }
@@ -196,6 +200,8 @@ export class TrackerEntry {
     }
     // Batch 61: the other watched objects a copy draws from (air, potion colour, invisible, enderman scream, wither invul and health): one S1C for what changed
     if (this.lastMeta) { const d = copyMetaDiff(this.lastMeta, e); if (d) this.send({ type: "meta", ...d }); }
+    // b90 mobpackets90: inside the gated branch, S20 of the dirty attributes (the mob entry's hook), then the head S19, then the S12 below
+    if (gated) { this.sendAttributes(); if (headPacket) this.send(headPacket); }
     // Entity.velocityChanged (knockback): the motion goes out at once, to everyone tracking
     if (e.velocityChanged) { this.send({ type: "velocity", vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) }); e.velocityChanged = false; }
     this.ticks++;
