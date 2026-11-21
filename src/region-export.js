@@ -103,7 +103,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const n=entity(e,name,ox,oz);
   // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
   if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);n.Invulnerable=byte(e.invulnerable?1:0);built.push({e,n});continue;}
-  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(e.health<=0&&Number.isInteger(e.death)?e.death:0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT (sw.b, bytecode-read; entnbt91-reference.json: every unnamed mob writes CustomName "" and CustomNameVisible 0): both keys always, b91 entnbt91. PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customName&&e.customNameVisible?1:0);
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)

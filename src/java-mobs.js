@@ -340,6 +340,8 @@ export function javaMobFromNbt(entity, options) {
       else record.health = Math.max(0, Math.min(record.health, cap));
     }
     delete record.loadHealthCap;
+    // b93 entnbt93: a mob saved at Health 0 inside its animation (DeathTime 0..19) loads dying and finishes it (onDeathUpdate counts to 20); the restore needs the counter
+    { const dt = record.deathTime ?? 0; delete record.deathTime; if (record.health <= 0 && record.type !== 'ender_crystal' && record.type !== 'ender_dragon' && dt >= 0 && dt < 20) record.death = dt; }
     if (OWNED_TYPES.has(record.type)) { const owned = ownerFields(entity, record.type); if (owned.owner) record.ownerUuid = owned.ownerUuid; }
     const holder = record.leash?.holder === 'player' ? leashHolderUuid(entity) : undefined;
     if (holder) record.leash = { ...record.leash, holderUuid: holder };
