@@ -185,7 +185,7 @@ import { SHADOWS, vehicleShadowCasters } from "./shadows.js";
 import { isSlimeLike, slimeHeight } from "./slime.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
-import { CHEST, settleFacing, adoptChest, chestPair, tickLid } from "./chest.js";
+import { CHEST, settleFacing, adoptChest, migrateChestFacing, chestPair, tickLid } from "./chest.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
@@ -2015,6 +2015,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
     updateDifficulty();
+    for (const key of Object.keys(survival.chests)) migrateChestFacing(world, survival.chests, ...key.split(",").map(Number)); // b93 tiles93: an old save's record facing moves into the cell once, here (the renderer repeats it for chunks that load later)
     // Chest blocks saved without tile data get the facing onBlockAdded gives them.
     for (const [key, b] of world.edits) {
       if (isChestBlock(b) && !survival.chests[key]) adoptChest(world, survival.chests, ...key.split(",").map(Number)); // b91 tiles91: the cell metadata is the facing

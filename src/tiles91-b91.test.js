@@ -47,7 +47,7 @@ test("old saves: the record's facing is the fallback and moves into the cell; a 
   const w = flat(), chests = { "14,40,14": newChest(5), "15,40,15": newChest(2) };
   w.set(14, 40, 14, CHEST); w.set(15, 40, 15, CHEST);
   assert.equal(w.getMeta(14, 40, 14), 0);
-  assert.equal(chestFacing(w, chests, 14, 40, 14), 5, "meta 0 reads the record");
+  assert.equal(chestFacing(w, chests, 14, 40, 14), 3, "b93: meta 0 no longer reads the record");
   assert.equal(migrateChestFacing(w, chests, 14, 40, 14), true);
   assert.equal(w.getMeta(14, 40, 14), 5);
   assert.equal(migrateChestFacing(w, chests, 14, 40, 14), false, "already migrated");

@@ -95,7 +95,7 @@ test("hosts: the server's sensors read sim.ticks and the pre-step skylightSubtra
   assert.match(main, /angle: \(\) => sensorSky\(survival\.time\)\.angle,/);
   assert.match(main, /totalTime: \(\) => \(mobs \? \(mobs\.worldTicks \?\? -1\) \+ 2 : undefined\),/, "the beacons' total time (tickBeacons): the mobs' tick runs after tickWorldSystems");
   assert.match(src("redstone-runtime.js"), /celestialAngle: celestialRadians\(game\.angle\?\.\(\) \?\? 0\)/);
-  assert.match(src("away-world.js"), /Object\.assign\(sensorSky, skyAt\(t, cycling\(\), weather\.rainStrength\(1\), weather\.weightedThunder\(1\)\)\)/, "the away run shares the helper");
+  assert.match(src("away-world.js"), /skyAt\(pre \+ step, step === 1, weather\.rainStrength\(1\), weather\.weightedThunder\(1\)\)/, "the away run shares the helper");
 });
 
 // ---- 1. chest <-> trapped chest on the server ----

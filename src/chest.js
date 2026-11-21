@@ -11,15 +11,13 @@ export const FACING = { 2: [0, -1], 3: [0, 1], 4: [-1, 0], 5: [1, 0] };
 const SIDES = [[0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
 import { largeChestName } from "./tile-names.js";
 export const chestKey = (x, y, z) => `${x},${y},${z}`;
-// b91 tiles91: BlockChest keeps its facing in block metadata (2-5), like the furnace since batch 90. The cell metadata rules; the record's `facing`
-// is only the fallback for a cell whose metadata is not 2-5 (a save from before this batch, an unmigrated column, a replica that has the record only)
-// and is still written for one release so that an older build can read the save. 3 when neither decides.
+// b91 tiles91: BlockChest keeps its facing in block metadata (2-5), like the furnace since batch 90. b93 tiles93: the runtime fallback to the record's `facing`
+// is gone; only migrateChestFacing (run at load and when a chunk is first drawn) moves an old save's record facing into the cell. The record still carries a
+// copy for export and older builds. 3 when the metadata is not 2-5.
 const faced = (f) => f >= 2 && f <= 5;
 export function chestFacing(world, chests, x, y, z) {
   const meta = world.getMeta?.(x, y, z);
-  if (faced(meta)) return meta;
-  const rec = chests?.[chestKey(x, y, z)]?.facing;
-  return faced(rec) ? rec : 3;
+  return faced(meta) ? meta : 3;
 }
 // Chunk.setBlockMetadata with flags 2 (setBlockMetadataWithNotify from func_149954_e / onBlockPlacedBy): the block stays, no breakBlock. Writes the cell
 // metadata (a silent tracked `put`: no neighbour notification, the saved edit carries the metadata) and the record fallback.
