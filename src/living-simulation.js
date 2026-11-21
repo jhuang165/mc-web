@@ -92,7 +92,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   } = hooks;
 
   inhabited.tick(survival.time);
-  if (mobs.ai?.player) { mobs.ai.player.sneaking = !!state.sneaking; if (state.onGround !== undefined) mobs.ai.player.onGround = !!state.onGround; mobs.ai.player.flying = !!state.flying; mobs.ai.player.riding = !!state.rider?.vehicle; if (state.sleeping !== undefined) mobs.ai.player.sleeping = !!state.sleeping; if (state.packetGround !== undefined) { mobs.ai.player.packetGround = !!state.packetGround; mobs.ai.player.sprinting = !!state.sprinting; mobs.ai.player.yaw = state.yaw ?? 0; } } // b83 attack83: processPlayer's packet onGround and the sprint flag, for the jump rule (entities.js serverPlayerUpdate) // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
+  if (mobs.ai?.player) { mobs.ai.player.sneaking = !!state.sneaking; if (state.onGround !== undefined && !mobs.ai.player.left && mobs.ai.player.hasMoved !== false) mobs.ai.player.onGround = !!state.onGround; mobs.ai.player.flying = !!state.flying; mobs.ai.player.riding = !!state.rider?.vehicle; if (state.sleeping !== undefined) mobs.ai.player.sleeping = !!state.sleeping; if (state.packetGround !== undefined) { mobs.ai.player.packetGround = !!state.packetGround; mobs.ai.player.sprinting = !!state.sprinting; mobs.ai.player.yaw = state.yaw ?? 0; } } // b83 attack83: processPlayer's packet onGround and the sprint flag, for the jump rule (entities.js serverPlayerUpdate) // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
   mobs.lootItems = items; // equipment mobs with canPickUpLoot pick items up (mob-equipment.md)
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;
