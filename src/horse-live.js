@@ -175,7 +175,7 @@ export function steeringRider(e) {
 }
 export function horseRideThink(mobs, e) {
   const rider = steeringRider(e), h = e.horse;
-  e.rotationYaw = f(rider.yaw % 360);
+  e.prevRotationYaw = e.rotationYaw = f(rider.yaw % 360); // b92 horse92: wi.e(FF) sets prevRotationYaw too (bytecode-read, executed in horse92-reference.json), so the rider's updateRidden sees no yaw change from the steering
   e.yaw = f(-e.rotationYaw * Math.PI / 180);
   // wi.e(FF): rotationPitch = rider.rotationPitch * 0.5, then renderYawOffset = rotationYawHead = rotationYaw (bytecode-read b77; a rider record without a pitch leaves the pitch alone).
   if (Number.isFinite(rider.pitch)) e.rotationPitch = f(f(rider.pitch * f(0.5)) % 360);
