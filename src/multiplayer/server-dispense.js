@@ -183,12 +183,17 @@ export class ServerDispense {
     if (!hit) return false;
     // EntityArrow.onUpdate (zc, bytecode-read): a landed hit on another player from a player shooter sends S2B reason 6 to the shooter; NetHandlerPlayClient plays
     // random.successful_hit (volume 0.18, pitch 0.45) at (posX, posY + getEyeHeight, posZ): the client's posY is feet + 1.62 and EntityPlayer.getEyeHeight 0.12 (player-item-use.js), so feet + 1.74.
-    if (who && who !== p && this.sim.players.get(who.id) === who) (who.soundsOut ??= []).push({ name: 'random.successful_hit', x: who.position.x, y: who.position.y + 1.74, z: who.position.z, volume: Math.fround(0.18), pitch: Math.fround(0.45) });
+    if (who && (who !== p || a.ownerBody) && this.sim.players.get(who.id) === who) (who.soundsOut ??= []).push({ name: 'random.successful_hit', x: who.position.x, y: who.position.y + 1.74, z: who.position.z, volume: Math.fround(0.18), pitch: Math.fround(0.45) });
     if (s.health > 0) s.arrowCount = addStuckArrow(s.arrowCount);
     arrowPunch(s, a, v => Math.fround(Math.sqrt(v)));
     if (shooter && typeof shooter === 'object' && mobs?.entities?.includes(shooter)) // a hit by a mob's arrow runs the wearer's Thorns on the shooter
       s.thorns?.({ hurt: d => mobs.attackEntityFrom(shooter, d, { from: { x: p.position.x, z: p.position.z }, player: true, name: 'thorns' }),
         sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: shooter.x, y: shooter.y, z: shooter.z, volume: 0.5, pitch: 1, dim: 0 }) });
+    else if (who && p.survival.thorns) { // b91 credit91 (bytecode-read zc.h 1065-1088, afv.a(sv, sa), agj.b): EnchantmentHelper.func_151384_a(victim, shooter) runs for any living shooter, a player's arrow too; a dead old body takes no damage (sv.a: health <= 0) but the sound still plays at it
+      const body = a.ownerBody, at = (body ?? who).position, vFrom = () => this.sim.pvpRules.fromOf(p);
+      s.thorns({ hurt: d => { if (!body) this.sim.damagePlayer(who, d, { name: 'thorns', from: vFrom(), call: () => who.survival.damage(d, 'thorns', true, 'thorns', vFrom()) }); },
+        sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: who.dimension | 0 }) });
+    }
     return true;
   }
   // A snowball or egg that struck: a mob takes the 0-damage thrown hit (3 on a blaze); a player takes none (EntityPlayer.attackEntityFrom returns false for 0).
@@ -256,7 +261,7 @@ export class ServerDispense {
   }
   tickArrow(lane, a, ctx) {
     if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
-    ctx.hanging = this.hangingOf(lane.dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings
+    ctx.hanging = this.hangingOf(lane.dim)?.arrowHost((a.ownerBody ?? this.ownerOf(a))?.survival?.creative); // b68 mppaintings; b91 credit91: EntityHanging.attackEntityFrom reads the old shooter's capabilities (the body's frozen flag)
     ctx.tntPlacer = this.ownerOf(a); // b86 blastcover86: BlockTNT.onEntityCollidedWithBlock (aob.a(ahb,III,sa), bytecode-read): a burning arrow's TNT has the shooter as placer
     this.credit(this.ownerOf(a), () => lane.arrows.tickOne(lane.world, a, ctx));
   }
