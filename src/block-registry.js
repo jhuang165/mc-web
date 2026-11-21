@@ -59,8 +59,9 @@ const MAP = {
   // BlockFurnace: facing 2-5 (3 is func_149930_e's open-neighbour default); lit_furnace is 62.
   14: {
     mc: 61, also: [62],
-    to: (meta, state) => [state.lit ? 62 : 61, facing(state)],
-    from: (meta, mc) => ({ meta: 0, state: { facing: meta, ...(mc === 62 ? { lit: true } : {}) }, exact: meta >= 2 && meta <= 5 }),
+    // b90 tiles90: BlockFurnace keeps its facing in block metadata (2-5), so the cell carries it both ways; `state.facing` only fills in a cell whose metadata is not 2-5.
+    to: (meta, state) => [state.lit ? 62 : 61, meta >= 2 && meta <= 5 ? meta : facing(state)],
+    from: (meta, mc) => ({ meta: meta >= 2 && meta <= 5 ? meta : 0, state: { facing: meta, ...(mc === 62 ? { lit: true } : {}) }, exact: meta >= 2 && meta <= 5 }),
   },
   15: fixed(16), 16: fixed(15), 17: fixed(56), 18: fixed(14), 19: same(35),
   // BlockTorch: metadata 1-4 on a wall, 5 standing. The port stores a standing torch as 0 (and
