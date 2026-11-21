@@ -65,7 +65,7 @@ export function installHorseGear(EntityWorld) {
     const l = e.leash;
     // Away run (away-entities.js): the player is in another dimension. td.bL steps only when the holder's world is the mob's own (bytecode-read, batch 43), and sw.bL keeps a
     // holder that is not dead, so the lead stays on and does nothing.
-    if (l?.holder === "player" && this.ai?.player?.absent) return { away: true, x: 0, y: 0, z: 0 };
+    if (l?.holder === "player" && (this.ai?.player?.absent || this.ai?.player?.left)) return { away: true, x: 0, y: 0, z: 0 };
     if (l?.holder === "player") { const p = this.ai?.player; return p && p.alive !== false ? { x: p.x, y: p.y, z: p.z, player: true } : null; }
     // Another mob holds (EntityLiving.func_110162_b with a living holder): found by UUID among this world's mobs; a dead or missing one holds nothing.
     if (l?.holder === "mob") { const m = this.leashHolderMob(l); return m ? { x: m.x, y: m.y, z: m.z, mob: m } : null; }

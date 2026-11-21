@@ -92,7 +92,7 @@ export function buildOcelotTasks(m, K) {
   // EntityOcelot's constructor: getNavigator().setAvoidsWater(true).
   m.navigator.setAvoidsWater(true);
   // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) && ownerPresent(e) ? m.ai.player : null);
+  m.owner = () => (isTamed(e) && ownerPresent(e) && !m.ai.player.left ? m.ai.player : null); // b91 spcopy91: see wolf-ai.js
   // EntityOcelot.bp (the AI update after the navigator, before the move helper): the speed the helper is about to use
   // decides sneaking (EntityAITempt's 0.6) and sprinting (1.33).
   m.updateAITick = () => Object.assign(e, movePose(m.moveHelper.update, m.moveHelper.speed));

@@ -233,7 +233,7 @@ export function applyExplosion(state, request, hooks = {}) {
       drainKnockback(survival, velocity, position);
       // Explosion.doExplosionA: the server's own motion gets the push less floor(impact * Blast Protection level * 0.15F); the S27 to the client carries the unreduced push.
       const kick = blastKnockback(survival.inventory?.armor ?? [], playerHit.impact), scale = playerHit.impact && kick !== playerHit.impact ? kick / playerHit.impact : 1;
-      const server = survival.serverPlayer?.motion; // the server's EntityPlayerMP gets the same Explosion.func_77277_b push (its motion leads a witch's aim); the hit's own knockback reached it in queueKnockBack
+      const server = survival.serverPlayer?.left ? null : survival.serverPlayer?.motion; // the server's EntityPlayerMP gets the same Explosion.func_77277_b push (its motion leads a witch's aim); the hit's own knockback reached it in queueKnockBack
       if (server) { server.x += playerHit.push[0] * scale; server.y += playerHit.push[1] * scale; server.z += playerHit.push[2] * scale; }
       // b79 explfx79 (bytecode-read bjb.a(gu), bjb.a(hy)): handleExplosion adds the float push to the client motion; handleEntityVelocity then replaces that motion with the server copy's (quantised).
       // So a hurt player ends with the server copy's motion (Blast Protection applied, the unreduced push overwritten), a creative or hurt-window-refused one keeps the unreduced S27 push.

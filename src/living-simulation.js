@@ -56,7 +56,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     if (event.dragonPush) {
       push(event.dragonPush, event);
       // The server copy is the entity the dragon's sweep really pushes (EntityDragon.collideWithEntities runs server-side): its motion takes the same addVelocity.
-      const copy = mobs.ai?.player?.motion, v = event.dragonPush;
+      const copy = mobs.ai?.player?.left ? null : mobs.ai?.player?.motion, v = event.dragonPush;
       if (copy) { copy.x += v.x; copy.y += v.y; copy.z += v.z; }
     }
   }
