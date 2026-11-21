@@ -141,6 +141,12 @@ const unload = (c, ctx) => s21({ x: Array.isArray(c) ? c[0] : c?.x, z: Array.isA
 const s26 = (cs, ctx) => C[38] + 12 * cs.length + memo(cs, 'bulk', () => columnsDeflated(cs, ctx?.chunks, { full: true, mask: 0xffff })); // S26: short, int, bool, data (one deflate), then int x, int z, short, short a column
 const bulks = (columns, ctx) => { const cs = list(columns); if (cs.length <= 5) return cs.length ? [[38, s26(cs, ctx)]] : []; const out = []; for (let i = 0; i < cs.length; i += 5) out.push([38, s26(cs.slice(i, i + 5), ctx)]); return out; }; // gz.c() = 5 columns a packet
 const s13 = (n) => (n ? C[19] + 4 * n : 0); // byte count, int ids
+/**
+ * b94 console94: one S13 per connection and player tick. `ctx.destroyed = { n, next }` is the player's destroyedItemsNetCache: `n` are ids the port already held a tick (mobs, items, thrown
+ * rows, a cart that left the 4-block re-check), due in this tick's drain; `next` are ids of an immediate removal (TNT, fireball and golem rows, a dead cart or boat), due one drain later.
+ * Without a queue the ids count at once, one S13 per kind as before.
+ */
+const queueDestroys = (ctx, n, late) => { if (!n) return []; const q = ctx?.destroyed; if (!q) return [[19, s13(n)]]; if (late) q.n = (q.n | 0) + n; else q.next = (q.next | 0) + n; return []; };
 // b90 console90: the entity tracker's packets by their own native id. The fixed sizes are the executed "base" rows (S15 8, S16 7, S17 10, S18 19, S19 6, S12 11, S1D 9);
 // S0F and the first S1C carry the mob class's whole DataWatcher (MOB_WATCHER: entry bytes plus the 127 end byte, executed per class by tools/probes/Console90Probe.java:
 // S0F = 24 + that, S1C = 5 + that); a later S1C writes only the changed entries; S04 holds an ItemStack; S20 rows are bytecode-read (il.b: string, double, short, 25 per modifier).
@@ -199,7 +205,7 @@ const mobRecords = (packets, ctx) => {
       if (live) { const now = watchState(live), n = watchDiff(last, now); watch.memory.set(p.i, now); if (n) out.push([28, C[28] - 1 + 1 + n]); }
     }
   }
-  if (destroys) out.push([19, s13(destroys)]);
+  out.push(...queueDestroys(ctx, destroys, true));
   return out;
 }; // the tick's destroyed ids go in one S13
 
@@ -215,10 +221,10 @@ const objectPacket = (p) => {
   if (k === 'meta') return [28, C[28] - 1 + 1 + list(p.list).reduce((n, e) => n + entryBytes(e), 0)];
   return POSITION[k] ?? null;
 };
-const objectRecords = (rows) => {
+const objectRecords = (rows, ctx) => {
   const out = []; let destroys = 0;
   for (const r of list(rows)) for (const p of list(r?.p)) { if ((p?.type ?? p?.k) === 'destroy') { destroys++; continue; } const o = objectPacket(p); if (o) out.push(o); }
-  if (destroys) out.push([19, s13(destroys)]);
+  out.push(...queueDestroys(ctx, destroys, true));
   return out;
 };
 // b91 console91: a cart or boat row of `vehicles`. server-cart-track.js records which packets the entry released for the row (vehicleInfo: position kinds, the S12, a join's S0E,
@@ -252,14 +258,19 @@ const dispEntRecords = (m, ctx) => {
     out.push(...kindRecords(info.kinds ?? ballKinds(r?.t)));
   }
   for (const key of [...mem.keys()]) if (!seen.has(key)) { mem.delete(key); gone++; }
-  if (gone) { if (ctx.destroyed) ctx.destroyed.n += gone; else out.push([19, s13(gone)]); } // b93 console93: EntityPlayerMP.func_152339_d queues the id; the next onUpdate sends it
+  out.push(...queueDestroys(ctx, gone, false)); // b93 console93: EntityPlayerMP.func_152339_d queues the id; the next onUpdate sends it
   return out;
 };
 /**
  * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127
  * (`Math.min(size, 127)`, the loop repeats until the list is empty), bytecode-read. Returns the records and empties the queue.
  */
-export const drainDestroyed = (q) => { const out = []; while (q && q.n > 0) { const k = Math.min(q.n, 127); out.push([19, s13(k)]); q.n -= k; } return out; };
+export const drainDestroyed = (q) => {
+  const out = [];
+  while (q && q.n > 0) { const k = Math.min(q.n, 127); out.push([19, s13(k)]); q.n -= k; }
+  if (q) { q.n = q.next | 0; q.next = 0; } // b94 console94: what the tick's immediate removals queued is due at the next drain
+  return out;
+};
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
 const payload = (channel, data) => 1 + stringSize(channel) + 2 + data; // C17/S3F: string channel, short length, data
 const CLIENT_BYTES = {
@@ -306,13 +317,13 @@ const CLIENT_PACKETS = {
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
   tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...list(m.players).filter((p) => ctx?.self === undefined || p?.id !== ctx.self).map(() => [24, C[24]]),
-    ...cellRecords(m.changes), ...objectRecords(m.itrack), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
+    ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),
   chunkBulk: (m, ctx) => bulks(m.columns, ctx),
   mobs: (m, ctx) => mobRecords(m.packets, ctx),
-  vehicles: (m) => [...list(m.set).flatMap(vehicleRecords), ...(list(m.del).length ? [[19, s13(list(m.del).length)]] : [])],
-  dispEnts: (m, ctx) => [...dispEntRecords(m, ctx), ...objectRecords(m.trk)], fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
+  vehicles: (m, ctx) => [...list(m.set).flatMap(vehicleRecords), ...queueDestroys(ctx, list(m.del).length - (m.delLate | 0), false), ...queueDestroys(ctx, m.delLate | 0, true)], // b94 console94: `delLate` ids of `del` had waited a tick already
+  dispEnts: (m, ctx) => [...dispEntRecords(m, ctx), ...objectRecords(m.trk, ctx)], fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
   pistonTiles: (m) => each(36, m.events, () => C[36]), crack: (m) => each(37, m.cracks, () => C[37]), aux: (m) => each(40, m.events, () => C[40]),
   sound: (m) => each(41, m.sounds, (s) => C[41] - 1 + stringSize(s?.name ?? s?.n ?? s?.sound ?? '')), // S29: string name, int x, y, z, float volume, byte pitch
   dispFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? e?.name ?? '')), fishFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? '')), // S2A: string name, 7 floats, int
