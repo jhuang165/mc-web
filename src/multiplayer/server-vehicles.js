@@ -386,7 +386,7 @@ export class ServerVehicles {
     eachView90(this.views, (view, id) => { // b90 mpperf90: Map.forEach, no [id, view] entry array per view (the body's one `continue` is the `return`)
       const p = this.host.players.get(id);
       if (!p) { view.known.clear(); view.vis?.clear(); view.ref = null; view.leaving = []; return; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
-      let quiet = null; const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map()), joins = (view.joins ??= new Map()); // b84 mpboat84: joins, the spawn record of each tracked vehicle
+      let quiet = null, late = 0; const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map()), joins = (view.joins ??= new Map()); // b84 mpboat84: joins, the spawn record of each tracked vehicle
       // b83 tracker83: the range test of EntityTrackerEntry.tryStartWachingThis (the square of side 2 * range around lastScaledPosition / 32, int division), run only when the
       // vehicle's entry re-lists (it moved over 4 blocks: CartTracker `recheck`, with the scaled position from before its packets) or this player's own entry does (it moved over
       // 4 blocks, joined, or its columns changed), as EntityTracker.updateTrackedEntities; in between the membership holds. A vehicle that leaves goes at the viewer's next update
@@ -421,11 +421,11 @@ export class ServerVehicles {
       if (fast89.mode === 'off' || view.known.size !== seen.size) // b89 mpperf89: every seen key is known, so equal sizes leave nothing to delete
       for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); joins.delete(key); del.push(key); } // dead, or its column not sent
       if (fast89.mode === 'off' || leaving.length !== 0) // b89 mpperf89: skip a loop that would do nothing
-      for (const key of leaving) if (!vis.has(key)) del.push(key); // last tick's untracked vehicles: the S13 now
+      for (const key of leaving) if (!vis.has(key)) { del.push(key); late++; } // last tick's untracked vehicles: the S13 now
       if (fast89.mode === 'off' || vis.size !== 0) // b89 mpperf89: skip a loop that would do nothing
       for (const key of vis) if (!all.some(v => keyOf(v) === key)) vis.delete(key);
       p.vehNet = quiet; // b92 console92: counted by the connection, never sent
-      if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
+      if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(late ? { delLate: late } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
     });
     for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel
     this.carts.reap(); this.boats.reap();

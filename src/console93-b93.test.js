@@ -47,9 +47,11 @@ test("a vanished dispEnts row's S13 waits for the next tick when the connection 
   const row = (i) => setRowInfo({ k: "t", i, x: 0, y: 0, z: 0, fuse: 40 }, { data: 0, velocity: true, watch: 11, kinds: [] });
   writePackets({ type: "dispEnts", ents: [row(1), row(2)] }, ctx);
   assert.deepEqual(writePackets({ type: "dispEnts", ents: [row(1)] }, ctx), [], "tick N: nothing counted, the id is queued");
-  assert.equal(destroyed.n, 1);
+  assert.equal(destroyed.next, 1);
+  assert.deepEqual(drainDestroyed(destroyed), [], "tick N's own drain (b94: the removal's tick) sends nothing");
   assert.deepEqual(drainDestroyed(destroyed), [[19, 6]], "tick N + 1's onUpdate");
   assert.deepEqual(writePackets({ type: "dispEnts", ents: [] }, ctx), []);
+  drainDestroyed(destroyed);
   assert.deepEqual(drainDestroyed(destroyed), [[19, 6]]);
   const old = { objs: new Map() };
   writePackets({ type: "dispEnts", ents: [row(1)] }, old);
@@ -77,6 +79,7 @@ test("a golem snowball's entry sends position packets on the 64 / 10 / velocity 
   assert.deepEqual(writePackets({ type: "dispEnts", ents: [b([])] }, ctx), [[14, C[14]], [28, 11], [18, 11]]);
   assert.deepEqual(writePackets({ type: "dispEnts", ents: [b([{ type: "move" }, { type: "velocity" }])] }, ctx), [[21, 8], [18, 11]]);
   assert.deepEqual(writePackets({ type: "dispEnts", ents: [] }, ctx), []);
+  drainDestroyed(destroyed);
   assert.deepEqual(drainDestroyed(destroyed), [[19, 6]]);
 });
 

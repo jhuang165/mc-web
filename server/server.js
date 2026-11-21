@@ -204,7 +204,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
     if (message.type === 'dimRespawn') ws.netObjs?.clear(); // b92 console92: the rebuilt world holds no tracked objects (the rows are spawned again)
-    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}), ...(message.type === 'dispEnts' ? { objs: (ws.netObjs ??= new Map()), destroyed: (ws.netDestroyed ??= { n: 0 }) /* b93 console93: S13s wait for the next tick */ } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
+    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}), ...(message.type === 'dispEnts' ? { objs: (ws.netObjs ??= new Map()) } : {}), ...(message.type === 'dispEnts' || message.type === 'mobs' || message.type === 'tick' || message.type === 'vehicles' ? { destroyed: (ws.netDestroyed ??= { n: 0, next: 0 }) /* b93 console93, b94 console94: every kind's S13 ids of the tick share one queue */ } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -364,7 +364,6 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.
       for (const [pid, player] of simulation.players) {
         const ws = sockets.get(pid);
-        if (ws?.netDestroyed?.n) for (const [packetId, bytes] of drainDestroyed(ws.netDestroyed)) simulation.admin.netStats.write(packetId, bytes); // b93 console93: EntityPlayerMP.onUpdate sends the S13s queued last tick, before this tick's tracker packets
         if (player.refusal && ws) send(ws, { type: 'chat', name: '', text: player.refusal });
         if (player.blocks && ws) send(ws, { type: 'blocks', changes: player.blocks });
         if (player.openSign && ws) send(ws, { type: 'signEditor', x: player.openSign[0], y: player.openSign[1], z: player.openSign[2] }); // S36 open sign editor
@@ -391,6 +390,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         for (const m of player.chunkOut ?? []) if (ws) send(ws, m); player.chunkOut = null; // b71 mpchunks: S21 unloads, then the S26 bulk columns
         for (const m of player.pistonOut ?? []) if (ws) send(ws, m); player.pistonOut = null; // b66 mppistons: S24 and the moving blocks (server-pistons.js)
         player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null; player.itemsOut = null; player.mobPackets = null;
+        if (ws?.netDestroyed) for (const [packetId, bytes] of drainDestroyed(ws.netDestroyed)) simulation.admin.netStats.write(packetId, bytes); // b93 console93, b94 console94: the player's onUpdate sends the S13 ids queued last tick together with the ones the port already held (every kind), counted after this slot's mob, vehicle and entity messages
       }
       if (autosave.step()) void save().catch(() => {}); // b89 console89: MinecraftServer.u(): tickCounter % 900 after the tick's world, network and console work; oi.j() then a(true), silent
     }
