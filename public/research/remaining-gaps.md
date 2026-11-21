@@ -2,6 +2,44 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 88
+
+Batch 88 covered these areas (track agents ran on Opus, by request):
+- **Horses.** Single-player riding matches native tick for tick in 18 executed runs (`Horse88Probe`). The ridden move takes the rider's input as is (the port decayed it by 0.98, also on the server); a jump released in mid air no longer fires on landing; a plain rear holds still; jump strength reads the attribute with its modifiers; yaw wraps `% 360`. Pigs with a carrot on a stick already matched.
+- **Boat placement and crystals.** The server's boat ray uses MathHelper's tables and the server eye (`BoatRayProbe`, 116 edge records, 0 mismatches); a dead player blocks a boat through death tick 20 only. The crystal box is [y-1, y+1] everywhere (`crystalBox` in `ender-crystal.js`); carts pass through crystals, boats stop at them, witch potions skip them, and they press only "everything" plates. The single-player player collides with the tracker's boat copies, so standing on a boat goes from 167 corrections in 200 ticks to 5.
+- **Entity tracking.** The mob trackers give a returning player the native spawn, metadata and double delta; an arriving player takes its place after the pass's new entities; a late viewer gets spawn, full metadata, attach and one equipment packet per slot, and the client copy draws the equipment. With no mob system, objects spawned inside `tickEntitySimulation` keep their spawn state.
+- **The single-player copy.** Landing dust, farmland trampling and the fall stat come from the copy's `handleFalling`; a position set inside the copy's tick ends the packet; a dismount is a position set; a dead mount leaves the copy at its seat; a portal trip carries fall distance and water state.
+- **Explosions and kill credit.** The server reads the player's look from its per-tick copy; a punched fireball deflects another ball and kills with the puncher's Looting; fireballs save no shooter; an ownerless wither skull does 5 magic damage with no knockback and hits players. One player's TNT hitting another is the placer's "explosion.player", unscaled, refused with pvp off; a self kill counts. Arrow kills take the Looting of the item held at that moment.
+- **The dedicated server.** Player data saves during /save-off (chunks do not); /save-all saves every world; /netstat reports native packet sizes from executed sizes of 99 packet classes (`Console88Probe`); /stop follows the native order. `/save-all flush` exists in 1.7.10.
+- **Tiles.** A server chest/trapped chest swap spills and starts empty; a meta-only sign rewrite leaves a blank sign; the live daylight sensor runs on `getTotalWorldTime() % 20` with native inputs (`Tiles88Probe`, 728 records); in single player `/setblock` over an open container closes its screen; `/setblock` over an ender chest makes a new tile.
+- **Entity NBT.** Mob saves keep Fire, OnGround, FallDistance and pitch; non-living entities keep the tag's Air or 0; every entity gets a random UUID at construction; projectiles keep PortalCooldown and Dimension; hanging entities keep theirs; an untagged Nether summon writes Dimension 0; no PortalCooldown clamps on load; boat falls already matched (`Entnbt88Probe`).
+- **Mob records.** 20 executed records replay with no divergence: cave spider poison on each difficulty, an iron golem against creepers and spiders, a snow golem against zombies and creepers. Snow golem snowballs draw the constructor's three aim randoms, skip creepers as targets, and round the lift twice.
+- **Server speed.** Behind `MC_MPPERF88=on|off|verify` (identical state hashes): stable number fields on mobs, index loops instead of for-of on the hot paths, departed watchers' stamps released, target numbers in a Float64Array. Heap growth per tick is 30% lower in travel, 34% in terrain and 6% in pen; tick time is unchanged.
+
+Found wrong in the batch 87 list:
+- `/save-all flush` exists in 1.7.10 (its lang keys are missing, so players see the raw keys).
+- The live daylight sensor gated on the port's own redstone counter, neither world time nor total time.
+- Boat fall distance already matched native.
+
+Still open from batch 88:
+- **Multiplayer.**
+  - Horses: on the sneak tick the native horse makes one more ridden move and lands a jump sent that tick; a fresh horse's first ridden tick has air speed 0 natively; mob-ridden horses unchecked.
+  - Boats and crystals: the port's server sends no falling-block rows, so the client has no falling-block copies; crystals have eye height 1.7 on the server (natively 0); the `/summon EnderCrystal` y convention, piston-pushed crystals and fireball targets still use old boxes; the multiplayer client does not collide with remote boats while walking.
+  - Tracking: no S20 attribute or S1D effect packets for mobs; a mob's server tracker entry is created after its first update; skeleton arrows do not update in their spawn tick.
+  - The single-player copy: a boat or cart broken under the player sends no S08; the old copy keeps ticking through the portal save; motion is not carried over; the mount and sleep-start ticks are direct placements; the client still looks for a `dismountSpot` when the vehicle dies.
+  - Kill credit: the server credits the last attacker, not the combat tracker's choice; a respawned player's earlier TNT credits his new body; the fireball punch reads the look at the action; dispensed arrows restore a shooter by name (native saves none); a dispensed snowball counts as a player hit.
+  - The dedicated server: the autosave interval is 10 s, not 900 ticks; chunk sizes in /netstat are a stand-in; bundled messages count once; the stop kick is a WebSocket close, not an S40 row.
+  - Speed: the remaining for-of loops in `thrown-tracks.js`, `server-vehicles.js` and the `simulation.js` player loop; mobs loaded through `EntityWorld.restore` are not reshaped; the largest allocators are now `moveEntityBody`, `moveWith`, the AI getters and `FineGrid`.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: mob equipment on copies, the double-delta overshoot, the "Server closed" screen, grazing-angle boat placement, PvP TNT death messages, plus the batch 67 to 87 lists.
+- **Single player.**
+  - Tiles: a non-command world edit clears a sign only on an id change, and chest swaps are handled only through `/setblock`; chest and furnace facing lives in the tile record, so `/setblock chest <facing>` over a chest reports no change; the server's `darkness` uses the world time after the increment.
+  - Entity NBT: `travelToDimension` picks the wrong source world when the saved Dimension differs; fireballs and rockets do not count PortalCooldown down; mob import clamps Fire to -1; eggs and fishing bobbers are not exported.
+  - Mob records: no snow golem against a blaze, poison on a mob, a spider jockey climbing, poison above level I, or a poisoned player's hunger and regeneration.
+  - Not seen in a browser: the horse jump bar when mounting with the key held, standing on a floating boat, the copy's landing dust and trampling, the screen closing after `/setblock`, snowballs and poison hearts, a reloaded mob's pitch and fire, plus the batch 87 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 87
 
 Batch 87 covered these areas (track agents ran on Opus, by request):
@@ -24,23 +62,7 @@ Found wrong in the batch 86 list:
 - The batch 86 pigman damage record was the Hard value, not Normal.
 - Away-run daylight sensors did not read noon: the run never refreshed them, so they kept their value from when the player left.
 
-Still open from batch 87:
-- **Multiplayer.**
-  - Riding: single-player horse jump counter timing in `vehicle-simulation.js` is not checked against native.
-  - Boat placement: the server boat ray uses Math.sin/cos, not the native tables; a dead player stays in the check until death tick 20; there are no client falling-block copies; `dragon-mobs.js` and `placement-entities.js` still use feet-based crystal boxes.
-  - Tracking: in single player, objects that update outside the walk before the tracker pass (besides eyes and the hook) are not copied first; with no mob system, objects spawned inside `tickEntitySimulation` are not copied; where the player falls among spawns inside the walk is not modelled; mob trackers are unchecked for the returning-player issue.
-  - The single-player copy: boat bobbing, trampling, dust and the fall stat stay on the client; the S08 wait, a stale seat and the dimension transition tick are not ported.
-  - Explosions on the server: the player's look is not native in every path; wither skull and ghast sources are not checked; player-against-player TNT credit; `punchedBy` is not saved; Looting from arrows.
-  - Console and offline mode: the 900-tick autosave skips everything under /save-off, while natively it still saves all player data; /netstat byte counts are JSON lengths, not VarInt frames.
-  - Speed: mob objects have many shapes, so V8 boxes each coordinate read and `push87` deoptimises; the `next` builtin; departed watchers' stamp slots linger until reused.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: horse jump bar, Creative armour in the hotbar, fall damage one network tick after landing, spawn and return copies, hook pushes across dimensions, plus the batch 67 to 86 lists.
-- **Single player.**
-  - Tiles: a chest and trapped chest swap on the server; a meta-only sign rewrite; the live daylight sensor on world time; single-player `/setblock` does not close an open screen.
-  - /summon: mob saves drop Fire, OnGround, FallDistance and pitch; non-living summons export Air 300 (natively the tag's value or 0); items, orbs, hanging entities, projectiles and untagged TNT and falling blocks have no stored UUID; projectile exports write PortalCooldown 0 and the region's Dimension; hanging entities drop PortalCooldown; an untagged Nether mob exports Dimension -1 (natively 0); items, boats and carts clamp PortalCooldown to 300 on load; boats keep their own fall code.
-  - Not seen in a browser: spilled container items, ocelot temptation, a fresh mob's head turn, plus the batch 86 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 87: carried into the batch 88 list above, less what batch 88 fixed.
 
 ## Done in batch 86
 

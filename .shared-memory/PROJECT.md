@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 88 (2026-11-20, ten tracks in `../wt88-<name>` on `batch88-<track>`, cut from fd68ecc68, merged --no-ff on `batch88-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b88-lead/track-rules.md`; lead note `b88-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.117.0, by track (details in the `*-b88-track.md` notes and "Done in batch 88" in `public/research/remaining-gaps.md`):
+  - horse88: `Horse88Probe` (18 runs); undecayed ride input, jump clear timing, `jumpHeld`, yaw `% 360`, the jump strength attribute (`horse-live.js`, `vehicle-simulation.js`).
+  - boatray88: `boatRay` in `boats.js` for the server too (`BoatRayProbe`, 116 records); dead players through death tick 20; `crystalBox` in `ender-crystal.js` everywhere; single-player player collides with tracker boat copies (`entity-collision.js`).
+  - track88: `beforePass`/`tryStartWith` in `server-mob-entries.js` (returning and arriving players); late-viewer packet order and client equipment (`remote-mobs.js`); `hooks.born` in `entity-simulation.js`.
+  - spcopy88: landing dust, trampling and fall stat in the copy; the in-tick position-set return; dismount as a position set; `serverMount` stale seat; portal carry-over.
+  - blast88: `serverLook` per tick; punched fireball deflection and Looting; no saved fireball shooter; ownerless wither skulls; PvP TNT as "explosion.player"; arrow Looting; capped knockback separation loops.
+  - console88: `server-save.js` (player data under /save-off, forced /save-all); native /netstat sizes (`Console88Probe`); the native /stop order.
+  - tiles88: `server-tile-swaps.js` (chest and sign swaps), `daylight-sensor-time.js`, `container-tiles.js` (screen close on `/setblock`; `Tiles88Probe`, 728 records).
+  - entnbt88: kept Entity keys on mobs and objects, random UUIDs at construction (`entity-uuid.js`), raw PortalCooldown, Nether summon Dimension 0 (`Entnbt88Probe`).
+  - mobrec88: 20 executed cave spider, iron golem and snow golem records (`b88mr`); snow golem aim randoms, creeper skip and lift rounding.
+  - mpperf88: `mpperf88-fast.js` behind `MC_MPPERF88=on|off|verify`; `mobShape88`, index loops, `releaseWatcher88`, `mobTargetAt88` (heap per tick -30% travel, -34% terrain, -6% pen).
+- Lead fixes: kept both sides in three merge conflicts: the dated `commands.md` entries (console88 and entnbt88), the fireball load in `fireballs.js` (entnbt88's kept Entity keys with blast88's no-shooter rule), and the imports in `boats.js` (entnbt88 and boatray88). `scheduled-ticks.test.js` and `simulation-replay.test.js` compared two runs that each spawn falling blocks with their own random UUIDs (entnbt88); they now leave the UUID out (b18262a22).
+- Verification: cross-track run of 265 files with MC_MPPERF83..88=verify: 3747/3747. One full `npm test` on 8dd57848a: 9956 tests, 9954 pass, 2 fail (those two comparisons, fixed in b18262a22 and rerun 9/9). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 88" in `public/research/remaining-gaps.md`.
+
 Batch 87 (2026-11-20, ten tracks in `../wt87-<name>` on `batch87-<track>`, cut from b95bfd9ac, merged --no-ff on `batch87-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b87-lead/track-rules.md`; lead note `b87-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.116.0, by track (details in the `*-b87-track.md` notes and "Done in batch 87" in `public/research/remaining-gaps.md`):
   - ride87: horses jump through C0B 6 and `horseJumpCounter` only; single-player lily pads through `boatClearCell`; Creative armour stays in the hand with a window resend.
