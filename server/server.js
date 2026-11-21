@@ -18,6 +18,9 @@ import readline from 'node:readline'; // b86 console86: the server console
 import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.js'; // b87 offline87: /netstat's native packet ids
 import { planSave, savePlayerData, STOP_LOG, STOP_KICK, worldSaveLine } from '../src/multiplayer/server-save.js'; // b88 console88: saves under /save-off, the stop sequence
 import { readPacketBytes, writePacketBytes } from '../src/multiplayer/net-packet-ids.js'; // b88 console88: /netstat's native record sizes
+import { readPackets, writePackets, kickPacket } from '../src/multiplayer/net-packet-ids.js'; // b89 console89: one /netstat record per native packet, kicks as S40
+import { chunkSourceFor } from '../src/multiplayer/net-native-bytes.js'; // b89 console89: the receiving player's world for the deflated chunk data
+import { autosaveClock, autosaveTicksOf } from '../src/multiplayer/server-save.js'; // b89 console89: the autosave on MinecraftServer.u()'s tick counter
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
 import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/server-ping.js'; // b68 mpping
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
@@ -173,7 +176,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
-    const packetId = writePacketId(message); if (packetId !== null) simulation.admin.netStats.write(packetId, writePacketBytes(message) /* b88 console88: the native frame bytes, not the JSON length */); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id
+    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -199,6 +202,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   };
   simulation.admin.loadFiles();
   simulation.admin.host = { kick: (pid, reason) => { const ws = sockets.get(pid); if (ws) ws.close(1008, closeReason(reason)); }, ipOf: (pid) => ips.get(pid), save: () => save({ force: true }) /* b88 console88: bh clears every levelSaving flag around its save */, stop: () => { void close().then(() => onStop?.()); } };
+  { const kick = simulation.admin.host.kick; simulation.admin.host.kick = (pid, reason) => { if (sockets.get(pid)?.readyState === WebSocket.OPEN) simulation.admin.netStats.write(...kickPacket(reason)); kick(pid, reason); }; } // b89 console89: NetHandlerPlayServer.c(String) sends an S40 with the full reason (/kick, /ban, /ban-ip, the idle kick)
   const social = new ServerSocial({ simulation, ops, deliver: (pid, message) => { const ws = sockets.get(pid); if (ws) send(ws, message); } });
   // b86 console86: console lines (DedicatedServer.func_71331_a queues them, func_71333_ah runs them after the tick's world and network work) and the server log
   // (MinecraftServer.a(fj): the unformatted text): the console's own lines and the admin notices of every other sender.
@@ -230,7 +234,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (--budget < 0 || binary) return ws.close(1008, 'Message rate or format rejected');
         const m = JSON.parse(data.toString());
         if (!m || typeof m !== 'object') return ws.close(1008, 'Invalid message');
-        { const packetId = readPacketId(m); if (packetId !== null) simulation.admin.netStats.read(packetId, readPacketBytes(m) /* b88 console88: native frame bytes */); } // b86 console86: /netstat (the decoder ez records each packet); b87 offline87: under its native id, after the parse (ez counts only registered ids)
+        for (const [packetId, bytes] of readPackets(m) ?? []) simulation.admin.netStats.read(packetId, bytes); // b86 console86: /netstat (the decoder ez records each packet); b87 offline87: under its native id, after the parse (ez counts only registered ids); b89 console89: one record per native packet
         if (!joined && handleStatus(m, r => send(ws, r), () => ({ motd, online: sockets.size, max: simulation.rules.maxPlayers, names: [...simulation.players.values()].map(p => p.name), favicon }))) return; // b68 mpping: pre-login status request and ping (NetHandlerStatusServer)
         if (!joined) {
           if (m.type !== 'join' || m.protocol !== PROTOCOL) return ws.close(1008, 'This game version differs from the server. Reload the page.');
@@ -252,6 +256,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           }
           simulation.addPlayer(id, account.name, profile.uuid /* b87 offline87: the saved player's key is the profile UUID (playerdata/<uuid>.dat) */, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
+          ws.netId = id; // b89 console89: the receiver of what send() counts (its own pose is not sent; its world gives the chunk data)
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.playerTracker.snapshot(id, simulation.objectTracker.snapshot(id, simulation.snapshot(id))) /* b73 streamfix73 */ /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)) });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
           social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
@@ -315,6 +320,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       broadcast({ type: 'chat', name: '', text: `${name} left the game` });
     });
   });
+  const autosave = autosaveClock(autosaveTicksOf(arguments[0])); // b89 console89: 900 ticks (MinecraftServer.u); `autosaveTicks`, or a test's old `saveMs` in ticks, overrides it
   const tickTimer = setInterval(() => {
     try {
       const tick = simulation.tick();
@@ -354,10 +360,11 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         for (const m of player.pistonOut ?? []) if (ws) send(ws, m); player.pistonOut = null; // b66 mppistons: S24 and the moving blocks (server-pistons.js)
         player.refusal = null; player.blocks = null; player.openSign = null; player.openBeacon = null; player.effectsOut = null; player.cracksOut = null; player.collectedOut = null; player.soundsOut = null; player.itemsOut = null; player.mobPackets = null;
       }
+      if (autosave.step()) void save().catch(() => {}); // b89 console89: MinecraftServer.u(): tickCounter % 900 after the tick's world, network and console work; oi.j() then a(true), silent
     }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
   }, tickMs);
-  const saveTimer = setInterval(() => { void save().catch(() => {}); }, saveMs); // b68 mpadmin: /save-off; b88 console88: the player data is still saved (MinecraftServer.u: oi.j, then a(true))
+  const saveTimer = null; // b68 mpadmin's wall-clock save timer; b89 console89: the autosave is the tick counter above (b88: the player data is still saved under /save-off)
   const heartbeatTimer = setInterval(() => { for (const ws of wss.clients) ws.heartbeat(); }, 10000);
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, bind, resolve); }); }
   catch (error) { clearInterval(tickTimer); clearInterval(saveTimer); clearInterval(heartbeatTimer); wss.close(); throw error; }
@@ -372,6 +379,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     log(STOP_LOG.players);
     savePlayerData(simulation); // oi.j(): taken before the kicks, as natively (the file is written with the worlds below: the port has one save file)
     const open = [...wss.clients];
+    for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) simulation.admin.netStats.write(...kickPacket(STOP_KICK)); // b89 console89: oi.u() kicks each player with an S40 (17 bytes, executed)
     for (const ws of open) ws.close(1008, STOP_KICK); // oi.u(): the S40 reason, then the channel closes
     await Promise.race([Promise.all(open.map(ws => (ws.readyState === WebSocket.CLOSED ? null : new Promise(resolve => ws.once('close', resolve))))), new Promise(resolve => setTimeout(resolve, kickGraceMs).unref?.())]);
     for (const ws of wss.clients) ws.terminate(); // a client that never answers the close

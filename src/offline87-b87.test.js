@@ -202,11 +202,11 @@ test("/netstat on the live server counts each message under its native packet id
   await a.next((m) => m.type === "chat" && /hello/.test(m.text ?? JSON.stringify(m)));
   const stat = /^PacketStat\((\d+)\)\{totalBytes=(\d+), count=(\d+), averageBytes=[\d.]+\}$/;
   const count = async (line) => { const [out] = await s.console(line); const m = stat.exec(out); assert.ok(m, out); return Number(m[3]); };
-  assert.equal(await count("netstat packet-read 0"), 1, "the join (C00 handshake / login start)");
+  assert.equal(await count("netstat packet-read 0"), 2, "the join: C00 handshake and C00 login start (b89 console89: one record per native packet; b87 counted the join once)");
   assert.equal(await count("netstat packet-read 1"), 1, "the chat line (C01)");
   assert.ok(await count("netstat packet-read 3") >= 1, "input (C03)");
   assert.equal(await count("netstat packet-write 1"), 1, "the welcome (S01)");
-  assert.ok(await count("netstat packet-write 24") >= 1, "ticks (S18)");
+  assert.ok(await count("netstat packet-write 24") >= 1, "entity teleports (S18); b89 console89: a lone player's own pose is not counted (the tracker sends nobody their own)");
   assert.ok(await count("netstat packet-write 2") >= 2, "the join and chat lines (S02)");
   const [totals] = await s.console("netstat");
   const [, reads, writes] = /^reads: (\d+), writes: (\d+)$/.exec(totals).map(Number);

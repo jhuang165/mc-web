@@ -63,7 +63,9 @@ test("the port's estimates equal the executed samples byte for byte", () => {
   assert.equal(sample("S30 one stone, one empty"), PLAY_FRAME.clientbound[48] + 7 + 2);
   assert.equal(writePacketBytes({ type: "windowItems", windowId: 1, slots: [stone, null], cursor: null }), sample("S30 one stone, one empty") + PLAY_FRAME.clientbound[47], "then the cursor's S2F");
   // the bundled tick: S03, an S18 per pose, the cells
-  assert.equal(writePacketBytes({ type: "tick", players: [{}, {}], changes: [[0, 0, 0, 1, 0]] }), 17 + 2 * 19 + 12);
+  // b89 console89: the S03 in a tick is sent every 20 ticks (MinecraftServer.v), so the tick names its counter; before b89 every tick message counted an S03
+  assert.equal(writePacketBytes({ type: "tick", tick: 20, players: [{}, {}], changes: [[0, 0, 0, 1, 0]] }), 17 + 2 * 19 + 12);
+  assert.equal(writePacketBytes({ type: "tick", tick: 21, players: [{}, {}], changes: [[0, 0, 0, 1, 0]] }), 2 * 19 + 12);
   // serverbound
   assert.equal(readPacketBytes({ type: "chat", text: "hello" }), 7);
   assert.equal(readPacketBytes({ type: "input" }), PLAY_FRAME.serverbound[6], "the controls and the look: C06");
