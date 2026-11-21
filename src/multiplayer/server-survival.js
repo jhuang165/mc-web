@@ -59,10 +59,22 @@ export class ServerSurvival {
     this.dropOnDeath(p);
     applyDeathThrow(p); // b75 mpplayerfx75: EntityPlayer.onDeath's motion (the S12 of the owner and the viewers is the position stream)
     const component = deathComponent(p.survival.combat, this.sim.scoreboard?.formatName(p.name) ?? p.name /* b64 mpscoreboard: team-coloured */, { rawName: p.name });
-    const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
+    const killer = this.killerOf(p); // b89 credit89: sv.aX (the CombatTracker's choice, else attackingPlayer, else the revenge target), not the last blow (b63 mppvp read lastAttacker)
     (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
     if (killer !== undefined && killer !== p.id) { const k = this.sim.players.get(killer); if (k) this.sim.stats?.add(k, STAT.playerKills); } // b63 lead: EntityPlayer.addToPlayerScore of a player victim (stat.playerKills)
     if (killer === p.id) this.sim.stats?.add(p, STAT.playerKills); // b88 blast88 (bytecode-read mw.a(ro), yz.b(sa, int)): aX() is the player himself after his own TNT, and addToPlayerScore has no self test
+  }
+  /**
+   * b89 credit89: the player id EntityPlayerMP.onDeath (mw.a(ro), bytecode-read) credits through func_94060_bK (sv.aX: rn.c(), else aR, else i; combat-tracker.js `fighter`), or undefined.
+   * A killing hit empties the tracker first (rn.g sees the victim dead), so a fatal fall or fire after a player's hit credits him through attackingPlayer while recentlyHit lasts
+   * (100 of the victim's ticks), though the message is the plain one. The tracker entity is the DamageSource entity: pvpRules.fromOf's record (playerId), or the self entity.
+   */
+  killerOf(p) {
+    const who = p.survival.combat?.fighter?.();
+    if (!who?.player) return undefined;
+    if (who.self) return p.id;
+    const raw = who.raw;
+    return raw?.playerId ?? (raw?.name != null ? [...this.sim.players.values()].find(q => q.name === raw.name)?.id : undefined);
   }
   /** gamerule keepInventory (default false); the rule table keeps strings. */
   keepInventory() { return String(this.sim.gameRules?.keepInventory ?? 'false').toLowerCase() === 'true'; }
@@ -145,6 +157,7 @@ export class ServerSurvival {
   /** C16 client status 0 (perform respawn): a dead player starts again at the world spawn with full vitals. */
   respawn(p) {
     if (!p?.dead) return false;
+    this.leaveBody(p); // b89 credit89: before anything is reset, the dead entity's TNT stays his
     const s = p.survival, spawn = this.sim.sleep.respawnPoint(p); // b66 mpsleep: the bed or /spawnpoint verified in the Overworld (ServerConfigurationManager.respawnPlayer), else the world spawn
     Object.assign(s, { health: 20, food: 20, saturation: 5, exhaustion: 0, timer: 0, air: 300, fire: 0, absorption: 0, hurtTicks: 0, hurtAmount: 0, protection: 60, combat: new CombatTracker(), lastDamage: '', lastSource: null, lastAttacker: null });
     s.effects = new Effects(); s.effects.player = s;
@@ -155,6 +168,24 @@ export class ServerSurvival {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { dead: false, fallDistance: 0, landedFall: 0, flying: false, grounded: false });
     return true;
+  }
+  /**
+   * b89 credit89 (bytecode-read oi.a(mw, int, boolean), ahb.f(sa), oi.a(yz), sv.a(ro, F), ro.a(agw)): respawnPlayer removes the old EntityPlayerMP from the world (setDead) and builds a
+   * new one, but primed TNT keeps the old one as getExplosivePlacedBy. Its blast is "explosion.player" with that dead entity: attackEntityFrom has no test of the attacker's life, so the
+   * knockback comes from where the old body was removed, his held item (empty after dropAllItems, kept under keepInventory, as clonePlayer copies the stacks) is what the message and
+   * Looting read, and aX() is the old entity. Its addToPlayerScore writes the StatisticsFile oi.a(yz) keys by UUID, the same object the new entity uses, and the scoreboard by name,
+   * so the kill stats still go to this record. The port reused the record, so the TNT acted from the new body; now each of this record's primed TNT gets a frozen body.
+   */
+  deadBody(p) {
+    const s = p.survival, held = s.held ? { ...s.held } : null, look = { yaw: p.serverLook?.yaw ?? p.yaw, pitch: p.serverLook?.pitch ?? p.pitch };
+    return { corpseOf: p, dead: true, id: p.id, name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: look.yaw, pitch: look.pitch, serverLook: look,
+      dimension: p.dimension, sleeping: false, survival: { creative: !!s.creative, held, health: 0, inventory: { armor: [] } } };
+  }
+  leaveBody(p) {
+    const dims = this.sim.dimensions, lists = new Set([this.sim.dispense, dims?.nether?.dispense, dims?.end?.n?.dispense].filter(Boolean).map(d => d.primed).filter(Array.isArray));
+    let body = null;
+    for (const list of lists) for (const t of list) if (t.placer === p) t.placer = body ??= this.deadBody(p);
+    return body;
   }
   /**
    * b61, bytecode-read (1.7.10 jar): EntityPlayerMP.onDeath (mw.a(ro)) and EntityPlayer.onDeath only call InventoryPlayer.dropAllItems (main and armour slots); neither it nor respawnPlayer

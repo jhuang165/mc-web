@@ -94,7 +94,7 @@ export function siteDescription(onLadderBlock, inWater, { ladder, vine }) {
 }
 
 export class CombatTracker {
-  constructor() { this.clear(); this.revenge = null; }
+  constructor() { this.clear(); this.revenge = null; this.attackingPlayer = null; this.recentlyHit = 0; }
   clear() { this.entries = []; this.lastDamage = 0; this.inCombat = false; this.takingDamage = false; }
   /** CombatTracker.func_94549_h. `alive` is EntityLivingBase.isEntityAlive. */
   reset(ticks, alive) {
@@ -111,9 +111,16 @@ export class CombatTracker {
     // EntityLivingBase.attackEntityFrom: a living source entity becomes the revenge target (also while the hit only tops up).
   }
   /** EntityLivingBase.setRevengeTarget / the part of attackEntityFrom that runs for every accepted hit. */
-  noteAttacker(src, ticks) { if (src.entity?.living) this.revenge = { entity: src.entity, tick: ticks }; }
+  noteAttacker(src, ticks) {
+    if (src.entity?.living) this.revenge = { entity: src.entity, tick: ticks };
+    // b89 credit89 (bytecode-read sv.a(ro, F) offsets 208-296): a player source entity sets recentlyHit (aS) 100 and attackingPlayer (aR); a tamed wolf sets
+    // recentlyHit 100 and clears attackingPlayer. Both run for a top-up hit too, and neither checks that the attacker is alive.
+    if (src.entity?.player) { this.recentlyHit = 100; this.attackingPlayer = src.entity; }
+    else if (src.entity?.raw?.type === "wolf" && (src.entity.raw.tamed === true || !!src.entity.raw.owner)) { this.recentlyHit = 100; this.attackingPlayer = null; }
+  }
   /** The revenge expiry of EntityLivingBase.onEntityUpdate: 100 ticks after the hit, or when the attacker died. */
   tick(ticks, attackerAlive = () => true) {
+    if (this.recentlyHit > 0) this.recentlyHit--; else this.attackingPlayer = null; // b89 credit89: sv.C offsets 417-439, before the revenge expiry
     if (this.revenge && (!attackerAlive(this.revenge.entity) || ticks - this.revenge.tick > REVENGE_TICKS)) this.revenge = null;
     if (ticks % 20 === 0) this.reset(ticks, true);
   }
@@ -127,8 +134,9 @@ export class CombatTracker {
     }
     return player && bestPlayer >= f(bestLiving / 3) ? player : living;
   }
-  /** EntityLivingBase.func_94060_bK: the tracker's fighter, else the revenge target. */
-  fighter() { return this.killer() ?? this.revenge?.entity ?? null; }
+  /** EntityLivingBase.func_94060_bK (sv.aX, bytecode-read): the tracker's fighter, else attackingPlayer (aR, cleared only when recentlyHit has run out), else the revenge target.
+   *  b89 credit89: the attackingPlayer step was missing, so a player's hit followed by a mob's (revenge the mob) and a fatal fall or fire named the mob. */
+  fighter() { return this.killer() ?? this.attackingPlayer ?? this.revenge?.entity ?? null; }
   /** CombatTracker.i: the entry that explains a long fall, or null. */
   fallEntry() {
     let best = null, bestFall = 0;

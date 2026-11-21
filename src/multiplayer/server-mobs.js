@@ -186,11 +186,12 @@ export class ServerMobs {
   }
   // b62: a left click at a ghast's fireball (EntityFireball.attackEntityFrom, ze.a): the ray of getMouseOver (3 blocks in Survival, 6 in Creative, nearer than the first block) picks the ball
   // and the player's look deflects it; `punchedBy` makes the kill of a ghast with it theirs (the `ghast` achievement, fireballWatch). True when a ball was hit (the click is used up).
-  punchBall(p) {
+  punchBall(p, look = p) {
     const fb = this.mobs._fireballs;
     if (!fb?.list.length || p.survival.health <= 0) return false;
     const reach = p.survival.creative ? 6 : 3, eye = { x: p.position.x, y: serverEyeY(p.position.y, p.sleeping), z: p.position.z };
-    const dir = { x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) };
+    const { yaw, pitch } = look ?? p; // b89 credit89: the look the click arrived with (simulation.js clickLook), not one a later message of the same tick wrote
+    const dir = { x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
     const wall = raycast(this.host.world, eye, dir, p.survival.creative ? 5 : 4.5);
     const pos = p.position, lying = !!p.sleeping, w2 = (lying ? SLEEP_BOX : 0.6) / 2, py = serverPosY(pos.y, lying), viewer = [pos.x - w2, py, pos.z - w2, pos.x + w2, py + (lying ? SLEEP_BOX : 1.8), pos.z + w2]; // the viewer's box (getMouseOver's entity search area)
     const hit = fb.pick(eye, dir, reach, wall ? wall.distance : reach, viewer);
@@ -298,6 +299,7 @@ export class ServerMobs {
     // b87 blast87: kills in this list are the placer's (server-stats.js / achievements read `attacker`), and the mobs' "player" (revenge, reinforcements) is his view.
     const ach = host.achievements, was = ach?.attacker, placerView = byPlayer && this.views.get(byPlayer.id);
     if (byPlayer) { if (placerView) this.use(placerView); if (ach) ach.attacker = byPlayer; }
+    if (byPlayer?.corpseOf && ach) ach.attacker = byPlayer.corpseOf; // b89 credit89: a respawned placer's dead body (ServerSurvival.deadBody) shares his StatisticsFile (oi.a(yz) keys it by UUID): the kills go to the record
     try { runBlastRows(rows); } finally { if (byPlayer && ach) ach.attacker = was; }
     finishBlastRows(state);
     const out = { list, ...explosionOutcome(world, list, size, weather.random, { smoking: ev.smoking !== false, flaming: !!ev.flaming, ...(ev.flaming ? { own: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) } : {}), opaque: opaqueCube }) }; // b80 lead: Explosion's own unseeded Random (explosionRNG) for the fire roll, drawn from Math.random rather than explodeBlocks' Date.now default so seeded runs repeat // b66 mpsleep: a bed's blast is flaming (BlockBed: newExplosion(.., true, true)) // b63: a charged wither skull caps the resistance (explosion-simulation.js)

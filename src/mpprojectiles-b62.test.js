@@ -137,15 +137,16 @@ test("a stuck arrow is picked up by a player touching it: arrow added, pop sound
   assert.deepEqual(seen, [[3, 7]]);
 });
 
-test("projectiles in flight are saved and loaded with their shooter's name", () => {
+test("projectiles in flight are saved and loaded; an arrow loads with no shooter (b89 credit89: EntityArrow NBT, zc.b(dh)/zc.a(dh), has no shooter key)", () => {
   const s = fixture(), p = join(s, "a", 1);
   shoot(s, { x: 70.5, y: 12, z: 70.5 }, { mz: 1 }, { shooter: "player", owner: p, ownerName: p.name });
   s.dispense.balls.balls.push({ ...s.dispense.balls.spawnThrowable({ x: 70, y: 10, z: 70 }, 0, 0, "snowball") });
   const data = JSON.parse(JSON.stringify(s.dispense.save()));
-  assert.equal(data.lanes[0].arrows[0].by, p.name);
+  assert.equal(data.lanes[0].arrows[0].by, undefined); // b89 credit89: was p.name
   const t = fixture(); t.dispense.load(data);
   assert.equal(t.dispense.arrows.list.length, 1);
-  assert.equal(t.dispense.arrows.list[0].ownerName, p.name);
+  assert.equal(t.dispense.arrows.list[0].ownerName, undefined); // b89 credit89: was p.name
+  assert.equal(t.dispense.arrows.list[0].shooter, null);
   assert.ok(t.dispense.balls.balls.length >= 1);
 });
 

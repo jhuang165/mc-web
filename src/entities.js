@@ -3224,7 +3224,7 @@ export class EntityWorld {
   // The spider's, cave spider's and pigman's legacy AI (EntityCreature.updateEntityActionState) lives in legacy-creature.js.
   // EntitySilverfish.attackEntityFrom (yk.a): an entity or magic source arms the 20 tick summon cooldown.
   silverfishHurt(e, source) {
-    const name = source.name ?? "generic", entity = !!(source.player || source.attacker || name === "mob" || name === "thorns");
+    const name = source.name ?? "generic", entity = !!(source.player || source.attacker || name === "mob" || name === "thorns" || source.projectile); // b89 credit89: every rq (thrown, arrow, fireball) is an EntityDamageSource, thrower or not
     e.summonCooldown = hurtSummon(e.summonCooldown ?? 0, { entity, type: name });
   }
   // The legacy AI fields of one silverfish (silverfish.js): kept off the saved record.
