@@ -144,7 +144,7 @@ test("wheat seeds breed chickens, wheat does not, and the chick is a child with 
   const chick = ew.entities.find((e) => e.growingAge < 0);
   assert.ok(chick);
   assert.equal(chick.type, "chicken");
-  assert.equal(chick.growingAge, -24000);
+  assert.equal(chick.growingAge, -23999);
   assert.equal(typeof chick.eggTimer, "number");
 });
 

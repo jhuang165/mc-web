@@ -176,7 +176,7 @@ test("wheat breeds sheep: the lamb mixes the parents' dye colours and the herd p
   assert.equal(lamb.type, "sheep");
   assert.equal(lamb.color, 3);
   assert.equal(lamb.sheared, false);
-  assert.equal(lamb.growingAge, -24000);
+  assert.equal(lamb.growingAge, -23999);
   const again = new EntityWorld(grass, w.serialize());
   assert.equal(again.entities.find((e) => e.id === lamb.id).color, 3);
 });

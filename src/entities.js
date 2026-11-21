@@ -2361,6 +2361,14 @@ export class EntityWorld {
     for (const e of this.entities) if (!seen.has(e)) { seen.add(e); if (early && this.playerStamp !== undefined) (this.earlySpawns ??= new WeakSet()).add(e); }
     this.spawnLen = this.entities.length;
   }
+  // b91 mobpackets91: World.spawnEntityInWorld adds to loadedEntityList at once (ahb.d: List.add at 98, bytecode-read) and updateEntities re-reads the size on every index, so a mob made
+  // in an entity's turn (a baby, a reinforcement, a slime child, an egg's chick, a converted villager) is updated in this same pass, at the end of the list. Walked entities already
+  // join `order` through `joined`; the mobs pushed onto `entities` are appended here, after the turn that made them.
+  adoptSpawns(order) {
+    if (this.entities.length === this.spawnLen || this.probeFixedList) return; // probeFixedList: a replay of a native probe whose loop walks a fixed array (EndermanWolfProbe's `ents`: born foals are not updated)
+    const listed = new Set(order);
+    for (const e of this.entities) if (!listed.has(e) && !this.walkOf?.has(e) && !e.lateHook && typeof e.health === "number") order.push(e);
+  }
   endTilePass() { this.tilePass = false; this.noteMobSpawns(false); }
   withBalls(order) {
     const balls = this._fireballs?.list, others = [];
@@ -2445,7 +2453,7 @@ export class EntityWorld {
     this.worldTicks = (this.worldTicks ?? -1) + 1;
     if (this.worldTicks % 20 === 0) this.sweepFrozen(player);
     if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
-    // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
+    // (b91: a mob spawned during the loop is appended to the order and updates in this pass: adoptSpawns.)
     unloadQueued(this); // b60so: WorldServer.tick: unloadQueuedChunks follows the spawner; the unloaded chunks' entities are out of the walk below (saved-order.js)
     releaseDead(this.entities);
     const seats = this.staleSeats ??= new Set(); let playerTurn = false; // b59so: the player seated in a boat he took from a mob is let go at his own turn (mob-riding.js)
@@ -2464,7 +2472,7 @@ export class EntityWorld {
     let prevEntity = null; // b54so: World.updateEntityWithOptionalForce's chunk/section check runs right after each entity's own update (and its rider's seat): done at the next turn's start
     const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); markMoved(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
     beginPushGrid(); // b75: the push grid is built by the first push of this loop
-    for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot()) {
+    for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot(), this.adoptSpawns(order)) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); } // the player's place in the list: his mount no longer lists him

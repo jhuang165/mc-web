@@ -34,7 +34,7 @@ import { JavaRandom } from "./java-random.js";
 import { JavaHashSetOrder } from "./java-hashset-order.js";
 import { horseFlagsOf } from "./horse-copy.js";
 import { copyDeathUpdate } from "./death-fx.js";
-import { copyMetaOf, copyMetaDiff, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
+import { copyMetaOf, copyMetaDiff, copyMetaDirty, applyCopyMeta, copyPotionSwirl } from "./copy-meta.js"; // batch 61: the watched values a copy draws from
 import { fast85, fail85, SIZE_SCRATCH } from "./mpperf85-fast.js"; // b85 mpperf85
 import { fast86, fail86 } from "./mpperf86-fast.js"; // b86 mpperf86
 import { transientIds } from "./tracker-transient.js"; // b64: entities that spawned and died inside one tick
@@ -618,7 +618,7 @@ export class MobTracker {
   // What sendLocation is told about the entity this tick (isAirBorne, the data watcher), and the bookkeeping after it
   observe(e, en) { return { airBorne: this.airBorneOf(e, en), changed: this.changedOf(e, en) }; }
   airBorneOf(e, en) { return e.airBorne === true || (en.wasGround && !e.onGround && (e.vy ?? e.motionY ?? 0) > 0); }
-  changedOf(e, en) { return e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) || (e.type === "horse" && horseFlagsOf(e) !== en.horse); }
+  changedOf(e, en) { return e.health !== en.health || (e.type === "bat" && !!e.batHanging !== en.hang) || (e.type === "squid" && (e.air ?? 300) !== en.air) || (e.type === "horse" && horseFlagsOf(e) !== en.horse) || copyMetaDirty(en.entry.lastMeta, e); }
   settle(e, en) { en.health = e.health; en.air = e.air ?? 300; en.hang = !!e.batHanging; if (e.type === "horse") en.horse = horseFlagsOf(e); en.wasGround = !!e.onGround; if (e.airBorne) e.airBorne = false; }
   // Batch 52: `beforePlayer(entity)` (EntityWorld) says an entity that left the world sits before the player in loadedEntityList: World.updateEntities removes it at its own place,
   // so the player's update that follows in the same pass flushes the destroy at once. The default is the player-first order: one tick later.
