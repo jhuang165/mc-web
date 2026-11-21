@@ -13,10 +13,13 @@ import { EntityIds } from '../entity-ids.js';
 import { slimeFields, slimeSquishStart, slimeSquishEnd } from '../slime.js';
 import { golemStatus, golemTick, golemDust } from './client-golems.js'; // b66 mpgolems
 import { dragonListed, mouseOverBox } from '../dragon-part-query.js'; // b81 mpcopies81
+import { potionParticles } from '../fx.js'; // b89 mobpackets89
+import { deathRandom } from '../death-fx.js'; // b89 mobpackets89
 
 // The sound names the server's S29 may carry for the mobs (WorldServer.playSoundAtEntity: living, hurt, death, step, the creeper's fuse and blast, the skeleton's bow, the egg's plop).
 export const isMobSound = name => typeof name === 'string' && /^(mob\.[a-z.]+|creeper\.primed|random\.(explode|bow|pop|eat|burp)|step\.[a-z]+)$/.test(name);
 const HURT_TICKS = 10, DEATH_TICKS = 20;
+const NO_EFFECTS = Object.freeze([]), INVISIBLE = Object.freeze([Object.freeze({ id: 14, amplifier: 0, duration: 1 })]); // b89 mobpackets89
 
 // `fx` (batch 60): { sound(name, x, y, z, volume, pitch), particle(name, x, y, z, vx, vy, vz) }, what the copies make that the game draws and plays (main.js).
 export class RemoteMobs {
@@ -26,7 +29,8 @@ export class RemoteMobs {
     this.rand = new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))); // the copies' Entity.rand for the heart and smoke bursts
     this.factory = new EntityWorld(world, [], Math.random, new EntityIds()); // stand-in records and the client movement code; it never ticks mobs
     const f = this.factory;
-    this.physics = Object.assign((c, m) => f.moveClient(c, m), { turn: (c, m) => f.clientAfterMove(c, m), pre: (c, m) => f.clientEnvironment(c, m), living: (c, m) => f.clientLiving(c, m) }); // b61 lead: the living roll moved out of clientEnvironment (mobcopies2)
+    this.physics = Object.assign((c, m) => f.moveClient(c, m), { turn: (c, m) => f.clientAfterMove(c, m), pre: (c, m) => f.clientEnvironment(c, m), living: (c, m) => this.living(c, m) }); // b61 lead: the living roll moved out of clientEnvironment (mobcopies2)
+    this.swirl = { spawn: (...a) => this.fx.particle?.(...a) }; // b89 mobpackets89: where the copies' potion swirl goes
     this.copies = new Map(); // wire id -> { client, mob }
     this.ctx = { clientOf: id => this.copies.get(id)?.client ?? null, holderOf: () => null }; // S1B(0): the vehicle named by wire id (a spider jockey's skeleton)
   }
@@ -51,11 +55,40 @@ export class RemoteMobs {
       else if (p.type === 'state') this.state(c.mob, p);
       else if (p.type === 'attach') this.attach(c, p);
       else if (p.type === 'equipment') (c.mob.equipment ??= [null, null, null, null, null])[p.slot] = p.item ? { ...p.item } : null; // b88 track88: S04 (handleEntityEquipment: setCurrentItemOrArmor)
+      else if (p.type === 'attributes') this.attributes(c, p.list);
+      else if (p.type === 'effect') this.effect(c, p);
       else {
         c.client.apply(p, this.ctx);
         if (!c.client.present) this.copies.delete(p.i);
       }
     }
+  }
+  // b89 mobpackets89: S20 (NetHandlerPlayClient.handleEntityProperties, bjb.a(il), bytecode-read): each row sets the copy's instance (registered with the name when the client class
+  // lacks it) to the row's base and modifiers. The copy keeps { base, mods, value } by name. Nothing on a mob copy reads them back: the walk animation (limbSwingAmount) comes from
+  // the distance the copy moved (EntityLivingBase.onUpdate's lastTickPosX delta), and moveEntityWithHeading's speed is multiplied by moveForward / moveStrafing, which stay 0 on a
+  // copy (no AI runs on the client), so the movement speed changes nothing it draws. (The copy's map is `client.attributes`.)
+  attributes(c, list) {
+    const a = c.client.attributes ??= new Map();
+    for (const r of list ?? []) a.set(r.name, { base: r.base, mods: r.mods.map((m) => [m[0], m[1]]), value: r.value });
+  }
+  // b89 mobpackets89: S1D (handleEntityEffect, bjb.a(in)): a PotionEffect(id, duration, amplifier) with the max-duration flag at 32767, then addPotionEffect: an effect already in the map
+  // combines (PotionEffect.combine, rw.a(rw): a higher amplifier takes both, the same amplifier the longer duration). The copy's EntityLivingBase.updatePotionEffects counts each down
+  // (PotionEffect.onUpdate) and never removes one (the removal is guarded by !isRemote); a mob gets no S1E. Its swirl reads watcher 7 (the colour), not this list (living below).
+  effect(c, p) {
+    const map = c.client.effects ??= new Map(), id = p.effect, had = map.get(id);
+    if (!had) { map.set(id, { id, amplifier: p.amplifier, duration: p.duration, max: p.duration === 32767 }); return; }
+    if (p.amplifier > had.amplifier) { had.amplifier = p.amplifier; had.duration = p.duration; } else if (p.amplifier === had.amplifier && had.duration < p.duration) had.duration = p.duration;
+  }
+  // b89 mobpackets89: EntityLivingBase.updatePotionEffects on the copy: the effects count down, then the swirl of watcher 7 (copy-meta.js copyPotionSwirl draws the same numbers
+  // into nothing) goes to the game's particles, on the copy's own Random and in its box; the living roll follows as before (entities.js clientLiving with the colour held off).
+  living(c, m) {
+    if (c.effects) for (const x of c.effects.values()) if (x.duration > 0) x.duration--;
+    const color = c.potion;
+    if (!(color > 0)) { this.factory.clientLiving(c, m); return; }
+    const [width, height] = this.factory.size(m);
+    potionParticles(this.swirl, { x: c.x, y: c.y, z: c.z, yOffset: 0, width, height }, color, deathRandom(c), { ambient: !!c.potionAmbient, invisible: !!c.invisible });
+    c.potion = 0;
+    try { this.factory.clientLiving(c, m); } finally { c.potion = color; }
   }
   // S1B(0) from the server (batch 61, mob on mob): the copy mounts the vehicle's copy (or gets off); the stand-in follows for the riding legs.
   attach(c, p) {
@@ -108,6 +141,7 @@ export class RemoteMobs {
   tick() {
     for (const { client, mob } of this.copies.values()) {
       client.dead = mob.health <= 0;
+      mob.effects = client.invisible ? INVISIBLE : NO_EFFECTS; // b89 mobpackets89: the renderer's isInvisible reads the watcher 0 flag natively (Entity.isInvisible), not the S1D list
       if (mob.type === 'wither') { mob.invul = client.invul ?? 0; mob.renderYawOffset = client.renderYawOffset; if (client.health !== undefined && mob.health > 0) mob.health = client.health; } // b63: watchers 20 (Invul) and 6 (health) arrive in S0F / S1C (copy-meta.js); the boss bar reads the health; the model turns by the body yaw of the copy (animateWither reads e.renderYawOffset)
       if (mob.type === 'ender_dragon') { if (client.health !== undefined && mob.health > 0) mob.health = client.health; } // b64 mpdragon: watcher 6 (S0F / S1C) feeds the boss bar and the death branch
       else if (mob.type === 'ender_crystal') mob.innerRotation = client.innerRotation; // the copy's spin

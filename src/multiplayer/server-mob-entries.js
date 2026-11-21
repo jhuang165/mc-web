@@ -4,7 +4,9 @@
 // and sends each packet to all of them (sendPacketToAllTrackingPlayers), the spawn packet to the one player that starts watching (tryStartWachingThis).
 // Batches 59 and 60 gave every player an own MobTracker: each watcher's entries ticked their own phase (an entry made while a player was elsewhere sent its first update on that
 // player's own count). `SharedEntry` is the TrackerEntry with a watcher set; `SharedMobTracker` is the MobTracker whose entries are SharedEntry and whose tick runs once.
-import { MobTracker, TrackerEntry, PlayerWatch, nextPacketSeq, stampPacketSeq, packetSeq } from '../entity-tracker.js';
+import { MobTracker, TrackerEntry, PlayerWatch, nextPacketSeq, stampPacketSeq, packetSeq, velocityInt } from '../entity-tracker.js';
+import { watchedAttributes, firstDirty, rowKey } from '../mob-tracked-attributes.js'; // b89 mobpackets89
+import { effectsInMapOrder } from '../mob-effects.js'; // b89 mobpackets89
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
@@ -17,6 +19,11 @@ const stackCopy = (s) => JSON.parse(JSON.stringify(s));
 const extraKey = (s) => { let o = null; for (const k in s) if (k !== 'id' && k !== 'count' && k !== 'damage') (o ??= {})[k] = s[k]; return o ? JSON.stringify(o) : ''; };
 // ItemStack.areItemStacksEqual (add.b): both null, or the same size, item, damage and tag
 const sameStack = (a, b) => a === b || (!!a && !!b && a.id === b.id && (a.count ?? 1) === (b.count ?? 1) && (a.damage ?? 0) === (b.damage ?? 0) && extraKey(a) === extraKey(b));
+// b89 mobpackets89: a mob's fields at one moment (the equipment slots and the effects copied: the entity pass replaces stacks and counts effect durations down in place).
+const snapOf = (e) => ({ ...e, ...(e.equipment ? { equipment: e.equipment.slice() } : {}), ...(e.effects ? { effects: e.effects.map((x) => ({ ...x })) } : {}) });
+// b89 mobpackets89: S1D (in(int, rw), bytecode-read): the effect id and the amplifier as bytes (& 255, read back signed), the duration clamped to 32767 as a short.
+const sbyte = (v) => ((v & 255) << 24) >> 24;
+export const effectPacket = (x) => ({ type: 'effect', effect: sbyte(x.id), amplifier: sbyte(x.amplifier | 0), duration: (Math.min(x.duration | 0, 32767) << 16) >> 16 });
 
 // A TrackerEntry whose `tracked` is "somebody tracks me" for the packets sent to everyone (send), and "this watcher tracks me" while `cur` is set (the range test of one player).
 // `dest` maps each emitted packet to the watchers it goes to, decided when it was emitted (a watcher that joins later gets the spawn instead).
@@ -28,6 +35,8 @@ export class SharedEntry extends TrackerEntry {
     this.held = null; // b88 track88: the packets startPackets emits, put back in my.b's order (startPackets below)
     this.gear = null; // b88 track88: EntityLivingBase.g, the equipment the last check saw (SharedMobTracker.create sets it: the port's entry follows the mob's first update)
     this.pre = null; // b88 track88: the state before this tick's entity pass, for a watcher whose slot comes before this entity (SharedMobTracker.beforePass)
+    this.birth = null; // b89 mobpackets89: the mob's state at its spawn while the entry is being made (SharedMobTracker.create / entryOf)
+    this.attrKeys = null; // b89 mobpackets89: the watched attribute rows the last pass saw (name -> rowKey); null before the first pass
   }
   // b87 mpperf87: the stamp and destinations of one of this entry's packets (the WeakMaps when it emitted with the flag off).
   seqOf(p) { const s = this.stamps; return s !== null && s.at(p) >= 0 ? s.seqOf(p) : packetSeq(p); }
@@ -60,7 +69,12 @@ export class SharedEntry extends TrackerEntry {
     return (this.snap = [...set]);
   }
   // EntityTrackerEntry.updatePlayerList: every player of the world, in list order (a flagged entry re-evaluates all of them).
-  updatePlayerList() { for (const w of this.owner.watchers.values()) this.tryStartFor(w); }
+  // b89 mobpackets89: the try of addEntityToTracker (the entry made at the spawn) uses the spawn state; a player arriving in this server tick is not in the world yet natively (it is
+  // tried after, at its own slot: serverStep's look loop).
+  updatePlayerList() {
+    const b = this.birth;
+    for (const w of this.owner.watchers.values()) if (b === null) this.tryStartFor(w); else if (!w.late89) this.tryStartWith(w, b);
+  }
   tryStartFor(w) {
     this.cur = w; this.view = w.view;
     try { TrackerEntry.prototype.tryStart.call(this); } finally { this.cur = null; }
@@ -70,7 +84,11 @@ export class SharedEntry extends TrackerEntry {
   // b88 track88: EntityTrackerEntry.tryStartWachingThis (my.b(mw), bytecode-read) sends, after the spawn (my.c): S1C with the whole data watcher (`hw(id, dw, true)` whenever the watcher is not
   // blank, every living entity), S20 the watched attributes, S12 only when the spawn is not an S0F, S1B(0) the vehicle, S1B(1) the leash holder, S04 for each of the five equipment slots
   // that holds a stack, then S1D for each active effect. TrackerEntry.startPackets emits the spawn, the bat's S1C and the two S1B; here the S1C carries every watched value the port models
-  // and the S04 follow the S1B. (Not modelled: S20 and S1D, the copies have no attribute map or effect list.)
+  // and the S04 follow the S1B.
+  // b89 mobpackets89: S20 `il(id, tq.c())` after the S1C, every watched attribute (mob-tracked-attributes.js), and S1D `in(id, rw)` after the S04, one per sv.aQ() effect in the
+  // HashMap's order (mob-effects.js effectsInMapOrder). The S1D are the only effect packets a mob's watchers get: EntityLivingBase.onNewPotionEffect / onChangedPotionEffect /
+  // onFinishedPotionEffect (sv.a(rw), sv.a(rw, Z), sv.b(rw)) only flag potionsNeedUpdate and move the attribute modifiers; EntityPlayerMP alone overrides them with S1D / S1E to its
+  // own connection. The colour and the invisible flag still reach the copy as watched values (copy-meta.js); a modifier change goes out as S20 at the next gated pass.
   startPackets() {
     if (this.object) { super.startPackets(); return; }
     const held = this.held = [];
@@ -78,9 +96,32 @@ export class SharedEntry extends TrackerEntry {
     const e = this.e, [spawn, ...rest] = held, meta = rest.length && rest[0].type === 'meta' ? rest.shift() : null;
     this.emit(spawn);
     this.emit({ type: 'meta', ...watchedOf(spawn), ...(meta ? meta : {}), type: 'meta' });
+    const attrs = watchedAttributes(e); // b89 mobpackets89
+    if (attrs.length) this.emit({ type: 'attributes', list: attrs });
     for (const p of rest) this.emit(p);
     const g = e.equipment;
     if (g) for (let i = 0; i < 5; i++) if (g[i]) this.emit({ type: 'equipment', slot: i, item: stackCopy(g[i]) });
+    if (e.effects?.length) for (const x of effectsInMapOrder(e)) this.emit(effectPacket(x)); // b89 mobpackets89
+  }
+  // b89 mobpackets89: EntityTrackerEntry.sendLocationToAllClients with func_111190_b (my.b(), bytecode-read): inside the gated branch (ticks % frequency, isAirBorne or a changed data
+  // watcher), after the position packets, the S1C and then S20 of the dirty attribute set go to the tracking players and the set is cleared, whether anyone tracks or not. The port
+  // has no attribute map: a row is dirty when its base, modifiers or value changed since the last gated pass (the first pass sends what the construction left, firstDirty). The
+  // head S19 natively follows S1C / S20; entity-tracker.js sends it before its S1C (not changed here). The S12 of velocityChanged comes after both.
+  sendLocation(airBorne = false, dataChanged = false) {
+    if (this.object || !(this.ticks % this.frequency === 0 || airBorne || dataChanged)) { super.sendLocation(airBorne, dataChanged); return; }
+    const e = this.e, knocked = !!e.velocityChanged;
+    e.velocityChanged = false;
+    super.sendLocation(airBorne, dataChanged);
+    this.sendAttributes();
+    if (knocked) this.send({ type: 'velocity', vx: velocityInt(e.vx ?? 0), vy: velocityInt(e.vy ?? 0), vz: velocityInt(e.vz ?? 0) });
+  }
+  sendAttributes() {
+    const rows = watchedAttributes(this.e);
+    if (!rows.length) return;
+    let keys = this.attrKeys, out;
+    if (keys === null) { out = firstDirty(this.e, rows); keys = this.attrKeys = new Map(); for (const r of rows) keys.set(r.name, rowKey(r)); }
+    else { out = null; for (const r of rows) { const k = rowKey(r); if (keys.get(r.name) !== k) { keys.set(r.name, k); (out ??= []).push(r); } } }
+    if (out !== null && out.length) this.send({ type: 'attributes', list: out });
   }
   // b88 track88: EntityLivingBase.onUpdate (sv.h 65..178, bytecode-read), at the start of each server update: every slot whose stack is not ItemStack.areItemStacksEqual (add.b) to the
   // one last seen goes out as S04 to the players tracking the entity (EntityTracker.func_151247_a, mn.a(sa, ft): not to the entity), and the copy is kept (add.m).
@@ -107,14 +148,33 @@ export class SharedMobTracker extends MobTracker {
     this.view.player = { shared: true }; // entryOf runs updatePlayerList for a new entry when a player exists; the real players are the watchers
     this.seq = 0; // b88 track88: join order of entries and watchers (World.loadedEntityList order)
     this.pres = []; // b88 track88: the entries holding a `pre` copy this tick
+    this.births = new WeakMap(); // b89 mobpackets89: mob -> { s: its state when beforePass first saw it without an entry, t: the tick }
+    this.birthList = null; // b89 mobpackets89: () => the world's mob list (ServerMobs sets it)
   }
   flush() {} // the server half only: the packets leave through `queued()`
+  // b89 mobpackets89: World.spawnEntityInWorld -> onEntityAdded -> EntityTracker.addEntityToTracker makes the entry at the spawn, before the mob's first update (bytecode-read:
+  // ahb.d(sa) appends to loadedEntityList and calls the world access's onEntityCreate, mn.a(sa) -> new my(...) and updatePlayerList). The port makes it in the tracker pass after the
+  // entity pass, so a mob spawned before the pass (natural spawning, an egg, a dispenser, a spawner of the last tick) has updated already: its entry takes the state beforePass copied
+  // (`births`) as its baseline (my.<init>: the last sent position, angles, health ...) and the S0F of the players in range, so this pass sends the first update's move as a delta.
+  // A mob spawned during the pass has not updated yet in the port, so its live state is the spawn state. The equipment check (sv.h) of the first update sends every held slot again
+  // (EntityLivingBase.g starts empty): right after the spawn try for a mob that has updated (entryOf), at the next beforePass for one that has not.
   create(e, size) {
-    const made = super.create(e, size), o = made.entry;
-    made.entry = new SharedEntry(e, { range: o.range, limit: this.limit, frequency: o.frequency, velocity: o.velocity, size: o.size }, this.view, this);
+    const b = this.births.get(e);
+    if (b !== undefined) this.births.delete(e);
+    const born = b !== undefined && b.t === this.tick - 1 ? b.s : null; // copied in this server tick's beforePass (serverStep has counted the tick since)
+    const from = born ?? e, made = super.create(from, size), o = made.entry;
+    made.entry = new SharedEntry(from, { range: o.range, limit: this.limit, frequency: o.frequency, velocity: o.velocity, size: o.size }, this.view, this);
+    made.entry.e = e;
+    made.entry.birth = born;
     made.seq = ++this.seq; // b88 track88
-    if (e.equipment) made.entry.gear = e.equipment.map((x) => (x ? stackCopy(x) : null)); // b88 track88: the entry starts after the mob's first update, whose check (sv.h) saw these slots
     return made;
+  }
+  entryOf(e, size, height, hold = false) {
+    const had = this.entries.get(e);
+    if (had !== undefined) return had;
+    const en = super.entryOf(e, size, height, hold), entry = en.entry, born = entry.birth;
+    if (born !== null) { entry.birth = null; entry.e = born; try { if (born.equipment) entry.checkGear(); } finally { entry.e = e; } } // b89 mobpackets89: the first update's equipment check
+    return en;
   }
   // EntityTracker.addEntityToTracker for a player: it is sent every entry in range at the next tick, in set order. `pos()` is the player's position.
   addWatcher(id, pos) {
@@ -134,13 +194,15 @@ export class SharedMobTracker extends MobTracker {
   // by ServerChunkViews.tick, before this) or who arrives now, an entity AFTER the player in loadedEntityList has not updated yet at the player's slot (EntityPlayerMP.onUpdate, mw.h, tries
   // the entities of each chunk it sends, mn.a(mw, apx)): its fields are copied here, before the pass, and the S0F is built from the copy.
   beforePass() {
+    const list = this.birthList?.(); // b89 mobpackets89: the spawn state of each mob without an entry (create)
+    if (list) for (let i = 0; i < list.length; i++) { const e = list[i]; if (!this.entries.has(e) && !this.births.has(e)) this.births.set(e, { s: snapOf(e), t: this.tick }); }
     let look = null;
     for (const w of this.watchers.values()) if (w.joining || w.peek?.()) (look ??= []).push(w);
     for (const en of this.entries.values()) {
       const entry = en.entry;
       if (entry.e.equipment || entry.gear) entry.checkGear();
       if (look === null) continue;
-      for (let k = 0; k < look.length; k++) if (en.seq > look[k].seq && !entry.set.has(look[k])) { entry.pre = { ...entry.e, ...(entry.e.equipment ? { equipment: entry.e.equipment.slice() } : {}) }; this.pres.push(entry); break; }
+      for (let k = 0; k < look.length; k++) if (en.seq > look[k].seq && !entry.set.has(look[k])) { entry.pre = snapOf(entry.e); /* b89 mobpackets89: the effects copied too (S1D) */ this.pres.push(entry); break; }
     }
   }
   // EntityTracker.updateTrackedEntities once for the world: the removals, the joiners, the new entries, every entry's location once (one `ticks` for all watchers), then each
@@ -175,7 +237,7 @@ export class SharedMobTracker extends MobTracker {
     for (const w of this.watchers.values()) {
       const fresh = !!w.fresh?.(); // b72 mpstream72: columns sent / unloaded this tick
       if (w.joining || fresh) (look ??= []).push(w);
-      if (w.joining && w.sameTick?.()) (late ??= []).push(w);
+      if (w.joining && w.sameTick?.()) { (late ??= []).push(w); w.late89 = true; } // b89 mobpackets89: not tried by the spawn try of this pass's new entries
       w.joining = false;
     }
     if (!fast) for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
@@ -184,7 +246,7 @@ export class SharedMobTracker extends MobTracker {
       if (this.entries.has(e)) continue;
       if (size.into) { size.into(e, SIZE_SCRATCH); this.entryOf(e, SIZE_SCRATCH[0], SIZE_SCRATCH[1]); } else { const [width, height] = size(e); this.entryOf(e, width, height); }
     }
-    if (late !== null) for (const w of late) w.seq = ++this.seq; // b88 track88: after this pass's new entries
+    if (late !== null) for (const w of late) { w.seq = ++this.seq; w.late89 = false; } // b88 track88: after this pass's new entries
     const order = this.walk(); // b86 mpperf86: the one walk list of this pass (stepEntry and tryStartFor add or remove no entry)
     let after = null; // b88 track88: [entry, watcher] tried after the pass (a newer entry without a copy)
     if (look !== null) for (const e of order) {
