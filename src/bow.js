@@ -249,6 +249,7 @@ export class Arrows {
   // One arrow's update, where a walk that holds every kind in one list (entity-simulation.js (entityWalkers)) reaches it.
   tickOne(world, a, ctx = {}) { if (!a.dead && ringEntityActive(world, a)) { this.step(world, a, ctx); if (!a.dead) stampEntity(a, a.x, a.y, a.z); } } // b72: the re-slice after the update
   step(world, a, ctx) {
+    a.groundAtStart = a.inGround === true; // b90 entnbt90: zc.h returns from its in-ground branch before I() (doBlockCollisions), so such an arrow touches no portal this update
     // Entity.onUpdate / onEntityUpdate: previous position and angles, water (which
     // also puts a fire out), fire, lava and the -64 void.
     a.px = a.x;
@@ -513,30 +514,31 @@ export class Arrows {
   // EntityArrow.writeEntityToNBT: the tile (shorts), inTile, inData, shake, inGround, pickup
   // (bytes), life (ticksInGround), damage and the base Entity's position, motion, rotation
   // and fire. The shooter and the critical flag (a datawatcher byte) are not saved.
-  serialize() {
-    return this.list.filter((a) => !a.dead).map((a) => ({
+  serialize() { return this.list.filter((a) => !a.dead).map((a) => this.serializeOne(a)); }
+  serializeOne(a) {
+    return ({
       x: a.x, y: a.y, z: a.z, mx: a.mx, my: a.my, mz: a.mz, yaw: a.yaw, pitch: a.pitch,
       xTile: a.xTile, yTile: a.yTile, zTile: a.zTile, life: a.ticksInGround, inTile: a.inTile, inData: a.inData,
       shake: a.shake, inGround: a.inGround, pickup: a.pickup, damage: a.damage, ...(a.fire ? { fire: a.fire } : {}), // b84 cmdfix84: any nonzero short
       ...keptBaseSave(a), // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as read
-    }));
+    });
   }
   load(list) {
     this.clear();
-    const ok = (v) => Number.isFinite(v), int = (v, lo, hi, d) => (Number.isInteger(v) ? bound(v, lo, hi) : d);
-    for (const d of (Array.isArray(list) ? list : []).slice(0, 300))
-      if (d && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok)) {
-        const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
-        this.list.push(
-          this.make({ x: d.x, y: d.y, z: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch }, this.rng(), {
-            xTile: int(d.xTile, -1, 2 ** 15, -1), yTile: int(d.yTile, -1, 255, -1), zTile: int(d.zTile, -1, 2 ** 15, -1),
-            ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
-            shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
-            damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, -32768, 32767, 0), // b84 cmdfix84: the whole short (was 0..2000)
-            ...keptBaseRestore(d), // b88 entnbt88
-          }),
-        );
-      }
+    for (const d of (Array.isArray(list) ? list : []).slice(0, 300)) { const a = this.fromRecord(d); if (a) this.list.push(a); }
+  }
+  // One saved arrow (a save, or a portal traveller's record) back to a live arrow, or null.
+  fromRecord(d) {
+    const ok = (v) => Number.isFinite(v), int = (v, lo, hi, dflt) => (Number.isInteger(v) ? bound(v, lo, hi) : dflt);
+    if (!(d && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok))) return null;
+    const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
+    return this.make({ x: d.x, y: d.y, z: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch }, this.rng(), {
+      xTile: int(d.xTile, -1, 2 ** 15, -1), yTile: int(d.yTile, -1, 255, -1), zTile: int(d.zTile, -1, 2 ** 15, -1),
+      ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
+      shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
+      damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, -32768, 32767, 0), // b84 cmdfix84: the whole short (was 0..2000)
+      ...keptBaseRestore(d), // b88 entnbt88
+    });
   }
   clear() {
     this.list = [];

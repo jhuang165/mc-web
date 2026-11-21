@@ -76,7 +76,8 @@ export class PortalState {
   }
   // The portal part of Entity.onEntityUpdate (sa.C) for a server world with the Nether allowed. Returns the dimension to travel to
   // (Entity.travelToDimension argument: 0 from the Nether, else -1) or null. `riding`: ridingEntity != null.
-  tick(dimension, { isPlayer = true, creative = false, riding = false } = {}) {
+  // `countdown: false`: the entity already counted timeUntilPortal itself this update (arrows, rockets: tickPortalCooldown ran in their own update).
+  tick(dimension, { isPlayer = true, creative = false, riding = false, countdown = true } = {}) {
     let travel = null;
     const max = maxInPortalTime(isPlayer, creative);
     if (this.inPortal) {
@@ -90,7 +91,7 @@ export class PortalState {
       if (this.portalCounter > 0) this.portalCounter -= 4;
       if (this.portalCounter < 0) this.portalCounter = 0;
     }
-    if (this.timeUntilPortal > 0) --this.timeUntilPortal;
+    if (countdown && this.timeUntilPortal > 0) --this.timeUntilPortal;
     return travel;
   }
   save() { return { c: this.portalCounter, t: this.timeUntilPortal }; }

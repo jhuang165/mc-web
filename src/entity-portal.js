@@ -9,7 +9,7 @@ import { OVERWORLD, NETHER, END, PortalState, transferTarget, GAME_IDS } from ".
 
 // Entities that never reach moveEntity -> doBlockCollisions, or that the port does not move between dimensions.
 const SKIPPED = new Set(["ender_dragon", "ender_crystal"]);
-export const SIZES = { item: [0.25, 0.25], orb: [0.5, 0.5] };
+export const SIZES = { item: [0.25, 0.25], orb: [0.5, 0.5], arrow: [0.5, 0.5], rocket: [0.25, 0.25] }; // b90 entnbt90: zc setSize(0.5, 0.5), zf setSize(0.25, 0.25)
 // Collision box of a record: half width and height; `e.y` is the bottom for all three kinds (a mob's feet).
 export function boxOf(kind, e) {
   if (kind === "cart" || kind === "boat") return e.bb ? [(e.bb[3] - e.bb[0]) / 2, e.bb[4] - e.bb[1]] : null;
@@ -17,7 +17,7 @@ export function boxOf(kind, e) {
   return [SIZES[kind][0] / 2, SIZES[kind][1]];
 }
 // Entity.posY, the value transferEntityToWorld hands to the Teleporter: a mob's feet, an item's bottom + yOffset, an orb's centre.
-export const POS_Y = { mob: 0, item: 0.125, orb: 0.25, cart: 0, boat: 0 }; // a cart's or boat's `y` is already its posY
+export const POS_Y = { mob: 0, item: 0.125, orb: 0.25, cart: 0, boat: 0, arrow: 0, rocket: 0 }; // arrows and rockets: yOffset 0, `y` is the bottom and posY // a cart's or boat's `y` is already its posY
 export const mobYawToMc = (yaw) => (-yaw * 180) / Math.PI + 0;
 export const mcToMobYaw = (deg) => (-deg * Math.PI) / 180 + 0;
 
@@ -61,16 +61,19 @@ export class EntityPortals {
   // One tick after the entity moved. Returns null or { arg, endPortal, direction }: the travelToDimension argument.
   // `getId(x,y,z)`: block id of the current dimension; `dim`: the dimension; `riding`: it has a rider or a vehicle.
   // `ridden`: something rides it (BlockPortal and BlockEndPortal ignore it, but the countdown of Entity.onEntityUpdate still runs).
-  step(e, kind, { dim, getId, riding = false, ridden = false }) {
+  // b90 entnbt90: `counted` = the entity's own update already ran sa.C's cooldown countdown (arrows, rockets); `noCollide` = it skips doBlockCollisions this update (an arrow
+  // that started the update in the ground returns before zc.h's I() call).
+  step(e, kind, { dim, getId, riding = false, ridden = false, counted = false, noCollide = false }) {
     const box = boxOf(kind, e);
     if (!box || (kind === "mob" && (e.health <= 0 || SKIPPED.has(e.type)))) return null;
     const s = this.state(e), prev = this.last.get(e) ?? { x: e.x, z: e.z };
     this.last.set(e, { x: e.x, z: e.z });
     let result = null;
     // Entity.onEntityUpdate runs first in the next tick: it consumes the inPortal the previous tick's collision set.
-    const go = s.tick(dim, { isPlayer: false, riding });
+    if (counted) s.timeUntilPortal = e.portalCooldown | 0;
+    const go = s.tick(dim, { isPlayer: false, riding, countdown: !counted });
     if (go !== null) result = { arg: go, endPortal: false, direction: s.teleportDirection };
-    else if (!riding && !ridden) {
+    else if (!riding && !ridden && !noCollide) {
       const [hw, h] = box, vehicle = kind === "cart" || kind === "boat", bb = e.bb;
       // doBlockCollisions: the box shrunk by 0.001 on every side; a vehicle has its own box, the others hang off their position.
       const x0 = Math.floor((vehicle ? bb[0] : e.x - hw) + 0.001), x1 = Math.floor((vehicle ? bb[3] : e.x + hw) - 0.001), z0 = Math.floor((vehicle ? bb[2] : e.z - hw) + 0.001), z1 = Math.floor((vehicle ? bb[5] : e.z + hw) - 0.001);
@@ -103,6 +106,7 @@ export function entityDeparture(portals, kind, e, r, owner) {
   const v = { vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0 };
   const mc = vehicle ? { x: e.x, y: e.posY, z: e.z, ...v, yaw: e.yaw ?? 0, pitch: 0 }
     : kind === "mob" ? { x: e.x, y: e.y, z: e.z, ...v, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
+    : kind === "arrow" || kind === "rocket" ? { x: e.x, y: e.y + POS_Y[kind], z: e.z, ...v, yaw: e.yaw ?? 0, pitch: e.pitch ?? 0 } // degrees, as zc.h / zf.h store them
     : { x: e.x, y: e.y + POS_Y[kind], z: e.z, ...v, yaw: 0, pitch: 0 };
   mc.teleportDirection = r.direction;
   return { rec, mc, arg: r.arg, source };
