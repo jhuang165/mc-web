@@ -391,6 +391,10 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
 // cancels love first, even for a rejected hit. Health never changes.
 export function thrownHit(mobs, e, from, ball = from) {
   if (!mobs.entities.includes(e)) return false;
+  // b92 credit92 (bytecode-read zk.j, zj.a, zm.a, ro.a(sa, sa)): a ball in flight keeps the EntityPlayerMP that threw it (the field `g`), also after respawnPlayer removed it; the hit's
+  // source entity is that old body (knockback from where it was removed, no life test in sv.a(ro, F)), and the mobs drop it as a dead target at their next update.
+  const body = ball && typeof ball === "object" ? ball.ownerBody : null;
+  if (body) from = body.position;
   if (e.type !== "zombie" && e.type !== "skeleton") {
     e.flee = 60;
     e.love = 0;
@@ -402,7 +406,7 @@ export function thrownHit(mobs, e, from, ball = from) {
   // b89 credit89: a dispensed ball has no thrower (BehaviorProjectileDispense builds it with no shooter), so causeThrownDamage(ball, null) is an rq whose getEntity (rq.j) is
   // null: no recentlyHit, no revenge, and attackedAtYaw from Math.random instead of knockBack (sv.a(ro,F) 208-322, bytecode-read). `from == null` is the server's ownerless ball.
   if (from == null || ball?.dispensed) return mobs.attackEntityFrom(e, amount, { name: "thrown", projectile: true });
-  return mobs.damage(e, amount, from.x, from.z, !thrower, null, thrower ? { projectile: true, shooter: thrower } : { projectile: true });
+  return mobs.damage(e, amount, from.x, from.z, !thrower, null, thrower ? { projectile: true, shooter: thrower } : { projectile: true, ...(body ? { deadAttacker: true } : {}) });
 }
 
 export class Projectiles {
@@ -557,7 +561,7 @@ export class Projectiles {
     }
     for (const t of orderTargets(near, targets)) { // b72: chunk list order decides equal distances (candidate-order.js)
       const e = t.box;
-      if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5) continue;
+      if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5 && !b.ownerBody) continue; // b92 credit92: the new body is another object than the old thrower (EntityThrowable compares `g`)
       const r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
       const d1 = Math.sqrt(dist2(start, r.vec));

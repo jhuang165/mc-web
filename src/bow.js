@@ -477,7 +477,27 @@ export class Arrows {
     // b88 blast88 (bytecode-read sv.a(ro), afv.i, ro.a(zc, sa)): the arrow source's getEntity is the shooter, and onDeath gives a player killer the Looting of the item he holds
     // at that moment (EnchantmentHelper.getLootingModifier(entity), not the bow). It used to be 0 for every arrow kill. A dedicated server's arrow holds the player record (`owner`).
     const looting = s === "player" ? getLootingModifier((shooterBody?.survival ?? ctx.survival)?.held ?? null) : 0;
-    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
+    const landed = mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
+    if (landed && ref.type !== "ender_dragon" && ref.type !== "ender_crystal") this.victimThorns(a, ref, ctx);
+    return landed;
+  }
+  // b92 credit92 (bytecode-read zc.h 1065-1088, afv.a(sv, sa)): a landed arrow on a living mob runs the Thorns of that mob's equipment on the shooter (a mob wears Thorns only from NBT or a
+  // dispensed / picked-up piece), as the melee hit does. The player shooter takes the damage through `ctx.thornsOnShooter` (the server's record) or `ctx.survival` (single player);
+  // a mob shooter through its own attackEntityFrom. A dead old body takes none (the hook decides), the sound still plays at it.
+  victimThorns(a, ref, ctx) {
+    const s = a.shooter, mobs = ctx.mobs;
+    if (!ref.equipment || typeof mobs?.thornsOfVictim !== "function") return;
+    if (s === "player") {
+      if (ctx.thornsOnShooter) { ctx.thornsOnShooter(a, ref); return; }
+      const survival = ctx.survival, p = ctx.player;
+      if (!survival) return;
+      mobs.thornsOfVictim(ref, { hurt: (n) => survival.damage(n, "thorns", true, "thorns", ref), sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: p?.x ?? a.x, y: p?.y ?? a.y, z: p?.z ?? a.z } }) });
+    } else if (s && typeof s === "object" && s !== ref && mobsHas(mobs, s)) {
+      mobs.thornsOfVictim(ref, {
+        hurt: (n) => mobs.attackEntityFrom(s, n, { from: { x: ref.x, z: ref.z }, attacker: ref, name: "thorns" }),
+        sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: s.x, y: s.y, z: s.z } }),
+      });
+    }
   }
   // EntityArrow.onCollideWithPlayer (zc.b_): the player's box grown by (1, 0.5, 1) touches a
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one

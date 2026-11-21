@@ -3090,6 +3090,8 @@ async function respawnPlayer() {
       if (cell) spawn = bedRespawnPosition(cell);
       else { bedSleep.spawn = null; showChatLine(document, BED_TEXT.notValid); }
     } else if (active.playerSpawn) spawn = { x: active.playerSpawn[0] + 0.5, y: active.playerSpawn[1], z: active.playerSpawn[2] + 0.5 }; // /spawnpoint
+    // b92 credit92 (bytecode-read zk.j, oi.a(mw, int, boolean)): a snowball, egg or pearl in flight keeps the EntityPlayerMP that threw it; respawnPlayer removes that entity where it died.
+    if (!multiplayer) { const body = { corpseOf: "player", dead: true, position: { x: position.x, y: position.y, z: position.z }, survival: { creative: !!survival.creative, held: survival.held ? { ...survival.held } : null, health: 0 } }; for (const b of projectiles.balls) if (!b.dead && !b.dispensed) b.ownerBody ??= body; }
     const time = survival.time;
     multiplayer?.respawn(); // C16 perform respawn; the server answers with the new health
     const kept = (ruleOn(active, "keepInventory") || multiplayer) && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
@@ -3339,20 +3341,21 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     orbSound: (s) => sounds.play(s.name, { volume: s.volume, pitch: s.pitch }),
     // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
     projectileTargets: () => [...mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
-    projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e, ball) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
+    projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e, ball) || thrownHit(mobs, e, ball?.ownerBody?.position ?? position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
-        hit:(e,source)=>e!=="player"&&(thrownAtStruck(e)||mobs?.attackEntityFrom(e,source.amount,{
+        hit:(e,source)=>e!=="player"&&(thrownAtStruck(e,pearl)||mobs?.attackEntityFrom(e,source.amount,{
           name:'thrown',player:!!source.thrower,attacker:'projectile',
-          ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
+          ...(source.thrower?{from:pearl.ownerBody?{x:pearl.ownerBody.position.x,z:pearl.ownerBody.position.z}:{x:position.x,z:position.z}}:{}),
+          ...(pearl.ownerBody?{deadAttacker:true}:{}), // b92 credit92: the old EntityPlayerMP is the thrower (zm.a, zk.j)
         })),
         particle:()=>{}, // the client's copy of the pearl portals on impact (object-tracker.js, Projectiles.clientImpact)
         teleport:({from,to})=>{
           // Count the physical movement preceding the teleport, not its displacement.
           oldPosition.x+=to.x-from.x;oldPosition.y+=to.y-from.y;oldPosition.z+=to.z-from.z;
           mobs?.ai?.player?.setLocation?.(to); // b86 spcopy86: EntityEnderPearl -> mw.setPositionAndUpdate -> setPlayerLocation
-          if (mobs?.ai?.player) mobs.ai.player.fallDistance = 0; // b87 spcopy87: EntityEnderPearl.onImpact zeroes the thrower's fallDistance before its 5 fall damage
+          if (mobs?.ai?.player && !pearl.ownerBody) mobs.ai.player.fallDistance = 0; // b92 credit92: a dead thrower's fall reset lands on the old entity; b87 spcopy87: EntityEnderPearl.onImpact zeroes the thrower's fallDistance before its 5 fall damage
         },
         markUnsaved:()=>{saved=false;},
       });
@@ -3908,7 +3911,7 @@ const cartHost = {
 };
 // EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a cart, boat, painting or item frame: attackEntityFrom(thrown by the player, 0) wobbles a vehicle (a Creative thrower breaks it)
 // and breaks a painting (a frame with an item loses the item), entity-simulation.js. False for anything else (a mob).
-function thrownAtStruck(e, ball) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, ball?.dispensed ? null : { player: true, creative: survival.creative })) return false; /* b89 credit89: a dispensed ball has no thrower */ saved = false; return true; }
+function thrownAtStruck(e, ball) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, ball?.dispensed ? null : { player: true, creative: ball?.ownerBody ? ball.ownerBody.survival.creative : survival.creative })) return false; /* b89 credit89: a dispensed ball has no thrower */ saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
     rockets, eyes, hooks: fishing.active && fishing.hook ? [fishing.hook] : [], // b82 spblast82: doExplosionA pushes these too (explosion-extras.js)
