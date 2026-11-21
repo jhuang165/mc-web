@@ -18,6 +18,7 @@
 // Java 8's treeified HashMap bins are modelled since batch 68 (java-hashmap-tree.js), so overlapping players keep the exact native order.
 import { JavaHashSetOrder } from '../java-hashset-order.js';
 import { chunkHash } from '../chunk-store.js';
+import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 
 export const VIEW_DISTANCE = 10;
 
@@ -68,7 +69,8 @@ export class ServerChunkSets {
     let s = this.sets.get(dim);
     if (!s) this.sets.set(dim, (s = new ChunkSet()));
     const here = [];
-    for (const p of this.sim.players.values()) if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z });
+    if (fast88.mode !== 'off') this.sim.players.forEach(p => { if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z }); }); // b88 mpperf88: Map.forEach, the same order without an iterator result per player
+    else for (const p of this.sim.players.values()) if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z });
     return s.chunks(here, world, this.radius);
   }
   // Weather.activeChunkSource for one dimension

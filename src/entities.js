@@ -6,6 +6,7 @@ import { fast84, fail84, moveSpeedQuick } from "./mpperf84-fast.js"; // b84 mppe
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { typeSize, pushNearBox, pushNearDone, meetsArg, fast83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { fast87, fail87, attackEquipment87, dryEntity, dryBounds, addZero } from "./mpperf87-fast.js"; // b87 mpperf87
+import { mobShape88 } from "./mpperf88-fast.js"; // b88 mpperf88
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -1071,7 +1072,7 @@ export class EntityWorld {
     });
   }
   create(type, x, y, z, random = this.random) {
-    return syncInterpolation({
+    return mobShape88(syncInterpolation({ // b88 mpperf88: the number fields' representation fixed at creation (mpperf88-fast.js)
       id: "mob-" + this.nextId++,
       uuid: newUuid(), // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js); kept by serialize and restore
       type,
@@ -1120,7 +1121,7 @@ export class EntityWorld {
       ...(type === "zombie" ? { reinforcement: reinforcementBase(random) } : {}),
       effects: [],
       ...this.physics(),
-    });
+    }));
   }
   // EntityEgg.onImpact (zl.a): a chick (EntityChicken, setGrowingAge(-24000)) at the
   // egg's position with the egg's rotationYaw (Java degrees) and pitch 0. No mob cap

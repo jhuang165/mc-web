@@ -8,6 +8,7 @@ import { MobTracker, TrackerEntry, PlayerWatch, nextPacketSeq, stampPacketSeq, p
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
+import { releaseWatcher88 } from '../mpperf88-fast.js'; // b88 mpperf88
 
 // A TrackerEntry whose `tracked` is "somebody tracks me" for the packets sent to everyone (send), and "this watcher tracks me" while `cur` is set (the range test of one player).
 // `dest` maps each emitted packet to the watchers it goes to, decided when it was emitted (a watcher that joins later gets the spawn instead).
@@ -80,6 +81,7 @@ export class SharedMobTracker extends MobTracker {
     if (!w) return;
     this.watchers.delete(id);
     for (const en of this.entries.values()) en.entry.set.delete(w);
+    releaseWatcher88(this.entries, w); // b88 mpperf88: the stale stamp slots (and a destination snapshot) naming the watcher are cleared
   }
   // EntityTracker.updateTrackedEntities once for the world: the removals, the joiners, the new entries, every entry's location once (one `ticks` for all watchers), then each
   // flagged player (moved more than 4 blocks) re-evaluates every entry in set order.

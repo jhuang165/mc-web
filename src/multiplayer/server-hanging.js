@@ -15,6 +15,7 @@
 import { Hanging, PAINTING_ITEM, FRAME_ITEM, ARTS, hangingArrowTargets } from '../hanging.js';
 import { hitSide } from '../hanging-interaction.js';
 import { TRACKER_LIMIT } from '../entity-tracker.js';
+import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 import { useEntityInReach } from './use-entity-reach.js'; // b76 mpcauldron76
 import { VIEW_DISTANCE } from './server-chunks.js';
 
@@ -141,6 +142,7 @@ export class ServerHanging {
       live.push({ key: 'k' + id, x: c.x, z: c.z, record: () => knotRecord(k, id) });
     }
     const out = new Map(), range = this.host.rules ? Math.min(160, this.host.rules.trackerLimit) : HANG_RANGE; // b69 serverprops: EntityTracker limit of the view distance
+    if (fast88.mode !== 'off') { this.views.forEach((view, id) => this.trackOne88(view, id, playerOf, live, range, out)); return out; } // b88 mpperf88: no entry pair, iterator or key copy per player
     for (const [id, view] of this.views) {
       const p = playerOf(id);
       if (!p) { view.known.clear(); continue; } // a player of another dimension: the client rebuilt its world
@@ -155,5 +157,20 @@ export class ServerHanging {
       if (hset.length || hdel.length) out.set(id, { ...(hset.length ? { hset } : {}), ...(hdel.length ? { hdel } : {}) });
     }
     return out;
+  }
+  // b88 mpperf88: one player's pass of track() with index and forEach loops. Deleting the key being visited inside Map.forEach visits the rest as the copied key list did.
+  trackOne88(view, id, playerOf, live, range, out) {
+    const p = playerOf(id);
+    if (!p) { view.known.clear(); return; }
+    const hset = [], hdel = [], seen = new Set(), known = view.known;
+    for (let k = 0; k < live.length; k++) {
+      const t = live[k];
+      if (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range) continue;
+      const record = t.record(), json = JSON.stringify(record);
+      seen.add(t.key);
+      if (known.get(t.key) !== json) { known.set(t.key, json); hset.push(record); }
+    }
+    if (known.size !== seen.size) known.forEach((_, key) => { if (!seen.has(key)) { known.delete(key); hdel.push(key); } }); // every known key was seen when the sizes match
+    if (hset.length || hdel.length) out.set(id, { ...(hset.length ? { hset } : {}), ...(hdel.length ? { hdel } : {}) });
   }
 }
