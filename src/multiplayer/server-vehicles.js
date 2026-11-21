@@ -272,11 +272,34 @@ export class ServerVehicles {
   tick() {
     const host = this.host, world = host.world;
     this.hanging.tick(); // b68 mppaintings: the 101st-update surface check
+    this.finishSneak(); // b90 horse90: a mount the mob tick did not update (a corpse) lets its sneaking rider off now
     this.riderInput();
     this.horses.stamp(); // b76 mphorse76: the tamer's name on a horse tamed by riding
     const any = this.carts.carts.length || this.boats.carts.length || [...host.players.values()].some(p => p.mount);
     if (!any) { this.track(); return; }
     this.afterRiders();
+  }
+  // b90 horse90: EntityPlayer.updateRidden for a mob mount whose own update did not let the rider off (the mob tick's riderSneakOff clears the flag when it ran).
+  finishSneak() {
+    for (const p of this.host.players.values()) {
+      const m = p.mount;
+      if (!m?.mob || !m.rider.sneakDismount) continue;
+      m.rider.sneakDismount = false;
+      if (m.rider.sneakSeat) Object.assign(m.rider, m.rider.sneakSeat);
+      m.rider.sneakSeat = null;
+      this.dismount(p);
+    }
+  }
+  // b90 horse90: the same for a cart or boat, right after its tick (structure-simulation.js riderSneakOff).
+  sneakOffVehicles() {
+    for (const p of this.host.players.values()) {
+      const m = p.mount, r = m?.rider;
+      if (!m || m.mob || !r?.sneakDismount) continue;
+      r.sneakDismount = false;
+      if (r.sneakSeat) Object.assign(r, r.sneakSeat);
+      r.sneakSeat = null;
+      this.dismount(p);
+    }
   }
   // Riders let go and the input they give (before the mobs tick too, so a pig steers on this tick's keys: b62).
   riderInput() {
@@ -287,7 +310,11 @@ export class ServerVehicles {
       // b86 seat86: a client that sends the C0C (p.ride) dismounts on its sneak (setSneaking, then EntityPlayer.updateRidden's `!isRemote && isSneaking()`) and steers with its
       // moveForward / moveStrafing (applyRide); a tick without one keeps the old values and its sneak is the C0B's (the controls). An older client that never sent a C0C keeps the controls rule.
       const ride = p.ride ?? null;
-      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead || (ride ? ride.k : p.input?.sneak)) { this.dismount(p); continue; }
+      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead) { this.dismount(p); continue; }
+      // b90 horse90: the sneak (C0C) is read by the network tick, but EntityPlayer.updateRidden (yz.ab) lets the rider off in World.updateEntityWithOptionalForce right after the mount's own
+      // update (ahb.a(sa, Z), bytecode-read; horse89-reference.json executed): this tick the mount still takes the rider's input, and the rider gets off after it (`sneakDismount`: the mob
+      // tick's riderSneakOff, or finishSneak / afterRiders below). The first call of the tick (before the mobs) fixes the seat the spot search starts from.
+      if (ride ? ride.k : p.input?.sneak) { if (!m.rider.sneakDismount) m.rider.sneakSeat = { x: m.rider.x, y: m.rider.y, z: m.rider.z }; m.rider.sneakDismount = true; }
       if (ride) applyRide(m.rider, ride);
       else if (!p.rideSeen) { const input = moveInput({ forward: p.input?.forward ?? 0, strafe: p.input?.strafe ?? 0 }); Object.assign(m.rider, { moveForward: f(input.forward * f(0.98)), moveStrafing: f(-input.strafe * f(0.98)) }); } // not slowed: a rider is not using an item (bytecode-read blk.e)
       Object.assign(m.rider, { yaw: f(180 - p.yaw * 180 / Math.PI), dead: false }); // the C05's rotationYaw (processPlayer's riding branch takes the packet's angles)
@@ -300,6 +327,7 @@ export class ServerVehicles {
     const blockers = [...host.players.values()].map(p => ({ bb: this.playerBox(p), ref: p.mount?.rider ?? p })).concat(this.boxesOfMobs());
     this.carts.tick(world, { entities: [...blockers.filter(b => b.ref?.type !== 'ender_crystal') /* b88 boatray88: xl.h needs canBePushed, which a crystal is not */, ...this.boats.carts.filter(b => !b.dead).map(b => ({ bb: b.bb, ref: b }))], host: this.cartHost });
     this.boats.tick(world, { entities: [...blockers, ...this.carts.carts.filter(c => !c.dead).map(c => ({ bb: c.bb, ref: c }))], hooks: this.boatHooks });
+    this.sneakOffVehicles(); // b90 horse90: the sneaking rider's updateRidden, after the cart's / boat's update
     // EntityLivingBase.collideWithNearbyEntities: players and mobs against the vehicles; the vehicle moves too (collide adds its side).
     for (const system of [this.carts, this.boats]) {
       if (!system.carts.length) continue;
