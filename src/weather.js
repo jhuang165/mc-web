@@ -344,10 +344,10 @@ export class Weather {
     this.tickChunks(world, this.activeChunkSource?.(world) ?? Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world)); // b67: the server's per-player set (server-chunks.js)
   }
   // One game tick. `world` may be null (timers only).
-  tick(world = null, player = null) {
+  tick(world = null, player = null, timersDone = false) {
     if (this.lastLightning > 0) this.lastLightning--; // Minecraft.runTick
     this.struck.length = 0;
-    this.updateWeather();
+    if (!timersDone) this.updateWeather(); // b92 mpobjects92: the dedicated server runs the timers first (World.updateWeather precedes the all-asleep skip in mt.b)
     if (world) {
       this.mood?.tick(); // World.setActivePlayerChunksAndCheckLight: the mood countdown, before the chunk loop
       this.tickChunks(world, this.activeChunkSource?.(world) ?? Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world)); // b67: the server's per-player set

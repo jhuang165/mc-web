@@ -2360,12 +2360,16 @@ export class EntityWorld {
     const seen = (this.spawnSeen ??= new WeakSet());
     for (const e of this.entities) if (!seen.has(e)) { seen.add(e); if (early && this.playerStamp !== undefined) (this.earlySpawns ??= new WeakSet()).add(e); }
     this.spawnLen = this.entities.length;
+    this.spawnTail = this.entities[this.entities.length - 1];
   }
+  // b92 mpobjects92 (bytecode-read ahb.h): a dead entity leaves loadedEntityList in its OWN turn (`remove(i--)` after its update; only unloadedEntityList is swept at the start), so a spawn made
+  // meanwhile always grows the list. The port drops a killed mob from `entities` at once, so a removal and a spawn in one turn leave the length equal: the appended tail is compared too.
+  spawnsPending() { const n = this.entities.length; return n !== this.spawnLen || this.entities[n - 1] !== this.spawnTail; }
   // b91 mobpackets91: World.spawnEntityInWorld adds to loadedEntityList at once (ahb.d: List.add at 98, bytecode-read) and updateEntities re-reads the size on every index, so a mob made
   // in an entity's turn (a baby, a reinforcement, a slime child, an egg's chick, a converted villager) is updated in this same pass, at the end of the list. Walked entities already
   // join `order` through `joined`; the mobs pushed onto `entities` are appended here, after the turn that made them.
   adoptSpawns(order) {
-    if (this.entities.length === this.spawnLen || this.probeFixedList) return; // probeFixedList: a replay of a native probe whose loop walks a fixed array (EndermanWolfProbe's `ents`: born foals are not updated)
+    if (!this.spawnsPending() || this.probeFixedList) return; // probeFixedList: a replay of a native probe whose loop walks a fixed array (EndermanWolfProbe's `ents`: born foals are not updated)
     const listed = new Set(order);
     for (const e of this.entities) if (!listed.has(e) && !this.walkOf?.has(e) && !e.lateHook && typeof e.health === "number") order.push(e);
   }
@@ -2473,7 +2477,7 @@ export class EntityWorld {
     const sections = () => { if (prevEntity) { trackSections(this, [prevEntity]); stampWalked(prevEntity); markMoved(prevEntity); } prevEntity = null; }; // b73 (candidate-order.js): the same re-slice for the sweep order
     beginPushGrid(); // b75: the push grid is built by the first push of this loop
     for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot(), this.adoptSpawns(order)) {
-      if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
+      if (this.spawnsPending()) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
       if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); } // the player's place in the list: his mount no longer lists him
       clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
@@ -2638,7 +2642,7 @@ export class EntityWorld {
     sections(); // b53so / b54so: an entity that changed chunk or section joins the end of its new list right after its own update (saved-order.js)
     for (const w of this.walks?.values() ?? []) w.reap();
     this._fireballs?.reap(); // the balls updated in the walk above; World.updateEntities drops the setDead ones
-    if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot));
+    if (this.spawnsPending()) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot));
     this.tickOrder = null; this.slot = null;
     // EntityPlayerMP.onUpdateEntity (mw.i), in the network tick after the world's entities: EntityLivingBase.onLivingUpdate on the server's copy of the player (its motion
     // is only what mobs, hits and explosions gave it: snapped below 0.005, moved, then slowed by the ground friction) and, at its end, collideWithNearbyEntities: every mob beside

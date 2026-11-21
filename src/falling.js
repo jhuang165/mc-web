@@ -149,6 +149,9 @@ export class FallingBlocks {
       }
     }
     if (!entities) return;
+    this.tickEntities();
+  }
+  tickEntities() {
     for (const e of this.entities) this.tickOne(e);
     this.reap();
   }

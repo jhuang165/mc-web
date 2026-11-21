@@ -21,3 +21,21 @@ export function tickWorldSystems(systems, clock, observers) {
   if (systems.tickTree) systems.redstone?.tickEnd?.(!!systems.deferTiles); // deferTiles: the caller runs redstone.tickTiles() after the entity walk
   else systems.redstone?.tick();
 }
+
+// b92 mpobjects92 (bytecode-read mt.b / ahb.h): the dedicated server's world pass in two pieces. WorldServer.tick runs the scheduled tickUpdates (fluids, fire, falling, redstone)
+// and the queued block events BEFORE the random block ticks and World.updateEntities; the tile entities (hoppers, brewing stands, the pistons' TileEntityPiston) update at the END of
+// updateEntities. `tickScheduledSystems` is the first piece, `tickTileSystems` the second (the live redstone engine's tile loop only: `redstone.endTick(true)` defers it).
+export function tickScheduledSystems(systems, clock, observers) {
+  systems.falling?.tick({ entities: false }); // BlockFalling.updateTick's scheduled entry; the falling entities walk later with the others (FallingBlocks.tickEntities)
+  tickBlockSystems(systems, clock, observers);
+  const r = systems.redstone;
+  if (!r) return;
+  r.beginTick();
+  r.tickUpdates();
+  r.endTick(true); // sendQueuedBlockEvents and the sensor scans now; the tile-entity loop waits for tickTileSystems
+}
+export function tickTileSystems(systems) {
+  systems.hoppers?.tick();
+  systems.brewing?.();
+  systems.redstone?.updateTileEntities();
+}

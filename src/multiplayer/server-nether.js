@@ -29,7 +29,7 @@ import { serverRedstoneDrop, installServerSkullBreak } from './server-redstone-d
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
-import { tickWorldSystems } from '../world-tick.js';
+import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
 import { tickBeacons } from '../pyramid-live.js';
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerInventory, makeStack } from '../inventory.js';
@@ -155,6 +155,9 @@ export function tickNether(sim, n, players) {
   sim.serverItems.tickOrbs(n.dim ?? NETHER); // b63: this dimension's orbs (sim.serverItems.xp is n.xp inside the swap) after the items, as the Overworld's tick
   n.mobs.mobs.cachedSpawnPoint ??= n.overMobs.mobs.cachedSpawnPoint; // SpawnerAnimals keeps 24 blocks from the OVERWORLD spawn in every dimension
   // b91 mpobjects91: WorldServer.tick's random block ticks run before World.updateEntities and the tracker flush (bytecode-read mt.b), as in simulation.js.
+  // b92 mpobjects92 (mt.b: tickPending before tickBlocks): the scheduled tickUpdates and the queued block events precede the random ticks and the entities; the tile entities follow the entities.
+  tickScheduledSystems({ falling: n.falling, farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone },
+    { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();
   n.dispense.tick();
@@ -163,10 +166,9 @@ export function tickNether(sim, n, players) {
   n.vehicles.tick();
   n.dispense.tickJoined?.(); // b81 blast81
   tickSpawners({ mobs: n.mobs, spawners: n.tileEntities.spawners, random: n.weather.random, players, light: netherLight(n), time: sim.time, vehicles: n.vehicles, viewDistance: sim.rules?.viewDistance }); // b70 serverprops2: tracker clamp (undefined = 10) // b65: + vehicles; b63: MobSpawnerBaseLogic (blaze spawners), after the entities
-  n.falling.tick(); // b90 mpobjects90: before the tracker pass (see simulation.js)
+  n.falling.tickEntities(); // b92: the scheduled part ran above; b90 mpobjects90: before the tracker pass (see simulation.js)
+  tickTileSystems({ hoppers: n.containers.ticks.hoppers, redstone: n.redstone }); // b92: the end of updateEntities
   n.dispense.flush();
-  tickWorldSystems({ farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, hoppers: n.containers.ticks.hoppers },
-    { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.pistons.flush(); // b66 mppistons
   tickBeacons(n.tileEntities.beacons, { world: w, time: sim.ticks /* b87 tiles87: getTotalWorldTime (DerivedWorldInfo reads the Overworld's) */, apply: (pl, e) => {
     const p = pl.player;
