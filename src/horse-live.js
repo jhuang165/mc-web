@@ -314,6 +314,7 @@ export function installHorse(EntityWorld) {
     rider.sneakSeat = null;
     this.horseSeats.dismount(this.world, rider, true);
     rider.released = { x: rider.x, y: rider.y, z: rider.z };
+    this.ai?.player?.sneakOff?.(rider.released); // b90 horse90: the integrated server's copy lets go in this same tick (PlayerView.sneakOff)
   };
   // EntityAIRunAroundLikeCrazy.updateTask (vg.e, run by the AI task of an untamed horse with a rider, ai.js RunAround): nextInt(50) == 0, then for a player rider
   // nextInt(100) < temper tames the horse (setTamedBy, status 7), otherwise temper + 5 (capped at 100); the rider is thrown off and the horse rears with the angry sound (status 6).

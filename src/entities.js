@@ -2523,6 +2523,7 @@ export class EntityWorld {
         corpseEntityUpdate(this, e, t);
         e.hurt = Math.max(0, e.hurt - 1);
         this.dying(e, t);
+        if (e.rider?.sneakDismount) this.riderSneakOff(e); // b90 horse90: a dying pig's sneaking rider gets off after the corpse's update too (a horse corpse already did, in horseTick)
         continue;
       }
       // EntityCreeper.onUpdate (xz.h) runs its fuse before EntityLivingBase.onUpdate. The
@@ -2573,6 +2574,7 @@ export class EntityWorld {
       e.hurt = Math.max(0, e.hurt - 1);
       if (e.health <= 0) {
         this.dying(e, t);
+        if (e.rider?.sneakDismount) this.riderSneakOff(e); // b90 horse90: a dying pig's sneaking rider gets off after the corpse's update too (a horse corpse already did, in horseTick)
         continue;
       }
       if (e.recentlyHit > 0) e.recentlyHit--;

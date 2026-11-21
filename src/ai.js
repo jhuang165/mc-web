@@ -1375,6 +1375,16 @@ class PlayerView {
     this.packet = null;
     this.answer = answered ? { x: at.x, y: at.y, z: at.z, onGround: false } : null;
   }
+  // b90 horse90: the copy's own EntityPlayer.updateRidden (yz.ab) for a sneaking rider of a mob (a horse, a pig): it runs in World.updateEntityWithOptionalForce right after the mount's
+  // update, in the same tick the C0C was read (bytecode-read; horse89-reference.json executed), so mountEntity(null) -> setPlayerLocation at the dismount spot happens here and this
+  // tick's packet (processed after the entities) takes the walking branch. Before, update() saw the client's dismount one tick later (the carts and boats already got off before it).
+  sneakOff(at) {
+    if (this.branch !== "riding" || !this.riding || this.left) return;
+    this.riding = false; this.wasRiding = false;
+    this.direct = false; this.branch = "walk";
+    this.packet = null; this.packetDy = 0;
+    this.setLocation(at);
+  }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
   update(player, survival, held) {
