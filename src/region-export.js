@@ -104,8 +104,8 @@ function payloadIn(state,ox,oz,report,blockAt) {
   // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
   if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);n.Invulnerable=byte(e.invulnerable?1:0);built.push({e,n});continue;}
   Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
-  // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
-  if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
+  // EntityLiving.writeEntityToNBT (sw.b, bytecode-read; entnbt91-reference.json: every unnamed mob writes CustomName "" and CustomNameVisible 0): both keys always, b91 entnbt91. PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
+  n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customName&&e.customNameVisible?1:0);
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.lost){const raw=leashRawTag(e.leash.raw);if(raw)n.Leash=raw;} // an unticked unusable tag: written back as it was (java-mobs.js leashRaw)
@@ -146,7 +146,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   // EntitySlime.writeEntityToNBT: Size (size - 1); a slime has no Age or InLove.
   if(e.type==='slime'||e.type==='magma_cube'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
   // EntityPigZombie.writeEntityToNBT: the short Anger (1.7.10 has no HurtBy tag), then EntityLiving's Equipment (slot 0 is the held sword) and DropChances (0.085 each); no Age or InLove.
-  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);n.CanBreakDoors=byte(e.canBreakDoors?1:0);n.IsBaby=byte((e.growingAge??0)<0?1:0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
+  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);n.CanBreakDoors=byte(e.canBreakDoors?1:0);if((e.growingAge??0)<0)n.IsBaby=byte(1);if(e.villager)n.IsVillager=byte(1);n.ConversionTime=int(-1);}
   // EntityEnderman.writeEntityToNBT: carried and carriedData as shorts (original block id and metadata; Age and InLove do not apply).
   if(e.type==='enderman'){delete n.Age;delete n.InLove;n.carried=short(e.carried??0);n.carriedData=short(e.carriedData??0);}
   // EntityBat.writeEntityToNBT: BatFlags (bit 1 = hanging); neither a squid nor a bat is an EntityAgeable.
@@ -154,6 +154,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   // EntityGhast.writeEntityToNBT: ExplosionPower; a blaze has none; neither is an EntityAgeable.
   // EntityWither.writeEntityToNBT: Invul (int); not an EntityAgeable.
   if(e.type==='wither'){delete n.Age;delete n.InLove;n.Invul=int(e.invul??0);}
+  if(e.type==='giant'||e.type==='ender_dragon'){delete n.Age;delete n.InLove;} // neither is an EntityAgeable or EntityAnimal (entnbt91-reference.json: no Age or InLove)
   if(e.type==='blaze'||e.type==='ghast'){delete n.Age;delete n.InLove;if(e.type==='ghast')n.ExplosionPower=int(e.explosionPower??1);}
   // EntityIronGolem.writeEntityToNBT: PlayerCreated (EntityAgeable's fields do not apply to a golem).
   if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
@@ -176,7 +177,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const nest=(b,seen)=>{const m=mountOf(b);if(m&&!seen.has(m)){seen.add(m);ridden.add(m);b.n.Riding=tag(NBT.COMPOUND,nest(m,seen));}return new Map(Object.entries(b.n));};
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
- for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0)})));} // b88 entnbt88: the raw cooldown (entnbt88-reference.json ticks: 5000 and -7 load and save unchanged)
+ for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0)})));} // b88 entnbt88: the raw cooldown (entnbt88-reference.json ticks: 5000 and -7 load and save unchanged)
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json); b82 fireext82: then moveEntity's counter (-1 at rest, 160 and up once lit)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(((e.health??5)<<24)>>24),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15,e.flowing?{flowing:true}:{});entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'FallingSand',ox,oz),

@@ -40,6 +40,7 @@ import { ExperienceOrbs } from '../experience.js';
 import { pinOverworldVehicles } from './server-nether-vehicles.js'; // b63: vehicles, leads and animal clicks in the Nether
 import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tickNether, applyPopulation } from './server-nether.js';
 import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
+import { ServerPortalShots } from './server-portal-shots.js'; // b91 entnbt91: arrows and rockets through portals
 
 const OVERWORLD = 0, END = 1, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
@@ -55,7 +56,7 @@ const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow',
 export class ServerDimensions {
   constructor(sim, saved = {}) {
     this.sim = sim; this.saved = saved ?? {}; this.nether = null; this.depth = 0; this.alt = {}; this.clearWeather = new Weather().save();
-    this.teleporters = new Map(); this.overworld = sim.world; this.end = new ServerEnd(this); // b63 mpend: the End (server-end.js)
+    this.teleporters = new Map(); this.overworld = sim.world; this.shots = new ServerPortalShots(this); this.end = new ServerEnd(this); // b63 mpend: the End (server-end.js)
     // sim.world is swapped while a Nether player's action runs
     pinOverworldVehicles(sim, this); // b63: the Overworld's vehicles see Overworld players only; the Nether has its own (server-nether-vehicles.js)
     // Overworld: a fire block lights a complete frame and a portal block without its frame goes (nether-portal-live.js, chained after Fire).
@@ -172,6 +173,7 @@ export class ServerDimensions {
   afterTick(base) {
     const sim = this.sim;
     for (const p of [...sim.players.values()]) if (!p.dead) this.checkPortal(p);
+    this.shots.step(); // b91 entnbt91: the arrows and rockets of every dimension in portals
     for (const t of this.teleporters.values()) if (sim.ticks % 100 === 0) t.removeStale(sim.ticks);
     this.alt = {};
     if (this.nether) this.alt[NETHER] = this.netherMessage(base);
@@ -200,6 +202,17 @@ export class ServerDimensions {
     this.teleporters.set(dimension, t = new Teleporter(adapter, { isSolid: solidId, random: new JavaRandom(seed) }));
     return t;
   }
+  // transferEntityToWorld for `e` (Minecraft units, `x`/`y`/`z`/`yaw`) leaving `from` for `to`: the End's platform, or the coordinates scaled about the middle and the Teleporter in the destination's context.
+  // Shared by the player's trip (arrive) and the arrows and rockets that cross portals (server-portal-shots.js, b91 entnbt91).
+  placeEntity(e, from, to, teleporter = true) {
+    if (to === END) { this.end.place(e, from, e.yaw); return; } // b63 mpend: the platform at the End's entrance
+    const dest = this.worldOf(to), tt = transferTarget(from, to, e.x - MIDDLE, e.y, e.z - MIDDLE, e.yaw);
+    Object.assign(e, { x: clamp(tt.x + MIDDLE), y: tt.y, z: clamp(tt.z + MIDDLE), yaw: tt.yaw });
+    // the Teleporter's writes run neighbour rules (a torch beside the frame drops): in the destination's context
+    if (!teleporter) return; // b91 entnbt91: a copy whose saved Dimension is 1 (oi.a runs the Teleporter only when j != 1)
+    const place = () => this.teleporterFor(to).placeInPortal(e, e.x, e.y, e.z, e.yaw);
+    if (to) this.swap(dest === this.overworld ? this.ensureNether() : this.ensureNether(), place); else place();
+  }
   // The trip: the destination is built, the Teleporter places the player, and a `dimRespawn` is queued for the connection. `at` skips the search (a respawn).
   arrive(p, to, { at = null, exit = false } = {}) {
     const sim = this.sim, from = p.dimension | 0;
@@ -207,14 +220,7 @@ export class ServerDimensions {
     const dest = this.worldOf(to);
     const e = { x: p.position.x, y: p.position.y, z: p.position.z, vx: 0, vy: 0, vz: 0, yaw: mcYaw(p.yaw), pitch: 0, teleportDirection: p.portal?.teleportDirection ?? 0 };
     if (at) Object.assign(e, { x: at.x, y: at.y, z: at.z });
-    else if (to === END) this.end.place(e, from, e.yaw); // b63 mpend: the platform at the End's entrance
-    else {
-      const tt = transferTarget(from, to, p.position.x - MIDDLE, p.position.y, p.position.z - MIDDLE, e.yaw);
-      Object.assign(e, { x: clamp(tt.x + MIDDLE), y: tt.y, z: clamp(tt.z + MIDDLE), yaw: tt.yaw });
-      // the Teleporter's writes run neighbour rules (a torch beside the frame drops): in the destination's context
-      const place = () => this.teleporterFor(to).placeInPortal(e, e.x, e.y, e.z, e.yaw);
-      if (to) this.swap(dest === this.overworld ? this.ensureNether() : this.ensureNether(), place); else place();
-    }
+    else this.placeEntity(e, from, to);
     // The player leaves the old dimension: the mob view goes (or comes back), and everything aimed at the old world is dropped.
     sim.vehicles?.dismount(p); // b61 lead: a rider leaves the vehicle (Entity.travelToDimension mounts nothing across)
     this.mobsOf(from).removePlayer(p.id); this.mobsOf(to).addPlayer(p); // b62: each dimension's mobs see only its own players
