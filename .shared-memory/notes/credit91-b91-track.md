@@ -19,7 +19,7 @@
 
 ## Verification
 - `node --test --test-concurrency=2 src/credit91-b91.test.js`: 6/6 pass; 0/6 with the source changes stashed (entities.js, nether-melee-live.js, multiplayer/).
-- Neighbour run: see the lead's message (224 test files naming DedicatedSimulation, server-dispense, nether-melee-live, reinforcement, revenge-target, pigman).
+- Neighbour run, 224 test files naming DedicatedSimulation, server-dispense, nether-melee-live, reinforcement, revenge-target or pigman, `--test-concurrency=2`: 3062 tests, 3061 pass. The one failure (`mpnether3-b63` Nether experience orbs) passes alone on this branch (9/9) and fails alone on the parent commit 94e060855 (8/1): load/timing flake, not caused by this change.
 - No full `npm test`, no `npm run build` (no new imports of modules outside src), no browser.
 
 ## Found wrong in the batch 90 list
