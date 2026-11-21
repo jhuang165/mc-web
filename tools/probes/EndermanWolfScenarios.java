@@ -295,6 +295,30 @@ public class EndermanWolfScenarios {
     // the golem is hurt by the player (EntityAIHurtByTarget retaliation)
     sc88("b91mr-golem-hurt-9307", 9307, 200, "G", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, 15, "20 melee 0");
   }
+  // Batch 92 (mobrec92, b92mr): the b91mr harness whose loop also ticks the slimes and magma cubes a death spawns (EndermanWolfProbe B92, row element 12 and the `kids` input list).
+  // Splits by an iron golem (size 2 and 4 of both kinds, the golem 6 blocks from the mob and 56 from the player) and by the player's melee (the mob's health set to 0.5, so the one hit kills it
+  // and its children chase the player).
+  static void run92() throws Exception {
+    double[][] gz = {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}};
+    for (int sd : new int[] {9401}) sc88("b92mr-golem-slime2-" + sd, sd, 160, "Gi", gz, 15);
+    sc88("b92mr-golem-slime4-9403", 9403, 150, "GI", gz, 15);
+    sc88("b92mr-golem-magma2-9404", 9404, 160, "Gl", gz, 15);
+    sc88("b92mr-golem-magma4-9405", 9405, 150, "Gu", gz, 15);
+    double[][] near = {{67.5, 64.5}, {64.5, 64.5}};
+    sc88("b92mr-player-slime2-9411", 9411, 200, "i", near, 15, "10 health 0 0.5", "11 melee 0");
+    sc88("b92mr-player-slime4-9412", 9412, 160, "I", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 15, "10 health 0 0.5", "11 melee 0");
+    sc88("b92mr-player-magma2-9413", 9413, 200, "l", near, 15, "10 health 0 0.5", "11 melee 0");
+    sc88("b92mr-player-magma4-9414", 9414, 160, "u", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 15, "10 health 0 0.5", "11 melee 0");
+    // other kinds against the golems: a snow golem's snowballs (IMob targets other than the zombie and creeper of b88) and an iron golem against a blaze (fireballs hurt it)
+    double[][] sn = {{120.5, 64.5}, {128.5, 64.5}, {64.5, 64.5}};
+    sc88("b92mr-snow-spider-9421", 9421, 150, "NB", sn, 0);
+    sc88("b92mr-snow-silverfish-9422", 9422, 150, "Nf", sn, 15);
+    sc88("b92mr-snow-witch-9423", 9423, 150, "NK", sn, 15);
+    sc88("b92mr-snow-slime2-9425", 9425, 150, "Ni", sn, 15);
+    sc88("b92mr-snow-magma2-9426", 9426, 150, "Nl", sn, 15);
+    sc88("b92mr-snow-cave-9427", 9427, 150, "NJ", sn, 0);
+    sc88("b92mr-golem-blaze-9431", 9431, 150, "Ga", sn, 15);
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

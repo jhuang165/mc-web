@@ -370,10 +370,14 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
     // The ender dragon is not collidable; its parts are (each EntityDragonPart box), and `part` tells aimPart which one was struck.
     if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box, reach }) => ({ ref: target, part, box, reach }));
     if (e.type === "ender_crystal") return [{ ref: e, box: crystalBox(e.x, e.y, e.z) }]; // b88 boatray88: the crystal box is centred on posY (ender-crystal.js)
-    const t = ENTITY_TYPES[e.type];
-    if (s88 !== null) return mobTargetAt92(s88, i, e, t, e.growingAge < 0);
-    if (st !== null && fast87.mode !== "off") return mobTargetAt(st, i, e, t, e.growingAge < 0); // b87 mpperf87: the sizes worked out in place, the record kept with its box while nobody marks it
-    const s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);
+    let t = ENTITY_TYPES[e.type], young = e.growingAge < 0;
+    if ((e.type === "slime" || e.type === "magma_cube") && e.size > 1) { // b92 mobrec92: setSize(0.6 * size) (executed: snow-slime2 / snow-magma2, a snowball strikes a size 2 slime at y 1.36); the table's box is the size 1 one
+      const w = f(f(0.6) * e.size);
+      t = { width: w, height: w }; young = false;
+    }
+    if (s88 !== null) return mobTargetAt92(s88, i, e, t, young);
+    if (st !== null && fast87.mode !== "off") return mobTargetAt(st, i, e, t, young); // b87 mpperf87: the sizes worked out in place, the record kept with its box while nobody marks it
+    const s = young ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);
     const rec = { ref: e, box: mobBoxAt(st, i, e, hw, h) };
     return fast85.mode === "off" ? [rec] : rec; // b85 mpperf85: no one-element list (mobTargetList takes a record); b84 mpperf84: the box is reused while the mob has not moved
   });

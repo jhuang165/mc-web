@@ -40,6 +40,7 @@ export const reference49 = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
 export const reference88 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b88mr-reference.json", import.meta.url))); // b88 mobrec88
+export const reference92 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b92mr-reference.json", import.meta.url))); // b92 mobrec92
 export const reference91 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b91mr-reference.json", import.meta.url))); // b91 mobrec91
 export const reference90 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b90mr-reference.json", import.meta.url))); // b90 mobrec90
 export const reference89 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b89mr-reference.json", import.meta.url))); // b89 mobrec89
@@ -82,14 +83,15 @@ export function replayEndermanWolf(r, opts = {}) {
 function run(r, opts) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
-  ew.probeFixedList = true; // b91: EndermanWolfProbe never ticks a spawned entity (its loop walks the fixed `ents` array; the b44 babies and the b45 foals are only added to the push lists), so a born baby is not updated in the pass (not what World.updateEntities does)
+  const x92 = r.name.startsWith("b92mr"); // b92 mobrec92: EndermanWolfProbe B92 ticks the entities a split slime or magma cube spawns (as World.updateEntities does), and row element 12 holds their rows
+  ew.probeFixedList = !x92; // b91: EndermanWolfProbe never ticks a spawned entity (its loop walks the fixed `ents` array; the b44 babies and the b45 foals are only added to the push lists), so a born baby is not updated in the pass (not what World.updateEntities does)
   ew.difficulty = 2;
   // Original block 62 (lit furnace) is the port's furnace with a fire; EntityAIOcelotSit reads the furnace's lit id, which the plain cell map cannot hold.
   const lit = (x, y, z) => (r.blocks ?? []).some(([x0, y0, z0, x1, y1, z1, id]) => id === 62 && x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1);
   ew.ocelotBlocks = { chestUsers: () => 0, furnaceLit: lit };
   ew.worldRandom = new JavaRandom(r.seed);
   const worldDraws = { n: 0 }; // b90 mobrec90: the probe's counting World.rand (row element 11); the replay's world random counts the same way
-  if (/^b9[01]mr/.test(r.name)) { const next = ew.worldRandom.next.bind(ew.worldRandom); ew.worldRandom.next = (bits) => { worldDraws.n++; return next(bits); }; }
+  if (/^b9[012]mr/.test(r.name)) { const next = ew.worldRandom.next.bind(ew.worldRandom); ew.worldRandom.next = (bits) => { worldDraws.n++; return next(bits); }; }
   let day = false, rain = false, bright = r.bright, held = 0;
   ew.isDaytime = () => day;
   ew.isRaining = () => rain;
@@ -100,6 +102,14 @@ function run(r, opts) {
   // b83 rain83: the enderman reads isWet through `mobs.wet` (World.canLightningStrikeAt at the feet and head cells); in this probe's plains world that is rain and an unroofed column.
   ew.wet = (e, h) => rain && (!roofed(Math.floor(e.x), Math.floor(e.z)));
   const ents = [], logs = [], init = [], spawnOpts = {};
+  const kidEnts = [], kidLogs = []; // b92: the split children in spawn order (the probe's kids list) and their Entity.rand logs
+  if (x92) ew.entitySeed = (c, kind) => { // the child's Entity.rand is the probe's logging Random seeded from the record; the constructor's jump delay (a draw of the probe's own SeedRandom) is the record's input
+    if (kind !== "slime-split") return;
+    const k = kidEnts.length, lr = new LogRandom(BigInt(r.seed * 10 + 500 + k));
+    setEntityRandom(c, lr);
+    if (r.kids?.[k]) c.jumpDelay = r.kids[k][2];
+    kidEnts.push(c); kidLogs.push(lr);
+  };
   [...types].forEach((ch, i) => {
     const [x, z, y0 = 0] = r.pos[i], e = ew.create(TYPE_OF[ch], x, y0, z);
     ew.entities.push(e);
@@ -129,16 +139,16 @@ function run(r, opts) {
   // item, orb and explosion machinery, the witch's potion list (seeded per throw from the record) and the gamerule mobGriefing.
   const xcw = r.rows[0][5] !== undefined && !r.init; // the horse set (b45, record.init) also has a sixth row element
   const x87 = r.name.startsWith("b87wf"); // b87 mobrec87: the potions fly too (EndermanWolfProbe B87W), after the mobs in the loaded-entity walk
-  const x89 = /^b(89|9[01])mr/.test(r.name); // b89 mobrec89: the b88mr harness plus the blaze's fireballs in the walk, mob effects and the player's food stats (row element 10)
+  const x89 = /^b(89|9[012])mr/.test(r.name); // b89 mobrec89: the b88mr harness plus the blaze's fireballs in the walk, mob effects and the player's food stats (row element 10)
   const x88 = x89 || r.name.startsWith("b88mr");
-  const x90 = /^b9[01]mr/.test(r.name); const x91 = r.name.startsWith("b91mr"); // b90 mobrec90: the b89mr harness plus the world random draw count (row element 11) // b88 mobrec88: a ticked server copy (b47sp rules) whose effects run, and the snow golem's snowballs fly (EndermanWolfProbe B88)
+  const x90 = /^b9[012]mr/.test(r.name); const x91 = /^b9[12]mr/.test(r.name); // b90 mobrec90: the b89mr harness plus the world random draw count (row element 11) // b88 mobrec88: a ticked server copy (b47sp rules) whose effects run, and the snow golem's snowballs fly (EndermanWolfProbe B88)
   const items = new ItemEntities(() => 0.5), orbs = new ExperienceOrbs([], () => 0.5), pv = { x: 0, y: 0, z: 0 };
   const potionSeeds = [];
   let grief = true;
   if (xcw) {
     setGameRuleSource((name) => (name === "mobGriefing" ? grief : ruleOn(null, name)));
     ew.potions = new WitchPotions(ew, () => (potionSeeds.length ? potionSeeds.shift() : 0) / 2 ** 48); // an impact's glass sound pitch also takes a random (the client world's, natively): it gets 0
-    if (!x87) { ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; } // the probe never flies a potion it spawned: the record keeps the launch
+    if (!x87 && !x92) { ew.potions.tick = () => {}; ew.potions.tickOne = () => {}; } // the probe never flies a potion it spawned: the record keeps the launch
   }
   const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true, yaw: 0 };
   const thrown = [];
@@ -151,7 +161,7 @@ function run(r, opts) {
     ew.potions.throwAt = (e, target) => { const b = throwAt(e, target); if (b) thrown.push(b); return b; };
   }
   // b88 mobrec88: the snowball walk (entity-simulation.js entityWalkers, kinds golemBall and potion), each ball's Entity.rand seeded from the record (row element 5[1] "snowball" seeds, as the witch's potions).
-  const balls = [], ballSeeds = [];
+  const balls = [], ballSeeds = [], flying = [];
   let ballsReported = 0;
   if (x88) {
     const wstate = { world: ew.world, mobs: ew, position: player, survival };
@@ -159,7 +169,11 @@ function run(r, opts) {
     for (const k of [...ew.walks.keys()]) if (k !== "potion" && k !== "golemBall") ew.walks.delete(k);
     const gb = ew.golemBalls, shoot = gb.shoot.bind(gb);
     gb.projectiles.random = () => (ballSeeds.length ? ballSeeds.shift() : 0) / 2 ** 48;
-    gb.shoot = (e, target) => { const n0 = gb.balls.length; shoot(e, target); if (gb.balls.length > n0) balls.push(gb.balls[gb.balls.length - 1]); };
+    gb.shoot = (e, target) => { const n0 = gb.balls.length; shoot(e, target); if (gb.balls.length > n0) { balls.push(gb.balls[gb.balls.length - 1]); flying.push(gb.balls[gb.balls.length - 1]); } };
+    if (x92 && ew.potions) { // b92: a witch's potions fly too (B88's throwable loop updates every EntityThrowable in spawn order, snowballs and potions together: row element 9 lists them as one sequence)
+      const throwAt = ew.potions.throwAt.bind(ew.potions);
+      ew.potions.throwAt = (e, target) => { const b = throwAt(e, target); if (b) { thrown.push(b); flying.push(b); } return b; };
+    }
   }
   // b89 mobrec89: the blaze's small fireballs (fireballs.js, ticked in the mob walk), each one's Entity.rand seeded from the record (row element 5[1] "fireball" seeds).
   const fireballs = [], fireballSeeds = [];
@@ -216,7 +230,7 @@ function run(r, opts) {
   };
   if (xcw) ew.explodeInline = (ev) => boom(ev); // a creeper explodes inside its own update, before the mobs after it in the list move
   const script = r.script.map((s) => s.split(" ")), vel = new Array(n + 1).fill(null).map(() => [0, 0]), states = [];
-  const idxOf = (b) => (!b ? -1 : b.isPlayer ? n : ents.indexOf(b.e ?? b));
+  const idxOf = (b) => { if (!b) return -1; if (b.isPlayer) return n; const i = ents.indexOf(b.e ?? b); return i >= 0 || !x92 ? i : kidEnts.indexOf(b.e ?? b) >= 0 ? 1000 + kidEnts.indexOf(b.e ?? b) : -1; };
   for (let t = 0; t < r.ticks; t++) {
     for (const p of script) {
       if (Number(p[0]) !== t) continue;
@@ -287,6 +301,7 @@ function run(r, opts) {
     if (x46) player.y = r.rows[t][7]; // the client's y (the probe's server copy falls and rises with its own motion; the replay takes it as the position packet's y)
     if (!x46) ew.ai.beginTick(player, survival, held); // b46mp, b47sp: ew.tick's own beginTick is the only one, so the position packet counter and the revenge timer count once a tick
     for (const l of logs) l.log.length = 0;
+    for (const l of kidLogs) l.log.length = 0;
     booms.length = cells.length = 0;
     const pending = xcw ? ew.events.filter((ev) => !ev.sound) : []; // the kill a script op made queued its drops, orbs and so on: they run with this tick's events
     if (!b47) ew.events.length = 0; // b47h: the sounds a script op made (feed, rear) are in the tick's row
@@ -306,8 +321,8 @@ function run(r, opts) {
     if (ew._golemBalls && !x88) ew._golemBalls.balls.length = 0; // the probe never ticks the snowballs a snow golem throws (the shot's draws are in the record, the flight is not)
     // The probe never ticks a baby the mating task spawned (World.spawnEntityInWorld adds it to no tick list there), so the replay drops it too.
     const kids = ew.entities.filter((x) => !ents.includes(x) && x.type === "horse").map(horseFlags);
-    ew.entities = ew.entities.filter((x) => ents.includes(x));
-    let sounds = ew.events.filter((e) => e.sound && !(x89 && e.sound === "mob.ghast.fireball" && e.volume === 2)).map((e) => [e.sound, e.volume, e.pitch]); // b89: the blaze's shot is World.playAuxSFX 1009 (pitch drawn on the client), which the probe's IWorldAccess sound log never sees
+    ew.entities = ew.entities.filter((x) => ents.includes(x) || (x92 && kidEnts.includes(x)));
+    let sounds = ew.events.filter((e) => e.sound && !((x87 || x92) && e.splashBreak) && !(x89 && e.sound === "mob.ghast.fireball" && e.volume === 2)).map((e) => [e.sound, e.volume, e.pitch]); // b89: the blaze's shot is World.playAuxSFX 1009 (pitch drawn on the client), which the probe's IWorldAccess sound log never sees
     if (xcw) {
       // The events main.js drains (living-simulation.js drainMobEvents): sound, xp orbs, explosion, item drops, in queue order. An explosion queues its hurt sounds while it
       // damages the mobs and its random.explode last, as Explosion.doExplosionA runs before doExplosionB plays it.
@@ -315,7 +330,7 @@ function run(r, opts) {
       ew.events.unshift(...pending);
       for (let i = 0; i < ew.events.length; i++) {
         const ev = ew.events[i];
-        if (ev.sound && !(x87 && ev.splashBreak) && !(x89 && ev.sound === "mob.ghast.fireball" && ev.volume === 2)) sounds.push([ev.sound, ev.volume, ev.pitch]); // b87: world event 2002's glass sound is the client's (the probe's playAuxSFX records no sound)
+        if (ev.sound && !((x87 || x92) && ev.splashBreak) && !(x89 && ev.sound === "mob.ghast.fireball" && ev.volume === 2)) sounds.push([ev.sound, ev.volume, ev.pitch]); // b87: world event 2002's glass sound is the client's (the probe's playAuxSFX records no sound)
         if (ev.xp) orbs.spawn(ev.xp, ev.position);
         if (ev.explode) boom(ev);
         if (ev.drop) items.dropMob(ev.drop, ev.count, ev.position, ev.damage, ev);
@@ -344,7 +359,7 @@ function run(r, opts) {
       for (const it of items.items.splice(0)) spawned.push(["item-port", it.stack.id, it.stack.damage ?? 0, it.stack.count, it.x, it.y + 0.125, it.z]);
       for (const o of orbs.orbs.splice(0)) spawned.push(["xp", o.value, o.x, o.posY, o.z]);
       for (const _ of primed.splice(0)) spawned.push(["other", "xw"]); // EntityTNTPrimed (xw) a blast chained
-      for (const b of x87 ? thrown.slice(reported) : ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]); // b87: the probe prints a new potion after its first update; the flying ones stay in the list
+      for (const b of x87 || x92 ? thrown.slice(reported) : ew.potions.projectiles.balls.splice(0)) spawned.push(["potion", b.damage, b.x, b.y, b.z, b.mx, b.my, b.mz]); // b87: the probe prints a new potion after its first update; the flying ones stay in the list
       reported = thrown.length;
       if (x88) { for (const b of balls.slice(ballsReported)) spawned.push(["snowball", b.x, b.y, b.z, b.mx, b.my, b.mz]); ballsReported = balls.length; }
       if (x89) { for (const b of ew._fireballs?.list ?? []) if (!fireballs.includes(b)) fireballs.push(b); for (const b of fireballs.slice(fireballsReported)) spawned.push(["fireball", b.x, b.y, b.z, b.vx, b.vy, b.vz]); fireballsReported = fireballs.length; }
@@ -354,9 +369,9 @@ function run(r, opts) {
       state.pos = [ew.ai.player.x, ew.ai.player.y, ew.ai.player.z]; // b47sp: where the server copy rests
       if (x48) state.pistons = rw.pistonTiles().map((t) => [t.x, t.y, t.z, t.progress, t.lastProgress]);
       if (x88) { // row element 9: [[k, x, y, z, motion, dead] of each snowball that updated, [the player's effects [id, duration, amplifier]]]
-        const live = balls.map((b, k) => [k, b]).filter(([, b]) => !b.deadBefore);
+        const all = x92 ? flying : balls, live = all.map((b, k) => [k, b]).filter(([, b]) => !b.deadBefore);
         state[9] = [live.map(([k, b]) => [k, b.x, b.y, b.z, b.mx, b.my, b.mz, b.dead ? 1 : 0]), [...survival.effects.active.values()].sort((a, b) => a.id - b.id).map((e) => [e.id, e.duration, e.amplifier])];
-        for (const b of balls) if (b.dead) b.deadBefore = true;
+        for (const b of all) if (b.dead) b.deadBefore = true;
       }
       if (x89) { // row element 10: [[each mob's effects [id, duration, amplifier] by id], [player health, food, saturation, exhaustion, food timer], [[k, x, y, z, motion, dead] of each fireball that updated]]
         const live = fireballs.map((b, k) => [k, b]).filter(([, b]) => !b.deadBefore);
@@ -365,6 +380,12 @@ function run(r, opts) {
         for (const b of fireballs) if (b.dead) b.deadBefore = true;
       }
       if (x90) state[11] = [worldDraws.n]; // row element 11: [World.rand draws so far]
+      if (x92) { // row element 12: [x, y, z, health, target, revenge, size, draws, motion] of every child so far, as EndermanWolfProbe's kids list
+        state[12] = kidEnts.map((e, k) => {
+          const b = ew.ai.brain(e);
+          return [e.x, e.y, e.z, e.removedHealth ?? e.health, idxOf(b.attackTarget), e.revenge ? (revengeOf(e) === "player" ? n : idxOf(revengeOf(e))) : -1, e.size, kidLogs[k].log.slice(), [e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.jumping ? 1 : 0, e.moveForward ?? 0, e.moveStrafing ?? 0]];
+        });
+      }
       if (x87) { // row element 6: [[k, x, y, z, motion, dead] of each potion that updated, [the player's effects [id, duration, amplifier]]]
         const live = thrown.map((b, k) => [k, b]).filter(([, b]) => !b.deadBefore); // in the air at the tick's start, or thrown during it (it joins the walk and updates in this pass)
         state[6] = [live.map(([k, b]) => [k, b.x, b.y, b.z, b.mx, b.my, b.mz, b.dead ? 1 : 0]), [...survival.effects.active.values()].sort((a, b) => a.id - b.id).map((e) => [e.id, e.duration, e.amplifier])];
@@ -414,13 +435,22 @@ export function firstDivergence(r, got) {
       if (d) return d;
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
+    if (r.name.startsWith("b92mr")) {
+      if (want[12].length !== have[12].length) return [t, "children", want[12].length, have[12].length];
+      for (let k = 0; k < want[12].length; k++) {
+        const w = want[12][k], g = have[12][k];
+        for (let q = 0; q < 7; q++) if (!same(w[q], g[q])) return [t, "child " + k, ["x", "y", "z", "health", "target", "revenge", "size"][q], w[q], g[q]];
+        if (JSON.stringify(w[7]) !== JSON.stringify(g[7])) return [t, "child " + k, "draws", w[7], g[7]];
+        for (let q = 0; q < 11; q++) if (!same(w[8][q], g[8][q])) return [t, "child " + k, ["vx", "vy", "vz", "yaw", "pitch", "headYaw", "bodyYaw", "onGround", "jumping", "moveForward", "moveStrafing"][q], w[8][q], g[8][q]];
+      }
+    }
     if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
-    if (/^b(8[89]|9[01])mr/.test(r.name)) { // b88 mobrec88: the flying snowballs and the player's effects (row element 9)
+    if (/^b(8[89]|9[012])mr/.test(r.name)) { // b88 mobrec88: the flying snowballs and the player's effects (row element 9)
       if (!deepSame(want[9][0], have[9][0])) return [t, "snowballs", want[9][0], have[9][0]];
       if (!deepSame(want[9][1], have[9][1])) return [t, "player effects", want[9][1], have[9][1]];
     }
-    if (/^b9[01]mr/.test(r.name) && !deepSame(want[11], have[11])) return [t, "world random draws", want[11], have[11]]; // b90 mobrec90: the aux event's pitch is the client's draw, the server world random is not touched by a shot
-    if (/^b(89|9[01])mr/.test(r.name)) { // b89 mobrec89: the mobs' effects, the player's health and food stats, the fireballs in flight (row element 10)
+    if (/^b9[012]mr/.test(r.name) && !deepSame(want[11], have[11])) return [t, "world random draws", want[11], have[11]]; // b90 mobrec90: the aux event's pitch is the client's draw, the server world random is not touched by a shot
+    if (/^b(89|9[012])mr/.test(r.name)) { // b89 mobrec89: the mobs' effects, the player's health and food stats, the fireballs in flight (row element 10)
       if (!deepSame(want[10][0], have[10][0])) return [t, "mob effects", want[10][0], have[10][0]];
       if (!deepSame(want[10][1], have[10][1])) return [t, "player food", want[10][1], have[10][1]];
       if (!deepSame(want[10][2], have[10][2])) return [t, "fireballs", want[10][2], have[10][2]];
