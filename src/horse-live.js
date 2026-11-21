@@ -190,9 +190,11 @@ export function horseRideThink(mobs, e) {
   }
   // jumpMovementFactor is getAIMoveSpeed() * 0.1 (the prior bp) before setAIMoveSpeed((float) movementSpeed.getAttributeValue()): the attribute
   // with its saved modifiers (probed attributes2 `horseRide`: +50% gives bp 0.38358983 and aQ 0.038358983; a prior bp of 0.9 gives aQ 0.09 once).
+  // b89 horse89: bp is not saved and starts at 0 (EntityLivingBase's field default), so a record that has no aiMoveSpeed counts as 0, not the attribute: the first ridden tick of a
+  // fresh or reloaded horse has aQ 0 (executed: horse88-reference.json tick 0, horse89-reference.json `freshAir`, where the airborne horse gains no horizontal speed that tick).
   const speed = aiMoveSpeed(e, 1);
   e.stepHeight = 1;
-  e.jumpFactor = f((Number.isFinite(e.aiMoveSpeed) ? e.aiMoveSpeed : speed) * f(0.1));
+  e.jumpFactor = f((Number.isFinite(e.aiMoveSpeed) ? e.aiMoveSpeed : 0) * f(0.1));
   e.aiMoveSpeed = speed;
   rideMoves.set(e, { strafe, forward });
   e.jumping = false;
@@ -285,6 +287,7 @@ export function installHorse(EntityWorld) {
     // written only in e(FF) and w(int), br only through j(Z) in e(FF)), so a jump power stored in the air waits for the landing and is dropped there, and one left on an
     // unridden horse (the rider got off in the air) stays until the next ridden tick.
     if (riddenMoves.has(e) && e.onGround) { e.jumpPower = 0; e.jumpingHorse = false; }
+    if (e.rider?.sneakDismount) this.riderSneakOff(e); // b89 horse89: after the ridden move (a dying horse too); nothing below moves the horse
     const max = maxHealthOf(e, e.horse.maxHealth);
     // wi.e (bytecode-read): nextInt(200) moves the tail before wf.e (EntityWorld, ahead of the AI); after it (server side) nextInt(900) with a live horse heals 1 (the draw is not gated on health),
     // then a horse not eating and with no rider draws nextInt(300) and starts eating when the block below is grass; eating stops after 50 ticks.
@@ -299,6 +302,18 @@ export function installHorse(EntityWorld) {
       const o = closestBredHorse(this, e, 16);
       if (o && distSq(o, e) > 4) herdTargets.set(e, o); // otherwise td.bp keeps what it held
     }
+  };
+  // b89 horse89: EntityPlayer.updateRidden (yz.ab, bytecode-read) for the player riding `e`, which World.updateEntityWithOptionalForce (ahb.a(sa, Z), bytecode-read) runs right
+  // after the mount's onUpdate (sa.h): on the server, isSneaking (set by the C0C, mw.a(FFZZ)) -> mountEntity(null) and setSneaking(false), returning before the rider's own update.
+  // mountEntity(null) is yz.a(sa) -> sv.m(sa) dismountEntity (the spot search from the rider's seat, which the network tick last put on the mount, or the top of the moved mount),
+  // then mw.a(sa)'s S1B and setPlayerLocation, whose S08 puts the client on that spot (`released`, vehicle-simulation.js finishVehicleTick). Executed: horse89-reference.json.
+  proto.riderSneakOff = function (e) {
+    const rider = e.rider;
+    rider.sneakDismount = false;
+    if (rider.sneakSeat) Object.assign(rider, rider.sneakSeat); // the live seat (vehicle-simulation.js); the client's own seat follows the tracked copy
+    rider.sneakSeat = null;
+    this.horseSeats.dismount(this.world, rider, true);
+    rider.released = { x: rider.x, y: rider.y, z: rider.z };
   };
   // EntityAIRunAroundLikeCrazy.updateTask (vg.e, run by the AI task of an untamed horse with a rider, ai.js RunAround): nextInt(50) == 0, then for a player rider
   // nextInt(100) < temper tames the horse (setTamedBy, status 7), otherwise temper + 5 (capped at 100); the rider is thrown off and the horse rears with the angry sound (status 6).
@@ -322,6 +337,7 @@ export function installHorse(EntityWorld) {
       // from that spot comes in its collideWithNearbyEntities this tick, and the mobs' copy of the player moves with it.
       this.horseSeats.dismount(this.world, rider, true);
       e.rider = null;
+      rider.released = true; // b89 horse89: setPlayerLocation's S08 puts the client on the spot too (vehicle-simulation.js finishVehicleTick)
       if (this.ai.player) Object.assign(this.ai.player, { x: rider.x, y: rider.y, z: rider.z });
     } else if (mob) mountEntity(mob, null, (m) => this.size(m)[1]);
     else return;

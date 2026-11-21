@@ -78,7 +78,10 @@ test('SIM-01 placement/mount/dismount actions use current state and survive JSON
  assert.equal(s.flying,false);assert.equal(s.fallDistance,0);assert.deepEqual(s.previous,old);assert.equal(movement.sneakOnGround,true);
  assert.equal(s.rider.moveForward,Math.fround(.98));
  moveRidingPlayer(s,{sneak:true},{trace:a=>trace.push(a)});
- assert.equal(s.rider.vehicle,null);assert.equal(c.rider,null);assert.equal(trace[0].dismount,true);
+ // b89 horse89: the sneak is acted on after the cart's update of the same tick (EntityPlayer.updateRidden after World.updateEntityWithOptionalForce's onUpdate; was: at once)
+ assert.equal(s.rider.vehicle,c);assert.equal(trace[0].dismount,true);
+ tickMinecartSimulation({world:s.world,minecarts:s.minecarts,mobs:null,position:s.position,velocity:s.velocity,rider:s.rider,width:.6,height:1.8,alive:true});finishVehicleTick(s);
+ assert.equal(s.rider.vehicle,null);assert.equal(c.rider,null);
  assert.equal(dispatchVehicleAction(s,{...mount,sneak:true}).branch,'occupied-or-sneaking-minecart');
  assert.equal(c.rider,null);
 });

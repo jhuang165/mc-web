@@ -22,6 +22,13 @@ Executed: `tools/probes/Horse88Probe.java` (`tools/verify-horse88.mjs`, `horse88
 - Single player: the jump key is tracked off the horse (mounting with it held counts on), and the dismount tick runs the counter without a send.
 Open: natively the sneak tick still makes one ridden move before the dismount; the first ridden tick of a freshly loaded horse uses `aiMoveSpeed` 0 natively for the air factor.
 
+## Batch 89 (horse89): the sneak tick, the first air factor, a mount dying under the rider
+Executed: `tools/probes/Horse89Probe.java` (`tools/verify-horse89.mjs`, `horse89-reference.json`, 10 rows, seeds 1 and 6) puts a real `EntityPlayerMP` on the unchanged `wi`: per tick the C0B (`wi.w(int)`), the real C0C handler `mw.a(FFZZ)`, `wi.h()`, then the real `yz.ab()` (updateRidden) for a sneaking linked rider. Bytecode-read: `yz.ab` (`!isRemote && isSneaking` -> mountEntity(null), setSneaking(false), return), `ahb.a(sa, Z)` (the rider's update right after its mount's onUpdate), `yz.a(sa)` (dismountEntity only when `!isRemote`), `sv.m` (spot search from the rider, fallback `posX, boundingBox.minY + height, posZ`). `src/horse89-b89.test.js` replays the rows. Corrected in the port:
+- The sneak tick makes one more ridden move (sneak input `0.3 * 0.98` forward, a C0B jump sent that tick lands), then the rider gets off at the spot searched from its old seat. Boats and carts follow the same order now (World / EntityPlayer code, bytecode-read; not separately executed). The superseded "dismount tick sends no C0B" of batch 88 is corrected: the C0B is sent.
+- The first ridden tick of a horse whose record has no `aiMoveSpeed` has jumpMovementFactor 0 (`bp` is not saved), not the speed attribute.
+- A mount that dies or is removed under the player leaves the client at its seat (no dismount spot); it falls from there.
+- A buck (RunAround) now moves the client to the dismount spot too (the S08 of setPlayerLocation).
+
 ## Files
 `src/horse.js` (rules), `src/horse-live.js` (engine wiring, riding), `src/horse-renderer.js`, tests.
 

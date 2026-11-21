@@ -68,11 +68,24 @@ export const playerBox = ({ x, y, z }, width, height) => mobBox(x, y, z, width, 
  * `hooks.drop(drop)` receives each Minecarts drop ({ stack, original, x, posY, z, motion, delay }).
  * Returns the drops of this tick.
  */
+// b89 horse89: EntityPlayer.updateRidden (yz.ab) for a player who sneaked this tick, right after the vehicle's own update (World.updateEntityWithOptionalForce, ahb.a(sa, Z);
+// both bytecode-read): mountEntity(null) -> dismountEntity from the live seat (`sneakSeat`) with the moved vehicle's top as the fallback; `released` hands the spot to the client
+// (vehicle-simulation.js finishVehicleTick).
+function riderSneakOff(world, system, v) {
+  const r = v.rider;
+  if (!r?.sneakDismount) return;
+  r.sneakDismount = false;
+  if (r.sneakSeat) Object.assign(r, r.sneakSeat);
+  r.sneakSeat = null;
+  system.dismount(world, r);
+  r.released = { x: r.x, y: r.y, z: r.z }; // the pushes after the update copy the client position onto the record again (vehicleBlockers)
+}
 export function tickMinecartSimulation(state, hooks = {}) {
   const { world, minecarts } = state;
   if (!minecarts?.carts.length) return [];
   const { blockers } = vehicleBlockers(state);
   minecarts.tick(world, { entities: cartBlockers(blockers), host: hooks.cartHost ?? null });
+  for (const c of minecarts.carts) riderSneakOff(world, minecarts, c); // b89 horse89
   return pushAndDrain(state, hooks, minecarts);
 }
 
@@ -82,7 +95,8 @@ export function tickMinecartSimulation(state, hooks = {}) {
 // passes through crystals; EntityBoat.getCollisionBox (xi.h) returns any entity's box, so a boat stops at the crystal's (bytecode-read).
 const cartBlockers = (list) => list.filter((b) => b.ref?.type !== "ender_crystal");
 function vehicleBlockers(state) {
-  const { mobs, position, width, height, alive = true, rider = null } = state;
+  const { mobs, width, height, alive = true, rider = null } = state;
+  const position = typeof rider?.released === "object" ? rider.released : state.position; // b89 horse89: a rider let off in this tick's update stands on its spot (riderSneakOff)
   const living = liveOrder(mobs, mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
   const sized = (e) => { if (e.type === "ender_crystal") return crystalBox(e.x, e.y, e.z); const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
@@ -126,6 +140,7 @@ export function tickMinecartOne(state, hooks, cart) {
   const { world, minecarts } = state;
   if (!minecarts || cart.dead) return;
   minecarts.tickOne(world, cart, [...cartBlockers(vehicleBlockers(state).blockers), ...solidVehicles(state.boats)], hooks.cartHost ?? null);
+  riderSneakOff(world, minecarts, cart); // b89 horse89
   for (const d of minecarts.drain()) hooks.drop?.(d);
 }
 /** The part of tickMinecartSimulation that follows the walk: the cart's pushes on the player and the mobs, the passenger links, the leftover drops. */
@@ -306,6 +321,7 @@ export function tickBoatSimulation(state, hooks = {}) {
   if (!boats?.carts.length) return [];
   const { blockers } = vehicleBlockers(state);
   boats.tick(world, { entities: blockers, hooks });
+  for (const b of boats.carts) riderSneakOff(world, boats, b); // b89 horse89
   return pushAndDrain(state, hooks, boats);
 }
 /** One boat's update where the loaded-entity walk reaches it (see tickMinecartOne). */
@@ -313,6 +329,7 @@ export function tickBoatOne(state, hooks, boat) {
   const { world, boats } = state;
   if (!boats || boat.dead) return;
   boats.tickOne(world, boat, [...vehicleBlockers(state).blockers, ...solidVehicles(state.minecarts)], hooks);
+  riderSneakOff(world, boats, boat); // b89 horse89
   for (const d of boats.drain()) hooks.drop?.(d);
 }
 export function finishBoatSimulation(state, hooks = {}) {

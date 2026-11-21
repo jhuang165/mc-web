@@ -2607,6 +2607,7 @@ export class EntityWorld {
       if (e.type === "wither") witherPost(this, e, t); // wither-boss-mobs.js: the side heads turn
       this.turnBody(e);
       this.swingLimbs(e);
+      if (e.rider?.sneakDismount) this.riderSneakOff(e); // b89 horse89: the sneaking player's updateRidden after its mount's update (a pig; a horse already did it in horseTick)
     }
     endPushGrid();
     if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); } // the player's place is after every entity of this pass

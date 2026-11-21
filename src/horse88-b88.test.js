@@ -117,7 +117,9 @@ test("a ten-tick hold sends (int)(bO * 100) on the release tick and the horse ju
   assert.ok(e.jumpingHorse && e.vy > 0 && (e.jumpPower ?? 0) === 0);
 });
 
-test("the sneak tick still runs the counter but sends no C0B (the port dismounts in the same tick)", () => {
+// b89 horse89: this test encoded the gap (no C0B, a same-tick dismount). Natively the C0B sent on the sneak tick still lands and the horse moves once more before
+// EntityPlayer.updateRidden lets the rider go (horse89-b89.test.js replays the executed rows); the client part of the tick now keeps the rider on.
+test("the sneak tick runs the counter and sends its C0B; the rider gets off in the mob tick, after the horse's move", () => {
   const { w, e } = horseWorld(64, 0, 64);
   const p = rider();
   w.horseSeats.mount(e, p);
@@ -128,8 +130,10 @@ test("the sneak tick still runs the counter but sends no C0B (the port dismounts
   const state = { rider: p, horses: w.horseSeats, world: w.world, position: { x: 64, y: 1, z: 64 }, previous: {}, velocity: { x: 0, y: 0, z: 0 }, motion: {}, yaw: 0,
     survival: { health: 20, held: null }, screen: "playing" };
   moveRidingPlayer(state, { sneak: true, jump: false });
-  assert.equal(jumps, 0);
+  assert.equal(jumps, 1);
   assert.equal(p.jumpCounter, -10); // the release ran (flag && !jump)
+  assert.ok(p.vehicle && e.rider === p && p.sneakDismount);
+  tick(w);
   assert.equal(p.vehicle, null);
   assert.equal(e.rider, null);
 });

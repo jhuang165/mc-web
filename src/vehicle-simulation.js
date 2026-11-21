@@ -73,7 +73,7 @@ export function dispatchVehicleAction(state, action, hooks = {}) {
     return { handled: true, branch: mounted ? (cart.boat ? 'mount-boat' : 'mount-minecart') : 'occupied-or-sneaking-minecart' };
   }
   const result = action.boat ? useBoat(state, { place: action.place, boat: cart }, hooks) : useMinecart(state, { place: action.place, cart }, hooks);
-  if (rider.vehicle?.dead) { minecarts.dismount(state.world, rider); releaseRider(state); }
+  if (rider.vehicle?.dead) releaseAtSeat(state, minecarts);
   hooks.markUnsaved?.();
   return result;
 }
@@ -102,6 +102,24 @@ function applySeat(state) {
   Object.assign(motion,{sprinting:false,sneaking:false,ySize:0,prevYSize:0,inWeb:false});
   Object.assign(state,{grounded:false,collidedH:false,flying:false,fallDistance:0,landedFall:0});
 }
+// b89 horse89: a mount that died or was removed under the player (a cart or boat broken, a horse corpse set dead at deathTime 20, /kill). The client's own World drops the link
+// (World.updateEntities: ridingEntity.isDead -> both links null; World.removeEntity -> rider.mountEntity(null), and EntityPlayer.mountEntity (yz.a(sa), bytecode-read) runs
+// dismountEntity only when !worldObj.isRemote), so the client player stays where its last seat put it and falls from there; no S08 follows (spcopy88: the server copy also stays).
+// The system's dismount still unlinks the record; its dismountSpot result is dropped.
+function releaseAtSeat(state, system = vehicleSystem(state)) {
+  const { rider, position } = state, seat = { x: position.x, y: position.y, z: position.z };
+  system.dismount(state.world, rider);
+  Object.assign(rider, seat);
+  releaseRider(state);
+}
+// b89 horse89: `released` is set where the world tick let the rider go (a sneak dismount after the mount's update, a horse's buck): true, or the dismount spot itself when later
+// code of the same tick may still copy the client position onto the rider record (structure-simulation.js vehicleBlockers in the cart / boat pushes).
+function releaseSpot(state) {
+  const { rider } = state, at = rider.released;
+  rider.released = false;
+  if (typeof at === "object") Object.assign(rider, at);
+  releaseRider(state);
+}
 export function releaseRider(state) {
   Object.assign(state.position,{x:state.rider.x,y:state.rider.y,z:state.rider.z});
   // Keep dismounts inside resident terrain (the fixed viewport for legacy worlds).
@@ -126,18 +144,29 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
   const {rider}=state;
   // b88 horse88: EntityPlayerSP.onLivingUpdate reads `flag` (the previous tick's movementInput.jump) on every tick and clears bO whenever the player is not on a horse
   // (blk.e 321-328 and 1100, bytecode-read), so the key is tracked on foot too: mounting with the key held continues the count (horse-live.js horseJumpCounter's off-horse branch).
-  if (!rider.vehicle) { rider.wasJump = !!controls.jump; rider.jumpPower = 0; return null; }
+  if (!rider.vehicle) {
+    if (rider.released) releaseSpot(state); // b89 horse89: a mount let go in the last world tick (no finishVehicleTick after it): the S08 spot
+    rider.wasJump = !!controls.jump; rider.jumpPower = 0; return null;
+  }
   const minecarts=vehicleSystem(state);
   syncRider(state);
   Object.assign(state.previous,state.position);
-  if (controls.sneak || rider.dead || rider.vehicle.dead) {
-    // The client still rides on the dismount tick, so its counter runs (b88 horse88). Its C0B is dropped: natively the horse makes one more ridden move with it before
-    // EntityPlayer.updateRidden dismounts the sneaking rider, a move the port's same-tick dismount has no place for.
+  // b89 horse89: every vehicle rides on through the sneak tick. The C0C's sneak (mw.a(FFZZ) -> setSneaking) reaches EntityPlayer.updateRidden (yz.ab, bytecode-read), which
+  // World.updateEntityWithOptionalForce (ahb.a(sa, Z)) runs right after the mount's onUpdate: the mount first makes its ridden move with this tick's input (sneak 0.3 included;
+  // a horse also lands a C0B jump sent this tick), then mountEntity(null) puts the rider on the dismount spot searched from its seat, with the moved mount's top as the fallback
+  // (executed for the horse, horse89-reference.json; boats and carts share the World and EntityPlayer code). `sneakDismount` is that sneak flag and `sneakSeat` the live seat the
+  // server player sits on (the network tick's updateRiderPosition); the mob tick (EntityWorld.riderSneakOff) or the cart / boat update (structure-simulation.js) acts on it and
+  // sets `released` for finishVehicleTick. A flag still set here means the mount was not updated since, so the rider gets off now as before.
+  const stale = !!rider.sneakDismount;
+  rider.sneakDismount = false; rider.sneakSeat = null;
+  if (rider.dead || rider.vehicle.dead) {
     state.horses?.charge(rider, controls, false);
-    if (!rider.dead && !rider.vehicle.dead) {
-      minecarts.updateRiderPosition(rider.vehicle); // the server seats the dismount from the live cart; the client's seat (a cart's copy) trails it
-      const action=captureVehicleAction({dismount:true}); hooks.trace?.(action); dispatchVehicleAction(state,action,hooks);
-    } else {minecarts.dismount(state.world,rider);releaseRider(state);}
+    if (rider.vehicle.dead) releaseAtSeat(state, minecarts); // b89 horse89: the client keeps its seat (releaseAtSeat)
+    else {minecarts.dismount(state.world,rider);releaseRider(state);}
+  } else if (stale) {
+    state.horses?.charge(rider, controls, false);
+    minecarts.updateRiderPosition(rider.vehicle); // the server seats the dismount from the live cart; the client's seat (a cart's copy) trails it
+    dispatchVehicleAction(state,captureVehicleAction({dismount:true}),hooks); // traced on the sneak tick
   } else {
     const input=moveInput({...controls}) /* EntityPlayerSP.onLivingUpdate: the 0.2 item-use slowdown needs isUsingItem && !isRiding (bytecode-read blk.e), so a rider is not slowed */;
     rider.moveForward=f(input.forward*f(.98));
@@ -146,6 +175,7 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
     state.horses?.charge(rider, controls); // horse-live.js: jump key counter
     minecarts.updateRiderPosition(rider.vehicle);
     applySeat(state);
+    if (controls.sneak) { rider.sneakDismount = true; rider.sneakSeat = { x: rider.x, y: rider.y, z: rider.z }; hooks.trace?.(captureVehicleAction({dismount:true})); }
   }
   const {position:p}=state, half=f(PHYSICS.width)/2;
   const bb=[p.x-half,p.y,p.z-half,p.x+half,p.y+f(PHYSICS.height),p.z+half];
@@ -153,8 +183,10 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
 }
 export function finishVehicleTick(state) {
   const {rider}=state, minecarts=vehicleSystem(state);
+  if(rider.released&&!rider.vehicle)releaseSpot(state); // b89 horse89: let go in this tick's world update (riderSneakOff, the buck): the S08 spot
   if(!rider.vehicle)return;
-  if(rider.vehicle.dead || state.survival.health<=0){minecarts.dismount(state.world,rider);releaseRider(state);}
+  if(rider.vehicle.dead){releaseAtSeat(state,minecarts);return;} // b89 horse89: a dead or removed mount leaves the client at its seat
+  if(state.survival.health<=0){minecarts.dismount(state.world,rider);releaseRider(state);}
   else {minecarts.updateRiderPosition(rider.vehicle);applySeat(state);}
 }
 export function detachPlayerVehicle(state) {
