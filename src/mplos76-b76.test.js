@@ -43,5 +43,5 @@ test('verify mode checks every call and "off" uses the reference', () => {
 test('EntitySenses.canSee caches per target and the cache is cleared at the next AI tick (source read, as native EntitySenses)', async () => {
   const src = (await import('node:fs')).readFileSync(new URL('./ai.js', import.meta.url), 'utf8');
   assert.match(src, /if \(this\.senseCache\.has\(t\)\) return this\.senseCache\.get\(t\)/);
-  assert.match(src, /this\.despawnEntity\(\);\n\s+this\.senseCache\.clear\(\);/);
+  assert.match(src, /this\.despawnEntity\(\);\n(\s+if \(fast89\.mode === \"off\" \|\| this\.senseCache\.size !== 0\)[^\n]*\n)?\s+this\.senseCache\.clear\(\);/); // b89 mpperf89: an empty cache is not cleared (no change)
 });

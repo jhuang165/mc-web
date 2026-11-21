@@ -4,6 +4,7 @@ import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
+import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
@@ -614,7 +615,7 @@ export class DedicatedSimulation {
     hardcoreTick(this); // b69 serverprops: a hardcore world is Hard
     this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle
     this.containers.tick();
-    for (const p of this.players.values()) {
+    eachValue89(this.players, (p) => { // b89 mpperf89: Map.forEach, no iterator result per player (MC_MPPERF89=off runs the for-of loop)
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       this.sleep.tickPlayer(p); // b66 mpsleep: the sleep timer and the morning wake
       p.serverLook = { yaw: p.yaw, pitch: p.pitch }; // b88 blast88: processPlayer's rotationYaw / rotationPitch (a sleeper's is the bed entry's, restored above); blasts read this copy (fireballs.js serverLookOf)
@@ -632,7 +633,7 @@ export class DedicatedSimulation {
       // EntityPlayerMP.onUpdate: ItemInWorldManager.updateBlockRemoving (the timer's tick and a delayed break), then the item in use, before the network tick.
       if (!p.survival.creative) this.dimensions.within(p, () => { const hit = p.dig.tick(cell => this.digRate(p, cell)); if (hit) this.breakDug(p, hit); }); // b62: a Nether player's delayed break runs in the Nether
       this.tickUse(p);
-    }
+    });
     this.chunkViews.tick(); // b71 mpchunks: updatePlayerInstances and the S26 / S21 queue of each player, after they moved
     if (this.items.items.length) {
       this.items.tick(this.world);
@@ -664,8 +665,8 @@ export class DedicatedSimulation {
     tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
     this.dispense.flush();
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
-    for (const p of this.players.values()) this.serverItems.settle(p);
-    for (const p of this.players.values()) this.serverSurvival.settle(p); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
+    eachValue89(this.players, (p) => this.serverItems.settle(p)); // b89 mpperf89
+    eachValue89(this.players, (p) => this.serverSurvival.settle(p)); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.maps.tick(); // b69 mpmaps: ItemMap.onUpdate and the S34 map updates (server-maps.js)
     this.deliverSounds();
     this.weather.tick(this.world);
