@@ -114,6 +114,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       const tileData = fallingTileDataOf(t); // TileEntityData (compound), copied into the tile entity on landing
       if (tileData) e.tileData = tileData;
       hosts.falling.entities.push(e);
+      hosts.falling.spawned?.(e); // b90 mpobjects90: World.spawnEntityInWorld's join state for the dedicated server's tracker (falling-lane.js)
     }
   } else if (id === "Boat") {
     const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: Math.fround((rotation?.[0] ?? 0) % 360), /* b87 summon87: setRotation's yaw % 360 */ vx: motion[0], vy: motion[1], vz: motion[2] });

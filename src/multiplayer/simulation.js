@@ -673,6 +673,7 @@ export class DedicatedSimulation {
     this.dispense.tickJoined(); // b81 blast81: TNT primed during the entity pass updates in it
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
     tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
+    this.falling.tick(); // b90 mpobjects90: WorldServer.tickUpdates spawns the falling block and World.updateEntities runs it BEFORE EntityTracker.updateTrackedEntities, so its S0E leaves in the tick it spawned (dispense.flush is the tracker pass)
     this.dispense.flush();
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     eachValue89(this.players, (p) => this.serverItems.settle(p)); // b89 mpperf89
@@ -683,7 +684,6 @@ export class DedicatedSimulation {
     this.sleep.worldTick(); // b66 mpsleep: WorldServer.tick's all-asleep night skip, right after the weather update (the clock has already advanced by this tick's one)
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
-    this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, hoppers: this.containers.ticks.hoppers },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     this.pistons.flush(); // b66 mppistons: S24 and the new moving blocks to the players in range

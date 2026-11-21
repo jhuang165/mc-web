@@ -226,7 +226,7 @@ test("bytecode-read Entity.moveEntity on the crystal: a piston moves its posY-ce
   const seen = [];
   crystalPushMove(null, { y: 4 }, 0, 0, 0, (_w, e, wd, h, dx, dy, dz, step) => { seen.push([e.y, wd, h, step]); return 0; });
   assert.deepEqual(seen, [[3, 2, 2, 0]]);
-  assert.match(src("./entities.js"), /if \(e\.type === "ender_crystal"\) return crystalPushMove\(this\.world, e, dx, dy, dz, moveEntity\);/);
+  assert.match(src("./entities.js"), /if \(e\.type === "ender_crystal"\) return crystalPushMove\(this\.world, e, dx, dy, dz, moveEntity(?:, crystalPushHooks\(e, \(c\) => crystalAttack\(this, c\)\))?\);/); // b90 mpobjects90: the line gained the hooks argument (a source pin, same behaviour)
 });
 
 test("the fireball sweep's crystal box is centred on posY (ze.h reads Entity.boundingBox), with mpperf79 on and off", () => {
