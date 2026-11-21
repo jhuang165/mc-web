@@ -228,12 +228,13 @@ const vehicleRecords = (row) => {
   if (!info) return [[24, C[24]]];
   const out = [];
   if (info.join) { out.push([14, C[14] + (info.data > 0 ? 6 : 0)]); if (info.watch) out.push([28, info.watch]); /* b92: the S1C of the whole watcher (my.b(mw): after the S0E, before the S12) */ if (info.velocity) out.push([18, C[18]]); }
+  if (info.strings) out.push([28, C[28] - 1 + 1 + info.strings]); // b93 console93: the command cart's changed watcher strings (23, 24)
   for (const k of info.kinds) if (POSITION[k]) out.push(POSITION[k]);
   if (!out.length) out.push([28, C[28] - 1 + 1 + 5]); // only a watched field changed (hit, damage, display, lit, fuse): one int entry
   return out;
 };
-/** b92 console92: the records of the tracker packet kinds an entry released (strings, or { type }); a 'meta' is an S1C of one byte entry (the burning flag). Used for carts a viewer holds whose row did not change. */
-export const kindRecords = (kinds) => { const out = []; for (const p of list(kinds)) { const k = typeof p === 'string' ? p : p?.type; if (k === 'meta') out.push([28, C[28] - 1 + 1 + 2]); else if (POSITION[k]) out.push(POSITION[k]); } return out; };
+/** b92 console92: the records of the tracker packet kinds an entry released (strings, or { type }); a 'meta' is an S1C of one byte entry (the burning flag); b93: { type: 'strings', bytes } an S1C of changed string entries. Used for carts a viewer holds whose row did not change. */
+export const kindRecords = (kinds) => { const out = []; for (const p of list(kinds)) { const k = typeof p === 'string' ? p : p?.type; if (k === 'meta') out.push([28, C[28] - 1 + 1 + 2]); else if (k === 'strings') out.push([28, C[28] - 1 + 1 + (p.bytes | 0)]); else if (POSITION[k]) out.push(POSITION[k]); } return out; };
 // b92 console92: the `ents` rows of dispEnts (primed TNT, fireballs, skulls, a golem's snowball) are the port's per-tick snapshot; natively each is ONE entity the tracker spawns once (S0E, then the
 // whole-watcher S1C, then an S12 when the entry sends velocity) and moves with S15 / S16 / S17 / S18 / S12 / S1C packets at its own cadence (EntityTrackerEntry), and its S13 when it leaves.
 // `ctx.objs` (per connection) remembers which rows the viewer holds; a row's info (net-row-info.js) names its S0E data, velocity flag and S1C size, and its tick's packet kinds come from the
@@ -251,9 +252,14 @@ const dispEntRecords = (m, ctx) => {
     out.push(...kindRecords(info.kinds ?? ballKinds(r?.t)));
   }
   for (const key of [...mem.keys()]) if (!seen.has(key)) { mem.delete(key); gone++; }
-  if (gone) out.push([19, s13(gone)]);
+  if (gone) { if (ctx.destroyed) ctx.destroyed.n += gone; else out.push([19, s13(gone)]); } // b93 console93: EntityPlayerMP.func_152339_d queues the id; the next onUpdate sends it
   return out;
 };
+/**
+ * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127
+ * (`Math.min(size, 127)`, the loop repeats until the list is empty), bytecode-read. Returns the records and empties the queue.
+ */
+export const drainDestroyed = (q) => { const out = []; while (q && q.n > 0) { const k = Math.min(q.n, 127); out.push([19, s13(k)]); q.n -= k; } return out; };
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
 const payload = (channel, data) => 1 + stringSize(channel) + 2 + data; // C17/S3F: string channel, short length, data
 const CLIENT_BYTES = {

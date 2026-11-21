@@ -33,7 +33,7 @@ import { eachView90 } from '../mpperf90-fast.js'; // b90 mpperf90
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
-import { CartTracker, setVehicleInfo, joinWatcher } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
+import { CartTracker, setVehicleInfo, joinWatcher, stringChange } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 import { boatPlaceEntities, mobBallLists, playerListed, crystalBox } from '../boat-place-entities.js'; // b87 boatcheck87 (b88 boatray88: playerListed)
 import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
@@ -409,12 +409,14 @@ export class ServerVehicles {
         if (!joins.has(key)) joins.set(key, riding ? null : cartTrack.join(v, !!en?.recheck)); // (the rider's client already holds its boat: no spawn record)
         const state = riding ? exact.get(v) : cartTrack.forViewer(v, joins.get(key), states.get(v)), json = JSON.stringify(state);
         seen.add(key);
+        let strings = 0, cmdNow = null; // b93 console93: the command cart's watcher strings (23, 24) as /netstat sees them: the join S1C holds them whole, a later change is its own S1C
+        if (v.type === 6 && !v.boat) { cmdNow = [v.command?.command ?? '', v.command?.watch24 ?? '']; const before = (view.cartStr ??= new Map()).get(key); view.cartStr.set(key, cmdNow); if (before && view.known.has(key)) strings = stringChange(before, cmdNow); }
         if (view.known.get(key) !== json) {
           const st = state, tracked = !v.boat || st.bc === 1, pos = tracked ? `${st.x},${st.y},${st.z},${st.yaw},${st.pitch},${st.rs ?? ''}` : '', had = view.known.has(key);
           view.known.set(key, json);
-          const row = tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : { ...st }; set.push(row); setVehicleInfo(row, { kinds: en?.kinds ?? [], join: !had, data: v.boat ? 0 : v.type | 0, velocity: !!v.boat || !!en, watch: joinWatcher(v.boat, v.type) }); // b91 console91: the packets /netstat counts for the row; cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
+          const row = tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : { ...st }; set.push(row); setVehicleInfo(row, { kinds: en?.kinds ?? [], join: !had, data: v.boat ? 0 : v.type | 0, velocity: !!v.boat || !!en, watch: joinWatcher(v.boat, v.type, cmdNow?.[0], cmdNow?.[1]), ...(strings && had ? { strings } : {}) }); // b91 console91: the packets /netstat counts for the row; cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
           knownPos.set(key, pos);
-        } else if (en?.kinds?.length) (quiet ??= []).push(en.kinds); // b92 console92: the entry sent packets (S12 of a cart, a move the viewer's state hides) with no row change
+        } else if (en?.kinds?.length || strings) (quiet ??= []).push(strings ? [...(en?.kinds ?? []), { type: 'strings', bytes: strings }] : en.kinds); // b92 console92: the entry sent packets (S12 of a cart, a move the viewer's state hides) with no row change
       }
       if (fast89.mode === 'off' || view.known.size !== seen.size) // b89 mpperf89: every seen key is known, so equal sizes leave nothing to delete
       for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); joins.delete(key); del.push(key); } // dead, or its column not sent

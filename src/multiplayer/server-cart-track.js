@@ -26,7 +26,14 @@ export const vehicleInfo = (row) => infos.get(row);
 // b92 console92: the S1C a viewer gets right after a cart's or boat's S0E (EntityTrackerEntry.tryStartWachingThis sends the whole DataWatcher whenever it is not blank, hw(id, dw, true)):
 // executed record bytes (console92-reference.json): Boat 26, MinecartRideable / Chest / TNT / Hopper / Spawner 38, MinecartFurnace 40 (the fuel flag), MinecartCommandBlock 42 (two empty strings).
 const CART_WATCH = [38, 38, 40, 38, 38, 38, 42]; // by cart type 0..6
-export const joinWatcher = (boat, type) => (boat ? 26 : CART_WATCH[type | 0] ?? 38);
+// b93 console93: the command-block cart's watcher entries 23 (the command) and 24 (the last output's JSON, "null" after xo.e() with no output) are strings: header byte, VarInt length, UTF-8 bytes.
+// Executed (Console93Probe, console93-reference.json): a command of n bytes and an output of m bytes make the whole S1C 42 + n + m (+1 each from 128 bytes, +2 from 16384).
+const utf8 = (s) => { let n = 0; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c < 0x80) n++; else if (c < 0x800) n += 2; else if (c >= 0xd800 && c < 0xdc00 && i + 1 < s.length) { n += 4; i++; } else n += 3; } return n; };
+const vint = (n) => (n < 0x80 ? 1 : n < 0x4000 ? 2 : n < 0x200000 ? 3 : 4);
+const entryOf = (s) => { const n = utf8(String(s ?? '')); return 1 + vint(n) + n; };
+export const joinWatcher = (boat, type, command, output) => (boat ? 26 : (CART_WATCH[type | 0] ?? 38) + ((type | 0) === 6 ? entryOf(command) - 2 + entryOf(output) - 2 : 0));
+/** Bytes of the S1C entries of the watcher strings `cur` ([command, output]) that differ from `prev` (te.b marks a value changed only when it differs), 0 when none. */
+export const stringChange = (prev, cur) => (prev[0] !== cur[0] ? entryOf(cur[0]) : 0) + (prev[1] !== cur[1] ? entryOf(cur[1]) : 0);
 export const CART_RANGE = 80, CART_FREQUENCY = 3, CART_WIDTH = Math.fround(0.98);
 const POS = ['x', 'y', 'z', 'yaw', 'pitch'];
 
