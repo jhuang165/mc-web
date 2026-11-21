@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 93 (2026-11-21, ten tracks in `../wt93-<name>` on `batch93-<track>93`, cut from aeb417610, merged --no-ff on `batch93-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b93-lead/track-rules.md`; lead note `b93-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.122.0, by track (details in the `*-b93-track.md` notes and "Done in batch 93" in `public/research/remaining-gaps.md`):
+  - horse93: `Horse93Probe`; client copy of a mob rider gets the rear shift, the player seat reads `bM` (previous rear amount), mob rider input decays once (0.98), not twice.
+  - mpobjects93: server natural spawning right after the sleep skip (`ServerMobs.spawnStep`); one `TickTree` per dimension for fluids, fire, falling blocks and redstone (`attachTickTree`); released deferred redstone entries run.
+  - portals93: player-held leads survive server portal trips when the holder is in the destination within 10 blocks; mob copies drop port-only transients (`TRANSIENT_MOB`).
+  - spcopy93: `SpCopy93Probe` corrected the b92 probe (all ids were 0); old-chunk listing at the scaled position and five-chunks-per-tick arrival tracking executed; no port change.
+  - credit93: the shooter's Bane hook on arrow hits (`arrowBane`, `shooterBane`); single-player Nether/End death bodies for balls, potions and arrows.
+  - console93: command-block cart strings in S1C, golem snowball tracker entries (`GolemTracks`), queued S13 for TNT/fireball/skull/golem-ball rows (`Console93Probe`).
+  - mpperf93: `mpperf93-fast.js` behind `MC_MPPERF93=on|off|verify`; `FineGrid` map reuse, in-place portal step records (heap per tick -5% travel, -9% pen, -2.5% terrain).
+  - tiles93: the away clock follows `/time` and `doDaylightCycle` at the native tick point (`away-commands.js` owns it); chest facing from cell metadata only, records migrated at load.
+  - entnbt93: mobs saved mid-death keep Health 0 and `DeathTime` (`Entnbt93Probe`).
+  - mobrec93: 32 executed records (squid, bat, wither skeleton, wither, pigman, giant); squid/bat corpse and yaw fixes, wither skeleton sounds/sunburn/drop ids, wither despawn/yaw/targets, pigman hurt-window anger.
+- Lead: three auto-merges (`main.js` tiles93 + credit93, `entities.js` entnbt93 + credit93 + mobrec93), no conflicts; checked mobrec93's coal/bone ids (internal 301/311).
+- Verification: one full `npm test` on the merged tree: 10414/10415; the one failure, `horse88-b88` "unsaddled tick 0", is a pre-existing flake (6/40 failures on unchanged main aeb417610; the horse's Random is seeded from `Math.random`, `entities.js:141`), passes alone on the merged tree. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 93" in `public/research/remaining-gaps.md`.
+
 Batch 92 (2026-11-21, ten tracks in `../wt92-<name>` on `batch92-<track>92`, cut from a5c011b4f, merged --no-ff on `batch92-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b92-lead/track-rules.md`; lead note `b92-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.121.0, by track (details in the `*-b92-track.md` notes and "Done in batch 92" in `public/research/remaining-gaps.md`):
   - horse92: `Vehicle92Probe` (push order already native), C0C before C02 dropped (`takeRideOrQueue`), `Horse92Probe` mob rider yaw, rear seat and body yaw; the non-native rider half-turn removed.
