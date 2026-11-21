@@ -1,0 +1,27 @@
+# spcopy93 (batch 93): the server copy across a portal trip, held targets, arrival tracking, old chunk membership
+
+## Summary
+No port behaviour changed. The track corrected the batch 92 probe, executed the arrival tracker path on the real classes, and established why the three open items cannot be closed in the port as it is built. Does not claim full parity.
+
+- `tools/probes/SpCopy93Probe.java` (run harness in git-ignored `tools/research/spcopy93-probe/`): `SpCopy92Probe` with distinct entity ids, the player as a real `mw` (EntityPlayerMP), and real `mn` (EntityTracker) and `mq` (PlayerManager) per world, wired through the world's IWorldAccess as WorldManager does.
+- `public/research/spcopy93-reference.jsonl` (7.7 KB): its output (6 cases).
+- `src/spcopy93-b93.test.js` (4 tests): pins the executed facts and the port state they were compared with.
+
+## Evidence
+- Executed (SpCopy93Probe): with distinct ids the old world's lists lose the player itself; the skip of the entity after the player (middle, first) and no skip for last, only and End exit are unchanged. The old world never updates the player again. After a transfer `isDead` is false; after the End exit (`removeEntity`) it stays true. The player is out of the chunk it stood in, but is listed in the old world's chunk at the scaled position (`srcChunkOfPlayer` holds `player`; End exit: not listed). Tracking the arriving player (`mn.a(sa)` inside `spawnEntityInWorld`) sends nothing to it: PlayerManager does not hold the player yet and its chunk is still in `loadedChunks`, so `isPlayerWatchingChunk` is false (`watchingWhilePending`). Once the chunk is out of `loadedChunks` and the player is a watcher, `mn.a(mw, apx)` (func_85172_a) tries the entity (the spawn attempt reaches `my.c()`: IllegalArgumentException for the probe's packetless entity class).
+- Bytecode-read: `vu.b()` (EntityAITarget.continueExecuting) reads the target's isEntityAlive (`sv.Z`), `td.f(sa)` squared distance against the follow range, sight (`vw.a`, 60 ticks) and creative; no world or list membership test. `oi.a(mw,int)` order: respawn S07, `mt.f` (old world), `oi.a(sa,int,mt,mt)` (spawns in the new world), `oi.a(mw,mt)` (PlayerManager add and chunk queue), `oi.b(mw,mt)`. `oi.a(sa,int,mt,mt)` calls `mt.a(sa,Z)` on the OLD world at the scaled position before the Teleporter runs (this is the re-listing). `my.b(mw)` requires `my.d(mw)` (PlayerManager watching, chunk not in `mw.f`) or `sa.n`. `mw.h` sends up to 5 chunks per tick and then calls `mn.a(mw, apx)`; `mn.a(mw, apx)` re-tests the entries whose chunk coordinates equal the chunk.
+- Port-read: `PlayerView.alive` is `_alive && !left`; `TargetBase.continueExecuting` drops a target that is not alive. `PlayerWatch.gate` is set only by the dedicated server (`server-mobs.js`); the single-player trackers see every column of the square at the first pass after `pendingJoin`.
+
+## Verification
+- `node --test --test-concurrency=2 src/spcopy93-b93.test.js src/spcopy92-b92.test.js`: 11 pass, 0 fail.
+- No behaviour change, so there is no fails-without-the-fix check. No full `npm test`, no build (no imports touched), no browser.
+
+## Found wrong in the batch 92 list
+- The batch 92 probe gave every entity id 0. `Entity.equals` compares ids and `ahb.f` removes with `List.remove(Object)`, so its `srcLoaded` lists removed the first entry (`b0`) instead of the player, its `srcNextTick` showed the player updating in the old world, and its "still in its chunk's entity list" reading was the same artifact. The skip and no-skip conclusions hold (same index shift); the old-world-update and chunk-list readings do not. `spcopy92-reference.jsonl` is left as committed (its test reads only the portal tick).
+- The quirk is not "removed from the loaded list but still in its chunk until unload". It is: out of the departure chunk, and re-listed in the old world's chunk at the scaled position by `updateEntityWithOptionalForce`.
+
+## Follow-ups (still open, with the reason)
+- Held target: natively a transfer leaves the copy alive and moves it to the arrival, so a mob in the old world holding it keeps the target when the arrival is within follow range of it (and `AttackOnCollide` can hit it through the box test). The port's `left` makes it not alive, so the target drops at once. Far arrivals (the usual case) match. The arrival (Teleporter result) exists only after the new world is built, after the old world was saved, so no position can be given at the portal tick; the scaled target is not the arrival. Left open.
+- Old chunk membership: observable only for an old-world entity query over the scaled chunk whose box meets the arrival box, i.e. a hop whose arrival is near the scaled position, in the few old-world ticks before the save. Same missing arrival. Not modelled.
+- Arrival tracker timing: natively nothing is sent at the track call, and the nearest five columns send per tick (spiral, `ChunkWatch` in `server-chunk-view.js`), each re-testing its entities (func_85172_a). The port's single-player trackers (mob, object) have no sent-column gate, so all entries show at the first pass after the arrival (and at login). Closing it needs a per-tick `ChunkWatch` for the integrated server, `PlayerWatch.gate`, and a re-list hook in `MobTracker`/`ObjectTracker` (the dedicated server's `fresh`); too wide to land without browser checks. The same gap exists at login.
+- Browser-only: how entities pop in after a portal trip.
