@@ -663,7 +663,8 @@ export class DedicatedSimulation {
       });
     }
     for (const p of this.players.values()) if (p.resendCells) {
-      p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, p.world.get(x, y, z), p.world.getMeta(x, y, z)]); // b61: the player's own world p.resendCells = null;
+      p.blocks = p.resendCells.map(([x, y, z]) => [x, y, z, p.world.get(x, y, z), p.world.getMeta(x, y, z)]); // b61: the player's own world
+      p.resendCells = null; // b89 lead (found by mpperf89): this statement had been folded into the comment above since b61, so a refused edit was resent every tick and the list kept growing; native sends the S23 once
     }
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys

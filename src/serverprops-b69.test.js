@@ -251,3 +251,17 @@ test("server-icon.png: only a 64 x 64 PNG becomes the status favicon", async () 
   await fs.writeFile(path.join(dir, "server-icon.png"), png(16, 16));
   assert.equal(await loadFavicon(dir, { warn: m => warns.push(m) }), null); assert.match(warns[0], /64 pixels wide/);
 });
+
+test("b89 lead: a refused edit's cells go out once (S23), then the resend list is cleared", () => {
+  const s = sim({ spawnProtection: 16 });
+  s.addPlayer("a", "Alex", uuid(1)); s.addPlayer("b", "Steve", uuid(2));
+  s.admin.ops.set(uuid(1), { uuid: uuid(1), name: "Alex", level: 4 }); s.admin.profiles.set("alex", { uuid: uuid(1), name: "Alex" });
+  const p = s.players.get("b");
+  p.survival.mode = "creative"; p.position.x = 64.5; p.position.y = 11; p.position.z = 64.5; p.pitch = -Math.PI / 2; p.moved = true;
+  s.world.set(64, 12, 64, 1);
+  assert.equal(s.edit(p, false), false);
+  assert.deepEqual(p.resendCells, [[64, 12, 64]]);
+  s.tick();
+  assert.equal(p.resendCells, null, "cleared after the resend tick");
+  assert.ok(p.blocks?.some(([x, y, z, id]) => x === 64 && y === 12 && z === 64 && id === 1), "the refused cell was resent");
+});
