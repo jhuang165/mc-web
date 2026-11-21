@@ -15,6 +15,7 @@
 // Node's zlib (deflateSync / gzipSync at level -1) stands in for java.util.zip; the executed samples match byte for byte (src/console89-b89.test.js).
 import { deflateSync, gzipSync } from 'node:zlib';
 import { toOriginal } from '../block-registry.js';
+import { WATER, LAVA, REPEATER } from '../world.js';
 import { NBT, encodeNbt } from '../nbt.js';
 import { writeItemTags } from '../item-tags.js';
 import { writeFireworkTags } from '../fireworks-nbt.js';
@@ -67,20 +68,25 @@ const toNative = (value) => {
  * The native data of a port column message ({ x, z, runs }: the run-length cells of encodeColumn, column order (lx * 16 + lz) * height + y). `source` gives what the
  * runs do not carry: { height, light: { skyAt(x, y, z), blockAt(x, y, z) } (world cells: column * 16 + local), biomes(x, z) -> 256 bytes, hasSky }. Without a light
  * source the sky light is 15 above the column's top non-air cell and 0 below, block light 0 (an estimate). Port blocks with no original count as air.
- * The block side state the port keeps outside the cell (flowing water, a lit furnace, a chest's facing) is not looked at: the metadata is toOriginal's default.
+ * The block side state the port keeps outside the cell (flowing water, a lit furnace, a chest's facing, farmland moisture, a powered repeater) comes from
+ * `source.stateAt(x, y, z, portId)` for the ids in STATEFUL (b90 console90); without it the metadata is toOriginal's default.
  */
+export const STATEFUL = new Set([WATER, LAVA, 14 /* furnace */, 30 /* moist farmland */, 41, 162 /* chests */, REPEATER]);
 export function columnData(column, source = {}, opts = {}) {
   const runs = Array.isArray(column?.runs) ? column.runs : [];
   let total = 0; for (let i = 1; i < runs.length; i += 2) total += runs[i] | 0;
   const height = source.height ?? (total >> 8), cells = 256 * height;
   const ids = new Uint16Array(cells), metas = new Uint8Array(cells), sky = new Uint8Array(cells), block = new Uint8Array(cells);
+  const ox = (column.x | 0) * 16, oz = (column.z | 0) * 16;
   let at = 0;
   for (let i = 0; i + 1 < runs.length && at < cells; i += 2) {
-    const v = toNative(runs[i] & 4095), end = Math.min(cells, at + (runs[i + 1] | 0));
-    if (v > 0) { ids.fill(v & 4095, at, end); metas.fill(v >> 12, at, end); }
+    const raw = runs[i] & 4095, v = toNative(raw), end = Math.min(cells, at + (runs[i + 1] | 0));
+    if (v > 0 && source.stateAt && STATEFUL.has(raw & 255)) { // b90 console90: the side state of these cells (flowing, moisture, facing, lit, powered) decides the metadata
+      for (let c = at; c < end; c++) { const col = (c / height) | 0, o = toOriginal(raw & 255, raw >> 8, source.stateAt(ox + (col >> 4), c - col * height, oz + (col & 15), raw & 255) ?? {}); if (o) { ids[c] = o[0] & 4095; metas[c] = o[1] & 15; } }
+    } else if (v > 0) { ids.fill(v & 4095, at, end); metas.fill(v >> 12, at, end); }
     at = end;
   }
-  const hasSky = source.hasSky !== false, light = source.light, ox = (column.x | 0) * 16, oz = (column.z | 0) * 16;
+  const hasSky = source.hasSky !== false, light = source.light;
   for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
     const base = (lx * 16 + lz) * height;
     const wx = ox + lx, wz = oz + lz;
@@ -100,7 +106,8 @@ export function columnData(column, source = {}, opts = {}) {
 /**
  * The Deflater(-1) length of the concatenated data of `columns` (one column: S21's data; up to five: S26's, deflated once). Lengths are cached by the columns'
  * coordinates and cells (a 64-bit hash of the runs), the options and the source, so the same terrain sent again (another player, a rejoin) is not deflated again.
- * The light is not part of the key: a light change with no cell change in these columns keeps the cached length (an estimate). At most CACHE_MAX entries (oldest dropped).
+ * b90 console90: the key also holds a hash of the columns' light arrays and of the side state of their stateful cells, so a light-only or state-only change is deflated again.
+ * At most CACHE_MAX entries (oldest dropped).
  */
 const lengths = new Map(), sourceIds = new WeakMap(), CACHE_MAX = 8192;
 let nextSource = 1;
@@ -111,8 +118,37 @@ const hashColumns = (columns) => {
   for (const c of columns) { mix(c?.x | 0); mix(c?.z | 0); const runs = Array.isArray(c?.runs) ? c.runs : []; mix(runs.length); for (let i = 0; i < runs.length; i++) mix(runs[i] | 0); }
   return `${a >>> 0}:${b >>> 0}`;
 };
+// A hash of the light arrays of the columns (LightVolume: a column is contiguous in y) and of the side state codes of their stateful cells.
+const stateCode = (s) => (s ? (s.flowing ? 1 : 0) | (s.moisture | 0) << 1 | (s.facing | 0) << 5 | (s.lit ? 1 : 0) << 8 | (s.powered ? 1 : 0) << 9 : 0);
+const hashSide = (columns, source) => {
+  let a = 0x9e3779b1;
+  const mix = (v) => { a = Math.imul(a ^ v, 0x85ebca6b); a ^= a >>> 15; };
+  const light = source.light;
+  if (light?.sky && light.block && light.height != null) {
+    const h = light.height;
+    for (const c of columns) for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
+      const wx = (c?.x | 0) * 16 + lx, wz = (c?.z | 0) * 16 + lz;
+      if (wx < 0 || wz < 0 || wx >= light.size || wz >= light.size) continue;
+      const at = (wx * light.size + wz) * h;
+      for (const arr of [light.sky, light.block]) {
+        if (h % 4 === 0 && (arr.byteOffset + at) % 4 === 0) { const w = new Uint32Array(arr.buffer, arr.byteOffset + at, h / 4); for (let i = 0; i < w.length; i++) mix(w[i]); }
+        else for (let i = 0; i < h; i++) mix(arr[at + i]);
+      }
+    }
+  }
+  if (source.stateAt) for (const c of columns) {
+    const runs = Array.isArray(c?.runs) ? c.runs : []; let total = 0; for (let i = 1; i < runs.length; i += 2) total += runs[i] | 0;
+    const h = source.height ?? (total >> 8); let at = 0;
+    for (let i = 0; i + 1 < runs.length; i += 2) {
+      const raw = runs[i] & 4095, end = at + (runs[i + 1] | 0);
+      if (STATEFUL.has(raw & 255)) for (let k = at; k < end; k++) { const col = (k / h) | 0; mix(stateCode(source.stateAt((c.x | 0) * 16 + (col >> 4), k - col * h, (c.z | 0) * 16 + (col & 15), raw & 255))); }
+      at = end;
+    }
+  }
+  return a >>> 0;
+};
 export function columnsDeflated(columns, source = {}, opts = {}) {
-  const key = `${sourceId(source)}|${opts.full !== false}|${opts.mask ?? 0xffff}|${hashColumns(columns)}`;
+  const key = `${sourceId(source)}|${opts.full !== false}|${opts.mask ?? 0xffff}|${hashColumns(columns)}|${hashSide(columns, source)}`;
   const hit = lengths.get(key);
   if (hit !== undefined) { lengths.delete(key); lengths.set(key, hit); return hit; }
   const parts = columns.map((c) => columnData(c, source, opts)), all = parts.length === 1 ? parts[0] : new Uint8Array(parts.reduce((n, d) => n + d.length, 0));
@@ -128,6 +164,16 @@ export function columnsDeflated(columns, source = {}, opts = {}) {
  * Dimensions that do not exist yet return undefined (the estimate): nothing is created for a count.
  */
 const sources = new WeakMap();
+/** b90 console90: the side state (block-registry's `state`) of a stateful cell of a dimension owner (the sim, or a Nether / End instance). */
+function sideState(o, x, y, z, id) {
+  const key = `${x},${y},${z}`;
+  if (id === WATER || id === LAVA) { const f = o.fluids; return f && (f.pending?.has(f.key(x, y, z, id)) || f.inFlight?.has(f.key(x, y, z, id))) ? { flowing: true } : undefined; }
+  if (id === 30) { const m = o.farming?.fields?.get(key); return m === undefined ? undefined : { moisture: m }; }
+  if (id === 14) { const f = o.tiles?.furnaces?.[key]; return { facing: f?.facing, lit: o.containers?.litFurnaces?.has(key) || (f?.burn ?? 0) > 0 }; }
+  if (id === 41 || id === 162) return { facing: o.tiles?.chests?.[key]?.facing };
+  if (id === REPEATER) return { powered: o.redstone?.lit?.has(key) === true };
+  return undefined;
+}
 export function chunkSourceFor(sim, dim = 0) {
   if (!sim) return undefined;
   const dims = sim.dimensions, n = dim === -1 ? dims?.nether : dim === 1 ? dims?.end?.n : null;
@@ -141,6 +187,8 @@ export function chunkSourceFor(sim, dim = 0) {
     sources.set(world, s);
   }
   s.light = light ?? null;
+  const owner = dim ? n : (sim.world === world ? sim : null); // the sim's own systems (not inside a Nether swap) hold the Overworld's side state
+  s.stateAt = owner ? (x, y, z, id) => sideState(owner, x, y, z, id) : null; // b90 console90
   return s;
 }
 

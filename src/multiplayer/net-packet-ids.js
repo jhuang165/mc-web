@@ -9,6 +9,7 @@
 // message: S03 time, S22/S23 cells, the players' poses, S2B weather) count once, under the id named below (b89 console89: now one record per native packet, writePackets). Bytes are the JSON text's UTF-8 length (natively: the packet
 // id VarInt and payload). Port-only messages with no native packet (a client pickup claim, the client's own inventory copy, a server error line ...) return null:
 // /netstat does not count them, as a native server never sends or reads them.
+import { toOriginal } from '../block-registry.js';
 import { columnsDeflated, itemTagBytes } from './net-native-bytes.js'; // b89 console89: deflated chunk data, item tags (node:zlib: server-only)
 export const STATUS_IDS = { pingStatus: 0, pingProbe: 1, pingStatusReply: 0, pingProbeReply: 1 }; // STATUS: C00ServerQuery / C01Ping, S00ServerInfo / S01Pong
 
@@ -125,7 +126,7 @@ export const PLAY_FRAME = {
 };
 const C = PLAY_FRAME.clientbound, SV = PLAY_FRAME.serverbound;
 const s02 = (jsonLength) => 1 + jsonString(jsonLength);
-const s23 = (c) => 11 + varIntSize(Array.isArray(c) ? c[3] | 0 : 0); // int x, byte y, int z, VarInt block, byte meta
+const s23 = (c) => 11 + varIntSize(Array.isArray(c) ? toOriginal(c[3] | 0, 0)?.[0] ?? 0 : 0); // b90 console90: the native id's VarInt (the port's id differs); // int x, byte y, int z, VarInt block, byte meta
 // b89 console89: PlayerInstance (mr.b) sends each chunk's changed cells on their own: S23 for one, S22 for 2 to 63 (64 and up became an S21 in `chunks`, splitChanges).
 const cellRecords = (changes) => { const by = new Map(); for (const c of list(changes)) { const k = Array.isArray(c) ? `${c[0] >> 4},${c[2] >> 4}` : ''; const g = by.get(k); if (g) g.push(c); else by.set(k, [c]); } return [...by.values()].map((g) => (g.length === 1 ? [35, s23(g[0])] : [34, C[34] + 4 * g.length])); };
 // b89 console89: chunk data is the Deflater(-1) length of the native layout (net-native-bytes.js). `ctx.chunks` is the receiving player's world ({ height, light, biomes,
@@ -137,7 +138,36 @@ const unload = (c, ctx) => s21({ x: Array.isArray(c) ? c[0] : c?.x, z: Array.isA
 const s26 = (cs, ctx) => C[38] + 12 * cs.length + memo(cs, 'bulk', () => columnsDeflated(cs, ctx?.chunks, { full: true, mask: 0xffff })); // S26: short, int, bool, data (one deflate), then int x, int z, short, short a column
 const bulks = (columns, ctx) => { const cs = list(columns); if (cs.length <= 5) return cs.length ? [[38, s26(cs, ctx)]] : []; const out = []; for (let i = 0; i < cs.length; i += 5) out.push([38, s26(cs.slice(i, i + 5), ctx)]); return out; }; // gz.c() = 5 columns a packet
 const s13 = (n) => (n ? C[19] + 4 * n : 0); // byte count, int ids
-const mobRecords = (packets) => { const out = []; let destroys = 0; for (const p of list(packets)) { const k = p?.type ?? p?.k; if (k === 'destroy') destroys++; else { const id = MOB_PACKET[k] ?? 24; out.push([id, C[id]]); } } if (destroys) out.push([19, s13(destroys)]); return out; }; // the tick's destroyed ids go in one S13
+// b90 console90: the entity tracker's packets by their own native id. The fixed sizes are the executed "base" rows (S15 8, S16 7, S17 10, S18 19, S19 6, S12 11, S1D 9);
+// S0F and the first S1C carry the mob class's whole DataWatcher (MOB_WATCHER: entry bytes plus the 127 end byte, executed per class by tools/probes/Console90Probe.java:
+// S0F = 24 + that, S1C = 5 + that); a later S1C writes only the changed entries; S04 holds an ItemStack; S20 rows are bytecode-read (il.b: string, double, short, 25 per modifier).
+const MOB_RECORD = { spawn: 15, destroy: 19, attach: 27, mobStatus: 26, state: 24, move: 21, look: 22, moveLook: 23, teleport: 24, head: 25, velocity: 18, meta: 28, equipment: 4, effect: 29, attributes: 32 };
+/** The port's mob type -> the 1.7.10 entity id string of the class whose DataWatcher it carries. */
+const NATIVE_MOB = { enderman: 'Enderman', pig: 'Pig', cow: 'Cow', mooshroom: 'MushroomCow', snow_golem: 'SnowMan', sheep: 'Sheep', chicken: 'Chicken', wolf: 'Wolf', ocelot: 'Ozelot', horse: 'EntityHorse', zombie: 'Zombie', skeleton: 'Skeleton', wither_skeleton: 'Skeleton', spider: 'Spider', cave_spider: 'CaveSpider', caveSpider: 'CaveSpider', creeper: 'Creeper', villager: 'Villager', silverfish: 'Silverfish', witch: 'Witch', slime: 'Slime', magma_cube: 'LavaSlime', pigman: 'PigZombie', iron_golem: 'VillagerGolem', squid: 'Squid', bat: 'Bat', blaze: 'Blaze', ghast: 'Ghast', wither: 'WitherBoss', ender_dragon: 'EnderDragon', giant: 'Giant' };
+/** Executed (public/research/console90-reference.json): the bytes of each living class's DataWatcher entries plus the 127 end byte, as a fresh entity writes them. */
+export const MOB_WATCHER = { Bat: 26, Blaze: 26, CaveSpider: 26, Chicken: 29, Cow: 29, Creeper: 30, EnderDragon: 24, Enderman: 30, EntityHorse: 48, Ghast: 26, Giant: 24, LavaSlime: 26, MushroomCow: 29, Ozelot: 35, Pig: 31, PigZombie: 30, Sheep: 31, Silverfish: 24, Skeleton: 26, Slime: 26, SnowMan: 24, Spider: 26, Squid: 24, Villager: 34, VillagerGolem: 26, Witch: 26, WitherBoss: 44, Wolf: 42, Zombie: 30 };
+const watcherOf = (type) => MOB_WATCHER[NATIVE_MOB[type]];
+// Watched entries one S1C change writes: header byte plus value (byte 1, short 2, int 4, float 4), by the port's meta key; the flags byte (invisible, burning) is one entry.
+const META_ENTRY = { potion: 5, ambient: 2, air: 3, screaming: 2, invul: 5, health: 5, batHanging: 2, horseFlags: 5 };
+const metaBytes = (p) => { let n = 1; for (const k of Object.keys(p ?? {})) if (k in META_ENTRY) n += META_ENTRY[k]; if (p && ('invisible' in p || 'burning' in p)) n += 2; return n; };
+const attributesBytes = (p) => C[32] + list(p?.list).reduce((n, r) => n + stringSize(r?.name ?? '') + 10 + 25 * list(r?.mods).length, 0);
+const mobRecords = (packets, ctx) => {
+  const out = []; let destroys = 0, type = null, fresh = false;
+  for (const p of list(packets)) {
+    const k = p?.type ?? p?.k;
+    if (k === 'destroy') { destroys++; continue; }
+    const id = MOB_RECORD[k] ?? 24;
+    if (k !== 'spawn' && k !== 'meta') fresh = false;
+    let bytes = C[id];
+    if (k === 'spawn') { type = p?.mob; fresh = true; const w = watcherOf(type); if (w !== undefined) bytes = C[15] - 1 + w; }
+    else if (k === 'meta') { const w = fresh ? watcherOf(type) : undefined; bytes = w !== undefined ? C[28] - 1 + w : C[28] - 1 + metaBytes(p); fresh = false; } // the S1C after a spawn is the whole DataWatcher
+    else if (k === 'equipment') bytes = C[4] - 2 + itemSize(p?.item);
+    else if (k === 'attributes') bytes = attributesBytes(p);
+    out.push([id, bytes]);
+  }
+  if (destroys) out.push([19, s13(destroys)]);
+  return out;
+}; // the tick's destroyed ids go in one S13
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
 const payload = (channel, data) => 1 + stringSize(channel) + 2 + data; // C17/S3F: string channel, short length, data
 const CLIENT_BYTES = {

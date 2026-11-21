@@ -50,7 +50,7 @@ test("the port's estimates equal the executed samples byte for byte", () => {
   assert.equal(writePacketBytes({ type: "pingList", items: [{ name: "Alex", online: true, ping: 0 }] }), sample("S38 Alex"));
   assert.equal(writePacketBytes({ type: "stats", stats: { "stat.leaveGame": 7 } }), sample("S37 stat.leaveGame 7"));
   assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 4, 0], [1, 2, 4, 4, 0], [1, 2, 5, 4, 0]] }), sample("S22 three records"));
-  assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 4, 0]] }), 12); assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 152, 0]] }), 13, "a block id past 127 is a two-byte VarInt");
+  assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 4, 0]] }), 12); assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 58, 0]] }), 13, "a native block id past 127 is a two-byte VarInt (b90 console90: the port id 58 is native 159; the VarInt is the native id's)");
   assert.equal(writePacketBytes({ type: "openWindow", title: "container.chest", kind: "chest" }), sample("S2D container.chest"));
   assert.equal(writePacketBytes({ type: "chunkUnload", columns: [{ x: 0, z: 0 }] }), sample("S21 unload, one biome"));
   assert.equal(writePacketBytes({ type: "welcome" }), sample("S01 default"));

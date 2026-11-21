@@ -117,7 +117,7 @@ test("kicks are S40 with the full reason: the executed sizes", () => {
 });
 
 test("a bundled message is one record per native packet", () => {
-  const tick = { type: "tick", players: [{ id: "a" }, { id: "b" }, { id: "c" }], changes: [[0, 1, 0, 1, 0], [1, 1, 0, 1, 0], [20, 1, 0, 1, 0], [0, 1, 40, 152, 0]] };
+  const tick = { type: "tick", players: [{ id: "a" }, { id: "b" }, { id: "c" }], changes: [[0, 1, 0, 1, 0], [1, 1, 0, 1, 0], [20, 1, 0, 1, 0], [0, 1, 40, 58, 0]] }; // b90 console90: port id 58 is native 159 (the VarInt is the native id's, two bytes)
   assert.deepEqual(writePackets({ ...tick, tick: 40 }, { self: "a" }), [[3, C[3]], [24, C[24]], [24, C[24]], [34, C[34] + 8], [35, 12], [35, 13]], "S03, an S18 per other player, S22 / S23 per chunk");
   assert.deepEqual(writePackets({ ...tick, tick: 41 }, { self: "a" }).map((r) => r[0]), [24, 24, 34, 35, 35], "S03 only every 20 ticks");
   assert.deepEqual(writePackets({ ...tick, tick: 41 }, { self: "a", tick: 60 }).map((r) => r[0]), [3, 24, 24, 34, 35, 35], "the server's own counter decides");
