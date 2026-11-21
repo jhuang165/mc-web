@@ -13,6 +13,13 @@ const f = Math.fround;
 // shadowSize and shadowOpaque as set by each renderer's constructor
 // (RenderManager registers RenderPig/RenderCow/RenderSheep with 0.7, RenderZombie's
 // RenderBiped with 0.5; RenderItem and RenderXPOrb use 0.15 and 0.75).
+// b91 mpobjects91: the multiplayer client's boat / cart copies (multiplayer/remote-vehicles.js) are plain records with the draw fields (px/py/pz, x, posY, z); their cast is
+// the single-player vehicle's: shadowSize 0.5 from RenderBoat (bne) / RenderMinecart (boi) constructors (bytecode-read), getShadowSize 0, so `height` 0 and the cast at posY.
+export function vehicleShadowCasters(list, spec, partial) {
+  const out = [], lerp = (a, b) => a + (b - a) * partial;
+  for (const c of list ?? []) if (!c.dead) out.push({ ...spec, x: lerp(c.px, c.x), y: lerp(c.py, c.posY), z: lerp(c.pz, c.z), pos: { x: c.x, y: c.posY, z: c.z }, height: 0 });
+  return out;
+}
 export const SHADOWS = {
   item: { size: f(0.15), opaque: f(0.75) },
   orb: { size: f(0.15), opaque: f(0.75) },

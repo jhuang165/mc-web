@@ -69,6 +69,7 @@ test('a bolt hurts the player in its box by 5 and sets the fire counter; a Creat
 test('mobs: a pig becomes a pigman, a creeper is charged, a zombie takes the 5 and burns, a mob outside the box is spared; no witch from a villager', () => {
   const s = fixture(); join(s, 'a', 1, 90.5, 90.5);
   const pig = mob(s, 'pig', 64.5, 64.5), creeper = mob(s, 'creeper', 65.5, 64.5), zombie = mob(s, 'zombie', 63.5, 65.5), spared = mob(s, 'cow', 80.5, 64.5);
+  s.tick(); // b91: the bolt now updates before the mobs (WorldServer.tick precedes updateEntities), so the mobs have to be in their steady state (fire -1 after one update), as in a running world; a never-updated mob would be struck at fire 0
   const health = zombie.health, cow = spared.health;
   bolt(s, 64.5, 64.5); s.tick();
   const list = s.mobs.mobs.entities;

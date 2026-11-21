@@ -181,7 +181,7 @@ import { createCommandHost, ruleOn } from "./command-host.js";
 import { replayPlayerCommands } from "./away-commands.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
-import { SHADOWS } from "./shadows.js";
+import { SHADOWS, vehicleShadowCasters } from "./shadows.js";
 import { isSlimeLike, slimeHeight } from "./slime.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -4926,6 +4926,8 @@ function shadowCasters(partial) {
   for (const e of objectViews(objectTracker, falling?.entities ?? [], "falling")) list.push({ ...SHADOWS.falling_block, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.49, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.49, z: e.z }, height: 0 });
   // b90 mpobjects90: the multiplayer client's falling-block copies cast the same shadow (their rows hold the box bottom, as the single-player entities).
   for (const e of remoteDispense?.falling ?? []) list.push({ ...SHADOWS.falling_block, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.49, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.49, z: e.z }, height: 0 });
+  // b91 mpobjects91: the multiplayer client's boat and cart copies (RenderBoat / RenderMinecart shadowSize 0.5, getShadowSize 0); remote orbs already come through xpOrbs.orbs above.
+  if (remoteVehicles) list.push(...vehicleShadowCasters(remoteVehicles.boats.carts, SHADOWS.boat, partial), ...vehicleShadowCasters(remoteVehicles.carts.carts, SHADOWS.minecart, partial));
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.
