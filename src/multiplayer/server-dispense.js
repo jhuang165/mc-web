@@ -32,6 +32,8 @@ import { ThrownTracks } from './thrown-tracks.js'; // b84 mpthrown84
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
+import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
+const noRows88 = l => l === undefined || l === null || (Array.isArray(l) && l.length === 0); // b88 mpperf88: a list snapshot's loops would not enter
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
 const f = Math.fround;
 
@@ -321,6 +323,7 @@ export class ServerDispense {
   snapshot(player) {
     const out = [], q = player.position, near = (e, range = NEAR) => (e.x - q.x) ** 2 + (e.z - q.z) ** 2 < range, dim = player.dimension | 0;
     if (dim !== this.dim) return out; // TNT, rockets and fireballs belong to this instance's dimension
+    if (fast88.mode !== 'off' && noRows88(this.primed) && noRows88(this.mobs._fireballs?.list) && noRows88(this.mobs._golemBalls?.balls) && noRows88(this.mobs._skulls?.list)) return out; // b88 mpperf88: nothing flies, so the loops below add nothing (five array iterators per player before)
     // b84 mpthrown84: eyes (b64 mpend2 rows) and rockets are tracker rows now
     // b82 fireext82: `f` for a TNT whose moveEntity counter is above 0 (natively the copy's own counter: xw never sets flag 0) and for a burning rocket or eye (flag 0)
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse, ...(t.fire > 0 ? { f: 1 } : {}) });
@@ -361,7 +364,8 @@ export class ServerDispense {
     const trk = new Map(), tracks = new Map();
     for (const lane of this.lanes) {
       const dim = lane.dim | 0, here = new Map(), t = this.tracksOf(lane);
-      for (const [id, p] of this.sim.players) if ((p.dimension | 0) === dim) here.set(id, p);
+      if (fast88.mode !== 'off') this.sim.players.forEach((p, id) => { if ((p.dimension | 0) === dim) here.set(id, p); }); // b88 mpperf88: Map.forEach, the same order without an entry pair per player
+      else for (const [id, p] of this.sim.players) if ((p.dimension | 0) === dim) here.set(id, p);
       trk.set(dim, t.update(this.thrownList(lane), here)); tracks.set(dim, t);
     }
     for (const p of this.sim.players.values()) {

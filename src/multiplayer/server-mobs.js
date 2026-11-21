@@ -10,6 +10,7 @@ import { serverCopyOf } from './server-copy-step.js'; // b82 mpplace82
 import { fast85 } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86, seqOrder, seqScratch, seqDone, plainPacket, wireNum, parsedState, samePacket, stateDiffs86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, fail87, shareDone } from '../mpperf87-fast.js'; // b87 mpperf87
+import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 import { stateDiffs } from '../mpperf77-fast.js'; // b77 mpperf77
 import { nearestView, mobStateJson, dropViewList } from '../mpperf79-fast.js'; // b79 mpperf79
 import { EntityWorld, SPAWN_RUNAWAY_GUARD } from '../entities.js';
@@ -59,6 +60,13 @@ SUPPORTED.add('giant'); // b82 entities82: the giant (summon, spawners and regio
 export const MOB_LIMIT = SPAWN_RUNAWAY_GUARD; // b73 mpspawn73: no flat cap any more (native has none); only the runaway guard. Natural spawning is limited per type by max * chunks / 256 (spawnPass), the wire per player by range (the trackers)
 const ELIGIBLE = 17; // SpawnerAnimals' chunk window around one player (entities.js ELIGIBLE_CHUNKS is 17 x 17)
 const num = e => Number(String(e.id).replace(/^mob-/, ''));
+// One mob's state resend in track: the watcher's known string, then the packet (b86 mpperf86: the parse cached per string). b88 mpperf88: a module function, so track's
+// index loop and its reference for-of share the body.
+function stateRow(v, out, e, s, q86, m86) {
+  v.known.set(e, s);
+  if (!q86) out.push({ type: 'state', i: num(e), ...JSON.parse(s) });
+  else { const c = { type: 'state', i: wireNum(e, num), ...parsedState(s) }; if (m86 === 'verify' && !samePacket(c, { type: 'state', i: num(e), ...JSON.parse(s) })) fail86('state packet'); out.push(c); }
+}
 
 // The HashMap<ChunkCoordIntPair, Boolean> SpawnerAnimals fills for ALL players (aho.a, bytecode-read): per player in list order, dx outer and dz inner over -8..8; an inner chunk is put as
 // false (overriding an edge put of an earlier player), an edge chunk as true only when the key is missing. `capacity` is the table size kept since the last clear (the default map
@@ -494,7 +502,8 @@ export class ServerMobs {
       queue.sort((a, b) => a[0] - b[0]);
       for (const [, en, pk] of queue) (q86 ? plain : send)(en, pk);
     }
-    for (const en of parts) en.entry.packets.length = 0;
+    if (fast88.mode !== 'off') for (let k = 0; k < parts.length; k++) parts[k].entry.packets.length = 0; // b88 mpperf88: index loops (no iterator result per entry or pair)
+    else for (const en of parts) en.entry.packets.length = 0;
     t.dying.length = 0;
     let diffs; // b77 mpperf77: per entry's watcher set, not every (view, entry) pair
     if (!q86) diffs = stateDiffs(this.views.values(), t.entries, stateOf);
@@ -505,11 +514,9 @@ export class ServerMobs {
     for (const v of this.views.values()) {
       const { out, later } = outs.get(v);
       v.destroys = later;
-      for (const [e, s] of diffs.get(v) ?? []) {
-        v.known.set(e, s);
-        if (!q86) out.push({ type: 'state', i: num(e), ...JSON.parse(s) });
-        else { const c = { type: 'state', i: wireNum(e, num), ...parsedState(s) }; if (m86 === 'verify' && !samePacket(c, { type: 'state', i: num(e), ...JSON.parse(s) })) fail86('state packet'); out.push(c); } // b86 mpperf86: the parse cached per string
-      }
+      const dl88 = diffs.get(v) ?? [], ix88 = fast88.mode !== 'off' && Array.isArray(dl88);
+      for (let k = 0; ix88 && k < dl88.length; k++) stateRow(v, out, dl88[k][0], dl88[k][1], q86, m86); // b88 mpperf88: an index loop (no iterator or pair destructure per row)
+      if (!ix88) for (const [e, s] of dl88) stateRow(v, out, e, s, q86, m86);
       for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.set.has(v.watcher)) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
       if (out.length) (v.player.mobPackets ??= []).push(...out);
     }

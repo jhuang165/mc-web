@@ -2,6 +2,7 @@ import { makeStack } from "./inventory.js";
 import { isFrozen } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { ringEntityActive } from './streaming-ticks.js';
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
+import { fast88, fail88, arrowNear88 } from "./mpperf88-fast.js"; // b88 mpperf88
 // ItemBow (abm), EntityArrow (zc) and the arrow half of EntitySkeleton (yl) from the
 // 1.7.10 JAR. Evidence, class digests and gaps: public/research/bows.md; the numbers
 // below are replayed against public/research/bow-reference.json by bow.test.js.
@@ -317,10 +318,16 @@ export class Arrows {
     let nearest = null, d0 = 0;
     const grow = f(0.3);
     const near = [];
-    for (const t of ctx.targets || []) {
+    const tl88 = ctx.targets || []; // b88 mpperf88: an index loop over the target array (no iterator result per target); verify also runs the loop below
+    if (fast88.mode !== "off" && Array.isArray(tl88)) arrowNear88(tl88, area, overlap, near);
+    if (fast88.mode === "off" || !Array.isArray(tl88) || fast88.mode === "verify") {
+    const ref88 = fast88.mode === "verify" && Array.isArray(tl88) ? [] : near;
+    for (const t of tl88) {
       if (!overlap(t.box, area)) continue;
       if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
-      near.push(t);
+      ref88.push(t);
+    }
+    if (ref88 !== near && (ref88.length !== near.length || ref88.some((t, k) => near[k] !== t))) fail88("arrow targets");
     }
     for (const t of orderTargets(near, ctx.targets || [])) { // b72: chunk list order decides equal distances (candidate-order.js)
       if ((t.ref === a.shooter || (a.owner && t.ref === a.owner)) && a.ticksInAir < 5) continue; // b62: `owner` is the server player who shot it (shooter stays "player" for the mobs' credit)

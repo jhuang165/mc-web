@@ -32,6 +32,7 @@
 //     bjd.b(II) -> apx.d() -> ahb.a(aor) per tile, ahb.b(List) per entity list). client-chunks.js does the same for mob and vehicle copies.
 import { encodeColumn } from './protocol.js';
 import { describeTiles } from '../tile-sync.js';
+import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 
 export const CHUNK_BULK_MAX = 5; // gz.c()
 const FRESH = ['mobs', 'objects', 'players', 'vehicles', 'thrown']; // b84 mpthrown84: + the thrown lane's re-list; // b83 tracker83: + the vehicle tracker's re-list; // b73 streamfix73: + the remote player tracker; // the trackers that re-list when columns change
@@ -138,15 +139,20 @@ export class ServerChunkViews {
   leave(playerId) { this.watches.delete(playerId); }
   // After the players moved: per player (list order) updatePlayerInstances, then the onUpdate loop. Messages go to `player.chunkOut` (sent by server.js).
   tick() {
-    for (const [id, p] of this.sim.players) {
+    if (fast88.mode !== 'off') { this.sim.players.forEach(this.tick88 ??= (p, id) => this.tickOne(id, p)); return; } // b88 mpperf88: Map.forEach (the same order, no entry pair or iterator result per player)
+    for (const [id, p] of this.sim.players) this.tickOne(id, p);
+  }
+  // One player's pass of tick() (b88 mpperf88: the loop body; the position pair is read by index, since a destructure walks an array iterator when this runs unoptimised).
+  tickOne(id, p) {
+    {
       const world = this.worldOf(p);
       let entry = this.watches.get(id);
       if (!entry || entry.world !== world) { // no snapshot went through here (a test, a dimension change): the client is taken to hold everything
-        const [nx, nz] = this.nativePos(world, p);
+        const np = this.nativePos(world, p), nx = np[0], nz = np[1];
         this.watches.set(id, entry = { world, watch: new ChunkWatch(this.radius, nx, nz, this.existsIn(world), { sent: true }), sent: new Set(world.chunks.keys()), fresh: new Set() });
-        continue;
+        return;
       }
-      const [nx, nz] = this.nativePos(world, p), out = [];
+      const np = this.nativePos(world, p), nx = np[0], nz = np[1], out = [];
       const unload = entry.watch.move(nx, nz);
       if (unload.length) { out.push({ type: 'chunkUnload', columns: unload.map(c => this.local(world, c)) }); for (const c of unload) entry.sent.delete(this.local(world, c).join(',')); for (const w of FRESH) entry.fresh.add(w); }
       const taken = entry.watch.take();

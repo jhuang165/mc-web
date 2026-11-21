@@ -8,6 +8,7 @@ import { MobTracker, TrackerEntry, PlayerWatch, nextPacketSeq, stampPacketSeq, p
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
+import { releaseWatcher88 } from '../mpperf88-fast.js'; // b88 mpperf88
 
 // b88 track88: the watched values of an S0F (the spawn packet minus its own fields), the S1C after it repeats them.
 const SPAWN_KEYS = new Set(['type', 'x', 'y', 'z', 'yaw', 'pitch', 'head', 'vx', 'vy', 'vz']);
@@ -126,6 +127,7 @@ export class SharedMobTracker extends MobTracker {
     if (!w) return;
     this.watchers.delete(id);
     for (const en of this.entries.values()) en.entry.set.delete(w);
+    releaseWatcher88(this.entries, w); // b88 mpperf88: the stale stamp slots (and a destination snapshot) naming the watcher are cleared
   }
   // b88 track88: before the world's entity pass (ServerMobs.tick, before EntityWorld.tick). EntityLivingBase.onUpdate's equipment check runs at the start of each update, so a change
   // goes out before the tracker pass (an item picked up in onLivingUpdate goes out at the next update). And for a watcher whose columns go out this tick (`peek`: they were queued
