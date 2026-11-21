@@ -106,6 +106,7 @@ export function entityDeparture(portals, kind, e, r, owner) {
   const vehicle = kind === "cart" || kind === "boat";
   delete rec.rider; // the player never travels with the vehicle
   rec.portalCooldown = portals.cooldownAfter(e, r) || undefined;
+  if (kind === "item") { delete rec.delay; delete rec.hover; } // b94 portals94 (bytecode-read xk.b/xk.a): EntityItem writes only Health, Age, Thrower, Owner and Item; the pickup delay (xk.b) and hoverStart (xk.c, random in the constructor) are not NBT, so the copy (new EntityItem(world)) starts with delay 0 and a fresh hover
   const source = Number.isInteger(e.nbtDimension) ? e.nbtDimension : undefined; // b89 entnbt89: travelToDimension's source (travelSource); undefined = the live dimension
   delete rec.nbtDimension; // b88 entnbt88: travelToDimension (sa.b(I), bytecode-read) sets Entity.dimension to the destination, which copyDataFrom carries over
   const v = { vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0 };

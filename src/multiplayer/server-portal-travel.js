@@ -15,11 +15,7 @@ import { ITEMS } from '../survival.js';
 import { LEAD_ITEM } from '../horse-gear.js';
 
 const OVERWORLD = 0, END = 1;
-// b93 portals93: the in-memory mob state that EntityLiving.writeToNBT does not write. Native copyDataFrom (sa.a(sa, boolean), bytecode-read: `old.e(nbt); this.f(nbt); am = old.am; aq = old.aq`)
-// moves only NBT (plus the portal cooldown and teleport direction), so a copy starts these over: the despawn / age counters, the revenge target's stamp, the jump and walk intents, the
-// living-sound timer, the home area, and the wolf shake, enderman stare, spider climb, slime hop and ocelot pose flags. Dropping them lets ServerMobs.restore supply the created defaults.
-const TRANSIENT_MOB = ['age', 'idle', 'revenge', 'burn', 'mateTicks', 'collidedH', 'inLava', 'moveForward', 'jumping', 'jumpTicks', 'livingSoundTime', 'home', 'homeRadius', 'leashHome', 'lastDamage', 'attack', 'flee',
-  'shakeTime', 'prevShakeTime', 'wet', 'shaking', 'stareCount', 'chaseTimer', 'climbing', 'wasOnGround', 'sneaking', 'sprinting', 'limbSwing', 'limbSwingAmount', 'prevLimbSwingAmount', 'bodyTicks', 'stepDistance'];
+import { TRANSIENT_MOB } from '../mob-transient.js';
 const reader = new PlayerInventory(ITEMS);
 
 export class ServerPortalTravel {
@@ -85,7 +81,7 @@ export class ServerPortalTravel {
       mobs.entities.push(m); mobs.nextId++;
     } else if (kind === 'cart' || kind === 'boat') {
       delete rec.rider; delete rec.id;
-      Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch], onGround: false });
+      Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch] }); // b94 portals94: OnGround is NBT, the copy keeps it
       const owner = kind === 'cart' ? p.vehicles.carts : p.vehicles.boats, ids = p.vehicles.ids;
       const made = (kind === 'boat' ? Boats.fromJSON([rec], { ids }) : Minecarts.fromJSON({ version: 1, carts: [rec] }, { ids })).carts[0];
       if (!made) return;
@@ -97,7 +93,7 @@ export class ServerPortalTravel {
       p.items.load([rec], s => reader.read(s), 0); // load() joins the new item (joined: its eid) and replaces the list: the old ones go back in front
       p.items.items = [...keep, ...p.items.items];
     } else {
-      Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, onGround: false });
+      Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz });
       const o = new ExperienceOrbs([rec]).orbs[0];
       if (!o) return;
       p.xp.orbs.push(o); p.xp.joined?.(o);
