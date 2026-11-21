@@ -24,8 +24,8 @@ test("a server tick: weather timers, sleep skip, scheduled ticks, random ticks, 
   s.tick();
   const log = [];
   const spy = (o, name, tag) => { const f = o[name].bind(o); o[name] = (...a) => { log.push(tag); return f(...a); }; };
-  spy(s.weather, "updateWeather", "timers"); spy(s.sleep, "worldTick", "sleep"); spy(s.fluids, "tick", "fluids"); spy(s.fire, "tick", "fire");
-  spy(s.redstone, "tickUpdates", "redstone"); spy(s.redstone, "updateTileEntities", "tiles"); spy(s.falling, "tickEntities", "fallingEntities");
+  spy(s.weather, "updateWeather", "timers"); spy(s.sleep, "worldTick", "sleep"); spy(s.fluids, "beginTick", "fluids"); spy(s.fire, "beginTick", "fire"); // b93: the shared tree calls each system's beginTick
+  spy(s.redstone, "beginTick", "redstone"); spy(s.redstone, "updateTileEntities", "tiles"); spy(s.falling, "tickEntities", "fallingEntities");
   spy(s.weather, "tick", "random"); spy(s.mobs, "tick", "mobs"); spy(s.dispense, "flush", "flush"); spy(s.pistons, "flush", "pistons");
   const hop = s.containers.ticks.hoppers; spy(hop, "tick", "hoppers");
   s.tick();

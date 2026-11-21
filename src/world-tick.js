@@ -30,8 +30,9 @@ export function tickScheduledSystems(systems, clock, observers) {
   tickBlockSystems(systems, clock, observers);
   const r = systems.redstone;
   if (!r) return;
-  r.beginTick();
-  r.tickUpdates();
+  // b93: with the shared TickTree the redstone entries were taken and run inside it (its begin is redstone.beginTick, its source runs accept / runTaken); otherwise the old own pass.
+  if (!systems.tickTree) { r.beginTick(); r.tickUpdates(); }
+  else while (r.thisTick?.length) r.runTaken(r.thisTick[0]); // an entry deferred in an earlier tick (its column was not resident) that retryDeferred released now: LiveRedstone.tickUpdates runs these last
   r.endTick(true); // sendQueuedBlockEvents and the sensor scans now; the tile-entity loop waits for tickTileSystems
 }
 export function tickTileSystems(systems) {

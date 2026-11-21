@@ -34,6 +34,7 @@ import { sensorSky, celestialRadians } from '../daylight-sensor-time.js'; // b88
 import { ServerChunkSets } from './server-chunks.js';
 import { ServerRules, blockProtected, flightCheck, hardcoreTick } from './server-properties.js'; // b69 serverprops
 import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
+import { attachTickTree } from '../tile-ticks.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack, copyStack } from '../inventory.js';
@@ -207,6 +208,7 @@ export class DedicatedSimulation {
       drop: serverRedstoneDrop(this, () => this.items), skulls: () => this.tileEntities.skulls, // b83 mppiston83: piston and support-loss drops (server-redstone-drops.js)
     });
     this.redstone.restore(saved.redstone);
+    this.tickTree = attachTickTree({ fluids: this.fluids, fire: this.fire, falling: this.falling, redstone: { redstone: this.redstone, tickBegin: () => this.redstone.beginTick() } }); // b93 mpobjects93: one NextTickListEntry TreeSet for the dimension (time, priority, creation id), as the single-player game
     installMusic(this, this.redstone, 0, saved.redstone); // b66 mpbooks: note blocks and jukeboxes (server-music.js)
     installServerCommandBlocks(this, this.redstone, this, 0); // b80 mpcmd80: BlockCommandBlock (server-command-blocks.js)
     this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`) || this.containers.litFurnaces.has(`${x},${y},${z}`))); // lit repeater or furnace (container-ticks)
@@ -678,10 +680,11 @@ export class DedicatedSimulation {
     // b91 mpobjects91 (bytecode-read mt.b, MinecraftServer.updateTimeLightAndEntities): WorldServer.tick (weather, the all-asleep skip, the random block ticks and the lightning rolls) and its
     // weather-effect bolts run BEFORE World.updateEntities and the EntityTracker flush. b92 mpobjects92 (mt.b, in order): ahb.b (the weather timers), the all-asleep skip and wakeAllPlayers,
     // [the spawner: mobs.tick below], tickPending (the scheduled tickUpdates and the queued block events), tickBlocks (the random ticks); then updateEntities, whose tile entities (hoppers,
-    // brewing stands, moving pistons) come last. Deviation: SpawnerAnimals (inside mobs.tick) still follows the scheduled pass.
+    // brewing stands, moving pistons) come last. b93: the SpawnerAnimals pass (mobs.spawnStep) now sits between the sleep skip and the scheduled pass.
     this.weather.updateWeather();
     this.sleep.worldTick(); // b92: right after the weather timers, before the scheduled ticks and the entities; the darkness read below is the post-skip clock, as mt.b's skylight step is
-    tickScheduledSystems({ falling: this.falling, farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
+    this.mobs.spawnStep(); // b93 mpobjects93: SpawnerAnimals, mt.b's step after the sleep skip and before tickPending (mobs.tick skips its own pass this tick)
+    tickScheduledSystems({ falling: this.falling, farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, tickTree: this.tickTree },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     this.weather.tick(this.world, null, true);
     this.lightning.tick(); // b66 mplightning

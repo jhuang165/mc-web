@@ -370,6 +370,14 @@ export class ServerMobs {
     if (!this.seen) { this.seen = new WeakSet(list); return; }
     for (let i = list.length - 1; i >= 0; i--) { const e = list[i]; if (this.seen.has(e)) continue; if (removedAtSpawn(rules, e.type)) list.splice(i, 1); else this.seen.add(e); }
   }
+  // b93 mpobjects93 (bytecode-read mt.b): SpawnerAnimals runs right after the sleep check and BEFORE tickPending / tickBlocks / updateEntities. The world tick calls this at that
+  // point; the following tick() then skips its own pass once. Nothing happens while nobody is in the world (tick() returns early as well, so the flag is not left set).
+  spawnStep() {
+    if (!this.views.size || !this.spawning) return;
+    if (Number.isInteger(this.host.difficulty)) this.mobs.difficulty = this.host.difficulty;
+    this.spawnPass();
+    this.spawnStepped = true;
+  }
   // One game tick. Nothing runs while nobody is in the world.
   tick() {
     const { mobs, views } = this;
@@ -383,10 +391,11 @@ export class ServerMobs {
       v.view.update({ x: p.position.x, y: p.position.y, z: p.position.z }, v.survival, p.survival.held?.id ?? 0);
       first ??= v;
     }
-    if (this.spawning) {
-      this.spawnPass();
+    if (this.spawning && !this.spawnStepped) {
+      this.spawnPass(); // b93: the world tick calls spawnStep() at its native place (before the scheduled ticks); a direct tick() still spawns here
       // b73 mpspawn73: the flat cull at 80 is gone (native has no global cap; the per-type cap of spawnPass bounds natural spawns)
     }
+    this.spawnStepped = false;
     this.use(first);
     this.tracker.beforePass(); // b88 track88: the equipment check of each update and the copies for a watcher whose slot comes first (server-mob-entries.js)
     const lead = first.player.position;
