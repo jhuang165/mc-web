@@ -20,7 +20,7 @@ import { tickPrimedTnt, tickOneTnt } from '../entity-simulation.js';
 import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
 import { rainedOn } from '../entity-wet.js'; // b83 rain83
 import { BallTracks } from './fireball-copy.js'; // b81 blast81
-import { TntTracks } from './tnt-tracks.js'; // b92 console92: the native tracker's packets of a primed TNT, for /netstat only
+import { TntTracks, GolemTracks } from './tnt-tracks.js'; // b92 console92: the native tracker's packets of a primed TNT, for /netstat only
 import { setRowInfo } from './net-row-info.js'; // b92 console92
 import { FireworkRockets, dispenseFirework } from '../fireworks-live.js';
 import { spawnEggMob, eggMobType } from '../spawn-egg-use.js';
@@ -56,6 +56,7 @@ export class ServerDispense {
     this.primed = [];
     this.ballTracks = new BallTracks(); // b81 blast81
     this.tntTracks = new TntTracks(); // b92 console92
+    this.golemTracks = new GolemTracks(); // b93 console93
     // b84 mpthrown84: arrows, thrown balls, rockets and eyes of this instance's own dimension go out as tracker packets (thrown-tracks.js); a stand-in lane keeps the exact rows
     this.thrownTracks = this.makeTracks();
     sim.dispenseHome ??= this; // b86 lanes86: the first instance is the Overworld's (simulation.js); a dimension instance routes lane 0 to it (laneFor)
@@ -361,7 +362,7 @@ export class ServerDispense {
     for (const t of this.primed) if (near(t, NEAR_TNT)) out.push(setRowInfo({ k: 't', i: this.id(t), x: t.x, y: t.y, z: t.z, fuse: t.fuse, ...(t.fire > 0 ? { f: 1 } : {}) }, { data: 0, velocity: true, watch: 11, kinds: this.tntTracks.kinds(t) })); // b92 console92: /netstat info (net-row-info.js)
     for (const r of []) if (near(r)) out.push({ k: 'r', i: this.id(r), x: r.x, y: r.y, z: r.z, ...(r.fire > 0 ? { f: 1 } : {}) });
     for (const b of this.mobs._fireballs?.list ?? []) if (!b.dead && near(b)) out.push(setRowInfo({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z, scale: b.scale, ...skullWire(b), t: this.ballTracks.row(b) }, { data: b.owner ? 6 : 0, velocity: false, watch: 11 })); // b81 blast81: `t` the tracker packets the client copy flies on (fireball-copy.js); b82 mpball82: the angle fields a skull row has (skull-look.js)
-    for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push(setRowInfo({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }, { data: 0, velocity: true, watch: 11 })); // b66 mpgolems: a snow golem's snowball
+    for (const b of this.mobs._golemBalls?.balls ?? []) if (!b.dead && near(b)) out.push(setRowInfo({ k: 'b', i: this.id(b), kind: b.kind, x: b.x, y: b.y, z: b.z }, { data: 0, velocity: true, watch: 11, kinds: this.golemTracks.kinds(b) })); // b66 mpgolems; b93 console93: its tracker packets: a snow golem's snowball
     for (const b of this.mobs._skulls?.list ?? []) if (!b.dead && near(b)) out.push(setRowInfo({ k: 'b', i: this.id(b), kind: 'witherSkull', x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, blue: b.blue ? 1 : 0, ...skullWire(b), t: this.ballTracks.row(b) }, { data: b.owner ? 6 : 0, velocity: false, watch: 13 })); // b63: wither skulls; b81 mpcopies81: the angle bytes of the S0E and of this tick's look packet (skull-look.js); b81 blast81: `t` the tracker packets the copy flies on (fireball-copy.js)
     return out;
   }
@@ -393,6 +394,7 @@ export class ServerDispense {
     const fx = this.fx.splice(0), taken = (this.collected ?? []).splice(0);
     for (const b of [...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]) if (!b.dead) b.track ??= skullEntry(b); // b81 mpcopies81: the S0E angles of the join (a ball that never ran the tickOne hooks)
     this.tntTracks.update(this.primed); // b92 console92
+    this.golemTracks.update(this.mobs._golemBalls?.balls ?? []); // b93 console93: a snowball entry per golem ball (64 / 10 / velocity), after the entity pass
     this.ballTracks.update([...(this.mobs._fireballs?.list ?? []), ...(this.mobs._skulls?.list ?? [])]); // b81 blast81: the balls' shared tracker entries, after the entity pass; b82 mpball82: the one entry also sends the look packets and the burning flag's S1C (fireball-copy.js), and sets `lookSent` for skullWire
     // b84 mpthrown84: the tracker lane; b86 lanes86: one per lane, each sending only to the players of its own dimension
     const trk = new Map(), tracks = new Map();

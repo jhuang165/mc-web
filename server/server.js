@@ -19,7 +19,7 @@ import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.j
 import { planSave, savePlayerData, STOP_LOG, STOP_KICK, worldSaveLine } from '../src/multiplayer/server-save.js'; // b88 console88: saves under /save-off, the stop sequence
 import { readPacketBytes, writePacketBytes } from '../src/multiplayer/net-packet-ids.js'; // b88 console88: /netstat's native record sizes
 import { readPackets, writePackets, kickPacket } from '../src/multiplayer/net-packet-ids.js'; // b89 console89: one /netstat record per native packet, kicks as S40
-import { watchSweep, kindRecords } from '../src/multiplayer/net-packet-ids.js'; // b92 console92: the S1C of a changed watcher on the native schedule
+import { watchSweep, kindRecords, drainDestroyed } from '../src/multiplayer/net-packet-ids.js'; // b92 console92: the S1C of a changed watcher on the native schedule
 import { hooks as watchHooks, watchState } from '../src/multiplayer/net-watch-bytes.js'; // b92 console92
 import { witherState } from '../src/wither-boss-mobs.js'; // b92 console92: the head targets (watchers 17-19)
 import { chunkSourceFor } from '../src/multiplayer/net-native-bytes.js'; // b89 console89: the receiving player's world for the deflated chunk data
@@ -204,7 +204,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
     if (message.type === 'dimRespawn') ws.netObjs?.clear(); // b92 console92: the rebuilt world holds no tracked objects (the rows are spawned again)
-    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}), ...(message.type === 'dispEnts' ? { objs: (ws.netObjs ??= new Map()) } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
+    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}), ...(message.type === 'dispEnts' ? { objs: (ws.netObjs ??= new Map()), destroyed: (ws.netDestroyed ??= { n: 0 }) /* b93 console93: S13s wait for the next tick */ } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -364,6 +364,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       // The two S23 resends of a block placement packet go to the clicker only, after the refusal text.
       for (const [pid, player] of simulation.players) {
         const ws = sockets.get(pid);
+        if (ws?.netDestroyed?.n) for (const [packetId, bytes] of drainDestroyed(ws.netDestroyed)) simulation.admin.netStats.write(packetId, bytes); // b93 console93: EntityPlayerMP.onUpdate sends the S13s queued last tick, before this tick's tracker packets
         if (player.refusal && ws) send(ws, { type: 'chat', name: '', text: player.refusal });
         if (player.blocks && ws) send(ws, { type: 'blocks', changes: player.blocks });
         if (player.openSign && ws) send(ws, { type: 'signEditor', x: player.openSign[0], y: player.openSign[1], z: player.openSign[2] }); // S36 open sign editor

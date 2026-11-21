@@ -1,0 +1,233 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "xn": {
+   "name": "EntityMinecartCommandBlock",
+   "sha256": "b58322492ba8f3a3735575e816ed241c49eaeb80b782a88cd94f2c0c0afd2ccd"
+  },
+  "xo": {
+   "name": "EntityMinecartCommandBlock$1 (CommandBlockLogic)",
+   "sha256": "4de39407e465777108fed08d6a01f1f01b3a86cf6b84aad98cd0ea86032e678c"
+  },
+  "agp": {
+   "name": "CommandBlockLogic",
+   "sha256": "e87fe5c3beb09b70acd897a77fa8767ca9e801a6c9a35c2eb01246a8addfe46e"
+  },
+  "hw": {
+   "name": "S1CPacketEntityMetadata",
+   "sha256": "be7813a6c38c61533cee670d87accc6110117d611ab1f71a7b41ffab1609f9b6"
+  },
+  "hq": {
+   "name": "S13PacketDestroyEntities",
+   "sha256": "9e2dd146c1fde6cb491482b2b2d0a5e2f96362488228f40bbfbedab1b7a569b3"
+  },
+  "te": {
+   "name": "DataWatcher",
+   "sha256": "f6a57efaf354dcb65d2bb7e6dcf7ba762eb4b38d2cda849774615deeb22d4d15"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/Console93Probe.java), MobPackets89Probe's world double. `cmdcart`: a MinecartCommandBlock whose logic got setCommand (agp.a(String)) and setLastOutput (agp.b(fj)) and then xo.e() (watchers 23 and 24); `s1cWhole` is hw(id, watcher, true) written after its id VarInt. `cmdchange`: the S1C of one changed string entry. `s13`: hq written after its id VarInt.",
+ "cmdcart": [
+  {
+   "case": "cmdcart",
+   "commandChars": 0,
+   "commandUtf8": 0,
+   "watch23": "",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 46
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 0,
+   "commandUtf8": 0,
+   "watch23": "",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 60
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 0,
+   "commandUtf8": 0,
+   "watch23": "",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 144
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 6,
+   "commandUtf8": 6,
+   "watch23": "say hi",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 52
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 6,
+   "commandUtf8": 6,
+   "watch23": "say hi",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 66
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 6,
+   "commandUtf8": 6,
+   "watch23": "say hi",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 150
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 10,
+   "commandUtf8": 10,
+   "watch23": "0123456789",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 56
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 10,
+   "commandUtf8": 10,
+   "watch23": "0123456789",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 70
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 10,
+   "commandUtf8": 10,
+   "watch23": "0123456789",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 154
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 127,
+   "commandUtf8": 127,
+   "watch23": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 173
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 127,
+   "commandUtf8": 127,
+   "watch23": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 187
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 127,
+   "commandUtf8": 127,
+   "watch23": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 271
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 128,
+   "commandUtf8": 128,
+   "watch23": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 175
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 128,
+   "commandUtf8": 128,
+   "watch23": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 189
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 128,
+   "commandUtf8": 128,
+   "watch23": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 273
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 2,
+   "commandUtf8": 5,
+   "watch23": "é€",
+   "watch24": "null",
+   "watch24Utf8": 4,
+   "s1cWhole": 51
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 2,
+   "commandUtf8": 5,
+   "watch23": "é€",
+   "watch24": "\"[12:00:00] Hello\"",
+   "watch24Utf8": 18,
+   "s1cWhole": 65
+  },
+  {
+   "case": "cmdcart",
+   "commandChars": 2,
+   "commandUtf8": 5,
+   "watch23": "é€",
+   "watch24": "\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"",
+   "watch24Utf8": 102,
+   "s1cWhole": 149
+  }
+ ],
+ "cmdchange": {
+  "case": "cmdchange",
+  "only23": 14,
+  "only24": 12,
+  "fresh": 42
+ },
+ "s13": [
+  {
+   "case": "s13",
+   "ids": 0,
+   "bytes": 2
+  },
+  {
+   "case": "s13",
+   "ids": 1,
+   "bytes": 6
+  },
+  {
+   "case": "s13",
+   "ids": 2,
+   "bytes": 10
+  },
+  {
+   "case": "s13",
+   "ids": 5,
+   "bytes": 22
+  },
+  {
+   "case": "s13",
+   "ids": 127,
+   "bytes": 510
+  },
+  {
+   "case": "s13",
+   "ids": 128,
+   "bytes": 514
+  }
+ ]
+}

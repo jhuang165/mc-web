@@ -5,6 +5,7 @@
 // pass, and its packets of that tick go to every viewer that has the row.
 import { TrackerEntry, sizeClass } from '../entity-tracker.js';
 import { TNT_SIZE, TNT_Y_OFFSET } from '../explosion.js';
+import { ObjectTracker as ObjectReader, OBJECT_KINDS } from '../object-tracker.js'; // b93 console93
 
 export const TNT_TRACK = Object.freeze({ range: 160, frequency: 10, velocity: true });
 class TntEntry extends TrackerEntry {
@@ -33,5 +34,32 @@ export class TntTracks {
     for (const e of [...this.map.keys()]) if (!live.has(e)) this.map.delete(e);
   }
   /** This tick's native packet kinds for `e` ([] when none). */
+  kinds(e) { return this.map.get(e)?.packets ?? []; }
+}
+
+// b93 console93: the same for a snow golem's snowball (`k: 'b'` rows of dispEnts that came from `mobs._golemBalls`). Bytecode-read (mn.a(sa), thrown-tracks.js): EntitySnowball is tracked
+// 64 / 10 / sendVelocityUpdates TRUE; my.c builds S0E type 61 with data 0. The stand-in comes from ObjectTracker.read('snowball') (the same read the thrown tracker uses for a player's
+// snowball), so a golem ball and a thrown one have the same entry. Nothing here goes on the wire: the packet kinds feed `/netstat` through the row's info.
+class BallEntry extends TrackerEntry {
+  constructor(o, spec) { super(o, { range: spec.range, frequency: spec.frequency, velocity: spec.velocity, size: sizeClass(spec.width) }, { log: null }); this.tracked = true; this.initialised = true; }
+  updatePlayerList() {}
+}
+export class GolemTracks {
+  constructor() { this.map = new Map(); this.reader = new ObjectReader(10, Math.random, null); }
+  /** After the tick's entity pass: each live ball's entry runs sendLocationToAllClients. */
+  update(list) {
+    const live = new Set();
+    for (const e of list) {
+      if (!e || e.dead) continue;
+      live.add(e);
+      let t = this.map.get(e);
+      if (!t) { const o = { id: 0 }; this.reader.read('snowball', e, o); t = { o, en: new BallEntry(o, OBJECT_KINDS.snowball), packets: [] }; this.map.set(e, t); }
+      this.reader.read('snowball', e, t.o);
+      t.o.velocityChanged = false;
+      t.en.sendLocation(t.o.airBorne === true, false);
+      t.packets = t.en.packets.splice(0).map((p) => ({ type: p.type }));
+    }
+    for (const e of [...this.map.keys()]) if (!live.has(e)) this.map.delete(e);
+  }
   kinds(e) { return this.map.get(e)?.packets ?? []; }
 }
