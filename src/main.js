@@ -1980,6 +1980,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.ring = createRing(world, { worker: !!streamPrefetch && !streamPrefetch.failed });
     if (streamPrefetch) streamPrefetch.ring = mobs.ring;
     mobs.lightSubtracted = () => scene.subtracted;
+    mobs.spawnSubtracted = () => spawnSubtracted; // b90 tiles90
+    mobs.spawnLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, spawnSubtracted) : 15);
     if (mobs.ring) { // ring mobs tick and ring columns take edits (natural-spawning.md "Round 5")
       attachRing(world, mobs.ring);
       mobs.ring.isHydrated = (cx, cz) => !streamStorage || streamStorage.loaded.has(`${cx},${cz}`);
@@ -3191,6 +3193,7 @@ function playerLanding() {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   };
 }
+let spawnSubtracted = 0; // b90 tiles90: skylightSubtracted as the previous tick's WorldServer.tick left it, for SpawnerAnimals
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -4018,6 +4021,8 @@ function movementTick(controls) {
     : inWater
       ? "SWIMMING"
       : "WALKING";
+  // b90 tiles90: SpawnerAnimals (the mob pass below) runs before WorldServer.tick's calculateSkylightSubtracted, so it reads the previous tick's value: the pre-step darkness of the clock as it stands before this tick's step.
+  spawnSubtracted = sensorSky(survival.time, !survival.timeFrozen, weather.rainStrength(1), weather.weightedThunder(1)).subtracted;
   tickSurvival(inWater, oldPosition, inLavaNow);
   tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime, deferTiles: true },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },

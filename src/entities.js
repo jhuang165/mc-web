@@ -3124,12 +3124,13 @@ export class EntityWorld {
     const sky = (x, y, z) => (openSky(world, x, y, z) ? 15 : 0), blockLight = (x, y, z) => (this.dimensionBlockLight ? this.dimensionBlockLight(x, y, z) : 0);
     s.env = dim ? { skyLight: () => 0, lightValue: blockLight, thunderLightValue: blockLight, fullLight: blockLight } : {
       skyLight: (x, y, z) => (this.skyLightAt ? this.skyLightAt(x, y, z) : sky(x, y, z)),
-      lightValue: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : Math.max(0, sky(x, y, z) - s.sub)),
+      // b90 tiles90: SpawnerAnimals runs before WorldServer.tick's calculateSkylightSubtracted, so it reads the PREVIOUS tick's skylightSubtracted: a host sets spawnLightAt / spawnSubtracted for that value
+      lightValue: (x, y, z) => (this.spawnLightAt ? this.spawnLightAt(x, y, z) : this.lightAt ? this.lightAt(x, y, z) : Math.max(0, sky(x, y, z) - s.sub)),
       thunderLightValue: (x, y, z) => (this.thunderLightAt ? this.thunderLightAt(x, y, z) : Math.max(0, sky(x, y, z) - 10)),
       fullLight: (x, y, z) => (this.fullLightAt ? this.fullLightAt(x, y, z) : sky(x, y, z)),
     };
     Object.assign(s.env, { thundering: () => !!this.isThundering?.(), time: 0, limit: SPAWN_RUNAWAY_GUARD, brightness: dim ? lightBrightnessTable(providerOf(dim).ambient) : SPAWN_BRIGHTNESS });
-    wrapRingEnv(s.env, () => this.ring, dim, () => this.lightSubtracted?.() ?? s.sub);
+    wrapRingEnv(s.env, () => this.ring, dim, () => this.spawnSubtracted?.() ?? this.lightSubtracted?.() ?? s.sub);
     const hooks = this.spawnerHooks(s.env);
     // Test doubles without metadata read meta 0.
     const metaWorld = world.getMeta ? world : { get: (a, b, c) => world.get(a, b, c), getMeta: () => 0 };

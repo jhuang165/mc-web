@@ -37,7 +37,7 @@ test("every internal cell state survives toOriginal -> fromOriginal", () => {
       assert.equal(back.id, id, `${id}:${meta}`);
       assert.ok(back.exact, `${id}:${meta} -> ${mc}:${mm}`);
       // Metadata is kept where the original stores the same meaning; else the original state is fixed.
-      if (back.meta !== meta) assert.equal(back.meta, 0);
+      if (back.meta !== meta) assert.ok(back.meta === 0 || (id === 14 && back.meta === mm), `${id}:${meta}`); // b90 tiles90: a furnace keeps its facing (2-5) in the cell metadata, so a stray cell meta comes back as the exported facing
       const [mc2, mm2] = toOriginal(back.id, back.meta, back.state);
       assert.deepEqual([mc2, mm2], [mc, mm]);
     }
@@ -59,7 +59,7 @@ test("side state: fluids, farmland moisture, chest/furnace facing and lit furnac
   assert.deepEqual(toOriginal(41, 0, { facing: 4 }), [54, 4]);
   assert.deepEqual(toOriginal(41, 0, { facing: 9 }), [54, 3]);
   assert.deepEqual(toOriginal(14, 0, { facing: 2, lit: true }), [62, 2]);
-  assert.deepEqual(fromOriginal(62, 2), { id: 14, meta: 0, exact: true, state: { facing: 2, lit: true } });
+  assert.deepEqual(fromOriginal(62, 2), { id: 14, meta: 2, exact: true, state: { facing: 2, lit: true } }); // b90 tiles90: the furnace facing is cell metadata (old expectation meta 0 dropped an imported furnace's facing)
   assert.equal(fromOriginal(54, 0).exact, false);
 });
 

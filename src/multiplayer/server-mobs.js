@@ -137,6 +137,8 @@ export class ServerMobs {
     mobs.fullLightAt = (x, y, z) => host.light.level(x, y, z, 0);
     mobs.dimensionBlockLight = (x, y, z) => host.light.blockAt(x, y, z);
     mobs.lightSubtracted = () => host.darkness;
+    mobs.spawnLightAt = (x, y, z) => host.light.level(x, y, z, host.spawnDarkness ?? host.darkness); // b90 tiles90: SpawnerAnimals reads the previous tick's skylightSubtracted (WorldServer.tick runs it before calculateSkylightSubtracted)
+    mobs.spawnSubtracted = () => host.spawnDarkness ?? host.darkness;
     mobs.loadTotalTime(host.ticks ?? 0);
     mobs.explodeInline = ev => { this.explode(ev.explode); const e = ev.explode; this.burst(e.x, e.y, e.z, e.size); }; // b79 explfx79: a creeper's blast inside its own update sends its S27 and sound too (it used to leave only the knock record behind)
     Object.defineProperty(mobs, 'lootItems', { get: () => host.items }); // b78 loot78: EntityLiving.onLivingUpdate's pickup loop sees the server's item entities (host.items is built after this object)

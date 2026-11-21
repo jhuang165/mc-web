@@ -22,7 +22,7 @@ import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { newChest, settleFacing } from "./chest.js";
 import { furnaceAddedFacing } from "./container-tiles.js"; // b89 tiles89
 // b89 tiles89: chest, trapped chest, furnace, lit furnace: the original metadata (facing) or id (lit) the port keeps outside the cell.
-const FACED_ORIGINALS = new Set([54, 146, 61, 62]), FURNACE_CELL = 14;
+const FACED_ORIGINALS = new Set([54, 146, 61, 62]), FURNACE_CELL = 14, DISPENSER_CELL = fromOriginal(23, 0)?.id, DROPPER_CELL = fromOriginal(158, 0)?.id;
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
@@ -294,7 +294,7 @@ export function createCommandHost(env) {
       // b84 cmdfix84: BlockJukebox.breakBlock (dropRecord, bytecode-read) also runs in this setBlock, so a loaded jukebox ejects its disc (item entity, stop-record) before the new block goes in.
       if (old !== 0 && old === fromOriginal(JUKEBOX_ID, 0)?.id) env.music?.()?.jukeboxes?.eject?.(x, y, z);
       const potHeld = w.get(x, y, z) === FLOWER_POT ? potBreakDrop(w, x, y, z) : null;
-      w.set(x, y, z, cell.id, true, cell.id === FURNACE_CELL ? furnaceAddedFacing(w, x, y, z) : cell.meta ?? 0); // b89 tiles89: BlockFurnace.onBlockAdded (ale.e) settles the facing whatever the command's metadata
+      w.set(x, y, z, cell.id, true, cell.id === FURNACE_CELL || cell.id === DISPENSER_CELL || cell.id === DROPPER_CELL ? furnaceAddedFacing(w, x, y, z) : cell.meta ?? 0); // b89 tiles89: BlockFurnace.onBlockAdded (ale.e) settles the facing whatever the command's metadata; b90 tiles90: so does BlockDispenser.onBlockAdded (akm.m, bytecode-read; the dropper inherits it), which also drops the trigger bit
       if (potHeld) { w.pots?.delete(potKey(x, y, z)); if (potHeld.id) env.dropStacks?.([potEntryStack(potHeld, makeStack)], x, y, z); }
       const key = `${x},${y},${z}`, stores = survival();
       // b75: tableNames, an enchanting table's CustomName goes with the old tile. b87 tiles87: CommandSetBlock (bm) clears no tile itself, it only calls World.setBlock (ahb.d(IIILaji;II)Z,
@@ -327,7 +327,7 @@ export function createCommandHost(env) {
       } else if (id) {
         const loaded = readContainerTile(id, tag ?? new Map());
         stores[loaded.name] ??= {};
-        stores[loaded.name][key] = { ...(id === 'Chest' ? newChest() : {}), ...loaded.record };
+        stores[loaded.name][key] = { ...(id === 'Chest' ? newChest() : {}), ...loaded.record, ...(original === 62 ? { lit: true } : {}) }; // b90 tiles90: lit_furnace with an empty tile stays lit (TileEntityFurnace.updateEntity flips the block only when burnTime > 0 changes), as an imported one
         if (id === 'Chest') settleFacing(w, stores.chests, x, y, z);
         this.ignoredTagKeys = loaded.ignored;
       } else if (tag) this.ignoredTagKeys = applySetblockTag(original, x, y, z, tag, { world: w, signs: env.signs?.(), music: env.music?.(), comparators: env.comparators?.() }) ?? [...tag.keys()]; // b83 plants83: pot, sign, note, jukebox, comparator (setblock-tags.js)
@@ -348,7 +348,7 @@ export function createCommandHost(env) {
       return writeContainerTile(name, record, x, y, z, { dropper: id === 158 });
     },
     blockAt(x, y, z) {
-      const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing ?? (b === FURNACE_CELL ? w.getMeta(x, y, z) : undefined) /* b89 tiles89: the furnace's facing is its cell metadata */, lit: (survival().furnaces?.[key]?.burn ?? 0) > 0 });
+      const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing ?? (b === FURNACE_CELL ? w.getMeta(x, y, z) : undefined) /* b89 tiles89: the furnace's facing is its cell metadata */, lit: survival().furnaces?.[key]?.lit ?? (survival().furnaces?.[key]?.burn ?? 0) > 0 }); // b90 tiles90: the record's lit flag (lit_furnace, imported) rules until the burning flag flips
       return { id: o?.[0] ?? 0, meta: o?.[1] ?? 0 };
     },
     setLook(yaw, pitch) { env.setLook?.(yaw, pitch); }, // a dedicated server's S08 rotation (player-op.js)

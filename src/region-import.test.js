@@ -167,7 +167,7 @@ test('chests, furnaces, dropped items and mobs convert; other tile entities and 
   assert.equal(report.scheduledTicks, 1);
   assert.deepEqual(report.blocks.unsupported, []);
   // Furnace facing is not stored by the browser; chest facing travels in its record; meta 0 is inexact.
-  assert.deepEqual(report.blocks.approximations, [{id: 54, meta: 0, cells: 1, to: [41, 0], exact: false, state: ['facing']}, {id: 61, meta: 2, cells: 1, to: [14, 0], exact: true, state: ['facing']}]);
+  assert.deepEqual(report.blocks.approximations, [{id: 54, meta: 0, cells: 1, to: [41, 0], exact: false, state: ['facing']}, {id: 61, meta: 2, cells: 1, to: [14, 2], exact: true, state: ['facing']}]);
   assert.equal(report.blocks.exact, 3);
 });
 

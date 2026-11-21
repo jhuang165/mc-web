@@ -681,6 +681,7 @@ export class DedicatedSimulation {
     this.maps.tick(); // b69 mpmaps: ItemMap.onUpdate and the S34 map updates (server-maps.js)
     this.deliverSounds();
     this.weather.tick(this.world);
+    this.spawnDarkness = this.darkness; // b90 tiles90: the field World.skylightSubtracted holds for the NEXT tick's SpawnerAnimals pass (read in mobs.tick, before the clock step; native: the spawner precedes calculateSkylightSubtracted)
     this.sleep.worldTick(); // b66 mpsleep: WorldServer.tick's all-asleep night skip, right after the weather update (the clock has already advanced by this tick's one)
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
