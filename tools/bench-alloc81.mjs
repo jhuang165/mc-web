@@ -1,10 +1,10 @@
 // Batch 81 mpperf81: server tick time, GC and heap in the pen, travel (spread field), pillar, nether and terrain (mixed blocks) scenes.
 // node [--expose-gc] tools/bench-alloc81.mjs [--scene=pen|travel|pillar|nether|terrain] [--mobs=200] [--players=16] [--ticks=150] [--warm=30] [--runs=5] [--state]
-//   [--cpuprof=file | --heapprof=file] [--seed=1]
+//   [--cpuprof=file [--cpuint=us] | --heapprof=file] [--seed=1]   (--cpuint: the CPU profiler's sampling interval, default 1000 us; b89)
 // Math.random is seeded in every mode, so two modes do the same work. Timed mode: each run builds a fresh scene, warms, then times --ticks ticks and records
 // ms/tick, cpu ms/tick, GC pauses (PerformanceObserver 'gc': count and ms per tick) and heap growth per tick (process.memoryUsage().heapUsed increases between
 // ticks, summed: a lower bound on bytes allocated, since a GC inside a tick hides that tick's allocations). Prints the median of the runs.
-// --state prints seeded determinism hashes after 50/100/150 ticks; compare across MC_MPPERF81=off|on|verify, MC_MPPERF82=off|on|verify, MC_MPPERF83=off|on|verify (and the earlier and later flags, up to MC_MPPERF88).
+// --state prints seeded determinism hashes after 50/100/150 ticks; compare across MC_MPPERF81=off|on|verify, MC_MPPERF82=off|on|verify, MC_MPPERF83=off|on|verify (and the earlier and later flags, up to MC_MPPERF89).
 import { performance, PerformanceObserver } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
 import inspector from 'node:inspector';
@@ -20,6 +20,7 @@ import { fast85 } from '../src/mpperf85-fast.js'; // b85 mpperf85: MC_MPPERF85 s
 import { fast86 } from '../src/mpperf86-fast.js'; // b86 mpperf86: MC_MPPERF86 shows as mode86
 import { fast87 } from '../src/mpperf87-fast.js'; // b87 mpperf87: MC_MPPERF87 shows as mode87
 import { fast88 } from '../src/mpperf88-fast.js'; // b88 mpperf88: MC_MPPERF88 shows as mode88
+import { fast89 } from '../src/mpperf89-fast.js'; // b89 mpperf89: MC_MPPERF89 shows as mode89
 
 const arg = (n, d) => (process.argv.find(a => a.startsWith(`--${n}=`)) ?? `=${d}`).split('=')[1];
 const SCENE = arg('scene', 'travel'), TICKS = +arg('ticks', 150), WARM = +arg('warm', 30), RUNS = +arg('runs', 5), SEED = +arg('seed', 1);
@@ -48,12 +49,12 @@ if (process.argv.includes('--state')) {
       hashes.push(h.digest('hex').slice(0, 16)); h = createHash('sha256');
     }
   }
-  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mobs=${host.entities.length}`, JSON.stringify(hashes));
+  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} mobs=${host.entities.length}`, JSON.stringify(hashes));
 } else {
   let gcCount = 0, gcMs = 0, on = false;
   new PerformanceObserver((l) => { if (on) for (const e of l.getEntries()) { gcCount++; gcMs += e.duration; } }).observe({ entryTypes: ['gc'] });
   const HEAP = arg('heapprof', ''), prof = HEAP || arg('cpuprof', ''), session = prof ? new inspector.Session() : null;
-  if (session) { session.connect(); session.post('Profiler.enable'); }
+  if (session) { session.connect(); session.post('Profiler.enable'); if (arg('cpuint', '')) session.post('Profiler.setSamplingInterval', { interval: +arg('cpuint', '') }); }
   const res = [];
   for (let r = 0; r < RUNS; r++) {
     seed();
@@ -76,5 +77,5 @@ if (process.argv.includes('--state')) {
     res.push({ ms, cpu, gc: gcCount / TICKS, gcMs: gcMs / TICKS, kb: grown / TICKS / 1024 });
   }
   const med = (k) => { const a = res.map(x => x[k]).sort((x, y) => x - y); return a[a.length >> 1]; };
-  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} runs=${RUNS} ticks=${TICKS} median ms/tick=${med('ms').toFixed(2)} (runs ${res.map(x => x.ms.toFixed(2)).join(' ')}) cpu ms/tick=${med('cpu').toFixed(2)} gc/tick=${med('gc').toFixed(2)} gc ms/tick=${med('gcMs').toFixed(2)} heap growth KB/tick=${med('kb').toFixed(0)}`);
+  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} runs=${RUNS} ticks=${TICKS} median ms/tick=${med('ms').toFixed(2)} (runs ${res.map(x => x.ms.toFixed(2)).join(' ')}) cpu ms/tick=${med('cpu').toFixed(2)} gc/tick=${med('gc').toFixed(2)} gc ms/tick=${med('gcMs').toFixed(2)} heap growth KB/tick=${med('kb').toFixed(0)}`);
 }

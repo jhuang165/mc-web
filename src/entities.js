@@ -9,6 +9,7 @@ import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-
 import { typeSize, pushNearBox, pushNearDone, meetsArg, fast83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { fast87, fail87, attackEquipment87, dryEntity, dryBounds, addZero } from "./mpperf87-fast.js"; // b87 mpperf87
 import { mobShape88 } from "./mpperf88-fast.js"; // b88 mpperf88
+import { fast89, restoreShaped89, aiOf89 } from "./mpperf89-fast.js"; // b89 mpperf89
 import { blockBoxes81, takeMoveScratch, releaseMoveScratch, copyBox, growInto, checkSameBox, dryBox, lavaIn, moveRecord, fast81 } from "./mpperf81-fast.js"; // b81 mpperf81
 import { trackSections, trackChunkLoads, nearSpawn, unloadQueued, liveOrder } from "./saved-order.js";
 import { orderTargets, stampWalked, stampPlayerCell, hasCell } from "./candidate-order.js"; // b72, b73
@@ -2140,7 +2141,8 @@ export class EntityWorld {
   }
   // The AI service: the brains (navigator, helpers and tasks per mob, see ai.js) hang off
   // a WeakMap, so they are never saved and a loaded world starts them fresh.
-  get ai(){
+  get ai(){ return fast89.mode === "off" ? this.makeAI89() : aiOf89(this); } // b89 mpperf89: the closures below make a function context on every call; a made MobAI skips them
+  makeAI89(){
     return this.mobAI??=new MobAI(this,{
       ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,entityRandom,isRaining:()=>this.isRaining?.(),
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return mobSizeObject(base.width*scale,base.height*scale);}, // b82 mpperf82: one reused answer (callers read it at once)
@@ -3276,6 +3278,7 @@ export class EntityWorld {
     st.entityAge = e.idle || 0; // the port's idle counter is EntityLiving.entityAge (a hit resets it)
     if (st.attackTime > 0) st.attackTime--;
     if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2; // EntityMob.onLivingUpdate: bright light ages it (EntityAIWander's and the wander roll's entityAge < 100 gate)
+    if (fast89.mode === "off" || m.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
     m.senseCache.clear();
     const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
     const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
@@ -3334,6 +3337,7 @@ export class EntityWorld {
     st.moveForward = f(f(st.moveForward || 0) * f(0.98));
     if (st.attackTime > 0) st.attackTime--;
     if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2;
+    if (fast89.mode === "off" || m.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
     m.senseCache.clear();
     const world = this.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
     const env = {
@@ -3546,3 +3550,4 @@ installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge
 installDragonMobs(EntityWorld); // dragon-mobs.js: the Ender Dragon type, part damage, save/restore
 installFireballMobs(EntityWorld); // blaze-ghast-mobs.js: blaze and ghast types, fire immunity, fireball pick/punch
 installWither(EntityWorld); // wither-boss-mobs.js: the Wither type, spawnWither, skulls
+EntityWorld.prototype.restore = restoreShaped89(EntityWorld.prototype.restore, mobShape88); // b89 mpperf89: a restored mob gets the created ones' number-field representation (after every install wrapper)

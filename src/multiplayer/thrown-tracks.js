@@ -26,6 +26,7 @@
 //     player from every set; its S13s go to the player's next world, whose client never had the copies (main.js builds a new RemoteDispense with the trip), so none is sent here.
 import { ObjectTracker as ObjectReader, ObjectEntry, Watcher, metaValues, OBJECT_KINDS } from '../object-tracker.js';
 import { TrackerEntry, sizeClass } from '../entity-tracker.js';
+import { fast89, eachValue89, leftAny89, anyGone89, anyNew89 } from '../mpperf89-fast.js'; // b89 mpperf89
 
 export const THROWN = Object.freeze(['arrow', 'snowball', 'egg', 'enderPearl', 'potion', 'expBottle', 'eyeOfEnder', 'firework', 'fishHook']);
 const everywhere = () => true;
@@ -94,36 +95,41 @@ export class ThrownTracks {
   update(list, players) {
     this.out = new Map();
     // last tick's held destroys go out first (the S13 of the player's update before this tracker pass); a player who left the dimension never gets them here
+    if (fast89.mode === 'off' || this.late.length !== 0) // b89 mpperf89: skip a loop that would do nothing
     for (const h of this.late.splice(0)) if (players.has(h.pid)) this.push(h.pid, h.o, h.packet);
     // untrackEntity: a player who left this dimension (or the server) leaves every set
+    if (fast89.mode === 'off' || leftAny89(this.watchers, players)) // b89 mpperf89: skip a loop that would do nothing
     for (const [pid, w] of [...this.watchers]) if (!players.has(pid)) { this.watchers.delete(pid); for (const o of this.objs.values()) o.en.drop(w); }
     // trackEntity for a player: a new watcher (its `seq` is its place in loadedEntityList, after every entity already there)
-    for (const [pid, player] of players) {
+    eachValue89(players, (player, pid) => { // b89 mpperf89: Map.forEach (MC_MPPERF89=off: the for-of loop)
       let w = this.watchers.get(pid);
       if (!w) this.watchers.set(pid, w = { pid, view: { player: null, watches: (cx, cz) => this.watches(pid, cx, cz), log: null }, ref: null, joining: true, seq: this.arrived(player) ? Infinity : ++this.seq });
       w.view.player = player.position;
-    }
+    });
     // b87 sptrack87: the players whose chunks went out this tick (a returning player's first tick here, or columns just sent) are tried by the entries in those chunks before the pass, as
     // EntityPlayerMP.onUpdate (mw.h) does at the player's slot of World.updateEntities: after the S26, mn.a(mw, apx) -> my.b(mw) for the chunk's entities. An entity BEFORE the player
     // in loadedEntityList (an entry older than the watcher) has already updated: the S0E carries this tick's state. One after it has not: the S0E carries the state read last tick. Both
     // then get this pass's delta from the shared baseline (my.a(List) sends to every watcher, the new one included). The transfer itself (oi.a(mw, int) -> mt.d(sa) -> mn.a(sa)) tries
     // nobody: the player is not in the new world's PlayerManager yet (mq.a(mw, int, int) fails), so trackEntity's own try is the chunk gate's first open.
     const look = [];
-    for (const w of this.watchers.values()) { const fresh = !!this.fresh(w.pid); if (w.joining || fresh) look.push(w); w.joining = false; }
+    eachValue89(this.watchers, (w) => { const fresh = !!this.fresh(w.pid); if (w.joining || fresh) look.push(w); w.joining = false; }); // b89 mpperf89
     // the entities that ended: a rocket's S1A 17, then the destroy to each tracking watcher
     const alive = new Set(list.map((x) => x.e));
+    if (fast89.mode === 'off' || anyGone89(this.objs, alive)) // b89 mpperf89: skip a loop that would do nothing
     for (const [e, o] of [...this.objs]) if (!alive.has(e)) {
       if (e.exploded && o.kind === 'firework') o.en.send({ type: 'status', id: o.p.id, status: 17 }); // World.setEntityState(rocket, 17), then setDead
       o.en.remove();
       this.objs.delete(e);
     }
+    if (fast89.mode === 'off' || look.length !== 0) // b89 mpperf89: skip a loop that would do nothing
     for (const w of look) for (const o of this.objs.values()) if (o.seq > w.seq) o.en.tryStartFor(w); // after the player: the last-read state
     // addEntityToTracker: the new entries, each sent at once to the players in range (from the join state)
+    if (fast89.mode === 'off' || anyNew89(list, this.objs)) // b89 mpperf89: skip a loop that would do nothing
     for (const { e, kind } of list) if (!this.objs.has(e)) { const o = this.entryFor(e, kind); o.seq = ++this.seq; this.objs.set(e, o); o.en.updatePlayerList(); }
     // b88 track88: a player who came through a portal earlier in this port tick (the destination ticks after afterTick's transfer: the Nether and the End) joins loadedEntityList after the
     // entities this pass spawned. Natively the transfer runs in networkTick (oi.a(mw, int) -> ahb.d(sa) appends the player), after every world's walk and tracker pass of that tick, so the
     // spawns of the walk the port is running now come before the player: their S0E, when the chunk gate opens, carries the state of that tick's update, not the one read before it.
-    for (const w of this.watchers.values()) if (w.seq === Infinity) w.seq = ++this.seq;
+    eachValue89(this.watchers, (w) => { if (w.seq === Infinity) w.seq = ++this.seq; }); // b89 mpperf89
     // sendLocationToAllClients, once per entry: the flush state
     for (const { e, kind } of list) {
       const o = this.objs.get(e), en = o.en;
@@ -131,19 +137,20 @@ export class ThrownTracks {
       const air = e.airBorne === true;
       e.velocityChanged = false;
       en.watcher.update(metaValues(kind, o.p));
+      if (fast89.mode === 'off' || look.length !== 0) // b89 mpperf89: skip a loop that would do nothing
       for (const w of look) if (o.seq < w.seq) en.tryStartFor(w); // before the player: this tick's state (the S1C after it lists the current values)
       en.sendLocation(air, en.watcher.hasChanges());
     }
     // the players whose own entry re-evaluated (moved more than 4 blocks, or new) re-test every entry (mn.a()'s second loop)
-    for (const w of this.watchers.values()) {
+    eachValue89(this.watchers, (w) => { // b89 mpperf89: Map.forEach (MC_MPPERF89=off: the for-of loop)
       const pos = w.view.player;
       let flagged = false;
       if (!w.ref) flagged = true;
       else { const dx = pos.x - w.ref.x, dy = pos.y - w.ref.y, dz = pos.z - w.ref.z; if (dx * dx + dy * dy + dz * dz > 16) flagged = true; }
       if (flagged) { w.ref = { x: pos.x, y: pos.y, z: pos.z }; for (const o of this.objs.values()) o.en.tryStartFor(w); }
-    }
+    });
     const sendOut = new Map();
-    for (const [pid, rows] of this.out) sendOut.set(pid, [...rows.values()]);
+    eachValue89(this.out, (rows, pid) => sendOut.set(pid, [...rows.values()])); // b89 mpperf89
     this.out = null;
     return sendOut;
   }

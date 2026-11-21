@@ -6,6 +6,7 @@
 // each mob gets a `Brain` here (kept in a WeakMap, never saved) that owns the
 // navigator, the helpers and the two task lists.
 import { nearbyLate } from "./mpperf77-fast.js"; // b77 mpperf77
+import { fast89, canUse89, taskTick89 } from "./mpperf89-fast.js"; // b89 mpperf89
 import { buildBlazeGhastTasks } from "./blaze-ghast-mobs.js";
 import { buildWitherTasks } from "./wither-boss-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
@@ -110,6 +111,7 @@ export class TaskList {
     this.entries.splice(this.entries.indexOf(entry), 1);
   }
   canUse(entry) {
+    if (fast89.mode !== "off") return canUse89(this, entry); // b89 mpperf89: only running tasks can refuse (mpperf89-fast.js)
     for (const other of this.entries) {
       if (other === entry) continue;
       const on = this.running.includes(other);
@@ -120,6 +122,7 @@ export class TaskList {
     return true;
   }
   tick() {
+    if (fast89.mode !== "off") return taskTick89(this); // b89 mpperf89: index loops, canUse89, no snapshot copy of 0 or 1 running task (mpperf89-fast.js)
     if (this.tickCount++ % this.rate === 0) {
       // uj.a(): startExecuting runs after the whole evaluation pass, so a reset of a
       // lower-priority task cannot clear a target the new task just set.
@@ -1246,6 +1249,7 @@ export class Brain {
     }
     e.idle = (e.idle || 0) + 1;
     this.despawnEntity();
+    if (fast89.mode === "off" || this.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
     this.senseCache.clear();
     this.beforeAI?.();
     if (this.combatTask !== undefined) this.syncCombatTask();

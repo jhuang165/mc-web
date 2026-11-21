@@ -4,6 +4,7 @@
 // Bytecode-read: EntitySpider.bR/a(sa,F)/h, EntityMob.bR/a(sa,F)/e, EntityPigZombie.bR/c/h.
 import { creatureActionState, pathWeight } from "./silverfish.js";
 import { isSpider } from "./spider.js";
+import { fast89 } from "./mpperf89-fast.js"; // b89 mpperf89
 
 const f = Math.fround;
 export const isLegacyCreature = (e) => isSpider(e.type) || e.type === "pigman";
@@ -48,6 +49,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom, hooks = null) {
   const bx = Math.floor(e.x), by = Math.floor(e.y + f(t.height * 0.66)), bz = Math.floor(e.z);
   const light = f(ew.ai.brightness(bx, by, bz));
   if (light > 0.5) st.entityAge += 2; // EntityMob.onLivingUpdate
+  if (fast89.mode === "off" || m.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
   m.senseCache.clear();
   const world = ew.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
   const env = {
