@@ -553,6 +553,7 @@ export class MobTracker {
   joinPlayer(id) {
     if (this.playerKey) this.order.remove(this.playerKey);
     this.playerId = id;
+    this.chunkGate?.restart(); // b94 spcopy94: a new EntityPlayerMP: PlayerManager queues its columns again
     if (!this.pendingJoin) { this.addPlayerKey(); this.resendPending = true; } // a later join: the entry goes in at once, and the new client is sent every entry at the next update
   }
   // Batch 54 (bytecode-read): a respawn is a new EntityPlayerMP in a client world that has no entities (Minecraft.setDimensionAndSpawnPlayer clears it). EntityTracker.addEntityToTracker for the
@@ -577,6 +578,17 @@ export class MobTracker {
     for (const t of [this, ...others]) t.dropClients();
     if (this.playerKey) this.order.remove(this.playerKey);
     this.playerKey = null; this.pendingJoin = true; this.resendPending = false;
+    this.chunkGate?.restart(); // b94 spcopy94: the player left this world; its columns here are queued again at the next arrival
+  }
+  // b94 spcopy94: the single-player sent-column gate (sp-chunk-gate.js). Opt-in: without it every column of the square counts as sent. `others` as in jointUpdate share it.
+  setChunkGate(gate) {
+    this.chunkGate = gate; this.watch.gate = gate ? (cx, cz) => gate.sees(cx, cz) : undefined;
+    this.freshHook = gate ? () => gate.takeFresh('mobs') : null;
+  }
+  shareChunkGate(o) {
+    const g = this.chunkGate ?? null;
+    if ((o.chunkGate ?? null) === g && (o.sharedGate === g)) return;
+    o.sharedGate = g; o.watch.gate = g ? (cx, cz) => g.sees(cx, cz) : undefined; o.freshHook = g ? () => g.takeFresh('objects') : null;
   }
   // The client world is new: no copies, nothing queued, no attachments; the entries forget the old player (removePlayerFromTracker without a packet)
   dropClients() {
@@ -668,7 +680,7 @@ export class MobTracker {
   // the second loop (a flagged player), then the client applies every queued packet in sending order and steps both kinds of copy in the one client list's order.
   jointUpdate(mobs, player, size, physics, joint) {
     const o = joint.tracker;
-    o.shareOrder(this); o.beforePlayer = this.beforePlayer;
+    o.shareOrder(this); o.beforePlayer = this.beforePlayer; this.shareChunkGate(o);
     o.ctx.world = joint.world; o.ctx.player = player;
     const all = o.allOf(o.withExtra(joint.lists)), none = () => [0];
     this.beginTick(mobs, player, size, false);
@@ -763,6 +775,7 @@ export class MobTracker {
     this.tick++;
     this.view.player = player;
     this.watch.update(player);
+    if (this.chunkGate) this.chunkGate.step(player.x, player.z, this.watch.radius); // b94 spcopy94: the columns sent this tick (five per tick), before the entries are tried
     this.sizeOf = size;
     const alive = new Set(mobs);
     // removeEntityFromAllTrackingPlayers: the destroy is queued now and the client copy lives until it is flushed, one tick later (it stays a crystal for the dragon's search)
@@ -807,6 +820,7 @@ export class MobTracker {
     let flagged = false;
     const dx = player.x - p.x, dy = (player.y ?? 0) - p.y, dz = player.z - p.z;
     if (!p.initialised || dx * dx + dy * dy + dz * dz > 16) { p.x = player.x; p.y = player.y ?? 0; p.z = player.z; p.initialised = true; flagged = true; }
+    if (this.freshHook?.()) flagged = true; // b94 spcopy94: columns were sent this tick: the entries in them are tried (func_85172_a)
     this.lastFlagged = flagged;
   }
   endTick() {}
