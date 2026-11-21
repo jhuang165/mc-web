@@ -11,6 +11,7 @@ import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpper
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
 import { releaseWatcher88 } from '../mpperf88-fast.js'; // b88 mpperf88
+import { fast91, fail91, newQuick91, sameAttrs91, noteAttrs91 } from '../mpperf91-fast.js'; // b91 mpperf91
 
 // b88 track88: the watched values of an S0F (the spawn packet minus its own fields), the S1C after it repeats them.
 const SPAWN_KEYS = new Set(['type', 'x', 'y', 'z', 'yaw', 'pitch', 'head', 'vx', 'vy', 'vz']);
@@ -37,6 +38,7 @@ export class SharedEntry extends TrackerEntry {
     this.pre = null; // b88 track88: the state before this tick's entity pass, for a watcher whose slot comes before this entity (SharedMobTracker.beforePass)
     this.birth = null; // b89 mobpackets89: the mob's state at its spawn while the entry is being made (SharedMobTracker.create / entryOf)
     this.bumps = {}; // b90 mobpackets90: e.attrBumps as the last gated pass saw it
+    this.q91 = newQuick91(); this.s91 = newQuick91(); // b91 mpperf91: the plain mob's watched numbers at the last pass, and a scratch
     this.attrKeys = null; // b89 mobpackets89: the watched attribute rows the last pass saw (name -> rowKey); null before the first pass
   }
   // b87 mpperf87: the stamp and destinations of one of this entry's packets (the WeakMaps when it emitted with the flag off).
@@ -110,11 +112,15 @@ export class SharedEntry extends TrackerEntry {
   // head S19 follows S1C / S20 (b90: entity-tracker.js holds it until this hook has run), and the S12 of velocityChanged comes after all three.
   sendAttributes() {
     if (this.object) return;
+    const quick = this.attrKeys !== null && fast91.mode !== "off" && sameAttrs91(this.e, this.q91, this.s91); // b91 mpperf91: a plain mob whose numbers did not change sends nothing
+    if (quick && fast91.mode !== "verify") return;
     const rows = watchedAttributes(this.e);
     if (!rows.length) return;
     let keys = this.attrKeys, out;
     if (keys === null) { out = firstDirty(this.e, rows); for (const r of rows) this.bumps[r.name] = this.e.attrBumps?.[r.name] ?? 0; keys = this.attrKeys = new Map(); for (const r of rows) keys.set(r.name, rowKey(r)); }
     else { out = null; for (const r of rows) { const k = rowKey(r), bump = this.e.attrBumps?.[r.name] ?? 0; if (keys.get(r.name) !== k || bump !== (this.bumps[r.name] ?? 0)) { keys.set(r.name, k); (out ??= []).push(r); } this.bumps[r.name] = bump; } }
+    if (quick && out !== null && out.length) fail91('unchanged pass sent rows');
+    noteAttrs91(this.e, rows, this.q91);
     if (out !== null && out.length) this.send({ type: 'attributes', list: out });
   }
   // b88 track88: EntityLivingBase.onUpdate (sv.h 65..178, bytecode-read), at the start of each server update: every slot whose stack is not ItemStack.areItemStacksEqual (add.b) to the
