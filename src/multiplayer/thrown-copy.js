@@ -23,7 +23,7 @@ export class ThrownCopies {
   }
   get size() { return this.copies.size; }
   clear() { this.copies.clear(); this.rowOf.clear(); }
-  // One message: the copies update, then the rows' packets apply. Returns { arrows, balls, hooks }.
+  // One message: the copies update, then the rows' packets apply. Returns { arrows, balls, hooks, falling }.
   tick(rows, world, player) {
     this.tracker.ctx.world = world; this.tracker.ctx.player = player;
     for (const c of this.copies.values()) { c.world = world; this.tracker.hookAngler = c.spec.hook && c.shooterLive ? this.hooks.refOf?.(c.shooterLive) ?? {} : null; c.step(this.tracker.ctx); }
@@ -50,7 +50,7 @@ export class ThrownCopies {
     return this.lists();
   }
   lists() {
-    const arrows = [], balls = [], hooks = [];
+    const arrows = [], balls = [], hooks = [], falling = []; // b89 mpobjects89: + falling
     for (const [key, c] of this.copies) {
       let row = this.rowOf.get(key);
       const fresh = !row;
@@ -64,12 +64,15 @@ export class ThrownCopies {
       } else if (spec.arrow) {
         row.crit = ((c.meta.get(16) ?? 0) & 1) === 1; row.inGround = !!c.sim?.inGround; row.shake = c.sim?.shake ?? 0;
         arrows.push(row);
+      } else if (c.kind === 'falling') { // b89 mpobjects89: falling-block copies (S0E type 70), rows as scene.setFalling draws them: y the box bottom (posY - 0.49), the block of the S0E data
+        const yo = spec.yOff; row.y = c.y - yo; row.py = c.py - yo; row.block = c.sim?.block ?? 1; row.meta = c.sim?.meta ?? 0; row.kind = 'falling';
+        falling.push(row);
       } else {
         row.kind = c.kind; row.damage = c.damage | 0;
         if (c.kind === 'eyeOfEnder' && !fresh) this.hooks.eyeTrail?.(row, row.x - row.px, row.y - row.py, row.z - row.pz);
         balls.push(row);
       }
     }
-    return { arrows, balls, hooks };
+    return { arrows, balls, hooks, falling };
   }
 }

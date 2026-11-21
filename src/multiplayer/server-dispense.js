@@ -29,6 +29,7 @@ import { orderTargets } from '../candidate-order.js'; // b77 spdispense77
 import { mobCandidate, dressMob } from '../sp-dispense76.js'; // b78 loot78: the single-player mob selector and dressing
 import { skullEntry, skullWire } from './skull-look.js'; // b81 mpcopies81
 import { ThrownTracks } from './thrown-tracks.js'; // b84 mpthrown84
+import { fallingTrackList } from './falling-lane.js'; // b89 mpobjects89
 import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of ender
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
@@ -343,6 +344,7 @@ export class ServerDispense {
     for (const r of this.rockets.rockets) if (!r.dead) out.push({ e: r, kind: 'firework' });
     for (const e of this._eyes?.system.eyes ?? []) if (!e.dead) out.push({ e, kind: 'eyeOfEnder' });
     out.push(...this.sim.fishing?.trackList(this.dim) ?? []); // b85 mphook85: fishing hooks (64 / 5 / velocity, S0E type 90 with the angler's id)
+    out.push(...fallingTrackList(this)); // b89 mpobjects89: falling blocks (160 / 20 / velocity, S0E type 70 with id | meta << 16; falling-lane.js)
     return out;
   }
   // b85 mphook85: the entity an arrow's S0E data names (its shooter): a player's id or a mob's wire id (the wire carries it as the row's `sh`).

@@ -9,6 +9,26 @@ export const CRYSTAL_EXPLOSION_POWER = 6;
 // posY: [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1], not a feet box. canBePushed (sa.S) and getBoundingBox (sa.J) are not overridden (false / null).
 export const crystalBox = (x, posY, z) => [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1];
 export const CRYSTAL_FIRE = 51;
+// b89 mpobjects89 (bytecode-read): wz overrides no getEyeHeight (sa.g()F is fconst_0), so the crystal's eye height is 0; sv.g()F (EntityLivingBase) is
+// height * 0.85F, which the crystal (an sa, not an sv) never runs. EntityPlayerMP's attack and interact reach check (NetHandlerPlayServer) reads it.
+export const CRYSTAL_EYE_HEIGHT = 0;
+// b89 mpobjects89: CommandSummon (bu.b, bytecode-read) builds the entity with EntityList.createEntityFromNBT and places it with setLocationAndAngles
+// (sa.b(DDDFF): posY = y + yOffset), so a summoned crystal's posY is the command y + 1 (executed: summon87-reference.json `base` EnderCrystal Pos[1] 65.5
+// where Pig and FireworksRocketEntity read 64.5 at the same command position). The port's crystal `y` is posY.
+export const CRYSTAL_Y_OFFSET = 1;
+export function liftSummonedCrystal(e) {
+  if (!e || e.type !== ENDER_CRYSTAL) return e;
+  e.y += CRYSTAL_Y_OFFSET;
+  if (e.py !== undefined) e.py = e.y;
+  return e;
+}
+// b89 mpobjects89 (bytecode-read): TileEntityPiston moves a crystal with Entity.moveEntity (sa.d), which moves the posY-centred box and sets posY =
+// minY + yOffset - ySize. The crystal's stepHeight (sa.W) is never set (0), canTriggerWalking (wz.g_) is false (no step sound) and Entity.fall does nothing
+// for it. `move` is entities.js moveEntity(world, e, w, h, dx, dy, dz, step): it moves the box whose bottom is e.y, so e.y is the box bottom during the call.
+export function crystalPushMove(world, e, dx, dy, dz, move) {
+  e.y -= CRYSTAL_Y_OFFSET;
+  try { return move(world, e, CRYSTAL_WIDTH, CRYSTAL_HEIGHT, dx, dy, dz, 0); } finally { e.y += CRYSTAL_Y_OFFSET; }
+}
 // RenderEnderCrystal: the cube spins at innerRotation * 3 degrees and bobs by sin(t * 0.2) / 2 + 0.5.
 // innerRotation starts at random.nextInt(100000) (unseeded in the original: only the range is checked).
 export const CRYSTAL_ROTATION_MAX = 99999;

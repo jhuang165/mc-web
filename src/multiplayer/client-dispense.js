@@ -13,17 +13,19 @@ const ARROW_FIELDS = ['yaw', 'pitch'];
 export class RemoteDispense {
   // hooks: sound(name, x, y, z, volume, pitch), explode(x, y, z, size), splash(x, y, z, damage), firework(x, y, z, vx, vy, vz, fireworks), spark(x, y, z, vx, vy, vz), poof(row), eyeTrail(row, vx, vy, vz), ballFx(row),
   // ballWet(row) (b82: Entity.isInWater of a ball row at px/py/pz, for the angles of a row whose copy holds none)
-  constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; this.copies = null; }
-  clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; this.copies?.clear(); }
+  constructor(hooks = {}) { this.hooks = hooks; this.rows = new Map(); this.arrows = []; this.balls = []; this.primed = []; this.copies = null; this.falling = []; /* b89 mpobjects89: falling-block copies */ }
+  clear() { this.rows.clear(); this.arrows = []; this.balls = []; this.primed = []; this.falling = []; this.copies?.clear(); }
   apply(message) {
     if (message.type === 'dispEnts') {
       this.ents(message.ents ?? []);
+      this.falling = []; // b89 mpobjects89: the falling-block copies of this message (thrown-copy.js lists)
       // b84 mpthrown84: tracker rows (`trk`) for arrows, thrown balls, rockets and eyes; the copies update first, then take the packets (thrown-copy.js). Old rows (`ents`) still work.
       if (message.trk || this.copies?.size) {
         this.copies ??= new ThrownCopies({ particle: this.hooks.copyParticle, firework: this.hooks.firework, eyeTrail: this.hooks.eyeTrail, balls: this.hooks.copyBalls, targets: this.hooks.copyTargets, refOf: this.hooks.copyRefOf, hasAngler: this.hooks.copyHasAngler });
-        const { arrows, balls, hooks } = this.copies.tick(message.trk, this.hooks.copyWorld?.() ?? null, this.hooks.copyPlayer?.() ?? null);
+        const { arrows, balls, hooks, falling } = this.copies.tick(message.trk, this.hooks.copyWorld?.() ?? null, this.hooks.copyPlayer?.() ?? null);
         this.arrows = [...this.arrows, ...arrows]; this.balls = [...this.balls, ...balls];
         this.hooks.fishHooks?.(hooks); // b85 mphook85: the fishing hook copies (client-fishing.js `lane`)
+        this.falling = falling ?? []; // b89 mpobjects89
       }
     }
     else if (message.type === 'dispFx') this.events(message.events ?? []);

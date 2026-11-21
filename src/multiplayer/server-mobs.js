@@ -27,6 +27,7 @@ import { JavaRandom } from '../java-random.js';
 import { mobRows, nonLivingRows, tntRows, finishBlastRows } from '../explosion-simulation.js';
 import { blastNear, runBlastRows } from '../explosion-extras.js'; // b83 blastorder83
 import { livingEyeHeight } from '../ai.js';
+import { CRYSTAL_EYE_HEIGHT } from '../ender-crystal.js'; // b89 mpobjects89
 import { serverCritical, sendCritFx } from './server-crit-fx.js'; // b73 particles73
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks
 import { serverPosY, serverEyeY, SLEEP_BOX } from '../sleeper-eye.js'; // b68 fixes68: a lying player's posY, eye and 0.2 box
@@ -528,12 +529,15 @@ export class ServerMobs {
     }
     this.statuses.length = 0;
   }
+  // b89 mpobjects89: the target's getEyeHeight for the reach check's canEntityBeSeen ray: the crystal's is 0 (wz has no sa.g()F override, bytecode-read); a living mob's
+  // is its setSize height * 0.85F (sv.g()F). The old read of a height field on the record was undefined on the server, so the ray ended at NaN for every mob.
+  useEye(mob) { return mob.type === 'ender_crystal' ? CRYSTAL_EYE_HEIGHT : livingEyeHeight(mob.type, this.mobs.size(mob)[1]); }
   // C02 UseEntity, attack: the reach is the server's (the client aims), the damage the held weapon's (EntityWorld.attack). True when the hit landed.
   attack(p, wireId) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || (mob.health <= 0 && mob.type !== 'ender_dragon') || p.survival.health <= 0) return false; // b80: a dying dragon's part still answers the hit (xa.a(wy, ro, F))
     if (this.host.vehicles?.horses.rides(p, mob)) return false; // b77 mphorserules77: wi.a(ro, F) ignores damage from its own rider
-    if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : !useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
+    if (mob.type === 'ender_dragon' ? !dragonReach(p, mob) : !useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: this.useEye(mob) })) return false; // b70: nh.a(ja), posY to posY // 6 blocks, a little over the creative reach of 5; the dragon's parts are the targets (b64)
     this.use(v);
     if (this.host.achievements) this.host.achievements.attacker = p; // b60: kills in this call are credited to p
     // b73 particles73: the jump-attack critical (damage * 1.5F) and its S0B animations 4 / 5 for the players in range
@@ -544,7 +548,7 @@ export class ServerMobs {
   interact(p, wireId, claim = false) {
     const v = this.views.get(p.id), mob = v && this.mobs.entities.find(e => num(e) === wireId);
     if (!mob || p.survival.health <= 0) return false; // b79: nh.a(ja) has no health test; a corpse in its death animation takes every interact (sw.c, the mob's own interact, the item's itemInteractionForEntity)
-    if (!useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: livingEyeHeight(mob.type, mob.height) })) return false; // b70: nh.a(ja), posY to posY
+    if (!useEntityInReach(this.host.world, p, { x: mob.x, y: mob.y, z: mob.z, eye: this.useEye(mob) })) return false; // b70: nh.a(ja), posY to posY
     this.use(v);
     // b62: taming. Only the owner is "the owner" for the click (sitting, feeding); a wolf or ocelot tamed by this click is stamped with the player's resume key.
     const owned = mob.type === 'wolf' || mob.type === 'ocelot', was = !!mob.owner;
