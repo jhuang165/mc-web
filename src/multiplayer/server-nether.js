@@ -154,6 +154,9 @@ export function tickNether(sim, n, players) {
   n.items.sounds.length = 0;
   sim.serverItems.tickOrbs(n.dim ?? NETHER); // b63: this dimension's orbs (sim.serverItems.xp is n.xp inside the swap) after the items, as the Overworld's tick
   n.mobs.mobs.cachedSpawnPoint ??= n.overMobs.mobs.cachedSpawnPoint; // SpawnerAnimals keeps 24 blocks from the OVERWORLD spawn in every dimension
+  // b91 mpobjects91: WorldServer.tick's random block ticks run before World.updateEntities and the tracker flush (bytecode-read mt.b), as in simulation.js.
+  n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
+  n.weather.drain();
   n.dispense.tick();
   viewNetherPlayers(n, players); n.vehicles.riderInput(); // b63: a pig steers on this tick's keys
   n.mobs.tick();
@@ -162,8 +165,6 @@ export function tickNether(sim, n, players) {
   tickSpawners({ mobs: n.mobs, spawners: n.tileEntities.spawners, random: n.weather.random, players, light: netherLight(n), time: sim.time, vehicles: n.vehicles, viewDistance: sim.rules?.viewDistance }); // b70 serverprops2: tracker clamp (undefined = 10) // b65: + vehicles; b63: MobSpawnerBaseLogic (blaze spawners), after the entities
   n.falling.tick(); // b90 mpobjects90: before the tracker pass (see simulation.js)
   n.dispense.flush();
-  n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
-  n.weather.drain();
   tickWorldSystems({ farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, hoppers: n.containers.ticks.hoppers },
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.pistons.flush(); // b66 mppistons
