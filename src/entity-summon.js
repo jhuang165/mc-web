@@ -80,7 +80,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     const item = nbtGet(t, "Item", NBT.COMPOUND), stack = item ? convertItem(item, { allowEmpty: true }) : null; // Count 0 is kept (probed, itemRead)
     if (!stack) spawned = false; // EntityItem.readEntityFromNBT: no readable stack is setDead
     else {
-      const e = hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) });
+      const e = hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: 0 }); // b92 entnbt92: EntityItem.readEntityFromNBT (xk.a) reads no PickupDelay; the field starts 0
       e.age = nbtGet(t, "Age", NBT.SHORT, 0); // b87 summon87 (executed, summon87-reference.json ticks): xk.a(dh) keeps any short; 1.7.10's onUpdate ages a negative one too (no -32768 sentinel, that is 1.8)
       e.fire = e.loadedFire = base.fire; e.onGround = base.onGround; if (base.invulnerable) e.invulnerable = true; // b83 cmdexec83: Fire (the item's burn counter, saved back unticked) and OnGround
       Object.assign(e, keptBaseOf(t)); // b88 entnbt88 (executed, entnbt88-reference.json): Air (0 when absent), UUID (random when absent), raw PortalCooldown, Dimension (0 when absent, also in the Nether)

@@ -8,7 +8,7 @@ const YAWS = ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYa
 // The saved fields of one pigman: Anger (short) and the held sword; the target, attack timer and sound delay start over.
 export const pigmanFields = () => ({ angerLevel: 0, randomSoundDelay: 0, pigTarget: false, attackTime: 0, held: null });
 export const pigmanFieldsFrom = (e) => ({
-  angerLevel: Number.isInteger(e.angerLevel) ? Math.max(-32768, Math.min(32767, e.angerLevel)) : 0, randomSoundDelay: 0, pigTarget: false, attackTime: 0,
+  angerLevel: Number.isInteger(e.angerLevel) ? Math.max(-32768, Math.min(32767, e.angerLevel)) : 0, randomSoundDelay: 0, pigTarget: false, attackTime: Number.isInteger(e.attackTime) ? (e.attackTime << 16) >> 16 : 0,
   held: e.held && Number.isInteger(e.held.id) ? { id: e.held.id, damage: e.held.damage | 0, count: 1 } : null,
 });
 

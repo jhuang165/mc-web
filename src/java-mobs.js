@@ -122,9 +122,9 @@ export const MOB_GEAR_NBT_KEYS = ['Equipment', 'DropChances', 'CanPickUpLoot'];
 export function mobGearNbtFields(tag, type, convertItem = () => null, other = false) {
   if (!MOB_GEAR_NBT_KEYS.some((k) => tag.has(k))) return {};
   if (!other && !GEAR_TYPES.has(type)) { // b77 spdispense77: any other EntityLiving (not the witch's own potion slot) keeps CanPickUpLoot and worn stacks; an all-default tag stays field-free
-    if (type === 'witch') return {};
     const g = mobGearNbtFields(tag, 'zombie_other', convertItem, true);
-    return g.canPickUpLoot || g.equipment?.some(Boolean) ? g : {};
+    if (type === 'witch' && g.equipment) g.equipment[0] = null; // b92 entnbt92: slot 0 is the witch's `held` potion (witch-potion code); slots 1-4, DropChances and CanPickUpLoot stay as EntityLiving holds them
+    return g.canPickUpLoot || g.equipment?.some(Boolean) || g.dropChances?.some((v) => Math.fround(v) !== Math.fround(DEFAULT_DROP_CHANCE)) ? g : {};
   }
   const gear = other ? emptyGear() : defaultGear(type);
   const equipment = tagValue(tag, 'Equipment', NBT.LIST);
@@ -298,13 +298,12 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (type === 'witch') {
     const equipment = tagValue(tag, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]);
-    // Other equipment slots have no live implementation.
-    if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
+    for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); // b92 entnbt92: slots 1-4, DropChances and CanPickUpLoot are kept below (mobGearNbtFields)
   }
   // Equipment / DropChances / CanPickUpLoot for the equipped mob types (the other types' slots have no live implementation: the witch's
   // potion is slot 0 above, any other stack is reported ignored) and Entity's PortalCooldown.
   if (GEAR_TYPES.has(type)) { Object.assign(record, mobGearNbtFields(tag, type, convertItem)); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); }
-  else if (type !== 'witch') { const g = mobGearNbtFields(tag, type, convertItem); if (g.equipment) { Object.assign(record, g); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); } } // b77 spdispense77: see mobGearNbtFields
+  else { const g = mobGearNbtFields(tag, type, convertItem); if (g.equipment || g.dropChances) { Object.assign(record, g); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); } } // b77 spdispense77: see mobGearNbtFields
   Object.assign(record, portalCooldownFields(tag)); kept.add('PortalCooldown');
   record.health = type === 'ender_crystal' ? health : Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health)); // EntityEnderCrystal is no EntityLivingBase: its health field (5) reads no NBT
   if (type !== 'ender_crystal') { Object.assign(record, gearNbtFields(tag)); for (const k of GEAR_NBT_KEYS) kept.add(k); } // EntityLiving's keys (b83 cmdexec83, executed: a crystal drops CustomName)

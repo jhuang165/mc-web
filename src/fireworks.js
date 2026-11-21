@@ -48,6 +48,7 @@ export function normalizeFireworks(v) {
   const explosions = Array.isArray(v.explosions) ? v.explosions.map(normalizeExplosion).filter(Boolean) : [];
   const out = { explosions };
   if (Number.isFinite(v.flight)) out.flight = (v.flight << 24) >> 24;
+  if (v.unlisted === true) out.unlisted = true; // b92 entnbt92: the tag had no Explosions list (ItemFirework only reads it; RecipeFireworks aey writes it, a command or creative stack may not have it)
   return out;
 }
 // Merge identity (ItemStack.areItemStackTagsEqual): same NBT.

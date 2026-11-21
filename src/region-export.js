@@ -103,7 +103,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const n=entity(e,name,ox,oz);
   // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
   if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);n.Invulnerable=byte(e.invulnerable?1:0);built.push({e,n});continue;}
-  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT (sw.b, bytecode-read; entnbt91-reference.json: every unnamed mob writes CustomName "" and CustomNameVisible 0): both keys always, b91 entnbt91. PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customName&&e.customNameVisible?1:0);
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
@@ -116,7 +116,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   // DropChances (five floats) for every mob, then Entity.writeToNBT's PortalCooldown (the live Entity.timeUntilPortal). mob-gear-nbt-reference.json.
   {const g=GEAR_TYPES.has(e.type)||e.equipment?gearFieldsFrom(e):null,witchHeld=e.type==='witch'&&e.held?stackNbt(e.held,undefined,report):null;
    n.CanPickUpLoot=byte(g?.canPickUpLoot?1:0);
-   n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>(g?stackNbt(g.equipment[i],undefined,report,true):i===0?witchHeld:null)??new Map()));
+   n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>(i===0&&witchHeld?witchHeld:g?stackNbt(g.equipment[i],undefined,report,true):null)??new Map()));
    n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(i=>Math.fround(g?.dropChances?.[i]??0.085)));
    n.PortalCooldown=int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0);} // b88 entnbt88: raw, as read (a negative one too)
   if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
@@ -186,7 +186,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   Tile:byte(o[0]),TileID:int(o[0]),Data:byte(Number.isInteger(e.data)?e.data:((e.meta&240)|(o[1]&15))&255),Time:byte(e.ticks&255),DropItem:byte(e.dropItem===false?0:1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40),...(e.tileData?{TileEntityData:tag(NBT.COMPOUND,compoundFromJson(e.tileData))}:{})})));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
- for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0,invulnerable:e.invulnerable,...(Number.isInteger(e.fire)?{fire:e.fire}:{}),air:e.air,uuid:e.uuid,portalCooldown:e.portalCooldown,nbtDimension:e.nbtDimension},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
+ for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0,invulnerable:e.invulnerable,fire:Number.isInteger(e.fire)?e.fire:0,air:e.air,uuid:e.uuid,portalCooldown:e.portalCooldown,nbtDimension:e.nbtDimension},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
   const n={...base,Direction:byte(e.dir),...([2,1,0,3][e.dir]===undefined?{}:{Dir:byte([2,1,0,3][e.dir])}),TileX:int(e.tx+ox),TileY:int(e.ty),TileZ:int(e.tz+oz)};
   if(e.kind==='painting')n.Motive=str(e.art);
   else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}

@@ -14,7 +14,7 @@ export function writeFireworkTags(stack, entries) {
   if (stack.fireworks && f) {
     const m = new Map();
     if (f.flight !== undefined) m.set('Flight', tag(NBT.BYTE, f.flight));
-    m.set('Explosions', tag(NBT.LIST, { elementType: f.explosions.length ? NBT.COMPOUND : NBT.END, items: f.explosions.map((e) => explosionTag(e).value) }));
+    if (!f.unlisted) m.set('Explosions', tag(NBT.LIST, { elementType: f.explosions.length ? NBT.COMPOUND : NBT.END, items: f.explosions.map((e) => explosionTag(e).value) }));
     entries.Fireworks = tag(NBT.COMPOUND, m);
   }
 }
@@ -32,6 +32,7 @@ export function readFireworkNbt(stack, nbt) {
   if (fw?.type === NBT.COMPOUND) {
     const list = fw.value.get('Explosions'), explosions = list?.type === NBT.LIST && list.value.elementType === NBT.COMPOUND ? list.value.items.map(readExplosion).filter(Boolean) : [];
     const out = { explosions }, flight = fw.value.get('Flight');
+    if (list?.type !== NBT.LIST) out.unlisted = true; // b92 entnbt92: a tag without the list stays without it
     if (flight) out.flight = (num(flight) << 24) >> 24;
     stack.fireworks = out;
   }
