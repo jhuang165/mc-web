@@ -155,11 +155,19 @@ export function handleFalling(world, p, dy, ground, hooks = {}) {
   } else if (dy < 0) p.fallDistance = f(r - dy);
 }
 
+/** b90 spcopy90: the queued C06, unless it was queued by an S08 of this very tick (`answerFrom`): the client takes that S08 in its next network processing, so the answer is the
+ *  next network tick's packet, and this tick's C03 meets a copy still waiting (offsets 31-87: dropped). */
+export function takeAnswer(p) {
+  if ((p.answerFrom ?? 0) > p.netTicks) return null;
+  const answer = p.answer;
+  p.answer = null;
+  return answer;
+}
+
 /** b89 spcopy89: offsets 31-87 around the riding and sleeping branches. Takes the queued C06 (`p.answer`); while hasMoved is false nothing runs (0) and every 20th network tick
  *  the S08 goes again (1512-1549); the C06 that answers takes the branch itself, then the tick's own packet (2); otherwise the tick's packet alone (1). */
 export function awaitedRuns(ew, p) {
-  const answer = p.answer, at = p.accepted ?? { x: p.x, y: p.y, z: p.z };
-  p.answer = null;
+  const answer = takeAnswer(p), at = p.accepted ?? { x: p.x, y: p.y, z: p.z };
   let runs = 1;
   if (!p.hasMoved && awaitedAnswer(answer, at)) { p.hasMoved = true; runs = 2; }
   if (!p.hasMoved) { if (p.netTicks % 20 === 0) ew.setPlayerLocation(p, at); return 0; }
@@ -171,6 +179,6 @@ export function brokenMountLocation(ew, p) {
   const at = p.brokenSeat;
   p.brokenSeat = null;
   if (!at) return;
-  p.setLocation(at, { answered: !!ew.serverCorrect });
+  p.setLocation(at, { answered: !!ew.serverCorrect, late: true }); // b90 spcopy90: the C06 comes with the next network tick
   ew.serverCorrect?.(at);
 }

@@ -219,6 +219,9 @@ test("a dismount is mountEntity(null) -> setPlayerLocation: the copy is put on t
   Object.assign(h.state, { grounded: false, fallDistance: 0, landedFall: 0 }); h.state.velocity.set(0, 0, 0);
   h.calls.length = 0;
   h.step();
+  assert.deepEqual(h.calls[0], { pkt: null, answered: true }, "b90: the dismount tick's own C03 meets a waiting copy (the S08 is answered in the next network tick)");
+  h.calls.length = 0;
+  h.step();
   assert.deepEqual(h.calls[0], { pkt: { ...spot, onGround: false }, answered: true }, "the C06 at the spot answers the S08");
   assert.equal(h.p.branch, "walk");
   for (let i = 0; i < 20; i++) h.step({ forward: i < 6 ? 1 : 0 });
@@ -328,7 +331,7 @@ test("source pins: the copy's landing hooks, the 681 return and the mount hook",
   const ents = readFileSync(new URL("./entities.js", import.meta.url), "utf8");
   assert.match(ents, /handleFalling\(world, p, to\.y - from\.y, !!ground, this\.copyLanding\(p\)\)/);
   assert.match(ents, /if \(!p\.hasMoved\) \{ p\.x = p\.accepted\.x; p\.y = p\.accepted\.y; p\.z = p\.accepted\.z; return; \}/);
-  assert.match(ents, /if \(p\.mount\?\.dead\) \{\n[^\n]*\n\s*if \(p\.mount\.remounted\)[^\n]*\n\s*this\.processPlayer\(p, null, p\.packetGround\); p\.netTicks\+\+; return;/); // b89 spcopy89: a broken mount's S08 comes first
+  assert.match(ents, /if \(p\.mount\?\.dead\) \{\n[^\n]*\n\s*if \(p\.mount\.remounted[^\n]*\n\s*this\.processPlayer\(p, null, p\.packetGround\); p\.netTicks\+\+; return;/); // b89 spcopy89: a broken mount's S08 comes first
   const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
   assert.match(main, /mobs\.serverMount = \(\) => rider\.vehicle \?\? null;/);
   assert.ok(!/server-process-player/.test(readFileSync(new URL("./multiplayer/simulation.js", import.meta.url), "utf8")), "the dedicated server is unchanged");

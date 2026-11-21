@@ -91,7 +91,10 @@ test("a cart broken by the player's hit: mountEntity(this) -> setPlayerLocation 
   assert.notDeepEqual(spot, seat, "the port's client let go at its dismount spot");
   h.step();
   assert.deepEqual(h.fixes, [seat], "one S08, at the seat");
-  assert.deepEqual(h.calls[0], { pkt: { ...seat, onGround: false }, answered: true }, "the C06 from the seat answers it");
+  assert.deepEqual(h.calls[0], { pkt: null, answered: true }, "b90: this tick's C03 meets the waiting copy");
+  h.calls.length = 0;
+  h.step();
+  assert.deepEqual(h.calls[0], { pkt: { ...seat, onGround: false }, answered: true }, "the C06 from the seat answers it, a network tick later (b90)");
   assert.equal(h.p.corrected ?? 0, 0, "a mount event, not a correction");
   assert.deepEqual(at(h.state.position), seat, "bjb.a(fu) put the client at the seat");
   for (let i = 0; i < 30; i++) h.step();
@@ -111,7 +114,13 @@ test("a cart broken in the world pass (lava, a cactus, a mob's hit) while the cl
   Object.assign(h.p, { riding: true, packetGround: false });
   h.w.tick({ ...body, ...seat }, h.s); // the client's link ends after the network tick (vehicle-simulation.js finishVehicleTick)
   assert.deepEqual(h.fixes, [seat]);
-  assert.deepEqual(h.calls, [{ pkt: { ...seat, onGround: false }, answered: true }, { pkt: null, answered: false }], "the answer, then the C05 (no position)");
+  assert.deepEqual(h.calls, [{ pkt: null, answered: true }], "b90: the S08 goes out in this tick; the C05 meets the waiting copy");
+  h.calls.length = 0;
+  h.fixes.length = 0;
+  Object.assign(h.p, { riding: false });
+  h.w.tick({ ...body, ...seat }, h.s);
+  assert.deepEqual(h.fixes, [], "b90: one mountEntity(this), one S08 (b89 sent a second one when the client's link ended)");
+  assert.deepEqual(h.calls, [{ pkt: { ...seat, onGround: false }, answered: true }, { pkt: null, answered: false }], "the next network tick: the answer, then the C05 (no position)");
   assert.deepEqual(at(h.p), seat);
   assert.equal(h.p.corrected ?? 0, 0);
 });
@@ -248,6 +257,8 @@ test("the mount tick is mountEntity -> setPlayerLocation at the copy's spot; the
   h.ride(1);
   assert.deepEqual(h.located, [spot], "one setPlayerLocation, where the copy stood");
   assert.equal(h.p.branch, "riding");
+  assert.equal(h.p.hasMoved, false, "b90: the C06 comes with the next network tick");
+  h.ride(1);
   assert.equal(h.p.hasMoved, true, "the C06 answered");
   assert.deepEqual(at(h.p), h.seatOf(), "seated by the riding branch");
   h.ride(20);
@@ -282,6 +293,10 @@ test("the first sleeping tick is sleepInBedAt -> setPlayerLocation at the bed: m
   h.w.tick({ ...body, ...bed }, h.s);
   assert.deepEqual(h.located, [bed]);
   assert.equal(h.p.branch, "sleeping");
+  assert.equal(h.p.hasMoved, false, "b90: the S08 of this tick is answered in the next");
+  assert.equal(moved, 0);
+  Object.assign(h.p, { sleeping: true });
+  h.w.tick({ ...body, ...bed }, h.s);
   assert.equal(h.p.hasMoved, true);
   assert.equal(moved, 2, "the answering C06 and the tick's packet each take the sleeping branch");
   assert.deepEqual(at(h.p), bed);

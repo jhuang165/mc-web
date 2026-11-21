@@ -54,7 +54,7 @@ import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { movedTooQuickly, movedWrongly, needsCorrection, shrunkBox, awaitedAnswer, updateFallResets, handleFalling } from "./server-process-player.js"; // b85 spcopy85, b86 spcopy86, b87 spcopy87
-import { awaitedRuns, brokenMountLocation } from "./server-process-player.js"; // b89 spcopy89
+import { awaitedRuns, brokenMountLocation, takeAnswer } from "./server-process-player.js"; // b89 spcopy89
 import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
@@ -2656,8 +2656,8 @@ export class EntityWorld {
     p.fallOwner = !p.placed; // b87 spcopy87: the copy's handleFalling deals the fall damage (player-environment.js landPlayer leaves it); a harness that places the copy keeps the client's
     if (p.brokenSeat) brokenMountLocation(this, p); // b89 spcopy89: a boat or cart broken under the copy: mountEntity(this) -> setPlayerLocation at the seat (S08)
     if (!p.direct) {
-      const ground = p.packetGround, answer = p.answer, packet = p.packet; // a caller that gives no packet onGround (a unit test) takes the copy's own, below
-      p.answer = p.packet = null;
+      const ground = p.packetGround, answer = takeAnswer(p), packet = p.packet; // a caller that gives no packet onGround (a unit test) takes the copy's own, below (b90 spcopy90: an S08 of this tick is answered in the next)
+      p.packet = null;
       if (answer) this.processPlayer(p, answer, answer.onGround);
       this.processPlayer(p, packet, ground);
       p.netTicks++;
@@ -2673,7 +2673,7 @@ export class EntityWorld {
       if (mount) p.mount = mount;
       if (p.mount?.dead) {
         // b89 spcopy89: broken by damage (boats.js / minecarts.js `remounted`): the S08 at the seat first, whose C06 answer then takes the walking branch too
-        if (p.mount.remounted) { p.brokenSeat = { x: p.x, y: p.y, z: p.z }; brokenMountLocation(this, p); const answer = p.answer; p.answer = null; if (answer) this.processPlayer(p, answer, answer.onGround); }
+        if (p.mount.remounted && p.brokenSent !== p.mount) { p.brokenSent = p.mount; p.brokenSeat = { x: p.x, y: p.y, z: p.z }; brokenMountLocation(this, p); const answer = takeAnswer(p); if (answer) this.processPlayer(p, answer, answer.onGround); }
         this.processPlayer(p, null, p.packetGround); p.netTicks++; return;
       }
       // b89 spcopy89: offsets 31-87 wrap the riding branch: after mountEntity's setPlayerLocation nothing runs until the C06 answers (awaitedRuns), and that C06 takes the branch too
