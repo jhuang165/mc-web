@@ -15,7 +15,8 @@ Not full parity; open items at the end.
 
 ## Verification
 - `node --test --test-concurrency=2 src/entnbt93-b93.test.js`: 3 pass. With the four source files reverted from Git: 2 pass, 1 fail (the round trip).
-- Wider run: see lead reply (every test naming region-export, region-import, entity-base-nbt, java-mobs or serialize()).
+- Wider run, three batches at concurrency 2 over the 180 files naming region-export, region-import, entity-base-nbt, java-mobs or serialize(): 319 + 21 (entities.test.js) + 1706 = 2046 tests, 2046 pass, 0 fail (the new file is in the last batch).
+- Old test changed: `entities.test.js` "legacy sword damage..." asserted `serialize().length === 0` for a mob just killed (death 0); that encoded the port's old omission, native saves it (executed row, Health 0 DeathTime 0 saved at 0 updates). Now expects 1 until deathTime 20, then 0.
 - Build not run (no import changes).
 
 ## Found wrong in the batch 92 list
