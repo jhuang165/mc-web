@@ -42,18 +42,19 @@ test("away run: with doDaylightCycle off the clock stays and every tick reads (t
 
 test("away run: a /time shift reaches the next tick's read, not the one in progress", () => {
   const ents = run({ time: step + 10, ticks: 10 });
+  ents.beginTick(); // b93: away-world.js begins each tick (the darkness is fixed there)
   const before = sky(ents);
   ents.shiftTime(-5000);
   assert.equal(sky(ents), before, "the darkness was calculated before the command block fired");
-  ents.tick();
+  ents.tick(); ents.endTick(); ents.beginTick();
   assert.equal(sky(ents), Math.max(0, 15 - native(step + 10 - 10 + 1 - 5000)));
 });
 
 test("away run: the first tick of a moving clock starts ticks before the saved end", () => {
   const code = src("away-entities.js");
   assert.match(code, /plan\.time : 0\) - \(cycling\(\) \? plan\.ticks \| 0 : 0\)/);
-  assert.match(code, /celestialAngle\(clock - shifted, 1\)/);
-  assert.match(code, /if \(cycling\(\)\) clock\+\+/);
+  assert.match(code, /celestialAngle\(clock, 1\)/); // b93: the tick's begin fixes it (snap)
+  assert.match(code, /clock \+= step/);
   assert.match(src("away-world.js"), /light, cycling, runCommand/);
 });
 

@@ -135,9 +135,12 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
   // the angle at (clock + 1) / 24000 (lighting.celestialAngle partial 1), whether or not the clock then moves; the entities see the time AFTER the increment. A /time command
   // block fires in tickUpdates, after the darkness was computed, so `shifted` keeps its change out of this tick's read. Before this the run started at the end time and read
   // the darkness one tick early.
-  let shifted = 0;
+  // b93 tiles93: `beginTick` (away-world.js, before tickUpdates) fixes the tick's increment (the rule as WorldServer.tick reads it) and its darkness (`snap`); a /time shift
+  // or /gamerule by a command block, or a /time from the tile pass, then reaches the NEXT tick's begin, wherever in this tick it was made. Without a begin (the unit tests that
+  // tick the gate alone) the darkness is read from the live clock.
+  let snap = null, step = cycling() ? 1 : 0, driven = false;
   let clock = (Number.isFinite(plan.time) ? plan.time : 0) - (cycling() ? plan.ticks | 0 : 0);
-  const subtracted = () => skylightSubtracted(celestialAngle(clock - shifted, 1), weather.rainStrength(1), weather.weightedThunder(1));
+  const subtracted = () => snap ?? skylightSubtracted(celestialAngle(clock, 1), weather.rainStrength(1), weather.weightedThunder(1));
   mobs.isActive = (m) => entityTicks(m.x, m.z); // World.updateEntityWithOptionalForce, re-read every tick: a mob that walks to the edge stops
   mobs.worldRandom = weather.random;
   mobs.wet = (m, height) => isWet(weather, world, m, height);
@@ -248,7 +251,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
     // One game tick of the entity gate, in the order of the live player tick (living simulation, then the entity simulation, rockets and
     // hanging entities, then carts and boats) is now the one walk (batch 45, 46): every kind at its join place, then the post-walk drains and portal travel.
     tick() {
-      mobSv.time = clock + (cycling() ? 1 : 0);
+      if (!driven) step = cycling() ? 1 : 0;
+      mobSv.time = clock + step;
       // The one list walk: mobs, orbs, items, TNT, thrown entities, arrows, potions, balls and skulls in the order they joined (EntityWorld.tickMobs with `walks`).
       if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length || items.items.length || xp.orbs.length || primed.length || projectiles.balls.length || arrows.list.length || self.falling?.entities.length || minecarts.carts.length || boats.carts.length || hanging.entities.length || rockets.rockets.length) {
         mobs.lootItems = items;
@@ -271,13 +275,14 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       portalTravel("arrow", arrows, arrows.list); // b91 entnbt91: zc.h (sa.h -> sa.C, then I() = doBlockCollisions) and zf.h (moveEntity) reach a portal block like the live tick's (dimension-live.js tickEntities)
       portalTravel("rocket", rockets, rockets.rockets);
       tickNo++;
-      if (cycling()) clock++;
-      shifted = 0;
+      if (!driven) clock += step;
       trace.sample();
     },
     close() { open = false; },
     park, stats,
-    shiftTime(d) { clock += d; shifted += d; }, // /time set or add by a command block
+    beginTick() { driven = true; snap = null; step = cycling() ? 1 : 0; snap = subtracted(); },
+    endTick() { clock += step; },
+    shiftTime(d) { clock += d; }, // /time set or add by a command block or a tile
     // Every list in its saved form: the records outside the run unchanged, the run's entities serialized.
     finish() {
       // b52so: the run's entities are stamped with their place in the native save walk, above the records the run left alone

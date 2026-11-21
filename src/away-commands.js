@@ -62,7 +62,13 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   const active = { allowCommands: true, gameRules: { ...DEFAULT_RULES, ...(plan.gameRules ?? {}) }, worldSpawn: [...spawn], defaultGameMode: plan.defaultGameMode };
   const initial = JSON.stringify(active), initialWeather = JSON.stringify(weather.save());
   const sv = { time: 0, mode: "survival", ...tiles };
-  const state = { ran: 0, timeShift: 0, lastTime: 0 };
+  // b93 tiles93: the run's world clock lives here. `clock` is the world time WorldServer.tick finds (before its increment), `step` the increment of the tick in progress
+  // (1 while doDaylightCycle is on AT THE START of the tick, as mt.b reads the rule before tickUpdates; a /gamerule from a command block moves the next tick's step), `pre`
+  // the pre-step time the tick's skylightSubtracted was computed from (a /time shift in the tick does not move it), `gained` the ticks the clock moved beyond (or short of)
+  // what the trip assumed (a rule that was off at the start and turned on, or the other way).
+  const cycleOn = () => ruleOn(active, "doDaylightCycle");
+  const state = { ran: 0, timeShift: 0, lastTime: 0, clock: (plan.time ?? 0) - (cycleOn() ? plan.ticks | 0 : 0), step: 0, pre: 0, start: cycleOn() ? 1 : 0, gained: 0 };
+  state.pre = state.clock;
   const stats = { run: 0, silent: 0, skipped: 0, queued: 0, reasons: {} };
   const queue = []; // player commands in firing order (replayPlayerCommands)
   const chat = [];
@@ -76,7 +82,9 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   } });
   // The saved clock is the end of the trip. `state.ran` is the 0-based index of the tick in progress: WorldServer.tick (mt.b, bytecode-read) adds 1 to the total time (ays.c) BEFORE it
   // runs tickUpdates (mt.a(Z), the block ticks and so the command blocks), so tick index n sees T0 + n + 1 (batch 42: it read T0 + n, one early; the last tick now sees plan.time).
-  const now = () => (plan.time ?? 0) - (plan.ticks - state.ran - 1) + state.timeShift;
+  const now = () => state.clock + state.step;
+  const beginTick = (n) => { state.ran = n; state.step = cycleOn() ? 1 : 0; state.pre = state.clock; state.gained += state.step - state.start; };
+  const endTick = () => { state.clock += state.step; };
   const env = {
     active: () => active, world: () => seen, weather: () => weather, survival: () => sv,
     mobs: () => entities()?.mobs ?? null, minecarts: () => entities()?.minecarts, spawners: () => null, rockets: () => entities()?.rockets,
@@ -84,7 +92,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     position: () => ({ x: spawn[0], y: spawn[1], z: spawn[2] }), seed: () => plan.seed,
     commandTile: (x, y, z) => rt.commandBlocks.tile(x, y, z),
     stackName: () => "", changed() {}, refreshInventory() {},
-    setTime: (t) => { const d = t - state.lastTime; state.lastTime = t; state.timeShift += d; entities()?.shiftTime(d); },
+    setTime: (t) => { const d = t - now(); state.lastTime = t; state.timeShift += d; state.clock += d; entities()?.shiftTime(d); },
     updateBlock() {}, destroyBlock: (x, y, z) => breakBlock(x, y, z),
     dropStacks, // b83 plants83: a /setblock-replaced pot's plant (away-world.js spills it)
     music: () => rt.music ?? null, comparators: () => rt.redstone?.tiles ?? null, // b83 plants83: /setblock data tags (setblock-tags.js)
@@ -304,7 +312,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   host.selectPlayerForAway = (text) => selectLocal(text, host);
 
   return {
-    host, stats, chat, state, queue,
+    host, stats, chat, state, queue, beginTick, endTick, now,
     execute,
     spawn: () => active.worldSpawn,
     rule: (name) => ruleOn(active, name), // b86 awaystore86: the run's game rules as /gamerule leaves them (GameRules is read on every call)
@@ -317,7 +325,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
     cartRun: (cart) => { if (cart.command?.command) execute(cart.command, cartCommandPosition(cart), cart.id); else if (cart.command) cart.command.successCount = 0; },
     result() {
       syncShadow(Infinity);
-      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), ...(queue.some((q) => q.xpd) ? { xpOps } : {}), commandBlocks: rt.commandBlocks.save(), ...(death ? { playerDeath: death } : {}), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift };
+      const out = { inventoryDelta: inventoryDelta(), ...(queue.some((q) => q.eff) ? { playerDelta: playerDelta() } : {}), ...(queue.some((q) => q.xpd) ? { xpOps } : {}), commandBlocks: rt.commandBlocks.save(), ...(death ? { playerDeath: death } : {}), playerCommands: queue, commandStats: { ...stats, reasons: { ...stats.reasons } }, chat, timeShift: state.timeShift + state.gained };
       if (JSON.stringify(weather.save()) !== initialWeather) out.weather = { ...weather.save(), rain: weather.rain, thunder: weather.thunder };
       if (JSON.stringify(active) !== initial) out.world = { gameRules: active.gameRules, worldSpawn: active.worldSpawn, ...(active.defaultGameMode !== undefined ? { defaultGameMode: active.defaultGameMode } : {}), ...(active.playerSpawn ? { playerSpawn: active.playerSpawn } : {}) };
       if (state.difficulty !== undefined) out.difficulty = state.difficulty;

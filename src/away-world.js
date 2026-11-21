@@ -36,6 +36,7 @@ import { Signs, isSign } from "./signs.js"; // b86 awaystore86
 import { Beacons, BEACON, tickBeacon } from "./pyramid.js"; // b86 awaystore86
 import { MobSpawners } from "./mob-spawner.js"; // b87 tiles87
 import { watchSpawnerBlocks } from "./spawner-block.js"; // b87 tiles87
+import { celestialAngle } from "./clock.js";
 import { sensorSky as skyAt } from "./daylight-sensor-time.js"; // b87 tiles87 / b88 tiles88: the daylight sensors' sky (World.skylightSubtracted and the angle)
 import { installTileSwaps, swapChestRecord } from "./container-tiles.js"; // b89 tiles89
 import { watchSupportLoss } from "./multiplayer/server-support-loss.js"; // b86 awaystore86: BlockSign / BlockBush / ladder / carpet onNeighborBlockChange
@@ -211,14 +212,15 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
   // The world time at tick n is away-commands.js's clock (the saved time is the end of the trip); doDaylightCycle false holds it.
   const sensorSky = { angle: 0, subtracted: 0 };
   const cycling = () => (rules.read ? rules.read("doDaylightCycle") : ruleOn({ gameRules: plan.gameRules }, "doDaylightCycle"));
-  const worldTimeAt = (n) => (plan.time ?? 0) + (cmds?.state.timeShift ?? 0) - (cycling() ? plan.ticks - n - 1 : 0);
   const sensorTick = (n) => {
     if (totalAt(n) % 20 !== 0) return;
     let sensors = null;
     for (const p of live.watched.values()) if (p.orig === DAYLIGHT_SENSOR && ticking(p.x, p.z) && live.watchIds.get(world.get(p.x, p.y, p.z)) === DAYLIGHT_SENSOR) (sensors ??= []).push(p);
     if (!sensors) return;
-    const t = worldTimeAt(n);
-    Object.assign(sensorSky, skyAt(t, cycling(), weather.rainStrength(1), weather.weightedThunder(1))); // b88 tiles88: the shared helper (daylight-sensor-time.js, executed against Tiles88Probe)
+    // b93 tiles93: the angle is read now (the world time after this tick's increment and any /time shift of the tick), the darkness is the one computed from the pre-step time
+    // at the start of the tick (cmds.state.pre; a /time shift or /gamerule in the tick does not move it). Same two inputs as daylight-sensor-time.js sensorSky.
+    const { step, pre } = cmds.state;
+    Object.assign(sensorSky, { ...skyAt(pre + step, step === 1, weather.rainStrength(1), weather.weightedThunder(1)), angle: celestialAngle(cmds.now(), 1) }); // b88 tiles88: the shared helper (daylight-sensor-time.js, executed against Tiles88Probe), the tick's pre-step time
     for (const p of sensors) live.refreshSensor(p.x, p.y, p.z);
   };
   const sv = new Survival({}, "survival");
@@ -329,7 +331,8 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if ((ran & 31) === 31 && now() - loopStart > budgetMs) { stopped = "budget"; break; }
     // World.tick order: WorldServer.tickUpdates (fluid, fire, falling and redstone entries from the one shared tree under one 1000 cap, then fire's
     // random ticks), then the block events and updateEntities (tile entities) while the gate is open.
-    cmds.state.ran = ran;
+    cmds.beginTick(ran); // b93 tiles93: the world time, the increment and the darkness of this tick, read before tickUpdates
+    ents?.beginTick();
     if (ran % 10 === 0) light.refresh(ran);
     freezeUnloadedRedstone();
     tree.tick({ x: 0, z: 0 }, { fluids: () => rt.flush() });
@@ -339,6 +342,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if (entities && ents) ents.tick();
     if (entities) { live.updateTileEntities(); rt.pistons.tick(); hoppers.tick(); brewing(); beaconTick(ran); sensorTick(ran); sv.tickFurnaces(); }
     // MinecraftServer.tick: after the worlds tick, `tickCounter % 900 == 0` saves them, and the save queues every unwatched chunk outside the CURRENT spawn area (see above).
+    cmds.endTick(); ents?.endTick();
     if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
   rt.flush();
