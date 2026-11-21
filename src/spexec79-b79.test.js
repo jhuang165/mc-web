@@ -160,7 +160,7 @@ test("server pearl landing (spexec78 executed records): a connected player of th
     const hitMob = { type: "zombie" }, hit = r.owner === "with-hit" ? hitMob : null;
     const pp = r.owner === "with-hit" ? { dead: false, dimension: 0, mount: null, fallDistance: 12, position: { copy: ({ x, y, z }) => log.push(`setPositionAndUpdate ${x} ${y} ${z}`) }, previous: { copy: () => {} }, velocity: {} } : p;
     const host = {
-      ownerOf: () => pp, hangingOf: () => null,
+      ownerOf: () => pp, hangingOf: () => null, throwerBody: () => null, // b92 credit92: the stub host gains the new helper (no dead thrower in these records)
       sim: { vehicles: { dismount: () => log.push("mountEntity null") }, damagePlayer: (_p, amount) => log.push(`attack owner ${amount.toFixed(1)}`) },
     };
     const lane = { dim: 0, world: { remote: false }, mobs: { entities: [hitMob], damage: (e, amount) => { log.push(`attack ${e.type} ${amount.toFixed(1)}`); return true; } } };

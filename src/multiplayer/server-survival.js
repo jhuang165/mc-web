@@ -190,6 +190,8 @@ export class ServerSurvival {
     const insts = new Set([this.sim.dispense, dims?.nether?.dispense, dims?.end?.n?.dispense].filter(Boolean));
     for (const d of insts) {
       for (const lane of d.lanes ?? []) for (const a of lane.arrows?.list ?? []) if (a.owner === p && !a.dead) { a.ownerBody ??= body ??= this.deadBody(p); }
+      // b92 credit92 (bytecode-read zk.j): thrown balls and potions hold the old EntityPlayerMP too (`thrower` stays the record for credit and the by-name lookup).
+      for (const lane of d.lanes ?? []) for (const b of [...(lane.balls?.balls ?? []), ...(lane.potions?.projectiles?.balls ?? [])]) if (b.thrower === p && !b.dead) b.ownerBody ??= body ??= this.deadBody(p);
       for (const b of d.mobs?._fireballs?.list ?? []) if (b.punchedBy === p && !b.dead) b.punchedBy = body ??= this.deadBody(p);
     }
     return body;

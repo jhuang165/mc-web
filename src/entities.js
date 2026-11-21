@@ -1675,6 +1675,14 @@ export class EntityWorld {
   // slowness roll on the player's Random; the tool wears and, for Fire Aspect, the target burns for
   // level * 4 s. `info` receives {knockback, enchantCritical, slowness} for the caller (the player's
   // own slowdown, the magic-crit particles, the hotbar).
+  // EnchantmentHelper.func_151384_a(victim, attacker) for a mob victim (thorns-live.js): its equipment rolls on its own Random and `hurt(n)` / `sound()` act on the attacker. Reached by a
+  // landed player hit (below) and, b92 credit92 (bytecode-read zc.h 1065-1088), by a landed arrow of any living shooter (bow.js).
+  thornsOfVictim(e, { hurt, sound }) {
+    return mobThornsOnPlayerHit(e, entityRandom(e), {
+      hurt, sound,
+      breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
+    });
+  }
   attack(e, tool, survival, player, extraKnockback = 0, critical = false, info = {}) {
     // b80: a dying dragon is still hit through its part: wy.a(ro, F) -> xa.a(wy, ro, F) returns true at any health (bytecode-read), so the weapon wears and the hunger cost is paid.
     if (!this.entities.includes(e) || (e.health <= 0 && e.type !== "ender_dragon")) return false;
@@ -1706,10 +1714,9 @@ export class EntityWorld {
     if (landed) {
       this.ai.playerHit(living ? e : null); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
-      if (living) mobThornsOnPlayerHit(e, entityRandom(e), {
+      if (living) this.thornsOfVictim(e, {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
-        breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
       });
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).

@@ -167,7 +167,7 @@ export class ServerDispense {
       out.push({ ref: p, immune: !!p.survival.creative, box: [q.x - hw, q.y, q.z - hw, q.x + hw, q.y + f(1.8), q.z + hw] });
     }
     out.push(...(this.hangingOf(lane.dim)?.targets() ?? [])); // b68 mppaintings: paintings and item frames are collidable
-    if (ball) { const who = ball.thrower ?? ball.owner ?? this.ownerOf(ball); for (const t of out) if (t.ref === who) t.thrower = true; }
+    if (ball && !ball.ownerBody) { const who = ball.thrower ?? ball.owner ?? this.ownerOf(ball); for (const t of out) if (t.ref === who) t.thrower = true; }
     return out;
   }
   // `attacker` of ServerAchievements: kills that happen inside `fn` are credited to `owner` (killEnemy, snipeSkeleton).
@@ -199,20 +199,37 @@ export class ServerDispense {
     }
     return true;
   }
+  // b92 credit92 (bytecode-read zc.h 1065-1088, afv.a(sv, sa), agj.b): a player's landed arrow on a mob wearing Thorns hurts the shooter: damagePlayer with the mob as the source (a dead old body takes
+  // none, sv.a: health <= 0, but the sound plays at it); the mob's Random rolls (thornsOfVictim).
+  mobThornsOnShooter(a, ref, lane, mobs) {
+    const who = this.ownerOf(a), body = a.ownerBody;
+    if (!who) return;
+    const at = (body ?? who).position;
+    mobs.thornsOfVictim(ref, {
+      hurt: (n) => { if (body || who.dead) return false; return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
+      sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: lane.dim }),
+    });
+  }
   // A snowball or egg that struck: a mob takes the 0-damage thrown hit (3 on a blaze); a player takes none (EntityPlayer.attackEntityFrom returns false for 0).
   // b68 mppaintings: the dimension's paintings and item frames (server-hanging.js)
   hangingOf(dim) { return (dim ? this.dimState(dim)?.vehicles : this.sim.vehicles)?.hanging; }
-  ballHit(mobs, e, ball) { for (const d of [0, -1, 1]) if (this.hangingOf(d)?.thrown(e, this.ownerOf(ball))) return true; return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? null, ball); } // b89 credit89: no thrower (a dispensed ball) is null, not the ball
+  // b92 credit92 (bytecode-read zk.j, zm.a): a ball keeps the EntityPlayerMP that threw it, so after respawnPlayer (or while the thrower lies dead) the thrower is the old body: its position, its frozen Creative flag.
+  throwerBody(ball, o = this.ownerOf(ball)) { return ball.ownerBody ?? (o?.dead && this.sim.serverSurvival ? (ball.ownerBody = this.sim.serverSurvival.deadBody(o)) : null); }
+  ballHit(mobs, e, ball) { const o = this.ownerOf(ball), who = this.throwerBody(ball, o) ?? o; for (const d of [0, -1, 1]) if (this.hangingOf(d)?.thrown(e, who)) return true; return e?.survival ? false : thrownHit(mobs, e, who?.position ?? null, ball); } // b89 credit89: no thrower (a dispensed ball) is null, not the ball
   // EntityEnderPearl.onImpact for a thrown pearl: the thrower (if online, alive and in this dimension) moves to the pearl, loses nothing but 5 fall damage and the fall distance.
   pearlImpact(lane, { pearl, hit }) {
-    const p = this.ownerOf(pearl), mobs = lane.mobs, world = lane.world;
-    const ok = p && !p.dead && (p.dimension | 0) === lane.dim;
-    const owner = ok ? { kind: 'playerMP', connected: true, world, riding: !!p.mount, get fallDistance() { return p.fallDistance ?? 0; }, set fallDistance(v) { p.fallDistance = v; p.landedFall = 0; } } : null;
+    const p = this.ownerOf(pearl), mobs = lane.mobs, world = lane.world, body = p ? this.throwerBody(pearl, p) : null;
+    // b92 credit92 (bytecode-read zm.a, nh.a(DDDFF), oi.a(mw, int, boolean)): the pearl holds the old EntityPlayerMP; its connection is still open and its world is where it was removed. Its
+    // setPositionAndUpdate goes through the handler, whose entity is the NEW player (nh.b), so the new body is moved (no dismount: the old one rides nothing); the fall reset and the 5 damage
+    // land on the old entity (sv.a: health <= 0 refuses it), so the new player keeps its fall distance and takes nothing.
+    const ok = p && (body ? (body.dimension | 0) === lane.dim : !p.dead && (p.dimension | 0) === lane.dim);
+    const stale = { fallDistance: 0 };
+    const owner = ok ? { kind: 'playerMP', connected: true, world, riding: !body && !!p.mount, get fallDistance() { return body ? stale.fallDistance : p.fallDistance ?? 0; }, set fallDistance(v) { if (body) stale.fallDistance = v; else { p.fallDistance = v; p.landedFall = 0; } } } : null;
     impactEnderPearl(pearl, { world, owner, hit: hit?.survival ? null : hit }, {
-      hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, p)) return; if (e?.type) thrownHit(mobs, e, p?.position ?? null, pearl); }, // b89 credit89: an ownerless pearl's causeThrownDamage(this, null) has no entity
+      hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, body ?? p)) return; if (e?.type) thrownHit(mobs, e, (body ?? p)?.position ?? null, pearl); }, // b89 credit89: an ownerless pearl's causeThrownDamage(this, null) has no entity
       dismount: () => this.sim.vehicles?.dismount?.(p),
       teleport: (_o, x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); },
-      damage: (_o, { amount }) => this.sim.damagePlayer(p, amount, { name: 'a fall', from: undefined, call: () => p.survival.damage(amount, 'a fall', false) }),
+      damage: (_o, { amount }) => body ? false : this.sim.damagePlayer(p, amount, { name: 'a fall', from: undefined, call: () => p.survival.damage(amount, 'a fall', false) }),
     });
   }
 
@@ -259,7 +276,7 @@ export class ServerDispense {
   // b89 mobpackets89: the arrow pass of tickLane split in two, so ServerProjectiles.tickJoined can update the arrows a skeleton shot during the mobs' pass
   arrowCtx(lane) {
     const mobs = lane.mobs, targets = arrowTargets(this.targets(lane), false);
-    const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z, shooter) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer ?? (shooter && typeof shooter === 'object' ? shooter : null)) : undefined, /* b87 blast87: aob.a(ahb,III,sa) takes zc.c when it is an EntityLivingBase: a skeleton's burning arrow makes it the placer */ hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
+    const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z, shooter) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer ?? (shooter && typeof shooter === 'object' ? shooter : null)) : undefined, /* b87 blast87: aob.a(ahb,III,sa) takes zc.c when it is an EntityLivingBase: a skeleton's burning arrow makes it the placer */ hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs), thornsOnShooter: (a, ref) => this.mobThornsOnShooter(a, ref, lane, mobs) };
     return ctx;
   }
   tickArrow(lane, a, ctx) {
@@ -305,7 +322,7 @@ export class ServerDispense {
       for (const ev of p.drain()) {
         const from = mobs.events.length;
         this.credit(this.ownerOf(ball), () => {
-          if (ev.potion) { const who = this.ownerOf(ball); potions.impact(ev.potion, null, null, who ? { x: who.position.x, z: who.position.z, name: who.name } : null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
+          if (ev.potion) { const who = this.throwerBody(ball) ?? this.ownerOf(ball); potions.impact(ev.potion, null, null, who ? { x: who.position.x, z: who.position.z, name: who.name } : null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
         });
         for (let i = from; i < mobs.events.length; i++) {
           const e = mobs.events[i];
@@ -319,7 +336,7 @@ export class ServerDispense {
     p.reap();
   }
   splashPlayers({ x, y, z, damage, custom, owner, hit }, lane = this, ball = null) {
-    const victims = [], who = ball && this.ownerOf(ball);
+    const victims = [], who = ball && (this.throwerBody(ball) ?? this.ownerOf(ball));
     for (const pl of this.sim.players.values()) if (!pl.dead && pl.survival?.health > 0 && (pl.dimension | 0) === lane.dim) victims.push({ x: pl.position.x, y: pl.position.y, z: pl.position.z, width: 0.6, height: 1.8, undead: false, ref: pl, direct: hit === pl });
     // the thrower is the DamageSource's entity: a player (named, so the death message and the knockback have one) or the witch
     const from = who ? { x: who.position.x, y: who.position.y, z: who.position.z, type: 'player', isPlayer: true, name: who.name } : owner?.x !== undefined ? owner : undefined;
