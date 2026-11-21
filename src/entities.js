@@ -581,6 +581,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   try { return moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s); } finally { releaseMoveScratch(s); }
 }
 // `s` (b81 mpperf81): scratch boxes and the pooled box lists in place of fresh arrays; the same numbers in the same order.
+function sneakAdjust90(world, e, w, h, dx, dz) {
+  return sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz], e).length);
+}
 function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
@@ -595,7 +598,7 @@ function moveEntityBody(world, e, w, h, dx, dy, dz, step, hooks, s) {
   // A sneaking EntityPlayer on the ground never walks off an edge (player-movement.js).
   const sneakEdgeOn = !!(e.sneaking && e.onGround);
   if (sneakEdgeOn)
-    [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz], e).length);
+    [dx, dz] = sneakAdjust90(world, e, w, h, dx, dz); // b90 mpperf90: the closure lives in its own function, so moveEntityBody makes no context per call
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
     // box itself, so its centre carries the same rounding as the original.

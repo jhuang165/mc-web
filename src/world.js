@@ -1,5 +1,6 @@
 import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
 import { chunkKeyOf } from "./mpperf82-fast.js"; // b82 mpperf82
+import { fast90, fail90 } from "./mpperf90-fast.js"; // b90 mpperf90
 import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType, mapFeaturesOn } from "./java-world.js";
 import { normalizeFlatOptions } from "./flat-world.js";
 import { playerSpawnPoint, topSolidOrLiquidBlock } from "./world-spawn.js";
@@ -614,6 +615,17 @@ export class World {
   }
   // World.getBlock: below y 0 (and above the top) is air, so a hole in the floor opens onto the void.
   get(x, y, z) {
+    // b90 mpperf90: a streaming world's integer cell in the column read last: inside() and chunkAt()'s first test, inline (anything else takes the path below)
+    const c90 = this.lastChunk;
+    if (c90 !== null && this.streaming && fast90.mode !== "off" && (x | 0) === x && (y | 0) === y && (z | 0) === z && y >= 0 && y < this.height && (x >> 4) === c90.x && (z >> 4) === c90.z
+      && x + this.originX >= -30000000 && x + this.originX < 30000000 && z + this.originZ >= -30000000 && z + this.originZ < 30000000) {
+      const v = c90.blocks[((x & 15) * 16 + (z & 15)) * this.height + y] ?? (this.ringReads ? this.ringSink.get(x, y, z) : 0);
+      if (fast90.mode === "verify" && v !== this.get90Reference(x, y, z)) fail90("world.get");
+      return v;
+    }
+    return this.get90Reference(x, y, z);
+  }
+  get90Reference(x, y, z) {
     if (!this.inside(x, y, z)) return 0;
     return this.chunkAt(x >> 4, z >> 4)?.blocks[cellIndex(x, y, z, this.height)] ?? (this.ringReads ? this.ringSink.get(x, y, z) : 0);
   }

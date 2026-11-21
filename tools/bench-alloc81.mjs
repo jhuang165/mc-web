@@ -21,6 +21,7 @@ import { fast86 } from '../src/mpperf86-fast.js'; // b86 mpperf86: MC_MPPERF86 s
 import { fast87 } from '../src/mpperf87-fast.js'; // b87 mpperf87: MC_MPPERF87 shows as mode87
 import { fast88 } from '../src/mpperf88-fast.js'; // b88 mpperf88: MC_MPPERF88 shows as mode88
 import { fast89 } from '../src/mpperf89-fast.js'; // b89 mpperf89: MC_MPPERF89 shows as mode89
+import { fast90 } from '../src/mpperf90-fast.js'; // b90 mpperf90: MC_MPPERF90 shows as mode90
 
 const arg = (n, d) => (process.argv.find(a => a.startsWith(`--${n}=`)) ?? `=${d}`).split('=')[1];
 const SCENE = arg('scene', 'travel'), TICKS = +arg('ticks', 150), WARM = +arg('warm', 30), RUNS = +arg('runs', 5), SEED = +arg('seed', 1);
@@ -49,7 +50,7 @@ if (process.argv.includes('--state')) {
       hashes.push(h.digest('hex').slice(0, 16)); h = createHash('sha256');
     }
   }
-  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} mobs=${host.entities.length}`, JSON.stringify(hashes));
+  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} mode90=${fast90.mode} mobs=${host.entities.length}`, JSON.stringify(hashes));
 } else {
   let gcCount = 0, gcMs = 0, on = false;
   new PerformanceObserver((l) => { if (on) for (const e of l.getEntries()) { gcCount++; gcMs += e.duration; } }).observe({ entryTypes: ['gc'] });
@@ -77,5 +78,5 @@ if (process.argv.includes('--state')) {
     res.push({ ms, cpu, gc: gcCount / TICKS, gcMs: gcMs / TICKS, kb: grown / TICKS / 1024 });
   }
   const med = (k) => { const a = res.map(x => x[k]).sort((x, y) => x - y); return a[a.length >> 1]; };
-  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} runs=${RUNS} ticks=${TICKS} median ms/tick=${med('ms').toFixed(2)} (runs ${res.map(x => x.ms.toFixed(2)).join(' ')}) cpu ms/tick=${med('cpu').toFixed(2)} gc/tick=${med('gc').toFixed(2)} gc ms/tick=${med('gcMs').toFixed(2)} heap growth KB/tick=${med('kb').toFixed(0)}`);
+  console.log(`scene=${SCENE} mode=${fast81.mode} mode82=${fast82.mode} mode83=${fast83.mode} mode84=${fast84.mode} mode85=${fast85.mode} mode86=${fast86.mode} mode87=${fast87.mode} mode88=${fast88.mode} mode89=${fast89.mode} mode90=${fast90.mode} runs=${RUNS} ticks=${TICKS} median ms/tick=${med('ms').toFixed(2)} (runs ${res.map(x => x.ms.toFixed(2)).join(' ')}) cpu ms/tick=${med('cpu').toFixed(2)} gc/tick=${med('gc').toFixed(2)} gc ms/tick=${med('gcMs').toFixed(2)} heap growth KB/tick=${med('kb').toFixed(0)}`);
 }

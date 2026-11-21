@@ -29,6 +29,7 @@ import { installPoweredRails } from '../powered-rails.js';
 import { ServerRiding } from './server-riding.js';
 import { ServerHorses } from './server-horses.js'; // b76 mphorse76
 import { fast89 } from '../mpperf89-fast.js'; // b89 mpperf89
+import { eachView90 } from '../mpperf90-fast.js'; // b90 mpperf90
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
@@ -345,9 +346,9 @@ export class ServerVehicles {
     // (isBoatEmpty false) and only reads those two packets the way xi.a(DDDFFI) and xi.i do (remote-vehicles.js)
     if (fast89.mode === 'off' || all.length !== 0) // b89 mpperf89: skip a loop that would do nothing
     for (const v of all) { const st = states.get(v), t = cartTrack.tick(v, st); if (v.boat) exact.set(v, { ...st, own: 1, tx: t.x, ty: t.y, tz: t.z, vs: t.vs, rs: t.rs, mx: t.mx, my: t.my, mz: t.mz }); states.set(v, { ...st, ...t }); }
-    for (const [id, view] of this.views) {
+    eachView90(this.views, (view, id) => { // b90 mpperf90: Map.forEach, no [id, view] entry array per view (the body's one `continue` is the `return`)
       const p = this.host.players.get(id);
-      if (!p) { view.known.clear(); view.vis?.clear(); view.ref = null; view.leaving = []; continue; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
+      if (!p) { view.known.clear(); view.vis?.clear(); view.ref = null; view.leaving = []; return; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
       const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map()), joins = (view.joins ??= new Map()); // b84 mpboat84: joins, the spawn record of each tracked vehicle
       // b83 tracker83: the range test of EntityTrackerEntry.tryStartWachingThis (the square of side 2 * range around lastScaledPosition / 32, int division), run only when the
       // vehicle's entry re-lists (it moved over 4 blocks: CartTracker `recheck`, with the scaled position from before its packets) or this player's own entry does (it moved over
@@ -385,7 +386,7 @@ export class ServerVehicles {
       if (fast89.mode === 'off' || vis.size !== 0) // b89 mpperf89: skip a loop that would do nothing
       for (const key of vis) if (!all.some(v => keyOf(v) === key)) vis.delete(key);
       if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
-    }
+    });
     for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel
     this.carts.reap(); this.boats.reap();
   }
