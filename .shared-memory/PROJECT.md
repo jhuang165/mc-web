@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 90 (2026-11-21, ten tracks in `../wt90-<name>` on `batch90-<track>90`, cut from 1d51974cf, merged --no-ff on `batch90-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b90-lead/track-rules.md`; lead note `b90-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.119.0, by track (details in the `*-b90-track.md` notes and "Done in batch 90" in `public/research/remaining-gaps.md`):
+  - horse90: sneak dismount after the mount's update (`server-vehicles.js` `finishSneak`/`sneakOffVehicles`, `PlayerView.sneakOff`), a dying pig's rider.
+  - spcopy90: onGround through portal trips (`arriveFrom`), `answerFrom`/`takeAnswer` next-network-tick S08 answers, one S08 for a broken mount (`brokenSent`).
+  - mobpackets90: `attrBumps` re-add S20 rows, head S19 after S1C/S20 (`sendAttributes` hook in `entity-tracker.js`), wither speed 0.6F.
+  - mpobjects90: falling blocks before the tracker flush, `falling.spawned` join state, `crystalPushHooks`, remote falling shadows.
+  - tiles90: furnace facing in cell metadata both ways, dispenser/dropper `/setblock` facing, `/setblock lit_furnace`, previous-tick spawn darkness (`spawnLightAt`/`spawnSubtracted`).
+  - mpperf90: `mpperf90-fast.js` behind `MC_MPPERF90=on|off|verify`; vehicle view loop, `FineGrid` recycling, inline `world.get`, `moveEntityBody` closure (heap per tick -3.4% travel, -1.3% terrain, -5% pen).
+  - entnbt90: arrows and rockets through portals, live same-dimension arrivals (`host.arriveLive`).
+  - console90: S40 for every kick, light in the chunk length cache, real chunk metadata, per-id tracker packets and executed DataWatcher sizes (`Console90Probe`, `console90-reference.json`).
+  - credit90: dead-body attacker view for TNT, arrows and punched fireballs (`corpseView`, `ownerBody`), click look for dig/place, ownerless away and imported snowballs.
+  - mobrec90: 13 executed records (spider jockey on a wall, blaze vs dead/creative players); no self target, `td.bq` dead-player target, float eye 1.62, client-stream shot pitch.
+- Lead fixes: the sneak dismount's S08 is answered late (horse90 x spcopy90, dd6b0b496, `lead90-b90.test.js`); chunk-store migration test follows the furnace metadata; the track88 equipment test gets a roof (daylight helmet wear made it flaky) (ec2251ba1).
+- Verification: one full `npm test` on the merged tree: 10140/10142, the two failures fixed in ec2251ba1 and re-run targeted. Build ok. No browser checks.
+- Open: "Still open from batch 90" in `public/research/remaining-gaps.md`.
+
 Batch 89 (2026-11-20, ten tracks in `../wt89-<name>` on `batch89-<track>`, cut from 6cd02f772, merged --no-ff on `batch89-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b89-lead/track-rules.md`; lead note `b89-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.118.0, by track (details in the `*-b89-track.md` notes and "Done in batch 89" in `public/research/remaining-gaps.md`):
   - horse89: `Horse89Probe` (10 scenarios); the sneak tick's last ridden move and jump (`finishVehicleTick`, `riderSneakOff`), fresh-horse air speed 0, dead-mount seat, buck movement.

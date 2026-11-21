@@ -2,6 +2,48 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 90
+
+Batch 90 covered these areas (track agents ran on Sonnet):
+- **Horses.** A sneaking rider of a horse or pig gets off right after the mount's own update in the sneak tick: on the dedicated server (`server-vehicles.js` `finishSneak`, `sneakOffVehicles`) and in the single-player copy (`PlayerView.sneakOff`); a dying pig's sneaking rider too. `Entity.setDead` and `onDeath` never touch the rider (bytecode-read).
+- **Multiplayer objects.** Falling blocks update before the tracker pass, so their S0E goes out in the tick they spawn; summoned and loaded falling blocks get their spawn-time join state; a pushed crystal explodes on cactus, fire and lava; the multiplayer client's falling copies cast the falling-block shadow.
+- **Mob packets.** Re-adding Speed, Slowness or Health Boost sends the S20 row again; the head S19 goes after S1C and S20; the wither's movementSpeed is the widened 0.6F.
+- **The single-player copy.** onGround carries through a portal trip; an S08 sent from the world pass or a click is answered in the next network tick; a broken mount sends one S08, not two.
+- **Kill credit.** A respawned player's TNT, arrows and punched fireballs keep the dead body as the attacker mobs see (revenge drops it at their next update); queued digs and placements use the look the click arrived with; away-run dispensed snowballs and imported ownerless snowballs are marked, and a player's snowball exports its owner name.
+- **The dedicated server.** Spam, illegal-character and duplicate-login kicks count an S40; the cached chunk length changes with light; chunk data carries real metadata and S23 sizes use the native id; tracker packets count under their own ids, and S0F/S1C use executed DataWatcher sizes for 29 living classes (`Console90Probe`).
+- **Server speed.** Behind `MC_MPPERF90=on|off|verify` (identical state hashes): the per-view vehicle loop without arrays, recycled `FineGrid` arrays and answers, an inline `world.get` for the last column, no closure in `moveEntityBody`. Heap per tick is 3.4% lower in travel, 1.3% in terrain and 5% in pen; tick time is within noise.
+- **Tiles.** Furnace facing round-trips through cell metadata in import and export; `/setblock` of a dispenser or dropper takes the facing from `onBlockAdded`, and `/setblock lit_furnace` stays lit; mob spawning reads the previous tick's darkness in single player and on the server.
+- **Entity NBT.** Arrows and firework rockets go through portals with their NBT (an arrow that starts the update in the ground touches none); a copy arriving in the player's own dimension joins the live lists at once.
+- **Mob records.** 13 new executed records replay with no divergence: a spider jockey on a ring wall (5) and a blaze against dead or creative players (8). A mob is never its own target (its own arrow), the blaze keeps a dead player target as `td.bq` does, the player's eye is the float 1.62, and the blaze's shot pitch no longer draws the world random.
+
+Found wrong in the batch 89 list:
+- "PlayerView sees the sneak one tick late" held only for horses and pigs; carts and boats were already in order.
+- The S20 row order cannot be matched: the native set holds attribute instances with identity hashes, so its order varies between JVM runs.
+- S1D has no ambient field in 1.7.10; ambient travels only as watcher 8 in S1C.
+- "Block states outside the cell" was wrong only for chunk data; S22/S23 carry a fixed metadata byte.
+- Natively `/setblock` ignores a dispenser's metadata; the port kept it.
+- A broken mount sent two S08s.
+
+Still open from batch 90:
+- **Multiplayer.**
+  - Horses: mob-ridden horses unchecked; boat and cart sneak order only bytecode-read.
+  - Objects: weather, lightning and maps still run after the tracker flush, and falling blocks now update before the random ticks; remote boats, carts and XP orbs cast no shadow.
+  - Mob packets: watcher 8 (ambient) is not carried in `copy-meta`; mid-pass spawns other than skeleton arrows update a tick late; the S12-after-head order is code-read only.
+  - Kill credit: pigmen and zombie reinforcements take the dead view as target (native order not executed); a dead shooter's arrow hitting the new body counts as a self hit; Thorns and the hanging Creative flag read the record; `use` has no stored look.
+  - The dedicated server: owner strings and name tags are not in the S0F/S1C sizes; later S1C keys the port does not emit are not counted; vehicle and object packets still count S18; the light hash cost is unmeasured.
+  - Speed: the `mobTargetAt88` box, `tickMobs` field shapes, `blockBoxesFast`, `watchedAttributes`, `moveSpeedModifiers` and the pathfinder.
+  - Entity NBT: the away run and the server do not move arrows or rockets between dimensions.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: falling-block shadows, a crystal exploding on cactus, the kick screens, plus the batch 67 to 89 lists.
+- **Single player.**
+  - Tiles: chest facing still lives in the tile record (migration plan in `tiles90-b90-track.md`); other mob updates read the same tick's darkness.
+  - The copy: the port's multi-tick portal trip has no native equivalent; `ai.player` readers without the `left` gate.
+  - Mob records: the dead server copy does not tick physics; legacy mobs still need `alive` for the closest player; the wither and zombie door aux pitches draw the world random; the self-target rule rests on the record, not bytecode; more records for the least-covered mob kinds.
+  - Entity NBT: no wider audit of per-kind round trips this batch.
+  - Not seen in a browser: an arrow or rocket arriving in the Nether, the horse and pig sneak dismount, mount and sleep without a hitch, the jockey's look while climbing, plus the batch 89 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 89
 
 Batch 89 covered these areas (track agents ran on Opus, by request):
@@ -22,24 +64,7 @@ Found wrong in the batch 88 list:
 - Eggs and fishing bobbers are never saved by 1.7.10, so there is nothing to export.
 - Batch 88's portal carry-over and batch 59/60's away-run catch-up never ran in the game: both read `record.transit` after `DimensionLive.arrive` deleted it.
 
-Still open from batch 89:
-- **Multiplayer.**
-  - Horses: PlayerView sees the sneak one tick late; the multiplayer server dismounts at once; a dying pig's rider; mob-ridden horses unchecked.
-  - Objects: falling blocks tick after `dispense.flush()`, so their spawn packet is a tick late; summoned or loaded falling blocks have no join state; a pushed crystal takes no cactus or fire hazards; object copies cast no shadows.
-  - Mob packets: re-adding an effect sends no no-op S20; S20 rows use a fixed order (native HashSet); the head S19 goes before S1C/S20; the wither's movementSpeed is 0.6 not 0.6000000238418579; no ambient flag on copies; mid-pass spawns other than skeleton arrows update a tick late.
-  - The single-player copy: onGround is not carried through a trip; the S08 is answered in the same tick.
-  - Kill credit: mobs treat the live player as the attacker of a dead body's TNT; arrows and punched fireballs in flight still point at the live player; block aiming and digging read `p.yaw` at the action; dispensed balls in the away world are not marked; an imported ownerless snowball is not marked.
-  - The dedicated server: the chat-spam, illegal-character and duplicate-login kicks count no S40; a cached chunk length ignores light-only changes; block states outside the cell use default metadata; mob spawn metadata and small move packets are estimates.
-  - Speed: the `server-vehicles` per-view loop; `tickMobs` field reads; `moveEntityBody`, `FineGrid`, `mobTargetAt88` and `world.get`.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: falling-block copies, walking on remote boats, crystals moved by pistons, the mobSpell swirl and invisibility on copies, the kick screens, plus the batch 67 to 88 lists.
-- **Single player.**
-  - Tiles: chest facing still lives in the tile record, not block metadata; `/setblock lit_furnace` shows unlit; dispenser facing on `/setblock`; export furnace facing; mob spawning reads the previous tick's darkness.
-  - Entity NBT: a same-dimension arrival waits in the "late" inbox; arrows and rockets do not cross portals.
-  - Mob records: no spider jockey climbing a wall; a dead or creative player target for the blaze; the blaze shot sound pitch draws from the world random.
-  - Not seen in a browser: poison hearts and tint, the blaze's fireball and smoke, the snow golem's death puff, the horse dismount after sneak, a broken boat under the player, plus the batch 88 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 89: carried into the batch 90 list above, less what batch 90 fixed or found wrong.
 
 ## Done in batch 88
 
