@@ -74,8 +74,9 @@ test("the speed attribute: 0.3, plus the 6.2 attacking boost while it has a targ
   assert.equal(E.moveSpeed({ speedBoost: true }), f(6.5));
   const sanitized = E.endermanFieldsFrom({ carried: 3, carriedData: 2, screaming: true });
   assert.deepEqual(sanitized, { ...E.endermanFields(), carried: 3, carriedData: 2 });
-  assert.deepEqual(E.endermanFieldsFrom({ carried: 300, carriedData: 2 }), E.endermanFields());
-  assert.deepEqual(E.endermanFieldsFrom({ carried: 0, carriedData: 7 }), E.endermanFields());
+  // b94 entnbt94 (executed, entnbt94-reference.json): the data byte is kept with no block (carried 300 / 0 are air, carriedData 2 / 7 stay), unlike the id
+  assert.deepEqual(E.endermanFieldsFrom({ carried: 300, carriedData: 2 }), { ...E.endermanFields(), carriedData: 2 });
+  assert.deepEqual(E.endermanFieldsFrom({ carried: 0, carriedData: 7 }), { ...E.endermanFields(), carriedData: 7 });
 });
 
 test("shouldAttackPlayer matches the original over distances, aim offsets, looks, helmets and line of sight", () => {

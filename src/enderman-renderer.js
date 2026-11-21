@@ -81,7 +81,7 @@ function setHeld(r, renderer, e, material) {
   if (st.key === key) return;
   st.key = key;
   for (const child of st.held.children.splice(0)) child.geometry.dispose();
-  const cell = e.carried ? fromOriginal(e.carried, e.carriedData || 0) : null;
+  const cell = e.carried ? fromOriginal(e.carried, (e.carriedData || 0) & 15) : null;
   if (!cell) return;
   const g = trackCubeUv(new THREE.BoxGeometry(1, 1, 1), (face) => blockTile(cell.id, face, false, cell.meta || 0), 0);
   st.held.add(new THREE.Mesh(g, material));
