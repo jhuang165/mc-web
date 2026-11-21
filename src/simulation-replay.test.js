@@ -15,6 +15,7 @@ import { Survival } from './survival.js';
 import { playerFixture, playerInputs } from './player-physics-fixture.js';
 
 const copy = value => JSON.parse(JSON.stringify(value));
+const noUuid = value => JSON.parse(JSON.stringify(value), (k, x) => (k === 'uuid' ? undefined : x)); // b88 lead: each run spawns its own falling blocks, each with its own random UUID (Entity's UUID.randomUUID, entnbt88), so UUIDs are left out of the comparison
 
 // This test checkpoint is deliberately not the browser's save format: it also
 // contains transient player motion, which browser saves do not yet retain.
@@ -27,7 +28,7 @@ function checkpoint(s) {
     transient: { hurtTicks, hurtAmount, hurtCount, hurtTime, hurtSounds, protection, ticks, lastDamage, died, drowned } },
   edits: [...s.world.edits], weather: s.weather.save(), random: s.weather.saveSimulation(),
   farms: s.farming.serialize(), fluids: s.fluids.save(), fire: s.fire.save(),
-  falling: s.falling.serialize(), fallingTicks: s.falling.save() });
+  falling: noUuid(s.falling.serialize()), fallingTicks: s.falling.save() });
 }
 
 function create(saved) {

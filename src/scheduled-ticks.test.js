@@ -115,6 +115,7 @@ test("malformed tick entries are skipped, and overdue work retains order", () =>
 });
 
 
+const noUuid = value => JSON.parse(JSON.stringify(value), (k, x) => (k === "uuid" ? undefined : x)); // b88 lead: each run spawns its own falling blocks, each with its own random UUID (Entity's UUID.randomUUID, entnbt88), so UUIDs are left out of the comparison
 test("falling columns retain one-tick deadlines and active entities across repeated reloads", () => {
   const w = world(), original = new FallingBlocks(w).watch();
   w.set(26, 19, 26, SAND, true, 1);
@@ -132,7 +133,7 @@ test("falling columns retain one-tick deadlines and active entities across repea
       restored = next;
     }
     original.tick(); restored.tick();
-    assert.deepEqual(restored.serialize(), original.serialize(), `entities at tick ${i}`);
+    assert.deepEqual(noUuid(restored.serialize()), noUuid(original.serialize()), `entities at tick ${i}`);
     assert.deepEqual(restored.save(), original.save(), `pending work at tick ${i}`);
     assert.deepEqual(restored.world.snapshot(), w.snapshot(), `blocks at tick ${i}`);
   }
