@@ -202,7 +202,7 @@ function tradePlayerClass(Task) {
     }
     shouldExecute() {
       const m = this.m, e = m.e, p = m.ai.player;
-      if (!(e.health > 0) || e.inWater || !e.onGround || e.velocityChanged || !e.customer || !p) return false;
+      if (!(e.health > 0) || e.inWater || !e.onGround || e.velocityChanged || !e.customer || !p || p.left) return false;
       return m.distSq(p) <= 16;
     }
     startExecuting() {
@@ -226,7 +226,7 @@ function lookAtTradePlayerClass(Task) {
     }
     shouldExecute() {
       if (!isTrading(this.m.e)) return false;
-      this.target = this.m.ai.player ?? null;
+      this.target = this.m.ai.player?.left ? null : this.m.ai.player ?? null; // b91 spcopy91: a copy that left the world is not found
       return !!this.target;
     }
     continueExecuting() {

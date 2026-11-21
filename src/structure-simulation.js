@@ -113,7 +113,7 @@ function pushAndDrain(state, hooks, system, mobsPushed = false) {
     velocity.x += vx;
     velocity.z += vz;
     // The integrated server's copy takes the same applyEntityCollision push (EntityPlayerMP is pushed by the cart/boat in its own world too): ai.player.motion.
-    const copy = state.mobs?.ai?.player?.motion;
+    const copy = state.mobs?.ai?.player?.left ? null : state.mobs?.ai?.player?.motion; // b91 spcopy91: a copy that left the world is not pushed
     if (copy) { copy.x += vx; copy.z += vz; }
   }
   if (!mobsPushed) for (const e of living) {

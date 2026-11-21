@@ -3268,7 +3268,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   ({ fallDistance, landedFall } = movement);
   // b87 tiles87: TileEntityBeacon.updateEntity reads World.getTotalWorldTime (aoq.h -> ahb.I, bytecode-read), not the world time /time and doDaylightCycle move. The mobs' tick later in
   // this step moves worldTicks to this tick's value before WorldServer.tick's increment, so the beacon (World.updateEntities, after it) sees the previous worldTicks + 2.
-  tickBeacons(beacons, { world, time: (mobs?.worldTicks ?? -1) + 2, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
+  tickBeacons(beacons, { world, time: (mobs?.worldTicks ?? -1) + 2, players: dims.busy ? [] : [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
   scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, inWater, ...moveFlags, grounded });
@@ -4090,7 +4090,7 @@ function movementTick(controls) {
   if (mobs && (spawners?.size || minecarts?.carts.some((c) => c.type === 4))) {
     const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);
     const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, boats, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
-      feet: survival.health > 0 ? { x: position.x, y: position.y, z: position.z } : null }, {
+      feet: survival.health > 0 && !dims.busy ? { x: position.x, y: position.y, z: position.z } : null }, {
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
       lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),
       thunderLightValue: (x, y, z) => level(x, y, z, 10),

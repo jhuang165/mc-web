@@ -2066,7 +2066,7 @@ export class EntityWorld {
   // b67 sieges: WorldServer.tick runs VillageSiege after the village tick; the clock and the players are what the host supplies (the server replaces both)
   get siege() { return (this.villageSiege ??= createSiege(this)); }
   siegeTime() { return this.siegeClock ?? 0; }
-  siegePlayers() { return this.ai.player ? [this.ai.player] : []; }
+  siegePlayers() { return this.ai.player && !this.ai.player.left ? [this.ai.player] : []; } // b91 spcopy91: playerEntities of this world only
   get villages() {
     return (this.villageCollection ??= createVillages(this));
   }

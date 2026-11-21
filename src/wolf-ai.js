@@ -129,7 +129,7 @@ export function buildWolfTasks(m, K) {
   const { Sit, Leap, FollowOwner } = tameableTasks(m, K);
   m.navigator.setAvoidsWater(true);
   // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) && ownerPresent(e) ? m.ai.player : null); // an owner who is not here (foreign OwnerUUID) is null
+  m.owner = () => (isTamed(e) && ownerPresent(e) && !m.ai.player.left ? m.ai.player : null); // b91 spcopy91: getPlayerEntityByName searches this world's playerEntities; a copy that left it is not found // an owner who is not here (foreign OwnerUUID) is null
   // EntityWolf.getEyeHeight: height * 0.8; EntityWolf.getVerticalFaceSpeed (x): 20 while sitting, else 40.
   Object.defineProperty(m, "eyeHeight", { get: () => f(m.height * f(0.8)), configurable: true });
   Object.defineProperty(m, "verticalFaceSpeed", { get: () => (e.sitting ? 20 : 40), set() {}, configurable: true });

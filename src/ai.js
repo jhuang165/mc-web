@@ -871,7 +871,7 @@ class NearestAttackable extends TargetBase {
   }
   shouldExecute() {
     const m = this.m, d = this.range(), p = m.ai.player;
-    if (!p || !m.ai.overlaps(m, p, d, 4, d)) return false;
+    if (!p || p.left || !m.ai.overlaps(m, p, d, 4, d)) return false;
     if (!this.isSuitableTarget(p, false)) return false;
     this.target = p;
     return true;
@@ -1268,7 +1268,7 @@ export class Brain {
   // 1 in 800 roll; within 32 the idle age resets, which is what lets Wander run.
   despawnEntity() {
     const e = this.e, p = this.ai.player;
-    if (!p || p.absent) return; // `absent`: the away run has no player (away-entities.js); getClosestPlayerToEntity is null and nothing happens. sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
+    if (!p || p.absent || p.left) return; // b91 spcopy91 `left`: the player is out of this world, so getClosestPlayerToEntity is null as well. `absent`: the away run has no player (away-entities.js); getClosestPlayerToEntity is null and nothing happens. sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
     const d3 = this.distSq(p), can = canDespawn(e);
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
@@ -1295,7 +1295,7 @@ class PlayerView {
     // The integrated server's EntityPlayerMP: yOffset 0, so posY is the feet, and getEyeHeight (mw.g) is 1.62 (eye-height-reference.json).
     // Every mob call site (EntityLookHelper, EntitySenses.canSee, EntityAIWatchClosest) reads that virtual, never EntityPlayer's 0.12.
     this.eyeHeight = PLAYER_EYE_HEIGHT;
-    this.alive = true;
+    this._alive = true;
     // The integrated server's copy of the player: its motion as mobs, hits and explosions left it (EntityWitch.attackEntityWithRangedAttack leads its aim by it) and whether
     // it stood on the ground (the friction of EntityPlayerMP.onUpdateEntity). The position is the client's.
     this.motion = { x: 0, y: 0, z: 0 };
@@ -1393,6 +1393,10 @@ class PlayerView {
     this.packet = null; this.packetDy = 0;
     this.setLocation(at, { late: true }); // b90 lead: a world-pass S08, answered in the next network tick (spcopy90 `answerFrom`)
   }
+  // b91 spcopy91: a copy that `left` the world is out of playerEntities, so it is no longer an alive player of this world for any reader (mob targeting, spawn blocking, pushes,
+  // pistons, village notes): `alive` reads false meanwhile, and the host's own survival health is untouched (a failed trip gives the copy back as it was).
+  get alive() { return this._alive && !this.left; }
+  set alive(v) { this._alive = v; }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
   update(player, survival, held) {
