@@ -63,6 +63,15 @@ function boatWorld(world) {
   return w;
 }
 
+// b89 mpobjects89: the multiplayer client player's boat boxes. World.getCollidingBoundingBoxes (ahb.a(sa, azt), bytecode-read) adds every other entity's
+// getBoundingBox (sa.J), and EntityBoat.J returns its box, so natively the client player walks into and stands on the boats of its client world: the copies
+// the tracker moves (RemoteVehicles.boats, positioned from the S0E / S14-S18 rows and their setPositionAndRotation2 steps, or the rider's own boat physics),
+// not the server's boats. `boats`: the client Boats list (RemoteVehicles.boats). A copy still listed after its destroy is gone (Boats.reap).
+export const clientBoatCopyBoxes = (boats) => {
+  const out = [];
+  for (const b of boats?.carts ?? []) if (!b.dead && b.bb) out.push(b.bb);
+  return out;
+};
 export class Boats extends Minecarts {
   constructor(options = {}) {
     super({ rails: {}, ...options });

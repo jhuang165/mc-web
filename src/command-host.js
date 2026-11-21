@@ -16,6 +16,7 @@ import { SUMMONABLE } from "./commands.js";
 import { summonCart, cartTypeOfSummon, spawnerRecord } from "./cart-summon.js";
 import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
 import { summonEntity, entityIdOfSummon } from "./entity-summon.js";
+import { liftSummonedCrystal } from "./ender-crystal.js"; // b89 mpobjects89
 import { mountEntity } from "./mob-riding.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { newChest, settleFacing } from "./chest.js";
@@ -238,6 +239,7 @@ export function createCommandHost(env) {
             mobs.entities.push(born);
           } else born = mobs.spawnNatural(type, x, y, z);
           if (born && typeof born === "object") { born.air = 0; facing(born, null); }
+          if (born && typeof born === "object") liftSummonedCrystal(born); // b89 mpobjects89: setLocationAndAngles adds the crystal's yOffset 1 (executed, summon87-reference.json)
           if (born && typeof born === "object") born.nbtDimension = 0; // b88 entnbt88 (executed, entnbt88-reference.json): readFromNBT's Dimension, 0 for the empty compound, in the Nether too
           return { other: true };
         }
@@ -246,6 +248,7 @@ export function createCommandHost(env) {
         const mob = mobs.restore({ ...parsed.record, x, y, z }, { summoned: true });
         if (!mob) return null;
         mobs.entities.push(mob); mobs.nextId++;
+        liftSummonedCrystal(mob); // b89 mpobjects89: posY = y + yOffset (sa.b(DDDFF), bytecode-read)
         facing(mob, nbt);
         mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
         if (nbtGet(nbt, 'Invulnerable', NBT.BYTE, 0) !== 0) mob.invulnerable = true; // b85 fire85: Entity.readFromNBT's flag (sa.i); attackEntityFrom refuses it

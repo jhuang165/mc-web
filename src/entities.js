@@ -1,5 +1,6 @@
 import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved, fineConfig } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
 import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
+import { crystalPushMove } from "./ender-crystal.js"; // b89 mpobjects89: the piston moves the crystal's posY-centred box
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
@@ -2992,6 +2993,7 @@ export class EntityWorld {
   pushMove(e, dx, dy, dz) {
     const base = ENTITY_TYPES[e.type];
     if (!base) return 0;
+    if (e.type === "ender_crystal") return crystalPushMove(this.world, e, dx, dy, dz, moveEntity); // b89 mpobjects89: Entity.moveEntity on [y - 1, y + 1], stepHeight 0, no steps or landing
     const s = mobScale(e), t = { ...base, width: base.width * s, height: base.height * s }, from = { x: e.x, y: e.y, z: e.z };
     const landed = moveEntity(this.world, e, t.width, t.height, dx, dy, dz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, this.moveHooks(e, t));
     // Entity.moveEntity (sa.d) is one method for the piston's push and a mob's own walk: updateFallState's landing comes before the step sound (the executed walking records of enderman-wolf-b44).

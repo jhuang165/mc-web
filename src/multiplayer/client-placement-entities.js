@@ -40,10 +40,12 @@ const tntBox = (t) => { const half = TNT_SIZE / 2; return [t.x - half, t.y, t.z 
 export function clientPlacementBlocker(sources) {
   const others = placementEntityBlocker(() => {
     const { mobs, vehicles, primed } = sources();
+    const { falling } = sources(); // b89 mpobjects89: the falling-block copies (EntityFallingBlock sets preventEntitySpawning; rows hold the box bottom)
     return {
       mobs: mobs ? { entities: mobs.list(), size: (o) => mobs.factory.size(o) } : null,
       vehicles: vehicles ? [vehicles.carts?.carts, vehicles.boats?.carts] : [],
       primed: (primed ?? []).map((t) => ({ bb: tntBox(t) })),
+      falling: falling ?? [],
     };
   });
   return (box) => playerBlocks(sources().players, box) || others(box);

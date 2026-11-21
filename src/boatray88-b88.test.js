@@ -192,7 +192,9 @@ test("source pins: the other crystal sites and the server's ray", () => {
   assert.match(main, /if \(live\.type === "ender_crystal"\) \{ out\.push\(\{ ref: c, box: crystalBox\(c\.x, c\.y, c\.z\) \}\); continue; \}/);
   assert.match(main, /if \(mob\.type === "ender_crystal"\) \{ out\.push\(\{ ref: c, box: crystalBox\(c\.x, c\.y, c\.z\) \}\); continue; \}/);
   assert.match(main, /intersects\(e\.type==="ender_crystal"\?crystalBox\(e\.x,e\.y,e\.z\):pushBox\(e,size\.width,size\.height\)\)/);
-  assert.match(main, /setEntityBoxes\(clientBoatBoxProvider\(\(\) => objectTracker\.vehicleTargets\(\)\.filter\(\(t\) => t\.kind === "boat"\)\.map\(\(t\) => t\.box\), boatBoxProvider/);
+  // b89 mpobjects89: the copies thunk moved to its own line and takes the remote boat copies in multiplayer (mpobjects89-b89.test.js); single player keeps the tracker's.
+  assert.match(main, /: objectTracker\.vehicleTargets\(\)\.filter\(\(t\) => t\.kind === "boat"\)\.map\(\(t\) => t\.box\)\);/);
+  assert.match(main, /setEntityBoxes\(clientBoatBoxProvider\(clientBoatCopies, boatBoxProvider/);
   const sv = read("./multiplayer/server-vehicles.js");
   assert.match(sv, /boatRay\(pos, p\.motion\?\.ySize \?\? 0, f\(180 - p\.yaw \* 180 \/ Math\.PI\), f\(-p\.pitch \* 180 \/ Math\.PI\), 0\)/);
   assert.ok(!/Math\.(sin|cos)\(/.test(sv.slice(sv.indexOf("useHeld("), sv.indexOf("boatEntities(p) {"))), "no double trig in useHeld");

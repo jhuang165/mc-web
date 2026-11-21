@@ -5,6 +5,7 @@
 //      types whose watched state is only dead/hurt/baby/burn (the same key order as mobState, so the same JSON text).
 //   3. sweepBox: Fireballs.sweep's per-mob box without building the pushBox array for mobs that miss the swept query box (same float arithmetic as pushBox).
 import { fast82, fail82 } from './mpperf82-fast.js'; // b82 mpperf82
+import { crystalBox } from './ender-crystal.js'; // b89 mpobjects89
 export const fast79 = { mode: (typeof process !== 'undefined' && process.env?.MC_MPPERF79) || 'on' };
 const f = Math.fround, SCRATCH = [0, 0];
 const fail = (what) => { throw new Error(`mpperf79 ${what} mismatch`); };
@@ -99,14 +100,18 @@ export function mobStateJson(e, mobState) {
 }
 
 // ---- 3. fireball sweep candidates ----
+// b89 mpobjects89: ze.h's entity pass reads Entity.boundingBox; the crystal's is [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1] (ender-crystal.js crystalBox).
+const crystalSweepBox = (e, q) => { const c = crystalBox(e.x, e.y, e.z); return c[3] > q[0] && c[0] < q[3] && c[4] > q[1] && c[1] < q[4] && c[5] > q[2] && c[2] < q[5] ? c : null; };
 // pushBox(e, ...mobs.size(e)) when it meets the query box q ([minX, minY, minZ, maxX, maxY, maxZ] test of Fireballs.sweep `near`), else null.
 export function sweepBoxReference(mobs, e, q, pushBox) {
+  if (e.type === 'ender_crystal') return crystalSweepBox(e, q); // b89 mpobjects89: the crystal's box is centred on posY (wz.<init> yOffset 1)
   const c = pushBox(e, ...mobs.size(e));
   return c[3] > q[0] && c[0] < q[3] && c[4] > q[1] && c[1] < q[4] && c[5] > q[2] && c[2] < q[5] ? c : null;
 }
 export function sweepBox(mobs, e, q, pushBox) {
   const mode = fast79.mode;
   if (mode === 'off' || typeof mobs.sizeInto !== 'function') return sweepBoxReference(mobs, e, q, pushBox);
+  if (e.type === 'ender_crystal') return crystalSweepBox(e, q); // b89 mpobjects89
   const s = mobs.sizeInto(e, SCRATCH), w = f(f(s[0]) / 2), h = f(s[1]);
   const hit = e.x + w > q[0] && e.x - w < q[3] && e.y + h > q[1] && e.y < q[4] && e.z + w > q[2] && e.z - w < q[5];
   const r = hit ? pushBox(e, s[0], s[1]) : null;

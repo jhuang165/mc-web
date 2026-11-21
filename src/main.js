@@ -333,6 +333,7 @@ import { MinecartRenderer } from "./minecart-renderer.js";
 import { CartSounds } from "./cart-sounds.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM, boatClearCell } from "./boats.js";
+import { clientBoatCopyBoxes } from "./boats.js"; // b89 mpobjects89
 import { boatBoxProvider, clientBoatBoxProvider } from "./entity-collision.js";
 import { placementEntityBlocker } from "./placement-entities.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
@@ -566,7 +567,8 @@ let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = nul
 let boats = new Boats({ ids: entityIds }), boatRenderer = null;
 const placementEntities = placementEntityBlocker(() => ({ mobs, vehicles: [minecarts?.carts, boats?.carts], falling: falling?.entities, primed })); // b81 collide81 (block placement)
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
-setEntityBoxes(clientBoatBoxProvider(() => objectTracker.vehicleTargets().filter((t) => t.kind === "boat").map((t) => t.box), boatBoxProvider({ get carts() { return boats?.carts; } }))); // b88 boatray88: the client player on the boat copies
+const clientBoatCopies = () => (multiplayer ? clientBoatCopyBoxes(remoteVehicles?.boats) : objectTracker.vehicleTargets().filter((t) => t.kind === "boat").map((t) => t.box)); // b89 mpobjects89: the multiplayer client player on the remote boat copies
+setEntityBoxes(clientBoatBoxProvider(clientBoatCopies, boatBoxProvider({ get carts() { return boats?.carts; } }))); // b88 boatray88: the client player on the boat copies
 setRocketEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } })); // b69: a firework rocket stops against boats (fireworks-live.js)
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
 let hanging = new Hanging({ ids: entityIds }), hangingRenderer = null, aimedHanging = null;
@@ -704,7 +706,7 @@ let remotePistons = null; // b66 mppistons: the dedicated world's moving piston 
 const spCapeStore = new SpCapeStore(localStorage); // b72 spcapes
 const spSkinStore = new SpSkinStore(localStorage); // b73 skins73
 let multiplayer = null, remotePlayers = null, remoteMobs = null, remoteDispense = null, remoteFishing = null, remoteLightning = null, aimedRemoteMob = null, worldWriterAvailable = false; // remoteMobs: the dedicated world's mobs (multiplayer/remote-mobs.js)
-const mpPlacementEntities = clientPlacementBlocker(() => ({ players: remotePlayers?.entries, mobs: remoteMobs, vehicles: remoteVehicles, primed: remoteDispense?.primed })); // b82 mpplace82: the client copies' checkNoEntityCollision
+const mpPlacementEntities = clientPlacementBlocker(() => ({ players: remotePlayers?.entries, mobs: remoteMobs, vehicles: remoteVehicles, primed: remoteDispense?.primed, falling: remoteDispense?.falling })); // b82 mpplace82: the client copies' checkNoEntityCollision
 
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
@@ -840,7 +842,9 @@ function tickRemoteFishing() {
   scene.setFishing(own ? { hook: own, first: !thirdPersonView, sneaking: !!motion.sneaking, swing: Math.min(1, animation.swingTime / SWING_SECONDS), angler: ownFishingAngler() } : null);
   scene.setOtherFishing(remoteFishing.others(multiplayer.id).map(h => { const e = remotePlayers?.entries.get(h.angler); return e ? { hook: h, angler: e.body, sneaking: !!e.state?.sneak } : null; }).filter(Boolean));
 }
-function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles); }
+function tickRemoteDispense() { scene.setArrows(remoteDispense.arrows); scene.setProjectiles(remoteDispense.balls, projectiles.particles);
+  scene.setFalling?.(remoteDispense.falling ?? []); // b89 mpobjects89: the falling-block copies (S0E type 70), drawn as the block
+}
 // Experience orbs of the server (EntityXPOrb): plain objects the orb renderer reads (x, y, z, previous position, value, colour phase).
 function syncMultiplayerOrbs(list) {
   const seen = new Set();
@@ -3695,6 +3699,7 @@ function predictMultiplayerUse() {
   const pbox = [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2];
   const mcYaw = Math.fround(180 - yaw * 180 / Math.PI), mcPitch = Math.fround(-pitch * 180 / Math.PI);
   const entities = survival.held.id === BOAT_ITEM ? clientEntityBoxes({ players: remotePlayers?.entries, mobs: remoteMobs, vehicles: remoteVehicles, primed: remoteDispense?.primed, arrows: remoteDispense?.arrows, balls: remoteDispense?.balls,
+    falling: remoteDispense?.falling ?? [], // b89 mpobjects89: the falling-block copies (EntityFallingBlock.canBeCollidedWith)
     items: [...remoteItems.values()].filter(e => !takenDrops.has(e.eid)), orbs: [...remoteOrbs.values()], hooks: remoteFishing?.rows ?? [] }) : []; // b86 predict86: ItemBoat's sight and box checks on the client's copies (b87 boatcheck87: + hooks)
   const out = clientUseItem({ world, survival, held: survival.held, eye: eyeRay.origin, dir: eyeRay.dir, yaw: mcYaw, mcYaw, mcPitch, position, ySize: motion.ySize ?? 0, playerBox: pbox, entities, maps: mapStore, dimension: world.dimension ?? 0 });
   const cells = [];
