@@ -6,6 +6,9 @@ const revengeBy = new WeakMap();
 export const noteRevenge = (e, by) => revengeBy.set(e, by);
 // b90 credit90 (bytecode-read sv.a(ro, F), sv.C 465-505): a dead EntityPlayer as the source entity (a respawned placer's TNT) is still setRevengeTarget'd; sv.C drops it at the mob's next update (isEntityAlive).
 export const DEAD_ATTACKER = Object.freeze({ health: 0, dead: true });
+// b91 credit91 (bytecode-read yg.a, yh.c, yq.a, td.bq 107-182): the dead attacker as the creature's entityToAttack. EntityMob / EntityPigZombie store the DamageSource entity with no test of its life,
+// EntityZombie hands it to a reinforcement as setAttackTarget, and td.bq drops it at the next update (sa.Z false). Dead, at the body's position (`from`).
+export const deadTargetAt = (source) => { const at = source.from ?? source.entity ?? {}; return { alive: false, x: at.x ?? 0, y: at.y ?? 0, z: at.z ?? 0, height: 0, eyeHeight: 0 }; };
 export const revengeOf = (e) => revengeBy.get(e) ?? null;
 // The living entity of a damage source in this port's source object: the player, the shooter of an arrow, or the attacking mob; null when the
 // source has no living entity (fall, fire, a string-named projectile).

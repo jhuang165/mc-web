@@ -326,12 +326,12 @@ export class DedicatedSimulation {
   // C02 UseEntity, attack: the wire id of a mob (the server repeats the reach test and damages with the held weapon, server-mobs.js).
   queueAttack(id, mob) {
     if (!this.players.has(id) || !Number.isInteger(mob) || mob < 0 || this.actions.filter(a => a.id === id).length >= 4) return false;
-    this.actions.push({ id, attack: mob }); return true;
+    this.actions.push({ id, attack: mob, look: clickLook(this.players.get(id)) }); return true; // b91 credit91: the C02 reads rotationYaw as the C03s before it left it (the Knockback / sprint push)
   }
   // b63 mppvp: C02 UseEntity, attack on another player (the wire id is the player's id); the server repeats processUseEntity's reach test (server-pvp.js).
   queuePvpAttack(id, target) {
     if (!this.players.has(id) || typeof target !== 'string' || target.length > 64 || this.actions.filter(a => a.id === id).length >= 4) return false;
-    this.actions.push({ id, pvp: target }); return true;
+    this.actions.push({ id, pvp: target, look: clickLook(this.players.get(id)) }); return true;
   }
   // C02 UseEntity, interact (b61 animal-use.js): feed, breed, shear, milk, saddle, dye an animal; `claim` is the client's own prediction.
   queueAnimUse(id, mob, claim) {
@@ -341,7 +341,7 @@ export class DedicatedSimulation {
   queueVehicle(id, m) { return this.vehicles.queue(id, m); } // b61: C02 on a minecart or boat (server-vehicles.js)
   queueUse(id, active) {
     if (!this.players.has(id) || typeof active !== 'boolean' || this.actions.filter(a => a.id === id).length >= 4) return false;
-    this.actions.push({ id, use: active }); return true;
+    this.actions.push({ id, use: active, look: clickLook(this.players.get(id)) }); return true; // b91 credit91: the release (C07 status 5) shoots along the look it arrived with
   }
   // The server's ray for a dig: the cell the player's own position and look aim at (no client coordinate is trusted), or null.
   aimCell(p) {
@@ -658,13 +658,16 @@ export class DedicatedSimulation {
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
         if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p, look)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
+        // b90 credit90 (bytecode-read ej, nh.a(jd) / nh.a(jo)): the C07 / C08 reads rotationYaw / rotationPitch as the C03s sent before it left them, not as a later message of this tick wrote them.
+        // b91 credit91: the same for C02 (nh.a(jo): the Knockback / sprint push reads rotationYaw) and the bow's release (C07 status 5); the queue is one ConcurrentLinkedQueue read in order.
         // b63 mppvp: pvp = C02 attack on a player
-        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined || (use === undefined && place !== undefined)) {
-          // b90 credit90 (bytecode-read ej, nh.a(jd) / nh.a(jo)): the C07 / C08 reads rotationYaw / rotationPitch as the C03s sent before it left them, not as a later message of this tick wrote them
-          const yaw = p.yaw, pitch = p.pitch;
-          if (look) { p.yaw = look.yaw; p.pitch = look.pitch; }
-          try { if (dig !== undefined) this.handleDig(p, dig); else this.edit(p, place, air); } finally { p.yaw = yaw; p.pitch = pitch; }
-        } else if (use !== undefined) this.handleUse(p, use);
+        const yaw = p.yaw, pitch = p.pitch;
+        if (look) { p.yaw = look.yaw; p.pitch = look.pitch; }
+        try {
+          if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined || (use === undefined && place !== undefined)) {
+            if (dig !== undefined) this.handleDig(p, dig); else this.edit(p, place, air);
+          } else if (use !== undefined) this.handleUse(p, use);
+        } finally { p.yaw = yaw; p.pitch = pitch; }
       });
     }
     for (const p of this.players.values()) if (p.resendCells) {

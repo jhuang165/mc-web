@@ -2,6 +2,7 @@
 // calls these from small hooks, in the manner of enderman-live.js.
 import { PIGMAN, pigmanProvoke, pigmanAngrySound, pigmanEquipment, pigStruck } from "./nether-melee.js";
 import { JavaRandom } from "./java-random.js";
+import { deadTargetAt } from "./revenge-target.js";
 
 const YAWS = ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"];
 // The saved fields of one pigman: Anger (short) and the held sword; the target, attack timer and sound delay start over.
@@ -18,7 +19,7 @@ export function pigmanHurt(ew, e, source, randOf) {
   if (!source.player || e.health <= 0) return false;
   const r = PIGMAN.angerRange, t = { w: PIGMAN.width / 2, h: PIGMAN.height };
   const near = (o) => !o.removedNow && o.x - t.w < e.x + t.w + r && o.x + t.w > e.x - t.w - r && o.z - t.w < e.z + t.w + r && o.z + t.w > e.z - t.w - r && o.y < e.y + t.h + r && o.y + t.h > e.y - r;
-  pigmanProvoke(e, ew.entities.filter((o) => o.type === "pigman"), randOf, near, (o) => { ew.silverfishState(o).target = ew.ai.player; }); // c(sa): entityToAttack
+  pigmanProvoke(e, ew.entities.filter((o) => o.type === "pigman"), randOf, near, (o) => { ew.silverfishState(o).target = source.deadAttacker ? deadTargetAt(source) : ew.ai.player; }); // c(sa): entityToAttack; b91 credit91: a dead attacker (yz is still a yz) is stored, then dropped by td.bq
   return true;
 }
 

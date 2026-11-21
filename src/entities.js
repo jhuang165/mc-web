@@ -92,7 +92,7 @@ import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDam
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
-import { DEAD_ATTACKER, noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
+import { DEAD_ATTACKER, deadTargetAt, noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
 import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle, takeVehicleFalls } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
@@ -1270,11 +1270,11 @@ export class EntityWorld {
       if (e.type === "horse") this.horseHurt(e, rand); // EntityHorse.getHurtSound (wi.aT): cS (mouth open), nextInt(3) first, 0 makes it rear (no sound of its own)
       this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
     }
-    if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source)); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
+    if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source), source.deadAttacker ? deadTargetAt(source) : null); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
     // EntityMob.attackEntityFrom (yg.a), every legacy-action-state EntityMob (spider, pigman, silverfish, blaze, giant; fireballs-replay.js, fireballs-reference.json
     // "fb-hurt-mobs"): any living attacker that is not this mob, its rider or its mount becomes entityToAttack. A source without an entity (a rider/mount null
     // equals the null entity) changes nothing. The AI-task mobs (zombie, skeleton ...) keep entityToAttack unused in 1.7.10 (bytecode-read).
-    if (TARGETS_ATTACKER.has(e.type) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = by === "player" ? this.ai.player : this.ai.brain(by);
+    if (TARGETS_ATTACKER.has(e.type) && by && by !== e && by !== e.ridingEntity && by !== e.riddenBy) this.silverfishState(e).target = source.deadAttacker ? deadTargetAt(source) : by === "player" ? this.ai.player : this.ai.brain(by); // b91 credit91: a dead body is stored as it is (yg.a has no life test) and dropped by td.bq
     // A source whose entity is no creature (the shooterless fireball): the dead entity becomes entityToAttack and the next td.bq clears it (isEntityAlive false).
     else if (TARGETS_ATTACKER.has(e.type) && !by && source.entity) this.silverfishState(e).target = { alive: false, x: source.entity.x, y: source.entity.y, z: source.entity.z, height: 0, eyeHeight: 0 };
     return true;
@@ -1298,10 +1298,10 @@ export class EntityWorld {
   // target is the attack target, else the revenge target, else the attacker; only the player
   // is a target here, so a hit by a skeleton's arrow on a zombie with no target calls no one.
   // The new zombie stands at the integer corner of its block, as setPosition puts it.
-  callReinforcement(e, by) {
+  callReinforcement(e, by, dead = null) {
     const player = this.ai.player, brain = this.ai.brain(e);
     // yq.a: the attack target, else the revenge target (the legacy entityToAttack stands in), else the hit's living source entity.
-    const target = brain.attackTarget ?? brain.revengeTarget ?? (by === "player" ? player : by ? this.ai.brain(by) : null);
+    const target = brain.attackTarget ?? brain.revengeTarget ?? dead ?? (by === "player" ? player : by ? this.ai.brain(by) : null);
     if (!target || this.entities.length >= SPAWN_RUNAWAY_GUARD) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
