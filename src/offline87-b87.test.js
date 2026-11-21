@@ -206,7 +206,7 @@ test("/netstat on the live server counts each message under its native packet id
   assert.equal(await count("netstat packet-read 1"), 1, "the chat line (C01)");
   assert.ok(await count("netstat packet-read 3") >= 1, "input (C03)");
   assert.equal(await count("netstat packet-write 1"), 1, "the welcome (S01)");
-  assert.ok(await count("netstat packet-write 24") >= 1, "entity teleports (S18); b89 console89: a lone player's own pose is not counted (the tracker sends nobody their own)");
+  assert.ok((await count("netstat packet-write 21")) + (await count("netstat packet-write 22")) + (await count("netstat packet-write 23")) + (await count("netstat packet-write 24")) + (await count("netstat packet-write 25")) >= 1, "entity moves, looks and teleports (S15-S19; b90 console90: each under its own id, b89: a lone player's own pose is not counted)"); // "entity teleports (S18); b89 console89: a lone player's own pose is not counted (the tracker sends nobody their own)");
   assert.ok(await count("netstat packet-write 2") >= 2, "the join and chat lines (S02)");
   const [totals] = await s.console("netstat");
   const [, reads, writes] = /^reads: (\d+), writes: (\d+)$/.exec(totals).map(Number);

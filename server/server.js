@@ -12,7 +12,7 @@ import { MAX_SKIN_BYTES, MAX_CAPE_BYTES } from '../src/skin.js';
 import { debugFileWriter } from '../src/multiplayer/server-debugfile.js'; // b74 mpmisc74: /debug stop writes debug/profile-results-*.txt
 import { setCapeShow } from '../src/multiplayer/cape-wire.js'; // b71 mpcapes
 import { applyClientSettings, chatDelivered as settingsChatDelivered, chatSendAllowed } from '../src/multiplayer/server-settings.js'; // b72 mpsettings
-import { SpamCounter, chatPacket } from '../src/server-handlers.js';
+import { SpamCounter, chatPacket, KICK } from '../src/server-handlers.js';
 import { ServerSocial, chatDisplay } from '../src/server-broadcast.js';
 import readline from 'node:readline'; // b86 console86: the server console
 import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.js'; // b87 offline87: /netstat's native packet ids
@@ -252,7 +252,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
             const old = sockets.get(previous);
             pings.leave(previous); // b68 mpping
             social.forget(previous); simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
-            old.replaced = true; old.close(1008, 'You logged in from another location');
+            old.replaced = true; if (old.readyState === WebSocket.OPEN) simulation.admin.netStats.write(...kickPacket('You logged in from another location')); /* b90 console90: oi.a kicks the old connection through nh.c(String), an S40 */ old.close(1008, 'You logged in from another location');
           }
           simulation.addPlayer(id, account.name, profile.uuid /* b87 offline87: the saved player's key is the profile UUID (playerdata/<uuid>.dat) */, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
@@ -307,7 +307,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           const r = chatPacket(chatSpam, Math.floor(Date.now() / 50), m.text, false);
           if (r.deliver && r.deliver.startsWith('/')) social.command(id, r.deliver); // /tell, /me; operators also /give, /tp, /gamemode ... on named players
           else if (r.deliver) social.chat(id, r.deliver);
-          if (r.kick) return ws.close(1008, r.kick);
+          if (r.kick) { if (ws.readyState === WebSocket.OPEN) simulation.admin.netStats.write(...kickPacket(r.kick === KICK.spam ? 'disconnect.spam' : r.kick)); return ws.close(1008, r.kick); } // b90 console90: nh.c(String) is an S40; the spam kick's reason is the literal key "disconnect.spam" (bytecode-read nh), the close text stays the display text
         } else ws.close(1008, 'Unknown message');
       } catch (error) { send(ws, { type: 'error', text: error.message }); ws.close(1008, 'Request rejected'); }
     });
