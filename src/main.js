@@ -1614,6 +1614,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 }
 // Hydrate only the resident window before constructing block runtimes and lighting.
 let tripLoading = false; // a portal trip is between worlds: screen is "home" for the loop but the music stays the game's
+let tripArrival = null; // b89 spcopy89: the portal trip's transit for launch (dimension-live.js arrive deletes record.transit before launch reads the record)
 let pendingBonusDrops = []; // b75: torch items of a bonus chest whose torch cannot stay (WorldGeneratorBonusChest -> BlockTorch.dropTorchIfCantStay)
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
@@ -1666,6 +1667,7 @@ async function openWorld(record) {
     warmer?.dispose(); warmer = null;
     if (loading && !trip) { gui.show(downloadTerrainScreen()); await nextPaint(); }
     performance.mark?.('trip:launch');
+    tripArrival = trip ? transit : null; // b89 spcopy89
     await launch(record,prepared,{slice:!!loading});
     performance.mark?.('trip:done');
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
@@ -1906,7 +1908,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     { const tiles = mobs.afterEntities; mobs.afterEntities = () => { tiles(); tickServerDig(); runPendingEdits(); }; } // the network tick follows: the queued C02 / C08 / C07 actions (b50 meleeorder)
     mobs.serverCopyMoved = (p, e) => { if (!p.riding && !p.sleeping) chargeServerCopy(mobs.world, p, e, { stats, survival, sprinting: !!motion.sprinting }); }; // b82 mpplace82: the copy's own addMovementStat (server-copy-stat.js)
     mobs.serverSeat = () => { const v = rider.vehicle, sys = v && vehicleSystem(vehicleState()); if (!sys) return null; const was = { x: rider.x, y: rider.y, z: rider.z }; sys.updateRiderPosition(v); const seat = { x: rider.x, y: rider.y, z: rider.z }; Object.assign(rider, was); return seat; }; // b87 spcopy87: the riding branch's mw.m.ac() on the live mount
-    if (tripLoading && record.transit && !record.transit.exit && !record.transit.death) mobs.ai.player.arriveFrom(leftCopy); // b88 spcopy88: its fallDistance, and setPlayerLocation at the arrival (an End exit or a death is respawnPlayer: a new one)
+    const arrival = tripArrival; tripArrival = null; // b89 spcopy89: record.transit is gone by now (arrive deleted it), so b88's test never passed in the game
+    if (tripLoading && arrival && !arrival.exit && !arrival.death) mobs.ai.player.arriveFrom(leftCopy, arrival.arrivalMotion); // b88 spcopy88: its fallDistance, and setPlayerLocation at the arrival (an End exit or a death is respawnPlayer: a new one); b89 spcopy89: its motion, as the Teleporter left it
     mobs.serverMount = () => rider.vehicle ?? null; // b88 spcopy88: the copy's ridingEntity, so a dead or removed mount lets it go at its seat (entities.js serverPlayerUpdate)
     mobs.serverFallStat = (p, d) => addFallStat(stats, d, false); // b88 spcopy88: the copy's EntityPlayer.fall (yz.b(F)) adds the distance-fallen stat (handleFalling tests allowFlying)
     mobs.serverCorrect = (at) => { position.set(at.x, at.y, at.z); previous.copy(position); velocity.set(0, 0, 0); }; // b85 spcopy85: processPlayer's setPlayerLocation (S08) for the integrated server's copy: bjb.a(fu) puts the client at the position and zeroes its motion (bytecode-read)
@@ -3147,7 +3150,7 @@ const dims = new DimensionLive({
     if (r.deathPlaced) { if (!r.deathPlaced.keepInventory) { survival.inventory.takeAll(); experience.death(); } survival.hurtTicks = 0; survival.protection = 0; if (!survival.damage(survival.health + 1, r.deathPlaced.cause) && survival.health > 0 && !survival.creative) { survival.health = 0; survival.lastDamage = r.deathPlaced.cause; survival.died = true; } r.stats.commands.death = r.deathPlaced; renderHotbar(); renderVitals(); }
     // The return builds the Overworld record from `root`, whose player state is the departure's: carry what the replay changed (the tile maps in root.player are the Overworld's own).
     if (r.stats.commands.replayed?.applied || r.deathPlaced) { const sp = survival.serialize(); root.player = { ...(root.player ?? {}) }; for (const k of Object.keys(sp)) if (!TILE_KEYS.includes(k)) root.player[k] = sp[k]; root.experience = experience.serialize(); root.mode = survival.mode; root.achievements = achievements.save(); root.stats = stats.save(); } },
-  player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
+  player: () => ({ x: position.x, y: position.y, z: position.z, yaw, motion: mobs?.ai?.player?.motion }), // b89 spcopy89: the server copy's motion rides the transit
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {
     screen = "credits";
@@ -4026,6 +4029,7 @@ function movementTick(controls) {
   if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
+  if (mobs?.ai?.player) mobs.ai.player.left = !!dims.busy; // b89 spcopy89: from the portal tick until the new world launches, the old world no longer has the player (mt.f(sa)); a failed trip gives it back
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
     playerTicks, width: PHYSICS.width, height: PHYSICS.height, sleeping: bedSleep.sleeping,
     sneaking: !!motion.sneaking, flying, rider, packetGround: grounded, sprinting: !!motion.sprinting, yaw, // b83 attack83: the C03 / C0B flags the integrated server's copy reads (living-simulation.js; sneaking, flying and riding were never set in single player)

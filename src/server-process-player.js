@@ -50,6 +50,17 @@
 //            setPlayerLocation(s, t, u); yz.a(sa) runs dismountEntity (sv.m) first on the server for mountEntity(null). EntityBoat / EntityMinecart.attackEntityFrom call
 //            rider.mountEntity(this) (a re-link: Entity.mountEntity has no toggle in 1.7.10) before setDead, so a broken boat or cart sends an S08 at the seat.
 //   oi.a(mw, int) (transferPlayerToDimension): the same mw moves to the new world (mt.f, a(sa, int, mt, mt), Teleporter ahp.a(sa, DDDF)), then setPlayerLocation; no write of R.
+// b89 spcopy89 (bytecode-read, 1.7.10 jar):
+//   xi.a(ro, F) / xl.a(ro, F) (EntityBoat / EntityMinecart.attackEntityFrom): on a break (a Creative attacker, or damage > 40) `if (l != null) l.a(this)` (riddenByEntity.mountEntity(this))
+//            at 106-118, before the drop and setDead (B). For the player: mw.a(sa) -> yz.a(sa) (not the null case) -> sa.a(sa): the links are set again (no toggle, offsets 80-132),
+//            then S1B and setPlayerLocation(s, t, u): an S08 at the seat it sits on. Entity.updateRidden then drops the dead mount with no move. The crash break (xi.h) and
+//            the void kill only setDead: no S08.
+//   mw.a(sa) is also the mount itself: setPlayerLocation(s, t, u) at the position the copy has when the C02 is handled, before the tick's C03 (the riding client's S08 handler
+//            puts it there, its updateRidden seats it again). mw.a(III) (sleepInBedAt): yz.a(III) (dismounts a rider, setSize(0.2, 0.2), L := 0.2, b(DDD) at the bed + 0.5 /
+//            0.9375, motion v / w / x := 0), then S0A to the trackers (mn.a(sa, ft)), setPlayerLocation(s, t, u), then S0A to the player.
+//   oi.a(mw, int) (transferPlayerToDimension): mt.f(sa) on the old world (ahb.f: setDead, playerEntities.remove, the chunk's and loadedEntityList's removal), K := false,
+//            a(sa, int, mt, mt) (transferEntityToWorld), setPlayerLocation. No putfield of the motion (sa.v / w / x) in either method: only Teleporter writes it, ahp.a's End
+//            platform (all three := 0, 198-205) and ahp.b's placeInExistingPortal (v and x turned at 1063-1106, w kept; all three := 0 when the portal has no side, 1132-1144).
 import { landingEffects, JUMP_BOOST } from "./damage-fx.js";
 import { entityWaterBox, waterAcceleration } from "./fluids.js";
 import { isOnLadder } from "./ladders.js";
@@ -142,4 +153,24 @@ export function handleFalling(world, p, dy, ground, hooks = {}) {
     }
     p.fallDistance = 0;
   } else if (dy < 0) p.fallDistance = f(r - dy);
+}
+
+/** b89 spcopy89: offsets 31-87 around the riding and sleeping branches. Takes the queued C06 (`p.answer`); while hasMoved is false nothing runs (0) and every 20th network tick
+ *  the S08 goes again (1512-1549); the C06 that answers takes the branch itself, then the tick's own packet (2); otherwise the tick's packet alone (1). */
+export function awaitedRuns(ew, p) {
+  const answer = p.answer, at = p.accepted ?? { x: p.x, y: p.y, z: p.z };
+  p.answer = null;
+  let runs = 1;
+  if (!p.hasMoved && awaitedAnswer(answer, at)) { p.hasMoved = true; runs = 2; }
+  if (!p.hasMoved) { if (p.netTicks % 20 === 0) ew.setPlayerLocation(p, at); return 0; }
+  return runs;
+}
+/** b89 spcopy89: a boat or cart broken by damage under the copy: riddenByEntity.mountEntity(this) -> setPlayerLocation(s, t, u) at the seat (`p.brokenSeat`). The S08 reaches the
+ *  client through `serverCorrect` (main.js: the client is put at the seat with its motion zeroed), whose C06 is queued. A mount event, not a correction: `corrected` is not counted. */
+export function brokenMountLocation(ew, p) {
+  const at = p.brokenSeat;
+  p.brokenSeat = null;
+  if (!at) return;
+  p.setLocation(at, { answered: !!ew.serverCorrect });
+  ew.serverCorrect?.(at);
 }

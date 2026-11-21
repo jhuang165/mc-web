@@ -204,12 +204,15 @@ test("server-side moves are setPlayerLocation: a /tp through a wall is kept, and
   assert.match(main, /mobs\?\.ai\?\.player\?\.setLocation\?\.\(position\); \/\/ b86 spcopy86: wakeUpPlayer/, "bed wake");
 });
 
-test("the server places the copy itself while riding, asleep and for a `placed` harness; the dismount is a setPlayerLocation (b88)", () => {
+test("the server places the copy itself for a `placed` harness; the mount (b89) and the dismount (b88) are a setPlayerLocation", () => {
   const h = host("spcopy86-direct");
   const p = h.p;
   p.riding = true;
+  const was = { x: p.x, y: p.y, z: p.z };
   p.update({ ...body, x: 44.5, y: 10, z: 44.5 }, h.s, 0);
-  assert.equal(p.direct, true); assert.equal(p.x, 44.5, "the mount carries it");
+  // b89 spcopy89: the mount is mountEntity(vehicle) -> setPlayerLocation at the copy's own spot (mw.a(sa), bytecode-read), then the riding branch seats it in the network tick.
+  assert.equal(p.direct, true); assert.equal(p.branch, "riding"); assert.deepEqual({ x: p.x, y: p.y, z: p.z }, was, "the S08 at the copy's spot, not a direct placement");
+  assert.equal(p.hasMoved, false); assert.deepEqual(p.answer, { ...was, onGround: false });
   p.riding = false;
   p.update({ ...body, x: 46.5, y: 10, z: 44.5 }, h.s, 0);
   // b88 spcopy88: the dismount is mountEntity(null) -> setPlayerLocation (mw.a(sa), bytecode-read): the copy is put there and waits for the client's C06, no longer placed directly.

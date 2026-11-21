@@ -579,6 +579,7 @@ export class Minecarts {
     cart.rolling = 10;
     cart.damage = f(cart.damage + f(amount * 10));
     if (creative || cart.damage > BREAK) {
+      if (cart.rider) cart.remounted = true; // b89 spcopy89: xl.a 106-118 riddenByEntity.mountEntity(this) before setDead: the player's copy gets an S08 at its seat (ai.js PlayerView)
       if (!creative || cart.customName) this.kill(cart, source);
       else this.setDead(cart);
     }

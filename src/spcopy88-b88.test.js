@@ -275,7 +275,8 @@ test("a portal trip keeps the EntityPlayerMP: the new world's copy has the old o
   assert.equal(fresh.calls.length > 0 && fresh.calls[0].answered, false, "a login places the copy directly");
   const src = readFileSync(new URL("./main.js", import.meta.url), "utf8");
   assert.match(src, /const leftCopy = mobs\?\.ai\?\.player;/);
-  assert.match(src, /if \(tripLoading && record\.transit && !record\.transit\.exit && !record\.transit\.death\) mobs\.ai\.player\.arriveFrom\(leftCopy\);/, "only a portal trip: the End's exit and a death are respawnPlayer (a new EntityPlayerMP)");
+  // b89 spcopy89: record.transit is deleted by dimension-live.js arrive before launch, so the transit now comes through tripArrival (and the Teleporter's motion with it)
+  assert.match(src, /if \(tripLoading && arrival && !arrival\.exit && !arrival\.death\) mobs\.ai\.player\.arriveFrom\(leftCopy, arrival\.arrivalMotion\);/, "only a portal trip: the End's exit and a death are respawnPlayer (a new EntityPlayerMP)");
 });
 
 // Item 5. EntityTrackerEntry.sendLocationToAllClients (my.a(List), bytecode-read: a relative move only for a delta of 4/32 block or more, offsets 481-507, or every 60
@@ -327,7 +328,7 @@ test("source pins: the copy's landing hooks, the 681 return and the mount hook",
   const ents = readFileSync(new URL("./entities.js", import.meta.url), "utf8");
   assert.match(ents, /handleFalling\(world, p, to\.y - from\.y, !!ground, this\.copyLanding\(p\)\)/);
   assert.match(ents, /if \(!p\.hasMoved\) \{ p\.x = p\.accepted\.x; p\.y = p\.accepted\.y; p\.z = p\.accepted\.z; return; \}/);
-  assert.match(ents, /if \(p\.mount\?\.dead\) \{ this\.processPlayer\(p, null, p\.packetGround\); p\.netTicks\+\+; return; \}/);
+  assert.match(ents, /if \(p\.mount\?\.dead\) \{\n[^\n]*\n\s*if \(p\.mount\.remounted\)[^\n]*\n\s*this\.processPlayer\(p, null, p\.packetGround\); p\.netTicks\+\+; return;/); // b89 spcopy89: a broken mount's S08 comes first
   const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
   assert.match(main, /mobs\.serverMount = \(\) => rider\.vehicle \?\? null;/);
   assert.ok(!/server-process-player/.test(readFileSync(new URL("./multiplayer/simulation.js", import.meta.url), "utf8")), "the dedicated server is unchanged");

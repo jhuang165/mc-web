@@ -140,7 +140,7 @@ export class DimensionLive {
     world.seed = javaSeed(record.seed);
     if (prepared.streaming && (record.wholeSave || record.rootId)) world.stored = await this.warmStored(record.rootId ? this.host.worlds?.().find((w) => w.id === record.rootId) ?? record : record, to);
     if (warm) await this.exitWarm.adopt(prepared, "start"); // cells the portal wait built for this world (exit-prewarm.js)
-    const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
+    const e = { x: tt.x, y: tt.y, z: tt.z, vx: t.motion?.x ?? 0, vy: t.motion?.y ?? 0, vz: t.motion?.z ?? 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 }; // b89 spcopy89: the copy's motion goes through the Teleporter
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
     // destinationCoordinateCache lives as long as the destination world does (natively the whole session): a repeat trip to the same column within about
     // 600 ticks reuses the portal picked before, even one that has been broken since. The Teleporter here is made per trip, so it is kept per root and dimension.
@@ -167,6 +167,7 @@ export class DimensionLive {
     if (pause) await runSteps(steps, pause); else drain(steps);
     this.writes = world.writes;
     record.position = { x: e.x, y: e.y, z: e.z, yaw: gameYaw(e.yaw), pitch: 0 };
+    t.arrivalMotion = { x: e.vx, y: e.vy, z: e.vz }; // b89 spcopy89: placeInExistingPortal turned (or zeroed) it, the End's platform zeroed it; main.js launch gives it to the new world's copy
     if (warm) await this.exitWarm.adopt(prepared, "end"); // Nether columns the portal wait built (the arrival window takes them)
   }
   // The kept portal cache of a root and dimension after the sweeps up to `now` (Teleporter.removeStalePortalLocations runs when the world time is a multiple of 100 and
@@ -467,6 +468,7 @@ export class DimensionLive {
       else if (target && dimensionOf(rec) === OVERWORLD) await this.beginAway(root);
       const next = { ...root, transit: { from: dimensionOf(rec), x: p.x, y: p.y, z: p.z, yaw: p.yaw, dir: this.state.teleportDirection, exit, death } };
       if (target) next.dimension = target; else delete next.dimension;
+      if (p.motion) next.transit.motion = { x: p.motion.x, y: p.motion.y, z: p.motion.z }; // b89 spcopy89: the server copy's motion at the transfer (transferPlayerToDimension keeps the EntityPlayerMP)
       this.quiet = true;
       h.sound("portal.travel", { volume: 0.25, pitch: 0.8 + Math.random() * 0.4 });
       const t0 = performance.now();
