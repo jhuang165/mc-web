@@ -24,7 +24,9 @@ export function attackedAtOf(fresh, from, random = Math.random, pose = null) {
 // (float) atan2(dz, dx) * 180 / PI - rotationYaw, with the coincident-position nudge (sv.a(ro, F)).
 function relativeAngle(from, at, yawDeg, random) {
   let dx = from.x - at.x, dz = from.z - at.z;
-  while (dx * dx + dz * dz < 1e-4) { dx = (random() - random()) * 0.01; dz = (random() - random()) * 0.01; }
+  let spins = 0; // b88 blast88: a self-hit (his own TNT) is coincident; a constant stub random must not spin forever
+  while (dx * dx + dz * dz < 1e-4 && spins++ < 1000) { dx = (random() - random()) * 0.01; dz = (random() - random()) * 0.01; }
+  if (dx * dx + dz * dz < 1e-4) { dx = 0.01; dz = 0; }
   return f(f((Math.atan2(dz, dx) * 180) / Math.PI) - f(yawDeg));
 }
 

@@ -16,6 +16,11 @@ import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 const isServerPlayer = (e) => !!e && typeof e === "object" && !!e.survival && !!e.position && Number.isFinite(e.yaw); // b87 blast87: a dedicated server player record
+import { getLootingModifier } from "./enchantments.js"; // b88 blast88
+// b88 blast88 (bytecode-read MinecraftServer.v, nh.a(jd)): the server's rotationYaw / rotationPitch is what processPlayer last set (offsets 625-678: the packet's angles when
+// jd.k(), then setPositionAndRotation; the sleeping branch keeps the entity's own), in the network tick AFTER the worlds' entity updates. The port takes a message's look
+// at arrival; the simulation's player loop (its processPlayer) copies it into `serverLook` after the sleep restore, and that copy is what a blast reads.
+export const serverLookOf = (p) => (p?.serverLook && Number.isFinite(p.serverLook.yaw) && Number.isFinite(p.serverLook.pitch) ? p.serverLook : { yaw: p.yaw, pitch: p.pitch });
 
 const f = Math.fround;
 // Entity.isImmuneToFire of the mobs that exist or will exist in this build.
@@ -154,10 +159,13 @@ export class Fireballs {
         const s = mobs.ai?.survival;
         return !!s && s.damage(n, "fireball", true, "fireball", owner && owner !== "player" ? owner : undefined); // the source entity is the shooter
       }
-      if (t?.ball) return this.hitBall(t.ball, owner); // EntityFireball.attackEntityFrom from the other ball's DamageSource
+      // b88 blast88: ro.a(ze, shooter).j() is the shooter, so a punched ball turns the other ball to the puncher's look; a server ball's "player" is `punchedBy` (the server has no playerLook)
+      if (t?.ball) return this.hitBall(t.ball, byPlayer && isServerPlayer(b.punchedBy) ? b.punchedBy : owner); // EntityFireball.attackEntityFrom from the other ball's DamageSource
       // DamageSource.causeFireballDamage(ball, shooter): the shooter is the source entity; without one (a dispenser's ball) it is the ball itself, which knocks back from its own
       // position and, for an EntityMob on the legacy action state, becomes the dead entityToAttack that the next update clears.
-      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }) });
+      // b88 blast88 (bytecode-read sv.a(ro)): onDeath takes Looting from ro.j() when it is a player (afv.i: the held item at the death), so a punched ball's kill rolls it
+      const looting = byPlayer ? getLootingModifier((isServerPlayer(b.punchedBy) ? b.punchedBy.survival : mobs.ai?.survival)?.held ?? null) : 0;
+      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }), looting });
     };
     if (b.large) {
       if (hit.entity) damage(FIREBALL.largeDamage);
@@ -186,7 +194,7 @@ export class Fireballs {
   }
   lookOf(e) {
     // b87 blast87: a server player's yaw and pitch are radians in the port's frame; rotationYaw = 180 - yaw in degrees, rotationPitch = -pitch (server-player-tracker.js).
-    if (isServerPlayer(e)) return lookVector(Math.fround(180 - (e.yaw * 180) / Math.PI), Math.fround((-e.pitch * 180) / Math.PI), mhSin, mhCos);
+    if (isServerPlayer(e)) { const l = serverLookOf(e); return lookVector(Math.fround(180 - (l.yaw * 180) / Math.PI), Math.fround((-l.pitch * 180) / Math.PI), mhSin, mhCos); }
     // b86 blastcover86: main.js playerLook gives rotationYaw / rotationPitch in degrees (playerEye), not a vector, so a player's TNT blast deflected a large ball to NaN; a replay
     // that hands a vector keeps it. getLookVec is EntityLivingBase.getLook(1.0F), the formula lookVector reproduces.
     if (e === "player") { const l = this.mobs.playerLook?.(); return !l ? null : Array.isArray(l) ? l : lookVector(l.yaw, l.pitch, mhSin, mhCos); }
@@ -243,13 +251,12 @@ export class Fireballs {
     b.owner = "player"; // ticksInAir goes on counting: the player is only skipped while the ball is under 25 ticks old
     return true;
   }
-  // The browser save (main.js `active.fireballs`): the flight state of every live ball. The shooter is a mob id, "player" or absent. A ball
+  // The browser save (main.js `active.fireballs`): the flight state of every live ball, without the shooter (b88 blast88: ze.b(dh) saves none). A ball
   // saved without its acceleration (an imported Java fireball: EntityFireball does not save it) keeps flying on its motion and slows.
   serialize(dimension = 0) {
     return this.list.filter((b) => !b.dead).map((b) => ({
       kind: b.kind, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, ax: b.ax, ay: b.ay, az: b.az, ticks: b.ticks, dimension,
       ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
-      ...(b.owner === "player" ? { owner: "player" } : b.owner?.id ? { owner: b.owner.id } : {}),
       ...(Number.isInteger(b.fire) && b.fire !== 0 ? { fire: b.fire } : {}), // b84 cmdfix84: Entity.writeToNBT's Fire (20 after the first update: ze.h setFire(1))
       rotation: [b.yaw ?? 0, b.pitch ?? 0], // b82 fireext82: Entity.writeToNBT's Rotation, which every entity writes (render81 had it for the skulls only)
     }));
@@ -275,7 +282,8 @@ export class Fireballs {
       if (ok(r.ticks)) ball.ticks = Math.max(0, r.ticks | 0);
       if (r.blue === true) ball.blue = true;
       if (Number.isInteger(r.fire) && r.fire !== 0) ball.fire = Math.max(-32768, Math.min(32767, r.fire)); // b84 cmdfix84
-      ball.owner = r.owner === "player" ? "player" : typeof r.owner === "string" ? this.mobs.entities.find((e) => e.id === r.owner) ?? null : null;
+      // b88 blast88 (bytecode-read ze.b(dh) / ze.a(dh)): EntityFireball writes xTile, yTile, zTile, inTile, inGround and direction (zg adds ExplosionPower), never the shooter, so a
+      // loaded ball has none (build: owner null): its hit is "onFire" with the ball itself, nobody's kill, and no shooter grace. An old save's `owner` is ignored.
       this.list.push(ball);
     }
   }

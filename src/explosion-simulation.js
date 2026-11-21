@@ -219,10 +219,13 @@ export function applyExplosion(state, request, hooks = {}) {
     );
     if (playerHit) {
       const hurtBefore = survival.hurtCount | 0;
-      if (!survival.creative && survival.scaledDamage(
+      // b88 blast88 (bytecode-read ro.a(agw), sv.a(ro, F)): the player's own TNT is "explosion.player" with HIM as the entity ("X was blown up by X") and a knockback from his own
+      // position (the coincident nudge); it was the plain "explosion" with none. rp.r() (isDifficultyScaled) is true only for a living entity that is not a player, so this one
+      // is not scaled (a creeper's and the plain explosion's still are: Survival.scaledDamage).
+      if (!survival.creative && (attacker === "player" ? survival.damage(playerHit.damage, "an explosion", true, "explosion", { x: position.x, y: position.y, z: position.z }, { self: true }) : survival.scaledDamage(
         playerHit.damage,
-        attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", { source: "explosion", from: attacker && attacker !== "player" ? attacker : undefined },
-      )) brokenTool();
+        attacker ? "a " + attacker.type : "an explosion", { source: "explosion", from: attacker || undefined },
+      ))) brokenTool();
       // A hit that opened a fresh hurt window is Entity.setBeenAttacked: the integrated server sends S12 (the server copy's motion) after the S27, and S12 SETS the client's motion.
       const s12 = !survival.creative && (survival.hurtCount | 0) > hurtBefore;
       // The source entity (Explosion.getExplosivePlacedBy: a creeper or other living exploder) knocks back first (attackEntityFrom), then the

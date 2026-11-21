@@ -25,10 +25,12 @@ export function queueVelocity(survival, x, y, z) {
 // Entity.rand roll never succeeds. A coincident attacker is nudged by Math.random like attackEntityFrom does.
 export function knockBack(velocity, position, from, nudge = Math.random, resistance = 0, roll = Math.random) {
   let dx = from.x - position.x, dz = from.z - position.z;
-  while (dx * dx + dz * dz < 1e-4) {
+  let spins = 0; // b88 blast88: a self-hit (his own TNT) is coincident; a constant stub random must not spin forever
+  while (dx * dx + dz * dz < 1e-4 && spins++ < 1000) {
     dx = (nudge() - nudge()) * 0.01;
     dz = (nudge() - nudge()) * 0.01;
   }
+  if (dx * dx + dz * dz < 1e-4) { dx = 0.01; dz = 0; }
   if (roll() < resistance) return false;
   const len = f(Math.sqrt(dx * dx + dz * dz)), k = f(0.4);
   velocity.x = velocity.x / 2 - (dx / len) * k;

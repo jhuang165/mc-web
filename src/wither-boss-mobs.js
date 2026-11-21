@@ -212,7 +212,8 @@ export class WitherSkulls extends Fireballs {
       if (owner) {
         landed = player ? !!survival?.scaledDamage(WITHER.skullDamage, "a wither", { source: "mob", from: owner }) : mobs.damage(t, WITHER.skullDamage, owner.x, owner.z, false, owner, { name: "mob", attacker: owner });
         if (landed && (player ? survival.health <= 0 : t.health <= 0) && owner.health > 0) owner.health = Math.min(WITHER.maxHealth, f(owner.health + WITHER.skullHeal));
-      } else if (!player) mobs.damage(t, 5, b.x, b.z, false, null, { name: "magic" });
+      } else if (!player) mobs.hazard(t, 5, "magic"); // b88 blast88 (bytecode-read zp.a(azu) offsets 65-77): DamageSource.magic (ro.k) has no entity, so no knockback (it pushed from the skull)
+      else survival?.damage(5, "magic", false); // b88 blast88: the same attackEntityFrom(magic, 5) on a player (it skipped him); magic bypasses armour and is not difficulty scaled
       const ticks = witherSkullEffectTicks(mobs.difficulty ?? 2);
       if (ticks > 0 && (player || t.type !== "wither")) {
         if (player) survival?.effects?.add({ id: POTION.WITHER, duration: ticks, amplifier: 1 });

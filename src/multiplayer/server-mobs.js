@@ -260,6 +260,9 @@ export class ServerMobs {
     // the placer as the source entity (mobRows: knockback, revenge, and for a player recentlyHit, XP, Looting and the kill, credited below through `attacker`). A TNT with no
     // placer (powered, dispensed, burnt) is a plain "explosion": no source entity, so no knockback (it used to push from the TNT itself).
     const byPlayer = placer?.survival ? placer : null;
+    // b88 blast88 (bytecode-read ro.a(agw), mw.a(ro, F), sv.a(ro, F)): a player in the list is hurt by the same "explosion.player" source with getExplosivePlacedBy as its entity (a TNT's placer,
+    // a creeper or wither; none for an unplaced TNT, a fireball or a bed): the death message, the knockback from that entity, the killer (playerKills) and the pvp test come from it.
+    const blastFrom = byPlayer ? host.pvpRules?.fromOf?.(byPlayer) ?? null : placer && typeof placer === 'object' ? placer : null;
     const b = { world, x, y, z, size, exploder: ev.source ?? null, placer };
     const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
@@ -274,7 +277,10 @@ export class ServerMobs {
         if (s.health <= 0) return;
         const hit = explosionImpact(world, x, y, z, size, p.x, serverPosY(p.y, lying), p.z, serverEyeY(p.y, lying), entityBox(p, lying ? SLEEP_BOX : PHYSICS.width, lying ? SLEEP_BOX : PHYSICS.height));
         if (!hit) return;
-        if (!s.creative) this.hurt(v.player, hit.damage, { name: 'explosion', from: ev.source ?? null }); // a creative player takes no damage but is pushed all the same (the push is in doExplosionA, not attackEntityFrom)
+        // b88 blast88: the source was the TNT entity with no damage scaling and the "explosion" reason the combat tracker does not know (a mob or generic death message); now the
+        // placer's "explosion.player" (as applyExplosion). rp.r() scales a living non-player entity's only (a creeper's; the plain one is scaled too), so a player's TNT is unscaled.
+        // pvp off (mw.a(yz)) refuses a player's TNT, his own too, but not the push below.
+        if (!s.creative) this.hurt(v.player, hit.damage, { name: 'explosion', from: blastFrom, call: () => blastFrom?.isPlayer ? s.damage(hit.damage, 'an explosion', true, 'explosion', blastFrom) : s.scaledDamage(hit.damage, 'an explosion', { source: 'explosion', from: blastFrom ?? undefined }) }); // a creative player takes no damage but is pushed all the same (the push is in doExplosionA, not attackEntityFrom)
         const kick = blastKnockback(s.inventory?.armor ?? [], hit.impact), scale = hit.impact && kick !== hit.impact ? kick / hit.impact : 1; // agi.a: Blast Protection on the server's own motion only
         for (let i = 0; i < 3; i++) v.player.velocity['xyz'[i]] += hit.push[i] * scale;
         knock.set(v.player, [hit.push[0], hit.push[1], hit.push[2]]);
