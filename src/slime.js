@@ -89,7 +89,7 @@ const wrap = (v) => { v = f(f(v) % 360); if (v >= 180) v = f(v - 360); if (v < -
 export const updateRotation = (current, target, limit) => f(current + Math.max(-limit, Math.min(limit, wrap(target - current))));
 // EntityLiving.faceEntity(target, 10, 20): `target.y` is the target's eye height position.
 export function faceEntity(s, target, yawLimit = 10, pitchLimit = 20) {
-  const dx = target.x - s.x, dz = target.z - s.z, dy = target.eyeY - (s.y + slimeEyeHeight(s.size)), h = Math.sqrt(dx * dx + dz * dz);
+  const dx = target.x - s.x, dz = target.z - s.z, dy = target.eyeY - (s.y + slimeEyeHeight(s.size)), h = f(Math.sqrt(dx * dx + dz * dz)); // MathHelper.sqrt_double is a float (b91 mobrec91)
   const yaw = f(f(Math.atan2(dz, dx) * 180 / FLOAT_PI) - 90), pitch = f(-f(Math.atan2(dy, h) * 180 / FLOAT_PI)); // sw.a(sa, F, F) divides by the float constant 3.1415927410125732 (bytecode-read, confirmed by the chase records)
   s.rotationPitch = updateRotation(s.rotationPitch || 0, pitch, pitchLimit);
   s.rotationYaw = updateRotation(s.rotationYaw, yaw, yawLimit);

@@ -75,7 +75,6 @@ export function breakDoorClass(Task) {
       const fx = f(x + 0.5 - e.x), fz = f(z + 0.5 - e.z);
       if (this.entityPos.x * fx + this.entityPos.z * fz < 0) this.stopped = true;
       const rand = m.ai.deps.entityRandom ? m.ai.deps.entityRandom(e) : m.rand;
-      ew.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
       if (rand.nextInt(20) === 0) this.sound("mob.zombie.wood");
       this.counter++;
       const stage = Math.trunc(f(f(this.counter / f(240)) * 10));
@@ -93,7 +92,8 @@ export function breakDoorClass(Task) {
     }
     sound(name) {
       const { x, y, z } = this.door, ew = this.m.ai.ew;
-      this.events.push({ sound: name, volume: 2, pitch: pitchRoll(ew.worldRandom), position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      ew.clientAuxRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)); // b91 mobrec91: aux events 1010/1012 draw the pitch from the client world's random (bma.a(yz,IIIII), bjf.s), not the server's
+      this.events.push({ sound: name, volume: 2, pitch: pitchRoll(ew.clientAuxRandom), position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
     }
     // World.destroyBlockInWorldPartially(entityId, x, y, z, stage): the crack overlay of the client (stage -1 clears it).
     crack(stage) {

@@ -194,7 +194,7 @@ test("a portal trip takes the player out of the old world at once: the copy stop
   const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
   assert.match(main, /if \(mobs\?\.ai\?\.player\) mobs\.ai\.player\.left = !!dims\.busy;/);
   const ents = readFileSync(new URL("./entities.js", import.meta.url), "utf8");
-  assert.match(ents, /if \(p\?\.alive && !p\.unticked && !p\.left\) \{/);
+  assert.match(ents, /if \(p && !p\.unticked && !p\.left\) \{/);
 });
 
 test("the motion crosses the trip: arriveFrom takes the Teleporter's result (or the old copy's own); travel puts the copy's motion in the transit", async () => {

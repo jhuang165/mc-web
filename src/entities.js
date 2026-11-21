@@ -1255,7 +1255,7 @@ export class EntityWorld {
       if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), this.mathRandom ?? Math.random);
       else (this.mathRandom ?? Math.random)(); // no attacker entity: attackedAtYaw = (int)(Math.random() * 2) * 180 (sv.a(ro, F), bytecode-read; the value is not used by the port)
     }
-    const child = e.growingAge < 0, sound = { volume: soundVolume(e.type), position: e };
+    const child = e.growingAge < 0, sound = { volume: volumeOf(e), position: e }; // b91 mobrec91: EntitySlime.getSoundVolume is 0.4 * size (executed b91mr-golem-slime-9301: 0.8 at size 2), not the table's 1
     // The server's own sound (hurt, or die when the hit kills) at getSoundPitch(): `events`, replayed against the original
     // by combat-reference.json. A fresh hit also sends status 2 to the clients (handleHealthUpdate: the hurt sound at
     // (r - r) * 0.2 + 1, no child pitch) and onDeath sends status 3 (the die sound the same way): the client's own
@@ -1524,7 +1524,7 @@ export class EntityWorld {
     };
     const blocked = (box) => {
       const p = this.ai?.player;
-      if (p?.alive && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
+      if (p?.inWorld && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
       // World.checkNoEntityCollision: not yet setDead (a dying mob still counts).
       // preventEntitySpawning is set by EntityLivingBase (bats included, though they are not pushable); probed natively.
       for (const o of this.entities) if ((o.type === "bat" || o.type === "ender_dragon" || o.type === "ender_crystal" || pushable(o)) && boxesIntersect(box, sized(o))) return true;
@@ -2638,7 +2638,7 @@ export class EntityWorld {
     this.tilePass = true; // b56tm: until the hook's network part (main.js tickServerDig -> endTilePass) a spawn is a tile entity pass spawn: late against the flush
     try { this.afterEntities?.(); } finally { this.tilePass = false; } // World.updateEntities' tile entity pass (moving piston blocks push mobs and the copy: b48pp records), after every entity and before the network tick
     const p = this.ai.player;
-    if (p?.alive && !p.unticked && !p.left) { // `unticked`: the village-fight replay's player, which the native probe never ticks; b89 spcopy89 `left`: gone to another dimension
+    if (p && !p.unticked && !p.left) { // b91 mobrec91: a dead copy (health 0) runs on too: nh.a(jd) never tests isDead, so EntityPlayerMP.onUpdateEntity keeps its motion, pushes and falls (executed b91mr-dead-flight-9101/9102). `unticked`: the village-fight replay's player, which the native probe never ticks; b89 spcopy89 `left`: gone to another dimension
       this.serverPlayerUpdate(p);
     }
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
@@ -2732,6 +2732,7 @@ export class EntityWorld {
         pushServerPlayer(p, o, at, true); // o.applyEntityCollision(player): the mob and the player both move
       }
     }
+    for (const o of liveOrder(this, this.entities)) if (isSlimeLike(o) && o.health > 0) this.slimeTouch(o, p, at); // EntityPlayer.collideWithPlayer, after the pushes
     return e;
   }
   // b85 spcopy85 / b86 spcopy86: NetHandlerPlayServer.processPlayer (nh.a(jd), bytecode-read; server-process-player.js has the offsets) for one packet `pkt` ({ x, y, z } or null for
@@ -2882,7 +2883,7 @@ export class EntityWorld {
     this.walks?.get("cart")?.pushMob?.(e);
     this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
-    if (p?.alive && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
+    if (p?.inWorld && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
     pushNearDone(near);
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
@@ -2909,7 +2910,7 @@ export class EntityWorld {
     this.walks?.get("cart")?.pushMob?.(e);
     this.walks?.get("boat")?.pushMob?.(e);
     const p = this.ai.player;
-    if (p?.alive && !e.rider?.player) {
+    if (p?.inWorld && !e.rider?.player) {
       const pw = f(f(p.width) / 2), ph = f(p.height), x = p.x, y = p.y, z = p.z;
       const hit = x + pw > near[0] && x - pw < near[3] && y + ph > near[1] && y < near[4] && z + pw > near[2] && z - pw < near[5]; // boxesMeet(near, pushBox(p, p.width, p.height))
       if (fast87.mode === "verify" && hit !== boxesMeet(near, pushBox(p, p.width, p.height))) fail87("push player box");
@@ -3039,12 +3040,21 @@ export class EntityWorld {
     e.slimeStrafe = e.moveStrafing || 0;
     this.slimeSquishFinish(e, rand);
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
-    // EntityPlayer.collideWithPlayer reaches mobs within the player's box grown 1 block sideways; b_ then needs size > 1,
-    // line of sight and distance^2 < (0.6 * size)^2 (centre to centre), and hits for `size`.
-    const p = this.ai.player, s = this.ai.survival;
-    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2, this.ai.brain(e).canSee(p), isMagma(e) || undefined)) {
+    const q = this.ai.player;
+    if (!q || q.unticked || q.left) this.slimeTouch(e, q); // a copy nothing ticks (a harness) has no collideWithPlayer of its own: the hit stays in the slime's tick
+  }
+  // EntityPlayer.collideWithPlayer (yz.e, after EntityLivingBase.onLivingUpdate and its collideWithNearbyEntities, so in EntityPlayerMP.onUpdateEntity's network tick after the
+  // world's entities) reaches mobs within the player's box grown 1 block sideways; EntitySlime.b_ then needs size > 1, line of sight and distance^2 < (0.6 * size)^2 (centre to
+  // centre), and hits for `size` (executed b91mr-slime-fight records: the knockback is the end of the copy's tick). `at`: the copy's moved position.
+  slimeTouch(e, p, at = p) {
+    const s = this.ai.survival;
+    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (at.x - e.x) ** 2 + (at.y - e.y) ** 2 + (at.z - e.z) ** 2, this.ai.brain(e).canSee(p), isMagma(e) || undefined)) {
       // EntitySlime.func_175451_e (ym.b_): a landed hit plays mob.attack at volume 1, pitch (rand - rand) * 0.2 + 1, both draws on the slime's Entity.rand
-      if (this.hitPlayer(e, s)) { const rand = entityRandom(e); this.events.push({ sound: "mob.attack", volume: 1, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } }); }
+      const home = { x: p.x, y: p.y, z: p.z };
+      if (at !== p) { p.x = at.x; p.y = at.y; p.z = at.z; } // the hit's knockBack on the copy reads its moved position (executed b91mr-magma-fight-9212)
+      let hit;
+      try { hit = this.hitPlayer(e, s); } finally { p.x = home.x; p.y = home.y; p.z = home.z; }
+      if (hit) { const rand = entityRandom(e); this.events.push({ sound: "mob.attack", volume: 1, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } }); }
     }
   }
   slimeSquishFinish(e, rand) {
@@ -3054,11 +3064,12 @@ export class EntityWorld {
   slimeThink(e) {
     const p = this.ai.player, s = this.ai.survival;
     this.ai.brain(e).despawnEntity();
-    const target = this.ai.closestVulnerablePlayer(e, 16) ? { x: p.x, eyeY: p.y + 1.62, z: p.z } : null;
+    const target = this.ai.closestVulnerablePlayer(e, 16) ? { x: p.x, eyeY: p.y + f(1.62), z: p.z } : null; // sv.g() is the float 1.62F
     e.moveForward = e.slimeForward;
     e.moveStrafing = e.slimeStrafe;
     e.aiMoveSpeed = SLIME.speed; // the fixed 0.1 land movement factor
     slimeActionState(e, entityRandom(e), target, (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
+    e.rotationYawHead = e.rotationYaw; // EntityLiving.onLivingUpdate without AI (sw.e): rotationYawHead = rotationYaw after the action state (b91 mobrec91, executed b91mr-slime-fight)
   }
   // EntitySlime.setDead (ym.B) at the end of the death animation: 2 to 4 children of half the size beside the corpse. The
   // No mob count test natively (ym.B: 2 + nextInt(3) spawnEntityInWorld calls, bytecode-read, slime.md); b71 drops the old 40 cap. SLIME_SPLIT_GUARD is only a
@@ -3290,11 +3301,12 @@ export class EntityWorld {
     const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
     const env = {
       rand, remote: false, get mobGriefing() { return gameRule("mobGriefing"); },
-      closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
+      closestPlayer: (me, range) => (p && !p.left && (range < 0 || m.distSq(p) < range * range) ? p : null), // World.getClosestPlayer (ahb.a(DDDD)) tests only the distance: a dead player stays (b91 mobrec91, bytecode-read; the blaze's executed b90mr-blaze-dead-9021)
+      lookGone: (x) => (x === p ? !p || !!p.left || (p.deadTicks ?? 0) > 20 : x.alive === false), // sw.bq drops the look target on sa.K (isDead), not health (b91 mobrec91: every legacy mob, as the blaze in b90)
       findPlayerToAttack: (me) => this.ai.closestVulnerablePlayer(me, 8),
       isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
       isCreative: (x) => x === p && !!s.creative,
-      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? f(1.62) : x.eyeHeight),
       boxMidY: (x) => x.y,
       canSee: (me, target) => m.canSee(target),
       attackEntity: (me, target, d) => {
@@ -3348,11 +3360,12 @@ export class EntityWorld {
     const world = this.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
     const env = {
       rand, remote: false,
-      closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
+      closestPlayer: (me, range) => (p && !p.left && (range < 0 || m.distSq(p) < range * range) ? p : null), // World.getClosestPlayer (ahb.a(DDDD)) tests only the distance: a dead player stays (b91 mobrec91, bytecode-read; the blaze's executed b90mr-blaze-dead-9021)
+      lookGone: (x) => (x === p ? !p || !!p.left || (p.deadTicks ?? 0) > 20 : x.alive === false), // sw.bq drops the look target on sa.K (isDead), not health (b91 mobrec91: every legacy mob, as the blaze in b90)
       findPlayerToAttack: (me) => { const c = this.ai.closestVulnerablePlayer(me, GIANT.range); return c && m.canSee(c) ? c : null; },
       isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
       isCreative: (x) => x === p && !!s.creative,
-      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? f(1.62) : x.eyeHeight),
       boxMidY: (x) => x.y,
       canSee: (me, target) => m.canSee(target),
       attackEntity: (me, target, d) => {

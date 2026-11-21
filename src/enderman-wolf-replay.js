@@ -40,6 +40,7 @@ export const reference49 = JSON.parse(readFileSync(new URL("../public/research/e
 export const reference48 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b48pp-reference.json", import.meta.url)));
 export const reference47h = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b47h-reference.json", import.meta.url)));
 export const reference88 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b88mr-reference.json", import.meta.url))); // b88 mobrec88
+export const reference91 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b91mr-reference.json", import.meta.url))); // b91 mobrec91
 export const reference90 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b90mr-reference.json", import.meta.url))); // b90 mobrec90
 export const reference89 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b89mr-reference.json", import.meta.url))); // b89 mobrec89
 export const reference43 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b43-reference.json", import.meta.url)));
@@ -54,6 +55,7 @@ class LogRandom extends JavaRandom {
 const TYPE_OF = { E: "enderman", W: "wolf", A: "wolf", T: "wolf", S: "wolf", O: "wolf", H: "sheep", Z: "zombie",
   C: "cow", M: "mooshroom", P: "pig", R: "horse", L: "ocelot", U: "ocelot", G: "iron_golem", B: "spider", I: "slime", f: "silverfish", g: "giant", z: "pigman", a: "blaze", N: "snow_golem", K: "witch", X: "creeper", c: "cow", p: "pig", m: "mooshroom",
   J: "cave_spider", // b88 mobrec88
+  i: "slime", j: "slime", l: "magma_cube", u: "magma_cube", v: "magma_cube", // b91 mobrec91: slime 2 and 1, magma cube 2 and 4 (jump delay fixed to 20 in the probe)
   Q: "horse", q: "horse", D: "horse", F: "horse", Y: "horse", V: "horse", 3: "horse", 4: "horse", 5: "horse", 6: "horse" }; // b44: the other EntityAITasks mobs (lower case: a baby)
 const ANIMALS = new Set(["cow", "mooshroom", "pig", "horse", "ocelot", "sheep"]);
 // b45 (horses): tame adult horses Q and q, a tame donkey D, a wild foal F, a tame foal Y: [type, variant, tame, growing age, max health, speed, jump] (EndermanWolfProbe.b45Horse); R is the wild adult the batch 44 probe builds (health, max health and speed fixed)
@@ -86,7 +88,7 @@ function run(r, opts) {
   ew.ocelotBlocks = { chestUsers: () => 0, furnaceLit: lit };
   ew.worldRandom = new JavaRandom(r.seed);
   const worldDraws = { n: 0 }; // b90 mobrec90: the probe's counting World.rand (row element 11); the replay's world random counts the same way
-  if (r.name.startsWith("b90mr")) { const next = ew.worldRandom.next.bind(ew.worldRandom); ew.worldRandom.next = (bits) => { worldDraws.n++; return next(bits); }; }
+  if (/^b9[01]mr/.test(r.name)) { const next = ew.worldRandom.next.bind(ew.worldRandom); ew.worldRandom.next = (bits) => { worldDraws.n++; return next(bits); }; }
   let day = false, rain = false, bright = r.bright, held = 0;
   ew.isDaytime = () => day;
   ew.isRaining = () => rain;
@@ -107,6 +109,7 @@ function run(r, opts) {
     if (ch === "T" || ch === "S" || ch === "O") { e.owner = "player"; e.health = 20; if (ch === "O") e.ownerUuid = "someone"; if (ch === "S") e.sitWish = true; }
     if (ch === "A") e.angry = true;
     if (ch === "I") Object.assign(e, slimeFields(4, () => 0), { jumpDelay: 20 }); // b49po: a size 4 slime with the probe's fixed jump timer (bn = 20)
+    if ("ijluv".includes(ch)) Object.assign(e, slimeFields(ch === "j" || ch === "v" ? 1 : ch === "u" ? 4 : 2, () => 0), { jumpDelay: 20 }); // b91 mobrec91
     if (ch === "U") { e.owner = "player"; e.health = 10; }
     if (ch === "R") { e.horse.maxHealth = e.health = 20; e.horse.speed = f32(0.2); } // fixed in the probe too (the rolled health and speed are not task draws)
     if (r.init && HORSES45[ch]) {
@@ -125,9 +128,9 @@ function run(r, opts) {
   // item, orb and explosion machinery, the witch's potion list (seeded per throw from the record) and the gamerule mobGriefing.
   const xcw = r.rows[0][5] !== undefined && !r.init; // the horse set (b45, record.init) also has a sixth row element
   const x87 = r.name.startsWith("b87wf"); // b87 mobrec87: the potions fly too (EndermanWolfProbe B87W), after the mobs in the loaded-entity walk
-  const x89 = /^b(89|90)mr/.test(r.name); // b89 mobrec89: the b88mr harness plus the blaze's fireballs in the walk, mob effects and the player's food stats (row element 10)
+  const x89 = /^b(89|9[01])mr/.test(r.name); // b89 mobrec89: the b88mr harness plus the blaze's fireballs in the walk, mob effects and the player's food stats (row element 10)
   const x88 = x89 || r.name.startsWith("b88mr");
-  const x90 = r.name.startsWith("b90mr"); // b90 mobrec90: the b89mr harness plus the world random draw count (row element 11) // b88 mobrec88: a ticked server copy (b47sp rules) whose effects run, and the snow golem's snowballs fly (EndermanWolfProbe B88)
+  const x90 = /^b9[01]mr/.test(r.name); const x91 = r.name.startsWith("b91mr"); // b90 mobrec90: the b89mr harness plus the world random draw count (row element 11) // b88 mobrec88: a ticked server copy (b47sp rules) whose effects run, and the snow golem's snowballs fly (EndermanWolfProbe B88)
   const items = new ItemEntities(() => 0.5), orbs = new ExperienceOrbs([], () => 0.5), pv = { x: 0, y: 0, z: 0 };
   const potionSeeds = [];
   let grief = true;
@@ -330,7 +333,7 @@ function run(r, opts) {
         : e.type === "wolf" ? [e.angry ? 1 : 0, e.sitting ? 1 : 0, e.owner ? 1 : 0, e.sitWish ? 1 : 0, e.inWater ? 1 : 0, ...(r.ext ? [e.love ?? 0, e.growingAge] : [])]
         : r.init && e.type === "horse" ? horseFlags(e)
         : r.ext && ANIMALS.has(e.type) ? [e.love ?? 0, e.growingAge] : [];
-      const legacyTarget = x88 && (e.type === "spider" || e.type === "cave_spider" || (x90 && e.type === "blaze")) ? ew.silverfishState(e).target : undefined; // b88: a spider's row has entityToAttack
+      const legacyTarget = x88 && (e.type === "spider" || e.type === "cave_spider" || (x90 && e.type === "blaze") || (x91 && (e.type === "silverfish" || e.type === "giant" || e.type === "pigman"))) ? ew.silverfishState(e).target : undefined; // b88: a spider's row has entityToAttack
       return [e.x, e.y, e.z, e.removedHealth ?? e.health, legacyTarget !== undefined ? (legacyTarget === ew.ai.player ? n : idxOf(legacyTarget)) : idxOf(b.attackTarget), e.revenge ? (revengeOf(e) === "player" ? n : idxOf(revengeOf(e))) : -1, flags, logs[i].log.slice(), [e.vx, e.vy, e.vz, e.rotationYaw, e.rotationPitch ?? 0, e.rotationYawHead, e.renderYawOffset, e.onGround ? 1 : 0, e.jumping ? 1 : 0, e.moveForward ?? 0, e.moveStrafing ?? 0]];
     });
     const state = [rows, sounds, damage, idxOf(ew.ai.player.hurtBy), r.init ? kids : null];
@@ -411,12 +414,12 @@ export function firstDivergence(r, got) {
       if (d2) return d2; // the b46mp records compare the server copy's motion (x, z) every tick; the older sets only after a blast, the only push on a player their probe applied (its player is not ticked)
     }
     if (r.init && JSON.stringify(want[5]) !== JSON.stringify(have[4])) return [t, "spawned horses", want[5], have[4]];
-    if (/^b(8[89]|90)mr/.test(r.name)) { // b88 mobrec88: the flying snowballs and the player's effects (row element 9)
+    if (/^b(8[89]|9[01])mr/.test(r.name)) { // b88 mobrec88: the flying snowballs and the player's effects (row element 9)
       if (!deepSame(want[9][0], have[9][0])) return [t, "snowballs", want[9][0], have[9][0]];
       if (!deepSame(want[9][1], have[9][1])) return [t, "player effects", want[9][1], have[9][1]];
     }
-    if (r.name.startsWith("b90mr") && !deepSame(want[11], have[11])) return [t, "world random draws", want[11], have[11]]; // b90 mobrec90: the aux event's pitch is the client's draw, the server world random is not touched by a shot
-    if (/^b(89|90)mr/.test(r.name)) { // b89 mobrec89: the mobs' effects, the player's health and food stats, the fireballs in flight (row element 10)
+    if (/^b9[01]mr/.test(r.name) && !deepSame(want[11], have[11])) return [t, "world random draws", want[11], have[11]]; // b90 mobrec90: the aux event's pitch is the client's draw, the server world random is not touched by a shot
+    if (/^b(89|9[01])mr/.test(r.name)) { // b89 mobrec89: the mobs' effects, the player's health and food stats, the fireballs in flight (row element 10)
       if (!deepSame(want[10][0], have[10][0])) return [t, "mob effects", want[10][0], have[10][0]];
       if (!deepSame(want[10][1], have[10][1])) return [t, "player food", want[10][1], have[10][1]];
       if (!deepSame(want[10][2], have[10][2])) return [t, "fireballs", want[10][2], have[10][2]];
