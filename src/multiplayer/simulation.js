@@ -33,7 +33,7 @@ import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '
 import { sensorSky, celestialRadians } from '../daylight-sensor-time.js'; // b88 tiles88
 import { ServerChunkSets } from './server-chunks.js';
 import { ServerRules, blockProtected, flightCheck, hardcoreTick } from './server-properties.js'; // b69 serverprops
-import { tickWorldSystems } from '../world-tick.js';
+import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack, copyStack } from '../inventory.js';
@@ -675,9 +675,14 @@ export class DedicatedSimulation {
       p.resendCells = null; // b89 lead (found by mpperf89): this statement had been folded into the comment above since b61, so a refused edit was resent every tick and the list kept growing; native sends the S23 once
     }
     // b91 mpobjects91 (bytecode-read mt.b, MinecraftServer.updateTimeLightAndEntities): WorldServer.tick (weather, the all-asleep skip, the random block ticks and the lightning rolls) and its
-    // weather-effect bolts run BEFORE World.updateEntities and the EntityTracker flush; the port had them after the flush. (Native also runs the scheduled tickUpdates before the random
-    // ticks and the entity pass; tickWorldSystems below still follows the entities: the Follow-up in mpobjects91-b91-track.md.)
-    this.weather.tick(this.world);
+    // weather-effect bolts run BEFORE World.updateEntities and the EntityTracker flush. b92 mpobjects92 (mt.b, in order): ahb.b (the weather timers), the all-asleep skip and wakeAllPlayers,
+    // [the spawner: mobs.tick below], tickPending (the scheduled tickUpdates and the queued block events), tickBlocks (the random ticks); then updateEntities, whose tile entities (hoppers,
+    // brewing stands, moving pistons) come last. Deviation: SpawnerAnimals (inside mobs.tick) still follows the scheduled pass.
+    this.weather.updateWeather();
+    this.sleep.worldTick(); // b92: right after the weather timers, before the scheduled ticks and the entities; the darkness read below is the post-skip clock, as mt.b's skylight step is
+    tickScheduledSystems({ falling: this.falling, farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
+      { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
+    this.weather.tick(this.world, null, true);
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
@@ -687,17 +692,15 @@ export class DedicatedSimulation {
     this.dispense.tickJoined(); // b81 blast81: TNT primed during the entity pass updates in it
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
     tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
-    this.falling.tick(); // b90 mpobjects90: WorldServer.tickUpdates spawns the falling block and World.updateEntities runs it BEFORE EntityTracker.updateTrackedEntities, so its S0E leaves in the tick it spawned (dispense.flush is the tracker pass)
+    this.falling.tickEntities(); // b92: the scheduled part ran in tickScheduledSystems; b90 mpobjects90: WorldServer.tickUpdates spawns the falling block and World.updateEntities runs it BEFORE EntityTracker.updateTrackedEntities, so its S0E leaves in the tick it spawned (dispense.flush is the tracker pass)
     this.maps.tick(); // b69 mpmaps (b91: ItemMap.onUpdate is the player's entity update, so before the tracker pass): ItemMap.onUpdate and the S34 map updates (server-maps.js)
+    tickTileSystems({ hoppers: this.containers.ticks.hoppers, redstone: this.redstone }); // b92: the end of World.updateEntities (tile entities), before the tracker pass
     this.dispense.flush();
     this.fishing.flush(); // b64 mpstats2: fishHooks / fishFx
     eachValue89(this.players, (p) => this.serverItems.settle(p)); // b89 mpperf89
     eachValue89(this.players, (p) => this.serverSurvival.settle(p)); // b61: a hit by a mob or an action kills in its own tick (server-survival.js)
     this.deliverSounds();
     this.spawnDarkness = this.darkness; // b90 tiles90: the field World.skylightSubtracted holds for the NEXT tick's SpawnerAnimals pass (read in mobs.tick, before the clock step; native: the spawner precedes calculateSkylightSubtracted)
-    this.sleep.worldTick(); // b66 mpsleep: WorldServer.tick's all-asleep night skip, (b91: still here, after spawnDarkness is captured; native runs it right after the weather update, before the entities) (the clock has already advanced by this tick's one)
-    tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, hoppers: this.containers.ticks.hoppers },
-      { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     this.pistons.flush(); // b66 mppistons: S24 and the new moving blocks to the players in range
     // TileEntityBeacon.updateEntity: every 80 world ticks the pyramid check, then the effects for the players in range (pyramid-live.js, the
     // singleplayer tick). Each grant also goes to that player as an S1D entity-effect message (`effectsOut`, delivered by the connection).
