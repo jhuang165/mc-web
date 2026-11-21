@@ -111,6 +111,8 @@ export function mobBaseOf(tag) {
   if (nbtGet(tag, "OnGround", NBT.BYTE, 0) !== 0) o.onGround = true;
   const fall = f(nbtGet(tag, "FallDistance", NBT.FLOAT, 0));
   if (fall !== 0) o.fallDistance = fall;
+  const air = nbtGet(tag, "Air", NBT.SHORT, 300); // b91 entnbt91: sv.C counts it only in water, so a loaded mob keeps the saved supply (a record without `air` is 300)
+  if (air !== 300) o.air = air;
   return o;
 }
 // A chunk compound's kept keys as a record (keptBaseOf with the defaults left out: Air 300 is what a record without `air` exports; a missing UUID is drawn on the first save).
