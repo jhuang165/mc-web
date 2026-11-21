@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 89 (2026-11-20, ten tracks in `../wt89-<name>` on `batch89-<track>`, cut from 6cd02f772, merged --no-ff on `batch89-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b89-lead/track-rules.md`; lead note `b89-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.118.0, by track (details in the `*-b89-track.md` notes and "Done in batch 89" in `public/research/remaining-gaps.md`):
+  - horse89: `Horse89Probe` (10 scenarios); the sneak tick's last ridden move and jump (`finishVehicleTick`, `riderSneakOff`), fresh-horse air speed 0, dead-mount seat, buck movement.
+  - mpobjects89: `multiplayer/falling-lane.js` (server falling-block rows) and client falling copies (`thrown-copy.js`); `clientBoatCopyBoxes` in `boats.js`; `useEye` reach check; `liftSummonedCrystal`; `crystalPushMove`; crystal boxes in `mpperf79-fast.js` sweeps.
+  - mobpackets89: `mob-tracked-attributes.js` (S20), S1D for new watchers, spawn-state tracker entries (`birthList`), skeleton arrows in their spawn tick (`MobPackets89Probe`, 32 records).
+  - spcopy89: `brokenMountLocation`, `PlayerView.left` during trips, `arrivalMotion` through the Teleporter, mount and sleep position sets, `tripArrival` in `main.js`.
+  - credit89: `killerOf` and the tracker's attacking player (`combat-tracker.js`, `server-survival.js`); `leaveBody` dead-body TNT; `clickLook` for the punch; no saved arrow shooter; `dispensed` thrown hits.
+  - console89: 900-tick silent autosave (`server-save.js`); `multiplayer/net-native-bytes.js` (deflated chunk lengths, item tags); `writePackets`/`readPackets`/`kickPacket` (`Console89Probe`).
+  - tiles89: `swapTiles`/`installTileSwaps`, `swapChestRecord`, `furnaceAddedFacing` (`container-tiles.js`); `/setblock` facing compare; darkness before the time increment.
+  - entnbt89: `travelSource`/`travelRoute` in `entity-portal.js`; fireball and rocket PortalCooldown; raw Fire on mob import.
+  - mobrec89: 20 executed records (`b89mr`); magic-path poison (`mob-effects.js`), snow golem hostile list, blaze dead-target hover, float exhaustion.
+  - mpperf89: `mpperf89-fast.js` behind `MC_MPPERF89=on|off|verify`; loop helpers, restore reshape, sense-cache guard, `makeAI89`, `TaskList` running-task walk (heap per tick -5.5% travel, -13% pen, -6% terrain).
+- Lead fixes: no merge conflicts. The away-run catch-up (b59/b60) read the deleted `record.transit` in `launch` and never ran in the game; it reads `tripArrival` now (8d61ba6d9, `lead89-b89.test.js`). The dedicated server never cleared a refused edit's resend list (the statement sat inside a comment since b61), so the cells went out every tick and the list grew; found by mpperf89, fixed with a test that fails without it (f9777cf5d).
+- Verification: Cross-track run of 115 files with MC_MPPERF83..89=verify: 2047/2047. One full `npm test` on f9777cf5d: 10077/10077. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 89" in `public/research/remaining-gaps.md`.
+
 Batch 88 (2026-11-20, ten tracks in `../wt88-<name>` on `batch88-<track>`, cut from fd68ecc68, merged --no-ff on `batch88-lead`; track agents ran on Opus, by request; shared rules `../artifacts/b88-lead/track-rules.md`; lead note `b88-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.117.0, by track (details in the `*-b88-track.md` notes and "Done in batch 88" in `public/research/remaining-gaps.md`):
   - horse88: `Horse88Probe` (18 runs); undecayed ride input, jump clear timing, `jumpHeld`, yaw `% 360`, the jump strength attribute (`horse-live.js`, `vehicle-simulation.js`).
