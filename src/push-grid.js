@@ -6,6 +6,7 @@
 // re-bucketed by `markMoved` (called where positions are written outside a mob's own move: seats, dismounts, piston pushes) and by push itself for the mob, its mount
 // and its rider; a changed array length, a moved list index, or a disabled grid falls back to the full scan (`lookup` returns null). MC_PUSHGRID=off disables it;
 // MC_PUSHGRID=verify runs both and throws on the first difference (tests and the benchmark use it to prove the two agree).
+import { fast90, recycleOf90, checkGrid90 } from "./mpperf90-fast.js"; // b90 mpperf90: FineGrid keeps the arrays of the grid before it
 import { fineSorted } from "./mpperf83-fast.js"; // b83 mpperf83: FineGrid.query sorts short candidate lists in place
 const CELL = 8, REACH = 12 + 1e-6;
 export const pushGridConfig = { mode: (typeof process !== "undefined" && process.env?.MC_PUSHGRID) || "on" }; // tests set `mode` ("on", "off", "verify")
@@ -53,8 +54,9 @@ export class PushGrid {
 }
 
 let active = null, looping = false; // the grid of the mob loop that is running (one at a time)
-export const beginPushGrid = () => { active = null; fine = null; looping = true; };
-export const endPushGrid = () => { active = null; fine = null; looping = false; };
+let spare = null; // b90 mpperf90: the grid the last loop ended with, for the next one to take the arrays of
+export const beginPushGrid = () => { active = null; if (fine) spare = fine; fine = null; looping = true; };
+export const endPushGrid = () => { active = null; if (fine) spare = fine; fine = null; looping = false; };
 // A position written outside a mob's own move (seat, dismount, piston push, teleport): the active grids file it again.
 export const markMoved = (o) => { if (active) active.touch(o); if (fine) fine.touch(o); };
 
@@ -82,9 +84,16 @@ export function pushCandidates(list, self) {
 const FCELL = 2, FBIG = 3;
 export const fineConfig = { mode: (typeof process !== "undefined" && process.env?.MC_MPPERF78) || "on", min: (typeof process !== "undefined" && +process.env?.MC_MPPERF78_MIN) || 60 };
 export class FineGrid {
-  constructor(list, halfOf) {
-    this.list = list; this.len = list.length; this.ents = list.slice(); this.halfOf = halfOf; this.cells = new Map(); this.idxOf = new Map(); this.keyAt = new Array(list.length); this.big = []; this.bad = false; this.maxHalf = 0;
-    this.buf = new Int32Array(256); this.n = 0;
+  constructor(list, halfOf, spare = null) {
+    const re = recycleOf90(spare); // b90 mpperf90: the retired grid's arrays (cleared), or null
+    this.list = list; this.len = list.length; this.halfOf = halfOf; this.cells = new Map(); this.idxOf = new Map(); this.big = []; this.bad = false; this.maxHalf = 0;
+    if (re === null) { this.ents = list.slice(); this.keyAt = new Array(list.length); this.buf = new Int32Array(256); this.pool = null; this.out = null; }
+    else {
+      const ents = re.ents, keyAt = re.keyAt; ents.length = list.length; keyAt.length = list.length;
+      for (let i = 0; i < list.length; i++) ents[i] = list[i];
+      this.ents = ents; this.keyAt = keyAt; this.buf = re.buf; this.pool = re.pool; this.out = re.out;
+    }
+    this.n = 0;
     for (let i = 0; i < list.length; i++) {
       const o = list[i]; this.idxOf.set(o, i);
       const h = halfOf(o);
@@ -93,9 +102,10 @@ export class FineGrid {
       const k = this.keyOf(o); this.keyAt[i] = k;
       if (k === k) this.cellList(k).push(i);
     }
+    if (re !== null && fast90.mode === "verify") checkGrid90(this, list);
   }
   keyOf(o) { return Number.isFinite(o?.x) && Number.isFinite(o.z) ? Math.floor(o.x / FCELL) * 1048576 + Math.floor(o.z / FCELL) : NaN; }
-  cellList(k) { let c = this.cells.get(k); if (!c) this.cells.set(k, (c = [])); return c; }
+  cellList(k) { let c = this.cells.get(k); if (!c) this.cells.set(k, (c = this.pool !== null && this.pool.length !== 0 ? this.pool.pop() : [])); return c; }
   touch(o) {
     const i = this.idxOf.get(o);
     if (i === undefined || this.keyAt[i] === -1) return; // unknown, or in the big list (always a candidate)
@@ -120,7 +130,8 @@ export class FineGrid {
     this.n = 0; // b83 mpperf83: `add` is a method (no closure per query) and short index lists sort in place (fineSorted, no subarray view)
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) { const c = this.cells.get(cx * 1048576 + cz); if (c) this.add(c); }
     if (this.big.length) this.add(this.big);
-    const n = this.n, idx = fineSorted(this.buf, n), out = new Array(n);
+    const n = this.n, idx = fineSorted(this.buf, n), out = fast90.mode === "off" ? new Array(n) : (this.out ??= []); // b90 mpperf90: the answer list is reused (one push loop reads it before the next query)
+    if (out.length !== n) out.length = n;
     for (let i = 0; i < n; i++) { const j = idx[i], o = ents[j]; if (list[j] !== o) { this.bad = true; return null; } out[i] = o; }
     return out;
   }
@@ -130,7 +141,7 @@ let fine = null;
 export function pushNear(list, self, near, halfOf, meets) {
   const MODE = fineConfig.mode;
   if (MODE === "off" || !looping || list.length < (MODE === "verify" ? 2 : fineConfig.min)) return null;
-  if (!fine || fine.list !== list) fine = new FineGrid(list, halfOf);
+  if (!fine || fine.list !== list) { fine = new FineGrid(list, halfOf, spare); spare = null; }
   fine.touch(self); if (self.ridingEntity) fine.touch(self.ridingEntity); if (self.riddenBy) fine.touch(self.riddenBy); if (self.rider) fine.touch(self.rider);
   const got = fine.query(near);
   if (got === null) { fine = null; return null; }
