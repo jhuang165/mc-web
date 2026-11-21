@@ -115,7 +115,8 @@ test("Entity.readFromNBT's Rotation is setRotation's yaw % 360 and pitch % 360; 
   assert.deepEqual(entityBaseOf(rot(-400, 725)).rotation, [-40, 5]);
   assert.deepEqual(entityBaseOf(new Map([["Rotation", t(NBT.LIST, { elementType: NBT.DOUBLE, items: [90, 0] })]])).rotation, [0, 0]); // getTagList(_, 5): another element type is empty
   const bare = entityBaseOf(new Map());
-  assert.deepEqual([bare.air, bare.portalCooldown, bare.nbtDimension, bare.fallDistance, bare.onGround, bare.invulnerable, bare.uuid], [0, 0, 0, 0, false, false, undefined]);
+  assert.deepEqual([bare.air, bare.portalCooldown, bare.nbtDimension, bare.fallDistance, bare.onGround, bare.invulnerable], [0, 0, 0, 0, false, false]);
+  assert.match(bare.uuid, /^[0-9a-f-]{36}$/); // b88 entnbt88: the constructor's UUID.randomUUID (it was left undefined and derived from the position on export)
   for (const name of ["PrimedTnt", "FallingSand", "Boat", "XPOrb", "Pig", "EnderCrystal"]) {
     const nat = row(name, null);
     assert.deepEqual([nat.Air, nat.Dimension, nat.PortalCooldown, nat.Rotation], ["0s", "0", "0", "[0:0.0f,1:0.0f,]"], name);

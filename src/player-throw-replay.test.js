@@ -200,7 +200,8 @@ test("bucket, throw and bow-release input replays match the pre-extraction main.
   const next = run(currentActions, ["traceAction", "edit", "releaseBowUse", "flushArrows"].map((n) => extract(currentMain, n)));
   assert.equal(next.states.length, SCRIPT.length);
   // b76 spsounds76: the throw pitch is now the native float32 chain (the pinned code used doubles); everything else is compared exactly.
-  const bow = (st) => JSON.parse(JSON.stringify(st), (k, v) => (k === "pitch" && typeof v === "number" ? Math.round(v * 1e6) / 1e6 : Array.isArray(v) && v[0] === "sound" && v[1] === false && v.length === 4 ? v.slice(0, 3) : v)); // and the bucket's break sound now carries the replaced cell as a fourth argument
+  // b88 entnbt88: the saved items and projectiles carry their own random UUIDs (Entity's UUID.randomUUID), left out of the comparison.
+  const bow = (st) => JSON.parse(JSON.stringify(st), (k, v) => k === "uuid" ? undefined : (k === "pitch" && typeof v === "number" ? Math.round(v * 1e6) / 1e6 : Array.isArray(v) && v[0] === "sound" && v[1] === false && v.length === 4 ? v.slice(0, 3) : v)); // and the bucket's break sound now carries the replaced cell as a fourth argument
   for (let i = 0; i < SCRIPT.length; i++) assert.deepEqual(bow(next.states[i]), bow(old.states[i]), `step ${i}`);
   assert.equal(next.draws, old.draws, "Math.random draw count");
 

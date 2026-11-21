@@ -98,6 +98,7 @@ import { enchantedDamage, isAbsolute, setMobFire } from "./armor-enchantments.js
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 import { dragonListed, mouseOverBox } from "./dragon-part-query.js"; // b81 mpcopies81
+import { mobBaseSave, mobBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -1003,7 +1004,7 @@ export class EntityWorld {
       return null;
     const fresh = this.create(e.type, e.x, e.y, e.z);
     this.nextId--; // restore callers advance once after accepting the mob
-    return syncInterpolation({
+    return Object.assign(syncInterpolation({
       ...fresh,
       ...e,
       id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
@@ -1066,9 +1067,9 @@ export class EntityWorld {
       vy: 0,
       // A mob that travelled through a portal arrives with the Teleporter's motion (entity-portal.js); PortalCooldown is saved.
       ...(e.portalMotion ? { vx: e.portalMotion.vx || 0, vy: e.portalMotion.vy || 0, vz: e.portalMotion.vz || 0, portalMotion: undefined } : {}),
-      portalCooldown: Number.isInteger(e.portalCooldown) && e.portalCooldown > 0 ? Math.min(300, e.portalCooldown) : undefined,
+      portalCooldown: Number.isInteger(e.portalCooldown) && e.portalCooldown !== 0 ? e.portalCooldown | 0 : undefined, // b88 entnbt88: raw, as readFromNBT's getInteger (was clamped to 1..300)
       ...this.physics(),
-    });
+    }), mobBaseRestore(e)); // b88 entnbt88: the saved Fire, OnGround, FallDistance and Rotation pitch (readFromNBT; entity-base-nbt.js)
   }
   create(type, x, y, z, random = this.random) {
     return syncInterpolation({
@@ -3460,6 +3461,7 @@ export class EntityWorld {
   serializeOne(e) {
     const saved = { ...e };
     for (const key of INTERPOLATED) delete saved[key];
+    Object.assign(saved, mobBaseSave(e)); // b88 entnbt88: writeToNBT's Fire, OnGround, FallDistance and Rotation pitch (they were transient)
     const riding = ridingId(e);
     if (riding) saved.riding = riding;
     else delete saved.riding;

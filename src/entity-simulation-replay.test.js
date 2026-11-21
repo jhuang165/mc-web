@@ -83,6 +83,7 @@ function create(record) {
   return { world, survival, position, items, projectiles, arrows, primed, weather };
 }
 
+const noUuid = (v) => JSON.parse(JSON.stringify(v), (k, x) => (k === "uuid" ? undefined : x)); // b88 entnbt88: each run draws its own random UUIDs (Entity's UUID.randomUUID), so they are left out of the comparison
 function checkpoint(s) {
   return copy({
     edits: [...s.world.edits], player: s.survival.serialize(), position: s.position,
@@ -131,7 +132,7 @@ test("real item, egg/snowball, arrow and primed-TNT serialized state replays thr
       resumed = create(JSON.parse(JSON.stringify(checkpoint(resumed))));
     }
     const expected = step(uninterrupted), actual = step(resumed);
-    assert.deepEqual(actual, expected, `ordered outputs and persistent state at tick ${tick}`);
+    assert.deepEqual(noUuid(actual), noUuid(expected), `ordered outputs and persistent state at tick ${tick}`);
     if (tick === 0) {
       assert.deepEqual(actual.state.projectiles, [], "egg and snowball both impacted the arena wall");
       assert.deepEqual(actual.output.map(e => e.type), [

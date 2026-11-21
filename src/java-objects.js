@@ -9,7 +9,7 @@ import { fromOriginal } from './block-registry.js';
 import { TNT_Y_OFFSET } from './explosion.js';
 import { FALLING_Y_OFFSET } from './falling.js';
 import { nbtToJson } from './spawner-data.js';
-import { entityBaseOf, entityBaseSave } from './entity-base-nbt.js';
+import { entityBaseOf, entityBaseSave, keptBaseImport } from './entity-base-nbt.js';
 
 export const JAVA_OBJECTS = Object.freeze({ XPOrb: 'xpOrbs', PrimedTnt: 'tnt', FallingSand: 'falling' });
 export const IMPORT_OBJECT_LIMIT = { xpOrbs: 512, tnt: 1024, falling: 1024 }; // ExperienceOrbs keeps 512
@@ -71,7 +71,7 @@ export function javaObjectFromNbt(entity, { shiftX = 0, shiftZ = 0 } = {}) {
     const age = nbtGet(entity, 'Age', NBT.SHORT, 0);
     if (age >= 6000) return { lost: 'expired' };
     const fire = nbtGet(entity, 'Fire', NBT.SHORT, 0);
-    return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround, ...invulnerableFields(entity) } }; // b86 summon86: Invulnerable
+    return { list, record: { x, y: pos[1] - ORB_HALF, z, value, age, health, fire, vx, vy, vz, onGround, ...invulnerableFields(entity), ...keptBaseImport(entity) } }; // b86 summon86: Invulnerable; b88 entnbt88: Air, UUID, PortalCooldown, Dimension
   }
   // b87 summon87: entityBaseOf adds Entity.readFromNBT's OnGround, raw FallDistance, Invulnerable, Air, Rotation, PortalCooldown, Dimension and UUID (entity-base-nbt.js).
   if (id === 'PrimedTnt') return { list, record: { x, y: pos[1] - TNT_Y_OFFSET, z, vx, vy, vz, fuse: nbtGet(entity, 'Fuse', NBT.BYTE, 0), fire: nbtGet(entity, 'Fire', NBT.SHORT, 0), ...entityBaseSave(entityBaseOf(entity)) } }; // b82 fireext82: Entity's Fire (moveEntity's counter)

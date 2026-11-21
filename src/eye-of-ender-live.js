@@ -3,6 +3,7 @@
 import { JavaRandom } from "./java-random.js";
 import { ITEM_EYE_OF_ENDER, END_PORTAL_FRAME, createEye, moveTowards, tickEye, shatterEffects, useEyeOnFrame, nearestStronghold, hasEye } from "./eye-of-ender.js";
 import { inLava, waterAcceleration, entityWaterBox } from "./fluids.js";
+import { keptBaseRestore, tickPortalCooldown } from "./entity-base-nbt.js"; // b88 entnbt88
 
 const f = Math.fround;
 
@@ -19,6 +20,7 @@ export const eyeWet = (world, box) => !!world?.get && waterAcceleration(world, e
 export function eyeFire(eye, world, { remote = false, inWater = false, box = null } = {}) {
   eye.fire = eye.fire | 0;
   if (inWater) eye.fire = 0;
+  if (!remote) tickPortalCooldown(eye); // b88 entnbt88: sa.C counts a positive PortalCooldown down on a WorldServer (bytecode-read)
   if (remote) eye.fire = 0;
   else if (eye.fire > 0) {
     if (eye.fire % 20 === 0) eye.velocityChanged = true;
@@ -98,7 +100,7 @@ export class EyesOfEnder {
     const keys = ["x", "y", "z", "px", "py", "pz", "vx", "vy", "vz", "yaw", "pitch", "prevYaw", "prevPitch", "tx", "ty", "tz", "age"];
     for (const e of Array.isArray(record.eyes) ? record.eyes : []) {
       if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
-      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false, fire: Number.isInteger(e.fire) ? e.fire : 0, ...(this.ids ? { entityId: Number.isInteger(e.entityId) ? e.entityId : this.ids.take() } : {}) }); // a saved eye is built anew (a new id); one handed over live (a summon) keeps its own
+      this.eyes.push({ ...Object.fromEntries(keys.map((k) => [k, e[k]])), drops: !!e.drops, dead: false, fire: Number.isInteger(e.fire) ? e.fire : 0, ...keptBaseRestore(e), /* b88 entnbt88: serialize keeps the whole record */ ...(this.ids ? { entityId: Number.isInteger(e.entityId) ? e.entityId : this.ids.take() } : {}) }); // a saved eye is built anew (a new id); one handed over live (a summon) keeps its own
     }
   }
 }

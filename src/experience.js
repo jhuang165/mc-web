@@ -9,6 +9,7 @@ import {mhSin} from "./lighting.js";
 import {freshEntityRandom} from "./java-random.js";
 import { FISHING_SMELT_EXPERIENCE } from "./fishing-content.js";
 import { NETHER_SMELT_EXPERIENCE } from "./nether-blocks.js";
+import { keptBaseRestore } from "./entity-base-nbt.js"; import { ensureUuid } from "./entity-uuid.js"; // b88 entnbt88
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
  constructor(data={}){data=data&&typeof data==='object'?data:{};this.total=Number.isFinite(data.total)?Math.max(0,Math.min(1000000,Math.floor(data.total))):0;this.score=Number.isFinite(data.score)?Math.max(0,Math.min(2147483647,Math.floor(data.score))):this.total;this.update();if(Number.isInteger(data.level)&&data.level>=0&&data.level<=1000000&&Number.isFinite(data.progress)&&data.progress>=0&&data.progress<1){this.level=data.level;this.progress=Math.fround(data.progress);this.points=Math.floor(this.progress*levelCost(this.level));this.levelState=true;}}
@@ -65,7 +66,7 @@ export class ExperienceOrbs {
   this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value].every(Number.isFinite)).map(o=>{
    // Saves before 0.21.4 stored the remaining lifetime (`life`) instead of xpOrbAge.
    const age=Number.isFinite(o.age)?o.age:Number.isFinite(o.life)?LIFETIME-o.life:0,n=k=>Number.isFinite(o[k])?o[k]:0;
-   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.trunc(age),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(o.invulnerable===true?{invulnerable:true}:{}),/* b86 summon86: Entity.writeToNBT's Invulnerable (sa.e, every entity) */...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})},undefined,ids);
+   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.trunc(age),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(o.invulnerable===true?{invulnerable:true}:{}),/* b86 summon86: Entity.writeToNBT's Invulnerable (sa.e, every entity) */...keptBaseRestore(o)/* b88 entnbt88: Air, UUID, Dimension, the raw PortalCooldown (was clamped to 1..300) */},undefined,ids);
   }).filter(o=>o.age<LIFETIME):[]; // b76: native keeps Value 0 or above 2477, a negative Age and Health 0 (an orb dies when hit, EntityXPOrb.attackEntityFrom)
  }
  rng(o){if(!this.entityRandom)return this.random;let r=this.rands.get(o);if(!r)this.rands.set(o,r=this.entityRandom());return r;}
@@ -195,6 +196,6 @@ export class ExperienceOrbs {
    fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(rng())-f(rng()))*f(0.4))),x:o.x,y:o.bb[1],z:o.z})}); // b84 rain84: the feet, after the move
   o.posY=o.bb[1]+HALF;
  }
- serialize(){return this.orbs.map(strip);}
- serializeOne(o){return strip(o);}
+ serialize(){return this.orbs.map(o=>this.serializeOne(o));}
+ serializeOne(o){ensureUuid(o);return strip(o);} // b88 entnbt88: the orb's UUID is drawn on its first save and kept (Entity.writeToNBT)
 }

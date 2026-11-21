@@ -21,6 +21,7 @@ import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
 import { arrowPunch } from "./player-knockback.js";
 import { applyBowEnchantments, bowEnchantments, setMobFire } from "./armor-enchantments.js";
+import { keptBaseSave, keptBaseRestore, tickPortalCooldown } from "./entity-base-nbt.js"; // b88 entnbt88
 
 const f = Math.fround;
 const PI_F = f(Math.PI), PI_D = 3.1415927410125732;
@@ -264,6 +265,7 @@ export class Arrows {
     a.my += wet.push[1];
     a.mz += wet.push[2];
     if (a.water) a.fire = 0;
+    if (!ctx?.remote) tickPortalCooldown(a); // b88 entnbt88: sa.C counts a positive PortalCooldown down on a WorldServer (bytecode-read)
     if (ctx?.remote) a.fire = 0; // b81 throwfire81: sa.C zeroes the counter of an entity on a client world every update (bytecode-read)
     else if (a.fire > 0) {
       // Entity.onEntityUpdate: `if (fire % 20 == 0) attackEntityFrom(DamageSource.onFire, 1)`; Entity.attackEntityFrom only runs setBeenAttacked, so a burning arrow
@@ -505,6 +507,7 @@ export class Arrows {
       x: a.x, y: a.y, z: a.z, mx: a.mx, my: a.my, mz: a.mz, yaw: a.yaw, pitch: a.pitch,
       xTile: a.xTile, yTile: a.yTile, zTile: a.zTile, life: a.ticksInGround, inTile: a.inTile, inData: a.inData,
       shake: a.shake, inGround: a.inGround, pickup: a.pickup, damage: a.damage, ...(a.fire ? { fire: a.fire } : {}), // b84 cmdfix84: any nonzero short
+      ...keptBaseSave(a), // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as read
     }));
   }
   load(list) {
@@ -519,6 +522,7 @@ export class Arrows {
             ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
             shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
             damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, -32768, 32767, 0), // b84 cmdfix84: the whole short (was 0..2000)
+            ...keptBaseRestore(d), // b88 entnbt88
           }),
         );
       }

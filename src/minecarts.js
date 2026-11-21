@@ -33,6 +33,7 @@ import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
 import * as V from "./cart-variants.js";
 import { cartPicksUp, mountMobOnVehicle, passFall } from "./vehicle-riders.js";
 import { hopperSuck, hopperCartContainer } from "./cart-hopper.js";
+import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 
 const f = Math.fround;
 export const CART_WIDTH = f(0.98), CART_HEIGHT = f(0.7), CART_SLOTS = 27;
@@ -692,6 +693,7 @@ export class Minecarts {
       id: c.id, uuid: ensureUuid(c), type: c.type, rider: c.rider?.player === true || undefined,
       x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround, invulnerable: c.invulnerable || undefined,
       portalCooldown: c.portalCooldown > 0 ? c.portalCooldown : undefined, // Entity.timeUntilPortal (PortalCooldown)
+      ...keptBaseSave(c), // b88 entnbt88: Air, Dimension and the raw PortalCooldown (entity-base-nbt.js)
       customName: c.customName || undefined, ...V.variantJSON(c),
       items: c.slots.flatMap((s, slot) => {
         const o = s ? originalOf(s) : null, u = c.unmapped[slot];
@@ -725,7 +727,7 @@ export class Minecarts {
       if (Number.isInteger(c.fire)) cart.fire = c.fire;
       cart.onGround = !!c.onGround;
       if (c.invulnerable === true) cart.invulnerable = true; // b86 summon86: Entity.writeToNBT/readFromNBT's Invulnerable
-      if (Number.isInteger(c.portalCooldown) && c.portalCooldown > 0) cart.portalCooldown = Math.min(300, c.portalCooldown);
+      Object.assign(cart, keptBaseRestore(c)); // b88 entnbt88: Air, UUID, Dimension and the raw PortalCooldown (sa.f; was clamped to 1..300)
     }
     return m;
   }

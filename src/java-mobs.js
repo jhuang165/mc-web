@@ -5,6 +5,7 @@ import { readNbt as readHorseNbt } from './horse.js';
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
 import { uuidFields, invulnerableFields } from './entity-uuid.js';
+import { mobBaseOf } from './entity-base-nbt.js'; // b88 entnbt88
 import { attributeFieldsFromNbt } from './mob-attributes.js';
 import { livingAttributeFields } from './mob-attribute-list.js';
 import { maxHealthOf, OWN_MAX_HEALTH } from './mob-riding.js';
@@ -141,8 +142,8 @@ export function mobGearNbtFields(tag, type, convertItem = () => null, other = fa
   gear.canPickUpLoot = tagValue(tag, 'CanPickUpLoot', NBT.BYTE, 0) !== 0;
   return gear;
 }
-// Entity.readFromNBT: PortalCooldown (an int, not clamped by 1.7.10; entities.js keeps 1 to 300).
-export const portalCooldownFields = (tag) => { const t = tagValue(tag, 'PortalCooldown', NBT.INT, 0); return t > 0 ? { portalCooldown: t } : {}; };
+// Entity.readFromNBT: PortalCooldown (an int, not clamped by 1.7.10; b88 entnbt88: kept raw, a negative one too, as entnbt88-reference.json's Pig -7 row).
+export const portalCooldownFields = (tag) => { const t = tagValue(tag, 'PortalCooldown', NBT.INT, 0); return t !== 0 ? { portalCooldown: t } : {}; };
 // EntityLivingBase.readEntityFromNBT reads Attributes before HealF, so setHealth clamps to the saved generic.maxHealth.
 function savedMaxHealth(entity) {
   const list = tagValue(entity, 'Attributes', NBT.LIST);
@@ -308,8 +309,9 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   record.health = type === 'ender_crystal' ? health : Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health)); // EntityEnderCrystal is no EntityLivingBase: its health field (5) reads no NBT
   if (type !== 'ender_crystal') { Object.assign(record, gearNbtFields(tag)); for (const k of GEAR_NBT_KEYS) kept.add(k); } // EntityLiving's keys (b83 cmdexec83, executed: a crystal drops CustomName)
   Object.assign(record, uuidFields(tag)); kept.add('UUIDMost'); kept.add('UUIDLeast');
+  record.nbtDimension = tagValue(tag, 'Dimension', NBT.INT, 0); kept.add('Dimension'); // b88 entnbt88 (executed, entnbt88-reference.json nether rows): readFromNBT's getInteger, 0 when absent, in the Nether too
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
-  if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
+  // b88 entnbt88: Rotation[1] (pitch) is no longer reported ignored: command-host.js facing sets it and the mob save keeps it (entities.js serializeOne)
   if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');
   return { record, ignored };
 }
@@ -320,6 +322,7 @@ export function javaMobFromNbt(entity, options) {
   const record = javaMobFromNbtBase(entity, options);
   if (record) {
     Object.assign(record, uuidFields(entity));
+    Object.assign(record, mobBaseOf(entity)); // b88 entnbt88: Dimension, Rotation pitch, OnGround, FallDistance as read (entity-base-nbt.js)
     // EntityLivingBase's Attributes (every living class; mob-attribute-list.js) and the owner / leash holder links (owner-links.js).
     const javaId = tagValue(entity, 'id', NBT.STRING, '');
     Object.assign(record, livingAttributeFields(entity, record, javaId));

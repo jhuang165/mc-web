@@ -43,7 +43,7 @@ export class EntityPortals {
   constructor() { this.states = new WeakMap(); this.last = new WeakMap(); }
   state(e) {
     let s = this.states.get(e);
-    if (!s) { s = new PortalState(); s.timeUntilPortal = Math.max(0, Math.min(300, e.portalCooldown | 0)); this.states.set(e, s); }
+    if (!s) { s = new PortalState(); s.timeUntilPortal = e.portalCooldown | 0; /* b88 entnbt88: the raw PortalCooldown (readFromNBT's getInteger; 5000 and -7 load unchanged, entnbt88-reference.json) */ this.states.set(e, s); }
     return s;
   }
   // One tick after the entity moved. Returns null or { arg, endPortal, direction }: the travelToDimension argument.
@@ -72,7 +72,7 @@ export class EntityPortals {
       if (end) result = { arg: END, endPortal: true, direction: s.teleportDirection };
       else if (nether) s.setInPortal(prev.x, prev.z, e.x, e.z, { isPlayer: false });
     }
-    if (s.timeUntilPortal > 0) e.portalCooldown = s.timeUntilPortal; else if (e.portalCooldown !== undefined) delete e.portalCooldown;
+    if (s.timeUntilPortal !== 0) e.portalCooldown = s.timeUntilPortal; else if (e.portalCooldown !== undefined) delete e.portalCooldown; // b88 entnbt88: a negative one is kept too
     return result;
   }
   // The cooldown written before travelToDimension(Nether portal: 300); End portal travel keeps the one it had.
@@ -86,6 +86,7 @@ export function entityDeparture(portals, kind, e, r, owner) {
   const vehicle = kind === "cart" || kind === "boat";
   delete rec.rider; // the player never travels with the vehicle
   rec.portalCooldown = portals.cooldownAfter(e, r) || undefined;
+  delete rec.nbtDimension; // b88 entnbt88: travelToDimension (sa.b(I), bytecode-read) sets Entity.dimension to the destination, which copyDataFrom carries over
   const v = { vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0 };
   const mc = vehicle ? { x: e.x, y: e.posY, z: e.z, ...v, yaw: e.yaw ?? 0, pitch: 0 }
     : kind === "mob" ? { x: e.x, y: e.y, z: e.z, ...v, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
