@@ -18,8 +18,11 @@ function flat() {
   w.spawn = () => ({ x: 64.5, y: 10, z: 64.5 });
   return w;
 }
+// b91 lead: every Entity.rand and the server's seeded randoms come from Math.random, so the three runs must share one seeded stream; otherwise a zombie's random jump
+// (isAirBorne opens the tracker's gated branch) moves an S20 by a tick between modes (seen once in the full run).
+const seededMath = (seed) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 function script(mode) {
-  const was = fast91.mode; fast91.mode = mode;
+  const was = fast91.mode, rnd = Math.random; fast91.mode = mode; Math.random = seededMath(9101);
   try {
     const s = new DedicatedSimulation({}, { world: flat(), gameMode: "creative", mobs: true });
     s.mobs.spawning = false; s.mobs.mobs.entities.length = 0;
@@ -43,7 +46,7 @@ function script(mode) {
       p.mobPackets = null; p.chunkOut = null;
     }
     return out;
-  } finally { fast91.mode = was; }
+  } finally { fast91.mode = was; Math.random = rnd; }
 }
 
 test("scripted S20 packets are identical off / on / verify and the script does send some", () => {

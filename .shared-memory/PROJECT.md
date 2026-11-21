@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 91 (2026-11-21, ten tracks in `../wt91-<name>` on `batch91-<track>91`, cut from 94e060855, merged --no-ff on `batch91-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b91-lead/track-rules.md`; lead note `b91-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.120.0, by track (details in the `*-b91-track.md` notes and "Done in batch 91" in `public/research/remaining-gaps.md`):
+  - horse91: `Vehicle91Probe` boat and cart sneak records (port already matched), a living mob rider steers a saddled horse (`steeringRider`).
+  - mpobjects91: server weather, random ticks, lightning and bolts before the entity pass, maps before the tracker flush; remote boat and cart shadows (`vehicleShadowCasters`).
+  - mobpackets91: watcher 8 ambient in `copy-meta`, `copyMetaDirty` gate, same-pass mid-pass spawns (`adoptSpawns`), executed S1C/S20/S19/S12 order (`MobPackets91Probe`).
+  - spcopy91: `PlayerView.alive` getter false while `left`, `left` gates for targeting, despawn, owners, villagers, leashes, sieges, pushes, spawners and beacons.
+  - credit91: dead-body attacker for pigmen, reinforcements and legacy mobs; a dead shooter's arrow (hit sound, Thorns, hanging Creative flag); server Thorns for player arrows; stored look for queued attacks, uses and bow releases.
+  - console91: owner strings and name tags in S0F/S1C, per-connection S1C changes, real cart/boat/item/orb/falling packet counts (`Console91Probe`), light hash measured (0.09 ms per column).
+  - mpperf91: `mpperf91-fast.js` behind `MC_MPPERF91=on|off|verify`; early `sendAttributes` return for unchanged plain mobs (heap per tick -7.5% travel, -4.6% terrain, -19% pen).
+  - tiles91: chest facing in cell metadata with lazy migration from the tile record; entity-time darkness for mob light reads.
+  - entnbt91: arrows and rockets cross portals in the away run and on the server (`server-portal-shots.js`); `Entnbt91Probe` audit of 84 entity ids and its fixes.
+  - mobrec91: 22 executed records (dead players, slimes, magma cubes, iron golem fights); dead copy keeps ticking, no alive test in legacy closest player, client-random aux pitch, slime contact, volume and head yaw, float `faceEntity`.
+- Lead fixes: every EndermanWolfProbe replay walks a fixed list (the probe never ticks babies; mobpackets91's same-pass spawns broke six b44 breeding replays); the mpperf91 S20 off/on/verify test runs on one seeded Math.random; spcopy91 note count.
+- Verification: one full `npm test` on the merged tree: 10226/10233, the seven failures fixed and re-run targeted (659/659). No browser checks.
+- Open: "Still open from batch 91" in `public/research/remaining-gaps.md`.
+
 Batch 90 (2026-11-21, ten tracks in `../wt90-<name>` on `batch90-<track>90`, cut from 1d51974cf, merged --no-ff on `batch90-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b90-lead/track-rules.md`; lead note `b90-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.119.0, by track (details in the `*-b90-track.md` notes and "Done in batch 90" in `public/research/remaining-gaps.md`):
   - horse90: sneak dismount after the mount's update (`server-vehicles.js` `finishSneak`/`sneakOffVehicles`, `PlayerView.sneakOff`), a dying pig's rider.
