@@ -62,6 +62,9 @@ public class EndermanWolfProbe {
   }
   static boolean B44, B45, BCW, B46, B47, B47H, B48, B87W;
   static boolean B88; // batch 88 (mobrec88, b88mr): see the B88 notes in scenario()
+  static boolean B90; // batch 90 (mobrec90, b90mr): the b89mr harness plus row element 11 [World.rand draws so far] (a counting Random in place of World.rand)
+  static class CountRandom extends Random { int n; CountRandom(long seed) { super(seed); } protected int next(int bits) { n++; return super.next(bits); } }
+  static CountRandom worldCount;
   static boolean B89, realHp; // batch 89 (mobrec89, b89mr): the b88mr harness plus row element 10 (mob effects, the player's health and food stats, the fireballs in flight); realHp: the realhp op stopped the 1000 health reset
   // Batch 45: a horse with fixed type, variant, tamed flag, growing age and attribute bases (health set to the maximum).
   static wi b45Horse(ahb w, int type, int variant, boolean tame, int age, double maxHealth, double speed, double jump) throws Exception {
@@ -209,7 +212,7 @@ public class EndermanWolfProbe {
     if (BCW) {
       SeedRandom.next = 7000000L + seed * 1000; // entities built mid-run (items, orbs, potions, the skeleton and arrow of arrowkill) count their Entity.rand seeds up from here
       EW.booms.clear(); EW.boomPlayer = player;
-      MobMoveProbe.set(w, "s", new Random(seed)); // World.rand (explosion rays, drop scatter, the sound pitch) restarts per record so the replay can seed it the same way
+      MobMoveProbe.set(w, "s", B90 ? (worldCount = new CountRandom(seed)) : new Random(seed)); // World.rand (explosion rays, drop scatter, the sound pitch) restarts per record so the replay can seed it the same way
       w.O().a("mobGriefing", "true");
       VillagerProbe.World.spawned.clear();
     }
@@ -343,7 +346,7 @@ public class EndermanWolfProbe {
       for (int i = 0; i < n; i++) {
         sa e = (sa) ents[i];
         if (i > 0) row.append(",");
-        sv tgt = ents[i] instanceof ya || (B88 && ents[i] instanceof yn) ? (sv) ((td) e).bT() : ((sw) e).o(); // batch 88: a spider's (and cave spider's) entityToAttack, the legacy action state's target
+        sv tgt = ents[i] instanceof ya || (B88 && ents[i] instanceof yn) || (B90 && ents[i] instanceof xx) ? (sv) ((td) e).bT() : ((sw) e).o(); // batch 88: a spider's (and cave spider's) entityToAttack, the legacy action state's target
         sv rv = (sv) MobMoveProbe.field(sv.class, "i").get(e);
         String flags = "[]";
         if (e instanceof ya) { ya en = (ya) e; flags = "[" + (en.cd() ? 1 : 0) + "," + (MobMoveProbe.b(en, "bv") ? 1 : 0) + "," + MobMoveProbe.field(ya.class, "bt").getInt(en) + "," + MobMoveProbe.field(ya.class, "bs").getInt(en) + "," + aji.b(en.cb()) + "]"; }
@@ -391,6 +394,7 @@ public class EndermanWolfProbe {
         zr fs = player.bQ();
         row.append("],[").append(VillageFightProbe.num(player.aS())).append(",").append(MobMoveProbe.field(zr.class, "a").getInt(fs)).append(",").append(VillageFightProbe.num(MobMoveProbe.field(zr.class, "b").getFloat(fs))).append(",").append(VillageFightProbe.num(MobMoveProbe.field(zr.class, "c").getFloat(fs))).append(",").append(MobMoveProbe.field(zr.class, "d").getInt(fs)).append("],[").append(fbs).append("]]");
       }
+      if (B90) row.append(",[").append(worldCount.n).append("]"); // batch 90: row element 11 [World.rand draws so far]
       row.append("]");
       if (t > 0) rs.append(",");
       rs.append(row);
@@ -433,11 +437,12 @@ public class EndermanWolfProbe {
     B47 = B48 || (args.length > 0 && (args[0].equals("b47sp") || args[0].equals("b46mp"))); // b50: the b46mp scenarios run under the b47 client / server-copy rules (client position, C03 packets, ticksExisted counted by the world tick)
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     B87W = args.length > 0 && args[0].equals("b87wf");
-    B89 = args.length > 0 && args[0].equals("b89mr");
+    B90 = args.length > 0 && args[0].equals("b90mr");
+    B89 = B90 || (args.length > 0 && args[0].equals("b89mr"));
     B88 = B89 || (args.length > 0 && args[0].equals("b88mr")); // b89mr: the b88mr harness
     if (B88) B47 = B46 = true; // b88mr: the b47 serverplayer harness (a ticked EntityPlayerMP, so its potion effects run)
     BCW = B46 || B87W || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B89) EndermanWolfScenarios.run89(); else if (B88) EndermanWolfScenarios.run88(); else if (B87W) EndermanWolfScenarios.run87(); else if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B90) EndermanWolfScenarios.run90(); else if (B89) EndermanWolfScenarios.run89(); else if (B88) EndermanWolfScenarios.run88(); else if (B87W) EndermanWolfScenarios.run87(); else if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }

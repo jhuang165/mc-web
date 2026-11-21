@@ -15,8 +15,10 @@ const f = Math.fround;
 export const isFireballMob = (e) => e.type === "blaze" || e.type === "ghast";
 // Level events of RenderGlobal.playAuxSFX (bma) at the block of the entity, centred: the sound, its volume, pitch (rand - rand) * 0.2 + 1.
 function levelEvent(m, e, sound, volume) {
-  m.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
-  m.events.push({ sound, volume, pitch: ghastPitch(m.worldRandom), position: { x: Math.trunc(e.x) + 0.5, y: Math.trunc(e.y) + 0.5, z: Math.trunc(e.z) + 0.5 } }); // playAuxSFXAtEntity(null, id, (int) x, (int) y, (int) z): casts truncate
+  // b90 mobrec90: the pitch is RenderGlobal.playAuxSFX's draw on the client world (bma: theWorld.rand); the server's World.playAuxSFXAtEntity draws nothing (executed: the b90mr records read the
+  // World.rand draw count after every shot). So it comes from a client stream of its own, never the simulation's `worldRandom`.
+  m.clientAuxRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+  m.events.push({ sound, volume, pitch: ghastPitch(m.clientAuxRandom), position: { x: Math.trunc(e.x) + 0.5, y: Math.trunc(e.y) + 0.5, z: Math.trunc(e.z) + 0.5 } }); // playAuxSFXAtEntity(null, id, (int) x, (int) y, (int) z): casts truncate
 }
 const wet = (m, e, t) => e.inWater || !!m.wet?.(e, t.height);
 
@@ -40,7 +42,6 @@ export function blazeUpdate(m, e, t, corpse = false) {
   const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
   // b89 mobrec89: xx.e reads bT() (entityToAttack) with no isEntityAlive test; a dead mob target is cleared by the action state (td.bq) after the hover read, so a dying
   // golem knocked upward still pulls the blaze up this tick (executed, b89mr-snow-blaze-8902). The player branch is unchanged.
-  if (st.target && st.target === p && !(p?.alive && !m.ai.survival.creative)) st.target = null; // the player, or a mob that hurt it (EntityMob.attackEntityFrom)
   const target = st.target;
   if (!corpse && wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });
@@ -73,11 +74,12 @@ export function blazeThink(m, e, t, aiMoveSpeed) {
   s.hasAttacked = false;
   const env = {
     rand, remote: false,
-    closestPlayer: (me, range) => (p?.alive && (range < 0 || brain.distSq(p) < range * range) ? p : null),
+    closestPlayer: (me, range) => (p && !p.left && (range < 0 || brain.distSq(p) < range * range) ? p : null), // World.getClosestPlayer (ahb.a(DDDD)) tests only the distance: a dead player (health 0, not yet respawned) is still in playerEntities (b90 mobrec90, executed b90mr-blaze-dead-9021)
     findPlayerToAttack: (me) => { const c = m.ai.closestVulnerablePlayer(me, BLAZE.followRange); return c && brain.canSee(c) ? c : null; },
+    lookGone: (x) => (x === p ? !p || !!p.left || (p.deadTicks ?? 0) > 20 : x.alive === false), // sw.bq drops the look target on sa.K (isDead) alone: a player at health 0 is looked at until onDeathUpdate's setDead at deathTime 20 (the 21st dead update is the first the mobs see; executed b90mr-blaze-dead-9021/9022/9023)
     isAlive: (x) => (x === p ? !!p.alive : x.alive !== false),
     isCreative: (x) => x === p && !!survival.creative,
-    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? 1.62 : x.eyeHeight),
+    eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : x === p || x.isPlayer ? f(1.62) : x.eyeHeight), // sv.g() is a float (f2d): 1.62F
     boxMidY: (x) => x.y,
     canSee: (me, target) => brain.canSee(target),
     attackEntity: (me, target, d) => {

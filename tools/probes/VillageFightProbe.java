@@ -60,7 +60,7 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-"); } // batch 87: b87-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-"); } // batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
   static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
@@ -402,7 +402,7 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") || name.startsWith("b86-") || name.startsWith("b87-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") + (follow > 0 ? ",\"follow\":" + follow : "") + (local > 0 ? ",\"local\":" + local : "") + (cache ? ",\"chunkCache\":true" : "") + (b36up(name) ? ",\"egg\":" + eggTimer + ",\"spawns\":[" + String.join(",", spawnRecs) + "],\"chickens\":[" + String.join(",", chickenRecs) + "]" + (b37up(name) ? ",\"mobs\":[" + String.join(",", mobRecs) + "]" + (name.startsWith("b85-") || name.startsWith("b86-") || name.startsWith("b87-") ? ",\"loot\":[" + String.join(",", lootRecs) + "]" : "") : "") : "") + ((name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b90-")) ? ",\"mathRandom\":" + SeedMath.json() : "") + (b38up(name) ? ",\"bright\":" + bright + ",\"patches\":" + java.util.Arrays.deepToString(patches) + ",\"poison\":" + poison : "") + (b35or36(name) ? ",\"searches\":" + searchJson() : "") + (unloadedChunks.length > 0 ? ",\"unloaded\":" + java.util.Arrays.deepToString(unloadedChunks) : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
@@ -1001,6 +1001,16 @@ public class VillageFightProbe {
         scenario("b87-" + (kind.equals("baby") ? "babykill" : "zvkill") + "-d" + d + "-" + sd, sd, 30, "VZ", penPos87, new String[] {"0 " + kind + " 1", "1 hit 0 1 17.0 mob"});
       }
     }
+    blocks = new int[][] {};
+    difficulty = 2;
+    // Batch 90 mobrec90 (names b90-*, the b39 layout: plain probe player in World.playerEntities, night, Normal): a skeleton spider jockey (EntitySpider.onSpawnWithEgg, the 1-in-100 roll on World.rand;
+    // the seeds are found by trying and confirmed by the record's `mobs`) climbing a wall. The spider spawns west of a stone ring three blocks high around the player, collides with it
+    // (isBesideClimbableBlock = isCollidedHorizontally) and climbs at 0.2 with the skeleton riding it (updateRiderPosition each tick), over the ring or against a pillar and a plateau.
+    local = 0; eggTimer = 6000; bright = 3; patches = new int[][] {};
+    double[][] jockeyArena = {{52.5, 52.5}, {54.5, 52.5}, {10.5, 130.5}, {66.5, 64.5}};
+    int[][] ring3j = {{64, 0, 62, 68, 2, 62, 1, 0}, {64, 0, 66, 68, 2, 66, 1, 0}, {64, 0, 63, 64, 2, 65, 1, 0}, {68, 0, 63, 68, 2, 65, 1, 0}};
+    blocks = ring3j;
+    for (int sd : new int[] {47, 2231, 1713, 972, 1003}) scenario("b90-jockey-ring-3-" + sd, sd, 400, "VVG", jockeyArena, new String[] {"3 spawnspider 58.5 60.5 0 90"});
     blocks = new int[][] {};
     difficulty = 2;
   }

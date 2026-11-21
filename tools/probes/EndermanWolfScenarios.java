@@ -253,6 +253,18 @@ public class EndermanWolfScenarios {
     sc88("b89mr-food-hunger-8935", 8935, 400, "P", pig, 15, "0 realhp 16", "0 food 20 0", "0 effect 1 17 400 2", "0 effect 1 19 100");
     sc88("b89mr-food-cave-8936", 8936, 300, "J", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 0, "0 look 90 0", "0 realhp 20", "0 food 20 0", "60 health 0 1", "61 melee 0");
   }
+  // Batch 90 (mobrec90, b90mr): the b89mr harness with row element 11 [World.rand draws so far]. A blaze against the player: shots (World.playAuxSFXAtEntity 1009 draws nothing on the server), the player going
+  // creative or dying mid-fight (EntityBlaze.onLivingUpdate, xx.e, reads entityToAttack before td.bq clears a dead or creative player target).
+  static void run90() throws Exception {
+    double[][] fight = {{70.5, 64.5, 4}, {64.5, 64.5}};
+    for (int sd : new int[] {9001, 9002}) sc88("b90mr-blaze-shot-" + sd, sd, 200, "a", fight, 15);
+    sc88("b90mr-blaze-creative-9011", 9011, 240, "a", fight, 15, "60 creative 1 on", "140 creative 1 off");
+    sc88("b90mr-blaze-creative-9012", 9012, 200, "a", new double[][] {{70.5, 64.5, 0}, {64.5, 64.5}}, 15, "30 creative 1 on");
+    sc88("b90mr-blaze-creative-start-9013", 9013, 120, "a", fight, 15, "0 creative 1 on");
+    sc88("b90mr-blaze-dead-9021", 9021, 200, "a", fight, 15, "0 realhp 20", "60 health 1 0.0");
+    sc88("b90mr-blaze-dead-9022", 9022, 200, "a", new double[][] {{70.5, 64.5, 10}, {64.5, 64.5}}, 15, "0 realhp 20", "45 health 1 0.0");
+    sc88("b90mr-blaze-dead-9023", 9023, 160, "a", new double[][] {{70.5, 64.5, 6}, {64.5, 64.5}}, 15, "0 realhp 20", "20 health 1 0.0");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");
