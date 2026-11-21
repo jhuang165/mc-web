@@ -334,7 +334,7 @@ export class Arrows {
     if (ref88 !== near && (ref88.length !== near.length || ref88.some((t, k) => near[k] !== t))) fail88("arrow targets");
     }
     for (const t of orderTargets(near, ctx.targets || [])) { // b72: chunk list order decides equal distances (candidate-order.js)
-      if ((t.ref === a.shooter || (a.owner && t.ref === a.owner)) && a.ticksInAir < 5) continue; // b62: `owner` is the server player who shot it (shooter stays "player" for the mobs' credit)
+      if ((t.ref === a.shooter || (a.owner && !a.ownerBody && t.ref === a.owner)) && a.ticksInAir < 5) continue; // b62: `owner` is the server player who shot it (shooter stays "player" for the mobs' credit)
       const e = t.box, r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
       const d1 = Math.sqrt(dist2(start, r.vec));
@@ -472,12 +472,12 @@ export class Arrows {
     if (a.fire > 0 && ref.type !== "enderman") setMobFire(ref, 5); // zc.h: setFire(5) before the damage, shortened by Fire Protection; never on an enderman (offset 906: instanceof ya, bytecode-read)
     // wi.a(ro, F) (bytecode-read b78): damage whose source entity (ro.j(), an arrow's shooter) is the horse's own rider is refused; the arrow ricochets. After setFire above, as zc.h.
     if (a.shooter === "player" && ref.type === "horse" && ref.rider && (!a.owner || a.owner.mount?.rider === ref.rider)) return false;
-    const s = a.shooter, from = s === "player" ? a.owner?.position ?? ctx.player ?? a : s && typeof s === "object" ? s : a;
+    const s = a.shooter, shooterBody = a.ownerBody ?? a.owner, from = s === "player" ? shooterBody?.position ?? ctx.player ?? a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
     // b88 blast88 (bytecode-read sv.a(ro), afv.i, ro.a(zc, sa)): the arrow source's getEntity is the shooter, and onDeath gives a player killer the Looting of the item he holds
     // at that moment (EnchantmentHelper.getLootingModifier(entity), not the bow). It used to be 0 for every arrow kill. A dedicated server's arrow holds the player record (`owner`).
-    const looting = s === "player" ? getLootingModifier((a.owner?.survival ?? ctx.survival)?.held ?? null) : 0;
-    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting });
+    const looting = s === "player" ? getLootingModifier((shooterBody?.survival ?? ctx.survival)?.held ?? null) : 0;
+    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
   }
   // EntityArrow.onCollideWithPlayer (zc.b_): the player's box grown by (1, 0.5, 1) touches a
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one

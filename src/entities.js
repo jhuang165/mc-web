@@ -92,7 +92,7 @@ import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDam
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
-import { noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
+import { DEAD_ATTACKER, noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
 import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle, takeVehicleFalls } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
@@ -1245,7 +1245,7 @@ export class EntityWorld {
     }
     // EntityLivingBase.attackEntityFrom: a living source entity (player, mob melee, an arrow's shooter) becomes the revenge target (revenge-target.js).
     const by = sourceEntity(this, e, source);
-    if (by) { e.revenge = (e.age || 0) + 1; noteRevenge(e, by); }
+    if (by) { e.revenge = (e.age || 0) + 1; noteRevenge(e, source.deadAttacker ? DEAD_ATTACKER : by); } // b90 credit90: a dead placer is no revenge target
     if (source.player) e.recentlyHit = 100;
     else if (source.attacker?.type === "wolf" && wolfTamed(source.attacker)) e.recentlyHit = 100; // EntityLivingBase.attackEntityFrom: a tamed wolf's hit counts as a player hit for drops (no attackingPlayer)
     if (e.type === "villager") this.villagerHurtBy(e, source);

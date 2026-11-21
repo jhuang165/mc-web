@@ -177,7 +177,7 @@ export class ServerDispense {
     if (!p?.survival || this.sim.players.get(p.id) !== p) return undefined;
     const s = p.survival, who = this.ownerOf(a), shooter = a.shooter;
     if (p.dead || s.health <= 0) return false;
-    const from = who ? { x: who.position.x, y: who.position.y, z: who.position.z, type: 'player', isPlayer: true, name: who.name } : shooter && typeof shooter === 'object' ? shooter : a;
+    const from = who ? { x: (a.ownerBody ?? who).position.x, y: (a.ownerBody ?? who).position.y, z: (a.ownerBody ?? who).position.z, type: 'player', isPlayer: true, name: who.name } /* b90 credit90: where the old body was removed */ : shooter && typeof shooter === 'object' ? shooter : a;
     if (a.fire > 0) s.setFire?.(5);
     const hit = this.sim.damagePlayer(p, dmg, { name: 'an arrow', from, call: () => s.damage(dmg, 'an arrow', true, undefined, from) }) !== false;
     if (!hit) return false;

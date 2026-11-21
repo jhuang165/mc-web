@@ -53,7 +53,7 @@ function projectileRecordOf(entity, { shiftX = 0, shiftZ = 0, convertItem = null
   const owned = String(nbtGet(entity, 'ownerName', NBT.STRING, '')).length > 0;
   // b80 fluids80: Entity.readFromNBT's Fire counter of a snowball, pearl (b81: or thrown potion and bottle) (it burns on in Projectiles.step; a throwable never moves with moveEntity, so it never rests below 0).
   const thrownFire = nbtGet(entity, 'Fire', NBT.SHORT, 0), burning = thrownFire !== 0 ? { fire: thrownFire } : {}; // b84 cmdfix84: the raw short (a negative one too: sa.C leaves it, writeToNBT gives it back)
-  if (id === 'Snowball') return { list, record: { ...base, ...burning } };
+  if (id === 'Snowball') return { list, record: { ...base, ...(owned ? {} : { dispensed: true }), ...burning } }; // b90 credit90: an empty ownerName is a null thrower (b89 dispensed ball); a named one keeps the player's hit
   // EntityEnderPearl.onImpact only teleports an EntityPlayerMP thrower; a pearl without one loads and just dies on impact (pearl-player.js).
   if (id === 'ThrownEnderpearl') return { list, record: { ...base, kind: 'enderPearl', ...(owned ? { owner: 'player' } : {}), ...burning } };
   if (FIREBALL_KINDS[id]) {
@@ -123,7 +123,7 @@ export function javaProjectileToNbt(list, e, { ox = 0, oz = 0, itemNbt = null } 
   if (list === 'projectiles') {
     if (e.kind === 'egg') return null;
     if (e.kind === 'enderPearl') return { id: 'ThrownEnderpearl', fields: throwable() };
-    return { id: 'Snowball', fields: throwable() };
+    return { id: 'Snowball', fields: { ...throwable(), ownerName: str(e.dispensed ? '' : PLAYER_OWNER_NAME) } }; // b90 credit90: only a dispensed ball has no thrower; the player's own snowball keeps its ownerName so a round trip does not make it ownerless
   }
   if (list === 'thrownPotions') {
     if (e.kind === 'expBottle') return { id: 'ThrownExpBottle', fields: throwable() };

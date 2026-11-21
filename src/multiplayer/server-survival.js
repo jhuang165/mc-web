@@ -185,6 +185,13 @@ export class ServerSurvival {
     const dims = this.sim.dimensions, lists = new Set([this.sim.dispense, dims?.nether?.dispense, dims?.end?.n?.dispense].filter(Boolean).map(d => d.primed).filter(Array.isArray));
     let body = null;
     for (const list of lists) for (const t of list) if (t.placer === p) t.placer = body ??= this.deadBody(p);
+    // b90 credit90 (bytecode-read zc.c, ze.a(ro, F)): an arrow in flight keeps the old EntityPlayerMP as its shooter and a punched fireball as the puncher, as the TNT does. `owner` stays the
+    // record for credit (the StatisticsFile is shared), `ownerBody` is what the arrow's position, held item and revenge read.
+    const insts = new Set([this.sim.dispense, dims?.nether?.dispense, dims?.end?.n?.dispense].filter(Boolean));
+    for (const d of insts) {
+      for (const lane of d.lanes ?? []) for (const a of lane.arrows?.list ?? []) if (a.owner === p && !a.dead) { a.ownerBody ??= body ??= this.deadBody(p); }
+      for (const b of d.mobs?._fireballs?.list ?? []) if (b.punchedBy === p && !b.dead) b.punchedBy = body ??= this.deadBody(p);
+    }
     return body;
   }
   /**

@@ -249,7 +249,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
       arrow: (e) => { if (ents) { const a = ents.arrows.make(e, e.rand, { shooter: null, pickup: 1 }); ents.arrows.list.push(a); ents.arrows.joined(a); } else unsupported.hit = true; },
       thrown: (kind, e) => {
         if (!ents) { unsupported.hit = true; return; }
-        const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
+        const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false, dispensed: true }; // b90 credit90: no thrower (as main.js, b89): causeThrownDamage(ball, null)
         if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, ...(Array.isArray(e.custom) ? { custom: e.custom.map((x) => ({ ...x })) } : {}), owner: null }; ents.mobs.potions.projectiles.balls.push(b); ents.mobs.joined(b, "potion"); } // as main.js: potions and bottles walk as "potion"
         else { ents.projectiles.balls.push(ball); ents.projectiles.joined(ball); }
       },

@@ -659,7 +659,12 @@ export class DedicatedSimulation {
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
         if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p, look)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
         // b63 mppvp: pvp = C02 attack on a player
-        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place, air);
+        if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined || (use === undefined && place !== undefined)) {
+          // b90 credit90 (bytecode-read ej, nh.a(jd) / nh.a(jo)): the C07 / C08 reads rotationYaw / rotationPitch as the C03s sent before it left them, not as a later message of this tick wrote them
+          const yaw = p.yaw, pitch = p.pitch;
+          if (look) { p.yaw = look.yaw; p.pitch = look.pitch; }
+          try { if (dig !== undefined) this.handleDig(p, dig); else this.edit(p, place, air); } finally { p.yaw = yaw; p.pitch = pitch; }
+        } else if (use !== undefined) this.handleUse(p, use);
       });
     }
     for (const p of this.players.values()) if (p.resendCells) {
