@@ -2,7 +2,7 @@
 // Only the west/north chest of a pair draws, using the 30-pixel-wide model.
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
-import { chestPair, lidAngle, christmas } from "./chest.js";
+import { chestPair, lidAngle, christmas, chestFacing, migrateChestFacing } from "./chest.js";
 import { isChestBlock, TRAPPED_CHEST, ENDER_CHEST, ITEM_TRAPPED_CHEST, ITEM_ENDER_CHEST } from "./chest-blocks.js";
 import { entityMaterial } from "./light-material.js";
 
@@ -100,13 +100,15 @@ export class ChestRenderer {
       const pair = chestPair(world, x, y, z);
       if (!pair.primary) continue;
       seen.add(key);
-      const shape = `${chest.facing},${pair.east ? "e" : pair.south ? "s" : "1"},${festive},${kind}`;
+      migrateChestFacing(world, chests, x, y, z); // b91 tiles91: a save's record facing moves into the cell metadata the first time its chunk is drawn
+      const facing = chestFacing(world, chests, x, y, z);
+      const shape = `${facing},${pair.east ? "e" : pair.south ? "s" : "1"},${festive},${kind}`;
       let entry = this.models.get(key);
       if (entry?.shape !== shape) {
         if (entry) this.remove(key);
         entry = { ...this.build(pair.double, festive, kind), shape, chest, cell: [x, y, z] };
         entry.root.position.set(x + (pair.east ? 1 : 0.5), y, z + (pair.south ? 1 : 0.5));
-        entry.root.rotation.y = ROTATION[chest.facing] ?? 0;
+        entry.root.rotation.y = ROTATION[facing] ?? 0;
         this.scene.add(entry.root);
         this.models.set(key, entry);
       }

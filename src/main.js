@@ -185,7 +185,7 @@ import { SHADOWS, vehicleShadowCasters } from "./shadows.js";
 import { isSlimeLike, slimeHeight } from "./slime.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
-import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
+import { CHEST, settleFacing, adoptChest, chestPair, tickLid } from "./chest.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
@@ -1939,7 +1939,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     watchMobStats(mobs, { live: statsLive });
     mobs.onEntityWalking = (x, y, z) => touchRedstoneOre(x, y, z); // Entity.moveEntity's step tail: Block.onEntityWalking
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
-    mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
+    mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, entitySubtracted()) : 15); // b91 tiles91: the darkness of this tick's entity pass (entitySubtracted)
     mobs.dimensionBlockLight = (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0;
     // Ocelot hooks (ocelot-ai.js, chest.js): the player's look for Tempt, chest and furnace state for OcelotSit, sitting cats on chests.
     mobs.playerLook = () => { const e = playerEye(); return { yaw: e.yaw, pitch: e.pitch }; };
@@ -1951,7 +1951,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.clientBoatBoxes = () => objectTracker.vehicleTargets().filter((t) => t.kind === "boat").map((t) => t.box); // b63: the boat copies' boxes for an enderman copy's teleport destination (copy-teleport.js)
     // World.isDaytime (skylightSubtracted < 4) and Chunk.canBlockSeeTheSky for the skeleton's
     // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
-    mobs.isDaytime = () => !world.dimension && (scene.subtracted ?? 0) < 4;
+    mobs.isDaytime = () => !world.dimension && entitySubtracted() < 4; // b91 tiles91: World.isDaytime reads the skylightSubtracted this tick's WorldServer.tick computed before the clock step
     mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
     mobs.isRaining = () => weather.isRaining();
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
@@ -1979,14 +1979,15 @@ async function launch(record, prepared, { slice = false } = {}) {
     // Headless terrain columns for the spawner's chunks beyond the resident window (headless-columns.js, natural-spawning.md).
     mobs.ring = createRing(world, { worker: !!streamPrefetch && !streamPrefetch.failed });
     if (streamPrefetch) streamPrefetch.ring = mobs.ring;
-    mobs.lightSubtracted = () => scene.subtracted;
+    entitySub = null;
+    mobs.lightSubtracted = () => entitySubtracted();
     mobs.spawnSubtracted = () => spawnSubtracted; // b90 tiles90
     mobs.spawnLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, spawnSubtracted) : 15);
     if (mobs.ring) { // ring mobs tick and ring columns take edits (natural-spawning.md "Round 5")
       attachRing(world, mobs.ring);
       mobs.ring.isHydrated = (cx, cz) => !streamStorage || streamStorage.loaded.has(`${cx},${cz}`);
       if (streamStorage) streamStorage.margin = 7; // hydrate the stored edits of every ring column too
-      wrapMobHooks(mobs, mobs.ring, () => scene.subtracted ?? 0);
+      wrapMobHooks(mobs, mobs.ring, () => entitySubtracted());
       wrapRandomTickLight(world, mobs.ring, () => scene.subtracted ?? 0, trees, farming); // random ticks in ring chunks read RingLight (natural-spawning.md "Round 8")
     }
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
@@ -2016,7 +2017,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     updateDifficulty();
     // Chest blocks saved without tile data get the facing onBlockAdded gives them.
     for (const [key, b] of world.edits) {
-      if (isChestBlock(b) && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
+      if (isChestBlock(b) && !survival.chests[key]) adoptChest(world, survival.chests, ...key.split(",").map(Number)); // b91 tiles91: the cell metadata is the facing
       if (b === ENDER_CHEST) survival.enderTiles[key] ??= newEnderTile(); // lid state for the renderer (not saved)
     }
     chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
@@ -3217,6 +3218,14 @@ function playerLanding() {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   };
 }
+// b91 tiles91: WorldServer.tick (mt.b, bytecode-read in b88) calculates skylightSubtracted = calculateSkylightSubtracted(1.0F) from the world time BEFORE it
+// adds 1 (and after this tick's weather update), then ticks random blocks, entities and tile entities, so every mob reader sees that value. While the clock moves
+// that reads the fraction (T-1+1)/24000 for post-step time T, which is exactly what scene.setTime(T) samples (partial 0), so the scene's `subtracted` was already
+// native then. With the clock frozen (doDaylightCycle off) it is (T+1)/24000 natively and the scene's T/24000 was one tick behind. `entitySub` is the native value
+// (sensorSky, the daylight sensor's convention), set once per tick right after tickSurvival and cleared when a world opens; null reads the scene's value. Other
+// dimensions have a fixed angle (no clock), so the scene's value stands.
+let entitySub = null;
+const entitySubtracted = () => entitySub ?? scene.subtracted ?? 0;
 let spawnSubtracted = 0; // b90 tiles90: skylightSubtracted as the previous tick's WorldServer.tick left it, for SpawnerAnimals
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
@@ -4048,6 +4057,7 @@ function movementTick(controls) {
   // b90 tiles90: SpawnerAnimals (the mob pass below) runs before WorldServer.tick's calculateSkylightSubtracted, so it reads the previous tick's value: the pre-step darkness of the clock as it stands before this tick's step.
   spawnSubtracted = sensorSky(survival.time, !survival.timeFrozen, weather.rainStrength(1), weather.weightedThunder(1)).subtracted;
   tickSurvival(inWater, oldPosition, inLavaNow);
+  entitySub = world.dimension ? null : sensorSky(survival.time, !survival.timeFrozen, weather.rainStrength(1), weather.weightedThunder(1)).subtracted; // b91 tiles91
   tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime, deferTiles: true },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates,
@@ -4092,7 +4102,7 @@ function movementTick(controls) {
     const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, boats, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
       feet: survival.health > 0 && !dims.busy ? { x: position.x, y: position.y, z: position.z } : null }, {
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
-      lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),
+      lightValue: (x, y, z) => level(x, y, z, entitySubtracted()), // b91 tiles91: the tile entity pass reads the same skylightSubtracted as the entities
       thunderLightValue: (x, y, z) => level(x, y, z, 10),
       thundering: () => weather.isThundering(),
     }, { spawnParticles: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)) });

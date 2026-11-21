@@ -14,7 +14,7 @@ import { BREWING_STAND, brewingView, newBrewingTile } from '../brewing.js';
 import { BrewingContainer } from '../brewing-container.js';
 import { ServerStations, STATION_BLOCKS } from './server-stations.js'; // b60: crafting table, enchanting table, anvil
 import { smeltExperience } from '../experience.js';
-import { settleFacing } from '../chest.js';
+import { adoptChest, chestFacing, migrateChestFacing } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
 import { forgetTableName } from '../tile-names.js'; // b75
 
@@ -220,7 +220,7 @@ export class ServerContainers {
     this.syncLids();
   }
   syncLids() {
-    for (const [key, c] of Object.entries(this.tiles.chests)) this.lid(key, c.users | 0, 'c', c.facing);
+    for (const [key, c] of Object.entries(this.tiles.chests)) this.lid(key, c.users | 0, 'c', chestFacing(this.sim.world, this.tiles.chests, ...key.split(',').map(Number)));
     for (const [key, t] of Object.entries(this.tiles.enderTiles)) this.lid(key, t.users | 0, 'e', 0);
   }
   // b60: BlockFurnace.func_149931_a swaps block 61 and 62 (and its light 13) when TileEntityFurnace's burn state flips. The port keeps one block id and a
@@ -272,7 +272,7 @@ export class ServerContainers {
   ensureChest(x, y, z, block) {
     const key = `${x},${y},${z}`, t = this.tiles;
     if (block === ENDER_CHEST) { if (!t.enderTiles[key]) t.enderTiles[key] = newEnderTile(); }
-    else if (isChestBlock(block)) { if (!t.chests[key]) settleFacing(this.sim.world, t.chests, x, y, z); }
+    else if (isChestBlock(block)) { if (!t.chests[key]) adoptChest(this.sim.world, t.chests, x, y, z); else migrateChestFacing(this.sim.world, t.chests, x, y, z); } // b91 tiles91: a saved record's facing moves into the cell metadata
     else return;
     this.sim.tileChanged(x, y, z);
     for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (this.sim.world.get(x + dx, y, z + dz) === block) this.sim.tileChanged(x + dx, y, z + dz);
@@ -282,7 +282,7 @@ export class ServerContainers {
   // Every chest and ender chest of the world as `contChest` descriptions, for the join snapshot.
   describeAll() {
     const w = this.sim.world, t = this.tiles, list = [];
-    for (const key of Object.keys(t.chests)) { const [x, y, z] = key.split(',').map(Number); if (isChestBlock(w.get(x, y, z))) list.push({ kind: 'contChest', x, y, z, facing: t.chests[key].facing }); }
+    for (const key of Object.keys(t.chests)) { const [x, y, z] = key.split(',').map(Number); if (isChestBlock(w.get(x, y, z))) list.push({ kind: 'contChest', x, y, z, facing: chestFacing(w, t.chests, x, y, z) }); }
     for (const key of Object.keys(t.enderTiles)) { const [x, y, z] = key.split(',').map(Number); if (w.get(x, y, z) === ENDER_CHEST) list.push({ kind: 'contChest', x, y, z, ender: true }); }
     return list;
   }

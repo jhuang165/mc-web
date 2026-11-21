@@ -172,15 +172,15 @@ test("legacy 128 x 128 x 64 worlds migrate to chunks and back without moving or 
     if (back.data[i] === cells.data[i] && back.meta[i] === cells.meta[i]) continue;
     assert.equal(i % HEIGHT, row);
     assert.equal(back.data[i], cells.data[i]);
-    assert.ok(cells.meta[i] !== 0 && back.meta[i] === 0 || (back.data[i] === 14 && back.meta[i] === 3)); // b90 tiles90: a furnace's facing is its cell metadata, so a stray cell meta (0, 1, 6-15) comes back as the exported default facing 3
+    assert.ok(cells.meta[i] !== 0 && back.meta[i] === 0 || ((back.data[i] === 14 || back.data[i] === 41 || back.data[i] === 162) && back.meta[i] === 3) || (back.data[i] === 41 && back.meta[i] === 5 && cells.meta[i] === 0)); // b91 tiles91: a chest too (BlockChest metadata 2-5, was record-only; the side-state east facing now lands in the cell); b90 tiles90: a furnace's facing is its cell metadata, so a stray cell meta (0, 1, 6-15) comes back as the exported default facing 3
   }
   for (let id = 1; id < BLOCKS.length; id++) {
     if (BLOCKS[id].reserved) continue;
     const i = ((p) => (p[0] * SIZE + p[2]) * HEIGHT + p[1])(at(id, 0));
-    assert.deepEqual([back.data[i], back.meta[i]], [id, id === 14 ? 3 : 0], `internal ${id} meta 0`); // b90 tiles90: a meta-0 furnace exports and comes back with the default facing 3
+    assert.deepEqual([back.data[i], back.meta[i]], [id, id === 14 || id === 162 ? 3 : id === 41 ? 5 : 0], `internal ${id} meta 0`); // b90 tiles90: a meta-0 furnace exports and comes back with the default facing 3; b91 tiles91: the chest at at(41, 0) carries the side-state east facing (5) in its cell now
   }
   assert.deepEqual(state.get(at(10, 3).join()), { flowing: true });
   assert.deepEqual(state.get(at(30, 0).join()), { moisture: 4 });
-  assert.deepEqual(state.get(at(41, 0).join()), { facing: 5 });
-  assert.deepEqual(state.get(at(41, 1).join()), { facing: 3 });
+  assert.equal(state.get(at(41, 0).join()), undefined, "b91 tiles91: the chest facing is the cell metadata, no side state");
+  assert.equal(state.get(at(41, 1).join()), undefined);
 });

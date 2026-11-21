@@ -511,7 +511,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       importedColumns[k] = ((importedColumns[k] ?? 0n) | bit);
     }
 
-    // Blocks: full height, through the block registry. Chest facing is carried in its chest record.
+    // Blocks: full height, through the block registry. Chest facing is the cell metadata (b91; the chest record keeps a fallback copy).
     const facings = new Map();
     for (let y = 0; y < height; y++) {
       const section = chunk.sections[y >> 4];
@@ -524,9 +524,8 @@ export async function importJavaRegionArea(regions, options = {}) {
           write(baseX + dx, y, baseZ + dz, 0, 0);
           continue;
         }
-        if (isChestBlock(mapped.id)) facings.set(`${dx},${y},${dz}`, mapped.state.facing >= 2 && mapped.state.facing <= 5 ? mapped.state.facing : 3);
-        const carried = isChestBlock(mapped.id) && mapped.exact;
-        if (key && (!mapped.exact || (mapped.state && !carried))) { report.blocks.approximated++; tally(approximations, key); }
+        if (isChestBlock(mapped.id)) facings.set(`${dx},${y},${dz}`, mapped.meta >= 2 && mapped.meta <= 5 ? mapped.meta : mapped.state?.facing >= 2 && mapped.state?.facing <= 5 ? mapped.state.facing : 3); // b91 tiles91: the facing is the cell's metadata (the record keeps a fallback copy)
+        if (key && (!mapped.exact || mapped.state)) { report.blocks.approximated++; tally(approximations, key); }
         else if (key) report.blocks.exact++;
         write(baseX + dx, y, baseZ + dz, mapped.id, mapped.meta, key);
         if (mapped.state?.powered === true) litRepeaters.push(`${baseX + dx},${y},${baseZ + dz}`); // powered repeater (94): the live engine keeps it as side state

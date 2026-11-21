@@ -30,7 +30,7 @@ import { MOB_SPAWNER, FLOWER_POT } from "./world.js";
 import { spawnerJSON } from "./mob-spawner.js";
 import { potContents, setPotContents, validPotRecord, potKey, EMPTY_POT } from "./stone-utility.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
-import { newChest } from "./chest.js";
+import { newChest, chestFacing, writeChestFacing } from "./chest.js";
 import { COMMAND_BLOCK, newCommandBlock, normalizeLastOutput } from "./command-block.js"; // b80 mpcmd80
 
 export { SIGN_POST, WALL_SIGN };
@@ -70,7 +70,7 @@ export function applyPotTile(world, t) {
 const chestOf = (stores, x, y, z, block) => {
   if (block === ENDER_CHEST) return { kind: "contChest", x, y, z, ender: true };
   const c = stores.chests?.[`${x},${y},${z}`];
-  return c ? { kind: "contChest", x, y, z, facing: c.facing } : null;
+  return c ? { kind: "contChest", x, y, z, facing: chestFacing(stores.world, stores.chests, x, y, z) } : null; // b91 tiles91: the cell's metadata, the record as fallback
 };
 
 // The description of the one tile entity at a cell (PlayerInstance.sendChunkUpdate's changed-cell branch: getDescriptionPacket when the block has
@@ -166,8 +166,8 @@ export function applyTiles(list, stores) {
     } else if (t.kind === "contChest" && stores.chests && stores.enders) {
       if (t.ender && block === ENDER_CHEST) (stores.enders[`${x},${y},${z}`] ??= newEnderTile());
       else if (!t.ender && isChestBlock(block) && Number.isInteger(t.facing) && t.facing >= 2 && t.facing <= 5) {
-        const rec = (stores.chests[`${x},${y},${z}`] ??= newChest(t.facing));
-        rec.facing = t.facing;
+        (stores.chests[`${x},${y},${z}`] ??= newChest(t.facing));
+        writeChestFacing(world, stores.chests, x, y, z, t.facing); // b91 tiles91: the replica's cell metadata too (the server's contChest is the block's metadata of 1.7.10)
       } else continue;
       n++;
     }

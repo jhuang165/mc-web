@@ -37,7 +37,7 @@ test("every internal cell state survives toOriginal -> fromOriginal", () => {
       assert.equal(back.id, id, `${id}:${meta}`);
       assert.ok(back.exact, `${id}:${meta} -> ${mc}:${mm}`);
       // Metadata is kept where the original stores the same meaning; else the original state is fixed.
-      if (back.meta !== meta) assert.ok(back.meta === 0 || (id === 14 && back.meta === mm), `${id}:${meta}`); // b90 tiles90: a furnace keeps its facing (2-5) in the cell metadata, so a stray cell meta comes back as the exported facing
+      if (back.meta !== meta) assert.ok(back.meta === 0 || ((id === 14 || id === 41 || id === 162) && back.meta === mm), `${id}:${meta}`); // b91 tiles91: a chest too (BlockChest metadata 2-5, was record-only). b90 tiles90: a furnace keeps its facing (2-5) in the cell metadata, so a stray cell meta comes back as the exported facing
       const [mc2, mm2] = toOriginal(back.id, back.meta, back.state);
       assert.deepEqual([mc2, mm2], [mc, mm]);
     }
