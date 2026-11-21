@@ -585,7 +585,7 @@ export class Projectiles {
       } else if (b.kind === "potion") {
         // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0), eight snowballpoof at the ball's current position, then setDead.
         // EntityPotion.onImpact (witch-potions.js applies it): the position, the entity struck and the owner go out as an event.
-        this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null } });
+        this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null, ...(b.ownerBody ? { ownerBody: b.ownerBody } : {}) } }); // b93 credit93: the old EntityPlayerMP threw it
         b.dead = true;
       } else if (b.kind === "expBottle") {
         // EntityExpBottle.onImpact (spawn-eggs.js, applied by witch-potions.js): the break position goes out as an event; an entity hit does not matter.

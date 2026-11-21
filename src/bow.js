@@ -478,8 +478,19 @@ export class Arrows {
     // at that moment (EnchantmentHelper.getLootingModifier(entity), not the bow). It used to be 0 for every arrow kill. A dedicated server's arrow holds the player record (`owner`).
     const looting = s === "player" ? getLootingModifier((shooterBody?.survival ?? ctx.survival)?.held ?? null) : 0;
     const landed = mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
-    if (landed && ref.type !== "ender_dragon" && ref.type !== "ender_crystal") this.victimThorns(a, ref, ctx);
+    if (landed && ref.type !== "ender_dragon" && ref.type !== "ender_crystal") { this.victimThorns(a, ref, ctx); this.shooterBane(a, ref, ctx); }
     return landed;
+  }
+  // b93 credit93 (bytecode-read zc.h 1088-1100, afv.b(sv, sa), afq.a(sv, sa, int)): after afv.a (Thorns) the arrow runs the SHOOTER's attacker hook on a living victim: the shooter's armour
+  // and, for a player, the item held at the moment of the hit (it may no longer be the bow) roll Bane of Arthropods slowness. Fire Aspect overrides no hook (only afq and agj do), so it
+  // does nothing for an arrow. A dead old body holds its frozen item and no armour.
+  shooterBane(a, ref, ctx) {
+    const s = a.shooter, mobs = ctx.mobs;
+    if (typeof mobs?.arrowBane !== "function") return;
+    if (s === "player") {
+      const body = a.ownerBody, sv = (body ?? a.owner)?.survival ?? ctx.survival;
+      mobs.arrowBane(ref, { armor: body ? null : sv?.inventory?.armor, held: sv?.held ?? null });
+    } else if (s && typeof s === "object" && s !== ref && mobsHas(mobs, s)) mobs.arrowBane(ref, { mob: s });
   }
   // b92 credit92 (bytecode-read zc.h 1065-1088, afv.a(sv, sa)): a landed arrow on a living mob runs the Thorns of that mob's equipment on the shooter (a mob wears Thorns only from NBT or a
   // dispensed / picked-up piece), as the melee hit does. The player shooter takes the damage through `ctx.thornsOnShooter` (the server's record) or `ctx.survival` (single player);
