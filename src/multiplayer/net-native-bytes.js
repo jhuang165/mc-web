@@ -120,7 +120,7 @@ const hashColumns = (columns) => {
 };
 // A hash of the light arrays of the columns (LightVolume: a column is contiguous in y) and of the side state codes of their stateful cells.
 const stateCode = (s) => (s ? (s.flowing ? 1 : 0) | (s.moisture | 0) << 1 | (s.facing | 0) << 5 | (s.lit ? 1 : 0) << 8 | (s.powered ? 1 : 0) << 9 : 0);
-const hashSide = (columns, source) => {
+export const hashSide = (columns, source) => { // b91 console91: exported for tools/bench-lighthash91.mjs
   let a = 0x9e3779b1;
   const mix = (v) => { a = Math.imul(a ^ v, 0x85ebca6b); a ^= a >>> 15; };
   const light = source.light;

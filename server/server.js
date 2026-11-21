@@ -171,12 +171,27 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     return json(res, 404, { error: 'Unknown request' }, req);
   }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
+  // b91 console91: /netstat's view of the mob a packet names (the owner string, name tag and later watcher keys natively in S0F / S1C): the Overworld's live mobs by wire number, and what
+  // this connection was last told (net-watch-bytes.js). A player in another dimension has no lookup (the sizes stay the class defaults).
+  const mobIndex = { tick: -1, map: new Map() };
+  const mobWatch = (ws) => {
+    const w = (ws.netWatch ??= { memory: new Map(), mob: null });
+    w.mob = (i) => {
+      if (simulation.players.get(ws.netId)?.dimension | 0) return undefined;
+      if (mobIndex.tick !== autosave.ticks) {
+        mobIndex.tick = autosave.ticks; mobIndex.map = new Map();
+        for (const e of simulation.mobs?.mobs?.entities ?? []) mobIndex.map.set(Number(String(e.id).replace(/^mob-/, '')), e);
+      }
+      return mobIndex.map.get(i);
+    };
+    return w;
+  };
   const send = (ws, message) => {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
-    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
+    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
