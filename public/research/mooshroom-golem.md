@@ -27,3 +27,5 @@ Source of truth: `tools/probes/MooshroomGolemProbe.java` runs the unchanged obfu
 - Snow golem balls do not damage the player or other mobs than the golem's targets (golems only target monsters). Golems do not retaliate against the player.
 - Spawn eggs and the mob spawner id list were left alone.
 - Not verified: nothing was run in a browser; `snowGolemUpdate` and `GolemBalls` are covered by the pure-rule tests only.
+
+- Batch 89 mobrec89 (2026-11-20): the snow golem's target set was too narrow. `IMob.mobSelector` accepts every IMob (the blaze, ghast, magma cube, pigman, wither skeleton, giant, wither and dragon too), less the classes `EntityLiving.canAttackClass` refuses (creeper and ghast, `sw.a(Class)`, bytecode-read). Executed: `enderman-wolf-b89mr` `snow-blaze-*`, where the golem targets the blaze on its first tick.

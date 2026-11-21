@@ -142,7 +142,9 @@ export function tickMobEffects(e, size, maxHealth, rand, fx, hurt) {
       }
       if (effect.id === POISON && e.health > 1) {
         const k = 25 >> effect.amplifier;
-        if (k <= 0 || effect.duration % k === 0) e.health = Math.max(1, f(e.health - 1));
+        // b89 mobrec89: Potion.performEffect calls attackEntityFrom(DamageSource.magic, 1.0F) (rv.a(sv, I), executed: enderman-wolf-b89mr-reference.json), so the hurt window,
+        // the knockback-resistance draw, the hurt sound and the witch's 15 % rule apply; without the world's attack path (`hurt`) the old direct step stays.
+        if (k <= 0 || effect.duration % k === 0) { if (hurt) hurt(e, 1, "magic"); else e.health = Math.max(1, f(e.health - 1)); }
       }
       // Potion.performEffect for the wither: attackEntityFrom(DamageSource.wither, 1.0F) every 40 >> amplifier ticks (every tick when the
       // shift reaches zero), so the hurt window and a kill go through the world's attack path (`hurt`, which also plays the sounds).

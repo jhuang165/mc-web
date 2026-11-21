@@ -777,7 +777,7 @@ export class Survival {
   }
   exhaust(n) {
     if (!this.creative)
-      this.exhaustion = Math.fround(Math.min(40, this.exhaustion + n));
+      this.exhaustion = Math.fround(Math.min(40, this.exhaustion + Math.fround(n))); // b89 mobrec89: FoodStats.addExhaustion(float): a 0.3 hit adds 0.3F (executed, b89mr-player-poison2-cave-8923)
   }
   // EntityPlayer.attackEntityFrom with a difficulty-scaled source (mob melee, explosions):
   // the scaled amount, then armour. A scaled 0 (Peaceful) is no hit at all. `options.source` names the
