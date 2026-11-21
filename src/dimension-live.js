@@ -104,7 +104,7 @@ export function advanceWorldClock({ mobs, weather, survival, scene }, n) {
 export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
-    this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
+    this.host = host; this.state = new PortalState(); this.busy = false; this.listSkip = false; this.overlayAmount = 0; this.writes = [];
     this.portals = new EntityPortals(); this.peeks = new Map(); this.exitCache = new Map(); this.queue = Promise.resolve(); this.flights = 0;
     this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.exitWarm = new ExitPrewarm(); this.prewarmEnabled = true; this.quiet = false; this.overlay = null; this.trigger = false;
   }
@@ -480,6 +480,7 @@ export class DimensionLive {
   async travel(target, { exit = false, death = false } = {}) {
     if (this.busy) return false;
     this.busy = true;
+    this.listSkip = !exit && !death; // b92 spcopy92: transferPlayerToDimension (removePlayerEntityDangerously) steps World.updateEntities over the next entity; the End exit (removeEntity) and a death do not
     try {
       const h = this.host, rec = h.active(), p = h.player();
       await this.settle();

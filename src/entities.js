@@ -2066,6 +2066,19 @@ export class EntityWorld {
   // b67 sieges: WorldServer.tick runs VillageSiege after the village tick; the clock and the players are what the host supplies (the server replaces both)
   get siege() { return (this.villageSiege ??= createSiege(this)); }
   siegeTime() { return this.siegeClock ?? 0; }
+  // b92 spcopy92: the portal tick, where the player's own list entry runs. Entity.onEntityUpdate -> travelToDimension -> ServerConfigurationManager.transferPlayerToDimension (oi.a(mw, int))
+  // calls WorldServer.removePlayerEntityDangerously (ahb.f(sa)) at once: setDead, out of playerEntities, the chunk and loadedEntityList (the index shifts), the tracker's untrack, then
+  // isDead goes back to false (offsets 78-86), so World.updateEntities (ahb.h, offsets 296-513) finds the player alive, does not remove it, and its `i++` steps over the entity that
+  // moved into the player's index: it is not updated in this pass (executed, public/research/spcopy92-reference.jsonl). The entities before the player, the spawner and the villages ran with the copy
+  // still in the world. An End exit (mw.b(I) -> ahb.e(sa), removeEntity) leaves the entry in the list for the loop to remove at once (i--), so nothing is stepped over. main.js sets
+  // `departing` for the tick the trip starts; this runs at the player's turn and returns whether the next entity is skipped.
+  copyDeparts() {
+    const p = this.ai.player, d = p?.departing;
+    if (!d) return false;
+    p.departing = null;
+    p.left = true;
+    return !!d.skip;
+  }
   siegePlayers() { return this.ai.player && !this.ai.player.left ? [this.ai.player] : []; } // b91 spcopy91: playerEntities of this world only
   get villages() {
     return (this.villageCollection ??= createVillages(this));
@@ -2456,7 +2469,7 @@ export class EntityWorld {
     // (b91: a mob spawned during the loop is appended to the order and updates in this pass: adoptSpawns.)
     unloadQueued(this); // b60so: WorldServer.tick: unloadQueuedChunks follows the spawner; the unloaded chunks' entities are out of the walk below (saved-order.js)
     releaseDead(this.entities);
-    const seats = this.staleSeats ??= new Set(); let playerTurn = false; // b59so: the player seated in a boat he took from a mob is let go at his own turn (mob-riding.js)
+    const seats = this.staleSeats ??= new Set(); let playerTurn = false, skipOne = false; // b59so: the player seated in a boat he took from a mob is let go at his own turn (mob-riding.js)
     const peacefulGone = [];
     // Entity.updateRidden ends with updateRiderPosition: the seat is taken right after the rider's own update, before the next mob of the list moves (b36 records: a mob after the mount pushes the rider at its new seat).
     let rider = null;
@@ -2475,11 +2488,12 @@ export class EntityWorld {
     for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot(), this.adoptSpawns(order)) {
       if (this.entities.length !== this.spawnLen) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
-      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); } // the player's place in the list: his mount no longer lists him
+      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); skipOne = this.copyDeparts(); } // the player's place in the list: his mount no longer lists him. b92 spcopy92: a portal trip's transferPlayerToDimension runs here (copyDeparts)
       clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
       this.beforeMob?.(e); // host hook (multiplayer/server-mobs.js): the nearest of several players is the AI's player for this mob
       seat();
       sections();
+      if (skipOne) { skipOne = false; continue; } // b92 spcopy92: the entity at the player's old list index (see copyDeparts) is not updated in this pass
       if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       const walk = this.walkOf?.get(e);
@@ -2631,7 +2645,7 @@ export class EntityWorld {
       if (e.rider?.sneakDismount) this.riderSneakOff(e); // b89 horse89: the sneaking player's updateRidden after its mount's update (a pig; a horse already did it in horseTick)
     }
     endPushGrid();
-    if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); } // the player's place is after every entity of this pass
+    if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); this.copyDeparts(); } // the player's place is after every entity of this pass
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();

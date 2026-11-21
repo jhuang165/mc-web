@@ -1346,7 +1346,9 @@ class PlayerView {
     // loadedEntityList), so this copy is no longer ticked, follows no packets and no mob finds it while the trip's save runs (main.js sets it while the trip is in flight).
     // `brokenSeat`: the seat a boat or cart broken by damage under the copy re-linked it at (EntityBoat / EntityMinecart.attackEntityFrom -> rider.mountEntity(this) ->
     // setPlayerLocation(s, t, u)); entities.js serverPlayerUpdate sends that S08 (server-process-player.js brokenMountLocation).
-    this.left = false;
+    this._left = false;
+    this.departing = false;
+    this.absent = false;
     this.brokenSeat = null;
     // b90 spcopy90: the network tick from which the queued C06 may be taken (`answerFrom`). An S08 sent from this tick's world pass or C02 (mountEntity, sleepInBedAt, a broken
     // seat, a dismount) reaches the client's next network processing, so its answer is the next network tick's packet (setLocation `late`).
@@ -1396,11 +1398,16 @@ class PlayerView {
   // b91 spcopy91: a copy that `left` the world is out of playerEntities, so it is no longer an alive player of this world for any reader (mob targeting, spawn blocking, pushes,
   // pistons, village notes): `alive` reads false meanwhile, and the host's own survival health is untouched (a failed trip gives the copy back as it was).
   get alive() { return this._alive && !this.left; }
+  // b92 spcopy92: `left` is true for every copy that is not in this world's playerEntities: one that transferPlayerToDimension took out (`_left`, main.js) and the away run's stand-in (`absent`,
+  // away-entities.js: that world has no EntityPlayerMP at all). Before, the b91 gates read only `_left`, so the away run's legacy mobs (closestPlayer with range -1), tamed pets (owner()),
+  // villagers and the siege still found the far stand-in (executed against the real readers in spcopy92-b92.test.js).
+  get left() { return this._left || this.absent === true; }
+  set left(v) { this._left = !!v; }
   set alive(v) { this._alive = v; }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }
   update(player, survival, held) {
-    if (this.left) return; // b89 spcopy89: out of this world (see `left`): the old WorldServer neither ticks it nor reads its packets
+    if (this._left) return; // b89 spcopy89: out of this world (see `left`): the old WorldServer neither ticks it nor reads its packets
     this.width = f(this.sleeping ? 0.2 : 0.6);
     this.height = f(this.sleeping ? 0.2 : 1.8);
     this.eyeHeight = this.sleeping ? f(0.2) + PLAYER_EYE_HEIGHT : PLAYER_EYE_HEIGHT; // b68 fixes68: posY = minY + yOffset 0.2 while lying, eye = posY + 1.62 (sleeper-eye.js)

@@ -179,6 +179,7 @@ function applyEditInner(state, { place = false, target = null, aimedEntity = nul
   const act = (branch, extra = {}) => ({ handled: true, branch, ...extra }),
     hook = (name, ...args) => hooks[name]?.(...args);
   if (state.screen !== 'playing') return { handled: false, branch: 'not-playing' };
+  if (state.mobs?.ai?.player?.left) return { handled: false, branch: 'player-left' }; // b92 spcopy92: the copy is out of this world (a portal trip in flight, EntityWorld.copyDeparts): no EntityPlayerMP here to hit, click or lead, so no attack, interaction, reinforcement call or leashFence
 
   hook('unlock');
   const id = state.heldTool, item = ITEMS[id];
