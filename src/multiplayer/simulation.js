@@ -33,7 +33,7 @@ import { LightVolume, lightEmission, celestialAngle, skylightSubtracted } from '
 import { sensorSky, celestialRadians } from '../daylight-sensor-time.js'; // b88 tiles88
 import { ServerChunkSets } from './server-chunks.js';
 import { ServerRules, blockProtected, flightCheck, hardcoreTick } from './server-properties.js'; // b69 serverprops
-import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
+import { tickScheduledSystems, tickTileSystems, tickBlockEvents } from '../world-tick.js';
 import { attachTickTree } from '../tile-ticks.js';
 import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
@@ -684,11 +684,12 @@ export class DedicatedSimulation {
     this.weather.updateWeather();
     this.sleep.worldTick(); // b92: right after the weather timers, before the scheduled ticks and the entities; the darkness read below is the post-skip clock, as mt.b's skylight step is
     this.mobs.spawnStep(); // b93 mpobjects93: SpawnerAnimals, mt.b's step after the sleep skip and before tickPending (mobs.tick skips its own pass this tick)
-    tickScheduledSystems({ falling: this.falling, farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, tickTree: this.tickTree },
+    tickScheduledSystems({ falling: this.falling, farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone, tickTree: this.tickTree, eventsLater: true },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
     this.weather.tick(this.world, null, true);
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
+    tickBlockEvents({ redstone: this.redstone }); // b94 mpobjects94: WorldServer.sendQueuedBlockEvents ends mt.b, after the random ticks and the weather bolts (it ran before them)
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
     this.mobs.tick();

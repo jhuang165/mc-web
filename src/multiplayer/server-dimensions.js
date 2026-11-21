@@ -173,14 +173,19 @@ export class ServerDimensions {
   // ---- per tick ----
   afterTick(base) {
     const sim = this.sim;
+    // b94 mpobjects94 (bytecode-read mt.b: ahp.a(getTotalWorldTime) is WorldServer.tick's step before its entities): the OVERWORLD teleporter's sweep precedes every arrival there (the Nether's and the End's
+    // entity passes follow the Overworld's whole tick), so an entry unused for 600 ticks is gone at a multiple of 100 before a trip from the Nether finds it. The Nether's sweep stays below, after the
+    // Overworld's entity pass (a trip into the Nether runs there) and before the Nether's own tick.
+    this.sweepTeleporters(sim, d => d === OVERWORLD);
     for (const p of [...sim.players.values()]) if (!p.dead) this.checkPortal(p);
     this.shots.step(); // b91 entnbt91: the arrows and rockets of every dimension in portals
     this.travel.step(OVERWORLD); // b92 portals92: the Overworld's mobs, items, orbs, carts and boats (the Nether's and the End's are walked after their own tick, netherMessage)
-    for (const t of this.teleporters.values()) if (sim.ticks % 100 === 0) t.removeStale(sim.ticks);
+    this.sweepTeleporters(sim, d => d !== OVERWORLD);
     this.alt = {};
     if (this.nether) this.alt[NETHER] = this.netherMessage(base);
     if (this.end.n) this.alt[END] = this.netherMessage(base, this.end.n, END); // b63 mpend
   }
+  sweepTeleporters(sim, pick) { for (const [d, t] of this.teleporters) if (pick(d)) t.removeStale(sim.ticks); } // Teleporter.removeStalePortalLocations tests the multiple of 100 itself
   // BlockPortal.onEntityCollidedWithBlock (the box overlaps a portal block) and Entity.onEntityUpdate's timer; `p.previous` is the last tick's position.
   checkPortal(p) {
     if (this.end.checkPortal(p)) return; // b63 mpend: BlockEndPortal

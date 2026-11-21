@@ -29,7 +29,7 @@ import { serverRedstoneDrop, installServerSkullBreak } from './server-redstone-d
 import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
-import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
+import { tickScheduledSystems, tickTileSystems, tickBlockEvents } from '../world-tick.js';
 import { attachTickTree } from '../tile-ticks.js';
 import { tickBeacons } from '../pyramid-live.js';
 import { Survival, ITEMS } from '../survival.js';
@@ -159,10 +159,11 @@ export function tickNether(sim, n, players) {
   // b91 mpobjects91: WorldServer.tick's random block ticks run before World.updateEntities and the tracker flush (bytecode-read mt.b), as in simulation.js.
   // b92 mpobjects92 (mt.b: tickPending before tickBlocks): the scheduled tickUpdates and the queued block events precede the random ticks and the entities; the tile entities follow the entities.
   n.mobs.spawnStep(); // b93 mpobjects93: SpawnerAnimals before tickPending (mt.b); n.mobs.tick() below skips its own pass
-  tickScheduledSystems({ falling: n.falling, farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, tickTree: n.tickTree },
+  tickScheduledSystems({ falling: n.falling, farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, tickTree: n.tickTree, eventsLater: true },
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();
+  tickBlockEvents({ redstone: n.redstone }); // b94 mpobjects94: sendQueuedBlockEvents is mt.b's last step, after the random ticks
   n.dispense.tick();
   viewNetherPlayers(n, players); n.vehicles.riderInput(); // b63: a pig steers on this tick's keys
   n.mobs.tick();

@@ -33,7 +33,13 @@ export function tickScheduledSystems(systems, clock, observers) {
   // b93: with the shared TickTree the redstone entries were taken and run inside it (its begin is redstone.beginTick, its source runs accept / runTaken); otherwise the old own pass.
   if (!systems.tickTree) { r.beginTick(); r.tickUpdates(); }
   else while (r.thisTick?.length) r.runTaken(r.thisTick[0]); // an entry deferred in an earlier tick (its column was not resident) that retryDeferred released now: LiveRedstone.tickUpdates runs these last
-  r.endTick(true); // sendQueuedBlockEvents and the sensor scans now; the tile-entity loop waits for tickTileSystems
+  if (!systems.eventsLater) r.endTick(true); // sendQueuedBlockEvents and the sensor scans now; the tile-entity loop waits for tickTileSystems
+}
+// b94 mpobjects94 (bytecode-read mt.b): WorldServer.sendQueuedBlockEvents (Z()) is the LAST step of WorldServer.tick, after tickPending, tickBlocks (the random ticks and the lightning rolls),
+// the chunk map, the villages and the portal sweep; an event the random ticks queued runs in the same tick, and a piston the scheduled pass queued extends after the random ticks. The server
+// passes `eventsLater: true` to tickScheduledSystems and calls this after its random ticks (the tile-entity loop still waits for tickTileSystems).
+export function tickBlockEvents(systems) {
+  systems.redstone?.endTick(true);
 }
 export function tickTileSystems(systems) {
   systems.hoppers?.tick();
