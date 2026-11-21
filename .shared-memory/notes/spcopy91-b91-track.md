@@ -16,7 +16,7 @@ Port-read: the old world ticks only from the portal tick until `openWorld` sets 
 
 ## Verification
 - `node --test src/spcopy91-b91.test.js`: 4/4. With the `ai.js` change stashed: 2 fail (checked).
-- Targeted run of tests naming wolf/ocelot/villager/leash/PlayerView/spcopy88-90/village-fight: see lead reply.
+- Targeted run of tests naming wolf/ocelot/villager/leash/PlayerView/spcopy88-90/village-fight, siegePlayers, despawnEntity, owner(), tickBeacons, dragonPush, blastKnockback, pushEntity (concurrency 2): 2490/2490 pass.
 
 ## Follow-ups
 - Readers that fire only from player events (hits, clicks, `callReinforcement`, `leashFence`) are unreachable while left and stay ungated.
