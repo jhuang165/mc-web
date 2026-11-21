@@ -2308,6 +2308,8 @@ export class EntityWorld {
     });
   }
   gearViewOf(e) { return (e && this.views?.get(e)) ?? e; } // the view gearViews() made of `e` (the aimed mob is compared by identity)
+  // b92 mobrec92: is `o` after the player in loadedEntityList? What spawned after the player joined (a split child: no stamp yet, or a later one) is.
+  afterPlayerSlot(o) { const P = this.orderSeqs?.get(this.playerKey) ?? this.playerStamp; if (P === undefined) return false; const s = this.orderSeqs?.get(o); return s === undefined || s > P; }
   // EntityPlayerMP.onUpdate (the S13 flush) runs at the player's place in loadedEntityList: an entity removed before that place flushes in the same pass (entity-tracker.js `beforePlayer`)
   beforePlayer(e) { const s = this.orderSeqs?.get(e); return s !== undefined && s < (this.orderSeqs.get(this.playerKey) ?? this.playerStamp ?? 0); }
   // Batch 53: the player joins loadedEntityList at a definite place. At login the world's own entities (loaded with its chunks) are in the list first and the player is appended
@@ -2882,16 +2884,18 @@ export class EntityWorld {
     // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
     const cand = pushNear(this.entities, e, near, pushHalf, meetsArg(fineConfig.mode, () => (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, this, pushBox))) ?? pushCandidates(this.entities, e); // b78 (push-grid.js FineGrid): only the entities whose box can reach this one's; b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
+    const p = this.ai.player;
+    let pend = !!(p?.inWorld && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))); // b92: the player's push waits for its place in the list
     for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
+        if (pend && this.afterPlayerSlot(o)) { pend = false; pushServerPlayer(p, e); } // the player pushes at its place in the list, before what spawned after it joined
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
       }
     // The carts and boats beside it push it (their applyEntityCollision) in its own update, when the loaded-entity walk holds them (entity-simulation.js `pushMob`).
     this.walks?.get("cart")?.pushMob?.(e);
     this.walks?.get("boat")?.pushMob?.(e);
-    const p = this.ai.player;
-    if (p?.inWorld && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
+    if (pend) pushServerPlayer(p, e); // e.applyEntityCollision on the player: both move (the server's copy of the player gets the motion)
     pushNearDone(near);
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
@@ -2904,6 +2908,13 @@ export class EntityWorld {
     // liveOrder without its filtered copy: the frozen entities (unloaded chunks) are skipped in the loop (nothing in it freezes or thaws one)
     const list = cand ?? this.entities, fz = this.frozen?.set.size ? this.frozen.set : null, ref = fast87.mode === "verify" ? pushPairsReference(this, e, near, liveOrder(this, list)) : null;
     let n = 0;
+    const p = this.ai.player;
+    let pend = false; // b92: the player's push waits for its place in the list (EntityLivingBase.collideWithNearbyEntities walks getEntitiesWithinAABBExcludingEntity in list order)
+    if (p?.inWorld && !e.rider?.player) {
+      const pw = f(f(p.width) / 2), ph = f(p.height), x = p.x, y = p.y, z = p.z;
+      pend = x + pw > near[0] && x - pw < near[3] && y + ph > near[1] && y < near[4] && z + pw > near[2] && z - pw < near[5]; // boxesMeet(near, pushBox(p, p.width, p.height))
+      if (fast87.mode === "verify" && pend !== boxesMeet(near, pushBox(p, p.width, p.height))) fail87("push player box");
+    }
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
       if (fz !== null && (fz.has(o) || !(i in list))) continue; // (filter also skips holes)
@@ -2911,19 +2922,14 @@ export class EntityWorld {
         if (ref && ref[n] !== o) fail87("push pairs");
         n++;
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o);
+        if (pend && this.afterPlayerSlot(o)) { pend = false; pushServerPlayer(p, e); }
         applyEntityCollision(o, e);
       }
     }
     if (ref && ref.length !== n) fail87("push pairs");
     this.walks?.get("cart")?.pushMob?.(e);
     this.walks?.get("boat")?.pushMob?.(e);
-    const p = this.ai.player;
-    if (p?.inWorld && !e.rider?.player) {
-      const pw = f(f(p.width) / 2), ph = f(p.height), x = p.x, y = p.y, z = p.z;
-      const hit = x + pw > near[0] && x - pw < near[3] && y + ph > near[1] && y < near[4] && z + pw > near[2] && z - pw < near[5]; // boxesMeet(near, pushBox(p, p.width, p.height))
-      if (fast87.mode === "verify" && hit !== boxesMeet(near, pushBox(p, p.width, p.height))) fail87("push player box");
-      if (hit) pushServerPlayer(p, e);
-    }
+    if (pend) pushServerPlayer(p, e);
     pushNearDone(near);
     if (e.type === "iron_golem") this.golemTailTick(e);
   }
@@ -3088,7 +3094,8 @@ export class EntityWorld {
       const child = this.create(e.type, k.x, k.y, k.z);
       Object.assign(child, slimeFields(k.size, this.random));
       this.entitySeed?.(child, "slime-split"); // the replays seed the child's Entity.rand (its constructor's draws and first jump delay)
-      for (const key of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) child[key] = k.yaw;
+      for (const key of ["rotationYaw", "prevRotationYaw", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) child[key] = k.yaw;
+      child.renderYawOffset = child.prevRenderYawOffset = 0; // setLocationAndAngles sets only rotationYaw and prevRotationYaw; renderYawOffset stays 0 until the first update (b92mr executed: kid body yaw 0.0 at adoption)
       child.yaw = (-k.yaw * Math.PI) / 180;
       this.entities.push(child);
       this.tickOrder?.push(child); // World.spawnEntityInWorld appends to the list being walked: the child updates in this pass (legacy-ai records)

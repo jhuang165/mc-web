@@ -77,7 +77,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
       break;
     case "creeper": add(GUNPOWDER, generic()); break;
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
-    case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
+    case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id === 341 ? 460 : id); break; // slime.js keeps the original item id 341; this build's Slimeball is 460 (341 is its Water bucket: b92 mobrec92 found a size 1 slime dropping a bucket) // EntitySlime.dropFewItems (slime.js)
     case "magma_cube": for (const id of magmaDrops(rand, e.size, looting)) add(id); break; // EntityMagmaCube.dropFewItems (nether-melee.js)
     case "pigman": for (const id of pigmanDrops(rand, looting)) add(id); break; // EntityPigZombie.dropFewItems
     case "wither": add(2060); break; // EntityWither.dropFewItems: one nether star (ade.bN)

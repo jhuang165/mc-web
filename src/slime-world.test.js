@@ -77,7 +77,7 @@ test("a dead slime splits into 2 to 4 children of half the size at the end of it
 test("only a size 1 slime drops slimeballs, and every size gives its size in experience", () => {
   let balls = 0;
   for (let seed = 0; seed < 50; seed++) {
-    balls += mobDrops({ type: "slime", size: 1 }, { playerHit: true }, new JavaRandom(seed)).filter(([id]) => id === 341).length;
+    balls += mobDrops({ type: "slime", size: 1 }, { playerHit: true }, new JavaRandom(seed)).filter(([id]) => id === 460).length; // b92 mobrec92: this build's Slimeball is 460 (341 is its Water bucket)
     assert.deepEqual(mobDrops({ type: "slime", size: 2 }, { playerHit: true }, new JavaRandom(seed)), []);
   }
   assert.ok(balls > 20 && balls < 90);

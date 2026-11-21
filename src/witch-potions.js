@@ -26,7 +26,7 @@ export class WitchPotions {
     const survival = target.survival, rand = entityRandom(e), motion = target.isPlayer ? { x: target.motion.x, z: target.motion.z } : { x: target.e?.vx, z: target.e?.vz };
     const choice = chooseThrownPotion(rand, e, {
       x: target.x, y: target.y, z: target.z, eyeHeight: target.eyeHeight, motionX: motion.x ?? 0, motionZ: motion.z ?? 0,
-      health: survival?.health ?? 20, hasEffect: (id) => !!survival?.effects?.has?.(id),
+      health: survival?.health ?? target.e?.health ?? 20, hasEffect: (id) => survival ? !!survival.effects?.has?.(id) : !!target.e?.effects?.some?.((x) => x.id === id), // b92: a mob target (a snow golem the witch fights) answers with its own health and effects (executed: snow-witch-9423, the second throw is not slowness once the first hit)
     }, !!e.drinking);
     if (!choice) return null;
     const at = throwSpawn(e, f((-e.yaw * 180) / Math.PI), WITCH.eyeHeight), rng = this.projectiles.rng(),
