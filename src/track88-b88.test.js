@@ -118,6 +118,8 @@ test("a player who reaches the Nether before the Nether's pass (the port's after
 // --- 2. the late viewer's packets in my.b's order, and the equipment check ---
 test("a late viewer gets S0F (the head byte), the full S1C, then S04 for each held slot; a changed slot goes out as S04 at the next update; the copy applies it", { timeout: 180000 }, () => {
   const s = server(), p = join(s, "p", 1, 64.5, 64.5), q = join(s, "q", 2, 66.5, 64.5);
+  // b90 lead: a roof over the pen, so the daylight roll (sunIgnite -> daylightHelmet, on the mob's randomly seeded Random) cannot wear the leather cap and send an unrelated S04
+  for (let x = 56; x <= 76; x++) for (let z = 60; z <= 80; z++) s.world.put(x, 20, z, 1, 0, false);
   const m = s.mobs.mobs.create("skeleton", 66.5, 10, 70.5); s.mobs.mobs.entities.push(m);
   m.equipment[4] = { id: 298, count: 1, damage: 3 };
   const remote = new RemoteMobs(s.world, {});
