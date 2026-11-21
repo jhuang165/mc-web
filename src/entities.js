@@ -1013,7 +1013,7 @@ export class EntityWorld {
       ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
       (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= (world.size ?? SIZE) || e.z < 0 || e.z >= (world.size ?? SIZE)) ||
       e.y < -64 || // b54so: no upper bound: AnvilChunkLoader files a record above 256 in section 15 (Chunk.addEntity clamps) and loads it; only the void (y < -64) removes
-      (e.health <= 0 && !summoned && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200))
+      (e.health <= 0 && !summoned && !(Number.isInteger(e.death) && e.death >= 0 && e.death < 20) && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200)) // b93 entnbt93: a record saved mid-death (DeathTime 0..19) is a living-dead mob that finishes its animation
     )
       return null;
     const fresh = this.create(e.type, e.x, e.y, e.z);
@@ -3574,7 +3574,8 @@ export class EntityWorld {
     e.limbSwing = f(e.limbSwing + e.limbSwingAmount);
   }
   serialize() {
-    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone).map((e) => this.serializeOne(e));
+    // b93 entnbt93: a mob in its death animation is not setDead yet, so the chunk save writes it with Health 0 and its DeathTime (AnvilChunkLoader keeps every !isDead entity)
+    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone || (Number.isInteger(e.death) && e.death >= 0 && e.death < 20 && e.type !== "ender_crystal" && e.type !== "ender_dragon")).map((e) => this.serializeOne(e));
   }
   // One saved record (also the record a mob travelling through a portal takes along, dimension-live.js).
   serializeOne(e) {

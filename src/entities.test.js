@@ -60,13 +60,14 @@ test("legacy sword damage wears the tool, suppresses duplicate hits, and emits o
   assert.equal(a.attack(pig, 115, p, player), true);
   assert.equal(a.drain().filter((e) => e.drop === 202).length, 1);
   assert.equal(pig.health, 0);
-  assert.equal(a.serialize().length, 0);
+  assert.equal(a.serialize().length, 1, "b93: a mob mid-death is saved with Health 0 (executed, entnbt93-reference.json); it used to be left out");
   // deathTime counts from the next onEntityUpdate.
   assert.equal(pig.death, 0);
   a.tick(player, p);
   assert.equal(pig.death, 1);
   for (let i = 0; i < 20; i++) a.tick(player, p);
   assert.equal(a.entities.length, 0);
+  assert.equal(a.serialize().length, 0, "setDead at deathTime 20: not saved");
 });
 test("night spawns hostile mobs through SpawnerAnimals while daylight spawns only animals", () => {
   const monster = (e) => creatureTypeOf(e.type) === "monster";
