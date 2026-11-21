@@ -1685,6 +1685,17 @@ export class EntityWorld {
       breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
     });
   }
+  // b93 credit93 (bytecode-read zc.h 1088-1100, afv.b(sv, sa), afx.a, afq.a(sv, sa, int)): EnchantmentHelper.func_151385_b(shooter, victim) runs after a landed arrow on a living victim:
+  // the shooter's armour (sv.ak(): a player's four armour slots, a mob's five equipment slots) and, for a player (`instanceof yz`) only, the held item at the moment of the hit. Only
+  // EnchantmentDamage overrides the hook (Bane of Arthropods: Slowness IV for 20 + shooter.rand.nextInt(10 * level) ticks on an arthropod); Fire Aspect has none, so an arrow gets no fire from it.
+  // `mob` is a mob shooter (its own Random, no separate held roll), else `armor`/`held` are a player's (the shared player Random, as the melee hit).
+  arrowBane(victim, { mob = null, armor = null, held = null } = {}) {
+    if (!this.entities.includes(victim) || victim.health <= 0) return null;
+    const rand = mob ? entityRandom(mob) : (this.playerRandom ??= javaLikeRandom(this.random));
+    const ticks = arthropodSlowness(mob ? mob.equipment : armor, mob ? null : held, victim.type, rand);
+    if (ticks != null) addMobEffect(victim, 2, ticks, 3);
+    return ticks;
+  }
   attack(e, tool, survival, player, extraKnockback = 0, critical = false, info = {}) {
     // b80: a dying dragon is still hit through its part: wy.a(ro, F) -> xa.a(wy, ro, F) returns true at any health (bytecode-read), so the weapon wears and the hunger cost is paid.
     if (!this.entities.includes(e) || (e.health <= 0 && e.type !== "ender_dragon")) return false;

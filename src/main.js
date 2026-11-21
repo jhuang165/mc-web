@@ -3075,9 +3075,16 @@ function showGameOver() {
     confirmNo: hardcore && !multiplayer ? async () => { const record = active; leaveToTitle(false); await deleteWorld(record); toast(HARDCORE_KICK); } : respawnPlayer,
   }));
 }
+// b93 credit93 (bytecode-read oi.a(mw, int, boolean), zk.j, zc.c): every snowball, egg, pearl, potion, bottle and arrow the dead player had in flight keeps the old EntityPlayerMP, which stays
+// where it was removed (the Nether and End death position too). The body is built where the player died, before leaveByDeath moves him, and given to the lists of the dimension he is in
+// when the respawn finishes (the Overworld's) and, for a Nether/End death, to the live lists he leaves behind.
+let pendingDeathBody = null;
+function deathBodyHere() { return { corpseOf: "player", dead: true, position: { x: position.x, y: position.y, z: position.z }, survival: { creative: !!survival.creative, held: survival.held ? { ...survival.held } : null, health: 0 } }; }
+function giveDeathBody(body) { for (const b of projectiles.balls) if (!b.dead && !b.dispensed) b.ownerBody ??= body; for (const b of mobs?.potions?.projectiles?.balls ?? []) if (!b.dead && b.owner === "player") b.ownerBody ??= body; for (const a of arrows.list) if (!a.dead && a.shooter === "player") a.ownerBody ??= body; }
 async function respawnPlayer() {
     if (dimensionOf(active)) { // died in the Nether/End: back to the Overworld, then the usual respawn below
-      if (await dims.leaveByDeath()) await respawnPlayer();
+      if (!multiplayer) { pendingDeathBody = deathBodyHere(); giveDeathBody(pendingDeathBody); }
+      if (await dims.leaveByDeath()) await respawnPlayer(); else pendingDeathBody = null;
       return;
     }
     try {
@@ -3091,7 +3098,7 @@ async function respawnPlayer() {
       else { bedSleep.spawn = null; showChatLine(document, BED_TEXT.notValid); }
     } else if (active.playerSpawn) spawn = { x: active.playerSpawn[0] + 0.5, y: active.playerSpawn[1], z: active.playerSpawn[2] + 0.5 }; // /spawnpoint
     // b92 credit92 (bytecode-read zk.j, oi.a(mw, int, boolean)): a snowball, egg or pearl in flight keeps the EntityPlayerMP that threw it; respawnPlayer removes that entity where it died.
-    if (!multiplayer) { const body = { corpseOf: "player", dead: true, position: { x: position.x, y: position.y, z: position.z }, survival: { creative: !!survival.creative, held: survival.held ? { ...survival.held } : null, health: 0 } }; for (const b of projectiles.balls) if (!b.dead && !b.dispensed) b.ownerBody ??= body; }
+    if (!multiplayer) { giveDeathBody(pendingDeathBody ?? deathBodyHere()); pendingDeathBody = null; }
     const time = survival.time;
     multiplayer?.respawn(); // C16 perform respawn; the server answers with the new health
     const kept = (ruleOn(active, "keepInventory") || multiplayer) && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
