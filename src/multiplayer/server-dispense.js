@@ -207,6 +207,7 @@ export class ServerDispense {
     if (!who) return;
     const at = (body ?? who).position;
     mobs.thornsOfVictim(ref, {
+      byPlayer: true,
       hurt: (n) => { if (body || who.dead) return false; return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
       sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: lane.dim }),
     });
