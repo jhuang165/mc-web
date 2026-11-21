@@ -1013,7 +1013,7 @@ export class EntityWorld {
       ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
       (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= (world.size ?? SIZE) || e.z < 0 || e.z >= (world.size ?? SIZE)) ||
       e.y < -64 || // b54so: no upper bound: AnvilChunkLoader files a record above 256 in section 15 (Chunk.addEntity clamps) and loads it; only the void (y < -64) removes
-      (e.health <= 0 && !summoned && !(Number.isInteger(e.death) && e.death >= 0 && e.death < 20) && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200)) // b93 entnbt93: a record saved mid-death (DeathTime 0..19) is a living-dead mob that finishes its animation
+      (e.health <= 0 && !summoned && !(Number.isInteger(e.death) && e.death < 20) && !(Number.isInteger(e.deathKept) && e.deathKept >= 20 && e.type !== "ender_dragon") && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200)) // b93 entnbt93: a record saved mid-death (DeathTime 0..19) is a living-dead mob that finishes its animation
     )
       return null;
     const fresh = this.create(e.type, e.x, e.y, e.z);
@@ -1769,7 +1769,8 @@ export class EntityWorld {
       for (const [drop, damage, enchantments] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0, toLive: toLiveStack }, entityRandom(e)))
         this.emitLoot({ drop, count: 1, ...(damage ? { damage } : {}), ...(enchantments ? { enchantments } : {}), position: at });
     }
-    e.death = 0;
+    // b94 entnbt94: a live mob loaded with a DeathTime keeps counting from it (executed: it stays put while alive); 20 or more never reaches the removal
+    if (Number.isInteger(e.deathKept) && e.type !== "ender_dragon") { if (e.deathKept < 20) { e.death = e.deathKept; delete e.deathKept; } else e.death = 0; } else e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
   }
   // /kill and the tests' kill: attackEntityFrom(DamageSource.outOfWorld, Float.MAX_VALUE) with no attacker, so no recentlyHit (no xp, no player-only drops)
@@ -1783,6 +1784,7 @@ export class EntityWorld {
   // last 100 ticks, not a child, leaves its experience (split into orbs by xpOrbs.spawn),
   // then is setDead with 20 "explode" puffs drawn on Entity.rand.
   deathUpdate(e, t) {
+    if (Number.isInteger(e.deathKept) && e.type !== "ender_dragon") { e.deathKept++; return; } // b94 entnbt94: a Health 0 mob loaded with DeathTime 20 or more counts on and is never removed (the count passes 20 without equalling it after the increment)
     e.death = (e.death || 0) + 1;
     if (e.death !== 20) return;
     freeRider(e); // onDeathUpdate's setDead at deathTime 20: the rider updating right after finds its mount dead and is let go within the same tick (b39 jockey kills)
@@ -3576,7 +3578,7 @@ export class EntityWorld {
   }
   serialize() {
     // b93 entnbt93: a mob in its death animation is not setDead yet, so the chunk save writes it with Health 0 and its DeathTime (AnvilChunkLoader keeps every !isDead entity)
-    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone || (Number.isInteger(e.death) && e.death >= 0 && e.death < 20 && e.type !== "ender_crystal" && e.type !== "ender_dragon")).map((e) => this.serializeOne(e));
+    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone || ((Number.isInteger(e.death) && e.death < 20 || Number.isInteger(e.deathKept) && e.deathKept >= 20) && e.type !== "ender_crystal" && e.type !== "ender_dragon")).map((e) => this.serializeOne(e));
   }
   // One saved record (also the record a mob travelling through a portal takes along, dimension-live.js).
   serializeOne(e) {

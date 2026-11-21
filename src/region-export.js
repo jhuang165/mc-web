@@ -103,7 +103,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const n=entity(e,name,ox,oz);
   // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
   if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);n.Invulnerable=byte(e.invulnerable?1:0);built.push({e,n});continue;}
-  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(e.health<=0&&Number.isInteger(e.death)?e.death:0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(Number.isInteger(e.deathKept)?e.deathKept:e.type!=='ender_dragon'&&e.health<=0&&Number.isInteger(e.death)?e.death:0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT (sw.b, bytecode-read; entnbt91-reference.json: every unnamed mob writes CustomName "" and CustomNameVisible 0): both keys always, b91 entnbt91. PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customName&&e.customNameVisible?1:0);
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
@@ -136,7 +136,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
    Object.assign(n,{Type:int(h.type),Variant:int(h.variant),Temper:int(h.temper),Tame:byte(h.tame?1:0),Bred:byte(h.bred?1:0),ChestedHorse:byte(h.chested?1:0),HasReproduced:byte(h.reproduced?1:0),EatingHaystack:byte(0),
     OwnerUUID:str(ownerText(e,!!h.owner,report.playerUuid??exportPlayerUuid({})))});
    if(h.saddled)n.SaddleItem=it(329);if(h.armor)n.ArmorItem=it(416+h.armor);
-   if(h.chested&&Array.isArray(h.items))n.Items=list(NBT.COMPOUND,h.items.map((st,i)=>i>=2?stackNbt(st,i,report):null).filter(Boolean));}
+   if(h.chested)n.Items=list(NBT.COMPOUND,(Array.isArray(h.items)?h.items:[]).map((st,i)=>i>=2?stackNbt(st,i,report):null).filter(Boolean));}
   // EntityVillager.writeEntityToNBT: Profession, Riches and Offers.Recipes (MerchantRecipe: buy, optional buyB, sell, uses, maxUses, in original item ids); EntityAgeable's Age is written above, InLove is EntityAnimal's.
   if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};
@@ -189,7 +189,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0,invulnerable:e.invulnerable,fire:Number.isInteger(e.fire)?e.fire:0,air:e.air,uuid:e.uuid,portalCooldown:e.portalCooldown,nbtDimension:e.nbtDimension},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
   const n={...base,Direction:byte(e.dir),...([2,1,0,3][e.dir]===undefined?{}:{Dir:byte([2,1,0,3][e.dir])}),TileX:int(e.tx+ox),TileY:int(e.ty),TileZ:int(e.tz+oz)};
   if(e.kind==='painting')n.Motive=str(e.art);
-  else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}
+  else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item){n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}} // b94 entnbt94 (executed): EntityItemFrame.writeEntityToNBT writes ItemRotation and ItemDropChance only inside its non-empty item branch
   entities.push(new Map(Object.entries(n)));}
  // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting, arrows,
  // fireballs, wither skulls, eyes of ender and firework rockets. An egg has no EntityList id (and the bobber class is not registered), so they stay unsupported.

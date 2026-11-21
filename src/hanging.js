@@ -273,7 +273,7 @@ export class Hanging {
         this.entities.push(this.withFire(this.make("painting", r.dir, r.tx, r.ty, r.tz, { art: art < 0 ? 0 : art }), r));
       } else if (r.kind === "frame") {
         this.entities.push(this.withFire(this.make("frame", r.dir, r.tx, r.ty, r.tz, {
-          item: r.item?.count ? structuredClone(r.item) : null, rotation: ((Number(r.rotation) || 0) % 4 + 4) % 4,
+          item: r.item?.count ? structuredClone(r.item) : null, rotation: ((Number(r.rotation) || 0) % 4) | 0, // b94 entnbt94 (executed): EntityItemFrame keeps i % 4 with Java's sign (ItemRotation -1 saves as -1); the renderer's -90 * rotation turn handles it
           dropChance: Number.isFinite(r.dropChance) ? r.dropChance : 1,
         }), r));
       }

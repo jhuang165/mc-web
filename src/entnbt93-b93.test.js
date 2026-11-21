@@ -54,9 +54,11 @@ test("import reads DeathTime of a Health 0 mob; restore keeps it dying; the save
   assert.equal(found.get("HealF").value, 0);
 });
 
-test("a Health 0 mob with DeathTime 20 or more, and an ender crystal, still do not load", () => {
-  assert.equal(javaMobFromNbt(cowTag(0, 25), {}).death, undefined);
+test("a Health 0 mob with DeathTime 20 or more is an immortal corpse (batch 94, executed: the count passes 20 and the mob is never removed), one without DeathTime still does not load", () => {
+  const rec = javaMobFromNbt(cowTag(0, 25), {});
+  assert.equal(rec.death, 0);
+  assert.equal(rec.deathKept, 25);
   const mobs = new EntityWorld(new World("entnbt93", "meadow", 1), []);
-  assert.equal(mobs.restore({ type: "cow", x: 8.5, y: 70, z: 8.5, health: 0, death: 25 }), null);
+  assert.ok(mobs.restore({ type: "cow", x: 8.5, y: 70, z: 8.5, health: 0, death: 0, deathKept: 25 }));
   assert.equal(mobs.restore({ type: "cow", x: 8.5, y: 70, z: 8.5, health: 0 }), null);
 });

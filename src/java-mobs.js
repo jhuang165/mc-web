@@ -35,7 +35,8 @@ const numbers = (map, key, type, n) => {
 export function readActiveEffects(entity) {
   const list = tagValue(entity, 'ActiveEffects', NBT.LIST);
   if (list?.elementType !== NBT.COMPOUND) return [];
-  return list.items.map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0), ...(tagValue(e, 'Ambient', NBT.BYTE, 0) !== 0 ? { ambient: true } : {}) }));
+  // b94 entnbt94 (executed, entnbt94-reference.json): PotionEffect.readCustomPotionEffectFromNBT drops an Id with no Potion (0, 24 to 31, 32 and up, negative); 1 to 23 exist in 1.7.10
+  return list.items.filter((e) => { const id = tagValue(e, 'Id', NBT.BYTE, 0); return id >= 1 && id <= 23; }).map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0), ...(tagValue(e, 'Ambient', NBT.BYTE, 0) !== 0 ? { ambient: true } : {}) }));
 }
 
 // `convertItem(compound)` is region-import's item converter (null for an unknown stack). Returns null when the id is not
@@ -341,7 +342,15 @@ export function javaMobFromNbt(entity, options) {
     }
     delete record.loadHealthCap;
     // b93 entnbt93: a mob saved at Health 0 inside its animation (DeathTime 0..19) loads dying and finishes it (onDeathUpdate counts to 20); the restore needs the counter
-    { const dt = record.deathTime ?? 0; delete record.deathTime; if (record.health <= 0 && record.type !== 'ender_crystal' && record.type !== 'ender_dragon' && dt >= 0 && dt < 20) record.death = dt; }
+    {
+      // b94 entnbt94 (executed): deathTime is an int counted only while health is 0 (onDeathUpdate removes the mob when the count reaches exactly 20), so a Health 0 record below 20 (negative too) is dying,
+      // a Health 0 record at 20 or more is an immortal corpse that counts on, a live mob keeps the value untouched, and the dragon (its own onDeathUpdate) never counts. `deathKept` is the counter the port does not run itself.
+      const dt = record.deathTime ?? 0; delete record.deathTime;
+      if (record.type === 'ender_crystal') { /* not living: no DeathTime */ }
+      else if (record.type === 'ender_dragon') { if (dt !== 0) record.deathKept = dt; }
+      else if (record.health <= 0 && dt < 20) record.death = dt;
+      else if (dt !== 0) { record.deathKept = dt; if (record.health <= 0) record.death = 0; } // the immortal corpse: the port's own counter stays below 20 so the removal marker (death 20) never fires
+    }
     if (OWNED_TYPES.has(record.type)) { const owned = ownerFields(entity, record.type); if (owned.owner) record.ownerUuid = owned.ownerUuid; }
     const holder = record.leash?.holder === 'player' ? leashHolderUuid(entity) : undefined;
     if (holder) record.leash = { ...record.leash, holderUuid: holder };

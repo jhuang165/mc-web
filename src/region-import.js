@@ -212,7 +212,7 @@ export function hangingFromNbt(tag, id, { shiftX = 0, shiftZ = 0, convertItem = 
     record.art = ARTS.some((a) => a[0] === motive) ? motive : ARTS[0][0];
   } else {
     const item = get(tag, 'Item', NBT.COMPOUND), stack = item ? convertItem(item) : null;
-    if (stack) { record.item = stack; record.rotation = get(tag, 'ItemRotation', NBT.BYTE, 0) & 3; }
+    if (stack) { record.item = stack; record.rotation = (get(tag, 'ItemRotation', NBT.BYTE, 0) % 4) | 0; } // b94 entnbt94: Java's i % 4 (7 -> 3, -1 -> -1)
     else record.rotation = 0;
     if (hasNumber(tag, 'ItemDropChance')) { const c = get(tag, 'ItemDropChance', NBT.FLOAT, 1); if (c !== 1) record.dropChance = c; }
   }

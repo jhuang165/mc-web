@@ -40,8 +40,10 @@ export const endermanFields = () => ({
 // What a save, an imported Java mob or /summon may contain, sanitised. ya.b(NBTTagCompound) writes `carried` and
 // `carriedData` (shorts); the datawatcher keeps them as bytes. screaming/aggressive are not saved in 1.7.10.
 export function endermanFieldsFrom(e) {
-  const id = Number.isInteger(e?.carried) && e.carried > 0 && e.carried < 256 ? e.carried : 0;
-  const data = id && Number.isInteger(e?.carriedData) && e.carriedData >= 0 && e.carriedData < 16 ? e.carriedData : 0;
+  // b94 entnbt94 (executed, entnbt94-reference.json): the id is kept in a signed byte of the datawatcher, so Block.getBlockById reads anything from 128 up (the double plant 175 too) and any
+  // unregistered id as air; carriedData is the byte (data & 255, signed) kept even with nothing carried (carried 0, data 5 stays 5; 200 -> -56).
+  const id = Number.isInteger(e?.carried) && e.carried > 0 && e.carried < 128 ? e.carried : 0;
+  const data = Number.isInteger(e?.carriedData) ? (e.carriedData << 24) >> 24 : 0;
   return { ...endermanFields(), carried: id, carriedData: data };
 }
 // aD()/e(): getAttributeValue(movementSpeed) is the legacy moveForward (td.bq).
@@ -176,7 +178,7 @@ export function carryStep(e, w, rng) {
   } else if (rng.nextInt(2000) === 0) {
     const x = floor(e.x - 1 + rng.nextDouble() * 2), y = floor(e.y + rng.nextDouble() * 2), z = floor(e.z - 1 + rng.nextDouble() * 2);
     if (w.blockId(x, y, z) === 0 && w.blockId(x, y - 1, z) !== 0 && w.isNormalCube(x, y - 1, z)) {
-      w.setBlock(x, y, z, e.carried, e.carriedData);
+      w.setBlock(x, y, z, e.carried, e.carriedData & 15); // the metadata nibble
       e.carried = 0;
       e.carriedData = 0;
     }

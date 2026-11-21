@@ -4,6 +4,7 @@
 // the hopper cart live in cart-hopper.js. Native evidence: public/research/carts-reference.json
 // (tools/probes/CartsProbe.java, tools/verify-carts.mjs), replayed by src/carts.test.js. Notes and gaps:
 // public/research/minecart-variants.md.
+import { isRegistered } from "./block-registry.js";
 import { normalizeLastOutput } from "./chat-component.js";
 import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from "./mob-spawner.js";
 import { spawnerPairs } from "./spawner-data.js";
@@ -42,7 +43,11 @@ export const DISPLAY = Object.freeze({
 export const displayTile = (c) => (c.dispOn ? c.dispRaw & 0xffff : DISPLAY[c.type]?.block ?? 0);
 export const displayData = (c) => (c.dispOn ? c.dispRaw >> 16 : DISPLAY[c.type]?.data ?? 0);
 export const displayOffset = (c) => (c.dispOn ? c.dispOffset ?? 6 : DISPLAY[c.type]?.offset ?? 6);
-export function setDisplayTile(c, id) { c.dispRaw = (id & 0xffff) | (displayData(c) << 16); c.dispOn = 1; }
+// b94 entnbt94 (executed, entnbt94-reference.json): EntityMinecart.readEntityFromNBT's setDisplayTile(Block.getBlockById(DisplayTile)) keeps id & 0xffff when that is a registered block and air (0)
+// otherwise (166 and 200 -> 0, -1 -> 0, 65556 -> 20), and the data is the int shifted into the watcher's high half (70000 -> 4464).
+export const displayTileId = (id) => { const k = (id | 0) & 0xffff; return isRegistered(k) ? k : 0; };
+export const displayDataValue = (data) => ((data | 0) << 16) >> 16;
+export function setDisplayTile(c, id) { c.dispRaw = displayTileId(id) | (displayData(c) << 16); c.dispOn = 1; }
 export function setDisplayTileData(c, data) { c.dispRaw = (displayTile(c) & 0xffff) | (data << 16); c.dispOn = 1; }
 export function setDisplayTileOffset(c, offset) { c.dispOffset = offset | 0; c.dispOn = 1; }
 
@@ -180,7 +185,7 @@ export function variantNBT(c) {
   const own = variantNBTFields(c);
   if (!c.dispOn && !c.customDisplay) return own;
   const saved = !c.dispOn; // a saved record (region-export) carries the fields, a live cart the watcher values
-  return { ...own, CustomDisplayTile: [1, 1], DisplayTile: [3, saved ? c.displayTile | 0 : displayTile(c)], DisplayData: [3, saved ? c.displayData | 0 : displayData(c)], DisplayOffset: [3, saved ? c.displayOffset | 0 : displayOffset(c)] }; // EntityMinecart.writeEntityToNBT
+  return { ...own, CustomDisplayTile: [1, 1], DisplayTile: [3, saved ? displayTileId(c.displayTile) : displayTile(c)], DisplayData: [3, saved ? displayDataValue(c.displayData) : displayData(c)], DisplayOffset: [3, saved ? c.displayOffset | 0 : displayOffset(c)] }; // EntityMinecart.writeEntityToNBT
 }
 function variantNBTFields(c) {
   if (c.type === 2) return { PushX: [6, c.pushX], PushZ: [6, c.pushZ], Fuel: [2, c.fuel] };
