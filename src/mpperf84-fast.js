@@ -23,6 +23,12 @@ export function boxStore(entities) {
   if (st === undefined) stores.set(entities, (st = []));
   return st;
 }
+// b92 mpperf92: the store of list `from` becomes the store of `to` (tickMobs replaces its list by a filtered copy every tick; slots whose mob moved index just miss).
+export function carryBoxStore(from, to) {
+  if (fast84.mode === "off" || from === to) return;
+  const st = stores.get(from);
+  if (st !== undefined) stores.set(to, st);
+}
 export function mobBoxAt(st, i, e, hw, h) {
   const x = e.x, y = e.y, z = e.z;
   if (st === null) return freshBox(x, y, z, hw, h);

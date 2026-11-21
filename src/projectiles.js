@@ -31,7 +31,8 @@ import { ENTITY_TYPES } from "./entities.js";
 import { boxStore, mobBoxAt } from "./mpperf84-fast.js"; // b84 mpperf84
 import { fast85 } from "./mpperf85-fast.js"; // b85 mpperf85
 import { fast87, mobTargetAt } from "./mpperf87-fast.js"; // b87 mpperf87
-import { fast88, targetStore88, mobTargetAt88 } from "./mpperf88-fast.js"; // b88 mpperf88
+import { fast88, targetStore88 } from "./mpperf88-fast.js"; // b88 mpperf88
+import { mobTargetAt92 } from "./mpperf92-fast.js"; // b92 mpperf92: a moved mob's box is rewritten in place once a mob tick has passed
 import { dragonPartTargets, aimPart } from "./dragon-parts.js";
 import { mobTargetList } from "./mpperf83-fast.js"; // b83 mpperf83
 import { keptBaseSave, keptBaseRestore, tickPortalCooldown } from "./entity-base-nbt.js"; // b88 entnbt88
@@ -370,7 +371,7 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
     if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box, reach }) => ({ ref: target, part, box, reach }));
     if (e.type === "ender_crystal") return [{ ref: e, box: crystalBox(e.x, e.y, e.z) }]; // b88 boatray88: the crystal box is centred on posY (ender-crystal.js)
     const t = ENTITY_TYPES[e.type];
-    if (s88 !== null) return mobTargetAt88(s88, i, e, t, e.growingAge < 0);
+    if (s88 !== null) return mobTargetAt92(s88, i, e, t, e.growingAge < 0);
     if (st !== null && fast87.mode !== "off") return mobTargetAt(st, i, e, t, e.growingAge < 0); // b87 mpperf87: the sizes worked out in place, the record kept with its box while nobody marks it
     const s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);
     const rec = { ref: e, box: mobBoxAt(st, i, e, hw, h) };

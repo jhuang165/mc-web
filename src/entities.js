@@ -5,6 +5,7 @@ import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
 import { fast84, fail84, moveSpeedQuick } from "./mpperf84-fast.js"; // b84 mpperf84
+import { boxStore } from "./mpperf84-fast.js"; import { bumpTargetEpoch92, carryTargets92 } from "./mpperf92-fast.js"; // b92 mpperf92
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { typeSize, pushNearBox, pushNearDone, meetsArg, fast83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { fast87, fail87, attackEquipment87, dryEntity, dryBounds, addZero } from "./mpperf87-fast.js"; // b87 mpperf87
@@ -2417,6 +2418,7 @@ export class EntityWorld {
     return taken;
   }
   tickMobs(player, survival, heldItem=0) {
+    bumpTargetEpoch92(boxStore(this.entities)); // b92 mpperf92: target boxes handed out before this tick may be rewritten in place
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
@@ -2651,7 +2653,7 @@ export class EntityWorld {
     }
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
     const kept = this.entities.filter((e) => e.health > 0 || e.death < 20);
-    noteGoneMobs(this, this.entities, kept); this.entities = kept; // b65 (tracker-transient.js): a mob spawned and removed inside one tick
+    noteGoneMobs(this, this.entities, kept); carryTargets92(this.entities, kept); this.entities = kept; // b65 (tracker-transient.js): a mob spawned and removed inside one tick
   }
   // The tick of the server's copy of the player (see tick): EntityPlayerMP.onUpdateEntity (mw.i). Entity.onEntityUpdate's handleWaterMovement (the flow push) and lava flag, then
   // EntityLivingBase.onLivingUpdate: the motion snap below 0.005 (y too), moveEntityWithHeading with no input (the copy is a plain EntityPlayerMP: stepHeight 0, its own sneak flag

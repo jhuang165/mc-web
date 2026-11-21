@@ -7,6 +7,7 @@ import { FENCE_GATE, TRAPDOOR, COBBLE_WALL } from "./shaped-blocks.js";
 import { NETHER_FENCE } from "./nether-blocks.js";
 import { isDoor, doorPassable } from "./doors-panes.js";
 import { pathCell, safeTries, setPathKinds, beginPathSearch, endPathSearch, KIND_CONTINUE, KIND_WATER, KIND_LAVA, KIND_FENCE, KIND_SOLID, KIND_OTHER } from "./mpperf80-fast.js";
+import { fast92, fail92 } from "./mpperf92-fast.js"; // b92 mpperf92: a shared PathFinder and a pooled memo page table
 const f = Math.fround;
 const WATER = 10, LAVA = 42;
 const floor = Math.floor;
@@ -284,8 +285,9 @@ function growTable(st) {
     p.slot = slot;
   }
 }
-const pagePool = [];
+const pagePool = [], memoPool = new Map();
 const takePage = () => pagePool.pop() || new Int8Array(4096).fill(127);
+let sharedFinder = null;
 export class PathFinder {
   constructor(world, openDoors, breakDoors, avoidsWater, canSwim, options = {}) {
     this.world = world;
@@ -412,6 +414,7 @@ export class PathFinder {
         if (page === null) {
           page = m.pages[slot] = takePage();
           m.used.push(page);
+          if (m.slots !== null) m.slots.push(slot);
         }
         const i = ((x - m.ox) & 15) | (((z - m.oz) & 15) << 4) | (((y - m.oy) & 15) << 8);
         let v = page[i];
@@ -427,7 +430,17 @@ export class PathFinder {
     const r = Math.min(Math.ceil(range) + 24, 400);
     const ox = end.x - r, oy = end.y - r, oz = end.z - r;
     const n = ((2 * r) >> 4) + 2;
-    this.memo = { ox, oy, oz, nx: n, ny: n, nz: n, pages: new Array(n * n * n).fill(null), used: [] };
+    if (fast92.mode === "off") this.memo = { ox, oy, oz, nx: n, ny: n, nz: n, pages: new Array(n * n * n).fill(null), used: [], slots: null };
+    else { // b92 mpperf92: the page table of an earlier search of this size (endMemo nulled the slots it used)
+      let m = memoPool.get(n);
+      if (m === undefined || m.busy) { // none of this size yet, or one is open (a search inside a search): a new table; the first of a size is kept
+        const made = { ox, oy, oz, nx: n, ny: n, nz: n, pages: new Array(n * n * n).fill(null), used: [], slots: [], busy: true };
+        if (m === undefined) memoPool.set(n, made);
+        m = made;
+      } else { m.ox = ox; m.oy = oy; m.oz = oz; m.busy = true; }
+      if (fast92.mode === "verify" && (m.used.length !== 0 || m.slots.length !== 0 || m.pages.length !== n * n * n || m.pages.some((x) => x !== null))) fail92("memo table");
+      this.memo = m;
+    }
     this.tries = undefined; // b80 mpperf80: safeTries asks the entity once per search (only while a memo is open)
     beginPathSearch(this.world);
   }
@@ -435,7 +448,10 @@ export class PathFinder {
     const m = this.memo;
     this.memo = null;
     endPathSearch();
-    if (m) for (const page of m.used) { page.fill(127); pagePool.push(page); }
+    if (m) {
+      for (const page of m.used) { page.fill(127); pagePool.push(page); }
+      if (m.slots !== null) { for (const k of m.slots) m.pages[k] = null; m.slots.length = 0; m.used.length = 0; m.busy = false; }
+    }
   }
   // ayg.a(III): the point of the (x, y, z) hash (the original's IntHashMap, keyed by the hash alone), created on first use. The points live in a module level pool
   // and an open addressing table (the same lookups as a Map keyed by the hash, with no per-search allocation); a returned PathEntity holds copies.
@@ -579,6 +595,22 @@ export class PathNavigate {
     return e.onGround || (this.canSwim && (e.inWater || e.inLava)) || !!e.isRidingChicken;
   }
   finder() {
+    if (fast92.mode !== "off") { // b92 mpperf92: the one shared finder, reset to what a new one holds, unless a search is open on it
+      let pf = sharedFinder;
+      const make = () => new PathFinder(this.world, this.canPassOpenDoors, this.canPassClosedDoors, this.avoidsWater, this.canSwim, { classify: this.classify, maxNodes: this.maxNodes });
+      if (pf === null) pf = sharedFinder = make();
+      else if (pf.memo !== null) return make();
+      else {
+        pf.world = this.world; pf.openDoors = this.canPassOpenDoors; pf.breakDoors = this.canPassClosedDoors; pf.avoidsWater = this.avoidsWater; pf.canSwim = this.canSwim;
+        pf.classify = this.classify || cachedClassify; pf.maxNodes = this.maxNodes ?? Infinity; pf.path.count = 0; pf.pointCount = 0; pf.pathOptions.fill(null); pf.expanded = 0; pf.tries = undefined;
+      }
+      if (fast92.mode === "verify") {
+        const ref = new PathFinder(this.world, this.canPassOpenDoors, this.canPassClosedDoors, this.avoidsWater, this.canSwim, { classify: this.classify, maxNodes: this.maxNodes });
+        for (const k of ["world", "openDoors", "breakDoors", "avoidsWater", "canSwim", "classify", "maxNodes", "pointCount", "expanded", "memo"]) if (!Object.is(pf[k], ref[k])) fail92(`finder ${k}`);
+        if (pf.path.count !== 0 || pf.pathOptions.length !== 32 || pf.pathOptions.some((x) => x !== null) || pf.tries !== undefined) fail92("finder state");
+      }
+      return pf;
+    }
     return new PathFinder(this.world, this.canPassOpenDoors, this.canPassClosedDoors, this.avoidsWater, this.canSwim, { classify: this.classify, maxNodes: this.maxNodes });
   }
   // Spends one unit of the shared search budget; false when exhausted this tick.
