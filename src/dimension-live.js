@@ -359,12 +359,12 @@ export class DimensionLive {
     if (kind === "mob") {
       delete rec.id;
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
-      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world; EntityItem's constructor motion
+      if (leashed && !same) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // b94 portals94: a holder in another world cannot be found by sw.bP (UUID lookup in the destination), so the lead drops; when the player IS in the destination the record keeps { holder: 'player' } and the copy's first leashed tick (leashRestore = sw.bP) keeps or drops it by the 10-block box. EntityItem's constructor motion
       inbox.entities.push(rec);
     } else if (kind === "cart" || kind === "boat") {
       // Entity.copyDataFrom keeps the contents and UUID (NBT); Pos, Motion and Rotation come from transferEntityToWorld. A rider does not travel with it.
       delete rec.rider;
-      Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch], onGround: false });
+      Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch] });
       delete rec.id; // a new id in the destination (passengers name their vehicle by id; Minecarts/Boats.fromJSON keep an id only when unused there)
       (kind === "cart" ? (inbox.carts ??= []) : (inbox.boats ??= [])).push(rec);
     } else if (kind === "arrow") { // b90 entnbt90: Entity.copyDataFrom keeps the NBT (life, inGround, inTile, pickup, damage; the shooter is not saved); Pos, Motion and Rotation come from the transfer
@@ -377,7 +377,7 @@ export class DimensionLive {
       Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });
       inbox.drops.push(rec);
     } else {
-      Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, onGround: false });
+      Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz }); // b94 portals94: OnGround is NBT (sa.e/sa.f), so the copy keeps the saved flag
       inbox.xpOrbs.push(rec);
     }
     if (live) { // the live lists took what they could; the rest waits for the dimension's next load

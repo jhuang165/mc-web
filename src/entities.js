@@ -35,6 +35,7 @@ import { gameRule } from "./game-rules.js";
 import { spiderDrops, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, anchoredShrunkBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
+import { withoutTransient } from "./mob-transient.js";
 import { endermanTick, endermanThink, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
 import { creatureActionState, SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
@@ -1008,6 +1009,7 @@ export class EntityWorld {
   // A saved mob record (a browser save, java-mobs.js import or /summon's data tag) back to a live mob, or null when it
   // is unusable. The caller adds it and advances nextId.
   restore(e, { summoned = false } = {}) {
+    e = withoutTransient(e); // b94 portals94: the in-memory state EntityLiving.writeToNBT does not write starts over, as natively
     const world = this.world;
     const t = ENTITY_TYPES[e.type];
     if (
