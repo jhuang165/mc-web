@@ -230,17 +230,18 @@ test('imported fireballs keep their saved motion with zero acceleration; the bro
   ball.ticks = 12;
   ball.ax = 0.01;
   const saved = JSON.parse(JSON.stringify(balls.serialize(0)));
-  assert.deepEqual([saved[0].owner, saved[0].ticks, saved[0].dimension, saved[0].ax], ['mob-7', 12, 0, 0.01]);
+  // b88 blast88 (bytecode-read ze.b(dh) / ze.a(dh)): EntityFireball saves no shooter, so the record has none and a loaded ball is nobody's (this asserted the old round trip)
+  assert.deepEqual([saved[0].owner, saved[0].ticks, saved[0].dimension, saved[0].ax], [undefined, 12, 0, 0.01]);
   const again = new Fireballs(mobs);
-  again.load(saved, 0);
-  assert.equal(again.list[0].owner, mobs.entities[0]);
+  again.load([{ ...saved[0], owner: 'mob-7' }], 0);
+  assert.equal(again.list[0].owner, null, "an old save's owner is ignored");
   assert.deepEqual([again.list[0].ticks, again.list[0].ax], [12, 0.01]);
   again.load(saved, 1);
   assert.equal(again.list.length, 0);
   const skulls = new WitherSkulls(mobs);
   skulls.load([{ kind: 'witherSkull', x: 1, y: 2, z: 3, vx: 0.1, vy: 0, vz: 0, blue: true, owner: 'player' }, { kind: 'fireball', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0 }]);
   assert.equal(skulls.list.length, 1);
-  assert.equal(skulls.list[0].owner, 'player');
+  assert.equal(skulls.list[0].owner, null, 'b88 blast88: zp keeps ze\'s NBT, no shooter (this asserted the old "player")');
 });
 
 test('native eyes of ender import with the native defaults: no target, no age, shatter flag off', () => {

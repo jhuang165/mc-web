@@ -21,6 +21,7 @@ import { aimPart } from "./dragon-parts.js";
 import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
 import { arrowPunch } from "./player-knockback.js";
+import { getLootingModifier } from "./enchantments.js"; // b88 blast88
 import { applyBowEnchantments, bowEnchantments, setMobFire } from "./armor-enchantments.js";
 import { keptBaseSave, keptBaseRestore, tickPortalCooldown } from "./entity-base-nbt.js"; // b88 entnbt88
 
@@ -472,7 +473,10 @@ export class Arrows {
     if (a.shooter === "player" && ref.type === "horse" && ref.rider && (!a.owner || a.owner.mount?.rider === ref.rider)) return false;
     const s = a.shooter, from = s === "player" ? a.owner?.position ?? ctx.player ?? a : s && typeof s === "object" ? s : a;
     // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
-    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });
+    // b88 blast88 (bytecode-read sv.a(ro), afv.i, ro.a(zc, sa)): the arrow source's getEntity is the shooter, and onDeath gives a player killer the Looting of the item he holds
+    // at that moment (EnchantmentHelper.getLootingModifier(entity), not the bow). It used to be 0 for every arrow kill. A dedicated server's arrow holds the player record (`owner`).
+    const looting = s === "player" ? getLootingModifier((a.owner?.survival ?? ctx.survival)?.held ?? null) : 0;
+    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting });
   }
   // EntityArrow.onCollideWithPlayer (zc.b_): the player's box grown by (1, 0.5, 1) touches a
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one

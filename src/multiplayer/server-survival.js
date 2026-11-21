@@ -61,6 +61,7 @@ export class ServerSurvival {
     const by = p.survival.lastAttacker, killer = by?.isPlayer ? by.playerId ?? [...this.sim.players.values()].find(q => q.name === by.name)?.id : undefined; // b63 mppvp: a player's blow (melee, arrow, potion) credits the killer
     (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
     if (killer !== undefined && killer !== p.id) { const k = this.sim.players.get(killer); if (k) this.sim.stats?.add(k, STAT.playerKills); } // b63 lead: EntityPlayer.addToPlayerScore of a player victim (stat.playerKills)
+    if (killer === p.id) this.sim.stats?.add(p, STAT.playerKills); // b88 blast88 (bytecode-read mw.a(ro), yz.b(sa, int)): aX() is the player himself after his own TNT, and addToPlayerScore has no self test
   }
   /** gamerule keepInventory (default false); the rule table keeps strings. */
   keepInventory() { return String(this.sim.gameRules?.keepInventory ?? 'false').toLowerCase() === 'true'; }

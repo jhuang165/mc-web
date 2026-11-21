@@ -617,6 +617,7 @@ export class DedicatedSimulation {
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       this.sleep.tickPlayer(p); // b66 mpsleep: the sleep timer and the morning wake
+      p.serverLook = { yaw: p.yaw, pitch: p.pitch }; // b88 blast88: processPlayer's rotationYaw / rotationPitch (a sleeper's is the bed entry's, restored above); blasts read this copy (fireballs.js serverLookOf)
       this.mobs.knock(p); // b60: a mob's knockback on this player (server-mobs.js)
       const copyFrom = { x: p.position.x, y: p.position.y, z: p.position.z }; serverCopyBefore(p, controls, p.world ?? this.world); // b82 mpplace82: EntityPlayerMP.onUpdateEntity's own move and its addMovementStat (server-copy-step.js)
       const moved = this.vehicles.riding(p) ? this.vehicles.sit(p) : movePlayer(p, p.dead ? IDLE_INPUT : controls); // b61: a rider is carried by the vehicle
