@@ -5,6 +5,7 @@
 // EntityBoat.onUpdate xi.h runs Entity.onUpdate; neither overrides travelToDimension). Their collision box is the entity's own `bb`.
 import { ENTITY_TYPES } from "./entities.js";
 import { mobScale } from "./slime.js";
+import { fast93, boxPair93 } from "./mpperf93-fast.js"; // b93 mpperf93
 import { OVERWORLD, NETHER, END, PortalState, transferTarget, GAME_IDS } from "./dimensions.js";
 
 // Entities that never reach moveEntity -> doBlockCollisions, or that the port does not move between dimensions.
@@ -64,17 +65,21 @@ export class EntityPortals {
   // b90 entnbt90: `counted` = the entity's own update already ran sa.C's cooldown countdown (arrows, rockets); `noCollide` = it skips doBlockCollisions this update (an arrow
   // that started the update in the ground returns before zc.h's I() call).
   step(e, kind, { dim, getId, riding = false, ridden = false, counted = false, noCollide = false }) {
-    const box = boxOf(kind, e);
+    const box = boxPair93(kind, e, boxOf, ENTITY_TYPES, mobScale, SIZES); // b93: a scratch pair, read before anything else calls it
     if (!box || (kind === "mob" && (e.health <= 0 || SKIPPED.has(e.type)))) return null;
-    const s = this.state(e), prev = this.last.get(e) ?? { x: e.x, z: e.z };
-    this.last.set(e, { x: e.x, z: e.z });
+    const s = this.state(e);
+    let px, pz; // the position of the previous step (this one's when there was none)
+    const lp = this.last.get(e);
+    if (lp === undefined) { px = e.x; pz = e.z; this.last.set(e, { x: e.x, z: e.z }); }
+    else if (fast93.mode === "off") { px = lp.x; pz = lp.z; this.last.set(e, { x: e.x, z: e.z }); }
+    else { px = lp.x; pz = lp.z; lp.x = e.x; lp.z = e.z; } // b93 mpperf93: rewritten in place
     let result = null;
     // Entity.onEntityUpdate runs first in the next tick: it consumes the inPortal the previous tick's collision set.
     if (counted) s.timeUntilPortal = e.portalCooldown | 0;
     const go = s.tick(dim, { isPlayer: false, riding, countdown: !counted });
     if (go !== null) result = { arg: go, endPortal: false, direction: s.teleportDirection };
     else if (!riding && !ridden && !noCollide) {
-      const [hw, h] = box, vehicle = kind === "cart" || kind === "boat", bb = e.bb;
+      const hw = box[0], h = box[1], vehicle = kind === "cart" || kind === "boat", bb = e.bb;
       // doBlockCollisions: the box shrunk by 0.001 on every side; a vehicle has its own box, the others hang off their position.
       const x0 = Math.floor((vehicle ? bb[0] : e.x - hw) + 0.001), x1 = Math.floor((vehicle ? bb[3] : e.x + hw) - 0.001), z0 = Math.floor((vehicle ? bb[2] : e.z - hw) + 0.001), z1 = Math.floor((vehicle ? bb[5] : e.z + hw) - 0.001);
       const y0 = Math.floor((vehicle ? bb[1] : e.y) + 0.001), y1 = Math.floor((vehicle ? bb[4] : e.y + h) - 0.001);
@@ -85,7 +90,7 @@ export class EntityPortals {
       }
       // BlockEndPortal.onEntityCollidedWithBlock: travelToDimension(1) at once, no cooldown test and none written.
       if (end) result = { arg: END, endPortal: true, direction: s.teleportDirection };
-      else if (nether) s.setInPortal(prev.x, prev.z, e.x, e.z, { isPlayer: false });
+      else if (nether) s.setInPortal(px, pz, e.x, e.z, { isPlayer: false });
     }
     if (s.timeUntilPortal !== 0) e.portalCooldown = s.timeUntilPortal; else if (e.portalCooldown !== undefined) delete e.portalCooldown; // b88 entnbt88: a negative one is kept too
     return result;

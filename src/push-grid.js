@@ -7,6 +7,7 @@
 // and its rider; a changed array length, a moved list index, or a disabled grid falls back to the full scan (`lookup` returns null). MC_PUSHGRID=off disables it;
 // MC_PUSHGRID=verify runs both and throws on the first difference (tests and the benchmark use it to prove the two agree).
 import { fast90, recycleOf90, checkGrid90 } from "./mpperf90-fast.js"; // b90 mpperf90: FineGrid keeps the arrays of the grid before it
+import { fast93, recycleOf93, checkIdx93 } from "./mpperf93-fast.js"; // b93 mpperf93: FineGrid keeps the index and cell maps of a grid over the same list
 import { fineSorted } from "./mpperf83-fast.js"; // b83 mpperf83: FineGrid.query sorts short candidate lists in place
 const CELL = 8, REACH = 12 + 1e-6;
 export const pushGridConfig = { mode: (typeof process !== "undefined" && process.env?.MC_PUSHGRID) || "on" }; // tests set `mode` ("on", "off", "verify")
@@ -85,8 +86,8 @@ const FCELL = 2, FBIG = 3;
 export const fineConfig = { mode: (typeof process !== "undefined" && process.env?.MC_MPPERF78) || "on", min: (typeof process !== "undefined" && +process.env?.MC_MPPERF78_MIN) || 60 };
 export class FineGrid {
   constructor(list, halfOf, spare = null) {
-    const re = recycleOf90(spare); // b90 mpperf90: the retired grid's arrays (cleared), or null
-    this.list = list; this.len = list.length; this.halfOf = halfOf; this.cells = new Map(); this.idxOf = new Map(); this.big = []; this.bad = false; this.maxHalf = 0;
+    const re = recycleOf93(spare, list) ?? recycleOf90(spare); // b90 mpperf90: the retired grid's arrays (cleared), or null; b93: and its Maps when the list is the same
+    this.list = list; this.len = list.length; this.halfOf = halfOf; this.cells = re?.cells ?? new Map(); this.idxOf = re?.idxOf ?? new Map(); this.big = []; this.bad = false; this.maxHalf = 0;
     if (re === null) { this.ents = list.slice(); this.keyAt = new Array(list.length); this.buf = new Int32Array(256); this.pool = null; this.out = null; }
     else {
       const ents = re.ents, keyAt = re.keyAt; ents.length = list.length; keyAt.length = list.length;
@@ -95,7 +96,7 @@ export class FineGrid {
     }
     this.n = 0;
     for (let i = 0; i < list.length; i++) {
-      const o = list[i]; this.idxOf.set(o, i);
+      const o = list[i]; if (re?.idxOf == null) this.idxOf.set(o, i);
       const h = halfOf(o);
       if (!(h <= FBIG)) { this.big.push(i); this.keyAt[i] = -1; continue; }
       if (h > this.maxHalf) this.maxHalf = h;
@@ -103,6 +104,7 @@ export class FineGrid {
       if (k === k) this.cellList(k).push(i);
     }
     if (re !== null && fast90.mode === "verify") checkGrid90(this, list);
+    if (re?.idxOf != null && fast93.mode === "verify") checkIdx93(this, list);
   }
   keyOf(o) { return Number.isFinite(o?.x) && Number.isFinite(o.z) ? Math.floor(o.x / FCELL) * 1048576 + Math.floor(o.z / FCELL) : NaN; }
   cellList(k) { let c = this.cells.get(k); if (!c) this.cells.set(k, (c = this.pool !== null && this.pool.length !== 0 ? this.pool.pop() : [])); return c; }
