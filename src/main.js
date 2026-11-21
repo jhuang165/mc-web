@@ -3136,7 +3136,31 @@ function tickWeather() {
 }
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
+// b90 entnbt90 (dimension-live.js deliver): a copy whose travelToDimension destination is the dimension the player is in is spawned in it at once (sa.b(I) calls
+// dst.spawnEntityInWorld for every destination). `record` is the saved record deliver built; returns true when the live lists took it.
+function arriveLive(kind, record) {
+  if (!world) return false;
+  if (kind === "write") { const [x, y, z, id, meta] = record; world.set(x, y, z, id, true, meta); return true; }
+  if (kind === "mob") { const m = mobs?.restore(record); if (!m) return false; mobs.entities.push(m); mobs.nextId++; return true; }
+  if (kind === "item") {
+    const keep = items.items;
+    items.load([record], (st) => survival.inventory.read(st, true), survival.time); // load() joins the new item and replaces the list; the old ones go back in front
+    items.items = [...keep, ...items.items];
+    return true;
+  }
+  if (kind === "orb") { const o = new ExperienceOrbs([record], undefined, entityIds).orbs[0]; if (!o) return false; xpOrbs.orbs.push(o); xpOrbs.joined?.(o); return true; }
+  if (kind === "arrow") { const a = arrows.fromRecord(record); if (!a) return false; arrows.list.push(a); arrows.joined?.(a); return true; }
+  if (kind === "rocket") { const r = rockets.fromRecord(record); if (!r) return false; rockets.rockets.push(r); rockets.joined?.(r); return true; }
+  const owner = kind === "boat" ? boats : minecarts;
+  if (!owner) return false;
+  const made = (kind === "boat" ? Boats.fromJSON([record], { ids: entityIds }) : minecarts.constructor.fromJSON({ version: 1, carts: [record] }, { ids: entityIds })).carts[0];
+  if (!made) return false;
+  made.id = owner.nextId++; // a new id in this world's list (the copy's id is not kept)
+  owner.carts.push(made); owner.joined?.(made);
+  return true;
+}
 const dims = new DimensionLive({
+  arriveLive,
   active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; }, remote: () => !!multiplayer, // remote: b61 the dedicated server runs the portals
   // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
   ticks: () => tickCounter,
@@ -4054,7 +4078,7 @@ function movementTick(controls) {
   serverDigTicked = false;
   redstoneRuntime?.tickTiles(); // no-op when the walk's afterEntities hook already ran them
   if (isWalked(mobs) && entityTick) { finishEntitySimulation(entityTick.state, entityTick.hooks); entityTick.track?.(); const seat = vehicleState(); finishVehicleTick(seat); applyVehicleState(seat); seatOnCartCopy(); } // after the list walk: pickups, thrown-entity events, then the tracker's view of the end state
-  dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
+  dims.tickEntities(world, { mobs, items, xpOrbs, carts: minecarts, boats, arrows, rockets }); // mobs, items, orbs, minecarts and boats in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).

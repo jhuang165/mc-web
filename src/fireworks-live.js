@@ -48,18 +48,21 @@ export class FireworkRockets {
   get balls() { return this.rows(this.rockets); }
   // The rows of rockets or of their client views (object-tracker.js objectView)
   rows(list) { return list.map((r) => { const row = ROWS.get(r) ?? ROWS.set(r, { kind: 'firework' }).get(r); return Object.assign(row, { x: r.x, y: r.y, z: r.z, px: r.px, py: r.py, pz: r.pz, burning: r.burning ?? r.fire > 0 }); }); }
-  serialize() { return { random: this.random.save(), rockets: this.rockets.map(({ ball, box, ...r }) => r) }; }
+  serialize() { return { random: this.random.save(), rockets: this.rockets.map((r) => this.serializeOne(r)) }; }
+  serializeOne({ ball, box, ...r }) { return r; } // b90 entnbt90: one rocket's record (portal travel copies it through its NBT)
   load(record) {
     this.rockets = [];
     if (!record || typeof record !== 'object') return;
     if (record.random) this.random.restore(record.random);
+    for (const e of Array.isArray(record.rockets) ? record.rockets : []) { const r = this.fromRecord(e); if (r) this.rockets.push(r); }
+  }
+  // One saved rocket (a save, or a portal traveller's record) back to a live rocket, or null.
+  fromRecord(e) {
     const keys = ['x', 'y', 'z', 'px', 'py', 'pz', 'mx', 'my', 'mz', 'yaw', 'pitch', 'prevYaw', 'prevPitch', 'life', 'lifetime'];
-    for (const e of Array.isArray(record.rockets) ? record.rockets : []) {
-      if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
-      const r = createRocket(e.x, e.y, e.z, e.stack ? { id: ITEM_FIREWORK_ROCKET, fireworks: normalizeFireworks(e.stack.fireworks) ?? undefined } : null, new JavaRandom(0));
-      Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])), { fire: Number.isInteger(e.fire) ? e.fire : 0 }, keptBaseRestore(e)); // b82 fireext82: Entity's Fire short; b88 entnbt88: Air, UUID, PortalCooldown, Dimension (serialize keeps the whole record)
-      this.rockets.push(r);
-    }
+    if (!e || !keys.every((k) => Number.isFinite(e[k]))) return null;
+    const r = createRocket(e.x, e.y, e.z, e.stack ? { id: ITEM_FIREWORK_ROCKET, fireworks: normalizeFireworks(e.stack.fireworks) ?? undefined } : null, new JavaRandom(0));
+    Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])), { fire: Number.isInteger(e.fire) ? e.fire : 0 }, keptBaseRestore(e)); // b82 fireext82: Entity's Fire short; b88 entnbt88: Air, UUID, PortalCooldown, Dimension (serialize keeps the whole record)
+    return r;
   }
 }
 

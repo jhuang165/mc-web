@@ -228,6 +228,8 @@ export class DimensionLive {
     // Minecarts (saved as { version, carts }) and boats (a list) that travelled here (batch 37).
     if (inbox.carts?.length) record.minecarts = { version: 1, ...record.minecarts, carts: [...(record.minecarts?.carts ?? []), ...inbox.carts] };
     if (inbox.boats?.length) record.boats = [...(Array.isArray(record.boats) ? record.boats : []), ...inbox.boats];
+    if (inbox.arrows?.length) record.arrows = [...(Array.isArray(record.arrows) ? record.arrows : []), ...inbox.arrows]; // b90 entnbt90
+    if (inbox.rockets?.length) record.rockets = { ...(record.rockets && typeof record.rockets === "object" ? record.rockets : {}), rockets: [...(Array.isArray(record.rockets?.rockets) ? record.rockets.rockets : []), ...inbox.rockets] };
     for (const [x, y, z, id, meta] of inbox.writes ?? []) prepared.set(x, y, z, id, true, meta);
   }
   // Entity portals --------------------------------------------------------------------
@@ -237,12 +239,12 @@ export class DimensionLive {
   // Per physics tick, after the mobs/items/orbs moved (Entity.onEntityUpdate + doBlockCollisions of each). Travellers leave the
   // live lists at once; their arrival (Teleporter in the target dimension) resolves asynchronously into the target's inbox.
   // `carts` (Minecarts) and `boats` (Boats) travel as well: their lists are `.carts`, their box `bb`, riders block the portal collision.
-  tickEntities(world, { mobs, items, xpOrbs, carts, boats } = {}) {
+  tickEntities(world, { mobs, items, xpOrbs, carts, boats, arrows, rockets } = {}) {
     if (this.busy || !world || this.host.active()?.transit || this.host.remote?.()) return; // b61 mpnether: the server's entities never travel on this side
     const dim = world.dimension ?? OVERWORLD, getId = (x, y, z) => world.get(x, y, z), at = { dim, getId };
     const root = this.rootRecord();
     if (!root) return;
-    const lists = [["mob", mobs?.entities], ["item", items?.items], ["orb", xpOrbs?.orbs], ["cart", carts?.carts], ["boat", boats?.carts]];
+    const lists = [["mob", mobs?.entities], ["item", items?.items], ["orb", xpOrbs?.orbs], ["cart", carts?.carts], ["boat", boats?.carts], ["arrow", arrows?.list], ["rocket", rockets?.rockets]]; // b90 entnbt90: arrows (zc.h) and rockets (zf.h) run sa.h -> sa.C and moveEntity/I() like the others
     for (const [kind, list] of lists) {
       if (!list?.length) continue;
       let gone = null;
@@ -250,17 +252,17 @@ export class DimensionLive {
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys too).
         if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         if (!ringEntityActive(world, e)) continue; // Entity.onEntityUpdate's portal step runs for every updated entity, ring ones too
-        if ((kind === "cart" || kind === "boat") && e.dead) continue;
+        if ((kind === "cart" || kind === "boat" || kind === "arrow" || kind === "rocket") && e.dead) continue;
         // A vehicle with a rider: the collision ignores it (so a ridden vehicle never starts a countdown), but one already counting down (the player mounted it after it
         // touched the portal) still travels at the threshold; its player rider is dismounted where it stood and stays behind (World.removeEntity -> mountEntity(null)).
-        const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : at);
+        const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : kind === "arrow" || kind === "rocket" ? { ...at, counted: true, noCollide: kind === "arrow" && e.groundAtStart === true } : at);
         if (!r) continue;
         if ((kind === "cart" || kind === "boat") && e.rider?.player) {
           const owner = kind === "cart" ? carts : boats;
           if (e.rider.vehicle === e) owner.dismount(world, e.rider); else e.rider = null;
         }
         (gone ??= new Set()).add(e);
-        this.depart(root, dim, kind, e, r, { mob: mobs, item: items, orb: xpOrbs, cart: carts, boat: boats }[kind]);
+        this.depart(root, dim, kind, e, r, { mob: mobs, item: items, orb: xpOrbs, cart: carts, boat: boats, arrow: arrows, rocket: rockets }[kind]);
       }
       if (gone) { const keep = list.filter((e) => !gone.has(e)); list.length = 0; list.push(...keep); }
     }
@@ -344,9 +346,14 @@ export class DimensionLive {
     const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: this.shareTeleporter(root, to, peek, time), spawn, heightAt });
     // b89 entnbt89: a mismatched Dimension can send the copy into the dimension the player is in (sa.b(I) spawns it in that world at once). The port cannot add it to
     // the live lists here: it waits in a `late` inbox, which storedRecord keeps and the next load of that dimension delivers (deliverArrivals).
-    const a = this.host.active?.(), late = !!a?.rootId && a.rootId === root.id && dimensionOf(a) === to;
-    if (late && !root.portalArrivals?.[to]?.late) (root.portalArrivals ??= {})[to] = { late: true, entities: [], drops: [], xpOrbs: [], writes: [] };
-    const inbox = ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
+    // b90 entnbt90 (bytecode-read sa.b(I): dst.spawnEntityInWorld(copy) runs for every destination, the player's own world included): when the host can add a record to its live
+    // lists (host.arriveLive, main.js) the copy joins them at once. Without that hook, or when it declines, it waits in the `late` inbox as before.
+    const a = this.host.active?.(), same = !!a?.rootId && a.rootId === root.id && dimensionOf(a) === to, live = same && typeof this.host.arriveLive === "function";
+    const real = () => {
+      if (same && !root.portalArrivals?.[to]?.late) (root.portalArrivals ??= {})[to] = { late: true, entities: [], drops: [], xpOrbs: [], writes: [] };
+      return ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
+    };
+    const inbox = live ? { entities: [], drops: [], xpOrbs: [], writes: [] } : real();
     for (const w of peek.writes.slice(before)) inbox.writes.push(w);
     const y = e.y - POS_Y[kind];
     if (kind === "mob") {
@@ -360,12 +367,23 @@ export class DimensionLive {
       Object.assign(rec, { x: e.x, y, z: e.z, motion: [e.vx, e.vy, e.vz], rotation: [e.yaw, e.pitch], onGround: false });
       delete rec.id; // a new id in the destination (passengers name their vehicle by id; Minecarts/Boats.fromJSON keep an id only when unused there)
       (kind === "cart" ? (inbox.carts ??= []) : (inbox.boats ??= [])).push(rec);
+    } else if (kind === "arrow") { // b90 entnbt90: Entity.copyDataFrom keeps the NBT (life, inGround, inTile, pickup, damage; the shooter is not saved); Pos, Motion and Rotation come from the transfer
+      Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz, yaw: e.yaw, pitch: e.pitch });
+      (inbox.arrows ??= []).push(rec);
+    } else if (kind === "rocket") { // Life, LifeTime and FireworksItem ride in the record; setLocationAndAngles puts the previous position and angles at the new place
+      Object.assign(rec, { x: e.x, y, z: e.z, px: e.x, py: y, pz: e.z, mx: e.vx, my: e.vy, mz: e.vz, yaw: e.yaw, pitch: e.pitch, prevYaw: e.yaw, prevPitch: e.pitch });
+      (inbox.rockets ??= []).push(rec);
     } else if (kind === "item") {
       Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });
       inbox.drops.push(rec);
     } else {
       Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, onGround: false });
       inbox.xpOrbs.push(rec);
+    }
+    if (live) { // the live lists took what they could; the rest waits for the dimension's next load
+      const KINDS = { entities: "mob", drops: "item", xpOrbs: "orb", carts: "cart", boats: "boat", arrows: "arrow", rockets: "rocket" };
+      for (const [list, k] of Object.entries(KINDS)) for (const rec of inbox[list] ?? []) { let ok = false; try { ok = this.host.arriveLive(k, rec) === true; } catch (error) { console.warn("live arrival failed:", error); } if (!ok) (real()[list] ??= []).push(rec); }
+      for (const w of inbox.writes) { let ok = false; try { ok = this.host.arriveLive("write", w) === true; } catch (error) { console.warn("live arrival failed:", error); } if (!ok) real().writes.push(w); }
     }
     this.host.dirty?.();
   }
