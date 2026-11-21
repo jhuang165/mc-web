@@ -15,6 +15,11 @@ import { ITEMS } from '../survival.js';
 import { LEAD_ITEM } from '../horse-gear.js';
 
 const OVERWORLD = 0, END = 1;
+// b93 portals93: the in-memory mob state that EntityLiving.writeToNBT does not write. Native copyDataFrom (sa.a(sa, boolean), bytecode-read: `old.e(nbt); this.f(nbt); am = old.am; aq = old.aq`)
+// moves only NBT (plus the portal cooldown and teleport direction), so a copy starts these over: the despawn / age counters, the revenge target's stamp, the jump and walk intents, the
+// living-sound timer, the home area, and the wolf shake, enderman stare, spider climb, slime hop and ocelot pose flags. Dropping them lets ServerMobs.restore supply the created defaults.
+const TRANSIENT_MOB = ['age', 'idle', 'revenge', 'burn', 'mateTicks', 'collidedH', 'inLava', 'moveForward', 'jumping', 'jumpTicks', 'livingSoundTime', 'home', 'homeRadius', 'leashHome', 'lastDamage', 'attack', 'flee',
+  'shakeTime', 'prevShakeTime', 'wet', 'shaking', 'stareCount', 'chaseTimer', 'climbing', 'wasOnGround', 'sneaking', 'sprinting', 'limbSwing', 'limbSwingAmount', 'prevLimbSwingAmount', 'bodyTicks', 'stepDistance'];
 const reader = new PlayerInventory(ITEMS);
 
 export class ServerPortalTravel {
@@ -67,12 +72,16 @@ export class ServerPortalTravel {
     if (!p) return;
     const y = e.y - POS_Y[kind];
     if (kind === 'mob') {
-      const mobs = p.mobs.mobs;
+      const mobs = p.mobs.mobs, holderId = t.leashed ? rec.leash?.holderId : undefined;
       delete rec.id;
+      for (const k of TRANSIENT_MOB) delete rec[k];
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
-      if (t.leashed) { delete rec.leash; this.lead(p, e.x, y, e.z); } // the holder is not in the new world: the lead drops (EntityLiving.updateLeashedState)
+      // A player holder: sw.bP (the first leashed tick of the copy) looks the UUID up among the living entities in the 10-block box around the copy, so a holder who stands in the destination
+      // within reach keeps the lead; otherwise the first updateLeashedState drops it (b93). A knot or mob holder stays on the record: the knot is found or made at the saved X/Y/Z of the NEW world.
+      if (t.leashed && !this.holderThere(to, rec.leash?.holderId, e.x, y, e.z, mobs.size(rec))) { delete rec.leash; this.lead(p, e.x, y, e.z); }
       const m = mobs.restore({ ...rec, id: 'mob-' + mobs.nextId });
       if (!m) return;
+      if (m.leash?.holder === 'player' && holderId !== undefined) m.leash = { ...m.leash, holderId }; // gearFieldsFrom keeps only { holder: 'player' }: the server's own holder id goes back on
       mobs.entities.push(m); mobs.nextId++;
     } else if (kind === 'cart' || kind === 'boat') {
       delete rec.rider; delete rec.id;
@@ -93,6 +102,13 @@ export class ServerPortalTravel {
       if (!o) return;
       p.xp.orbs.push(o); p.xp.joined?.(o);
     }
+  }
+  // sw.bP's box: the copy's bounding box grown by 10 each way meets the holder's box (player 0.6 x 1.8).
+  holderThere(dim, id, x, y, z, [w, h]) {
+    const pl = id === undefined ? null : this.dims.sim.players.get(id);
+    if (!pl || (pl.dimension | 0) !== dim) return false;
+    const q = pl.position;
+    return Math.abs(q.x - x) <= 10 + (w + 0.6) / 2 && Math.abs(q.z - z) <= 10 + (w + 0.6) / 2 && q.y + 1.8 >= y - 10 && q.y <= y + h + 10;
   }
   lead(p, x, y, z) {
     p.items.spawn({ id: LEAD_ITEM, count: 1, damage: 0 }, x, y, z, { delay: 10, motion: [Math.random() * 0.2 - 0.1, 0.2, Math.random() * 0.2 - 0.1] });
