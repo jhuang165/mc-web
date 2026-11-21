@@ -17,6 +17,12 @@
 //     bytecode-read xl.h), so a cart's S12 has nothing to show and is not released.
 import { TrackerEntry, sizeClass, angleByteOf, velocityInt } from '../entity-tracker.js';
 
+// b91 console91: what the entry released for a `vehicles` row, kept off the wire for /netstat (net-packet-ids.js): the kinds of the packets of the tick (S15 move, S16 look, S17 moveLook,
+// S18 teleport, S12 velocity: EntityTrackerEntry's own choice, bytecode-read and executed in tracker-vehicles-reference.json), `join` (the viewer starts tracking: an S0E), the S0E's data
+// (the cart type; a boat's is 0) and whether the spawn is followed by an S12.
+const infos = new WeakMap();
+export const setVehicleInfo = (row, info) => { infos.set(row, info); };
+export const vehicleInfo = (row) => infos.get(row);
 export const CART_RANGE = 80, CART_FREQUENCY = 3, CART_WIDTH = Math.fround(0.98);
 const POS = ['x', 'y', 'z', 'yaw', 'pitch'];
 
@@ -72,6 +78,7 @@ export class CartTracker {
     }
     en.released = place;
     if (place && en.motion) en.rs++; // a boat's release count: every position packet re-aims the copy (8 increments), even at the same serverPos
+    en.kinds = en.entry.packets.map((p) => p.type); // b91 console91
     en.entry.packets.length = 0;
     en.snapPost = this.snap(en); // b84 mpboat84: ... and the one a viewer's own re-list finds (EntityTracker runs it after every entry's update)
     if (v.airBorne) v.airBorne = false; // Entity.isAirBorne is reset by the tracker after the send

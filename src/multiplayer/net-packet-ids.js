@@ -10,6 +10,8 @@
 // id VarInt and payload). Port-only messages with no native packet (a client pickup claim, the client's own inventory copy, a server error line ...) return null:
 // /netstat does not count them, as a native server never sends or reads them.
 import { toOriginal } from '../block-registry.js';
+import { watchState, stringExtra, watchDiff } from './net-watch-bytes.js'; // b91 console91: owner strings, name tags and the later watcher keys of a native mob
+import { vehicleInfo } from './server-cart-track.js'; // b91 console91: the packets a cart or boat entry released
 import { columnsDeflated, itemTagBytes } from './net-native-bytes.js'; // b89 console89: deflated chunk data, item tags (node:zlib: server-only)
 export const STATUS_IDS = { pingStatus: 0, pingProbe: 1, pingStatusReply: 0, pingProbeReply: 1 }; // STATUS: C00ServerQuery / C01Ping, S00ServerInfo / S01Pong
 
@@ -151,23 +153,67 @@ const watcherOf = (type) => MOB_WATCHER[NATIVE_MOB[type]];
 const META_ENTRY = { potion: 5, ambient: 2, air: 3, screaming: 2, invul: 5, health: 5, batHanging: 2, horseFlags: 5 };
 const metaBytes = (p) => { let n = 1; for (const k of Object.keys(p ?? {})) if (k in META_ENTRY) n += META_ENTRY[k]; if (p && ('invisible' in p || 'burning' in p)) n += 2; return n; };
 const attributesBytes = (p) => C[32] + list(p?.list).reduce((n, r) => n + stringSize(r?.name ?? '') + 10 + 25 * list(r?.mods).length, 0);
+// b91 console91: `ctx.watch` ({ mob(i) -> the live mob, memory: Map i -> watchState }, per receiving player) lets the count see what the port's packets do not carry: the owner string and
+// name tag in the S0F and the first S1C, and one S1C with the changed native keys (health, age, tame flags, colour, ...) when a message carries a packet of the mob (net-watch-bytes.js).
+const GATED = new Set(['move', 'look', 'moveLook', 'teleport', 'head', 'meta', 'velocity']);
 const mobRecords = (packets, ctx) => {
-  const out = []; let destroys = 0, type = null, fresh = false;
+  const out = [], watch = ctx?.watch; let destroys = 0, type = null, fresh = false, extra = 0;
+  const diffed = new Set();
   for (const p of list(packets)) {
     const k = p?.type ?? p?.k;
-    if (k === 'destroy') { destroys++; continue; }
+    if (k === 'destroy') { destroys++; watch?.memory.delete(p.i); continue; }
     const id = MOB_RECORD[k] ?? 24;
     if (k !== 'spawn' && k !== 'meta') fresh = false;
     let bytes = C[id];
-    if (k === 'spawn') { type = p?.mob; fresh = true; const w = watcherOf(type); if (w !== undefined) bytes = C[15] - 1 + w; }
-    else if (k === 'meta') { const w = fresh ? watcherOf(type) : undefined; bytes = w !== undefined ? C[28] - 1 + w : C[28] - 1 + metaBytes(p); fresh = false; } // the S1C after a spawn is the whole DataWatcher
+    if (k === 'spawn') {
+      type = p?.mob; fresh = true; extra = 0;
+      const live = watch?.mob(p.i);
+      if (live) { const st = watchState(live); watch.memory.set(p.i, st); extra = stringExtra(st); }
+      const w = watcherOf(type); if (w !== undefined) bytes = C[15] - 1 + w + extra;
+    }
+    else if (k === 'meta') { const w = fresh ? watcherOf(type) : undefined; bytes = w !== undefined ? C[28] - 1 + w + extra : C[28] - 1 + metaBytes(p); fresh = false; } // the S1C after a spawn is the whole DataWatcher
     else if (k === 'equipment') bytes = C[4] - 2 + itemSize(p?.item);
     else if (k === 'attributes') bytes = attributesBytes(p);
     out.push([id, bytes]);
+    if (watch && GATED.has(k) && !diffed.has(p.i)) { // the changed native keys of this mob, one S1C (after its first packet of the message)
+      diffed.add(p.i);
+      const last = watch.memory.get(p.i), live = last && watch.mob(p.i);
+      if (live) { const now = watchState(live), n = watchDiff(last, now); watch.memory.set(p.i, now); if (n) out.push([28, C[28] - 1 + 1 + n]); }
+    }
   }
   if (destroys) out.push([19, s13(destroys)]);
   return out;
 }; // the tick's destroyed ids go in one S13
+
+// b91 console91: object tracker rows `{ i, k, p: [packets] }` (the `itrack` rows of the tick message: items and orbs; `trk` of dispEnts: falling blocks, arrows, thrown entities,
+// hooks, rockets, eyes). The entry's own choice stays: a packet counts under the id of its kind (S0E / S11, S1C, S12, S15, S16, S17, S18, S13), not S18. The S0E carries three motion
+// shorts (6 bytes) only when its data is above 0 (EntityTrackerEntry.func_151260_c: fw(sa, int, int), bytecode-read b84); an S1C row is its watcher list as te.a(List, et) writes it.
+const POSITION = { move: [21, C[21]], look: [22, C[22]], moveLook: [23, C[23]], teleport: [24, C[24]], velocity: [18, C[18]] }; // S15, S16, S17, S18 and the S12, by their own ids
+const ENTRY_BYTES = [2, 3, 5, 5, null, null, 13]; // DataWatcher value type -> header + value bytes (4 string and 5 ItemStack are variable)
+const entryBytes = (e) => { const t = e?.[0] | 0; return t === 4 ? 1 + stringSize(e[2] ?? '') : t === 5 ? 1 + itemSize(e[2]) : ENTRY_BYTES[t] ?? 2; };
+const objectPacket = (p) => {
+  const k = p?.type ?? p?.k;
+  if (k === 'spawn') return p.orb || p.k === 'orb' ? [17, C[17]] : [14, C[14] + (p.data > 0 ? 6 : 0)];
+  if (k === 'meta') return [28, C[28] - 1 + 1 + list(p.list).reduce((n, e) => n + entryBytes(e), 0)];
+  return POSITION[k] ?? null;
+};
+const objectRecords = (rows) => {
+  const out = []; let destroys = 0;
+  for (const r of list(rows)) for (const p of list(r?.p)) { if ((p?.type ?? p?.k) === 'destroy') { destroys++; continue; } const o = objectPacket(p); if (o) out.push(o); }
+  if (destroys) out.push([19, s13(destroys)]);
+  return out;
+};
+// b91 console91: a cart or boat row of `vehicles`. server-cart-track.js records which packets the entry released for the row (vehicleInfo: position kinds, the S12, a join's S0E,
+// the S0E's data); a row it knows nothing about keeps counting one S18.
+const vehicleRecords = (row) => {
+  const info = vehicleInfo(row);
+  if (!info) return [[24, C[24]]];
+  const out = [];
+  if (info.join) { out.push([14, C[14] + (info.data > 0 ? 6 : 0)]); if (info.velocity) out.push([18, C[18]]); }
+  for (const k of info.kinds) if (POSITION[k]) out.push(POSITION[k]);
+  if (!out.length) out.push([28, C[28] - 1 + 1 + 5]); // only a watched field changed (hit, damage, display, lit, fuse): one int entry
+  return out;
+};
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
 const payload = (channel, data) => 1 + stringSize(channel) + 2 + data; // C17/S3F: string channel, short length, data
 const CLIENT_BYTES = {
@@ -214,13 +260,13 @@ const CLIENT_PACKETS = {
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
   tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...list(m.players).filter((p) => ctx?.self === undefined || p?.id !== ctx.self).map(() => [24, C[24]]),
-    ...cellRecords(m.changes), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
+    ...cellRecords(m.changes), ...objectRecords(m.itrack), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),
   chunkBulk: (m, ctx) => bulks(m.columns, ctx),
-  mobs: (m) => mobRecords(m.packets),
-  vehicles: (m) => [...list(m.set).map(() => [24, C[24]]), ...(list(m.del).length ? [[19, s13(list(m.del).length)]] : [])],
-  dispEnts: (m) => each(14, m.ents, () => C[14]), fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
+  mobs: (m, ctx) => mobRecords(m.packets, ctx),
+  vehicles: (m) => [...list(m.set).flatMap(vehicleRecords), ...(list(m.del).length ? [[19, s13(list(m.del).length)]] : [])],
+  dispEnts: (m) => [...each(14, m.ents, () => C[14]), ...objectRecords(m.trk)], fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
   pistonTiles: (m) => each(36, m.events, () => C[36]), crack: (m) => each(37, m.cracks, () => C[37]), aux: (m) => each(40, m.events, () => C[40]),
   sound: (m) => each(41, m.sounds, (s) => C[41] - 1 + stringSize(s?.name ?? s?.n ?? s?.sound ?? '')), // S29: string name, int x, y, z, float volume, byte pitch
   dispFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? e?.name ?? '')), fishFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? '')), // S2A: string name, 7 floats, int

@@ -33,7 +33,7 @@ import { eachView90 } from '../mpperf90-fast.js'; // b90 mpperf90
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
-import { CartTracker } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
+import { CartTracker, setVehicleInfo } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 import { boatPlaceEntities, mobBallLists, playerListed, crystalBox } from '../boat-place-entities.js'; // b87 boatcheck87 (b88 boatray88: playerListed)
 import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
@@ -403,7 +403,7 @@ export class ServerVehicles {
         if (view.known.get(key) !== json) {
           const st = state, tracked = !v.boat || st.bc === 1, pos = tracked ? `${st.x},${st.y},${st.z},${st.yaw},${st.pitch},${st.rs ?? ''}` : '', had = view.known.has(key);
           view.known.set(key, json);
-          set.push(tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : st); // cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
+          const row = tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : { ...st }; set.push(row); setVehicleInfo(row, { kinds: en?.kinds ?? [], join: !had, data: v.boat ? 0 : v.type | 0, velocity: !!v.boat || !!en }); // b91 console91: the packets /netstat counts for the row; cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
           knownPos.set(key, pos);
         }
       }
