@@ -18,8 +18,8 @@
 
 ## Verification
 - `node --test --test-concurrency=2 src/credit90-b90.test.js`: 5/5 pass; 0/5 with the source changes stashed.
-- Neighbour run: see the final reply for counts.
-- No full `npm test`, no browser. `npm run build` not run (no import changes beyond existing modules; see reply).
+- Neighbour run, 138 test files naming the edited modules, `--test-concurrency=2` in four chunks: 1411 tests, 1409 pass. The 2 failures (`cmd-exec-b83` Ozelot air, `track88-b88` late-viewer S04) pass when those two files run alone on this branch (13/13) and on the parent commit: load-dependent, not caused by this change.
+- No full `npm test`, no browser. `npm run build` not run (no new imports or modules).
 
 ## Found wrong in the batch 89 list
 - Nothing wrong. The batch 89 export wrote `ownerName ''` for a player's snowball; that is fixed here (it only mattered once import started marking ownerless balls).
