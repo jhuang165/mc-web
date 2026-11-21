@@ -47,7 +47,8 @@ export class ServerPortalShots {
   }
   // transferEntityToWorld + spawnEntityInWorld for one traveller: the route from the saved Dimension (travelRoute), the placement (ServerDimensions.placeEntity or the Overworld spawn
   // for the End's exit), then the copy joins the destination's lane (an arrow) or instance (a rocket).
-  arrive({ kind, dim, rec, mc, arg, source }) {
+  // The placement half, shared with the server's mobs, items, orbs, carts and boats (server-portal-travel.js): `{ e, to }` in Minecraft units.
+  placed({ dim, arg, source, mc }) {
     const d = this.dims, from = source ?? dim, route = travelRoute(from, arg), to = route.to, e = { vx: 0, vy: 0, vz: 0, pitch: 0, teleportDirection: 0, ...mc };
     if (route.spawn) { // the End's exit: world.getSpawnPoint, posY = getHeightValue; no Teleporter
       const w = d.overworld, s = d.sim.worldSpawn ?? w.spawn(), x = Array.isArray(s) ? s[0] : s.x, z = Array.isArray(s) ? s[2] : s.z;
@@ -59,6 +60,10 @@ export class ServerPortalShots {
       d.placeEntity(e, from, to, route.teleporter); // the Teleporter runs only when the source (the saved Dimension) is not the End
     }
     e.yaw %= 360; // the copy is built from NBT: Entity.readFromNBT keeps rotationYaw % 360
+    return { e, to };
+  }
+  arrive(t) {
+    const { kind, rec } = t, d = this.dims, { e, to } = this.placed(t);
     const y = e.y - POS_Y[kind], lane = d.sim.dispenseHome ? this.laneOf(to) : null;
     if (!lane) return;
     if (kind === 'arrow') {
