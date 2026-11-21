@@ -65,8 +65,16 @@ export function takeRide(p, ride) { p.ride = cleanRide(ride); if (p.ride) p.ride
 // b92 horse92: mw.a(FFZZ) is a no-op unless ridingEntity != null (bytecode-read), and the network queue runs the packets in arrival order, so a C0C that arrives before the C02 that
 // mounts is dropped (the old code kept it and the mount's first tick used it). `queued`: this player already has a C02 / interact waiting in the tick's action list, which may mount
 // before this C0C is read; the C0C then waits behind it in the same list and is read as `{ id, ride }` (simulation.js actions loop) only if the player is mounted by then.
+// b94 horse94: every C05 of a riding player reaches mw.i -> yz.h -> sv.e, which multiplies the rider's moveForward / moveStrafing by 0.98F in place BEFORE the C0C of the same tick
+// overwrites them (Horse94Probe, executed: horse94-reference.json playerRider). A tick whose message carries no C0C leaves the horse a decayed 0.98 * old value (0.9604, 0.9412, ...), and a
+// C0C component outside [-1, 1] keeps the decayed old value (applyRide leaves it alone). The decay is done as the message arrives; no message, no decay (mw.h, the world tick, never runs sv.e).
+export function decayRideInput(rider) {
+  if (!rider) return;
+  rider.moveForward = f(f(rider.moveForward || 0) * f(0.98));
+  rider.moveStrafing = f(f(rider.moveStrafing || 0) * f(0.98));
+}
 export function takeRideOrQueue(host, p, id, ride) {
-  if (p.mount) { takeRide(p, ride); return; }
+  if (p.mount) { decayRideInput(p.mount.rider); takeRide(p, ride); return; }
   if (!cleanRide(ride)) return;
   p.rideSeen = true; // the client is a C0C sender whatever happened to this one
   if (host.actions.some(a => a.id === id && (a.veh || a.animUse !== undefined))) host.actions.push({ id, ride });

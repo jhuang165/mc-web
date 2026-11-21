@@ -86,10 +86,10 @@ test("server: the C0C steers (moveForward / moveStrafing in [-1, 1], else the ol
   s.input("a", input({ forward: 0 }, riderPacket({ forward: 1 }))); s.tick();
   assert.equal(p.mount.rider.moveForward, f(f(1) * f(0.98)), "the packet's moveForward, though the controls say 0");
   s.input("a", input({}, { s: 0.5, f: 2, j: false, k: false })); s.tick();
-  assert.equal(p.mount.rider.moveForward, f(f(1) * f(0.98)), "2 is out of range: the old value stays");
+  assert.equal(p.mount.rider.moveForward, f(f(f(1) * f(0.98)) * f(0.98)), "2 is out of range: the old value stays, after the C05's EntityLivingBase.onLivingUpdate decay (b94 horse94, Horse94Probe)");
   assert.equal(p.mount.rider.moveStrafing, 0.5);
   s.input("a", input({ forward: 1 })); s.tick();
-  assert.equal(p.mount.rider.moveStrafing, 0.5, "no C0C this tick: nothing changes");
+  assert.equal(p.mount.rider.moveStrafing, f(0.5 * f(0.98)), "no C0C this tick: only the C05's decay");
   s.input("a", input({ sneak: false }, { s: 0, f: 0, j: false, k: true })); s.tick();
   assert.equal(p.mount, null, "setSneaking from the C0C, then updateRidden lets go");
 });
