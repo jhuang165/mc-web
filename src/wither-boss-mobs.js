@@ -138,6 +138,8 @@ export function witherAITick(brain) {
 // command block goes with its drops (World.func_147480_a(.., true)); one level event 1012 if any went.
 function breakBlocks(m, e, rand) {
   const w = m.world, fy = Math.floor(e.y), fx = Math.floor(e.x), fz = Math.floor(e.z);
+  m.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+  const wrand = m.worldRandom; // b94 mobrec94 (executed b94mr-wither-break): World.func_147480_a drops through World.rand (ahb.s), not the wither's own Entity.rand
   let any = false;
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy <= 3; dy++) {
     const x = fx + dx, y = fy + dy, z = fz + dz, id = w.get(x, y, z);
@@ -148,8 +150,8 @@ function breakBlocks(m, e, rand) {
     const pot = id === FLOWER_POT && w.getMeta ? potContents(w, x, y, z) : null;
     w.set(x, y, z, 0);
     m.events.push({ blockEdit: [[x, y, z]], blockBreak: { x, y, z, block: id, meta } });
-    for (const d of explosionDrops(id, meta, x, y, z, 1, rand).items) m.events.push({ drop: d.id, count: 1, ...(d.damage ? { damage: d.damage } : {}), ...(d.tags ?? {}), position: { x: d.x, y: d.y, z: d.z } });
-    const held = pot && potHeldDrop(pot, x, y, z, rand);
+    for (const d of explosionDrops(id, meta, x, y, z, 1, wrand).items) m.events.push({ drop: d.id, count: 1, ...(d.damage ? { damage: d.damage } : {}), ...(d.tags ?? {}), position: { x: d.x, y: d.y, z: d.z } });
+    const held = pot && potHeldDrop(pot, x, y, z, wrand);
     if (held?.id) m.events.push({ drop: held.id, count: 1, ...(held.damage ? { damage: held.damage } : {}), ...(held.tags ?? {}), position: { x: held.x, y: held.y, z: held.z } });
     any = true;
   }
@@ -286,7 +288,7 @@ export function installWither(EntityWorld) {
     if (e?.type !== "wither") return base.call(this, e, amount, source);
     const name = source.name ?? "generic", a = source.shooter ?? source.attacker; // DamageSource.getEntity: an arrow's shooter
     if (name === "drown" || (e.invul ?? 0) > 0) return false;
-    if (armored(e.health) && (source.arrow || name === "arrow")) return false;
+    if (armored(e.health) && (source.arrow || source.directArrow || name === "arrow")) return false; // b94 mobrec94: bow.js marks `directArrow` (DamageSource.getSourceOfDamage is the arrow); `arrow` stays for the tests and the probe op
     if (a && typeof a === "object" && !source.player && witherIsUndead(a)) return false;
     const s = witherState(e);
     if (s.bv <= 0) s.bv = WITHER.blockBreakCooldown;
