@@ -18,6 +18,20 @@
 export const DIMENSION_NAMES = ['Overworld', 'Nether', 'The End'];
 export const STOP_LOG = { stopping: 'Stopping server', players: 'Saving players', worlds: 'Saving worlds' };
 export const STOP_KICK = 'Server closed'; // oi.u()
+// b89 console89: the autosave runs on MinecraftServer.u()'s tick counter (bytecode-read): `tickCounter++`, then v() (the worlds, the network, the console commands),
+// then `if (tickCounter % 900 == 0) { oi.j(); a(true); }`. The counter is not saved: it starts at 0 at each launch, so the first autosave is the 900th tick after
+// start (45 s at 20 TPS), whatever the world's age. Neither oi.j() nor a(true) logs a line (a(true) skips the per-world lines; mt.a(true, null) has no progress
+// object), so the autosave is silent. AUTOSAVE_LOG is that: no lines.
+export const AUTOSAVE_TICKS = 900;
+export const AUTOSAVE_LOG = [];
+/** The server's tick counter and its autosave test: `step()` counts one tick and answers whether this tick ends with the autosave. `every` is the test override. */
+export function autosaveClock(every = AUTOSAVE_TICKS) {
+  const n = Math.max(1, Math.floor(Number(every)) || AUTOSAVE_TICKS);
+  return { every: n, ticks: 0, step() { this.ticks++; return this.ticks % this.every === 0; } };
+}
+/** The autosave interval in ticks of createDedicatedServer's options: `autosaveTicks`, else the old `saveMs` (tests) in ticks of `tickMs`, else 900. */
+export const autosaveTicksOf = (options = {}) => (Number.isFinite(options?.autosaveTicks) ? options.autosaveTicks
+  : Number.isFinite(options?.saveMs) ? Math.max(1, Math.round(options.saveMs / (Number.isFinite(options.tickMs) && options.tickMs > 0 ? options.tickMs : 50))) : AUTOSAVE_TICKS);
 export const worldSaveLine = (levelName, dim) => `Saving chunks for level '${levelName}'/${DIMENSION_NAMES[dim]}`;
 
 /** oi.j(): every online player's data into the saved players (the port's playerdata), returned in the save's shape. */

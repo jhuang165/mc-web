@@ -1,0 +1,116 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "javaVersion": "java version \"19.0.1\" 2022-10-18",
+ "classes": {
+  "gx": {
+   "name": "S21PacketChunkData",
+   "sha256": "89064a20e044381ce81deccec5b6a3ea664427013d2a9d59ccd85e164ecae342"
+  },
+  "gz": {
+   "name": "S26PacketMapChunkBulk",
+   "sha256": "d6b0f00aa523a5a3a2124b3baf6999eedc6cf9c02954d0713334a6f678a968da"
+  },
+  "et": {
+   "name": "PacketBuffer",
+   "sha256": "81ab003c4658dd545b5c1fe2d7d7604470d10e7b9ee1ab534e37d99c9f387666"
+  },
+  "du": {
+   "name": "CompressedStreamTools",
+   "sha256": "06b85ed6d5ed228ca4144a428edf825a7565b41b4f1a354da7c0c909d661d644"
+  },
+  "gs": {
+   "name": "S40PacketDisconnect",
+   "sha256": "4eff8449475fa1a3640d630f6a4a57323952fec74db01b9952c1a7d1964e3c40"
+  }
+ },
+ "method": "Executed on the unchanged classes (tools/probes/Console89Probe.java): chunks (apx) built from the formula in the probe (sections 0-3 hold blocks below y 64, section 4 exists with light only), written as S21 (gx(apx, full, mask)) and S26 (gz(List)) after the id VarInt, as the encoder fa counts them; the undeflated data is gx.a(apx, full, mask).a. An S2F (gq) with a tagged ItemStack, the tag gzip length (du.a), and S40 (gs(fq(text))) for the kick texts.",
+ "chunks": [
+  {
+   "name": "S21 full",
+   "id": 33,
+   "bytes": 565,
+   "dataLength": 41216,
+   "dataSha256": "2ad4f17198011d918532c4a90b584e8d33139f846f450be54705464ff7adb023"
+  },
+  {
+   "name": "S21 partial 0b10010",
+   "id": 33,
+   "bytes": 337,
+   "dataLength": 20480,
+   "dataSha256": "2fd248e402a685177737dbb9b7e2af4879ed7533958dd1be345ecf4873b1f271"
+  },
+  {
+   "name": "S21 full, no sky",
+   "id": 33,
+   "bytes": 539,
+   "dataLength": 33024,
+   "dataSha256": "12e0b488e5683afd0b2d62bbded7d7c8c8da1e731674dceff472d8dfe63f4bd1"
+  },
+  {
+   "name": "S26 two chunks",
+   "id": 38,
+   "bytes": 1053,
+   "dataLength": 82432,
+   "dataSha256": "aa74dfa9d9312c2aca5b2275d1042c8f9a8d89907651d02bb671e85f19ec0320"
+  },
+  {
+   "name": "S21 unload",
+   "id": 33,
+   "bytes": 32,
+   "dataLength": 256,
+   "dataSha256": "76e1fd4cd1ce43a0461567a2676f0d298b8b85658209a42ffde2258f955acc17"
+  }
+ ],
+ "items": [
+  {
+   "name": "S2F diamond sword, ench sharpness 5, Name Hi",
+   "id": 47,
+   "bytes": 85,
+   "gzip": 74
+  },
+  {
+   "name": "S2F diamond sword, no tag",
+   "id": 47,
+   "bytes": 11
+  }
+ ],
+ "kicks": [
+  {
+   "text": "Kicked by an operator.",
+   "id": 64,
+   "bytes": 26,
+   "json": "\"Kicked by an operator.\""
+  },
+  {
+   "text": "You are banned from this server.",
+   "id": 64,
+   "bytes": 36,
+   "json": "\"You are banned from this server.\""
+  },
+  {
+   "text": "You have been IP banned.",
+   "id": 64,
+   "bytes": 28,
+   "json": "\"You have been IP banned.\""
+  },
+  {
+   "text": "You have been idle for too long!",
+   "id": 64,
+   "bytes": 36,
+   "json": "\"You have been idle for too long!\""
+  },
+  {
+   "text": "Server closed",
+   "id": 64,
+   "bytes": 17,
+   "json": "\"Server closed\""
+  },
+  {
+   "text": "go <away> & don't",
+   "id": 64,
+   "bytes": 41,
+   "json": "\"go \\u003caway\\u003e \\u0026 don\\u0027t\""
+  }
+ ]
+}
