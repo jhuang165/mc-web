@@ -19,6 +19,9 @@ import { summonEntity, entityIdOfSummon } from "./entity-summon.js";
 import { mountEntity } from "./mob-riding.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { newChest, settleFacing } from "./chest.js";
+import { furnaceAddedFacing } from "./container-tiles.js"; // b89 tiles89
+// b89 tiles89: chest, trapped chest, furnace, lit furnace: the original metadata (facing) or id (lit) the port keeps outside the cell.
+const FACED_ORIGINALS = new Set([54, 146, 61, 62]), FURNACE_CELL = 14;
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
@@ -278,13 +281,17 @@ export function createCommandHost(env) {
       const old = w.get(x, y, z);
       if (mode === "keep" && old !== 0) return false;
       if (mode === "destroy" && old !== 0) env.destroyBlock(x, y, z);
-      if (w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
+      // b89 tiles89: a chest's facing lives in its record and a furnace's lit state in its burn time, so for those the native test (func_150807_a returns
+      // early only when the block and the metadata are both unchanged) compares the original id and metadata blockAt reports: /setblock chest over a chest
+      // of another facing, or lit_furnace over an unlit furnace, runs breakBlock (the spill below) instead of "no change".
+      const faced = FACED_ORIGINALS.has(original), before = faced ? this.blockAt(x, y, z) : null;
+      if (faced ? before.id === original && before.meta === ((meta | 0) & 15) : w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
       // b82 pots82: World.setBlock runs the old block's breakBlock on the server even for the same block with another metadata (Chunk.func_150807_a, apx.a;
       // bytecode-read), so a replaced pot drops its stored stack (BlockFlowerPot.breakBlock, ald.a) and its tile entity goes (BlockContainer.breakBlock).
       // b84 cmdfix84: BlockJukebox.breakBlock (dropRecord, bytecode-read) also runs in this setBlock, so a loaded jukebox ejects its disc (item entity, stop-record) before the new block goes in.
       if (old !== 0 && old === fromOriginal(JUKEBOX_ID, 0)?.id) env.music?.()?.jukeboxes?.eject?.(x, y, z);
       const potHeld = w.get(x, y, z) === FLOWER_POT ? potBreakDrop(w, x, y, z) : null;
-      w.set(x, y, z, cell.id, true, cell.meta ?? 0);
+      w.set(x, y, z, cell.id, true, cell.id === FURNACE_CELL ? furnaceAddedFacing(w, x, y, z) : cell.meta ?? 0); // b89 tiles89: BlockFurnace.onBlockAdded (ale.e) settles the facing whatever the command's metadata
       if (potHeld) { w.pots?.delete(potKey(x, y, z)); if (potHeld.id) env.dropStacks?.([potEntryStack(potHeld, makeStack)], x, y, z); }
       const key = `${x},${y},${z}`, stores = survival();
       // b75: tableNames, an enchanting table's CustomName goes with the old tile. b87 tiles87: CommandSetBlock (bm) clears no tile itself, it only calls World.setBlock (ahb.d(IIILaji;II)Z,
@@ -338,7 +345,7 @@ export function createCommandHost(env) {
       return writeContainerTile(name, record, x, y, z, { dropper: id === 158 });
     },
     blockAt(x, y, z) {
-      const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing, lit: (survival().furnaces?.[key]?.burn ?? 0) > 0 });
+      const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing ?? (b === FURNACE_CELL ? w.getMeta(x, y, z) : undefined) /* b89 tiles89: the furnace's facing is its cell metadata */, lit: (survival().furnaces?.[key]?.burn ?? 0) > 0 });
       return { id: o?.[0] ?? 0, meta: o?.[1] ?? 0 };
     },
     setLook(yaw, pitch) { env.setLook?.(yaw, pitch); }, // a dedicated server's S08 rotation (player-op.js)

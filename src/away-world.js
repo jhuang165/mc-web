@@ -37,6 +37,7 @@ import { Beacons, BEACON, tickBeacon } from "./pyramid.js"; // b86 awaystore86
 import { MobSpawners } from "./mob-spawner.js"; // b87 tiles87
 import { watchSpawnerBlocks } from "./spawner-block.js"; // b87 tiles87
 import { sensorSky as skyAt } from "./daylight-sensor-time.js"; // b87 tiles87 / b88 tiles88: the daylight sensors' sky (World.skylightSubtracted and the angle)
+import { installTileSwaps, swapChestRecord } from "./container-tiles.js"; // b89 tiles89
 import { watchSupportLoss } from "./multiplayer/server-support-loss.js"; // b86 awaystore86: BlockSign / BlockBush / ladder / carpet onNeighborBlockChange
 import { setGameRuleSource, ruleOn } from "./game-rules.js";
 import { JavaRandom } from "./java-random.js";
@@ -178,6 +179,9 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     if (old !== now && old === ENCHANTING_TABLE && tiles.tableNames) delete tiles.tableNames[`${x},${y},${z}`]; // TileEntityEnchantmentTable's CustomName goes with it (main.js)
     if (old !== now && old === ENDER_CHEST && tiles.enderTiles) delete tiles.enderTiles[`${x},${y},${z}`];
   }; }
+  // b89 tiles89: a chest <-> trapped chest swap by any edit spills the slots and starts the new block's tile (container-tiles.js swapTiles, as both live hosts);
+  // the meta-only sign rewrite is the onChange line above (remove, then create, on any change of the block or its metadata).
+  installTileSwaps(world, { signs: null, containers: { swapChest: (x, y, z) => swapChestRecord(world, (tiles.chests ??= {}), x, y, z, (stacks) => spillTile(stacks, x, y, z)) } });
   // b87 tiles87: the saved spawner tiles (root.spawners, only when the world has the list: structure-simulation.js reads a missing list as a fresh world). A spawner does nothing
   // here (MobSpawnerBaseLogic.updateSpawner needs a player within range, agq.f), but a spawner replaced in the run loses its tile (BlockContainer.breakBlock, World.removeTileEntity;
   // spawner-block.js, as main.js) and a /setblock spawner gets one (command-host.js env.spawners). The list comes back whole, in the live game's own save form (MobSpawners.toJSON).

@@ -8,12 +8,6 @@
 //  * BlockSign has no breakBlock of its own (BlockContainer's removes the tile): a sign rewritten with another metadata only (a standing sign's
 //    rotation, a wall sign's facing) starts a fresh, empty TileEntitySign. The put wrappers cleared it only on an id change (b87 tiles87).
 // `ctx`: { signs (Signs), containers (ServerContainers), own() -> the dimension's stores are the ones `sim` holds now (no other dimension's swap) }.
-import { isSign } from '../signs.js';
-import { isChestBlock } from '../chest-blocks.js';
-
-export function swapTiles(ctx, x, y, z, old, oldMeta, b, m) {
-  if (old === b ? oldMeta === m : !(isSign(old) && isSign(b)) && !(isChestBlock(old) && isChestBlock(b))) return;
-  if (!ctx.own()) return;
-  if (isSign(old) && old === b && ctx.signs) { ctx.signs.remove(x, y, z); ctx.signs.create(x, y, z); }
-  if (isChestBlock(old) && isChestBlock(b) && old !== b) ctx.containers?.swapChest(x, y, z);
-}
+// b89 tiles89: the rule now lives in ../container-tiles.js, shared with single player (main.js) and the away run (away-world.js); the server's put
+// wrappers (simulation.js, server-dimensions.js, server-end.js) keep calling it from here with the same `ctx`.
+export { swapTiles } from '../container-tiles.js';
